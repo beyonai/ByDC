@@ -1,0 +1,72 @@
+[project]
+name = "datacloud-memory"
+version = "0.1.0"
+description = "DataCloud Memory - 短期/长期记忆服务"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+    { name = "Whale DataCloud Team" }
+]
+keywords = ["memory", "session", "storage", "retrieval"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "redis>=5.0",
+    "pydantic>=2.0",
+    "msgpack>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+datacloud-memory = "datacloud_memory.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/datacloud_memory"]
+
+[tool.uv]
+default-groups = ["dev"]
+
+# ============================================
+# Ruff 配置
+# ============================================
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "ASYNC"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ============================================
+# MyPy 配置
+# ============================================
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+ignore_missing_imports = true
+
+# ============================================
+# Pytest 配置
+# ============================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
