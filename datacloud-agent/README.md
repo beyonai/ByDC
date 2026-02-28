@@ -71,6 +71,24 @@
 - 文件系统: 基于LangGraph状态的工作空间管理
 ```
 
+## 开发工具
+
+### Superpowers 插件
+
+本项目已集成 **Superpowers** 插件，提供完整的软件开发工作流支持：
+
+- **测试驱动开发（TDD）**：强制执行 RED-GREEN-REFACTOR 循环
+- **系统化调试**：结构化的问题诊断和根因追踪
+- **子代理驱动开发**：多阶段审查和代码质量保证
+- **计划编写与执行**：将设计分解为可执行的任务
+- **代码审查**：自动化的代码审查流程
+
+**插件位置**：`.cursor/plugins/superpowers`
+
+**使用方式**：在 Cursor Agent chat 中，插件会自动触发相关技能。例如：
+- "help me plan this feature" - 触发计划编写技能
+- "let's debug this issue" - 触发系统化调试技能
+
 ## 快速开始
 
 ```bash
