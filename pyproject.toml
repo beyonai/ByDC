@@ -1,0 +1,143 @@
+[project]
+name = "whale-datacloud"
+version = "0.1.0"
+description = "Whale DataCloud - A multi-service data platform"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+    { name = "Whale DataCloud Team" }
+]
+keywords = ["data", "cloud", "service", "platform"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+# 根项目依赖（开发工具等）
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pre-commit>=3.8",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pre-commit>=3.8",
+]
+
+[project.urls]
+Homepage = "https://github.com/whalecloud/whale-datacloud"
+Repository = "https://github.com/whalecloud/whale-datacloud"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/whale_datacloud"]
+
+# ============================================
+# Workspace 配置 - uv 多子项目管理
+# ============================================
+[tool.uv.workspace]
+members = [
+    "datacloud-agent",
+    "datacloud-data-service",
+    "datacloud-knowledge-service",
+    "datacloud-memory",
+]
+
+[tool.uv.sources]
+# 声明 workspace 成员，供其他子项目依赖
+datacloud-agent = { workspace = true }
+datacloud-data-service = { workspace = true }
+datacloud-knowledge-service = { workspace = true }
+datacloud-memory = { workspace = true }
+
+[tool.uv]
+default-groups = ["dev"]
+
+# ============================================
+# Ruff 配置 - 代码格式化和 lint
+# ============================================
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # Pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "W",   # pycodestyle warnings
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "ASYNC", # flake8-async
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# ============================================
+# MyPy 配置 - 类型检查
+# ============================================
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+ignore_missing_imports = true
+
+# ============================================
+# Pytest 配置 - 测试
+# ============================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
