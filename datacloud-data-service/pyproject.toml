@@ -1,0 +1,75 @@
+[project]
+name = "datacloud-data-service"
+version = "0.1.0"
+description = "DataCloud Data Service - NL2Data数据查询执行服务"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+    { name = "Whale DataCloud Team" }
+]
+keywords = ["data", "sql", "nl2data", "query"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",  # For FastAPI TestClient
+]
+
+[project.scripts]
+datacloud-data-service = "datacloud_data_service.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/datacloud_data_service"]
+
+[tool.uv]
+default-groups = ["dev"]
+
+# ============================================
+# Ruff 配置
+# ============================================
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "ASYNC"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ============================================
+# MyPy 配置
+# ============================================
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+ignore_missing_imports = true
+
+# ============================================
+# Pytest 配置
+# ============================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
