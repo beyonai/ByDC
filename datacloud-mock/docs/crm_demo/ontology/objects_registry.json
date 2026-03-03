@@ -1,0 +1,1013 @@
+{
+  "$schema": "https://datacloud.io/schemas/ontology/v1.0",
+  "version": "1.0",
+  "scope": "OBJECT",
+  "metadata": {
+    "name": "CRM销售场景本体共享库",
+    "description": "销售场景所有对象、函数、关系的共享对象库",
+    "author": "admin",
+    "created_time": "2026-03-03T00:00:00Z",
+    "tenant_id": "TENANT_001",
+    "domain_ref": "sales"
+  },
+  "functions": [
+    {
+      "function_code": "fn_query_mysql",
+      "function_name": "MySQL通用查询",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "MySQL通用查询",
+          "version": "1.0.0"
+        },
+        "servers": [
+          { "url": "http://data-service:8082" }
+        ],
+        "paths": {
+          "/api/v1/query": {
+            "post": {
+              "summary": "执行MySQL查询",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "required": ["sql", "datasource_id"],
+                      "properties": {
+                        "sql": {
+                          "type": "string",
+                          "description": "SQL语句"
+                        },
+                        "datasource_id": {
+                          "type": "string",
+                          "description": "数据源ID"
+                        },
+                        "sql_param_emp_no": {
+                          "type": "string",
+                          "description": "动态参数：员工工号"
+                        },
+                        "sql_param_org_id": {
+                          "type": "string",
+                          "description": "动态参数：组织ID"
+                        },
+                        "sql_param_date_from": {
+                          "type": "string",
+                          "format": "date",
+                          "description": "动态参数：开始日期"
+                        },
+                        "sql_param_date_to": {
+                          "type": "string",
+                          "format": "date",
+                          "description": "动态参数：结束日期"
+                        },
+                        "sql_param_keyword": {
+                          "type": "string",
+                          "description": "动态参数：关键词"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "查询结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "result_set": {
+                            "type": "array",
+                            "items": { "type": "object" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_po_users_query_by_ids",
+      "function_name": "按名称/ID查询人员",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "按名称/ID查询人员",
+          "version": "1.0.0"
+        },
+        "servers": [
+          { "url": "http://main-data-service:8080" }
+        ],
+        "paths": {
+          "/api/v1/po/users/query": {
+            "post": {
+              "summary": "按用户ID或名称查询人员",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "userIds": {
+                          "type": "array",
+                          "items": { "type": "string" },
+                          "description": "用户ID列表（与names二选一）"
+                        },
+                        "names": {
+                          "type": "array",
+                          "items": { "type": "string" },
+                          "description": "用户名称列表（与userIds二选一）"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "人员列表",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "users": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "user_id": { "type": "string" },
+                                "user_name": { "type": "string" },
+                                "user_number": { "type": "string" },
+                                "org_id": { "type": "string" },
+                                "state": { "type": "string" }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_po_users_query_by_org",
+      "function_name": "按组织ID查询人员",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "按组织ID查询人员",
+          "version": "1.0.0"
+        },
+        "servers": [
+          { "url": "http://main-data-service:8080" }
+        ],
+        "paths": {
+          "/api/v1/po/users/by-org/{orgId}": {
+            "get": {
+              "summary": "按组织ID查询人员",
+              "parameters": [
+                {
+                  "name": "orgId",
+                  "in": "path",
+                  "required": true,
+                  "schema": { "type": "string" },
+                  "description": "组织ID"
+                },
+                {
+                  "name": "includeSubOrgs",
+                  "in": "query",
+                  "required": false,
+                  "schema": { "type": "boolean" },
+                  "description": "是否包含下级组织人员"
+                }
+              ],
+              "responses": {
+                "200": {
+                  "description": "人员列表",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "users": {
+                            "type": "array",
+                            "items": { "type": "object" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_po_org_query_by_ids",
+      "function_name": "按名称/ID查询组织",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "按名称/ID查询组织",
+          "version": "1.0.0"
+        },
+        "servers": [
+          { "url": "http://main-data-service:8080" }
+        ],
+        "paths": {
+          "/api/v1/po/organizations/query": {
+            "post": {
+              "summary": "按组织ID或名称查询组织",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "orgIds": {
+                          "type": "array",
+                          "items": { "type": "string" },
+                          "description": "组织ID列表"
+                        },
+                        "orgNames": {
+                          "type": "array",
+                          "items": { "type": "string" },
+                          "description": "组织名称列表"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "组织列表",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "organizations": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "org_id": { "type": "string" },
+                                "org_name": { "type": "string" },
+                                "org_code": { "type": "string" },
+                                "parent_org_id": { "type": "string" }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_po_org_query_sub_orgs",
+      "function_name": "查询下级组织",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "查询下级组织",
+          "version": "1.0.0"
+        },
+        "servers": [
+          { "url": "http://main-data-service:8080" }
+        ],
+        "paths": {
+          "/api/v1/po/organizations/{orgId}/children": {
+            "get": {
+              "summary": "查询指定组织的下级组织",
+              "parameters": [
+                {
+                  "name": "orgId",
+                  "in": "path",
+                  "required": true,
+                  "schema": { "type": "string" },
+                  "description": "组织ID"
+                },
+                {
+                  "name": "recursive",
+                  "in": "query",
+                  "required": false,
+                  "schema": { "type": "boolean" },
+                  "description": "是否递归查询所有下级"
+                }
+              ],
+              "responses": {
+                "200": {
+                  "description": "下级组织列表",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "organizations": {
+                            "type": "array",
+                            "items": { "type": "object" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_create",
+      "function_name": "创建待办",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "创建待办",
+          "version": "1.0.0"
+        },
+        "servers": [
+          { "url": "http://todo-service:8090" }
+        ],
+        "paths": {
+          "/api/v1/todos": {
+            "post": {
+              "summary": "创建待办",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "required": ["title"],
+                      "properties": {
+                        "title": {
+                          "type": "string",
+                          "description": "待办标题"
+                        },
+                        "deadlineAt": {
+                          "type": "string",
+                          "description": "截止时间，格式 yyyy-MM-dd HH:mm:ss"
+                        },
+                        "handlerIds": {
+                          "type": "array",
+                          "items": { "type": "string" },
+                          "description": "处理人ID列表"
+                        },
+                        "priority": {
+                          "type": "string",
+                          "description": "优先级"
+                        },
+                        "urgencyLevel": {
+                          "type": "string",
+                          "description": "紧急程度"
+                        },
+                        "content": {
+                          "type": "string",
+                          "description": "待办内容"
+                        },
+                        "meetingNoteId": {
+                          "type": "string",
+                          "description": "关联的会议纪要id"
+                        },
+                        "promoter": {
+                          "type": "string",
+                          "description": "单据人/发起人名称或员工工号"
+                        },
+                        "remark": {
+                          "type": "string",
+                          "description": "备注"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "创建结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "todoId": { "type": "string" },
+                          "errorMsg": { "type": "string" },
+                          "status": { "type": "string" },
+                          "title": { "type": "string" },
+                          "createdAt": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_query_list",
+      "function_name": "查询待办列表",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "查询待办列表",
+          "version": "1.0.0"
+        },
+        "servers": [
+          { "url": "http://todo-service:8090" }
+        ],
+        "paths": {
+          "/api/v1/todos/list": {
+            "post": {
+              "summary": "查询待办列表",
+              "requestBody": {
+                "required": false,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "priority": {
+                          "type": "string",
+                          "description": "优先级"
+                        },
+                        "urgencyLevel": {
+                          "type": "string",
+                          "description": "紧急程度"
+                        },
+                        "orgId": {
+                          "type": "string",
+                          "description": "组织ID"
+                        },
+                        "meetingNoteIds": {
+                          "type": "array",
+                          "items": { "type": "string" },
+                          "description": "会议纪要ID列表"
+                        },
+                        "statusList": {
+                          "type": "array",
+                          "items": { "type": "string" },
+                          "description": "待办状态列表"
+                        },
+                        "page": {
+                          "type": "string",
+                          "description": "页码"
+                        },
+                        "keyword": {
+                          "type": "string",
+                          "description": "关键词搜索"
+                        },
+                        "deadlineEnd": {
+                          "type": "string",
+                          "description": "截止时间结束，格式yyyy-MM-dd HH:mm:ss"
+                        },
+                        "status": {
+                          "type": "string",
+                          "description": "待办状态"
+                        },
+                        "promoter": {
+                          "type": "string",
+                          "description": "单据人/发起人员工工号"
+                        },
+                        "deadlineStart": {
+                          "type": "string",
+                          "description": "截止开始时间，格式yyyy-MM-dd HH:mm:ss"
+                        },
+                        "pageSize": {
+                          "type": "string",
+                          "description": "页大小"
+                        },
+                        "includeSubOrgs": {
+                          "type": "string",
+                          "description": "是否查询下级组织，true 是，false 否"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "待办列表",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "todoId": { "type": "string" },
+                            "deadlineAt": { "type": "string" },
+                            "approvalComment": { "type": "string" },
+                            "priority": { "type": "string" },
+                            "urgencyLevel": { "type": "string" },
+                            "content": { "type": "string" },
+                            "progress": { "type": "integer" },
+                            "status": { "type": "string" },
+                            "completedAt": { "type": "string" },
+                            "meetingNoteId": { "type": "string" },
+                            "title": { "type": "string" },
+                            "approvedAt": { "type": "string" },
+                            "createdAt": { "type": "string" },
+                            "handleContent": { "type": "string" },
+                            "handlers": { "type": "array", "items": { "type": "object" } },
+                            "returnReason": { "type": "string" },
+                            "promoter": { "type": "string" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_accept",
+      "function_name": "接收待办",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "接收待办",
+          "version": "1.0.0"
+        },
+        "servers": [
+          { "url": "http://todo-service:8090" }
+        ],
+        "paths": {
+          "/api/v1/todos/{todoId}/accept": {
+            "put": {
+              "summary": "接收待办",
+              "parameters": [
+                {
+                  "name": "todoId",
+                  "in": "path",
+                  "required": true,
+                  "schema": { "type": "string" },
+                  "description": "待办ID"
+                }
+              ],
+              "responses": {
+                "200": {
+                  "description": "接收结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "todoId": { "type": "string" },
+                          "status": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_return",
+      "function_name": "退回待办",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "退回待办",
+          "version": "1.0.0"
+        },
+        "servers": [
+          { "url": "http://todo-service:8090" }
+        ],
+        "paths": {
+          "/api/v1/todos/{todoId}/return": {
+            "put": {
+              "summary": "退回待办",
+              "parameters": [
+                {
+                  "name": "todoId",
+                  "in": "path",
+                  "required": true,
+                  "schema": { "type": "string" },
+                  "description": "待办ID"
+                }
+              ],
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "required": ["returnReason"],
+                      "properties": {
+                        "returnReason": {
+                          "type": "string",
+                          "description": "退回原因"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "退回结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "todoId": { "type": "string" },
+                          "status": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_process",
+      "function_name": "处理待办",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "处理待办",
+          "version": "1.0.0"
+        },
+        "servers": [
+          { "url": "http://todo-service:8090" }
+        ],
+        "paths": {
+          "/api/v1/todos/batch/process": {
+            "put": {
+              "summary": "批量处理待办",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "required": ["todoIds"],
+                      "properties": {
+                        "todoIds": {
+                          "type": "array",
+                          "items": { "type": "string" },
+                          "description": "待办ID列表"
+                        },
+                        "handleComment": {
+                          "type": "string",
+                          "description": "处理意见/备注"
+                        },
+                        "progress": {
+                          "type": "integer",
+                          "description": "处理进度 0-100",
+                          "minimum": 0,
+                          "maximum": 100
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "处理结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "todoId": {
+                            "type": "string",
+                            "description": "被处理的待办ID"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_delete",
+      "function_name": "删除待办",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "删除待办",
+          "version": "1.0.0"
+        },
+        "servers": [
+          { "url": "http://todo-service:8090" }
+        ],
+        "paths": {
+          "/api/v1/todos/batch": {
+            "delete": {
+              "summary": "批量删除待办",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "required": ["todoIds"],
+                      "properties": {
+                        "todoIds": {
+                          "type": "array",
+                          "items": { "type": "string" },
+                          "description": "待办ID列表"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "删除结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "deletedIds": {
+                            "type": "string",
+                            "description": "删除成功的ID串"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_urge",
+      "function_name": "催更待办",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "催更待办",
+          "version": "1.0.0"
+        },
+        "servers": [
+          { "url": "http://todo-service:8090" }
+        ],
+        "paths": {
+          "/api/v1/todos/batch/urge": {
+            "post": {
+              "summary": "批量催更待办",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "required": ["todoIds"],
+                      "properties": {
+                        "todoIds": {
+                          "type": "array",
+                          "items": { "type": "string" },
+                          "description": "待办ID列表"
+                        },
+                        "followUpContent": {
+                          "type": "string",
+                          "description": "催更内容"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "催更结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "todoId": { "type": "string" },
+                          "followUpAt": {
+                            "type": "string",
+                            "description": "催更时间，格式 YYYY-MM-DD HH:mm:ss"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_update",
+      "function_name": "修改待办",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "修改待办",
+          "version": "1.0.0"
+        },
+        "servers": [
+          { "url": "http://todo-service:8090" }
+        ],
+        "paths": {
+          "/api/v1/todos/{todoId}": {
+            "put": {
+              "summary": "修改待办",
+              "parameters": [
+                {
+                  "name": "todoId",
+                  "in": "path",
+                  "required": true,
+                  "schema": { "type": "string" },
+                  "description": "待办ID"
+                }
+              ],
+              "requestBody": {
+                "required": false,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "planFinishTime": {
+                          "type": "string",
+                          "description": "计划完成时间，格式 yyyy-MM-dd HH:mm:ss"
+                        },
+                        "handlerIds": {
+                          "type": "array",
+                          "items": { "type": "string" },
+                          "description": "处理人"
+                        },
+                        "priority": {
+                          "type": "string",
+                          "description": "优先级"
+                        },
+                        "urgencyLevel": {
+                          "type": "string",
+                          "description": "紧急程度"
+                        },
+                        "content": {
+                          "type": "string",
+                          "description": "待办内容"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "修改结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "todoId": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_approve",
+      "function_name": "审批待办",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "审批待办",
+          "version": "1.0.0"
+        },
+        "servers": [
+          { "url": "http://todo-service:8090" }
+        ],
+        "paths": {
+          "/api/v1/todos/batch/approve": {
+            "put": {
+              "summary": "批量审批待办",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "required": ["approvalStatus", "todoIds"],
+                      "properties": {
+                        "approvalComment": {
+                          "type": "string",
+                          "description": "审批意见"
+                        },
+                        "approvalStatus": {
+                          "type": "string",
+                          "description": "审批状态：Approving(通过) 或 Rejected(拒绝)",
+                          "enum": ["Approving", "Rejected"]
+                        },
+                        "todoIds": {
+                          "type": "array",
+                          "items": { "type": "string" },
+                          "description": "待办ID列表"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "审批结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "todoId": { "type": "string" },
+                          "approvalStatus": {
+                            "type": "string",
+                            "description": "审批状态：Approving(通过) 或 Rejected(拒绝)"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "objects": [],
+  "relations": []
+}
