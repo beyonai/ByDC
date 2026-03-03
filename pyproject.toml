@@ -61,6 +61,7 @@ members = [
     "datacloud-data-service",
     "datacloud-knowledge-service",
     "datacloud-memory",
+    "datacloud-mock",
 ]
 
 [tool.uv.sources]
@@ -69,6 +70,7 @@ datacloud-agent = { workspace = true }
 datacloud-data-service = { workspace = true }
 datacloud-knowledge-service = { workspace = true }
 datacloud-memory = { workspace = true }
+datacloud-mock = { workspace = true }
 
 [tool.uv]
 default-groups = ["dev"]
