@@ -18,6 +18,16 @@ datacloud-mock/
 ├── README.md                 # 本说明
 ├── pyproject.toml            # 项目与依赖
 │
+├── mock-resource/            # 仿真资源（数据、本体、术语统一入口）
+│   ├── data/                 # 数据（CSV、配置等，按子系统分子目录）
+│   │   └── crm_demo/
+│   │       └── ...
+│   ├── ontology/             # 本体知识（OWL 等，按子系统分子目录）
+│   │   └── crm_demo/
+│   │       └── ...
+│   └── terminology/          # 术语知识（术语表、词典等）
+│       └── ...
+│
 ├── docs/                     # 文档（按子系统分子文件夹）
 │   └── crm_demo/             # 示例：CRM 演示子系统文档
 │       └── *.md
@@ -53,6 +63,20 @@ datacloud-mock/
 
 - **包与目录名**：Python 包名用**下划线**（如 `data_init`），不要用连字符（`data-init` 不能作为包导入）。
 - **服务入口**：统一从 `src/datacloud_mock/main.py` 的 FastAPI `app` 启动；各子系统的路由在 `main.py` 中挂载（mount 或 include_router）。
+
+---
+
+## mock-resource（仿真资源）
+
+仿真资源统一放在 **`mock-resource/`** 下，按用途分为三个子目录：
+
+| 目录 | 用途 |
+|------|------|
+| **mock-resource/data** | 放数据（CSV、配置等，可按子系统如 `crm_demo` 再分子目录） |
+| **mock-resource/ontology** | 放本体知识（OWL 等本体文件，按子系统分子目录） |
+| **mock-resource/terminology** | 放术语知识（术语表、词典等） |
+
+服务与脚本在引用数据、本体或术语时，可优先从 `mock-resource` 对应子目录读取。
 
 ---
 
@@ -149,6 +173,7 @@ mkdir -p tests/crm_demo
 
 - **用途**：CSV 示例、配置等，与代码分离。
 - **规则**：可按子系统建 `data/<子系统名>/`，其下再按业务或模块分子目录。
+- **推荐**：仿真数据优先放在 **`mock-resource/data/`**，与本体、术语统一管理（参见 [mock-resource（仿真资源）](#mock-resource仿真资源)）。
 
 ---
 
