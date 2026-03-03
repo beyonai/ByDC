@@ -1,0 +1,10 @@
+type_code,type_name,type_desc,type,type_term_id
+EMPLOYEE,员工,员工对象,1,TERM_EMPLOYEE
+GENERAL,通用,字典/枚举类术语，如销售,2,TERM_GENERAL
+OBJ,对象,本体-对象类型，如员工、组织、合同,3,TERM_OBJ
+VIEW,视图,本体-视图类型，如员工视图、组织视图,3,TERM_VIEW
+FUNC,函数,本体-函数类型，如查询函数、计算函数,3,TERM_FUNC
+PARAM,入参,本体-入参类型，如函数入参、动作入参,3,TERM_PARAM
+PROP,属性,本体-属性类型，如对象属性、参数属性,3,TERM_PROP
+ACTION,动作,本体-动作类型，如查询动作、提交动作,3,TERM_ACTION
+DOC,文档名称,文档名称术语，如产品手册、接口文档,4,TERM_DOC
