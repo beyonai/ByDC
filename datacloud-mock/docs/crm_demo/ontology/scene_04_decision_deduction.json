@@ -6,7 +6,7 @@
     "name": "销售决策推演场景",
     "description": "针对管理政策效果分析与突发事件应对的决策推演",
     "author": "admin",
-    "created_time": "2026-03-03T14:00:10Z",
+    "created_time": "2026-03-03T14:37:24Z",
     "tenant_id": "TENANT_001",
     "domain_ref": "sales"
   },
@@ -70,16 +70,16 @@
                             "items": {
                               "type": "object",
                               "properties": {
-                                "user_id": {
+                                "userId": {
                                   "type": "string"
                                 },
-                                "user_name": {
+                                "userName": {
                                   "type": "string"
                                 },
-                                "user_number": {
+                                "userNumber": {
                                   "type": "string"
                                 },
-                                "org_id": {
+                                "orgId": {
                                   "type": "string"
                                 },
                                 "state": {
@@ -150,7 +150,37 @@
                           "users": {
                             "type": "array",
                             "items": {
-                              "type": "object"
+                              "type": "object",
+                              "properties": {
+                                "userId": {
+                                  "type": "string",
+                                  "description": "用户ID"
+                                },
+                                "userName": {
+                                  "type": "string",
+                                  "description": "用户名称"
+                                },
+                                "userNumber": {
+                                  "type": "string",
+                                  "description": "工号"
+                                },
+                                "orgId": {
+                                  "type": "string",
+                                  "description": "组织ID"
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "description": "用户状态"
+                                },
+                                "email": {
+                                  "type": "string",
+                                  "description": "用户邮箱"
+                                },
+                                "phone": {
+                                  "type": "string",
+                                  "description": "用户电话"
+                                }
+                              }
                             }
                           }
                         }
@@ -300,7 +330,33 @@
                           "organizations": {
                             "type": "array",
                             "items": {
-                              "type": "object"
+                              "type": "object",
+                              "properties": {
+                                "orgId": {
+                                  "type": "string",
+                                  "description": "组织ID"
+                                },
+                                "orgName": {
+                                  "type": "string",
+                                  "description": "组织名称"
+                                },
+                                "orgCode": {
+                                  "type": "string",
+                                  "description": "组织编码"
+                                },
+                                "parentOrgId": {
+                                  "type": "string",
+                                  "description": "父组织ID"
+                                },
+                                "orgLevel": {
+                                  "type": "integer",
+                                  "description": "组织层级"
+                                },
+                                "orgType": {
+                                  "type": "string",
+                                  "description": "组织类型"
+                                }
+                              }
                             }
                           }
                         }
@@ -1121,7 +1177,7 @@
       },
       "properties": [
         {
-          "property_code": "user_id",
+          "property_code": "userId",
           "property_name": "用户唯一标识",
           "property_type": "BIGINT",
           "required": true,
@@ -1129,7 +1185,7 @@
           "source_column": "user_id"
         },
         {
-          "property_code": "user_name",
+          "property_code": "userName",
           "property_name": "用户名称",
           "property_type": "STRING",
           "required": true,
@@ -1153,7 +1209,7 @@
           "source_column": "phone"
         },
         {
-          "property_code": "user_code",
+          "property_code": "userCode",
           "property_name": "用户登录标识",
           "property_type": "STRING",
           "required": true,
@@ -1177,7 +1233,7 @@
           "source_column": "remark"
         },
         {
-          "property_code": "user_exp_date",
+          "property_code": "userExpDate",
           "property_name": "用户过期日期",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -1185,7 +1241,7 @@
           "source_column": "user_exp_date"
         },
         {
-          "property_code": "create_date",
+          "property_code": "createDate",
           "property_name": "记录创建日期",
           "property_type": "TIMESTAMP",
           "required": true,
@@ -1193,7 +1249,7 @@
           "source_column": "create_date"
         },
         {
-          "property_code": "update_date",
+          "property_code": "updateDate",
           "property_name": "记录更新日期",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -1209,7 +1265,7 @@
           "source_column": "state"
         },
         {
-          "property_code": "is_locked",
+          "property_code": "isLocked",
           "property_name": "是否锁定",
           "property_type": "STRING",
           "required": true,
@@ -1217,7 +1273,7 @@
           "source_column": "is_locked"
         },
         {
-          "property_code": "last_login_date",
+          "property_code": "lastLoginDate",
           "property_name": "最后一次登录时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -1225,7 +1281,7 @@
           "source_column": "last_login_date"
         },
         {
-          "property_code": "thumbnail_uri",
+          "property_code": "thumbnailUri",
           "property_name": "用户头像URL地址",
           "property_type": "STRING",
           "required": false,
@@ -1233,7 +1289,7 @@
           "source_column": "thumbnail_uri"
         },
         {
-          "property_code": "ext_attr",
+          "property_code": "extAttr",
           "property_name": "用户扩展信息",
           "property_type": "STRING",
           "required": false,
@@ -1241,7 +1297,7 @@
           "source_column": "ext_attr"
         },
         {
-          "property_code": "user_number",
+          "property_code": "userNumber",
           "property_name": "工号",
           "property_type": "STRING",
           "required": false,
@@ -1249,7 +1305,7 @@
           "source_column": "user_number"
         },
         {
-          "property_code": "station_id",
+          "property_code": "stationId",
           "property_name": "所属驻地",
           "property_type": "BIGINT",
           "required": false,
@@ -1288,63 +1344,53 @@
               "mapping_path": "$.requestBody.userIds"
             },
             {
-              "param_code": "users",
-              "param_name": "人员列表",
-              "param_type": "LIST",
+              "param_code": "userId",
+              "param_name": "用户ID",
+              "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
-              "mapping_path": "$.response.users",
-              "children": [
-                {
-                  "param_code": "user_id",
-                  "param_name": "用户ID",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "user_name",
-                  "param_name": "用户名称",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "user_number",
-                  "param_name": "工号",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "org_id",
-                  "param_name": "组织ID",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "state",
-                  "param_name": "用户状态",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "email",
-                  "param_name": "邮箱",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "phone",
-                  "param_name": "电话",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                }
-              ]
+              "mapping_path": "$.response.users[].userId"
+            },
+            {
+              "param_code": "userName",
+              "param_name": "用户名称",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.users[].userName"
+            },
+            {
+              "param_code": "userNumber",
+              "param_name": "工号",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.users[].userNumber"
+            },
+            {
+              "param_code": "orgId",
+              "param_name": "组织ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.users[].orgId"
+            },
+            {
+              "param_code": "state",
+              "param_name": "用户状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.users[].state"
+            },
+            {
+              "param_code": "email",
+              "param_name": "邮箱",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.users[].email"
+            },
+            {
+              "param_code": "phone",
+              "param_name": "电话",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.users[].phone"
             }
           ]
         },
@@ -1378,49 +1424,53 @@
               "mapping_path": "$.parameters.includeSubOrgs"
             },
             {
-              "param_code": "users",
-              "param_name": "人员列表",
-              "param_type": "LIST",
+              "param_code": "userId",
+              "param_name": "用户ID",
+              "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
-              "mapping_path": "$.response.users",
-              "children": [
-                {
-                  "param_code": "user_id",
-                  "param_name": "用户ID",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "user_name",
-                  "param_name": "用户名称",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "user_number",
-                  "param_name": "工号",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "org_id",
-                  "param_name": "组织ID",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "state",
-                  "param_name": "用户状态",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                }
-              ]
+              "mapping_path": "$.response.users[].userId"
+            },
+            {
+              "param_code": "userName",
+              "param_name": "用户名称",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.users[].userName"
+            },
+            {
+              "param_code": "userNumber",
+              "param_name": "工号",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.users[].userNumber"
+            },
+            {
+              "param_code": "orgId",
+              "param_name": "所属组织ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.users[].orgId"
+            },
+            {
+              "param_code": "state",
+              "param_name": "用户状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.users[].state"
+            },
+            {
+              "param_code": "email",
+              "param_name": "邮箱",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.users[].email"
+            },
+            {
+              "param_code": "phone",
+              "param_name": "电话",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.users[].phone"
             }
           ]
         }
@@ -1445,7 +1495,7 @@
       },
       "properties": [
         {
-          "property_code": "org_id",
+          "property_code": "orgId",
           "property_name": "组织ID",
           "property_type": "BIGINT",
           "required": true,
@@ -1453,7 +1503,7 @@
           "source_column": "org_id"
         },
         {
-          "property_code": "org_code",
+          "property_code": "orgCode",
           "property_name": "组织编码",
           "property_type": "STRING",
           "required": true,
@@ -1461,7 +1511,7 @@
           "source_column": "org_code"
         },
         {
-          "property_code": "org_name",
+          "property_code": "orgName",
           "property_name": "组织名称",
           "property_type": "STRING",
           "required": true,
@@ -1469,7 +1519,7 @@
           "source_column": "org_name"
         },
         {
-          "property_code": "org_type",
+          "property_code": "orgType",
           "property_name": "组织类型",
           "property_type": "STRING",
           "required": true,
@@ -1477,7 +1527,7 @@
           "source_column": "org_type"
         },
         {
-          "property_code": "parent_org_id",
+          "property_code": "parentOrgId",
           "property_name": "父组织标识",
           "property_type": "BIGINT",
           "required": true,
@@ -1485,7 +1535,7 @@
           "source_column": "parent_org_id"
         },
         {
-          "property_code": "org_level",
+          "property_code": "orgLevel",
           "property_name": "组织层级",
           "property_type": "INTEGER",
           "required": false,
@@ -1493,7 +1543,7 @@
           "source_column": "org_level"
         },
         {
-          "property_code": "org_index",
+          "property_code": "orgIndex",
           "property_name": "同层排序字段",
           "property_type": "INTEGER",
           "required": false,
@@ -1501,7 +1551,7 @@
           "source_column": "org_index"
         },
         {
-          "property_code": "create_date",
+          "property_code": "createDate",
           "property_name": "创建时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -1509,7 +1559,7 @@
           "source_column": "create_date"
         },
         {
-          "property_code": "update_date",
+          "property_code": "updateDate",
           "property_name": "更新时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -1517,7 +1567,7 @@
           "source_column": "update_date"
         },
         {
-          "property_code": "path_code",
+          "property_code": "pathCode",
           "property_name": "组织路径",
           "property_type": "STRING",
           "required": false,
@@ -1525,7 +1575,7 @@
           "source_column": "path_code"
         },
         {
-          "property_code": "org_desc",
+          "property_code": "orgDesc",
           "property_name": "组织描述",
           "property_type": "STRING",
           "required": false,
@@ -1564,56 +1614,53 @@
               "mapping_path": "$.requestBody.orgNames"
             },
             {
-              "param_code": "organizations",
-              "param_name": "组织列表",
-              "param_type": "LIST",
+              "param_code": "orgId",
+              "param_name": "组织ID",
+              "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
-              "mapping_path": "$.response.organizations",
-              "children": [
-                {
-                  "param_code": "org_id",
-                  "param_name": "组织ID",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "org_name",
-                  "param_name": "组织名称",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "org_code",
-                  "param_name": "组织编码",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "parent_org_id",
-                  "param_name": "父组织ID",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "org_level",
-                  "param_name": "组织层级",
-                  "param_type": "INTEGER",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "org_type",
-                  "param_name": "组织类型",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                }
-              ]
+              "mapping_path": "$.response.organizations[].orgId"
+            },
+            {
+              "param_code": "orgName",
+              "param_name": "组织名称",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.organizations[].orgName"
+            },
+            {
+              "param_code": "orgCode",
+              "param_name": "组织编码",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.organizations[].orgCode"
+            },
+            {
+              "param_code": "parentOrgId",
+              "param_name": "父组织ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.organizations[].parentOrgId"
+            },
+            {
+              "param_code": "orgLevel",
+              "param_name": "组织层级",
+              "param_type": "INTEGER",
+              "direction": "OUT",
+              "mapping_path": "$.response.organizations[].orgLevel"
+            },
+            {
+              "param_code": "orgType",
+              "param_name": "组织类型",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.organizations[].orgType"
+            },
+            {
+              "param_code": "orgDesc",
+              "param_name": "组织描述",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.organizations[].orgDesc"
             }
           ]
         },
@@ -1624,7 +1671,7 @@
           "function_refs": [
             "fn_po_org_query_sub_orgs"
           ],
-          "description": "按组织ID查询其直接或全部下级组织列表",
+          "description": "按组织ID查询其所有直接下级或全部下级组织",
           "visible": true,
           "tags": [
             "查询"
@@ -1640,63 +1687,53 @@
             },
             {
               "param_code": "recursive",
-              "param_name": "是否递归查询",
+              "param_name": "是否递归",
               "param_type": "BOOLEAN",
               "direction": "IN",
               "required": false,
               "mapping_path": "$.parameters.recursive"
             },
             {
-              "param_code": "organizations",
-              "param_name": "下级组织列表",
-              "param_type": "LIST",
+              "param_code": "orgId",
+              "param_name": "组织ID",
+              "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
-              "mapping_path": "$.response.organizations",
-              "children": [
-                {
-                  "param_code": "org_id",
-                  "param_name": "组织ID",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "org_name",
-                  "param_name": "组织名称",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "org_code",
-                  "param_name": "组织编码",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "parent_org_id",
-                  "param_name": "父组织ID",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "org_level",
-                  "param_name": "组织层级",
-                  "param_type": "INTEGER",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "org_type",
-                  "param_name": "组织类型",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                }
-              ]
+              "mapping_path": "$.response.organizations[].orgId"
+            },
+            {
+              "param_code": "orgName",
+              "param_name": "组织名称",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.organizations[].orgName"
+            },
+            {
+              "param_code": "orgCode",
+              "param_name": "组织编码",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.organizations[].orgCode"
+            },
+            {
+              "param_code": "parentOrgId",
+              "param_name": "父组织ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.organizations[].parentOrgId"
+            },
+            {
+              "param_code": "orgLevel",
+              "param_name": "组织层级",
+              "param_type": "INTEGER",
+              "direction": "OUT",
+              "mapping_path": "$.response.organizations[].orgLevel"
+            },
+            {
+              "param_code": "orgType",
+              "param_name": "组织类型",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.organizations[].orgType"
             }
           ]
         }
@@ -1737,7 +1774,7 @@
           "source_column": "title"
         },
         {
-          "property_code": "todo_content",
+          "property_code": "todoContent",
           "property_name": "待办内容",
           "property_type": "TEXT",
           "required": false,
@@ -1745,7 +1782,7 @@
           "source_column": "todo_content"
         },
         {
-          "property_code": "deadline_at",
+          "property_code": "deadlineAt",
           "property_name": "截止时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -1753,7 +1790,7 @@
           "source_column": "deadline_at"
         },
         {
-          "property_code": "todo_priority",
+          "property_code": "todoPriority",
           "property_name": "优先级",
           "property_type": "STRING",
           "required": false,
@@ -1761,7 +1798,7 @@
           "source_column": "todo_priority"
         },
         {
-          "property_code": "todo_status",
+          "property_code": "todoStatus",
           "property_name": "待办状态",
           "property_type": "STRING",
           "required": false,
@@ -1769,7 +1806,7 @@
           "source_column": "todo_status"
         },
         {
-          "property_code": "created_by",
+          "property_code": "createdBy",
           "property_name": "创建人ID",
           "property_type": "STRING",
           "required": true,
@@ -1785,7 +1822,7 @@
           "source_column": "promoter"
         },
         {
-          "property_code": "org_id",
+          "property_code": "orgId",
           "property_name": "组织ID",
           "property_type": "BIGINT",
           "required": true,
@@ -1793,7 +1830,7 @@
           "source_column": "org_id"
         },
         {
-          "property_code": "handler_id",
+          "property_code": "handlerId",
           "property_name": "主处理人ID",
           "property_type": "STRING",
           "required": false,
@@ -1801,7 +1838,7 @@
           "source_column": "handler_id"
         },
         {
-          "property_code": "created_at",
+          "property_code": "createdAt",
           "property_name": "创建时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -1809,7 +1846,7 @@
           "source_column": "created_at"
         },
         {
-          "property_code": "updated_at",
+          "property_code": "updatedAt",
           "property_name": "更新时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -1817,7 +1854,7 @@
           "source_column": "updated_at"
         },
         {
-          "property_code": "completed_at",
+          "property_code": "completedAt",
           "property_name": "完成时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -1825,7 +1862,7 @@
           "source_column": "completed_at"
         },
         {
-          "property_code": "cancelled_at",
+          "property_code": "cancelledAt",
           "property_name": "取消时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -1833,7 +1870,7 @@
           "source_column": "cancelled_at"
         },
         {
-          "property_code": "cancelled_reason",
+          "property_code": "cancelledReason",
           "property_name": "取消原因",
           "property_type": "TEXT",
           "required": false,
@@ -1841,7 +1878,7 @@
           "source_column": "cancelled_reason"
         },
         {
-          "property_code": "approved_at",
+          "property_code": "approvedAt",
           "property_name": "审批通过时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -1849,7 +1886,7 @@
           "source_column": "approved_at"
         },
         {
-          "property_code": "rejected_at",
+          "property_code": "rejectedAt",
           "property_name": "审批拒绝时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -1857,7 +1894,7 @@
           "source_column": "rejected_at"
         },
         {
-          "property_code": "approval_comment",
+          "property_code": "approvalComment",
           "property_name": "审批意见",
           "property_type": "TEXT",
           "required": false,
@@ -1865,7 +1902,7 @@
           "source_column": "approval_comment"
         },
         {
-          "property_code": "urgency_level",
+          "property_code": "urgencyLevel",
           "property_name": "紧急程度",
           "property_type": "STRING",
           "required": false,
@@ -1881,7 +1918,7 @@
           "source_column": "remark"
         },
         {
-          "property_code": "meeting_note_id",
+          "property_code": "meetingNoteId",
           "property_name": "关联会议纪要ID",
           "property_type": "BIGINT",
           "required": false,
@@ -1889,7 +1926,7 @@
           "source_column": "meeting_note_id"
         },
         {
-          "property_code": "return_reason",
+          "property_code": "returnReason",
           "property_name": "退回理由",
           "property_type": "STRING",
           "required": false,
@@ -1897,7 +1934,7 @@
           "source_column": "return_reason"
         },
         {
-          "property_code": "returned_at",
+          "property_code": "returnedAt",
           "property_name": "退回时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -1916,7 +1953,7 @@
           "description": "创建待办事项并指定处理人",
           "visible": true,
           "tags": [
-            "创建"
+            "写入"
           ],
           "params": [
             {
@@ -1969,7 +2006,7 @@
             },
             {
               "param_code": "meetingNoteId",
-              "param_name": "关联会议纪要ID",
+              "param_name": "会议纪要ID",
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
@@ -1977,7 +2014,7 @@
             },
             {
               "param_code": "promoter",
-              "param_name": "发起人",
+              "param_name": "发起人工号",
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
@@ -1996,7 +2033,6 @@
               "param_name": "待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
               "mapping_path": "$.response.todoId"
             },
             {
@@ -2004,7 +2040,6 @@
               "param_name": "错误信息",
               "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
               "mapping_path": "$.response.errorMsg"
             },
             {
@@ -2012,15 +2047,13 @@
               "param_name": "待办状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
               "mapping_path": "$.response.status"
             },
             {
-              "param_code": "title_out",
+              "param_code": "title",
               "param_name": "待办标题",
               "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
               "mapping_path": "$.response.title"
             },
             {
@@ -2028,7 +2061,6 @@
               "param_name": "创建时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
               "mapping_path": "$.response.createdAt"
             }
           ]
@@ -2144,98 +2176,116 @@
             },
             {
               "param_code": "includeSubOrgs",
-              "param_name": "是否查询下级组织",
+              "param_name": "是否查询下级",
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
               "mapping_path": "$.requestBody.includeSubOrgs"
             },
             {
-              "param_code": "todos",
-              "param_name": "待办列表",
-              "param_type": "LIST",
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
-              "mapping_path": "$.response.todos",
-              "children": [
-                {
-                  "param_code": "todoId",
-                  "param_name": "待办ID",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "title",
-                  "param_name": "标题",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "status",
-                  "param_name": "状态",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "priority",
-                  "param_name": "优先级",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "urgencyLevel",
-                  "param_name": "紧急程度",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "deadlineAt",
-                  "param_name": "截止时间",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "content",
-                  "param_name": "内容",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "progress",
-                  "param_name": "进度",
-                  "param_type": "INTEGER",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "createdAt",
-                  "param_name": "创建时间",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "promoter",
-                  "param_name": "发起人",
-                  "param_type": "STRING",
-                  "direction": "OUT",
-                  "required": false
-                },
-                {
-                  "param_code": "handlers",
-                  "param_name": "处理人列表",
-                  "param_type": "ARRAY",
-                  "direction": "OUT",
-                  "required": false
-                }
-              ]
+              "mapping_path": "$.response.todos[].todoId"
+            },
+            {
+              "param_code": "title",
+              "param_name": "待办标题",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.todos[].title"
+            },
+            {
+              "param_code": "status",
+              "param_name": "待办状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.todos[].status"
+            },
+            {
+              "param_code": "priority",
+              "param_name": "优先级",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.todos[].priority"
+            },
+            {
+              "param_code": "urgencyLevel",
+              "param_name": "紧急程度",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.todos[].urgencyLevel"
+            },
+            {
+              "param_code": "deadlineAt",
+              "param_name": "截止时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.todos[].deadlineAt"
+            },
+            {
+              "param_code": "content",
+              "param_name": "待办内容",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.todos[].content"
+            },
+            {
+              "param_code": "progress",
+              "param_name": "处理进度",
+              "param_type": "INTEGER",
+              "direction": "OUT",
+              "mapping_path": "$.response.todos[].progress"
+            },
+            {
+              "param_code": "createdAt",
+              "param_name": "创建时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.todos[].createdAt"
+            },
+            {
+              "param_code": "promoter",
+              "param_name": "发起人",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.todos[].promoter"
+            },
+            {
+              "param_code": "approvalComment",
+              "param_name": "审批意见",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.todos[].approvalComment"
+            },
+            {
+              "param_code": "approvedAt",
+              "param_name": "审批通过时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.todos[].approvedAt"
+            },
+            {
+              "param_code": "completedAt",
+              "param_name": "完成时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.todos[].completedAt"
+            },
+            {
+              "param_code": "meetingNoteId",
+              "param_name": "关联会议纪要ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.todos[].meetingNoteId"
+            },
+            {
+              "param_code": "returnReason",
+              "param_name": "退回原因",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.todos[].returnReason"
             }
           ]
         },
@@ -2261,11 +2311,10 @@
               "mapping_path": "$.parameters.todoId"
             },
             {
-              "param_code": "todoId_out",
+              "param_code": "todoId",
               "param_name": "待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
               "mapping_path": "$.response.todoId"
             },
             {
@@ -2273,7 +2322,6 @@
               "param_name": "待办状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
               "mapping_path": "$.response.status"
             }
           ]
@@ -2308,11 +2356,10 @@
               "mapping_path": "$.requestBody.returnReason"
             },
             {
-              "param_code": "todoId_out",
+              "param_code": "todoId",
               "param_name": "待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
               "mapping_path": "$.response.todoId"
             },
             {
@@ -2320,7 +2367,6 @@
               "param_name": "待办状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
               "mapping_path": "$.response.status"
             }
           ]
@@ -2356,18 +2402,17 @@
             },
             {
               "param_code": "progress",
-              "param_name": "处理进度",
+              "param_name": "处理进度0-100",
               "param_type": "INTEGER",
               "direction": "IN",
               "required": false,
               "mapping_path": "$.requestBody.progress"
             },
             {
-              "param_code": "todoId_out",
-              "param_name": "待办ID",
+              "param_code": "todoId",
+              "param_name": "被处理的待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
               "mapping_path": "$.response.todoId"
             }
           ]
@@ -2395,10 +2440,9 @@
             },
             {
               "param_code": "deletedIds",
-              "param_name": "已删除ID串",
+              "param_name": "删除成功的ID串",
               "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
               "mapping_path": "$.response.deletedIds"
             }
           ]
@@ -2433,11 +2477,10 @@
               "mapping_path": "$.requestBody.followUpContent"
             },
             {
-              "param_code": "todoId_out",
-              "param_name": "待办ID",
+              "param_code": "todoId",
+              "param_name": "被催更的待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
               "mapping_path": "$.response.todoId"
             },
             {
@@ -2445,7 +2488,6 @@
               "param_name": "催更时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
               "mapping_path": "$.response.followUpAt"
             }
           ]
@@ -2460,7 +2502,7 @@
           "description": "修改待办事项的基本信息",
           "visible": true,
           "tags": [
-            "操作"
+            "写入"
           ],
           "params": [
             {
@@ -2481,7 +2523,7 @@
             },
             {
               "param_code": "handlerIds",
-              "param_name": "处理人ID列表",
+              "param_name": "处理人列表",
               "param_type": "ARRAY",
               "direction": "IN",
               "required": false,
@@ -2512,11 +2554,10 @@
               "mapping_path": "$.requestBody.content"
             },
             {
-              "param_code": "todoId_out",
-              "param_name": "待办ID",
+              "param_code": "todoId",
+              "param_name": "被修改的待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
               "mapping_path": "$.response.todoId"
             }
           ]
@@ -2559,19 +2600,17 @@
               "mapping_path": "$.requestBody.todoIds"
             },
             {
-              "param_code": "todoId_out",
+              "param_code": "todoId",
               "param_name": "待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
               "mapping_path": "$.response.todoId"
             },
             {
-              "param_code": "approvalStatus_out",
-              "param_name": "审批结果状态",
+              "param_code": "approvalStatus",
+              "param_name": "审批状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "required": false,
               "mapping_path": "$.response.approvalStatus"
             }
           ]
@@ -2605,7 +2644,7 @@
           "source_column": "id"
         },
         {
-          "property_code": "report_date",
+          "property_code": "reportDate",
           "property_name": "日报日期",
           "property_type": "DATE",
           "required": true,
@@ -2613,7 +2652,7 @@
           "source_column": "report_date"
         },
         {
-          "property_code": "report_title",
+          "property_code": "reportTitle",
           "property_name": "日报标题",
           "property_type": "STRING",
           "required": true,
@@ -2621,7 +2660,7 @@
           "source_column": "report_title"
         },
         {
-          "property_code": "report_content",
+          "property_code": "reportContent",
           "property_name": "日报内容",
           "property_type": "JSON",
           "required": false,
@@ -2629,7 +2668,7 @@
           "source_column": "report_content"
         },
         {
-          "property_code": "report_status",
+          "property_code": "reportStatus",
           "property_name": "日报状态",
           "property_type": "INTEGER",
           "required": true,
@@ -2637,7 +2676,7 @@
           "source_column": "report_status"
         },
         {
-          "property_code": "belong_emp_no",
+          "property_code": "belongEmpNo",
           "property_name": "员工工号",
           "property_type": "STRING",
           "required": true,
@@ -2645,7 +2684,7 @@
           "source_column": "belong_emp_no"
         },
         {
-          "property_code": "belong_user_name",
+          "property_code": "belongUserName",
           "property_name": "员工姓名",
           "property_type": "STRING",
           "required": true,
@@ -2653,7 +2692,7 @@
           "source_column": "belong_user_name"
         },
         {
-          "property_code": "belong_emp_org_id",
+          "property_code": "belongEmpOrgId",
           "property_name": "归属用户所在的组织ID",
           "property_type": "STRING",
           "required": false,
@@ -2661,7 +2700,7 @@
           "source_column": "belong_emp_org_id"
         },
         {
-          "property_code": "created_by",
+          "property_code": "createdBy",
           "property_name": "创建人",
           "property_type": "STRING",
           "required": true,
@@ -2669,7 +2708,7 @@
           "source_column": "created_by"
         },
         {
-          "property_code": "created_time",
+          "property_code": "createdTime",
           "property_name": "创建时间",
           "property_type": "TIMESTAMP",
           "required": true,
@@ -2677,7 +2716,7 @@
           "source_column": "created_time"
         },
         {
-          "property_code": "updated_by",
+          "property_code": "updatedBy",
           "property_name": "更新人",
           "property_type": "STRING",
           "required": false,
@@ -2685,7 +2724,7 @@
           "source_column": "updated_by"
         },
         {
-          "property_code": "updated_time",
+          "property_code": "updatedTime",
           "property_name": "更新时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -2722,7 +2761,7 @@
           "source_column": "id"
         },
         {
-          "property_code": "bo_name",
+          "property_code": "boName",
           "property_name": "商机名称",
           "property_type": "STRING",
           "required": true,
@@ -2730,7 +2769,7 @@
           "source_column": "bo_name"
         },
         {
-          "property_code": "belong_depart",
+          "property_code": "belongDepart",
           "property_name": "所属营销部",
           "property_type": "STRING",
           "required": false,
@@ -2738,7 +2777,7 @@
           "source_column": "belong_depart"
         },
         {
-          "property_code": "customer_name",
+          "property_code": "customerName",
           "property_name": "客户名称",
           "property_type": "STRING",
           "required": true,
@@ -2746,7 +2785,7 @@
           "source_column": "customer_name"
         },
         {
-          "property_code": "order_date",
+          "property_code": "orderDate",
           "property_name": "落单时间",
           "property_type": "DATE",
           "required": false,
@@ -2754,7 +2793,7 @@
           "source_column": "order_date"
         },
         {
-          "property_code": "bid_opening_time",
+          "property_code": "bidOpeningTime",
           "property_name": "主标开标时间",
           "property_type": "DATE",
           "required": false,
@@ -2762,7 +2801,7 @@
           "source_column": "bid_opening_time"
         },
         {
-          "property_code": "iwhale_cbm_emp_no",
+          "property_code": "iwhaleCbmEmpNo",
           "property_name": "商机负责人工号",
           "property_type": "STRING",
           "required": true,
@@ -2770,7 +2809,7 @@
           "source_column": "iwhale_cbm_emp_no"
         },
         {
-          "property_code": "iwhale_cbm_name",
+          "property_code": "iwhaleCbmName",
           "property_name": "商机负责人名称",
           "property_type": "STRING",
           "required": true,
@@ -2778,7 +2817,7 @@
           "source_column": "iwhale_cbm_name"
         },
         {
-          "property_code": "iwhale_cbm_org_id",
+          "property_code": "iwhaleCbmOrgId",
           "property_name": "商机负责人组织",
           "property_type": "STRING",
           "required": false,
@@ -2786,7 +2825,7 @@
           "source_column": "iwhale_cbm_org_id"
         },
         {
-          "property_code": "software_income_time",
+          "property_code": "softwareIncomeTime",
           "property_name": "软收计入时间",
           "property_type": "DATE",
           "required": false,
@@ -2794,7 +2833,7 @@
           "source_column": "software_income_time"
         },
         {
-          "property_code": "it_investment_scale",
+          "property_code": "itInvestmentScale",
           "property_name": "客户IT投资规模（万元）",
           "property_type": "STRING",
           "required": true,
@@ -2802,7 +2841,7 @@
           "source_column": "it_investment_scale"
         },
         {
-          "property_code": "win_bid",
+          "property_code": "winBid",
           "property_name": "是否中标",
           "property_type": "INTEGER",
           "required": true,
@@ -2810,7 +2849,7 @@
           "source_column": "win_bid"
         },
         {
-          "property_code": "iwhale_sc_emp_no",
+          "property_code": "iwhaleScEmpNo",
           "property_name": "支撑sc工号",
           "property_type": "STRING",
           "required": false,
@@ -2818,7 +2857,7 @@
           "source_column": "iwhale_sc_emp_no"
         },
         {
-          "property_code": "iwhale_sc_name",
+          "property_code": "iwhaleScName",
           "property_name": "浩鲸sc名称",
           "property_type": "STRING",
           "required": false,
@@ -2826,7 +2865,7 @@
           "source_column": "iwhale_sc_name"
         },
         {
-          "property_code": "diliver_content",
+          "property_code": "diliverContent",
           "property_name": "合同交付内容",
           "property_type": "STRING",
           "required": false,
@@ -2842,7 +2881,7 @@
           "source_column": "type"
         },
         {
-          "property_code": "performance_type",
+          "property_code": "performanceType",
           "property_name": "业绩类型",
           "property_type": "STRING",
           "required": false,
@@ -2850,7 +2889,7 @@
           "source_column": "performance_type"
         },
         {
-          "property_code": "early_diliver",
+          "property_code": "earlyDiliver",
           "property_name": "是否提前交付",
           "property_type": "INTEGER",
           "required": false,
@@ -2858,7 +2897,7 @@
           "source_column": "early_diliver"
         },
         {
-          "property_code": "business_opportunity_process",
+          "property_code": "businessOpportunityProcess",
           "property_name": "商机状态",
           "property_type": "STRING",
           "required": true,
@@ -2866,7 +2905,7 @@
           "source_column": "business_opportunity_process"
         },
         {
-          "property_code": "contract_scale",
+          "property_code": "contractScale",
           "property_name": "合同额（万）",
           "property_type": "STRING",
           "required": false,
@@ -2874,7 +2913,7 @@
           "source_column": "contract_scale"
         },
         {
-          "property_code": "software_sale_scale",
+          "property_code": "softwareSaleScale",
           "property_name": "软销规模（万元）",
           "property_type": "STRING",
           "required": false,
@@ -2882,7 +2921,7 @@
           "source_column": "software_sale_scale"
         },
         {
-          "property_code": "software_income_scale",
+          "property_code": "softwareIncomeScale",
           "property_name": "软收计入规模（万元）",
           "property_type": "STRING",
           "required": false,
@@ -2890,7 +2929,7 @@
           "source_column": "software_income_scale"
         },
         {
-          "property_code": "order_rate",
+          "property_code": "orderRate",
           "property_name": "落单几率",
           "property_type": "STRING",
           "required": true,
@@ -2898,7 +2937,7 @@
           "source_column": "order_rate"
         },
         {
-          "property_code": "business_opportunity_desc",
+          "property_code": "businessOpportunityDesc",
           "property_name": "商机具体进展描述",
           "property_type": "STRING",
           "required": false,
@@ -2906,7 +2945,7 @@
           "source_column": "business_opportunity_desc"
         },
         {
-          "property_code": "submit_person",
+          "property_code": "submitPerson",
           "property_name": "提交人",
           "property_type": "STRING",
           "required": false,
@@ -2914,7 +2953,7 @@
           "source_column": "submit_person"
         },
         {
-          "property_code": "submit_organization",
+          "property_code": "submitOrganization",
           "property_name": "提交组织",
           "property_type": "STRING",
           "required": false,
@@ -2922,7 +2961,7 @@
           "source_column": "submit_organization"
         },
         {
-          "property_code": "is_ali_integrated",
+          "property_code": "isAliIntegrated",
           "property_name": "是否集成阿里产品",
           "property_type": "INTEGER",
           "required": false,
@@ -2930,7 +2969,7 @@
           "source_column": "is_ali_integrated"
         },
         {
-          "property_code": "opportunity_nature",
+          "property_code": "opportunityNature",
           "property_name": "商机性质",
           "property_type": "STRING",
           "required": false,
@@ -2938,7 +2977,7 @@
           "source_column": "opportunity_nature"
         },
         {
-          "property_code": "opportunity_source",
+          "property_code": "opportunitySource",
           "property_name": "商机来源",
           "property_type": "STRING",
           "required": false,
@@ -2946,7 +2985,7 @@
           "source_column": "opportunity_source"
         },
         {
-          "property_code": "source_description",
+          "property_code": "sourceDescription",
           "property_name": "来源说明",
           "property_type": "STRING",
           "required": false,
@@ -2954,7 +2993,7 @@
           "source_column": "source_description"
         },
         {
-          "property_code": "opportunity_stage",
+          "property_code": "opportunityStage",
           "property_name": "商机进展",
           "property_type": "STRING",
           "required": false,
@@ -2962,7 +3001,7 @@
           "source_column": "opportunity_stage"
         },
         {
-          "property_code": "opportunity_id",
+          "property_code": "opportunityId",
           "property_name": "商机ID",
           "property_type": "STRING",
           "required": false,
@@ -2970,7 +3009,7 @@
           "source_column": "opportunity_id"
         },
         {
-          "property_code": "instance_id",
+          "property_code": "instanceId",
           "property_name": "实例ID",
           "property_type": "STRING",
           "required": false,
@@ -2978,7 +3017,7 @@
           "source_column": "instance_id"
         },
         {
-          "property_code": "instance_title",
+          "property_code": "instanceTitle",
           "property_name": "实例标题",
           "property_type": "STRING",
           "required": false,
@@ -2986,7 +3025,7 @@
           "source_column": "instance_title"
         },
         {
-          "property_code": "prepay_expected_date",
+          "property_code": "prepayExpectedDate",
           "property_name": "预测回款时间【预付款】",
           "property_type": "DATE",
           "required": false,
@@ -2994,7 +3033,7 @@
           "source_column": "prepay_expected_date"
         },
         {
-          "property_code": "prepay_expected_amount",
+          "property_code": "prepayExpectedAmount",
           "property_name": "预测回款金额【预付款】(万元)",
           "property_type": "STRING",
           "required": false,
@@ -3002,7 +3041,7 @@
           "source_column": "prepay_expected_amount"
         },
         {
-          "property_code": "customer_tax_id",
+          "property_code": "customerTaxId",
           "property_name": "客户纳税号",
           "property_type": "STRING",
           "required": false,
@@ -3010,7 +3049,7 @@
           "source_column": "customer_tax_id"
         },
         {
-          "property_code": "created_by",
+          "property_code": "createdBy",
           "property_name": "创建人",
           "property_type": "STRING",
           "required": true,
@@ -3018,7 +3057,7 @@
           "source_column": "created_by"
         },
         {
-          "property_code": "created_time",
+          "property_code": "createdTime",
           "property_name": "创建时间",
           "property_type": "TIMESTAMP",
           "required": true,
@@ -3026,7 +3065,7 @@
           "source_column": "created_time"
         },
         {
-          "property_code": "updated_by",
+          "property_code": "updatedBy",
           "property_name": "更新人",
           "property_type": "STRING",
           "required": false,
@@ -3034,7 +3073,7 @@
           "source_column": "updated_by"
         },
         {
-          "property_code": "updated_time",
+          "property_code": "updatedTime",
           "property_name": "更新时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -3072,7 +3111,7 @@
           "source_column": "id"
         },
         {
-          "property_code": "user_id",
+          "property_code": "userId",
           "property_name": "责任人ID",
           "property_type": "STRING",
           "required": false,
@@ -3080,7 +3119,7 @@
           "source_column": "user_id"
         },
         {
-          "property_code": "emp_no",
+          "property_code": "empNo",
           "property_name": "责任人工号",
           "property_type": "STRING",
           "required": true,
@@ -3096,7 +3135,7 @@
           "source_column": "name"
         },
         {
-          "property_code": "emp_org_id",
+          "property_code": "empOrgId",
           "property_name": "责任人组织",
           "property_type": "STRING",
           "required": false,
@@ -3104,7 +3143,7 @@
           "source_column": "emp_org_id"
         },
         {
-          "property_code": "contact_no",
+          "property_code": "contactNo",
           "property_name": "合同号",
           "property_type": "STRING",
           "required": true,
@@ -3112,7 +3151,7 @@
           "source_column": "contact_no"
         },
         {
-          "property_code": "contact_name",
+          "property_code": "contactName",
           "property_name": "合同名称",
           "property_type": "STRING",
           "required": true,
@@ -3120,7 +3159,7 @@
           "source_column": "contact_name"
         },
         {
-          "property_code": "contact_date",
+          "property_code": "contactDate",
           "property_name": "合同时间",
           "property_type": "DATE",
           "required": true,
@@ -3128,7 +3167,7 @@
           "source_column": "contact_date"
         },
         {
-          "property_code": "soft_sell",
+          "property_code": "softSell",
           "property_name": "软销金额",
           "property_type": "STRING",
           "required": false,
@@ -3136,7 +3175,7 @@
           "source_column": "soft_sell"
         },
         {
-          "property_code": "contact_scale",
+          "property_code": "contactScale",
           "property_name": "合同金额",
           "property_type": "STRING",
           "required": true,
@@ -3144,7 +3183,7 @@
           "source_column": "contact_scale"
         },
         {
-          "property_code": "created_by",
+          "property_code": "createdBy",
           "property_name": "创建人",
           "property_type": "STRING",
           "required": true,
@@ -3152,7 +3191,7 @@
           "source_column": "created_by"
         },
         {
-          "property_code": "created_time",
+          "property_code": "createdTime",
           "property_name": "创建时间",
           "property_type": "TIMESTAMP",
           "required": true,
@@ -3160,7 +3199,7 @@
           "source_column": "created_time"
         },
         {
-          "property_code": "updated_by",
+          "property_code": "updatedBy",
           "property_name": "更新人",
           "property_type": "STRING",
           "required": false,
@@ -3168,7 +3207,7 @@
           "source_column": "updated_by"
         },
         {
-          "property_code": "updated_time",
+          "property_code": "updatedTime",
           "property_name": "更新时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -3205,7 +3244,7 @@
           "source_column": "id"
         },
         {
-          "property_code": "customer_name",
+          "property_code": "customerName",
           "property_name": "客户名称",
           "property_type": "STRING",
           "required": true,
@@ -3213,7 +3252,7 @@
           "source_column": "customer_name"
         },
         {
-          "property_code": "belong_depart",
+          "property_code": "belongDepart",
           "property_name": "所属营销部",
           "property_type": "STRING",
           "required": true,
@@ -3229,7 +3268,7 @@
           "source_column": "type"
         },
         {
-          "property_code": "build_content",
+          "property_code": "buildContent",
           "property_name": "建设内容",
           "property_type": "STRING",
           "required": false,
@@ -3237,7 +3276,7 @@
           "source_column": "build_content"
         },
         {
-          "property_code": "iwhale_cbm_emp_no",
+          "property_code": "iwhaleCbmEmpNo",
           "property_name": "客户维护人工号",
           "property_type": "STRING",
           "required": true,
@@ -3245,7 +3284,7 @@
           "source_column": "iwhale_cbm_emp_no"
         },
         {
-          "property_code": "iwhale_cbm_name",
+          "property_code": "iwhaleCbmName",
           "property_name": "客户维护人名称",
           "property_type": "STRING",
           "required": true,
@@ -3253,7 +3292,7 @@
           "source_column": "iwhale_cbm_name"
         },
         {
-          "property_code": "iwhale_cbm_org_id",
+          "property_code": "iwhaleCbmOrgId",
           "property_name": "客户维护人组织",
           "property_type": "STRING",
           "required": false,
@@ -3261,7 +3300,7 @@
           "source_column": "iwhale_cbm_org_id"
         },
         {
-          "property_code": "belong_industry",
+          "property_code": "belongIndustry",
           "property_name": "所属行业",
           "property_type": "STRING",
           "required": false,
@@ -3269,7 +3308,7 @@
           "source_column": "belong_industry"
         },
         {
-          "property_code": "it_investment_scale",
+          "property_code": "itInvestmentScale",
           "property_name": "客户IT投资规模（万元）",
           "property_type": "STRING",
           "required": false,
@@ -3277,7 +3316,7 @@
           "source_column": "it_investment_scale"
         },
         {
-          "property_code": "data_year",
+          "property_code": "dataYear",
           "property_name": "数据年份",
           "property_type": "YEAR",
           "required": true,
@@ -3285,7 +3324,7 @@
           "source_column": "data_year"
         },
         {
-          "property_code": "software_sale_scale",
+          "property_code": "softwareSaleScale",
           "property_name": "软销规模（万元）",
           "property_type": "STRING",
           "required": false,
@@ -3293,7 +3332,7 @@
           "source_column": "software_sale_scale"
         },
         {
-          "property_code": "next_year_predict_scale",
+          "property_code": "nextYearPredictScale",
           "property_name": "明年预计软销规模",
           "property_type": "STRING",
           "required": false,
@@ -3301,7 +3340,7 @@
           "source_column": "next_year_predict_scale"
         },
         {
-          "property_code": "contract_scale",
+          "property_code": "contractScale",
           "property_name": "合同额（万元）",
           "property_type": "STRING",
           "required": false,
@@ -3317,7 +3356,7 @@
           "source_column": "process"
         },
         {
-          "property_code": "main_business",
+          "property_code": "mainBusiness",
           "property_name": "主营业务",
           "property_type": "STRING",
           "required": false,
@@ -3325,7 +3364,7 @@
           "source_column": "main_business"
         },
         {
-          "property_code": "submit_person",
+          "property_code": "submitPerson",
           "property_name": "提交人",
           "property_type": "STRING",
           "required": false,
@@ -3333,7 +3372,7 @@
           "source_column": "submit_person"
         },
         {
-          "property_code": "submit_organization",
+          "property_code": "submitOrganization",
           "property_name": "提交组织",
           "property_type": "STRING",
           "required": false,
@@ -3341,7 +3380,7 @@
           "source_column": "submit_organization"
         },
         {
-          "property_code": "business_opportunity_process",
+          "property_code": "businessOpportunityProcess",
           "property_name": "商机进展",
           "property_type": "STRING",
           "required": false,
@@ -3349,7 +3388,7 @@
           "source_column": "business_opportunity_process"
         },
         {
-          "property_code": "customer_tax_id",
+          "property_code": "customerTaxId",
           "property_name": "客户纳税号",
           "property_type": "STRING",
           "required": false,
@@ -3357,7 +3396,7 @@
           "source_column": "customer_tax_id"
         },
         {
-          "property_code": "instance_id",
+          "property_code": "instanceId",
           "property_name": "实例ID",
           "property_type": "STRING",
           "required": false,
@@ -3365,7 +3404,7 @@
           "source_column": "instance_id"
         },
         {
-          "property_code": "created_by",
+          "property_code": "createdBy",
           "property_name": "创建人",
           "property_type": "STRING",
           "required": true,
@@ -3373,7 +3412,7 @@
           "source_column": "created_by"
         },
         {
-          "property_code": "created_time",
+          "property_code": "createdTime",
           "property_name": "创建时间",
           "property_type": "TIMESTAMP",
           "required": true,
@@ -3381,7 +3420,7 @@
           "source_column": "created_time"
         },
         {
-          "property_code": "updated_by",
+          "property_code": "updatedBy",
           "property_name": "更新人",
           "property_type": "STRING",
           "required": false,
@@ -3389,7 +3428,7 @@
           "source_column": "updated_by"
         },
         {
-          "property_code": "updated_time",
+          "property_code": "updatedTime",
           "property_name": "更新时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -3425,7 +3464,7 @@
           "source_column": "id"
         },
         {
-          "property_code": "user_id",
+          "property_code": "userId",
           "property_name": "用户id",
           "property_type": "STRING",
           "required": false,
@@ -3433,7 +3472,7 @@
           "source_column": "user_id"
         },
         {
-          "property_code": "emp_no",
+          "property_code": "empNo",
           "property_name": "工号",
           "property_type": "STRING",
           "required": true,
@@ -3441,7 +3480,7 @@
           "source_column": "emp_no"
         },
         {
-          "property_code": "attendance_date",
+          "property_code": "attendanceDate",
           "property_name": "考勤日",
           "property_type": "DATE",
           "required": true,
@@ -3449,7 +3488,7 @@
           "source_column": "attendance_date"
         },
         {
-          "property_code": "bill_date",
+          "property_code": "billDate",
           "property_name": "账期",
           "property_type": "YEAR",
           "required": true,
@@ -3457,7 +3496,7 @@
           "source_column": "bill_date"
         },
         {
-          "property_code": "forenoon_status",
+          "property_code": "forenoonStatus",
           "property_name": "上午打卡结果",
           "property_type": "STRING",
           "required": false,
@@ -3465,7 +3504,7 @@
           "source_column": "forenoon_status"
         },
         {
-          "property_code": "afternoon_status",
+          "property_code": "afternoonStatus",
           "property_name": "下午打卡结果",
           "property_type": "STRING",
           "required": false,
@@ -3473,7 +3512,7 @@
           "source_column": "afternoon_status"
         },
         {
-          "property_code": "forenoon_time",
+          "property_code": "forenoonTime",
           "property_name": "上午实际打卡时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -3481,7 +3520,7 @@
           "source_column": "forenoon_time"
         },
         {
-          "property_code": "afternoon_time",
+          "property_code": "afternoonTime",
           "property_name": "下午实际打卡时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -3489,7 +3528,7 @@
           "source_column": "afternoon_time"
         },
         {
-          "property_code": "created_by",
+          "property_code": "createdBy",
           "property_name": "创建人",
           "property_type": "STRING",
           "required": true,
@@ -3497,7 +3536,7 @@
           "source_column": "created_by"
         },
         {
-          "property_code": "created_time",
+          "property_code": "createdTime",
           "property_name": "创建时间",
           "property_type": "TIMESTAMP",
           "required": true,
@@ -3505,7 +3544,7 @@
           "source_column": "created_time"
         },
         {
-          "property_code": "updated_by",
+          "property_code": "updatedBy",
           "property_name": "更新人",
           "property_type": "STRING",
           "required": false,
@@ -3513,7 +3552,7 @@
           "source_column": "updated_by"
         },
         {
-          "property_code": "updated_time",
+          "property_code": "updatedTime",
           "property_name": "更新时间",
           "property_type": "TIMESTAMP",
           "required": false,
@@ -3521,7 +3560,7 @@
           "source_column": "updated_time"
         },
         {
-          "property_code": "forenoon_location",
+          "property_code": "forenoonLocation",
           "property_name": "上午打卡地点",
           "property_type": "STRING",
           "required": false,
@@ -3529,7 +3568,7 @@
           "source_column": "forenoon_location"
         },
         {
-          "property_code": "afternoon_location",
+          "property_code": "afternoonLocation",
           "property_name": "下午打卡地点",
           "property_type": "STRING",
           "required": false,
@@ -3547,8 +3586,8 @@
       "target_object_ref": "po_organization",
       "relation_type": "BELONGS_TO",
       "cardinality": "MANY_TO_ONE",
-      "source_property_ref": "org_id",
-      "target_property_ref": "org_id"
+      "source_property_ref": "orgId",
+      "target_property_ref": "orgId"
     },
     {
       "relation_name": "组织父子层级",
@@ -3556,8 +3595,8 @@
       "target_object_ref": "po_organization",
       "relation_type": "BELONGS_TO",
       "cardinality": "MANY_TO_ONE",
-      "source_property_ref": "parent_org_id",
-      "target_property_ref": "org_id"
+      "source_property_ref": "parentOrgId",
+      "target_property_ref": "orgId"
     },
     {
       "relation_name": "人员有合同",
@@ -3565,8 +3604,8 @@
       "target_object_ref": "po_users_kpi_detail",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "user_number",
-      "target_property_ref": "emp_no"
+      "source_property_ref": "userNumber",
+      "target_property_ref": "empNo"
     },
     {
       "relation_name": "组织有合同",
@@ -3574,8 +3613,8 @@
       "target_object_ref": "po_users_kpi_detail",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "org_id",
-      "target_property_ref": "emp_org_id"
+      "source_property_ref": "orgId",
+      "target_property_ref": "empOrgId"
     },
     {
       "relation_name": "人员有考勤",
@@ -3583,8 +3622,8 @@
       "target_object_ref": "sales_emp_attendance",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "user_number",
-      "target_property_ref": "emp_no"
+      "source_property_ref": "userNumber",
+      "target_property_ref": "empNo"
     },
     {
       "relation_name": "人员有日报",
@@ -3592,8 +3631,8 @@
       "target_object_ref": "sales_daily_report",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "user_number",
-      "target_property_ref": "belong_emp_no"
+      "source_property_ref": "userNumber",
+      "target_property_ref": "belongEmpNo"
     },
     {
       "relation_name": "人员负责商机",
@@ -3601,8 +3640,8 @@
       "target_object_ref": "sales_business_opportunity",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "user_number",
-      "target_property_ref": "iwhale_cbm_emp_no"
+      "source_property_ref": "userNumber",
+      "target_property_ref": "iwhaleCbmEmpNo"
     },
     {
       "relation_name": "组织负责商机",
@@ -3610,8 +3649,8 @@
       "target_object_ref": "sales_business_opportunity",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "org_id",
-      "target_property_ref": "iwhale_cbm_org_id"
+      "source_property_ref": "orgId",
+      "target_property_ref": "iwhaleCbmOrgId"
     },
     {
       "relation_name": "商机关联客户",
@@ -3619,8 +3658,8 @@
       "target_object_ref": "sales_customer",
       "relation_type": "ASSOCIATES",
       "cardinality": "MANY_TO_ONE",
-      "source_property_ref": "customer_name",
-      "target_property_ref": "customer_name"
+      "source_property_ref": "customerName",
+      "target_property_ref": "customerName"
     },
     {
       "relation_name": "人员维护客户",
@@ -3628,8 +3667,8 @@
       "target_object_ref": "sales_customer",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "user_number",
-      "target_property_ref": "iwhale_cbm_emp_no"
+      "source_property_ref": "userNumber",
+      "target_property_ref": "iwhaleCbmEmpNo"
     },
     {
       "relation_name": "人员创建待办",
@@ -3637,8 +3676,8 @@
       "target_object_ref": "todo_items",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "user_id",
-      "target_property_ref": "created_by"
+      "source_property_ref": "userId",
+      "target_property_ref": "createdBy"
     }
   ]
 }
