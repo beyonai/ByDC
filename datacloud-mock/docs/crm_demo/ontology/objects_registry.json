@@ -1828,5 +1828,213 @@
       "actions": []
     }
   ],
-  "relations": []
+  "relations": [
+    {
+      "relation_name": "人员归属组织",
+      "source_object_ref": "po_users",
+      "target_object_ref": "po_organization",
+      "relation_type": "BELONGS_TO",
+      "cardinality": "MANY_TO_ONE",
+      "source_property_ref": "org_id",
+      "target_property_ref": "org_id"
+    },
+    {
+      "relation_name": "组织父子层级",
+      "source_object_ref": "po_organization",
+      "target_object_ref": "po_organization",
+      "relation_type": "BELONGS_TO",
+      "cardinality": "MANY_TO_ONE",
+      "source_property_ref": "parent_org_id",
+      "target_property_ref": "org_id"
+    },
+    {
+      "relation_name": "人员有个人KPI",
+      "source_object_ref": "po_users",
+      "target_object_ref": "po_users_kpi_summary",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "user_number",
+      "target_property_ref": "emp_no"
+    },
+    {
+      "relation_name": "人员有个人KPI完成统计",
+      "source_object_ref": "po_users",
+      "target_object_ref": "po_users_kpi_completion",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "user_number",
+      "target_property_ref": "emp_no"
+    },
+    {
+      "relation_name": "人员有合同",
+      "source_object_ref": "po_users",
+      "target_object_ref": "po_users_kpi_detail",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "user_number",
+      "target_property_ref": "emp_no"
+    },
+    {
+      "relation_name": "组织有合同",
+      "source_object_ref": "po_organization",
+      "target_object_ref": "po_users_kpi_detail",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "org_id",
+      "target_property_ref": "emp_org_id"
+    },
+    {
+      "relation_name": "组织有组织KPI",
+      "source_object_ref": "po_organization",
+      "target_object_ref": "sales_org_kpi_summary",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "org_id",
+      "target_property_ref": "org_id"
+    },
+    {
+      "relation_name": "组织有组织KPI完成统计",
+      "source_object_ref": "po_organization",
+      "target_object_ref": "sales_org_kpi_completion",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "org_id",
+      "target_property_ref": "org_id"
+    },
+    {
+      "relation_name": "人员有考勤",
+      "source_object_ref": "po_users",
+      "target_object_ref": "sales_emp_attendance",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "user_number",
+      "target_property_ref": "emp_no"
+    },
+    {
+      "relation_name": "人员有日报",
+      "source_object_ref": "po_users",
+      "target_object_ref": "sales_daily_report",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "user_number",
+      "target_property_ref": "belong_emp_no"
+    },
+    {
+      "relation_name": "商机有状态变更记录",
+      "source_object_ref": "sales_business_opportunity",
+      "target_object_ref": "sales_bo_status_change",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "id",
+      "target_property_ref": "bo_id"
+    },
+    {
+      "relation_name": "人员负责商机",
+      "source_object_ref": "po_users",
+      "target_object_ref": "sales_business_opportunity",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "user_number",
+      "target_property_ref": "iwhale_cbm_emp_no"
+    },
+    {
+      "relation_name": "组织负责商机",
+      "source_object_ref": "po_organization",
+      "target_object_ref": "sales_business_opportunity",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "org_id",
+      "target_property_ref": "iwhale_cbm_org_id"
+    },
+    {
+      "relation_name": "商机关联客户",
+      "source_object_ref": "sales_business_opportunity",
+      "target_object_ref": "sales_customer",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "MANY_TO_ONE",
+      "source_property_ref": "customer_name",
+      "target_property_ref": "customer_name"
+    },
+    {
+      "relation_name": "人员维护客户",
+      "source_object_ref": "po_users",
+      "target_object_ref": "sales_customer",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "user_number",
+      "target_property_ref": "iwhale_cbm_emp_no"
+    },
+    {
+      "relation_name": "费用申请人",
+      "source_object_ref": "po_users",
+      "target_object_ref": "sales_expense_report",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "user_number",
+      "target_property_ref": "applicant_emp_no"
+    },
+    {
+      "relation_name": "费用申请组织",
+      "source_object_ref": "po_organization",
+      "target_object_ref": "sales_expense_report",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "org_id",
+      "target_property_ref": "applicant_org_id"
+    },
+    {
+      "relation_name": "费用关联商机",
+      "source_object_ref": "sales_expense_report",
+      "target_object_ref": "sales_business_opportunity",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "MANY_TO_ONE",
+      "source_property_ref": "related_bo_id",
+      "target_property_ref": "opportunity_id"
+    },
+    {
+      "relation_name": "费用关联客户",
+      "source_object_ref": "sales_expense_report",
+      "target_object_ref": "sales_customer",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "MANY_TO_ONE",
+      "source_property_ref": "related_customer_id",
+      "target_property_ref": "id"
+    },
+    {
+      "relation_name": "人员创建待办",
+      "source_object_ref": "po_users",
+      "target_object_ref": "todo_items",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "user_id",
+      "target_property_ref": "created_by"
+    },
+    {
+      "relation_name": "人员创建会议纪要",
+      "source_object_ref": "po_users",
+      "target_object_ref": "sales_meeting_note",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "user_number",
+      "target_property_ref": "created_by"
+    },
+    {
+      "relation_name": "会议纪要关联商机",
+      "source_object_ref": "sales_meeting_note",
+      "target_object_ref": "sales_business_opportunity",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "MANY_TO_ONE",
+      "source_property_ref": "related_bo_id",
+      "target_property_ref": "opportunity_id"
+    },
+    {
+      "relation_name": "会议纪要关联客户",
+      "source_object_ref": "sales_meeting_note",
+      "target_object_ref": "sales_customer",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "MANY_TO_ONE",
+      "source_property_ref": "related_customer_id",
+      "target_property_ref": "id"
+    }
+  ]
 }
