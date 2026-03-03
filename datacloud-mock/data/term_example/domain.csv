@@ -1,0 +1,3 @@
+domain_id,domain_name,parent_id,domain_desc
+DOMAIN_001,组织管理,,企业组织架构相关术语
+DOMAIN_002,员工管理,DOMAIN_001,员工信息、入职离职等

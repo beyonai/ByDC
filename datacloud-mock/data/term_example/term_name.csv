@@ -1,0 +1,8 @@
+name_id,term_id,name_text,name_pinyin,name_length
+NAME_001,TERM_001,员工,yuangong,2
+NAME_002,TERM_001,职员,zhiyuan,2
+NAME_003,TERM_001,员工编码,yuangongbianma,4
+NAME_004,TERM_002,王小明,wangxiaoming,3
+NAME_005,TERM_002,小王,xiaowang,2
+NAME_006,TERM_002,销售王小明,xiaoshouwangxiaoming,5
+NAME_007,TERM_003,王大明,wangdaming,3
