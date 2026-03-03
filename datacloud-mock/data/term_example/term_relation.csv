@@ -1,0 +1,6 @@
+relation_id,source_term_id,target_term_id,relation_name,action
+REL_001,TERM_ORG,TERM_EMP,组织_具有_员工,根据组织查询员工
+REL_002,TERM_EMP,TERM_CONTRACT,员工_签订_合同,根据员工查询合同
+REL_003,TERM_EMP,TERM_KPI,员工_关联_KPI,根据员工查询KPI
+REL_004,TERM_EMP,TERM_ATTENDANCE,员工_拥有_考勤,根据员工查询考勤
+REL_005,TERM_XIAOMING,TERM_EMP,王小明_属于_员工,查询王小明的员工信息
