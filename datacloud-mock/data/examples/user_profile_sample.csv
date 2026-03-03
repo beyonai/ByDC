@@ -1,6 +1,0 @@
-user_id,user_name,age,gender,city,registration_date,vip_level,total_orders
-USER001,张三,28,男,上海,2023-01-15,金卡,15
-USER002,李四,32,女,北京,2023-02-20,银卡,8
-USER003,王五,25,男,广州,2023-03-10,普通,3
-USER004,赵六,35,女,深圳,2023-04-05,金卡,22
-USER005,钱七,29,男,成都,2023-05-12,银卡,11
