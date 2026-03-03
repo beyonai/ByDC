@@ -1,0 +1,17 @@
+{
+  "success": true,
+  "data": {
+    "query_id": "query_001",
+    "status": "completed",
+    "result": {
+      "columns": ["order_id", "customer_name", "product_name", "quantity", "total_amount"],
+      "rows": [
+        ["ORD001", "张三", "笔记本电脑", 1, 5999.00],
+        ["ORD002", "李四", "无线鼠标", 2, 178.00],
+        ["ORD003", "王五", "机械键盘", 1, 299.00]
+      ],
+      "total_count": 3
+    },
+    "execution_time_ms": 125
+  }
+}
