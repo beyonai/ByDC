@@ -303,6 +303,8 @@
 > 上述对象级文件导入后，系统可直接据此实例化 MCP Server：`sales_person` 和 `sales_business_opportunity` 成为 MCP Resource，`query_opportunity_by_emp` 和 `update_opportunity_status` 成为 MCP Tool。
 > 
 > **参数层级说明**：JSON 中 `params` 内的 `children` 数组对应数据库中 `parent_param_id` 的父子关系，导入时系统自动将嵌套结构展平为 dc_param 行记录。`mapping_path` 使用 `$` 前缀引用 api_schema 中的参数位置。
+>
+> **API 对象属性绑定**：当 `object_type` 为 API 时，属性可增加 `param_bindings` 数组，建立属性与动作 IN/OUT 参数的显式绑定。示例：`{ "property_code": "userCode", "param_bindings": [ { "action_code": "query_users_by_name_or_ids", "param_code": "userCode" }, { "action_code": "query_users_by_org_id", "param_code": "userNumber" } ] }`。详见设计文档 `docs/plans/2026-03-04-ontology-property-param-bindings-design.md`。
 
 ##### 3.3.3.1 dataCloud 本体 JSON 格式规范（dc-ontology.json）— 视图级完整示例
 
@@ -696,6 +698,7 @@ JSON 格式是 dataCloud 的**主格式**，所有其他格式转换以 JSON 为
 | `objects[*].actions[*].function_ref` | dc_action.function_id → dc_function（兼容） | 可选，单个函数编码 |
 | `objects[*].actions[*].function_refs` | dc_action_function | 函数编码数组，对应多函数绑定 |
 | `objects[*].properties[*].ext_attrs` | dc_property.ext_attrs | 属性扩展属性（枚举值、格式约束、绑定的术语类型等） |
+| `objects[*].properties[*].param_bindings` | （可选） | API 对象属性到动作参数的绑定；每项含 `action_code`、`param_code`；direction 由 action 的 param 定义决定；详见 `docs/plans/2026-03-04-ontology-property-param-bindings-design.md` |
 | `relations[*]` | dc_object_relation | 对象间关系 |
 | `relations[*].action_ref` | dc_object_relation.action_id → dc_action | 绑定的动作（非必填），值为 action_code；该动作须属于 source_object_ref 或 target_object_ref 所指对象之一 |
 | `views[*]` | dc_object_view + dc_object_view_mapping | 视图定义 |
