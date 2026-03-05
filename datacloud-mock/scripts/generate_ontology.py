@@ -134,7 +134,9 @@ def extract_scene(registry: dict, scene_key: str, scene_config: dict) -> dict:
 
 def main() -> None:
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    registry_path = os.path.join(script_dir, "objects_registry.json")
+    mock_root = os.path.dirname(script_dir)
+    modules_dir = os.path.join(mock_root, "mock-resource", "ontology", "crm_demo", "modules")
+    registry_path = os.path.join(modules_dir, "objects_registry.json")
 
     print(f"Loading registry from: {registry_path}")
     registry = load_registry(registry_path)
@@ -147,7 +149,7 @@ def main() -> None:
 
     for scene_key, scene_config in SCENE_CONFIGS.items():
         scene_data = extract_scene(registry, scene_key, scene_config)
-        output_path = os.path.join(script_dir, f"{scene_key}.json")
+        output_path = os.path.join(modules_dir, f"{scene_key}.json")
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(scene_data, f, ensure_ascii=False, indent=2)
         print(

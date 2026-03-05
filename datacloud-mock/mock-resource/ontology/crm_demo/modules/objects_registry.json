@@ -1,4 +1,10 @@
 {
+  "termMeta": {
+    "datasetId": 12,
+    "termMasterType": "dict/list",
+    "termTypeCode": "user",
+    "termField": "name/code"
+  },
   "$schema": "https://datacloud.io/schemas/ontology/v1.0",
   "version": "1.0",
   "scope": "OBJECT",
@@ -11,97 +17,6 @@
     "domain_ref": "sales"
   },
   "functions": [
-    {
-      "function_code": "fn_query_mysql",
-      "function_name": "MySQL通用查询",
-      "description": "MySQL通用查询，通过SQL查询MySQL数据源并返回结果集",
-      "function_type": "API",
-      "api_schema": {
-        "openapi": "3.0.3",
-        "info": {
-          "title": "MySQL通用查询",
-          "version": "1.0.0"
-        },
-        "servers": [
-          {
-            "url": "http://data-service:8082"
-          }
-        ],
-        "paths": {
-          "/api/v1/query": {
-            "post": {
-              "summary": "执行MySQL查询",
-              "requestBody": {
-                "required": true,
-                "content": {
-                  "application/json": {
-                    "schema": {
-                      "type": "object",
-                      "required": [
-                        "sql",
-                        "datasource_id"
-                      ],
-                      "properties": {
-                        "sql": {
-                          "type": "string",
-                          "description": "SQL语句"
-                        },
-                        "datasource_id": {
-                          "type": "string",
-                          "description": "数据源ID"
-                        },
-                        "sql_param_emp_no": {
-                          "type": "string",
-                          "description": "动态参数：员工工号"
-                        },
-                        "sql_param_org_id": {
-                          "type": "string",
-                          "description": "动态参数：组织ID"
-                        },
-                        "sql_param_date_from": {
-                          "type": "string",
-                          "format": "date",
-                          "description": "动态参数：开始日期"
-                        },
-                        "sql_param_date_to": {
-                          "type": "string",
-                          "format": "date",
-                          "description": "动态参数：结束日期"
-                        },
-                        "sql_param_keyword": {
-                          "type": "string",
-                          "description": "动态参数：关键词"
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              "responses": {
-                "200": {
-                  "description": "查询结果",
-                  "content": {
-                    "application/json": {
-                      "schema": {
-                        "type": "object",
-                        "properties": {
-                          "result_set": {
-                            "type": "array",
-                            "items": {
-                              "type": "object"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     {
       "function_code": "fn_po_users_query_by_ids",
       "function_name": "按名称/ID查询人员",
@@ -207,29 +122,32 @@
           }
         ],
         "paths": {
-          "/api/v1/po/users/by-org/{orgId}": {
-            "get": {
+          "/api/v1/po/users/by-org": {
+            "post": {
               "summary": "按组织ID查询人员",
-              "parameters": [
-                {
-                  "name": "orgId",
-                  "in": "path",
-                  "required": true,
-                  "schema": {
-                    "type": "string"
-                  },
-                  "description": "组织ID"
-                },
-                {
-                  "name": "includeSubOrgs",
-                  "in": "query",
-                  "required": false,
-                  "schema": {
-                    "type": "boolean"
-                  },
-                  "description": "是否包含下级组织人员"
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "orgId": {
+                          "type": "string",
+                          "description": "组织ID"
+                        },
+                        "includeSubOrgs": {
+                          "type": "boolean",
+                          "description": "是否包含下级组织人员"
+                        }
+                      },
+                      "required": [
+                        "orgId"
+                      ]
+                    }
+                  }
                 }
-              ],
+              },
               "responses": {
                 "200": {
                   "description": "人员列表",
@@ -387,29 +305,32 @@
           }
         ],
         "paths": {
-          "/api/v1/po/organizations/{orgId}/children": {
-            "get": {
+          "/api/v1/po/organizations/children": {
+            "post": {
               "summary": "查询指定组织的下级组织",
-              "parameters": [
-                {
-                  "name": "orgId",
-                  "in": "path",
-                  "required": true,
-                  "schema": {
-                    "type": "string"
-                  },
-                  "description": "组织ID"
-                },
-                {
-                  "name": "recursive",
-                  "in": "query",
-                  "required": false,
-                  "schema": {
-                    "type": "boolean"
-                  },
-                  "description": "是否递归查询所有下级"
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "orgId": {
+                          "type": "string",
+                          "description": "组织ID"
+                        },
+                        "recursive": {
+                          "type": "boolean",
+                          "description": "是否递归查询所有下级"
+                        }
+                      },
+                      "required": [
+                        "orgId"
+                      ]
+                    }
+                  }
                 }
-              ],
+              },
               "responses": {
                 "200": {
                   "description": "下级组织列表",
@@ -752,20 +673,28 @@
           }
         ],
         "paths": {
-          "/api/v1/todos/{todoId}/accept": {
-            "put": {
+          "/api/v1/todos/accept": {
+            "post": {
               "summary": "接收待办",
-              "parameters": [
-                {
-                  "name": "todoId",
-                  "in": "path",
-                  "required": true,
-                  "schema": {
-                    "type": "string"
-                  },
-                  "description": "待办ID"
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "todoId": {
+                          "type": "string",
+                          "description": "待办ID"
+                        }
+                      },
+                      "required": [
+                        "todoId"
+                      ]
+                    }
+                  }
                 }
-              ],
+              },
               "responses": {
                 "200": {
                   "description": "接收结果",
@@ -808,35 +737,29 @@
           }
         ],
         "paths": {
-          "/api/v1/todos/{todoId}/return": {
-            "put": {
+          "/api/v1/todos/return": {
+            "post": {
               "summary": "退回待办",
-              "parameters": [
-                {
-                  "name": "todoId",
-                  "in": "path",
-                  "required": true,
-                  "schema": {
-                    "type": "string"
-                  },
-                  "description": "待办ID"
-                }
-              ],
               "requestBody": {
                 "required": true,
                 "content": {
                   "application/json": {
                     "schema": {
                       "type": "object",
-                      "required": [
-                        "returnReason"
-                      ],
                       "properties": {
                         "returnReason": {
                           "type": "string",
                           "description": "退回原因"
+                        },
+                        "todoId": {
+                          "type": "string",
+                          "description": "待办ID"
                         }
-                      }
+                      },
+                      "required": [
+                        "returnReason",
+                        "todoId"
+                      ]
                     }
                   }
                 }
@@ -884,7 +807,7 @@
         ],
         "paths": {
           "/api/v1/todos/batch/process": {
-            "put": {
+            "post": {
               "summary": "批量处理待办",
               "requestBody": {
                 "required": true,
@@ -892,9 +815,6 @@
                   "application/json": {
                     "schema": {
                       "type": "object",
-                      "required": [
-                        "todoIds"
-                      ],
                       "properties": {
                         "todoIds": {
                           "type": "array",
@@ -913,7 +833,10 @@
                           "minimum": 0,
                           "maximum": 100
                         }
-                      }
+                      },
+                      "required": [
+                        "todoIds"
+                      ]
                     }
                   }
                 }
@@ -959,7 +882,7 @@
         ],
         "paths": {
           "/api/v1/todos/batch": {
-            "delete": {
+            "post": {
               "summary": "批量删除待办",
               "requestBody": {
                 "required": true,
@@ -967,9 +890,6 @@
                   "application/json": {
                     "schema": {
                       "type": "object",
-                      "required": [
-                        "todoIds"
-                      ],
                       "properties": {
                         "todoIds": {
                           "type": "array",
@@ -978,7 +898,10 @@
                           },
                           "description": "待办ID列表"
                         }
-                      }
+                      },
+                      "required": [
+                        "todoIds"
+                      ]
                     }
                   }
                 }
@@ -1095,22 +1018,11 @@
           }
         ],
         "paths": {
-          "/api/v1/todos/{todoId}": {
-            "put": {
+          "/api/v1/todos/update": {
+            "post": {
               "summary": "修改待办",
-              "parameters": [
-                {
-                  "name": "todoId",
-                  "in": "path",
-                  "required": true,
-                  "schema": {
-                    "type": "string"
-                  },
-                  "description": "待办ID"
-                }
-              ],
               "requestBody": {
-                "required": false,
+                "required": true,
                 "content": {
                   "application/json": {
                     "schema": {
@@ -1138,8 +1050,15 @@
                         "content": {
                           "type": "string",
                           "description": "待办内容"
+                        },
+                        "todoId": {
+                          "type": "string",
+                          "description": "待办ID"
                         }
-                      }
+                      },
+                      "required": [
+                        "todoId"
+                      ]
                     }
                   }
                 }
@@ -1184,7 +1103,7 @@
         ],
         "paths": {
           "/api/v1/todos/batch/approve": {
-            "put": {
+            "post": {
               "summary": "批量审批待办",
               "requestBody": {
                 "required": true,
@@ -1192,10 +1111,6 @@
                   "application/json": {
                     "schema": {
                       "type": "object",
-                      "required": [
-                        "approvalStatus",
-                        "todoIds"
-                      ],
                       "properties": {
                         "approvalComment": {
                           "type": "string",
@@ -1216,7 +1131,11 @@
                           },
                           "description": "待办ID列表"
                         }
-                      }
+                      },
+                      "required": [
+                        "approvalStatus",
+                        "todoIds"
+                      ]
                     }
                   }
                 }
@@ -1235,6 +1154,393 @@
                           "approvalStatus": {
                             "type": "string",
                             "description": "审批状态：Approving(通过) 或 Rejected(拒绝)"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_expense_apply",
+      "function_name": "申请费用报备",
+      "description": "创建费用报备记录",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "申请费用报备",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://main-data-service:8080"
+          }
+        ],
+        "paths": {
+          "/api/v1/expense-reports": {
+            "post": {
+              "summary": "申请费用报备",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "required": [
+                        "applicantEmpNo",
+                        "applicantName",
+                        "applicantOrgId",
+                        "expenseAmount"
+                      ],
+                      "properties": {
+                        "applicantEmpNo": {
+                          "type": "string",
+                          "description": "申请人工号或名称"
+                        },
+                        "applicantName": {
+                          "type": "string",
+                          "description": "申请人姓名"
+                        },
+                        "applicantOrgId": {
+                          "type": "string",
+                          "description": "申请组织ID"
+                        },
+                        "expenseAmount": {
+                          "type": "number",
+                          "description": "申请金额（元）"
+                        },
+                        "expenseDesc": {
+                          "type": "string",
+                          "description": "申请说明"
+                        },
+                        "relatedBoId": {
+                          "type": "string",
+                          "description": "关联商机ID"
+                        },
+                        "relatedCustomerId": {
+                          "type": "string",
+                          "description": "关联客户ID"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "创建结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "errorMsg": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_expense_update",
+      "function_name": "修改费用报备",
+      "description": "修改费用报备记录（审批前）",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "修改费用报备",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://main-data-service:8080"
+          }
+        ],
+        "paths": {
+          "/api/v1/expense-reports/update": {
+            "post": {
+              "summary": "修改费用报备",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "expenseAmount": {
+                          "type": "number",
+                          "description": "申请金额（元）"
+                        },
+                        "expenseDesc": {
+                          "type": "string",
+                          "description": "申请说明"
+                        },
+                        "relatedBoId": {
+                          "type": "string",
+                          "description": "关联商机ID"
+                        },
+                        "relatedCustomerId": {
+                          "type": "string",
+                          "description": "关联客户ID"
+                        },
+                        "applicantOrgId": {
+                          "type": "string",
+                          "description": "申请组织ID"
+                        },
+                        "id": {
+                          "type": "string",
+                          "description": "费用报备ID"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "修改结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_expense_approve",
+      "function_name": "审批费用报备",
+      "description": "批量审批费用报备（通过或拒绝）",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "审批费用报备",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://main-data-service:8080"
+          }
+        ],
+        "paths": {
+          "/api/v1/expense-reports/batch/approve": {
+            "post": {
+              "summary": "批量审批费用报备",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "expenseReportIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "费用报备ID列表"
+                        },
+                        "approvalStatus": {
+                          "type": "string",
+                          "description": "审批状态：Approving(通过) 或 Rejected(拒绝)",
+                          "enum": [
+                            "Approving",
+                            "Rejected"
+                          ]
+                        },
+                        "approvalComment": {
+                          "type": "string",
+                          "description": "审批意见"
+                        }
+                      },
+                      "required": [
+                        "expenseReportIds",
+                        "approvalStatus"
+                      ]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "审批结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "approvalStatus": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_expense_query",
+      "function_name": "查询费用报备",
+      "description": "查询费用报备列表，支持多种过滤条件",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "查询费用报备",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://main-data-service:8080"
+          }
+        ],
+        "paths": {
+          "/api/v1/expense-reports/list": {
+            "post": {
+              "summary": "查询费用报备列表",
+              "requestBody": {
+                "required": false,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "applicantEmpNos": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "申请人工号列表"
+                        },
+                        "applicantOrgId": {
+                          "type": "string",
+                          "description": "申请组织ID"
+                        },
+                        "approvalStatus": {
+                          "type": "string",
+                          "description": "审批状态"
+                        },
+                        "applyTimeStart": {
+                          "type": "string",
+                          "description": "申请时间起，格式yyyy-MM-dd HH:mm:ss"
+                        },
+                        "applyTimeEnd": {
+                          "type": "string",
+                          "description": "申请时间止，格式yyyy-MM-dd HH:mm:ss"
+                        },
+                        "page": {
+                          "type": "integer",
+                          "description": "页码"
+                        },
+                        "pageSize": {
+                          "type": "integer",
+                          "description": "每页条数"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "费用报备列表",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "expenseReports": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "applicantEmpNo": {
+                                  "type": "string"
+                                },
+                                "applicantName": {
+                                  "type": "string"
+                                },
+                                "applicantOrgId": {
+                                  "type": "string"
+                                },
+                                "expenseAmount": {
+                                  "type": "number"
+                                },
+                                "expenseDesc": {
+                                  "type": "string"
+                                },
+                                "relatedBoId": {
+                                  "type": "string"
+                                },
+                                "relatedCustomerId": {
+                                  "type": "string"
+                                },
+                                "applyTime": {
+                                  "type": "string"
+                                },
+                                "approvalStatus": {
+                                  "type": "string"
+                                },
+                                "approvalComment": {
+                                  "type": "string"
+                                },
+                                "approvedAt": {
+                                  "type": "string"
+                                }
+                              }
+                            }
                           }
                         }
                       }
@@ -1273,7 +1579,11 @@
           "property_type": "BIGINT",
           "required": true,
           "is_primary_key": true,
-          "source_column": "user_id"
+          "source_column": "user_id",
+          "param_bindings": [
+            { "action_code": "query_users_by_name_or_ids", "param_code": "userId" },
+            { "action_code": "query_users_by_org_id", "param_code": "userId" }
+          ]
         },
         {
           "property_code": "userName",
@@ -1281,7 +1591,11 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
-          "source_column": "user_name"
+          "source_column": "user_name",
+          "param_bindings": [
+            { "action_code": "query_users_by_name_or_ids", "param_code": "userName" },
+            { "action_code": "query_users_by_org_id", "param_code": "userName" }
+          ]
         },
         {
           "property_code": "email",
@@ -1289,7 +1603,11 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
-          "source_column": "email"
+          "source_column": "email",
+          "param_bindings": [
+            { "action_code": "query_users_by_name_or_ids", "param_code": "email" },
+            { "action_code": "query_users_by_org_id", "param_code": "email" }
+          ]
         },
         {
           "property_code": "phone",
@@ -1297,7 +1615,11 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
-          "source_column": "phone"
+          "source_column": "phone",
+          "param_bindings": [
+            { "action_code": "query_users_by_name_or_ids", "param_code": "phone" },
+            { "action_code": "query_users_by_org_id", "param_code": "phone" }
+          ]
         },
         {
           "property_code": "userCode",
@@ -1305,7 +1627,11 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
-          "source_column": "user_code"
+          "source_column": "user_code",
+          "param_bindings": [
+            { "action_code": "query_users_by_name_or_ids", "param_code": "userCode" },
+            { "action_code": "query_users_by_org_id", "param_code": "userNumber" }
+          ]
         },
         {
           "property_code": "address",
@@ -1353,7 +1679,11 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
-          "source_column": "state"
+          "source_column": "state",
+          "param_bindings": [
+            { "action_code": "query_users_by_name_or_ids", "param_code": "state" },
+            { "action_code": "query_users_by_org_id", "param_code": "state" }
+          ]
         },
         {
           "property_code": "isLocked",
@@ -1393,7 +1723,10 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
-          "source_column": "user_number"
+          "source_column": "user_number",
+          "param_bindings": [
+            { "action_code": "query_users_by_org_id", "param_code": "userNumber" }
+          ]
         },
         {
           "property_code": "stationId",
@@ -1419,19 +1752,17 @@
           ],
           "params": [
             {
-              "param_code": "names",
-              "param_name": "用户名称列表",
-              "param_type": "ARRAY",
-              "direction": "IN",
-              "required": false,
-              "mapping_path": "$.requestBody.names"
-            },
-            {
               "param_code": "userIds",
-              "param_name": "用户ID列表",
+              "param_name": "用户名称或id列表",
               "param_type": "ARRAY",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "user",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.userIds"
             },
             {
@@ -1449,11 +1780,11 @@
               "mapping_path": "$.response.users[].userName"
             },
             {
-              "param_code": "userNumber",
+              "param_code": "userCode",
               "param_name": "工号",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.users[].userNumber"
+              "mapping_path": "$.response.users[].userCode"
             },
             {
               "param_code": "orgId",
@@ -1591,7 +1922,11 @@
           "property_type": "BIGINT",
           "required": true,
           "is_primary_key": true,
-          "source_column": "org_id"
+          "source_column": "org_id",
+          "param_bindings": [
+            { "action_code": "query_org_by_name_or_id", "param_code": "orgId" },
+            { "action_code": "query_sub_orgs_by_org_id", "param_code": "orgId" }
+          ]
         },
         {
           "property_code": "orgCode",
@@ -1599,7 +1934,11 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
-          "source_column": "org_code"
+          "source_column": "org_code",
+          "param_bindings": [
+            { "action_code": "query_org_by_name_or_id", "param_code": "orgCode" },
+            { "action_code": "query_sub_orgs_by_org_id", "param_code": "orgCode" }
+          ]
         },
         {
           "property_code": "orgName",
@@ -1607,7 +1946,11 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
-          "source_column": "org_name"
+          "source_column": "org_name",
+          "param_bindings": [
+            { "action_code": "query_org_by_name_or_id", "param_code": "orgName" },
+            { "action_code": "query_sub_orgs_by_org_id", "param_code": "orgName" }
+          ]
         },
         {
           "property_code": "orgType",
@@ -1615,7 +1958,11 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
-          "source_column": "org_type"
+          "source_column": "org_type",
+          "param_bindings": [
+            { "action_code": "query_org_by_name_or_id", "param_code": "orgType" },
+            { "action_code": "query_sub_orgs_by_org_id", "param_code": "orgType" }
+          ]
         },
         {
           "property_code": "parentOrgId",
@@ -1623,7 +1970,11 @@
           "property_type": "BIGINT",
           "required": true,
           "is_primary_key": false,
-          "source_column": "parent_org_id"
+          "source_column": "parent_org_id",
+          "param_bindings": [
+            { "action_code": "query_org_by_name_or_id", "param_code": "parentOrgId" },
+            { "action_code": "query_sub_orgs_by_org_id", "param_code": "parentOrgId" }
+          ]
         },
         {
           "property_code": "orgLevel",
@@ -1631,7 +1982,11 @@
           "property_type": "INTEGER",
           "required": false,
           "is_primary_key": false,
-          "source_column": "org_level"
+          "source_column": "org_level",
+          "param_bindings": [
+            { "action_code": "query_org_by_name_or_id", "param_code": "orgLevel" },
+            { "action_code": "query_sub_orgs_by_org_id", "param_code": "orgLevel" }
+          ]
         },
         {
           "property_code": "orgIndex",
@@ -1671,7 +2026,10 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
-          "source_column": "org_desc"
+          "source_column": "org_desc",
+          "param_bindings": [
+            { "action_code": "query_org_by_name_or_id", "param_code": "orgDesc" }
+          ]
         }
       ],
       "actions": [
@@ -1690,19 +2048,17 @@
           "params": [
             {
               "param_code": "orgIds",
-              "param_name": "组织ID列表",
+              "param_name": "组织ID或名称列表",
               "param_type": "ARRAY",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "org",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.orgIds"
-            },
-            {
-              "param_code": "orgNames",
-              "param_name": "组织名称列表",
-              "param_type": "ARRAY",
-              "direction": "IN",
-              "required": false,
-              "mapping_path": "$.requestBody.orgNames"
             },
             {
               "param_code": "orgId",
@@ -1770,10 +2126,16 @@
           "params": [
             {
               "param_code": "orgId",
-              "param_name": "组织ID",
+              "param_name": "组织名称或ID",
               "param_type": "STRING",
               "direction": "IN",
               "required": true,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "org",
+                "termField": "code"
+              },
               "mapping_path": "$.parameters.orgId"
             },
             {
@@ -1854,7 +2216,12 @@
           "property_type": "BIGINT",
           "required": true,
           "is_primary_key": true,
-          "source_column": "id"
+          "source_column": "id",
+          "param_bindings": [
+            { "action_code": "create_todo", "param_code": "todoId" },
+            { "action_code": "query_todo_list", "param_code": "todoId" },
+            { "action_code": "accept_todo", "param_code": "todoId" }
+          ]
         },
         {
           "property_code": "title",
@@ -1862,7 +2229,11 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
-          "source_column": "title"
+          "source_column": "title",
+          "param_bindings": [
+            { "action_code": "create_todo", "param_code": "title" },
+            { "action_code": "query_todo_list", "param_code": "title" }
+          ]
         },
         {
           "property_code": "todoContent",
@@ -1870,7 +2241,11 @@
           "property_type": "TEXT",
           "required": false,
           "is_primary_key": false,
-          "source_column": "todo_content"
+          "source_column": "todo_content",
+          "param_bindings": [
+            { "action_code": "create_todo", "param_code": "content" },
+            { "action_code": "query_todo_list", "param_code": "content" }
+          ]
         },
         {
           "property_code": "deadlineAt",
@@ -1878,7 +2253,11 @@
           "property_type": "TIMESTAMP",
           "required": false,
           "is_primary_key": false,
-          "source_column": "deadline_at"
+          "source_column": "deadline_at",
+          "param_bindings": [
+            { "action_code": "create_todo", "param_code": "deadlineAt" },
+            { "action_code": "query_todo_list", "param_code": "deadlineAt" }
+          ]
         },
         {
           "property_code": "todoPriority",
@@ -1886,7 +2265,11 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
-          "source_column": "todo_priority"
+          "source_column": "todo_priority",
+          "param_bindings": [
+            { "action_code": "create_todo", "param_code": "priority" },
+            { "action_code": "query_todo_list", "param_code": "priority" }
+          ]
         },
         {
           "property_code": "todoStatus",
@@ -1894,7 +2277,11 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
-          "source_column": "todo_status"
+          "source_column": "todo_status",
+          "param_bindings": [
+            { "action_code": "create_todo", "param_code": "status" },
+            { "action_code": "query_todo_list", "param_code": "status" }
+          ]
         },
         {
           "property_code": "createdBy",
@@ -1910,7 +2297,11 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
-          "source_column": "promoter"
+          "source_column": "promoter",
+          "param_bindings": [
+            { "action_code": "create_todo", "param_code": "promoter" },
+            { "action_code": "query_todo_list", "param_code": "promoter" }
+          ]
         },
         {
           "property_code": "orgId",
@@ -1934,7 +2325,11 @@
           "property_type": "TIMESTAMP",
           "required": false,
           "is_primary_key": false,
-          "source_column": "created_at"
+          "source_column": "created_at",
+          "param_bindings": [
+            { "action_code": "create_todo", "param_code": "createdAt" },
+            { "action_code": "query_todo_list", "param_code": "createdAt" }
+          ]
         },
         {
           "property_code": "updatedAt",
@@ -1950,7 +2345,10 @@
           "property_type": "TIMESTAMP",
           "required": false,
           "is_primary_key": false,
-          "source_column": "completed_at"
+          "source_column": "completed_at",
+          "param_bindings": [
+            { "action_code": "query_todo_list", "param_code": "completedAt" }
+          ]
         },
         {
           "property_code": "cancelledAt",
@@ -1974,7 +2372,10 @@
           "property_type": "TIMESTAMP",
           "required": false,
           "is_primary_key": false,
-          "source_column": "approved_at"
+          "source_column": "approved_at",
+          "param_bindings": [
+            { "action_code": "query_todo_list", "param_code": "approvedAt" }
+          ]
         },
         {
           "property_code": "rejectedAt",
@@ -1990,7 +2391,10 @@
           "property_type": "TEXT",
           "required": false,
           "is_primary_key": false,
-          "source_column": "approval_comment"
+          "source_column": "approval_comment",
+          "param_bindings": [
+            { "action_code": "query_todo_list", "param_code": "approvalComment" }
+          ]
         },
         {
           "property_code": "urgencyLevel",
@@ -1998,7 +2402,11 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
-          "source_column": "urgency_level"
+          "source_column": "urgency_level",
+          "param_bindings": [
+            { "action_code": "create_todo", "param_code": "urgencyLevel" },
+            { "action_code": "query_todo_list", "param_code": "urgencyLevel" }
+          ]
         },
         {
           "property_code": "remark",
@@ -2006,7 +2414,10 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
-          "source_column": "remark"
+          "source_column": "remark",
+          "param_bindings": [
+            { "action_code": "create_todo", "param_code": "remark" }
+          ]
         },
         {
           "property_code": "meetingNoteId",
@@ -2014,7 +2425,11 @@
           "property_type": "BIGINT",
           "required": false,
           "is_primary_key": false,
-          "source_column": "meeting_note_id"
+          "source_column": "meeting_note_id",
+          "param_bindings": [
+            { "action_code": "create_todo", "param_code": "meetingNoteId" },
+            { "action_code": "query_todo_list", "param_code": "meetingNoteId" }
+          ]
         },
         {
           "property_code": "returnReason",
@@ -2022,7 +2437,10 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
-          "source_column": "return_reason"
+          "source_column": "return_reason",
+          "param_bindings": [
+            { "action_code": "query_todo_list", "param_code": "returnReason" }
+          ]
         },
         {
           "property_code": "returnedAt",
@@ -2065,10 +2483,16 @@
             },
             {
               "param_code": "handlerIds",
-              "param_name": "处理人ID列表",
+              "param_name": "处理人ID或名称列表",
               "param_type": "ARRAY",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "user",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.handlerIds"
             },
             {
@@ -2077,6 +2501,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "dict",
+                "termTypeCode": "priority",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.priority"
             },
             {
@@ -2085,6 +2515,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "dict",
+                "termTypeCode": "urgencyLevel",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.urgencyLevel"
             },
             {
@@ -2105,10 +2541,16 @@
             },
             {
               "param_code": "promoter",
-              "param_name": "发起人工号",
+              "param_name": "发起人工号或名称",
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "user",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.promoter"
             },
             {
@@ -2175,6 +2617,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "dict",
+                "termTypeCode": "priority",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.priority"
             },
             {
@@ -2183,14 +2631,26 @@
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "dict",
+                "termTypeCode": "urgencyLevel",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.urgencyLevel"
             },
             {
               "param_code": "orgId",
-              "param_name": "组织ID",
+              "param_name": "组织ID或名称",
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "org",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.orgId"
             },
             {
@@ -2207,6 +2667,12 @@
               "param_type": "ARRAY",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "dict",
+                "termTypeCode": "status",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.statusList"
             },
             {
@@ -2239,14 +2705,26 @@
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "dict",
+                "termTypeCode": "status",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.status"
             },
             {
               "param_code": "promoter",
-              "param_name": "发起人工号",
+              "param_name": "发起人工号或名称",
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "user",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.promoter"
             },
             {
@@ -2680,6 +3158,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "required": true,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "dict",
+                "termTypeCode": "approvalStatus",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.approvalStatus"
             },
             {
@@ -2764,14 +3248,26 @@
           "property_type": "INTEGER",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "reportStatus",
+            "termField": "code"
+          },
           "source_column": "report_status"
         },
         {
           "property_code": "belongEmpNo",
-          "property_name": "员工工号",
+          "property_name": "员工工号或名称",
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
           "source_column": "belong_emp_no"
         },
         {
@@ -2780,6 +3276,12 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "name"
+          },
           "source_column": "belong_user_name"
         },
         {
@@ -2788,39 +3290,13 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "code"
+          },
           "source_column": "belong_emp_org_id"
-        },
-        {
-          "property_code": "createdBy",
-          "property_name": "创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_by"
-        },
-        {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
-          "property_type": "TIMESTAMP",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_time"
         }
       ],
       "actions": []
@@ -2894,42 +3370,16 @@
         {
           "property_code": "participantEmpNos",
           "property_name": "会议参与人员工号",
-          "property_type": "JSON",
+          "property_type": "ARRAY",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
           "source_column": "participant_emp_nos"
-        },
-        {
-          "property_code": "createdBy",
-          "property_name": "会议创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_by"
-        },
-        {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
-          "property_type": "TIMESTAMP",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_time"
         }
       ],
       "actions": []
@@ -2974,6 +3424,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "name"
+          },
           "source_column": "belong_depart"
         },
         {
@@ -3002,10 +3458,16 @@
         },
         {
           "property_code": "iwhaleCbmEmpNo",
-          "property_name": "商机负责人工号",
+          "property_name": "商机负责人工号或名称",
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
           "source_column": "iwhale_cbm_emp_no"
         },
         {
@@ -3014,14 +3476,26 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "name"
+          },
           "source_column": "iwhale_cbm_name"
         },
         {
           "property_code": "iwhaleCbmOrgId",
-          "property_name": "商机负责人组织",
+          "property_name": "商机负责人组织或名称",
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "code"
+          },
           "source_column": "iwhale_cbm_org_id"
         },
         {
@@ -3050,10 +3524,16 @@
         },
         {
           "property_code": "iwhaleScEmpNo",
-          "property_name": "支撑sc工号",
+          "property_name": "支撑sc工号或名称",
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
           "source_column": "iwhale_sc_emp_no"
         },
         {
@@ -3062,6 +3542,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "name"
+          },
           "source_column": "iwhale_sc_name"
         },
         {
@@ -3150,6 +3636,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "name"
+          },
           "source_column": "submit_person"
         },
         {
@@ -3158,6 +3650,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "name"
+          },
           "source_column": "submit_organization"
         },
         {
@@ -3247,38 +3745,6 @@
           "required": false,
           "is_primary_key": false,
           "source_column": "customer_tax_id"
-        },
-        {
-          "property_code": "createdBy",
-          "property_name": "创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_by"
-        },
-        {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
-          "property_type": "TIMESTAMP",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_time"
         }
       ],
       "actions": []
@@ -3310,14 +3776,6 @@
           "source_column": "id"
         },
         {
-          "property_code": "boId",
-          "property_name": "商机主键ID",
-          "property_type": "BIGINT",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "bo_id"
-        },
-        {
           "property_code": "opportunityId",
           "property_name": "商机业务唯一标识",
           "property_type": "STRING",
@@ -3331,6 +3789,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "dict",
+            "termTypeCode": "changeStatus",
+            "termField": "code"
+          },
           "source_column": "status_before"
         },
         {
@@ -3339,6 +3803,12 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "dict",
+            "termTypeCode": "changeStatus",
+            "termField": "code"
+          },
           "source_column": "status_after"
         },
         {
@@ -3355,6 +3825,12 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
           "source_column": "changed_by"
         },
         {
@@ -3364,38 +3840,6 @@
           "required": true,
           "is_primary_key": false,
           "source_column": "changed_time"
-        },
-        {
-          "property_code": "createdBy",
-          "property_name": "创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_by"
-        },
-        {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
-          "property_type": "TIMESTAMP",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_time"
         }
       ],
       "actions": []
@@ -3428,19 +3872,17 @@
           "source_column": "id"
         },
         {
-          "property_code": "userId",
-          "property_name": "责任人ID",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "user_id"
-        },
-        {
           "property_code": "empNo",
-          "property_name": "责任人工号",
+          "property_name": "责任人工号或名称",
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
           "source_column": "emp_no"
         },
         {
@@ -3449,6 +3891,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "name"
+          },
           "source_column": "name"
         },
         {
@@ -3457,6 +3905,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "code"
+          },
           "source_column": "emp_org_id"
         },
         {
@@ -3498,38 +3952,6 @@
           "required": true,
           "is_primary_key": false,
           "source_column": "contact_scale"
-        },
-        {
-          "property_code": "createdBy",
-          "property_name": "创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_by"
-        },
-        {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
-          "property_type": "TIMESTAMP",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_time"
         }
       ],
       "actions": []
@@ -3574,6 +3996,12 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "name"
+          },
           "source_column": "belong_depart"
         },
         {
@@ -3594,10 +4022,16 @@
         },
         {
           "property_code": "iwhaleCbmEmpNo",
-          "property_name": "客户维护人工号",
+          "property_name": "客户维护人工号或名称",
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
           "source_column": "iwhale_cbm_emp_no"
         },
         {
@@ -3606,6 +4040,12 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "name"
+          },
           "source_column": "iwhale_cbm_name"
         },
         {
@@ -3614,6 +4054,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "code"
+          },
           "source_column": "iwhale_cbm_org_id"
         },
         {
@@ -3686,6 +4132,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "name"
+          },
           "source_column": "submit_person"
         },
         {
@@ -3694,6 +4146,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "name"
+          },
           "source_column": "submit_organization"
         },
         {
@@ -3719,38 +4177,6 @@
           "required": false,
           "is_primary_key": false,
           "source_column": "instance_id"
-        },
-        {
-          "property_code": "createdBy",
-          "property_name": "创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_by"
-        },
-        {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
-          "property_type": "TIMESTAMP",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_time"
         }
       ],
       "actions": []
@@ -3758,8 +4184,8 @@
     {
       "object_code": "sales_expense_report",
       "object_name": "费用报备对象",
-      "object_type": "ANALYTICS_DB",
-      "source_system": "crm_system",
+      "object_type": "API",
+      "source_system": "main_data_system",
       "domain_ref": "sales",
       "description": "销售费用报备表，记录营销费用申请信息",
       "tags": [
@@ -3767,10 +4193,10 @@
         "费用"
       ],
       "source_config": {
-        "connector_type": "mysql",
-        "datasource_id": "ds_crm",
-        "table_name": "sales_expense_report",
-        "primary_key": "id"
+        "connector_type": "http",
+        "base_url": "http://main-data-service:8080",
+        "primary_key": "id",
+        "display_column": "expenseDesc"
       },
       "properties": [
         {
@@ -3779,15 +4205,31 @@
           "property_type": "BIGINT",
           "required": true,
           "is_primary_key": true,
-          "source_column": "id"
+          "source_column": "id",
+          "param_bindings": [
+            { "action_code": "apply_expense_report", "param_code": "id" },
+            { "action_code": "update_expense_report", "param_code": "id" },
+            { "action_code": "approve_expense_report", "param_code": "id" },
+            { "action_code": "query_expense_report", "param_code": "id" }
+          ]
         },
         {
           "property_code": "applicantEmpNo",
-          "property_name": "申请人工号",
+          "property_name": "申请人工号或名称",
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
-          "source_column": "applicant_emp_no"
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
+          "source_column": "applicant_emp_no",
+          "param_bindings": [
+            { "action_code": "apply_expense_report", "param_code": "applicantEmpNo" },
+            { "action_code": "query_expense_report", "param_code": "applicantEmpNo" }
+          ]
         },
         {
           "property_code": "applicantName",
@@ -3795,7 +4237,17 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
-          "source_column": "applicant_name"
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "name"
+          },
+          "source_column": "applicant_name",
+          "param_bindings": [
+            { "action_code": "apply_expense_report", "param_code": "applicantName" },
+            { "action_code": "query_expense_report", "param_code": "applicantName" }
+          ]
         },
         {
           "property_code": "applicantOrgId",
@@ -3803,7 +4255,18 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
-          "source_column": "applicant_org_id"
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "code"
+          },
+          "source_column": "applicant_org_id",
+          "param_bindings": [
+            { "action_code": "apply_expense_report", "param_code": "applicantOrgId" },
+            { "action_code": "update_expense_report", "param_code": "applicantOrgId" },
+            { "action_code": "query_expense_report", "param_code": "applicantOrgId" }
+          ]
         },
         {
           "property_code": "expenseAmount",
@@ -3811,7 +4274,12 @@
           "property_type": "DECIMAL",
           "required": true,
           "is_primary_key": false,
-          "source_column": "expense_amount"
+          "source_column": "expense_amount",
+          "param_bindings": [
+            { "action_code": "apply_expense_report", "param_code": "expenseAmount" },
+            { "action_code": "update_expense_report", "param_code": "expenseAmount" },
+            { "action_code": "query_expense_report", "param_code": "expenseAmount" }
+          ]
         },
         {
           "property_code": "expenseDesc",
@@ -3819,7 +4287,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
-          "source_column": "expense_desc"
+          "source_column": "expense_desc",
+          "param_bindings": [
+            { "action_code": "apply_expense_report", "param_code": "expenseDesc" },
+            { "action_code": "update_expense_report", "param_code": "expenseDesc" },
+            { "action_code": "query_expense_report", "param_code": "expenseDesc" }
+          ]
         },
         {
           "property_code": "relatedBoId",
@@ -3827,7 +4300,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
-          "source_column": "related_bo_id"
+          "source_column": "related_bo_id",
+          "param_bindings": [
+            { "action_code": "apply_expense_report", "param_code": "relatedBoId" },
+            { "action_code": "update_expense_report", "param_code": "relatedBoId" },
+            { "action_code": "query_expense_report", "param_code": "relatedBoId" }
+          ]
         },
         {
           "property_code": "relatedCustomerId",
@@ -3835,7 +4313,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
-          "source_column": "related_customer_id"
+          "source_column": "related_customer_id",
+          "param_bindings": [
+            { "action_code": "apply_expense_report", "param_code": "relatedCustomerId" },
+            { "action_code": "update_expense_report", "param_code": "relatedCustomerId" },
+            { "action_code": "query_expense_report", "param_code": "relatedCustomerId" }
+          ]
         },
         {
           "property_code": "applyTime",
@@ -3843,42 +4326,469 @@
           "property_type": "TIMESTAMP",
           "required": true,
           "is_primary_key": false,
-          "source_column": "apply_time"
+          "source_column": "apply_time",
+          "param_bindings": [
+            { "action_code": "query_expense_report", "param_code": "applyTime" }
+          ]
         },
         {
-          "property_code": "createdBy",
-          "property_name": "创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
+          "property_code": "approvalStatus",
+          "property_name": "审批状态",
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
-          "source_column": "updated_by"
+          "source_column": "approval_status",
+          "param_bindings": [
+            { "action_code": "approve_expense_report", "param_code": "approvalStatus" },
+            { "action_code": "query_expense_report", "param_code": "approvalStatus" }
+          ]
         },
         {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
+          "property_code": "approvalComment",
+          "property_name": "审批意见",
+          "property_type": "STRING",
+          "required": false,
+          "is_primary_key": false,
+          "source_column": "approval_comment",
+          "param_bindings": [
+            { "action_code": "approve_expense_report", "param_code": "approvalComment" },
+            { "action_code": "query_expense_report", "param_code": "approvalComment" }
+          ]
+        },
+        {
+          "property_code": "approvedAt",
+          "property_name": "审批时间",
           "property_type": "TIMESTAMP",
           "required": false,
           "is_primary_key": false,
-          "source_column": "updated_time"
+          "source_column": "approved_at",
+          "param_bindings": [
+            { "action_code": "query_expense_report", "param_code": "approvedAt" }
+          ]
         }
       ],
-      "actions": []
+      "actions": [
+        {
+          "action_code": "apply_expense_report",
+          "action_name": "申请费用报备",
+          "action_type": "BUSINESS",
+          "function_refs": [
+            "fn_expense_apply"
+          ],
+          "description": "创建费用报备记录",
+          "visible": true,
+          "tags": [
+            "写入"
+          ],
+          "params": [
+            {
+              "param_code": "applicantEmpNo",
+              "param_name": "申请人工号或名称",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "user",
+                "termField": "code"
+              },
+              "mapping_path": "$.requestBody.applicantEmpNo"
+            },
+            {
+              "param_code": "applicantName",
+              "param_name": "申请人姓名",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "user",
+                "termField": "name"
+              },
+              "mapping_path": "$.requestBody.applicantName"
+            },
+            {
+              "param_code": "applicantOrgId",
+              "param_name": "申请组织ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "org",
+                "termField": "code"
+              },
+              "mapping_path": "$.requestBody.applicantOrgId"
+            },
+            {
+              "param_code": "expenseAmount",
+              "param_name": "申请金额（元）",
+              "param_type": "DECIMAL",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.expenseAmount"
+            },
+            {
+              "param_code": "expenseDesc",
+              "param_name": "申请说明",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": false,
+              "mapping_path": "$.requestBody.expenseDesc"
+            },
+            {
+              "param_code": "relatedBoId",
+              "param_name": "关联商机ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": false,
+              "mapping_path": "$.requestBody.relatedBoId"
+            },
+            {
+              "param_code": "relatedCustomerId",
+              "param_name": "关联客户ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": false,
+              "mapping_path": "$.requestBody.relatedCustomerId"
+            },
+            {
+              "param_code": "id",
+              "param_name": "费用报备ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.id"
+            },
+            {
+              "param_code": "errorMsg",
+              "param_name": "错误信息",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.errorMsg"
+            },
+            {
+              "param_code": "status",
+              "param_name": "状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.status"
+            }
+          ]
+        },
+        {
+          "action_code": "update_expense_report",
+          "action_name": "修改费用报备",
+          "action_type": "BUSINESS",
+          "function_refs": [
+            "fn_expense_update"
+          ],
+          "description": "修改费用报备记录（审批前）",
+          "visible": true,
+          "tags": [
+            "写入"
+          ],
+          "params": [
+            {
+              "param_code": "id",
+              "param_name": "费用报备ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.parameters.id"
+            },
+            {
+              "param_code": "expenseAmount",
+              "param_name": "申请金额（元）",
+              "param_type": "DECIMAL",
+              "direction": "IN",
+              "required": false,
+              "mapping_path": "$.requestBody.expenseAmount"
+            },
+            {
+              "param_code": "expenseDesc",
+              "param_name": "申请说明",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": false,
+              "mapping_path": "$.requestBody.expenseDesc"
+            },
+            {
+              "param_code": "relatedBoId",
+              "param_name": "关联商机ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": false,
+              "mapping_path": "$.requestBody.relatedBoId"
+            },
+            {
+              "param_code": "relatedCustomerId",
+              "param_name": "关联客户ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": false,
+              "mapping_path": "$.requestBody.relatedCustomerId"
+            },
+            {
+              "param_code": "applicantOrgId",
+              "param_name": "申请组织ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": false,
+              "mapping_path": "$.requestBody.applicantOrgId"
+            },
+            {
+              "param_code": "id",
+              "param_name": "费用报备ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.id"
+            },
+            {
+              "param_code": "status",
+              "param_name": "状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.status"
+            },
+            {
+              "param_code": "updatedAt",
+              "param_name": "更新时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.updatedAt"
+            }
+          ]
+        },
+        {
+          "action_code": "approve_expense_report",
+          "action_name": "审批费用报备",
+          "action_type": "BUSINESS",
+          "function_refs": [
+            "fn_expense_approve"
+          ],
+          "description": "批量审批费用报备（通过或拒绝）",
+          "visible": true,
+          "tags": [
+            "操作"
+          ],
+          "params": [
+            {
+              "param_code": "expenseReportIds",
+              "param_name": "费用报备ID列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.expenseReportIds"
+            },
+            {
+              "param_code": "approvalStatus",
+              "param_name": "审批状态",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "dict",
+                "termTypeCode": "approvalStatus",
+                "termField": "code"
+              },
+              "mapping_path": "$.requestBody.approvalStatus"
+            },
+            {
+              "param_code": "approvalComment",
+              "param_name": "审批意见",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": false,
+              "mapping_path": "$.requestBody.approvalComment"
+            },
+            {
+              "param_code": "id",
+              "param_name": "费用报备ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.id"
+            },
+            {
+              "param_code": "approvalStatus",
+              "param_name": "审批状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.approvalStatus"
+            }
+          ]
+        },
+        {
+          "action_code": "query_expense_report",
+          "action_name": "查询费用报备",
+          "action_type": "BUSINESS",
+          "function_refs": [
+            "fn_expense_query"
+          ],
+          "description": "查询费用报备列表，支持多种过滤条件",
+          "visible": true,
+          "tags": [
+            "查询"
+          ],
+          "params": [
+            {
+              "param_code": "applicantEmpNos",
+              "param_name": "申请人工号列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "user",
+                "termField": "code"
+              },
+              "mapping_path": "$.requestBody.applicantEmpNos"
+            },
+            {
+              "param_code": "applicantOrgId",
+              "param_name": "申请组织ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "org",
+                "termField": "code"
+              },
+              "mapping_path": "$.requestBody.applicantOrgId"
+            },
+            {
+              "param_code": "approvalStatus",
+              "param_name": "审批状态",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": false,
+              "mapping_path": "$.requestBody.approvalStatus"
+            },
+            {
+              "param_code": "applyTimeStart",
+              "param_name": "申请时间起",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": false,
+              "mapping_path": "$.requestBody.applyTimeStart"
+            },
+            {
+              "param_code": "applyTimeEnd",
+              "param_name": "申请时间止",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": false,
+              "mapping_path": "$.requestBody.applyTimeEnd"
+            },
+            {
+              "param_code": "page",
+              "param_name": "页码",
+              "param_type": "INTEGER",
+              "direction": "IN",
+              "required": false,
+              "mapping_path": "$.requestBody.page"
+            },
+            {
+              "param_code": "pageSize",
+              "param_name": "每页条数",
+              "param_type": "INTEGER",
+              "direction": "IN",
+              "required": false,
+              "mapping_path": "$.requestBody.pageSize"
+            },
+            {
+              "param_code": "id",
+              "param_name": "费用报备ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.expenseReports[].id"
+            },
+            {
+              "param_code": "applicantEmpNo",
+              "param_name": "申请人工号",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.expenseReports[].applicantEmpNo"
+            },
+            {
+              "param_code": "applicantName",
+              "param_name": "申请人姓名",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.expenseReports[].applicantName"
+            },
+            {
+              "param_code": "applicantOrgId",
+              "param_name": "申请组织ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.expenseReports[].applicantOrgId"
+            },
+            {
+              "param_code": "expenseAmount",
+              "param_name": "申请金额",
+              "param_type": "DECIMAL",
+              "direction": "OUT",
+              "mapping_path": "$.response.expenseReports[].expenseAmount"
+            },
+            {
+              "param_code": "expenseDesc",
+              "param_name": "申请说明",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.expenseReports[].expenseDesc"
+            },
+            {
+              "param_code": "relatedBoId",
+              "param_name": "关联商机ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.expenseReports[].relatedBoId"
+            },
+            {
+              "param_code": "relatedCustomerId",
+              "param_name": "关联客户ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.expenseReports[].relatedCustomerId"
+            },
+            {
+              "param_code": "applyTime",
+              "param_name": "申请时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.expenseReports[].applyTime"
+            },
+            {
+              "param_code": "approvalStatus",
+              "param_name": "审批状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.expenseReports[].approvalStatus"
+            },
+            {
+              "param_code": "approvalComment",
+              "param_name": "审批意见",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.expenseReports[].approvalComment"
+            },
+            {
+              "param_code": "approvedAt",
+              "param_name": "审批时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.response.expenseReports[].approvedAt"
+            }
+          ]
+        }
+      ]
     },
     {
       "object_code": "po_users_kpi_summary",
@@ -3908,19 +4818,17 @@
           "source_column": "id"
         },
         {
-          "property_code": "userId",
-          "property_name": "责任人id",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "user_id"
-        },
-        {
           "property_code": "empNo",
           "property_name": "责任人工号",
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
           "source_column": "emp_no"
         },
         {
@@ -3938,38 +4846,6 @@
           "required": false,
           "is_primary_key": false,
           "source_column": "kpi_sum"
-        },
-        {
-          "property_code": "createdBy",
-          "property_name": "创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_by"
-        },
-        {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
-          "property_type": "TIMESTAMP",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_time"
         }
       ],
       "actions": []
@@ -4007,15 +4883,13 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
           "source_column": "emp_no"
-        },
-        {
-          "property_code": "userId",
-          "property_name": "责任人用户ID",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "user_id"
         },
         {
           "property_code": "periodType",
@@ -4064,38 +4938,6 @@
           "required": false,
           "is_primary_key": false,
           "source_column": "contract_count"
-        },
-        {
-          "property_code": "createdBy",
-          "property_name": "创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_by"
-        },
-        {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
-          "property_type": "TIMESTAMP",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_time"
         }
       ],
       "actions": []
@@ -4129,10 +4971,16 @@
         },
         {
           "property_code": "orgId",
-          "property_name": "组织ID",
+          "property_name": "组织ID或名称",
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "code"
+          },
           "source_column": "org_id"
         },
         {
@@ -4141,6 +4989,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "name"
+          },
           "source_column": "org_name"
         },
         {
@@ -4158,38 +5012,6 @@
           "required": true,
           "is_primary_key": false,
           "source_column": "kpi_sum"
-        },
-        {
-          "property_code": "createdBy",
-          "property_name": "创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_by"
-        },
-        {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
-          "property_type": "TIMESTAMP",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_time"
         }
       ],
       "actions": []
@@ -4223,10 +5045,16 @@
         },
         {
           "property_code": "orgId",
-          "property_name": "组织ID",
+          "property_name": "组织ID或名称",
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "code"
+          },
           "source_column": "org_id"
         },
         {
@@ -4235,6 +5063,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "name"
+          },
           "source_column": "org_name"
         },
         {
@@ -4284,38 +5118,6 @@
           "required": false,
           "is_primary_key": false,
           "source_column": "contract_count"
-        },
-        {
-          "property_code": "createdBy",
-          "property_name": "创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_by"
-        },
-        {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
-          "property_type": "TIMESTAMP",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_time"
         }
       ],
       "actions": []
@@ -4346,19 +5148,17 @@
           "source_column": "id"
         },
         {
-          "property_code": "userId",
-          "property_name": "用户id",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "user_id"
-        },
-        {
           "property_code": "empNo",
-          "property_name": "工号",
+          "property_name": "工号或名称",
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
           "source_column": "emp_no"
         },
         {
@@ -4410,38 +5210,6 @@
           "source_column": "afternoon_time"
         },
         {
-          "property_code": "createdBy",
-          "property_name": "创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_by"
-        },
-        {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
-          "property_type": "TIMESTAMP",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_time"
-        },
-        {
           "property_code": "forenoonLocation",
           "property_name": "上午打卡地点",
           "property_type": "STRING",
@@ -4486,7 +5254,7 @@
       "target_object_ref": "po_users_kpi_summary",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "userNumber",
+      "source_property_ref": "userCode",
       "target_property_ref": "empNo"
     },
     {
@@ -4495,7 +5263,7 @@
       "target_object_ref": "po_users_kpi_completion",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "userNumber",
+      "source_property_ref": "userCode",
       "target_property_ref": "empNo"
     },
     {
@@ -4504,7 +5272,7 @@
       "target_object_ref": "po_users_kpi_detail",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "userNumber",
+      "source_property_ref": "userCode",
       "target_property_ref": "empNo"
     },
     {
@@ -4540,7 +5308,7 @@
       "target_object_ref": "sales_emp_attendance",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "userNumber",
+      "source_property_ref": "userCode",
       "target_property_ref": "empNo"
     },
     {
@@ -4549,7 +5317,7 @@
       "target_object_ref": "sales_daily_report",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "userNumber",
+      "source_property_ref": "userCode",
       "target_property_ref": "belongEmpNo"
     },
     {
@@ -4559,7 +5327,7 @@
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
       "source_property_ref": "id",
-      "target_property_ref": "boId"
+      "target_property_ref": "opportunityId"
     },
     {
       "relation_name": "人员负责商机",
@@ -4567,7 +5335,7 @@
       "target_object_ref": "sales_business_opportunity",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "userNumber",
+      "source_property_ref": "userCode",
       "target_property_ref": "iwhaleCbmEmpNo"
     },
     {
@@ -4594,7 +5362,7 @@
       "target_object_ref": "sales_customer",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "userNumber",
+      "source_property_ref": "userCode",
       "target_property_ref": "iwhaleCbmEmpNo"
     },
     {
@@ -4603,7 +5371,7 @@
       "target_object_ref": "sales_expense_report",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "userNumber",
+      "source_property_ref": "userCode",
       "target_property_ref": "applicantEmpNo"
     },
     {
@@ -4639,8 +5407,17 @@
       "target_object_ref": "todo_items",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "userId",
-      "target_property_ref": "createdBy"
+      "source_property_ref": "userCode",
+      "target_property_ref": "promoter"
+    },
+    {
+      "relation_name": "人员需处理待办",
+      "source_object_ref": "po_users",
+      "target_object_ref": "todo_items",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "userCode",
+      "target_property_ref": "handlerIds"
     },
     {
       "relation_name": "人员创建会议纪要",
@@ -4648,8 +5425,8 @@
       "target_object_ref": "sales_meeting_note",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "userNumber",
-      "target_property_ref": "createdBy"
+      "source_property_ref": "userCode",
+      "target_property_ref": "participantEmpNos"
     },
     {
       "relation_name": "会议纪要关联商机",
