@@ -27,7 +27,7 @@ def _mount_subsystems() -> None:
     """挂载各子系统路由（按需取消注释或新增）。"""
     try:
         from datacloud_mock.crm_demo.apis import router as crm_router
-        app.include_router(crm_router, prefix="/crm_demo", tags=["crm_demo"])
+        app.include_router(crm_router, prefix="/api/v1/crm_demo", tags=["crm_demo"])
     except ImportError:
         pass  # 子系统未实现时忽略
 
