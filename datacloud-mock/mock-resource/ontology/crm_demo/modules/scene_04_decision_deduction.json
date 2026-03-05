@@ -6,7 +6,7 @@
     "name": "销售决策推演场景",
     "description": "针对管理政策效果分析与突发事件应对的决策推演",
     "author": "admin",
-    "created_time": "2026-03-03T14:37:24Z",
+    "created_time": "2026-03-04T08:25:43Z",
     "tenant_id": "TENANT_001",
     "domain_ref": "sales"
   },
@@ -116,29 +116,32 @@
           }
         ],
         "paths": {
-          "/api/v1/po/users/by-org/{orgId}": {
-            "get": {
+          "/api/v1/po/users/by-org": {
+            "post": {
               "summary": "按组织ID查询人员",
-              "parameters": [
-                {
-                  "name": "orgId",
-                  "in": "path",
-                  "required": true,
-                  "schema": {
-                    "type": "string"
-                  },
-                  "description": "组织ID"
-                },
-                {
-                  "name": "includeSubOrgs",
-                  "in": "query",
-                  "required": false,
-                  "schema": {
-                    "type": "boolean"
-                  },
-                  "description": "是否包含下级组织人员"
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "orgId": {
+                          "type": "string",
+                          "description": "组织ID"
+                        },
+                        "includeSubOrgs": {
+                          "type": "boolean",
+                          "description": "是否包含下级组织人员"
+                        }
+                      },
+                      "required": [
+                        "orgId"
+                      ]
+                    }
+                  }
                 }
-              ],
+              },
               "responses": {
                 "200": {
                   "description": "人员列表",
@@ -296,29 +299,32 @@
           }
         ],
         "paths": {
-          "/api/v1/po/organizations/{orgId}/children": {
-            "get": {
+          "/api/v1/po/organizations/children": {
+            "post": {
               "summary": "查询指定组织的下级组织",
-              "parameters": [
-                {
-                  "name": "orgId",
-                  "in": "path",
-                  "required": true,
-                  "schema": {
-                    "type": "string"
-                  },
-                  "description": "组织ID"
-                },
-                {
-                  "name": "recursive",
-                  "in": "query",
-                  "required": false,
-                  "schema": {
-                    "type": "boolean"
-                  },
-                  "description": "是否递归查询所有下级"
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "orgId": {
+                          "type": "string",
+                          "description": "组织ID"
+                        },
+                        "recursive": {
+                          "type": "boolean",
+                          "description": "是否递归查询所有下级"
+                        }
+                      },
+                      "required": [
+                        "orgId"
+                      ]
+                    }
+                  }
                 }
-              ],
+              },
               "responses": {
                 "200": {
                   "description": "下级组织列表",
@@ -661,20 +667,28 @@
           }
         ],
         "paths": {
-          "/api/v1/todos/{todoId}/accept": {
-            "put": {
+          "/api/v1/todos/accept": {
+            "post": {
               "summary": "接收待办",
-              "parameters": [
-                {
-                  "name": "todoId",
-                  "in": "path",
-                  "required": true,
-                  "schema": {
-                    "type": "string"
-                  },
-                  "description": "待办ID"
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "todoId": {
+                          "type": "string",
+                          "description": "待办ID"
+                        }
+                      },
+                      "required": [
+                        "todoId"
+                      ]
+                    }
+                  }
                 }
-              ],
+              },
               "responses": {
                 "200": {
                   "description": "接收结果",
@@ -717,35 +731,29 @@
           }
         ],
         "paths": {
-          "/api/v1/todos/{todoId}/return": {
-            "put": {
+          "/api/v1/todos/return": {
+            "post": {
               "summary": "退回待办",
-              "parameters": [
-                {
-                  "name": "todoId",
-                  "in": "path",
-                  "required": true,
-                  "schema": {
-                    "type": "string"
-                  },
-                  "description": "待办ID"
-                }
-              ],
               "requestBody": {
                 "required": true,
                 "content": {
                   "application/json": {
                     "schema": {
                       "type": "object",
-                      "required": [
-                        "returnReason"
-                      ],
                       "properties": {
                         "returnReason": {
                           "type": "string",
                           "description": "退回原因"
+                        },
+                        "todoId": {
+                          "type": "string",
+                          "description": "待办ID"
                         }
-                      }
+                      },
+                      "required": [
+                        "returnReason",
+                        "todoId"
+                      ]
                     }
                   }
                 }
@@ -793,7 +801,7 @@
         ],
         "paths": {
           "/api/v1/todos/batch/process": {
-            "put": {
+            "post": {
               "summary": "批量处理待办",
               "requestBody": {
                 "required": true,
@@ -801,9 +809,6 @@
                   "application/json": {
                     "schema": {
                       "type": "object",
-                      "required": [
-                        "todoIds"
-                      ],
                       "properties": {
                         "todoIds": {
                           "type": "array",
@@ -822,7 +827,10 @@
                           "minimum": 0,
                           "maximum": 100
                         }
-                      }
+                      },
+                      "required": [
+                        "todoIds"
+                      ]
                     }
                   }
                 }
@@ -868,7 +876,7 @@
         ],
         "paths": {
           "/api/v1/todos/batch": {
-            "delete": {
+            "post": {
               "summary": "批量删除待办",
               "requestBody": {
                 "required": true,
@@ -876,9 +884,6 @@
                   "application/json": {
                     "schema": {
                       "type": "object",
-                      "required": [
-                        "todoIds"
-                      ],
                       "properties": {
                         "todoIds": {
                           "type": "array",
@@ -887,7 +892,10 @@
                           },
                           "description": "待办ID列表"
                         }
-                      }
+                      },
+                      "required": [
+                        "todoIds"
+                      ]
                     }
                   }
                 }
@@ -1004,22 +1012,11 @@
           }
         ],
         "paths": {
-          "/api/v1/todos/{todoId}": {
-            "put": {
+          "/api/v1/todos/update": {
+            "post": {
               "summary": "修改待办",
-              "parameters": [
-                {
-                  "name": "todoId",
-                  "in": "path",
-                  "required": true,
-                  "schema": {
-                    "type": "string"
-                  },
-                  "description": "待办ID"
-                }
-              ],
               "requestBody": {
-                "required": false,
+                "required": true,
                 "content": {
                   "application/json": {
                     "schema": {
@@ -1047,8 +1044,15 @@
                         "content": {
                           "type": "string",
                           "description": "待办内容"
+                        },
+                        "todoId": {
+                          "type": "string",
+                          "description": "待办ID"
                         }
-                      }
+                      },
+                      "required": [
+                        "todoId"
+                      ]
                     }
                   }
                 }
@@ -1093,7 +1097,7 @@
         ],
         "paths": {
           "/api/v1/todos/batch/approve": {
-            "put": {
+            "post": {
               "summary": "批量审批待办",
               "requestBody": {
                 "required": true,
@@ -1101,10 +1105,6 @@
                   "application/json": {
                     "schema": {
                       "type": "object",
-                      "required": [
-                        "approvalStatus",
-                        "todoIds"
-                      ],
                       "properties": {
                         "approvalComment": {
                           "type": "string",
@@ -1125,7 +1125,11 @@
                           },
                           "description": "待办ID列表"
                         }
-                      }
+                      },
+                      "required": [
+                        "approvalStatus",
+                        "todoIds"
+                      ]
                     }
                   }
                 }
@@ -1328,19 +1332,17 @@
           ],
           "params": [
             {
-              "param_code": "names",
-              "param_name": "用户名称列表",
-              "param_type": "ARRAY",
-              "direction": "IN",
-              "required": false,
-              "mapping_path": "$.requestBody.names"
-            },
-            {
               "param_code": "userIds",
-              "param_name": "用户ID列表",
+              "param_name": "用户名称或id列表",
               "param_type": "ARRAY",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "user",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.userIds"
             },
             {
@@ -1358,11 +1360,11 @@
               "mapping_path": "$.response.users[].userName"
             },
             {
-              "param_code": "userNumber",
+              "param_code": "userCode",
               "param_name": "工号",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.users[].userNumber"
+              "mapping_path": "$.response.users[].userCode"
             },
             {
               "param_code": "orgId",
@@ -1599,19 +1601,17 @@
           "params": [
             {
               "param_code": "orgIds",
-              "param_name": "组织ID列表",
+              "param_name": "组织ID或名称列表",
               "param_type": "ARRAY",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "org",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.orgIds"
-            },
-            {
-              "param_code": "orgNames",
-              "param_name": "组织名称列表",
-              "param_type": "ARRAY",
-              "direction": "IN",
-              "required": false,
-              "mapping_path": "$.requestBody.orgNames"
             },
             {
               "param_code": "orgId",
@@ -1679,10 +1679,16 @@
           "params": [
             {
               "param_code": "orgId",
-              "param_name": "组织ID",
+              "param_name": "组织名称或ID",
               "param_type": "STRING",
               "direction": "IN",
               "required": true,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "org",
+                "termField": "code"
+              },
               "mapping_path": "$.parameters.orgId"
             },
             {
@@ -1974,10 +1980,16 @@
             },
             {
               "param_code": "handlerIds",
-              "param_name": "处理人ID列表",
+              "param_name": "处理人ID或名称列表",
               "param_type": "ARRAY",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "user",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.handlerIds"
             },
             {
@@ -1986,6 +1998,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "dict",
+                "termTypeCode": "priority",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.priority"
             },
             {
@@ -1994,6 +2012,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "dict",
+                "termTypeCode": "urgencyLevel",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.urgencyLevel"
             },
             {
@@ -2014,10 +2038,16 @@
             },
             {
               "param_code": "promoter",
-              "param_name": "发起人工号",
+              "param_name": "发起人工号或名称",
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "user",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.promoter"
             },
             {
@@ -2084,6 +2114,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "dict",
+                "termTypeCode": "priority",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.priority"
             },
             {
@@ -2092,14 +2128,26 @@
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "dict",
+                "termTypeCode": "urgencyLevel",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.urgencyLevel"
             },
             {
               "param_code": "orgId",
-              "param_name": "组织ID",
+              "param_name": "组织ID或名称",
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "org",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.orgId"
             },
             {
@@ -2116,6 +2164,12 @@
               "param_type": "ARRAY",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "dict",
+                "termTypeCode": "status",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.statusList"
             },
             {
@@ -2148,14 +2202,26 @@
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "dict",
+                "termTypeCode": "status",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.status"
             },
             {
               "param_code": "promoter",
-              "param_name": "发起人工号",
+              "param_name": "发起人工号或名称",
               "param_type": "STRING",
               "direction": "IN",
               "required": false,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "list",
+                "termTypeCode": "user",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.promoter"
             },
             {
@@ -2589,6 +2655,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "required": true,
+              "termMeta": {
+                "datasetId": 12,
+                "termMasterType": "dict",
+                "termTypeCode": "approvalStatus",
+                "termField": "code"
+              },
               "mapping_path": "$.requestBody.approvalStatus"
             },
             {
@@ -2673,14 +2745,26 @@
           "property_type": "INTEGER",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "reportStatus",
+            "termField": "code"
+          },
           "source_column": "report_status"
         },
         {
           "property_code": "belongEmpNo",
-          "property_name": "员工工号",
+          "property_name": "员工工号或名称",
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
           "source_column": "belong_emp_no"
         },
         {
@@ -2689,6 +2773,12 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "name"
+          },
           "source_column": "belong_user_name"
         },
         {
@@ -2697,39 +2787,13 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "code"
+          },
           "source_column": "belong_emp_org_id"
-        },
-        {
-          "property_code": "createdBy",
-          "property_name": "创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_by"
-        },
-        {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
-          "property_type": "TIMESTAMP",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_time"
         }
       ],
       "actions": []
@@ -2774,6 +2838,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "name"
+          },
           "source_column": "belong_depart"
         },
         {
@@ -2802,10 +2872,16 @@
         },
         {
           "property_code": "iwhaleCbmEmpNo",
-          "property_name": "商机负责人工号",
+          "property_name": "商机负责人工号或名称",
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
           "source_column": "iwhale_cbm_emp_no"
         },
         {
@@ -2814,14 +2890,26 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "name"
+          },
           "source_column": "iwhale_cbm_name"
         },
         {
           "property_code": "iwhaleCbmOrgId",
-          "property_name": "商机负责人组织",
+          "property_name": "商机负责人组织或名称",
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "code"
+          },
           "source_column": "iwhale_cbm_org_id"
         },
         {
@@ -2850,10 +2938,16 @@
         },
         {
           "property_code": "iwhaleScEmpNo",
-          "property_name": "支撑sc工号",
+          "property_name": "支撑sc工号或名称",
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
           "source_column": "iwhale_sc_emp_no"
         },
         {
@@ -2862,6 +2956,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "name"
+          },
           "source_column": "iwhale_sc_name"
         },
         {
@@ -2950,6 +3050,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "name"
+          },
           "source_column": "submit_person"
         },
         {
@@ -2958,6 +3064,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "name"
+          },
           "source_column": "submit_organization"
         },
         {
@@ -3047,38 +3159,6 @@
           "required": false,
           "is_primary_key": false,
           "source_column": "customer_tax_id"
-        },
-        {
-          "property_code": "createdBy",
-          "property_name": "创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_by"
-        },
-        {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
-          "property_type": "TIMESTAMP",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_time"
         }
       ],
       "actions": []
@@ -3111,19 +3191,17 @@
           "source_column": "id"
         },
         {
-          "property_code": "userId",
-          "property_name": "责任人ID",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "user_id"
-        },
-        {
           "property_code": "empNo",
-          "property_name": "责任人工号",
+          "property_name": "责任人工号或名称",
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
           "source_column": "emp_no"
         },
         {
@@ -3132,6 +3210,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "name"
+          },
           "source_column": "name"
         },
         {
@@ -3140,6 +3224,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "code"
+          },
           "source_column": "emp_org_id"
         },
         {
@@ -3181,38 +3271,6 @@
           "required": true,
           "is_primary_key": false,
           "source_column": "contact_scale"
-        },
-        {
-          "property_code": "createdBy",
-          "property_name": "创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_by"
-        },
-        {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
-          "property_type": "TIMESTAMP",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_time"
         }
       ],
       "actions": []
@@ -3257,6 +3315,12 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "name"
+          },
           "source_column": "belong_depart"
         },
         {
@@ -3277,10 +3341,16 @@
         },
         {
           "property_code": "iwhaleCbmEmpNo",
-          "property_name": "客户维护人工号",
+          "property_name": "客户维护人工号或名称",
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
           "source_column": "iwhale_cbm_emp_no"
         },
         {
@@ -3289,6 +3359,12 @@
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "name"
+          },
           "source_column": "iwhale_cbm_name"
         },
         {
@@ -3297,6 +3373,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "code"
+          },
           "source_column": "iwhale_cbm_org_id"
         },
         {
@@ -3369,6 +3451,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "name"
+          },
           "source_column": "submit_person"
         },
         {
@@ -3377,6 +3465,12 @@
           "property_type": "STRING",
           "required": false,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "org",
+            "termField": "name"
+          },
           "source_column": "submit_organization"
         },
         {
@@ -3402,38 +3496,6 @@
           "required": false,
           "is_primary_key": false,
           "source_column": "instance_id"
-        },
-        {
-          "property_code": "createdBy",
-          "property_name": "创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_by"
-        },
-        {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
-          "property_type": "TIMESTAMP",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_time"
         }
       ],
       "actions": []
@@ -3464,19 +3526,17 @@
           "source_column": "id"
         },
         {
-          "property_code": "userId",
-          "property_name": "用户id",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "user_id"
-        },
-        {
           "property_code": "empNo",
-          "property_name": "工号",
+          "property_name": "工号或名称",
           "property_type": "STRING",
           "required": true,
           "is_primary_key": false,
+          "termMeta": {
+            "datasetId": 12,
+            "termMasterType": "list",
+            "termTypeCode": "user",
+            "termField": "code"
+          },
           "source_column": "emp_no"
         },
         {
@@ -3528,38 +3588,6 @@
           "source_column": "afternoon_time"
         },
         {
-          "property_code": "createdBy",
-          "property_name": "创建人",
-          "property_type": "STRING",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_by"
-        },
-        {
-          "property_code": "createdTime",
-          "property_name": "创建时间",
-          "property_type": "TIMESTAMP",
-          "required": true,
-          "is_primary_key": false,
-          "source_column": "created_time"
-        },
-        {
-          "property_code": "updatedBy",
-          "property_name": "更新人",
-          "property_type": "STRING",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_by"
-        },
-        {
-          "property_code": "updatedTime",
-          "property_name": "更新时间",
-          "property_type": "TIMESTAMP",
-          "required": false,
-          "is_primary_key": false,
-          "source_column": "updated_time"
-        },
-        {
           "property_code": "forenoonLocation",
           "property_name": "上午打卡地点",
           "property_type": "STRING",
@@ -3604,7 +3632,7 @@
       "target_object_ref": "po_users_kpi_detail",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "userNumber",
+      "source_property_ref": "userCode",
       "target_property_ref": "empNo"
     },
     {
@@ -3622,7 +3650,7 @@
       "target_object_ref": "sales_emp_attendance",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "userNumber",
+      "source_property_ref": "userCode",
       "target_property_ref": "empNo"
     },
     {
@@ -3631,7 +3659,7 @@
       "target_object_ref": "sales_daily_report",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "userNumber",
+      "source_property_ref": "userCode",
       "target_property_ref": "belongEmpNo"
     },
     {
@@ -3640,7 +3668,7 @@
       "target_object_ref": "sales_business_opportunity",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "userNumber",
+      "source_property_ref": "userCode",
       "target_property_ref": "iwhaleCbmEmpNo"
     },
     {
@@ -3667,7 +3695,7 @@
       "target_object_ref": "sales_customer",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "userNumber",
+      "source_property_ref": "userCode",
       "target_property_ref": "iwhaleCbmEmpNo"
     },
     {
@@ -3676,8 +3704,17 @@
       "target_object_ref": "todo_items",
       "relation_type": "ASSOCIATES",
       "cardinality": "ONE_TO_MANY",
-      "source_property_ref": "userId",
-      "target_property_ref": "createdBy"
+      "source_property_ref": "userCode",
+      "target_property_ref": "promoter"
+    },
+    {
+      "relation_name": "人员需处理待办",
+      "source_object_ref": "po_users",
+      "target_object_ref": "todo_items",
+      "relation_type": "ASSOCIATES",
+      "cardinality": "ONE_TO_MANY",
+      "source_property_ref": "userCode",
+      "target_property_ref": "handlerIds"
     }
   ]
 }
