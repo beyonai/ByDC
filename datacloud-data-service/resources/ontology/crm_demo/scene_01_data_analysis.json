@@ -1,0 +1,17 @@
+{
+  "view_id": "scene_01_data_analysis",
+  "view_name": "在线查数分析场景",
+  "description": "销售数据分析场景，支持简单查询、跨库联合检索、非结构化融合检索",
+  "object_ids": [
+    "po_users",
+    "po_organization",
+    "todo_items",
+    "sales_daily_report",
+    "sales_business_opportunity",
+    "po_users_kpi_detail",
+    "sales_customer",
+    "po_users_kpi_summary",
+    "sales_org_kpi_summary",
+    "sales_emp_attendance"
+  ]
+}
