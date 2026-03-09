@@ -1,6 +1,7 @@
 """Queue policy for action resolution."""
 
 from enum import Enum
+
 from datacloud_agent.queue.types import QueueMode
 
 

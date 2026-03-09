@@ -7,6 +7,7 @@ inbound messages with deduplication, debouncing, and queue-based execution.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from collections import defaultdict
 from typing import Any
@@ -373,10 +374,8 @@ class AgentRunner:
             task = self._running_tasks.get(session_key)
             if task and not task.done():
                 task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
                 # Clean up
                 self._running_tasks.pop(session_key, None)
                 self._active_sessions.discard(session_key)
@@ -402,10 +401,8 @@ class AgentRunner:
             task = self._running_tasks.get(session_key)
             if task and not task.done():
                 task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
             self._running_tasks.pop(session_key, None)
             self._active_sessions.discard(session_key)
 

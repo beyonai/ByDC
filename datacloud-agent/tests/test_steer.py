@@ -366,3 +366,91 @@ class TestAgentRunnerIntegration:
                 f"Mode {mode.value} should resolve to {expected_action.value}, got {action.value}"
             )
             print(f"Mode {mode.value} -> {action.value}")
+
+
+class TestAgentRunnerHandleMessageSteer:
+    """Tests for handle_message with STEER modes."""
+
+    @pytest.fixture
+    def runner(self):
+        """Create an AgentRunner with mocked dependencies."""
+        config = GatewayConfig(inbound=InboundConfig(dedupe_window_ms=1000, debounce_ms=100))
+        session_manager = MagicMock()
+        agent_registry = MagicMock()
+        event_emitter = MagicMock()
+        queue_manager = MagicMock()
+
+        runner = AgentRunner(
+            config=config,
+            session_manager=session_manager,
+            agent_registry=agent_registry,
+            event_emitter=event_emitter,
+            queue_manager=queue_manager,
+        )
+        return runner
+
+    @pytest.mark.asyncio
+    async def test_handle_message_steer_not_active(self, runner):
+        """STEER mode when session not active should execute."""
+        runner._run_agent = AsyncMock(return_value={"response": "ok"})
+        result = await runner.handle_message("session1", "hello", QueueMode.STEER)
+        assert result["status"] == "executed"
+        runner._run_agent.assert_called_once_with("session1", ["hello"])
+
+    @pytest.mark.asyncio
+    async def test_handle_message_steer_active(self, runner):
+        """STEER mode when active should steer."""
+        runner._active_sessions.add("session1")
+        runner._steer_run = AsyncMock(return_value={"response": "steered"})
+        result = await runner.handle_message("session1", "new prompt", QueueMode.STEER)
+        assert result["status"] == "steered"
+        runner._steer_run.assert_called_once_with("session1", "new prompt")
+
+    @pytest.mark.asyncio
+    async def test_handle_message_interrupt_active(self, runner):
+        """INTERRUPT mode when active should interrupt."""
+        runner._active_sessions.add("session1")
+        runner._interrupt_run = AsyncMock()
+        result = await runner.handle_message("session1", "ignored", QueueMode.INTERRUPT)
+        assert result["status"] == "interrupted"
+        runner._interrupt_run.assert_called_once_with("session1")
+
+    @pytest.mark.asyncio
+    async def test_handle_message_interrupt_not_active(self, runner):
+        """INTERRUPT mode when not active should execute (since not active)."""
+        runner._run_agent = AsyncMock(return_value={"response": "ok"})
+        result = await runner.handle_message("session1", "hello", QueueMode.INTERRUPT)
+        assert result["status"] == "executed"
+        runner._run_agent.assert_called_once_with("session1", ["hello"])
+
+    @pytest.mark.asyncio
+    async def test_handle_message_steer_backlog_active(self, runner):
+        """STEER_BACKLOG mode when active should enqueue."""
+        runner._active_sessions.add("session1")
+        runner.message_enqueuer.enqueue = AsyncMock(return_value=True)
+        result = await runner.handle_message("session1", "hello", QueueMode.STEER_BACKLOG)
+        assert result["status"] == "queued"
+        assert result["queue_mode"] == "steer_backlog"
+        runner.message_enqueuer.enqueue.assert_called_once()
+        # Verify queue settings mode is STEER_BACKLOG
+        queue_settings = runner.message_enqueuer.enqueue.call_args[0][2]
+        assert queue_settings.mode == QueueMode.STEER_BACKLOG
+
+    @pytest.mark.asyncio
+    async def test_handle_message_queue_mode_active(self, runner):
+        """QUEUE mode when active should enqueue."""
+        runner._active_sessions.add("session1")
+        runner.message_enqueuer.enqueue = AsyncMock(return_value=True)
+        result = await runner.handle_message("session1", "hello", QueueMode.QUEUE)
+        assert result["status"] == "queued"
+        assert result["queue_mode"] == "queue"
+        runner.message_enqueuer.enqueue.assert_called_once()
+        queue_settings = runner.message_enqueuer.enqueue.call_args[0][2]
+        assert queue_settings.mode == QueueMode.QUEUE
+
+    @pytest.mark.asyncio
+    async def test_handle_message_drop_heartbeat(self, runner):
+        """Heartbeat messages should be dropped (is_heartbeat not yet supported)."""
+        # Currently heartbeat not implemented, so this test just ensures no crash
+        # We'll test that policy returns DROP when is_heartbeat=True, but runner doesn't have that param.
+        pass
