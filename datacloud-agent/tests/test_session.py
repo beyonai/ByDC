@@ -272,6 +272,8 @@ class TestSessionManagerWithPersistence:
         )
         await asyncio.sleep(0.01)
 
+        # Capture timestamp before reset
+        original_updated_at = session.updated_at
         # Update the session
         await manager.reset_session(session.session_key)
         await asyncio.sleep(0.01)
@@ -283,7 +285,8 @@ class TestSessionManagerWithPersistence:
         retrieved = await manager2.get_session(session.session_key)
         assert retrieved is not None
         assert retrieved.metadata == {}
-        assert retrieved.updated_at >= session.updated_at
+        # updated_at should be >= original (may be equal if reset within same microsecond)
+        assert retrieved.updated_at >= original_updated_at
 
     async def test_persistence_empty_file(self, tmp_path: Path):
         """Test that an empty persistence file does not cause errors."""

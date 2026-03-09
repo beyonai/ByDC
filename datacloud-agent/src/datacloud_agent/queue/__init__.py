@@ -11,6 +11,8 @@ from datacloud_agent.queue.types import (
     QueueState,
 )
 from datacloud_agent.queue.manager import QueueManager
+from datacloud_agent.queue.enqueuer import MessageEnqueuer
+from datacloud_agent.queue.drainer import QueueDrainer
 
 __all__ = [
     # Types
@@ -21,4 +23,8 @@ __all__ = [
     "QueueState",
     # Manager
     "QueueManager",
+    # Enqueuer
+    "MessageEnqueuer",
+    # Drainer
+    "QueueDrainer",
 ]

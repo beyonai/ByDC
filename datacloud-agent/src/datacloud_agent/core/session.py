@@ -10,7 +10,7 @@ import asyncio
 import json
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -78,6 +78,8 @@ class SessionManager:
 
     async def _load_sessions(self) -> None:
         """Load sessions from the persistence file (background)."""
+        if self._persistence_path is None:
+            return
         async with self._load_lock:
             try:
                 content = await asyncio.to_thread(
@@ -112,6 +114,7 @@ class SessionManager:
 
     def _append_line(self, line: str) -> None:
         """Thread‑safe helper to append a line to the persistence file."""
+        assert self._persistence_path is not None
         with self._persistence_path.open("a", encoding="utf-8") as f:
             f.write(line)
 
@@ -133,7 +136,7 @@ class SessionManager:
         """
         session_id = str(uuid.uuid4())
         session_key = f"tenant:{tenant_ctx.tenant_id}:agent:{agent_id}:{session_id}"
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         session = Session(
             session_id=session_id,
@@ -205,7 +208,7 @@ class SessionManager:
             return False
 
         session.metadata.clear()
-        session.updated_at = datetime.now(timezone.utc)
+        session.updated_at = datetime.now(UTC)
         asyncio.create_task(self._save_session(session))
         return True
 
