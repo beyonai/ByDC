@@ -1,0 +1,45 @@
+"""JDBC URL 解析测试。"""
+from datacloud_data_sdk.sql_executor.jdbc_parser import (
+    parse_jdbc_url,
+    parse_clickhouse_jdbc_url,
+)
+
+
+def test_parse_sqlite_url():
+    assert parse_jdbc_url("jdbc:sqlite::memory:", "SQLITE") == ":memory:"
+    assert parse_jdbc_url("jdbc:sqlite:/tmp/db.sqlite", "SQLITE") == "/tmp/db.sqlite"
+
+
+def test_parse_mysql_url():
+    url = parse_jdbc_url("jdbc:mysql://localhost:3306/crm", "MYSQL")
+    assert url == "mysql+aiomysql://localhost:3306/crm"
+
+
+def test_parse_doris_url():
+    url = parse_jdbc_url("jdbc:mysql://doris:9030/db", "DORIS")
+    assert url == "mysql+aiomysql://doris:9030/db"
+
+
+def test_parse_postgresql_url():
+    url = parse_jdbc_url("jdbc:postgresql://localhost:5432/analytics", "POSTGRESQL")
+    assert url == "postgresql+asyncpg://localhost:5432/analytics"
+
+
+def test_parse_clickhouse_jdbc_url():
+    params = parse_clickhouse_jdbc_url("jdbc:clickhouse://ch-host:8123/analytics")
+    assert params["host"] == "ch-host"
+    assert params["port"] == 8123
+    assert params["database"] == "analytics"
+    assert params["user"] == ""
+    assert params["password"] == ""
+
+
+def test_parse_clickhouse_jdbc_url_with_auth():
+    params = parse_clickhouse_jdbc_url(
+        "jdbc:clickhouse://ch:8123/db?user=readonly&password=secret"
+    )
+    assert params["host"] == "ch"
+    assert params["port"] == 8123
+    assert params["database"] == "db"
+    assert params["user"] == "readonly"
+    assert params["password"] == "secret"
