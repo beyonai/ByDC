@@ -10,6 +10,7 @@ from datacloud_agent.queue import (
     QueueSettings,
     QueuedMessage,
     DropPolicy,
+    QueueMode,
 )
 
 
@@ -193,7 +194,7 @@ class TestQueueDrainer:
         """Test starting and stopping background drain."""
         manager = QueueManager()
         drainer = QueueDrainer(manager)
-        settings = QueueSettings()
+        settings = QueueSettings(mode=QueueMode.QUEUE)
         await manager.get_or_create("s1", settings)
         msg = QueuedMessage(prompt="test", session_key="s1")
         await manager.enqueue("s1", msg)
@@ -231,7 +232,7 @@ class TestQueueDrainer:
         """Test background drain processes multiple messages."""
         manager = QueueManager()
         drainer = QueueDrainer(manager)
-        settings = QueueSettings()
+        settings = QueueSettings(mode=QueueMode.QUEUE)
         await manager.get_or_create("s1", settings)
         msg1 = QueuedMessage(prompt="m1", session_key="s1")
         msg2 = QueuedMessage(prompt="m2", session_key="s1")

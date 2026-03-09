@@ -117,14 +117,14 @@ class QueueDrainer:
         """Background loop that drains the queue at intervals."""
         try:
             while not stop_event.is_set():
-                # Drain all messages
-                if asyncio.iscoroutinefunction(processor):
-                    # Assume processor is async and takes a single message
-                    # We'll call drain which uses processor per message
-                    await self.drain(session_key, processor)
-                else:
-                    # Assume processor is async and takes a list (collect mode)
+                # Determine queue mode and drain accordingly
+                mode = self._get_queue_mode(session_key)
+                if mode == QueueMode.COLLECT:
+                    # Processor should accept list of messages
                     await self.drain_collect(session_key, processor)
+                else:
+                    # Processor should accept single message
+                    await self.drain(session_key, processor)
                 await asyncio.sleep(interval)
         except asyncio.CancelledError:
             pass
