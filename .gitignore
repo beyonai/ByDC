@@ -166,3 +166,11 @@ cython_debug/
 # LangGraph API checkpoint files
 **/.langgraph_api/
 
+.idea/inspectionProfiles/profiles_settings.xml
+.idea/.gitignore
+.idea/misc.xml
+.idea/modules.xml
+.idea/vcs.xml
+.idea/whale_datacloud.iml
+uv.lock
+uv.lock
