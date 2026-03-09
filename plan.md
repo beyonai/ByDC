@@ -66,6 +66,19 @@
         - [ ] 获取工具列表API
         - [ ] 工具执行API
         - [ ] 获取资源列表API
+    - [ ] 功能开发
+      - [ ] 工程基础：双子包、pyproject、异常、InvocationContext
+      - [ ] 接入层：FastAPI、REST /query、MCP tools、skills
+      - [ ] 工具层：ToolRegistry、UnifiedQuery、ActionExecutor、ParamMapper、TermResolver
+      - [ ] SDK 核心层：View、Object、Action、Relation
+      - [ ] 本体层：OntologyLoader、对象/视图/动作、数据源从本体配置
+      - [ ] 计划层：ObjectViewBuilder、PlanGenerator、PlanValidator、ExecutionObjectConverter、DataPermissionRewriter
+      - [ ] 执行层：Executor、ApiExecutor、ScriptExecutor、SqlExecutor、连接器（SQLite/MySQL/PG/CH）
+      - [ ] 聚合层：DirectAggregator、SqliteAggregator
+      - [ ] 支撑层：EventBus、Tracing、CsvStorage
+      - [ ] 配置与测试
+      - [ ] 造测试数据：CRM demo、SQLite fixtures、API mock 等
+      - [ ] Phase 2：文档库（文档对象元数据存储与检索）、操作动作（API/MCP 工具执行与参数编排）、Skills API（Skill 包生成与按 view/object 过滤）
   - [ ] 【黄升】超级分析智能体服务
     - [ ] 开发框架&环境搭建，有标准的README、main.py,工具类等
     - [ ] 功能开发
@@ -126,6 +139,19 @@
         - [ ] 获取工具列表API
         - [ ] 工具执行API
         - [ ] 获取资源列表API
+    - [ ] 功能开发（按设计架构）
+      - [ ] 工程基础：双子包、pyproject、异常、InvocationContext
+      - [ ] 接入层：FastAPI、REST /query、MCP tools、skills
+      - [ ] 工具层：ToolRegistry、UnifiedQuery、ActionExecutor、ParamMapper、TermResolver
+      - [ ] SDK 核心层：View、Object、Action、Relation
+      - [ ] 本体层：OntologyLoader、对象/视图/动作、数据源从本体配置
+      - [ ] 计划层：ObjectViewBuilder、PlanGenerator、PlanValidator、ExecutionObjectConverter、DataPermissionRewriter
+      - [ ] 执行层：Executor、ApiExecutor、ScriptExecutor、SqlExecutor、连接器（SQLite/MySQL/PG/CH）
+      - [ ] 聚合层：DirectAggregator、SqliteAggregator
+      - [ ] 支撑层：EventBus、Tracing、CsvStorage
+      - [ ] 配置与测试
+      - [ ] 造测试数据：CRM demo、SQLite fixtures、API mock 等
+      - [ ] Phase 2：文档库（文档对象元数据存储与检索）、操作动作（API/MCP 工具执行与参数编排）、Skills API（Skill 包生成与按 view/object 过滤）
 
   - [ ] 【黄升】超级分析智能体服务
     - [ ] 开发框架&环境搭建，有标准的README、main.py,工具类等
