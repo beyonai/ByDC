@@ -8,6 +8,19 @@ from datacloud_data_sdk.ontology.models import (
 )
 
 
+def test_ontology_field_has_term_type_and_dataset_id() -> None:
+    f = OntologyField(
+        field_code="x",
+        field_name="X",
+        field_type="STRING",
+        term_set="user.code",
+        term_type="enum",
+        dataset_id=12,
+    )
+    assert f.term_type == "enum"
+    assert f.dataset_id == 12
+
+
 def test_field_has_term_set_and_source_column() -> None:
     f = OntologyField(
         field_code="stage_code",

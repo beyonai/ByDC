@@ -7,6 +7,7 @@ import httpx
 
 from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError, KbExecutionError
+from datacloud_data_sdk.utils.curl_logger import log_curl
 from datacloud_data_sdk.executor.models import KbExecTask
 from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
 
@@ -61,6 +62,8 @@ class KbExecutor:
             "tags": task.tags,
             "top_k": 10,
         }
+
+        log_curl("POST", url, body=body)
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
