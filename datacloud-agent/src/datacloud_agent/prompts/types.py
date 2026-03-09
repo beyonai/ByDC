@@ -4,7 +4,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LayerType(str, Enum):
@@ -60,12 +60,7 @@ class SystemPromptConfig(BaseModel):
             "IDENTITY.md": LayerType.IDENTITY,
             "USER.md": LayerType.IDENTITY,
             "AGENTS.md": LayerType.COLLABORATION,
-            "knowledge.md": LayerType.KNOWLEDGE,
-            "knowledge": LayerType.KNOWLEDGE,
         }
     )
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)

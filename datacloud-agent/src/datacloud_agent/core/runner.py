@@ -17,6 +17,7 @@ from datacloud_agent.core.session import SessionManager
 from datacloud_agent.events.emitter import EventEmitter
 from datacloud_agent.queue.enqueuer import MessageEnqueuer
 from datacloud_agent.queue.manager import QueueManager
+from datacloud_agent.queue.policy import QueueAction, QueuePolicy
 from datacloud_agent.queue.types import QueuedMessage, QueueMode, QueueSettings
 
 
@@ -135,6 +136,7 @@ class AgentRunner:
         # Active sessions tracking
         self._active_sessions: set[str] = set()
         self._active_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self._running_tasks: dict[str, asyncio.Task] = {}
 
         # Message enqueuer
         self.message_enqueuer = MessageEnqueuer(queue_manager)
@@ -147,16 +149,13 @@ class AgentRunner:
         Flow:
             1. Check deduplication (skip if duplicate)
             2. Check debouncing (skip if too frequent)
-            3. Check if agent is active for session
-            4. If not active: execute immediately
-            5. If active: enqueue based on queue_mode
-                - COLLECT: Add to queue, will be merged later
-                - FOLLOWUP: Add to queue for sequential processing
+            3. Resolve action based on queue policy
+            4. Execute action: EXECUTE, ENQUEUE, ENQUEUE_FOLLOWUP, STEER, INTERRUPT, DROP
 
         Args:
             session_key: Full session key.
             prompt: The user prompt/message.
-            queue_mode: Queue mode (COLLECT or FOLLOWUP).
+            queue_mode: Queue mode (COLLECT, FOLLOWUP, STEER, STEER_BACKLOG, INTERRUPT, QUEUE).
 
         Returns:
             Dictionary with status and details.
@@ -177,8 +176,16 @@ class AgentRunner:
         # Acquire session lock to check active status and decide
         lock = self._active_locks[session_key]
         async with lock:
-            if session_key in self._active_sessions:
-                # Session is active → enqueue
+            action, was_active = await self._resolve_action(session_key, queue_mode)
+
+            if action == QueueAction.EXECUTE:
+                # Session not active → mark as active and execute
+                self._active_sessions.add(session_key)
+                # Release lock while executing to allow other messages to enqueue
+                # (they will see session as active)
+                pass  # continue outside lock
+            elif action == QueueAction.ENQUEUE:
+                # Enqueue with original mode (COLLECT, STEER_BACKLOG, QUEUE)
                 queue_settings = QueueSettings(mode=queue_mode)
                 message = QueuedMessage(prompt=prompt, session_key=session_key)
                 success = await self.message_enqueuer.enqueue(session_key, message, queue_settings)
@@ -194,24 +201,84 @@ class AgentRunner:
                         "session_key": session_key,
                         "queue_mode": queue_mode.value,
                     }
+            elif action == QueueAction.ENQUEUE_FOLLOWUP:
+                # Enqueue with FOLLOWUP mode
+                queue_settings = QueueSettings(mode=QueueMode.FOLLOWUP)
+                message = QueuedMessage(prompt=prompt, session_key=session_key)
+                success = await self.message_enqueuer.enqueue(session_key, message, queue_settings)
+                if success:
+                    return {
+                        "status": "queued",
+                        "session_key": session_key,
+                        "queue_mode": QueueMode.FOLLOWUP.value,
+                    }
+                else:
+                    return {
+                        "status": "queue_full",
+                        "session_key": session_key,
+                        "queue_mode": QueueMode.FOLLOWUP.value,
+                    }
+            elif action == QueueAction.STEER:
+                # STEER: interrupt active run and steer with new input
+                # We'll handle outside lock (steer_run will acquire lock internally)
+                # But we need to ensure session remains active
+                # Release lock and call _steer_run
+                pass
+            elif action == QueueAction.INTERRUPT:
+                # INTERRUPT: cancel active run, drop the message
+                # We'll interrupt and return status
+                await self._interrupt_run(session_key)
+                return {
+                    "status": "interrupted",
+                    "session_key": session_key,
+                }
+            elif action == QueueAction.DROP:
+                return {
+                    "status": "dropped",
+                    "session_key": session_key,
+                }
             else:
-                # Session not active → mark as active and execute
-                self._active_sessions.add(session_key)
-                # Release lock while executing to allow other messages to enqueue
-                # (they will see session as active)
+                # Fallback: treat as ENQUEUE
+                queue_settings = QueueSettings(mode=queue_mode)
+                message = QueuedMessage(prompt=prompt, session_key=session_key)
+                success = await self.message_enqueuer.enqueue(session_key, message, queue_settings)
+                if success:
+                    return {
+                        "status": "queued",
+                        "session_key": session_key,
+                        "queue_mode": queue_mode.value,
+                    }
+                else:
+                    return {
+                        "status": "queue_full",
+                        "session_key": session_key,
+                        "queue_mode": queue_mode.value,
+                    }
 
-        # Execute agent (outside lock)
-        try:
-            result = await self._execute_agent(session_key, [prompt])
+        # Actions that require execution outside lock: EXECUTE, STEER
+        if action == QueueAction.EXECUTE:
+            try:
+                result = await self._run_agent(session_key, [prompt])
+                return {
+                    "status": "executed",
+                    "session_key": session_key,
+                    "result": result,
+                }
+            finally:
+                async with lock:
+                    self._active_sessions.discard(session_key)
+                    # _run_agent already cleaned up _running_tasks
+        elif action == QueueAction.STEER:
+            # STEER mode: interrupt active run and steer with new input
+            result = await self._steer_run(session_key, prompt)
             return {
-                "status": "executed",
+                "status": "steered",
                 "session_key": session_key,
                 "result": result,
             }
-        finally:
-            # Remove from active sessions after execution
-            async with lock:
-                self._active_sessions.discard(session_key)
+        else:
+            # Should not reach here (already returned)
+            raise RuntimeError(f"Unexpected action {action}")
 
     async def _is_active(self, session_key: str) -> bool:
         """Check if session has an active run.
@@ -223,6 +290,33 @@ class AgentRunner:
             True if session is active.
         """
         return session_key in self._active_sessions
+
+    async def _resolve_action(
+        self, session_key: str, queue_mode: QueueMode
+    ) -> tuple[QueueAction, bool]:
+        """Resolve the action to take for a message.
+
+        Must be called under session lock.
+
+        Args:
+            session_key: Session key.
+            queue_mode: Requested queue mode.
+
+        Returns:
+            Tuple of (action, is_active) where is_active indicates if session
+            was active before this call.
+        """
+        is_active = session_key in self._active_sessions
+        # For now, heartbeat and followup are not supported
+        is_heartbeat = False
+        should_followup = False
+        action = QueuePolicy.resolve(
+            is_active=is_active,
+            is_heartbeat=is_heartbeat,
+            should_followup=should_followup,
+            queue_mode=queue_mode,
+        )
+        return action, is_active
 
     async def _handle_collect_mode(self, session_key: str, prompt: str) -> dict[str, Any]:
         """Handle COLLECT mode logic.
@@ -263,6 +357,80 @@ class AgentRunner:
             return {"status": "queued", "session_key": session_key, "queue_mode": "followup"}
         else:
             return {"status": "queue_full", "session_key": session_key, "queue_mode": "followup"}
+
+    async def _steer_run(self, session_key: str, prompt: str) -> dict[str, Any]:
+        """Interrupt active run and steer with new input.
+
+        Args:
+            session_key: Session key.
+            prompt: New prompt to execute.
+
+        Returns:
+            Execution result.
+        """
+        lock = self._active_locks[session_key]
+        async with lock:
+            task = self._running_tasks.get(session_key)
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+                # Clean up
+                self._running_tasks.pop(session_key, None)
+                self._active_sessions.discard(session_key)
+            # Mark session as active for new execution
+            self._active_sessions.add(session_key)
+            # Release lock while executing
+        try:
+            result = await self._run_agent(session_key, [prompt])
+            return result
+        finally:
+            async with lock:
+                self._active_sessions.discard(session_key)
+                # _run_agent already cleaned up _running_tasks
+
+    async def _interrupt_run(self, session_key: str) -> None:
+        """Cancel active run without starting a new one.
+
+        Args:
+            session_key: Session key.
+        """
+        lock = self._active_locks[session_key]
+        async with lock:
+            task = self._running_tasks.get(session_key)
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+            self._running_tasks.pop(session_key, None)
+            self._active_sessions.discard(session_key)
+
+    async def _run_agent(self, session_key: str, messages: list[str]) -> dict[str, Any]:
+        """Run agent with messages, storing task for cancellation.
+
+        Args:
+            session_key: Session key.
+            messages: List of messages to process.
+
+        Returns:
+            Dictionary with execution result.
+        """
+        # Create task for execution
+        task = asyncio.create_task(self._execute_agent(session_key, messages))
+        self._running_tasks[session_key] = task
+        try:
+            result = await task
+            return result
+        except asyncio.CancelledError:
+            # Task was cancelled (e.g., by steer or interrupt)
+            raise
+        finally:
+            # Clean up if still present (may have been removed by steer/interrupt)
+            self._running_tasks.pop(session_key, None)
 
     async def _execute_agent(self, session_key: str, messages: list[str]) -> dict[str, Any]:
         """Execute agent with messages.
