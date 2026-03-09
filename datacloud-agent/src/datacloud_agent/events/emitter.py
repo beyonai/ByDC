@@ -3,7 +3,6 @@
 import asyncio
 from collections import deque
 from collections.abc import Callable
-from typing import Optional
 
 from datacloud_agent.events.types import Event, EventType
 
@@ -109,7 +108,7 @@ class EventEmitter:
                 else:
                     handler(event)
 
-    def get_history(self, event_type: Optional[EventType] = None, limit: int = 100) -> list[Event]:
+    def get_history(self, event_type: EventType | None = None, limit: int = 100) -> list[Event]:
         """Get event history, optionally filtered by event type.
 
         Args:

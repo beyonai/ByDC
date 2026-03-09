@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import time
 from collections import defaultdict
 from typing import Any
@@ -137,7 +138,7 @@ class AgentRunner:
         # Active sessions tracking
         self._active_sessions: set[str] = set()
         self._active_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
-        self._running_tasks: dict[str, asyncio.Task] = {}
+        self._running_tasks: dict[str, asyncio.Task[Any]] = {}
 
         # Message enqueuer
         self.message_enqueuer = MessageEnqueuer(queue_manager)
@@ -399,10 +400,25 @@ class AgentRunner:
         lock = self._active_locks[session_key]
         async with lock:
             task = self._running_tasks.get(session_key)
-            if task and not task.done():
-                task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await task
+            if task:
+                # Handle both real asyncio.Task and mock objects
+                # For AsyncMock, task.done() returns a coroutine that needs special handling
+                try:
+                    done_result = task.done()
+                    # If done() returns a coroutine (e.g., from AsyncMock), await it to get the actual value
+                    if inspect.isawaitable(done_result):
+                        done_result = await done_result
+                    should_cancel = not done_result
+                except Exception:
+                    # If we can't determine, safest to cancel
+                    should_cancel = True
+
+                if should_cancel:
+                    task.cancel()
+                    # Only await if it's an actual awaitable (not a mock)
+                    if inspect.isawaitable(task):
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await task
             self._running_tasks.pop(session_key, None)
             self._active_sessions.discard(session_key)
 

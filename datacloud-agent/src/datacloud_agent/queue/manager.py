@@ -4,8 +4,8 @@ import asyncio
 from datetime import datetime
 
 from datacloud_agent.queue.types import (
-    QueueSettings,
     QueuedMessage,
+    QueueSettings,
     QueueState,
 )
 
@@ -13,7 +13,7 @@ from datacloud_agent.queue.types import (
 class QueueManager:
     """Manages queues for different sessions."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the queue manager."""
         self._queues: dict[str, QueueState] = {}
         self._locks: dict[str, asyncio.Lock] = {}

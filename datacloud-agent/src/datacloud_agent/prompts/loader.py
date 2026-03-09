@@ -3,7 +3,6 @@
 import asyncio
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 from .types import LayerType, SystemPromptConfig
 
@@ -21,7 +20,7 @@ class PromptLoader:
         self.config = config
         self._prompts_dir = config.prompts_dir.resolve()
 
-    async def load_all(self) -> Dict[LayerType, List[Tuple[Path, str]]]:
+    async def load_all(self) -> dict[LayerType, list[tuple[Path, str]]]:
         """Load all .md files from the prompts directory.
 
         Returns:
@@ -42,8 +41,8 @@ class PromptLoader:
         loaded = await asyncio.gather(*tasks)
 
         # Group by layer
-        grouped: Dict[LayerType, List[Tuple[Path, str]]] = {layer: [] for layer in LayerType}
-        for (file_path, layer), content in zip(md_files, loaded):
+        grouped: dict[LayerType, list[tuple[Path, str]]] = {layer: [] for layer in LayerType}
+        for (file_path, layer), content in zip(md_files, loaded, strict=False):
             if content:
                 grouped[layer].append((file_path, content))
 
@@ -53,7 +52,7 @@ class PromptLoader:
 
         return grouped
 
-    def _collect_md_files(self) -> List[Path]:
+    def _collect_md_files(self) -> list[Path]:
         """Synchronous helper to collect all .md files recursively."""
         files = []
         for path in self._prompts_dir.rglob("*.md"):
@@ -64,7 +63,7 @@ class PromptLoader:
     def _determine_layer(self, file_path: Path) -> LayerType:
         """Determine the layer for a given file path."""
         try:
-            rel_path = file_path.relative_to(self._prompts_dir)
+            rel_path: Path | str = file_path.relative_to(self._prompts_dir)
         except ValueError:
             # File is outside prompts_dir (should not happen with rglob)
             rel_path = file_path.name
@@ -75,7 +74,7 @@ class PromptLoader:
         # Default layer
         return self.config.default_layer
 
-    async def _load_file_content(self, file_path: Path, _layer: LayerType) -> Optional[str]:
+    async def _load_file_content(self, file_path: Path, _layer: LayerType) -> str | None:
         """Load and optionally truncate file content."""
         try:
             content = await asyncio.to_thread(file_path.read_text, encoding="utf-8")

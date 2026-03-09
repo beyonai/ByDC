@@ -84,53 +84,83 @@ def gateway_client(
 @pytest.fixture
 def gateway_client_integration():
     """Create a GatewayClient with real components but mocked LLM dependencies."""
-    from datacloud_agent.api.client import GatewayClient
-    from datacloud_agent.core.registry import AgentConfig
+    import sys
 
-    client = GatewayClient()
+    # Create mock modules for deepagents to avoid import errors
+    mock_deepagents_module = MagicMock()
+    mock_deepagents_module.create_deep_agent = MagicMock()
+    mock_deepagents_module.backends = MagicMock()
+    mock_deepagents_module.backends.FilesystemBackend = MagicMock()
+    sys.modules["deepagents"] = mock_deepagents_module
+    sys.modules["deepagents.backends"] = mock_deepagents_module.backends
 
-    # Register default agent
-    default_config = AgentConfig(
-        agent_id="default",
-        name="Default Agent",
-        description="General purpose agent",
-        model="claude-sonnet-4-6",
-        provider="anthropic",
-        system_prompt="You are a helpful assistant.",
-        tools=["know", "query", "compute", "render", "store"],
-    )
-    client._agent_registry.register("default", default_config)
+    # Mock langchain if not present (but it's likely installed)
+    try:
+        import langchain
+    except ImportError:
+        mock_langchain_module = MagicMock()
+        mock_langchain_module.chat_models = MagicMock()
+        mock_langchain_module.chat_models.init_chat_model = MagicMock()
+        sys.modules["langchain"] = mock_langchain_module
+        sys.modules["langchain.chat_models"] = mock_langchain_module.chat_models
 
-    # Register coder agent
-    coder_config = AgentConfig(
-        agent_id="coder",
-        name="Coder Agent",
-        description="Specialized in coding tasks",
-        model="claude-sonnet-4-6",
-        provider="anthropic",
-        system_prompt="You are a coding assistant.",
-        tools=["know", "query", "compute"],
-    )
-    client._agent_registry.register("coder", coder_config)
+    # Now patch the specific functions
+    with (
+        patch("deepagents.create_deep_agent") as mock_deepagents,
+        patch("deepagents.backends.FilesystemBackend") as mock_fs_backend,
+        patch("langchain.chat_models.init_chat_model") as mock_langchain,
+    ):
+        mock_deepagents.return_value = MagicMock()
+        mock_fs_backend.return_value = MagicMock()
+        mock_langchain.return_value = MagicMock()
 
-    # Mock agent creation to return a mock agent dict
-    client._agent_registry.create_agent = MagicMock(
-        return_value={
-            "agent_id": "default",
-            "name": "Default Agent",
-            "model": "claude-sonnet-4-6",
-            "provider": "anthropic",
-            "system_prompt": "You are a helpful assistant.",
-            "tools": ["know", "query", "compute", "render", "store"],
-        }
-    )
+        from datacloud_agent.api.client import GatewayClient
+        from datacloud_agent.core.registry import AgentConfig
 
-    yield client
+        client = GatewayClient()
 
+        # Register default agent
+        default_config = AgentConfig(
+            agent_id="default",
+            name="Default Agent",
+            description="General purpose agent",
+            model="claude-sonnet-4-6",
+            provider="anthropic",
+            system_prompt="You are a helpful assistant.",
+            tools=["know", "query", "compute", "render", "store"],
+        )
+        client._agent_registry.register("default", default_config)
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create event loop for async tests."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
+        # Register coder agent
+        coder_config = AgentConfig(
+            agent_id="coder",
+            name="Coder Agent",
+            description="Specialized in coding tasks",
+            model="claude-sonnet-4-6",
+            provider="anthropic",
+            system_prompt="You are a coding assistant.",
+            tools=["know", "query", "compute"],
+        )
+        client._agent_registry.register("coder", coder_config)
+
+        # Mock agent creation to return a mock agent dict
+        client._agent_registry.create_agent = MagicMock(
+            return_value={
+                "agent_id": "default",
+                "name": "Default Agent",
+                "model": "claude-sonnet-4-6",
+                "provider": "anthropic",
+                "system_prompt": "You are a helpful assistant.",
+                "tools": ["know", "query", "compute", "render", "store"],
+            }
+        )
+
+        yield client
+
+    # Clean up mock modules
+    sys.modules.pop("deepagents", None)
+    sys.modules.pop("deepagents.backends", None)
+    # Only remove langchain if we added it
+    if "langchain" not in sys.modules:
+        sys.modules.pop("langchain", None)
+        sys.modules.pop("langchain.chat_models", None)
