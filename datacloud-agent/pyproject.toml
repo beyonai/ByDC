@@ -22,6 +22,7 @@ dependencies = [
     "datacloud-knowledge-service",
     "datacloud-data-service",
     "datacloud-memory",
+    "pyyaml>=6.0.3",
 ]
 
 [dependency-groups]

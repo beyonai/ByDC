@@ -9,4 +9,21 @@
 """
 
 __version__ = "0.1.0"
-__all__ = ["__version__"]
+__all__ = [
+    "__version__",
+    # SDK modules
+    "api",
+    "core",
+    "queue",
+    "tenant",
+    "prompts",
+    "backend",
+    "config",
+    "utils",
+    # Legacy modules
+    "agent",
+    "events",
+    "memory",
+    "tools",
+    "workspace",
+]
