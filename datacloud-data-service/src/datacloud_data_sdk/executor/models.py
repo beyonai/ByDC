@@ -10,6 +10,8 @@ class ApiExecTask:
     params: dict[str, Any] = field(default_factory=dict)
     output_ref: str = ""
     csv_table_name: str = ""
+    bind_from_step: str = ""
+    bind_key: str = ""
 
 
 @dataclass

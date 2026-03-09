@@ -57,35 +57,19 @@ def _make_performance_log_handler() -> tuple[Any, dict[str, list]]:
     return on_span, spans_by_request
 
 
-def _build_datasource_configs(settings: Any) -> dict:
-    """从 settings 构建 datasource_configs，供 lifespan 使用。"""
-    datasource_configs: dict = {}
-    if getattr(settings, "datasources_yaml_path", ""):
-        yaml_path = Path(settings.datasources_yaml_path)
-        if yaml_path.exists():
-            from datacloud_data_sdk.sql_executor.config_loader import (
-                _dict_to_config,
-                load_datasources_from_yaml,
-            )
-
-            datasource_configs = load_datasources_from_yaml(yaml_path)
-            logger.info("Loaded %d datasources from %s", len(datasource_configs), yaml_path)
-    if getattr(settings, "datasources", None):
-        from datacloud_data_sdk.sql_executor.config_loader import _dict_to_config
-
-        for alias, cfg in settings.datasources.items():
-            if hasattr(cfg, "db_type"):
-                datasource_configs[alias] = cfg
-            elif isinstance(cfg, dict):
-                datasource_configs[alias] = _dict_to_config(alias, cfg)
-    return datasource_configs
-
-
 def create_app(
     *,
     datasource_configs: dict | None = None,
 ) -> FastAPI:
     """创建 FastAPI 应用。测试时可传入 datasource_configs 覆盖配置。"""
+    sdk_logger = logging.getLogger("datacloud_data_sdk")
+    sdk_logger.setLevel(logging.INFO)
+    sdk_logger.propagate = False
+    if not sdk_logger.handlers:
+        h = logging.StreamHandler()
+        h.setLevel(logging.INFO)
+        h.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+        sdk_logger.addHandler(h)
 
     @asynccontextmanager
     async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -123,12 +107,12 @@ def create_app(
         else:
             logger.warning("DC_LLM_API_KEY not set, LLM plan generation disabled")
 
-        configs = datasource_configs if datasource_configs is not None else _build_datasource_configs(settings)
-        if configs:
-            loader.configure(datasource_configs=configs)
+        if datasource_configs is not None:
+            loader.configure(datasource_configs=datasource_configs)
 
         from datacloud_data_sdk.events.bus import EventBus
         from datacloud_data_sdk.events.handlers import register_query_handlers
+        from datacloud_data_sdk.events.trace_logger import EventTraceLogger
         from datacloud_data_sdk.events.tracing import TracingMiddleware
 
         bus = EventBus()
@@ -136,12 +120,26 @@ def create_app(
         perf_handler, _ = _make_performance_log_handler()
         tracing.on_span_complete(perf_handler)
         register_query_handlers(bus, tracing=tracing)
+        if settings.trace_enabled:
+            trace_logger = EventTraceLogger(
+                trace_log_path=settings.trace_log_path,
+                enabled=True,
+            )
+            trace_logger.register(bus)
         loader.configure(event_bus=bus)
 
         app.state.event_bus = bus  # 供测试在替换 loader 时注入 event_bus
 
         loader.configure(csv_base_dir=settings.csv_base_dir)
         loader.configure(sql_execution_mode=settings.sql_execution_mode)
+
+        if settings.znt_server:
+            from datacloud_data_sdk.ontology.term_loader import TermLoader
+
+            term_loader = TermLoader()
+            term_loader.configure_api(settings.znt_server)
+            loader.configure(term_loader=term_loader)
+            logger.info("Configured TermLoader with znt_server=%s", settings.znt_server)
 
         app.state.loader = loader
         logger.info("OntologyLoader initialized and stored in app.state")

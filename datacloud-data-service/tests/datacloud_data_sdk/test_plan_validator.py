@@ -1,6 +1,7 @@
 from datacloud_data_sdk.plan.models import (
     ObjectViewField,
     ObjectViewFunction,
+    ObjectViewFunctionParam,
     ObjectViewObject,
     ObjectViewPayload,
     ObjectViewSource,
@@ -167,3 +168,118 @@ def test_api_step_unknown_function_id_fails() -> None:
     result = PlanValidator().validate(plan, payload)
     assert not result.valid
     assert any("fn_nonexistent" in e for e in result.errors)
+
+
+def test_api_step_missing_required_param_fails() -> None:
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[ObjectViewSource(source_id="SRC_API", source_type="API")],
+        objects=[
+            ObjectViewObject(
+                object_id="obj1", object_name="测试对象", source_id="SRC_API",
+                fields=[ObjectViewField(name="id", type="string")],
+                functions=[
+                    ObjectViewFunction(
+                        function_code="fn_real",
+                        params=[
+                            ObjectViewFunctionParam(
+                                param_code="userIds",
+                                param_name="用户ID列表",
+                                param_type="ARRAY",
+                                direction="IN",
+                                required=True,
+                            )
+                        ],
+                    )
+                ],
+            )
+        ],
+    )
+    plan = QueryExecutionPlan(
+        question="test", can_answer=True,
+        steps=[
+            PlanStep(step_id="s1", type="API", source_id="SRC_API",
+                     function_id="fn_real", params={}, output_ref="out")
+        ],
+        aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
+    )
+    result = PlanValidator().validate(plan, payload)
+    assert not result.valid
+    assert any("userIds" in e and "missing" in e for e in result.errors)
+
+
+def test_api_step_unknown_param_fails() -> None:
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[ObjectViewSource(source_id="SRC_API", source_type="API")],
+        objects=[
+            ObjectViewObject(
+                object_id="obj1", object_name="测试对象", source_id="SRC_API",
+                fields=[ObjectViewField(name="id", type="string")],
+                functions=[
+                    ObjectViewFunction(
+                        function_code="fn_real",
+                        params=[
+                            ObjectViewFunctionParam(
+                                param_code="userIds",
+                                param_name="用户ID列表",
+                                param_type="ARRAY",
+                                direction="IN",
+                                required=True,
+                            )
+                        ],
+                    )
+                ],
+            )
+        ],
+    )
+    plan = QueryExecutionPlan(
+        question="test", can_answer=True,
+        steps=[
+            PlanStep(step_id="s1", type="API", source_id="SRC_API",
+                     function_id="fn_real", params={"userIds": ["x"], "invalid_key": 1},
+                     output_ref="out")
+        ],
+        aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
+    )
+    result = PlanValidator().validate(plan, payload)
+    assert not result.valid
+    assert any("invalid_key" in e for e in result.errors)
+
+
+def test_api_step_valid_params_passes() -> None:
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[ObjectViewSource(source_id="SRC_API", source_type="API")],
+        objects=[
+            ObjectViewObject(
+                object_id="obj1", object_name="测试对象", source_id="SRC_API",
+                fields=[ObjectViewField(name="id", type="string")],
+                functions=[
+                    ObjectViewFunction(
+                        function_code="fn_real",
+                        params=[
+                            ObjectViewFunctionParam(
+                                param_code="userIds",
+                                param_name="用户ID列表",
+                                param_type="ARRAY",
+                                direction="IN",
+                                required=True,
+                            )
+                        ],
+                    )
+                ],
+            )
+        ],
+    )
+    plan = QueryExecutionPlan(
+        question="test", can_answer=True,
+        steps=[
+            PlanStep(step_id="s1", type="API", source_id="SRC_API",
+                     function_id="fn_real", params={"userIds": ["u1"]},
+                     output_ref="out")
+        ],
+        aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
+    )
+    result = PlanValidator().validate(plan, payload)
+    assert result.valid
