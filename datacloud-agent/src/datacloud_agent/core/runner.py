@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import defaultdict
-from typing import Any, Dict, Optional
+from typing import Any
 
 from datacloud_agent.config.models import GatewayConfig
 from datacloud_agent.core.registry import AgentRegistry
@@ -17,7 +17,7 @@ from datacloud_agent.core.session import SessionManager
 from datacloud_agent.events.emitter import EventEmitter
 from datacloud_agent.queue.enqueuer import MessageEnqueuer
 from datacloud_agent.queue.manager import QueueManager
-from datacloud_agent.queue.types import QueueMode, QueuedMessage, QueueSettings
+from datacloud_agent.queue.types import QueuedMessage, QueueMode, QueueSettings
 
 
 class DedupeCache:
@@ -287,7 +287,7 @@ class AgentRunner:
             raise ValueError(f"Agent '{agent_id}' not found in registry")
 
         # Create agent instance (mock for now)
-        agent = self.agent_registry.create_agent(agent_id)
+        _agent = self.agent_registry.create_agent(agent_id)
 
         # Simulate execution
         # TODO: Replace with actual agent execution
