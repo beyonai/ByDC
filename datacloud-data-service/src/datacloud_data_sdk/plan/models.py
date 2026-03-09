@@ -18,12 +18,30 @@ class ObjectViewField:
     type: str
     description: str = ""
     aliases: list[str] = field(default_factory=list)
+    term_set: str | None = None
+    term_type: str | None = None
+    dataset_id: int | None = None
+
+
+@dataclass
+class ObjectViewFunctionParam:
+    param_code: str
+    param_name: str
+    param_type: str
+    direction: str  # IN / OUT
+    required: bool = False
+    mapping_path: str = ""
+    default_value: Any = None
+    term_set: str | None = None
+    term_type: str | None = None
+    dataset_id: int | None = None
 
 
 @dataclass
 class ObjectViewFunction:
     function_code: str
     description: str = ""
+    params: list[ObjectViewFunctionParam] = field(default_factory=list)
 
 
 @dataclass

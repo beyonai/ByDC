@@ -28,6 +28,8 @@ class OntologyField:
     is_primary_key: bool = False
     source_column: str | None = None
     term_set: str | None = None
+    term_type: str | None = None  # "enum" | "lookup"
+    dataset_id: int | None = None
     physical_mappings: list[FieldPhysicalMapping] = field(default_factory=list)
 
 
@@ -43,6 +45,8 @@ class OntologyActionParam:
     default_value: Any = None
     mapping_path: str = ""
     term_set: str | None = None
+    term_type: str | None = None  # "enum" | "lookup"
+    dataset_id: int | None = None
 
 
 @dataclass
@@ -84,6 +88,7 @@ class OntologyClass:
     source_type: str  # DB / API / KNOWLEDGE_BASE
     datasource_alias: str | None = None
     table_name: str | None = None
+    source_config: dict[str, Any] | None = None
     tags: list[str] = field(default_factory=list)
     fields: list[OntologyField] = field(default_factory=list)
     actions: list[OntologyAction] = field(default_factory=list)

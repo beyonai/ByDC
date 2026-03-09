@@ -60,14 +60,14 @@
 
 ```bash
 # 安装依赖
-pip install -r requirements.txt
+pip install -e ".[all]"
 
-# 配置环境变量
+# 配置环境变量（可选）
 cp .env.example .env
-# 编辑 .env 文件，配置数据库连接、权限规则等
+# 编辑 .env 文件，配置 LLM、本体路径等；数据源来自本体对象上的 source_config
 
 # 启动服务
-python -m datacloud_data_service.main
+uvicorn datacloud_data_service.api.routes:create_app --factory --host 0.0.0.0 --port 8080
 ```
 
 ## API 接口
@@ -115,6 +115,19 @@ datacloud-data-service/
 │   └── api/              # API接口
 ├── tests/                # 测试文件
 └── docs/                 # 文档
+```
+
+## 开发脚本
+
+### 导出场景完整 JSON
+
+根据场景定义和 objects_registry 生成自包含的完整 JSON：
+
+```bash
+python scripts/export_scene_json.py \
+  --scene resources/ontology/crm_demo/scene_01_data_analysis.json \
+  --registry resources/ontology/crm_demo/objects_registry.json \
+  --output resources/ontology/crm_demo/scene_01_data_analysis_full.json
 ```
 
 ## 相关文档

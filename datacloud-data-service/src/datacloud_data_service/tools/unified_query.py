@@ -59,6 +59,9 @@ class UnifiedQuery:
                 "isError": False,
             }
         except Exception as e:
+            from datacloud_data_sdk.events.trace_logger import log_exception_stack
+
+            log_exception_stack(e)
             return {
                 "content": [{"type": "text", "text": str(e)}],
                 "isError": True,

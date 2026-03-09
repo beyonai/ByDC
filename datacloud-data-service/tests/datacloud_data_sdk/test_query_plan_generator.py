@@ -1,8 +1,21 @@
 import pytest
-from datacloud_data_sdk.plan.query_plan_generator import (
-    BasePlanGenerator, MockPlanGenerator, camel_to_snake, camel_to_snake_keys,
+from datacloud_data_sdk.ontology.term_loader import TermLoader
+from datacloud_data_sdk.plan.models import (
+    ObjectViewField,
+    ObjectViewFunction,
+    ObjectViewFunctionParam,
+    ObjectViewObject,
+    ObjectViewPayload,
+    ObjectViewSource,
+    QueryExecutionPlan,
 )
-from datacloud_data_sdk.plan.models import ObjectViewPayload, QueryExecutionPlan
+from datacloud_data_sdk.plan.query_plan_generator import (
+    BasePlanGenerator,
+    MockPlanGenerator,
+    _serialize_payload,
+    camel_to_snake,
+    camel_to_snake_keys,
+)
 
 PAYLOAD = ObjectViewPayload(view_id="v1", sources=[], objects=[], relations=[])
 
@@ -94,3 +107,72 @@ async def test_kb_step_parsed_correctly() -> None:
     assert step.query == "用户问题关键词"
     assert step.tags == {"belong_emp_no": "xxx"}
     assert step.output_ref == "kb_out"
+
+
+def test_serialize_payload_splits_input_output_params() -> None:
+    """序列化时 function.params 拆分为 inputParams/outputParams。"""
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[ObjectViewSource(source_id="SRC", source_type="API")],
+        objects=[
+            ObjectViewObject(
+                object_id="obj1",
+                object_name="对象",
+                source_id="SRC",
+                functions=[
+                    ObjectViewFunction(
+                        function_code="fn_x",
+                        params=[
+                            ObjectViewFunctionParam(
+                                "p1", "入参1", "STRING", "IN", term_set="status.code"
+                            ),
+                            ObjectViewFunctionParam("p2", "出参2", "STRING", "OUT"),
+                        ],
+                    )
+                ],
+            )
+        ],
+        relations=[],
+    )
+    result = _serialize_payload(payload)
+    fn = result["objects"][0]["functions"][0]
+    assert "inputParams" in fn
+    assert "outputParams" in fn
+    assert "params" not in fn
+    assert len(fn["inputParams"]) == 1
+    assert fn["inputParams"][0]["paramCode"] == "p1"
+    assert len(fn["outputParams"]) == 1
+    assert fn["outputParams"][0]["paramCode"] == "p2"
+
+
+def test_serialize_payload_injects_term_labels_with_loader() -> None:
+    """有 term_loader 且 term_set 有数据时，注入 termType 和 termLabels。"""
+    loader = TermLoader.from_mapping({
+        "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
+    })
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[],
+        objects=[
+            ObjectViewObject(
+                object_id="obj1",
+                object_name="对象",
+                source_id="SRC",
+                functions=[
+                    ObjectViewFunction(
+                        function_code="fn_x",
+                        params=[
+                            ObjectViewFunctionParam(
+                                "status", "状态", "STRING", "IN", term_set="status.code"
+                            ),
+                        ],
+                    )
+                ],
+            )
+        ],
+        relations=[],
+    )
+    result = _serialize_payload(payload, term_loader=loader)
+    inp = result["objects"][0]["functions"][0]["inputParams"][0]
+    assert inp["termType"] == "enum"
+    assert inp["termLabels"] == ["待办", "已完成"]
