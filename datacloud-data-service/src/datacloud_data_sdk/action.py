@@ -93,6 +93,7 @@ class Action:
         import httpx
 
         from datacloud_data_sdk.exceptions import ActionNotConfiguredError, ApiExecutionError
+        from datacloud_data_sdk.utils.curl_logger import log_curl
 
         if not self._loader:
             raise ActionNotConfiguredError(self._action.action_code)
@@ -104,6 +105,8 @@ class Action:
 
         url = self._build_url(config)
         headers = self._build_headers()
+
+        log_curl("POST", url, headers=headers, body=params)
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(url, json=params, headers=headers)

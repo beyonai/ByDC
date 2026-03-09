@@ -28,6 +28,7 @@ class LoaderConfig:
     kb_source_configs: dict[str, dict] | None = None  # {alias: {endpoint: url}}
     csv_base_dir: str = "/tmp/datacloud_csv"
     sql_execution_mode: str = "internal"
+    term_loader: Any = None  # TermLoader，用于术语解析；None 时跳过
 
 
 class OntologyLoader:
@@ -61,13 +62,18 @@ class OntologyLoader:
         for obj in content.get("objects", []):
             fields = self._parse_fields(obj.get("fields", []))
             actions = self._parse_actions(obj.get("actions", []), obj["object_code"])
+            source_config = obj.get("source_config")
+            datasource_alias = (
+                source_config.get("alias") if source_config and isinstance(source_config, dict) else None
+            ) or obj.get("datasource_alias")
             ontology_class = OntologyClass(
                 object_code=obj["object_code"],
                 object_name=obj.get("object_name", obj["object_code"]),
                 description=obj.get("description", ""),
                 source_type=obj.get("source_type", "DB"),
-                datasource_alias=obj.get("datasource_alias"),
+                datasource_alias=datasource_alias,
                 table_name=obj.get("table_name"),
+                source_config=source_config if isinstance(source_config, dict) else None,
                 tags=obj.get("tags", []),
                 fields=fields,
                 actions=actions,
@@ -87,11 +93,37 @@ class OntologyLoader:
                 )
             )
 
+        extracted = self._extract_datasource_configs_from_objects()
+        if extracted:
+            self._config.datasource_configs = {
+                **self._config.datasource_configs,
+                **extracted,
+            }
+
     def configure(self, **kwargs: Any) -> None:
         """设置运行时配置（plan_generator、datasource_configs、csv_base_dir）。"""
         for k, v in kwargs.items():
             if hasattr(self._config, k):
                 setattr(self._config, k, v)
+
+    def _extract_datasource_configs_from_objects(self) -> dict[str, Any]:
+        """从 source_type=DB 且含 source_config 的对象提取 DataSourceConfig，按 alias 去重。"""
+        from datacloud_data_sdk.sql_executor.config_loader import (
+            _dict_to_config,
+            _substitute_dict,
+        )
+
+        configs: dict[str, Any] = {}
+        for cls in self._classes.values():
+            if cls.source_type != "DB" or not cls.source_config:
+                continue
+            sc = cls.source_config
+            alias = sc.get("alias") if isinstance(sc, dict) else None
+            if not alias or alias in configs:
+                continue
+            substituted = _substitute_dict(dict(sc))
+            configs[alias] = _dict_to_config(alias, substituted)
+        return configs
 
     # --- 本体层 API ---
 
@@ -186,24 +218,64 @@ class OntologyLoader:
 
     # --- 内部解析 ---
 
+    @staticmethod
+    def _parse_term_meta(raw: dict[str, Any]) -> tuple[str | None, str | None, int | None]:
+        """从 termMeta 或 term_set 解析，返回 (term_set, term_type, dataset_id)。"""
+        tm = raw.get("termMeta") or raw.get("term_meta")
+        if tm and isinstance(tm, dict):
+            tc = tm.get("termTypeCode") or tm.get("term_type_code")
+            tf = tm.get("termField") or tm.get("term_field")
+            tmt = tm.get("termMasterType") or tm.get("term_master_type")
+            ds = tm.get("datasetId") or tm.get("dataset_id")
+            term_set = f"{tc}.{tf}" if tc and tf else None
+            term_type = "enum" if tmt == "dict" else ("lookup" if tmt == "list" else None)
+            try:
+                dataset_id = int(ds) if ds is not None else None
+            except (TypeError, ValueError):
+                dataset_id = None
+            return (term_set, term_type, dataset_id)
+        return (raw.get("term_set"), None, None)
+
+    def _parse_action_param(self, p: dict[str, Any]) -> OntologyActionParam:
+        ts, tt, did = self._parse_term_meta(p)
+        term_set = ts if ts is not None else p.get("term_set")
+        return OntologyActionParam(
+            param_code=p["param_code"],
+            param_name=p.get("param_name", p["param_code"]),
+            direction=p.get("direction", "IN"),
+            param_type=p.get("param_type", "STRING"),
+            required=p.get("required", False),
+            default_value=p.get("default_value"),
+            mapping_path=p.get("mapping_path", ""),
+            term_set=term_set,
+            term_type=tt,
+            dataset_id=did,
+        )
+
     def _parse_fields(self, raw_fields: list[dict[str, Any]]) -> list[OntologyField]:
-        return [
-            OntologyField(
-                field_code=f["field_code"],
-                field_name=f.get("field_name", f["field_code"]),
-                field_type=f.get("field_type", "STRING"),
-                description=f.get("description", ""),
-                aliases=f.get("aliases", []),
-                required=f.get("required", False),
-                is_primary_key=f.get("is_primary_key", False),
-                source_column=f.get("source_column"),
-                term_set=f.get("term_set"),
-                physical_mappings=[
-                    FieldPhysicalMapping(**m) for m in f.get("physical_mappings", [])
-                ],
+        result = []
+        for f in raw_fields:
+            ts, tt, did = self._parse_term_meta(f)
+            term_set = ts if ts is not None else f.get("term_set")
+            result.append(
+                OntologyField(
+                    field_code=f["field_code"],
+                    field_name=f.get("field_name", f["field_code"]),
+                    field_type=f.get("field_type", "STRING"),
+                    description=f.get("description", ""),
+                    aliases=f.get("aliases", []),
+                    required=f.get("required", False),
+                    is_primary_key=f.get("is_primary_key", False),
+                    source_column=f.get("source_column"),
+                    term_set=term_set,
+                    term_type=tt,
+                    dataset_id=did,
+                    physical_mappings=[
+                        FieldPhysicalMapping(**m) for m in f.get("physical_mappings", [])
+                    ],
+                )
             )
-            for f in raw_fields
-        ]
+        return result
 
     def _parse_actions(
         self, raw_actions: list[dict[str, Any]], belong_class: str
@@ -215,17 +287,7 @@ class OntologyLoader:
                 description=a.get("description", ""),
                 belong_class=belong_class,
                 params=[
-                    OntologyActionParam(
-                        param_code=p["param_code"],
-                        param_name=p.get("param_name", p["param_code"]),
-                        direction=p.get("direction", "IN"),
-                        param_type=p.get("param_type", "STRING"),
-                        required=p.get("required", False),
-                        default_value=p.get("default_value"),
-                        mapping_path=p.get("mapping_path", ""),
-                        term_set=p.get("term_set"),
-                    )
-                    for p in a.get("params", [])
+                    self._parse_action_param(p) for p in a.get("params", [])
                 ],
                 function_refs=a.get("function_refs", []),
                 script=a.get("script"),
