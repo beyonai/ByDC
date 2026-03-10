@@ -122,7 +122,16 @@ class GatewayClient:
         )
 
         # Extract response content from result
-        content = result.get("message", "") if isinstance(result, dict) else str(result)
+        # Result structure: {'status': 'executed', 'session_key': '...', 'result': {'agent_id': '...', 'messages': [...], 'response': '...', 'usage': {...}}}
+        content = ""
+        if isinstance(result, dict):
+            inner_result = result.get("result", {})
+            if isinstance(inner_result, dict):
+                content = inner_result.get("response", "")
+            else:
+                content = str(inner_result)
+        else:
+            content = str(result)
 
         return ChatResponse(
             content=content,
@@ -165,7 +174,17 @@ class GatewayClient:
             queue_mode=QueueMode.COLLECT,
         )
 
-        content = result.get("message", "") if isinstance(result, dict) else str(result)
+        # Extract response content from result
+        # Result structure: {'status': 'executed', 'session_key': '...', 'result': {'agent_id': '...', 'messages': [...], 'response': '...', 'usage': {...}}}
+        content = ""
+        if isinstance(result, dict):
+            inner_result = result.get("result", {})
+            if isinstance(inner_result, dict):
+                content = inner_result.get("response", "")
+            else:
+                content = str(inner_result)
+        else:
+            content = str(result)
 
         yield ChatChunk(content=content, is_last=True)
 
