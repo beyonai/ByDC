@@ -175,3 +175,6 @@ cython_debug/
 uv.lock
 
 .opencode/
+
+# Sisyphus agent working directory
+.sisyphus/
