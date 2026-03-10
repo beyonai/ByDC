@@ -1,12 +1,12 @@
 """Tenant context using contextvars for thread-safe isolation."""
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
 
 from datacloud_agent.tenant.types import TenantType
-
 
 # Context variable for tenant isolation
 tenant_ctx: ContextVar["TenantContext | None"] = ContextVar("tenant_ctx", default=None)
@@ -66,7 +66,7 @@ class TenantContext:
 
 
 @contextmanager
-def tenant_scope(tenant: TenantContext):
+def tenant_scope(tenant: TenantContext) -> Iterator[TenantContext]:
     """Context manager for tenant scope.
 
     Args:

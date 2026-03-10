@@ -122,7 +122,7 @@ class SessionManager:
         self,
         tenant_ctx: TenantContext,
         agent_id: str,
-        metadata: dict | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Session:
         """Create a new session for the given tenant and agent.
 
@@ -167,7 +167,7 @@ class SessionManager:
         self,
         tenant_ctx: TenantContext,
         agent_id: str,
-        metadata: dict | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Session:
         """Get an existing session or create a new one.
 

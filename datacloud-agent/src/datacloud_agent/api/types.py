@@ -1,7 +1,28 @@
 """Types for Gateway API."""
 
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Dict, Optional
+from typing import Any
+
+# Re-export config types for API convenience
+from datacloud_agent.config.models import (
+    AgentConfig,
+    GatewayConfig,
+    InboundConfig,
+    MessagesConfig,
+    QueueConfig,
+)
+from datacloud_agent.queue.types import QueueMode
+
+__all__ = [
+    "ChatResponse",
+    "ChatChunk",
+    "GatewayConfig",
+    "MessagesConfig",
+    "InboundConfig",
+    "QueueConfig",
+    "AgentConfig",
+    "QueueMode",
+]
 
 
 @dataclass
@@ -18,7 +39,7 @@ class ChatResponse:
     content: str
     session_id: str
     agent_id: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -33,4 +54,4 @@ class ChatChunk:
 
     content: str
     is_last: bool = False
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
