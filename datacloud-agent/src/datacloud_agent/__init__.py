@@ -8,9 +8,29 @@
 - store: 数据存储
 """
 
+from datacloud_agent.api import (
+    AgentNotFoundError,
+    ChatChunk,
+    ChatResponse,
+    GatewayClient,
+    GatewayConnectionError,
+    GatewayError,
+    GatewayTimeoutError,
+    SessionNotFoundError,
+)
+
 __version__ = "0.1.0"
 __all__ = [
     "__version__",
+    # High-level API
+    "GatewayClient",
+    "ChatResponse",
+    "ChatChunk",
+    "GatewayError",
+    "GatewayTimeoutError",
+    "GatewayConnectionError",
+    "SessionNotFoundError",
+    "AgentNotFoundError",
     # SDK modules
     "api",
     "core",
