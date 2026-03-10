@@ -28,6 +28,10 @@ async def test_api_executor_writes_csv(tmp_path: Path) -> None:
         params={"names": ["test"]},
         output_ref="emp_list",
         csv_table_name="api_emp",
+        output_params=[
+            ("userId", "$.users[].userId"),
+            ("userName", "$.users[].userName"),
+        ],
     )
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -45,7 +49,12 @@ async def test_api_executor_writes_csv(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_api_executor_raises_on_http_error(tmp_path: Path) -> None:
-    task = ApiExecTask(function_code="fn_get_emp", params={}, output_ref="x")
+    task = ApiExecTask(
+        function_code="fn_get_emp",
+        params={},
+        output_ref="x",
+        output_params=[("id", "$.items[].id")],
+    )
     mock_resp = MagicMock()
     mock_resp.status_code = 500
     mock_resp.text = "Internal Error"

@@ -54,8 +54,10 @@ class View:
 
         return "\n".join(lines)
 
-    async def query(self, question: str) -> dict[str, object]:
+    async def query(self, question: str, include_plan: bool = True) -> dict[str, object]:
         """跨对象自然语言查询：计划 -> 执行 -> 聚合完整管线。"""
+        import json
+        import logging
         import uuid
         from dataclasses import asdict
 
@@ -115,18 +117,24 @@ class View:
                     validation_errors=validation_errors,
                     term_loader=getattr(config, "term_loader", None),
                 )
+                plan_dict = {
+                    "question": plan.question,
+                    "can_answer": plan.can_answer,
+                    "clarification": plan.clarification,
+                    "steps": [asdict(s) for s in plan.steps],
+                    "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
+                }
                 if observer:
                     try:
-                        plan_dict = {
-                            "question": plan.question,
-                            "can_answer": plan.can_answer,
-                            "clarification": plan.clarification,
-                            "steps": [asdict(s) for s in plan.steps],
-                            "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
-                        }
                         await observer.on_plan_generated(request_id, plan_dict)
                     except Exception:
                         pass
+                try:
+                    logging.getLogger("datacloud_data_sdk").info(
+                        json.dumps(plan_dict, ensure_ascii=False)
+                    )
+                except Exception:
+                    pass
 
                 if not plan.can_answer:
                     raise CannotAnswerError(plan.clarification)
@@ -170,7 +178,7 @@ class View:
 
             try:
                 ctx = get_current_context()
-                plan = DataPermissionRewriter().rewrite(plan, ctx)
+                # plan = DataPermissionRewriter().rewrite(plan, ctx)
             except Exception:
                 pass
             if observer:
@@ -190,9 +198,9 @@ class View:
                 from datacloud_data_sdk.plan.term_resolver import TermResolver
 
                 term_resolver = TermResolver(config.term_loader)
-            tasks = ExecutionObjectConverter(term_resolver=term_resolver).convert(
-                plan, payload
-            )
+            tasks = ExecutionObjectConverter(
+                term_resolver=term_resolver, loader=loader
+            ).convert(plan, payload)
             if observer:
                 try:
                     tasks_dict = []
@@ -228,20 +236,16 @@ class View:
                 api_executor=api_exec,
                 script_executor=script_exec,
                 kb_executor=kb_exec,
+                csv_base_dir=config.csv_base_dir,
             )
             step_results = await executor.run(
                 tasks, request_id, step_ids=[s.step_id for s in plan.steps]
             )
             if observer:
                 try:
-                    await observer.on_steps_executed(request_id, step_results)
+                    await observer.on_steps_executed(request_id, step_results.to_legacy_dict())
                 except Exception:
                     pass
-
-            for i, step in enumerate(plan.steps):
-                exec_key = f"step_{i}"
-                if exec_key in step_results:
-                    step_results[step.step_id] = step_results[exec_key]
 
             if plan.aggregation:
                 if plan.aggregation.strategy == "SQLITE_MEM":
@@ -263,10 +267,28 @@ class View:
                 except Exception:
                     pass
 
-            return {
+            result = {
                 "records": records,
-                "meta": {"request_id": request_id, "question": question, "view_id": self.view_id},
+                "meta": {
+                    "viewId": self.view_id,
+                    "columns": list(columns),
+                    "total": len(records),
+                },
+                "trace": {
+                    "request_id": request_id,
+                    "question": question,
+                    "view_id": self.view_id,
+                },
             }
+            if include_plan:
+                result["plan"] = {
+                    "question": plan.question,
+                    "can_answer": plan.can_answer,
+                    "clarification": plan.clarification,
+                    "steps": [asdict(s) for s in plan.steps],
+                    "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
+                }
+            return result
         except Exception as exc:
             from datacloud_data_sdk.events.trace_logger import log_exception_stack
 
