@@ -110,7 +110,10 @@ class View:
             result = None
             for retry in range(max_retries + 1):
                 plan = await config.plan_generator.generate(
-                    payload, question, validation_errors=validation_errors
+                    payload,
+                    question,
+                    validation_errors=validation_errors,
+                    term_loader=getattr(config, "term_loader", None),
                 )
                 if observer:
                     try:
@@ -182,7 +185,14 @@ class View:
                 except Exception:
                     pass
 
-            tasks = ExecutionObjectConverter().convert(plan)
+            term_resolver = None
+            if getattr(config, "term_loader", None):
+                from datacloud_data_sdk.plan.term_resolver import TermResolver
+
+                term_resolver = TermResolver(config.term_loader)
+            tasks = ExecutionObjectConverter(term_resolver=term_resolver).convert(
+                plan, payload
+            )
             if observer:
                 try:
                     tasks_dict = []
@@ -219,7 +229,9 @@ class View:
                 script_executor=script_exec,
                 kb_executor=kb_exec,
             )
-            step_results = await executor.run(tasks, request_id)
+            step_results = await executor.run(
+                tasks, request_id, step_ids=[s.step_id for s in plan.steps]
+            )
             if observer:
                 try:
                     await observer.on_steps_executed(request_id, step_results)
@@ -255,6 +267,11 @@ class View:
                 "records": records,
                 "meta": {"request_id": request_id, "question": question, "view_id": self.view_id},
             }
+        except Exception as exc:
+            from datacloud_data_sdk.events.trace_logger import log_exception_stack
+
+            log_exception_stack(exc, request_id=request_id, trace_id=trace_id)
+            raise
         finally:
             csv_manager.cleanup(request_id)
 

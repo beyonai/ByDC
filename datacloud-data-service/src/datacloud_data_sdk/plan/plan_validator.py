@@ -61,6 +61,7 @@ class PlanValidator:
                 )
             errors.extend(self._validate_sql_field_refs(step, payload))
             errors.extend(self._validate_function_ids(step, payload))
+            errors.extend(self._validate_api_step_params(step, payload))
 
         if plan.aggregation:
             agg = plan.aggregation
@@ -136,3 +137,37 @@ class PlanValidator:
                 f"Step {step.step_id}: unknown function_id {step.function_id!r}"
             ]
         return []
+
+    def _validate_api_step_params(
+        self, step: PlanStep, payload: ObjectViewPayload
+    ) -> list[str]:
+        if step.type != "API" or not step.function_id:
+            return []
+
+        fn = None
+        for obj in payload.objects:
+            for f in obj.functions:
+                if f.function_code == step.function_id:
+                    fn = f
+                    break
+            if fn is not None:
+                break
+        if fn is None:
+            return []
+
+        in_params = [p for p in fn.params if p.direction == "IN"]
+        in_codes = {p.param_code for p in in_params}
+        required_codes = {p.param_code for p in in_params if p.required}
+
+        errors: list[str] = []
+        for code in required_codes:
+            if code not in step.params:
+                errors.append(
+                    f"Step {step.step_id}: missing required param {code!r} for function {step.function_id!r}"
+                )
+        for key in step.params:
+            if key not in in_codes:
+                errors.append(
+                    f"Step {step.step_id}: unknown param {key!r} for function {step.function_id!r}"
+                )
+        return errors

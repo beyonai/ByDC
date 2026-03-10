@@ -1,13 +1,16 @@
 """ApiExecutor: HTTP API 调用 + CSV 输出。"""
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
 
 from datacloud_data_sdk.context import get_current_context
 from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
+from datacloud_data_sdk.utils.curl_logger import log_curl
 from datacloud_data_sdk.exceptions import ApiExecutionError
 from datacloud_data_sdk.executor.models import ApiExecTask
 from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
@@ -28,13 +31,28 @@ class ApiExecutor:
         self._configs = function_configs
         self._csv = CsvStorageManager(csv_base_dir)
 
-    async def execute(self, task: ApiExecTask, request_id: str) -> ApiExecResult:
+    async def execute(
+        self,
+        task: ApiExecTask,
+        request_id: str,
+        step_results: dict[str, str] | None = None,
+    ) -> ApiExecResult:
+        params = dict(task.params)
+        if task.bind_from_step and task.bind_key and step_results:
+            bind_path = step_results.get(task.bind_from_step, "")
+            if bind_path and Path(bind_path).exists():
+                values = self._read_bind_values(bind_path, task.bind_key)
+                if values:
+                    params[task.bind_key] = values[0]
+
         config = self._configs.get(task.function_code, {})
         url = self._build_url(config)
         headers = self._build_headers()
 
+        log_curl("POST", url, headers=headers, body=params)
+
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, json=task.params, headers=headers)
+            resp = await client.post(url, json=params, headers=headers)
 
         if resp.status_code >= 400:
             raise ApiExecutionError(task.function_code, resp.status_code, resp.text)
@@ -63,6 +81,11 @@ class ApiExecutor:
         except Exception:
             pass
         return headers
+
+    def _read_bind_values(self, csv_path: str, key: str) -> list[str]:
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            return [row[key] for row in reader if key in row]
 
     def _extract_records(self, data: Any) -> list[dict[str, Any]]:
         """Extract list of records from API response."""

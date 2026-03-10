@@ -25,6 +25,11 @@ def _make_loader(plan_dict: dict, tmp_path: Path) -> OntologyLoader:
                     "object_code": "sales_business_opportunity",
                     "object_name": "商机",
                     "source_type": "DB",
+                    "source_config": {
+                        "alias": "crm_db",
+                        "db_type": "SQLITE",
+                        "jdbc_url": "jdbc:sqlite::memory:",
+                    },
                     "datasource_alias": "crm_db",
                     "table_name": "sales_business_opportunity",
                     "fields": [
