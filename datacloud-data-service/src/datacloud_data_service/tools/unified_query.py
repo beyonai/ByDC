@@ -18,15 +18,16 @@ class UnifiedQuery:
         question: str,
         view_id: str = "",
         object_ids: list[str] | None = None,
+        include_plan: bool = True,
     ) -> dict[str, Any]:
         """执行自然语言查询，返回 MCP content 格式。"""
         try:
             if view_id:
                 view = self._loader.get_view(view_id)
-                result = await view.query(question)
+                result = await view.query(question, include_plan=include_plan)
             elif object_ids and len(object_ids) == 1:
                 obj = self._loader.get_object(object_ids[0])
-                result = await obj.query(question)
+                result = await obj.query(question, include_plan=include_plan)
             else:
                 all_ids = object_ids or [c.object_code for c in self._loader.get_ontology_classes()]
                 from datacloud_data_sdk.view import View
@@ -52,7 +53,7 @@ class UnifiedQuery:
                     objects=objects,
                     relations=relations,
                 )
-                result = await view.query(question)
+                result = await view.query(question, include_plan=include_plan)
 
             return {
                 "content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False, default=str)}],
