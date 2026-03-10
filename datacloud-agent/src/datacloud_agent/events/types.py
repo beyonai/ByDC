@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 
 class EventType(Enum):
@@ -39,7 +40,7 @@ class Event:
     """
 
     type: EventType
-    data: dict = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.now)
     session_id: str = ""
 

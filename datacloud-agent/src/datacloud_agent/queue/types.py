@@ -1,9 +1,10 @@
 """Queue types for OpenClaw Gateway."""
 
+import uuid
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from dataclasses import dataclass, field
-import uuid
+from typing import Any
 
 
 class QueueMode(str, Enum):
@@ -43,7 +44,7 @@ class QueuedMessage:
     session_key: str
     message_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: datetime = field(default_factory=datetime.now)
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     priority: int = 0
 
 

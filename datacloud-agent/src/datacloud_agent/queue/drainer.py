@@ -1,8 +1,9 @@
 """Queue drainer for OpenClaw Gateway."""
 
 import asyncio
-from typing import Any, Callable, Awaitable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 
 from datacloud_agent.queue.manager import QueueManager
 from datacloud_agent.queue.types import QueuedMessage, QueueMode
@@ -12,14 +13,14 @@ from datacloud_agent.queue.types import QueuedMessage, QueueMode
 class _BackgroundTask:
     """Internal representation of a background drain task."""
 
-    task: asyncio.Task
+    task: asyncio.Task[Any]
     stop_event: asyncio.Event
 
 
 class QueueDrainer:
     """Drains queues and processes messages."""
 
-    def __init__(self, queue_manager: QueueManager):
+    def __init__(self, queue_manager: QueueManager) -> None:
         """Initialize the drainer.
 
         Args:
@@ -87,7 +88,7 @@ class QueueDrainer:
     def start_background_drain(
         self,
         session_key: str,
-        processor: Callable,
+        processor: Callable[..., Awaitable[Any]],
         interval: float = 1.0,
     ) -> None:
         """Start a background task that periodically drains the queue.
@@ -110,10 +111,10 @@ class QueueDrainer:
     async def _background_drain_loop(
         self,
         session_key: str,
-        processor: Callable,
+        processor: Callable[..., Awaitable[Any]],
         interval: float,
         stop_event: asyncio.Event,
-    ):
+    ) -> None:
         """Background loop that drains the queue at intervals."""
         try:
             while not stop_event.is_set():
