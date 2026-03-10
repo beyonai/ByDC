@@ -58,9 +58,13 @@ class TestGatewayClientChat:
         mock_session.agent_id = "default"
         client._session_manager.create_session = AsyncMock(return_value=mock_session)
 
-        # Mock agent runner
+        # Mock agent runner - using actual return format from handle_message
         client._agent_runner.handle_message = AsyncMock(
-            return_value={"message": "Hello!", "status": "success"}
+            return_value={
+                "status": "executed",
+                "session_key": "tenant:default:agent:default:session-123",
+                "result": {"response": "Hello!", "agent_id": "default"},
+            }
         )
 
         response = await client.chat("Hello!")
@@ -80,9 +84,13 @@ class TestGatewayClientChat:
         mock_session.agent_id = "default"
         client._session_manager.get_session = AsyncMock(return_value=mock_session)
 
-        # Mock agent runner
+        # Mock agent runner - using actual return format from handle_message
         client._agent_runner.handle_message = AsyncMock(
-            return_value={"message": "Response!", "status": "success"}
+            return_value={
+                "status": "executed",
+                "session_key": "tenant:default:agent:default:existing-session",
+                "result": {"response": "Response!", "agent_id": "default"},
+            }
         )
 
         response = await client.chat("Hello!", session_id="existing-session")
@@ -100,9 +108,13 @@ class TestGatewayClientChat:
         mock_session.agent_id = "coder"
         client._session_manager.create_session = AsyncMock(return_value=mock_session)
 
-        # Mock agent runner
+        # Mock agent runner - using actual return format from handle_message
         client._agent_runner.handle_message = AsyncMock(
-            return_value={"message": "Code response", "status": "success"}
+            return_value={
+                "status": "executed",
+                "session_key": "tenant:default:agent:coder:session-456",
+                "result": {"response": "Code response", "agent_id": "coder"},
+            }
         )
 
         response = await client.chat("Write code", agent_id="coder")
@@ -131,9 +143,13 @@ class TestGatewayClientChatStream:
         mock_session.agent_id = "default"
         client._session_manager.create_session = AsyncMock(return_value=mock_session)
 
-        # Mock agent runner
+        # Mock agent runner - using actual return format from handle_message
         client._agent_runner.handle_message = AsyncMock(
-            return_value={"message": "Streamed response", "status": "success"}
+            return_value={
+                "status": "executed",
+                "session_key": "tenant:default:agent:default:session-789",
+                "result": {"response": "Streamed response", "agent_id": "default"},
+            }
         )
 
         chunks = []
@@ -371,7 +387,13 @@ class TestGatewayClientIntegration:
             with patch.object(
                 client._agent_runner,
                 "handle_message",
-                AsyncMock(return_value={"message": "Hello! How can I help?", "status": "success"}),
+                AsyncMock(
+                    return_value={
+                        "status": "executed",
+                        "session_key": "test-key",
+                        "result": {"response": "Hello! How can I help?", "agent_id": "default"},
+                    }
+                ),
             ):
                 response = await client.chat("Hello!")
 
