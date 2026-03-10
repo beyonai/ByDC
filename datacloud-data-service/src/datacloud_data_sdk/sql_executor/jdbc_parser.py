@@ -5,7 +5,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 
 def parse_jdbc_url(jdbc_url: str, db_type: str) -> str:
-    """将 JDBC URL 转为 Python 连接字符串（MySQL/PostgreSQL/SQLite）。"""
+    """将 JDBC URL 转为 Python 连接字符串（MySQL/PostgreSQL/OpenGauss/SQLite）。"""
     if db_type.upper() == "SQLITE":
         return jdbc_url.replace("jdbc:sqlite:", "")
     if db_type.upper() == "MYSQL":
@@ -14,7 +14,26 @@ def parse_jdbc_url(jdbc_url: str, db_type: str) -> str:
         return jdbc_url.replace("jdbc:mysql:", "mysql+aiomysql:")
     if db_type.upper() == "POSTGRESQL":
         return jdbc_url.replace("jdbc:postgresql:", "postgresql+asyncpg:")
+    if db_type.upper() == "OPENGAUSS":
+        if jdbc_url.startswith("jdbc:opengauss:"):
+            return jdbc_url.replace("jdbc:opengauss:", "opengauss+asyncpg:")
+        return jdbc_url.replace("jdbc:postgresql:", "opengauss+asyncpg:")
     return jdbc_url
+
+
+def extract_current_schema(jdbc_url: str) -> str | None:
+    """从 JDBC URL 的 query 中解析 currentSchema，用于设置 search_path。"""
+    url = jdbc_url
+    if jdbc_url.startswith("jdbc:opengauss:"):
+        url = jdbc_url.replace("jdbc:opengauss:", "opengauss://", 1)
+    elif jdbc_url.startswith("jdbc:postgresql:"):
+        url = jdbc_url.replace("jdbc:postgresql:", "postgresql://", 1)
+    parsed = urlparse(url)
+    qs = parse_qs(parsed.query)
+    values = qs.get("currentSchema") or qs.get("current_schema")
+    if not values:
+        return None
+    return values[0]
 
 
 def parse_clickhouse_jdbc_url(jdbc_url: str) -> dict[str, str | int]:

@@ -39,14 +39,13 @@ class DataPermissionRewriter:
             source_id=step.source_id,
             datasource_alias=step.datasource_alias,
             sql_template=sql,
+            object_id=step.object_id,
             function_id=step.function_id,
             params=step.params,
             output_ref=step.output_ref,
             csv_table_name=step.csv_table_name,
             bind_from_step=step.bind_from_step,
             bind_key=step.bind_key,
-            script=step.script,
-            action_code=step.action_code,
         )
 
     def _inject_tenant_id(self, sql: str, tenant_id: str) -> str:

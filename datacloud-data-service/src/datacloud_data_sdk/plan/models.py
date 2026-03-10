@@ -21,6 +21,7 @@ class ObjectViewField:
     term_set: str | None = None
     term_type: str | None = None
     dataset_id: int | None = None
+    source_column: str | None = None  # DB 物理列名，SQL 中必须使用此列名
 
 
 @dataclass
@@ -45,6 +46,17 @@ class ObjectViewFunction:
 
 
 @dataclass
+class ObjectViewAction:
+    """对象动作，供 LLM 选择 (objectId, actionCode)。"""
+
+    action_code: str
+    input_params: list[ObjectViewFunctionParam] = field(default_factory=list)
+    output_params: list[ObjectViewFunctionParam] = field(default_factory=list)
+    implementation_type: str = "API"  # API | SCRIPT
+    function_code: str | None = None  # 仅 API 类有
+
+
+@dataclass
 class ObjectViewObject:
     object_id: str
     object_name: str
@@ -53,6 +65,7 @@ class ObjectViewObject:
     description: str = ""
     fields: list[ObjectViewField] = field(default_factory=list)
     functions: list[ObjectViewFunction] = field(default_factory=list)
+    actions: list[ObjectViewAction] = field(default_factory=list)
 
 
 @dataclass
@@ -77,18 +90,17 @@ class ObjectViewPayload:
 @dataclass
 class PlanStep:
     step_id: str
-    type: str  # SQL / API / SCRIPT / KB
+    type: str  # SQL / API / KB
     source_id: str = ""
     datasource_alias: str = ""
     sql_template: str = ""
-    function_id: str = ""
+    object_id: str = ""  # type=API 时必填，用于定位 action
+    function_id: str = ""  # type=API 时表示 actionCode
     params: dict[str, Any] = field(default_factory=dict)
     output_ref: str = ""
     csv_table_name: str = ""
     bind_from_step: str = ""
     bind_key: str = ""
-    script: str = ""
-    action_code: str = ""
     query: str = ""
     tags: dict[str, Any] = field(default_factory=dict)
 
