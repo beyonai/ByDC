@@ -13,6 +13,11 @@ REGISTRY = {
             "object_name": "销售商机",
             "description": "商机对象",
             "source_type": "DB",
+            "source_config": {
+                "alias": "test_db",
+                "db_type": "SQLITE",
+                "jdbc_url": "jdbc:sqlite::memory:",
+            },
             "datasource_alias": "test_db",
             "table_name": "sales_bo",
             "fields": [
