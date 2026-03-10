@@ -1,18 +1,21 @@
-"""WebSocket support for OpenClaw Gateway Service.
+"""WebSocket support for datacloud-agent-service with OpenClaw protocol.
 
-Provides real-time bidirectional communication for chat, commands, and events.
+Provides real-time bidirectional communication using OpenClaw Gateway protocol.
 """
 
 import contextlib
 import json
 import logging
+from typing import Optional
 
-from datacloud_agent import GatewayClient
-from datacloud_agent.config.models import GatewayConfig
 from fastapi import WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel, ValidationError
 
+from datacloud_agent import GatewayClient
+from datacloud_agent.config.models import GatewayConfig
+
 from config import settings
+from openclaw_protocol import OpenClawProtocolHandler
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +32,9 @@ class WebSocketMessage(BaseModel):
 
 async def get_websocket_gateway_client(
     websocket: WebSocket,
-    tenant_id: str | None = None,
+    tenant_id: Optional[str] = None,
 ) -> GatewayClient:
-    """Get GatewayClient for WebSocket connection.
-
-    Extracts tenant ID from query parameters or headers.
-    """
+    """Get GatewayClient for WebSocket connection."""
     # Try to get tenant ID from query parameter
     if not tenant_id:
         tenant_id = websocket.query_params.get("tenant_id")
@@ -69,14 +69,9 @@ async def get_websocket_gateway_client(
 
 
 async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time communication.
+    """WebSocket endpoint for OpenClaw protocol.
 
-    Handles:
-    - Connection establishment
-    - Message parsing and validation
-    - Chat message streaming
-    - Command execution
-    - Ping/pong keepalive
+    Handles OpenClaw Gateway protocol frames for real-time chat.
     """
     await websocket.accept()
     logger.info("WebSocket connection established")
@@ -88,84 +83,33 @@ async def websocket_endpoint(websocket: WebSocket):
         # Create GatewayClient for this connection
         client = await get_websocket_gateway_client(websocket, tenant_id)
 
+        # Create protocol handler
+        handler = OpenClawProtocolHandler(client)
+
         # Main message loop
         while True:
             try:
-                # Receive JSON message
-                data = await websocket.receive_json()
-            except json.JSONDecodeError:
-                await websocket.send_json({"type": "error", "error": "Invalid JSON message"})
-                continue
+                # Receive text message (JSON frame)
+                data = await websocket.receive_text()
+                frame = json.loads(data)
 
-            # Validate message
-            try:
-                msg = WebSocketMessage(**data)
-            except ValidationError as e:
-                await websocket.send_json(
-                    {"type": "error", "error": f"Invalid message format: {e.errors()}"}
+                # Handle the frame
+                async def send_callback(response_frame: dict):
+                    await websocket.send_text(json.dumps(response_frame))
+
+                await handler.handle_frame(frame, send_callback)
+
+            except json.JSONDecodeError as e:
+                logger.warning(f"Invalid JSON received: {e}")
+                await websocket.send_text(
+                    json.dumps({"type": "res", "ok": False, "error": "Invalid JSON"})
                 )
-                continue
-
-            # Route message by type
-            if msg.type == "ping":
-                await websocket.send_json({"type": "pong"})
-
-            elif msg.type == "chat":
-                if not msg.message:
-                    await websocket.send_json(
-                        {"type": "error", "error": "Missing 'message' for chat type"}
-                    )
-                    continue
-
-                # Stream chat response
-                try:
-                    async for chunk in client.chat_stream(
-                        message=msg.message,
-                        session_id=msg.session_id,
-                        agent_id=msg.agent_id,
-                    ):
-                        await websocket.send_json(
-                            {
-                                "type": "chat_chunk",
-                                "content": chunk.content,
-                                "is_last": chunk.is_last,
-                            }
-                        )
-                except Exception as e:
-                    logger.exception("Error during chat streaming")
-                    await websocket.send_json({"type": "error", "error": f"Chat error: {str(e)}"})
-
-            elif msg.type == "command":
-                if not msg.command:
-                    await websocket.send_json(
-                        {"type": "error", "error": "Missing 'command' for command type"}
-                    )
-                    continue
-
-                try:
-                    result = await client.execute_command(
-                        command=msg.command,
-                        session_id=msg.session_id,
-                    )
-                    await websocket.send_json(
-                        {
-                            "type": "command_result",
-                            "result": result,
-                        }
-                    )
-                except Exception as e:
-                    logger.exception("Error executing command")
-                    await websocket.send_json(
-                        {"type": "error", "error": f"Command error: {str(e)}"}
-                    )
-
-            else:
-                await websocket.send_json(
-                    {"type": "error", "error": f"Unknown message type: {msg.type}"}
-                )
+            except Exception as e:
+                logger.exception("Error handling WebSocket message")
+                await websocket.send_text(json.dumps({"type": "res", "ok": False, "error": str(e)}))
 
     except WebSocketDisconnect:
-        logger.info("WebSocket connection closed")
+        logger.info("WebSocket connection closed by client")
     except Exception:
         logger.exception("Unexpected error in WebSocket handler")
         with contextlib.suppress(Exception):
