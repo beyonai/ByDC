@@ -4,14 +4,49 @@ Implements the OpenClaw Gateway protocol for WebSocket communication.
 This allows the OpenClaw UI to communicate with datacloud-agent-service.
 """
 
-import json
+import asyncio
 import logging
+import os
 import uuid
 from typing import Any
 
 from datacloud_agent import GatewayClient
+from datacloud_agent.core import AgentConfig
 
 logger = logging.getLogger(__name__)
+
+# Check if we have API key for real LLM calls
+_HAS_API_KEY = bool(os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY"))
+
+
+def ensure_default_agent(client: GatewayClient) -> None:
+    """Ensure a default agent is registered in the client.
+
+    Args:
+        client: The GatewayClient instance to configure.
+    """
+    registry = client._agent_registry
+
+    # Check if default agent already exists
+    if registry.get("default") is not None:
+        return
+
+    # Create and register a default agent
+    try:
+        # Use qwen model which is available in the lab environment
+        config = AgentConfig(
+            agent_id="default",
+            provider="openai",
+            model="qwen3.5-plus",
+            system_prompt="You are a helpful AI assistant for DataCloud. You help users with data analysis, queries, and general questions.",
+            tools=["know", "query"],
+            subagents=[],
+        )
+        registry.register("default", config)
+        logger.info("Registered default agent")
+    except ValueError as e:
+        # Agent might already exist
+        logger.debug(f"Default agent registration skipped: {e}")
 
 
 class OpenClawProtocolHandler:
@@ -20,6 +55,9 @@ class OpenClawProtocolHandler:
     def __init__(self, gateway_client: GatewayClient):
         self.client = gateway_client
         self.active_streams = {}  # session_id -> stream_task
+
+        # Ensure default agent is registered
+        ensure_default_agent(self.client)
 
     async def handle_frame(self, frame: dict, send_callback) -> None:
         """Handle an incoming protocol frame.
@@ -86,48 +124,124 @@ class OpenClawProtocolHandler:
         if not message:
             raise ValueError("Message is required")
 
-        # Start streaming response
-        async def stream_response():
-            try:
-                async for chunk in self.client.chat_stream(
-                    message=message, session_id=session_id, agent_id="default"
-                ):
-                    await send_callback(
-                        {
-                            "type": "event",
-                            "event": "chat.chunk",
-                            "payload": {
-                                "sessionId": session_id,
-                                "content": chunk.content,
-                                "isLast": chunk.is_last,
-                            },
-                        }
-                    )
-
-                # Send completion event
-                await send_callback(
-                    {
-                        "type": "event",
-                        "event": "chat.complete",
-                        "payload": {"sessionId": session_id},
-                    }
-                )
-            except Exception as e:
-                logger.exception("Error streaming response")
-                await send_callback(
-                    {
-                        "type": "event",
-                        "event": "chat.error",
-                        "payload": {"sessionId": session_id, "message": str(e)},
-                    }
-                )
-
-        # Start streaming in background
-        import asyncio
-
-        asyncio.create_task(stream_response())
+        # Use mock response if no API key is configured
+        effective_session_id = session_id or str(uuid.uuid4())
+        if not _HAS_API_KEY:
+            asyncio.create_task(
+                self._mock_stream_response(effective_session_id, message, send_callback)
+            )
+        else:
+            # Start streaming response using real LLM
+            asyncio.create_task(
+                self._real_stream_response(effective_session_id, message, send_callback)
+            )
 
         return {"sessionId": session_id, "status": "streaming"}
+
+    async def _mock_stream_response(self, session_id: str, message: str, send_callback) -> None:
+        """Send a mock response when no API key is available."""
+        try:
+            # Simulate typing delay
+            await asyncio.sleep(0.5)
+
+            # Send mock response chunks
+            mock_response = (
+                f"**你好！** 我是 DataCloud Agent。\n\n"
+                f'你发送的消息是："{message}"\n\n'
+                f"> **注意**：当前后端运行在模拟模式下，因为没有配置 LLM API key。\n\n"
+                f"要启用真实 AI 响应，请设置以下环境变量之一：\n"
+                f"- `OPENAI_API_KEY` - 用于 OpenAI 兼容的 API\n"
+                f"- `ANTHROPIC_API_KEY` - 用于 Anthropic Claude\n\n"
+                f"前后端连接已成功建立！✅"
+            )
+
+            # Stream response in chunks
+            chunk_size = 10
+            for i in range(0, len(mock_response), chunk_size):
+                chunk = mock_response[i : i + chunk_size]
+                is_last = i + chunk_size >= len(mock_response)
+
+                await send_callback(
+                    {
+                        "type": "event",
+                        "event": "chat.chunk",
+                        "payload": {
+                            "sessionId": session_id,
+                            "content": chunk,
+                            "isLast": is_last,
+                        },
+                    }
+                )
+                await asyncio.sleep(0.05)  # Small delay between chunks
+
+            # Send completion event
+            await send_callback(
+                {
+                    "type": "event",
+                    "event": "chat.complete",
+                    "payload": {"sessionId": session_id},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error in mock streaming")
+            await send_callback(
+                {
+                    "type": "event",
+                    "event": "chat.error",
+                    "payload": {"sessionId": session_id, "message": str(e)},
+                }
+            )
+
+    async def _real_stream_response(self, session_id: str, message: str, send_callback) -> None:
+        """Send a real LLM response."""
+        try:
+            logger.info(f"Starting real stream response for session {session_id}")
+
+            # Use chat method instead of chat_stream to get full response
+            # Note: chat_stream has a bug where it looks for 'message' field but result has 'response' field
+            response = await self.client.chat(
+                message=message, session_id=session_id, agent_id="default", stream=False
+            )
+
+            logger.info(f"Got response: {response.content[:50]}...")
+
+            # Stream response in chunks to simulate streaming
+            content = response.content
+            chunk_size = 20
+            for i in range(0, len(content), chunk_size):
+                chunk = content[i : i + chunk_size]
+                is_last = i + chunk_size >= len(content)
+
+                await send_callback(
+                    {
+                        "type": "event",
+                        "event": "chat.chunk",
+                        "payload": {
+                            "sessionId": session_id,
+                            "content": chunk,
+                            "isLast": is_last,
+                        },
+                    }
+                )
+                await asyncio.sleep(0.03)  # Small delay between chunks
+
+            # Send completion event
+            await send_callback(
+                {
+                    "type": "event",
+                    "event": "chat.complete",
+                    "payload": {"sessionId": session_id},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error streaming response")
+            await send_callback(
+                {
+                    "type": "event",
+                    "event": "chat.error",
+                    "payload": {"sessionId": session_id, "message": str(e)},
+                }
+            )
 
     async def handle_chat_abort(self, params: dict, send_callback, frame_id: str) -> dict:
         """Abort an ongoing chat stream."""
