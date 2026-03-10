@@ -23,6 +23,9 @@ dependencies = [
     "datacloud-data-service",
     "datacloud-memory",
     "pyyaml>=6.0.3",
+    "deepagents>=0.4.7",
+    "langgraph>=1.0.10",
+    "langchain-openai>=1.1.10",
 ]
 
 [dependency-groups]
