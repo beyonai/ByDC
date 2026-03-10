@@ -1,13 +1,12 @@
 """Tests for AgentRunner and supporting classes."""
 
-import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from datacloud_agent.core import AgentRunner, DedupeCache, InboundDebouncer
 from datacloud_agent.config.models import GatewayConfig, InboundConfig
+from datacloud_agent.core import AgentRunner, DedupeCache, InboundDebouncer
 from datacloud_agent.queue.types import QueueMode
 
 
