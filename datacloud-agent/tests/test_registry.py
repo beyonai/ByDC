@@ -14,56 +14,48 @@ class TestAgentConfig:
         """Test creating an AgentConfig with required fields."""
         config = AgentConfig(
             agent_id="test",
-            name="Test Agent",
-            description="A test agent",
             model="claude-sonnet-4-6",
             provider="anthropic",
         )
         assert config.agent_id == "test"
-        assert config.name == "Test Agent"
-        assert config.description == "A test agent"
         assert config.model == "claude-sonnet-4-6"
         assert config.provider == "anthropic"
         assert config.system_prompt is None
         assert config.tools == []
-        assert config.metadata == {}
+        assert config.subagents == []
 
     def test_agent_config_with_optional_fields(self):
         """Test AgentConfig with optional fields."""
         config = AgentConfig(
             agent_id="test",
-            name="Test Agent",
-            description="A test agent",
             model="claude-sonnet-4-6",
             provider="anthropic",
             system_prompt="You are a test agent.",
             tools=["know", "query"],
-            metadata={"version": "1.0"},
+            subagents=[{"agent_id": "sub1", "model": "model1", "provider": "provider1"}],
         )
         assert config.system_prompt == "You are a test agent."
         assert config.tools == ["know", "query"]
-        assert config.metadata == {"version": "1.0"}
+        assert config.subagents == [
+            {"agent_id": "sub1", "model": "model1", "provider": "provider1"}
+        ]
 
     def test_agent_config_defaults_are_independent(self):
         """Ensure default lists/dicts are independent instances."""
         config1 = AgentConfig(
             agent_id="test1",
-            name="Test1",
-            description="Desc1",
             model="model1",
             provider="provider1",
         )
         config2 = AgentConfig(
             agent_id="test2",
-            name="Test2",
-            description="Desc2",
             model="model2",
             provider="provider2",
         )
         config1.tools.append("know")
-        config1.metadata["key"] = "value"
+        config1.subagents.append({"agent_id": "sub1"})
         assert config2.tools == []
-        assert config2.metadata == {}
+        assert config2.subagents == []
 
 
 class TestAgentRegistryBasics:
@@ -79,8 +71,6 @@ class TestAgentRegistryBasics:
         registry = AgentRegistry()
         config = AgentConfig(
             agent_id="default",
-            name="Default Agent",
-            description="General purpose",
             model="claude-sonnet-4-6",
             provider="anthropic",
         )
@@ -88,7 +78,6 @@ class TestAgentRegistryBasics:
         retrieved = registry.get("default")
         assert retrieved is not None
         assert retrieved.agent_id == "default"
-        assert retrieved.name == "Default Agent"
         assert retrieved.model == "claude-sonnet-4-6"
         assert retrieved.provider == "anthropic"
 
@@ -97,8 +86,6 @@ class TestAgentRegistryBasics:
         registry = AgentRegistry()
         config = AgentConfig(
             agent_id="default",
-            name="Default",
-            description="Desc",
             model="model",
             provider="provider",
         )
@@ -111,8 +98,6 @@ class TestAgentRegistryBasics:
         registry = AgentRegistry()
         config = AgentConfig(
             agent_id="default",
-            name="Default",
-            description="Desc",
             model="model",
             provider="provider",
         )
@@ -131,15 +116,11 @@ class TestAgentRegistryBasics:
         registry = AgentRegistry()
         config1 = AgentConfig(
             agent_id="agent1",
-            name="Agent One",
-            description="First agent",
             model="model1",
             provider="provider1",
         )
         config2 = AgentConfig(
             agent_id="agent2",
-            name="Agent Two",
-            description="Second agent",
             model="model2",
             provider="provider2",
         )
@@ -152,21 +133,11 @@ class TestAgentRegistryBasics:
         agent_ids = {a["id"] for a in agents}
         assert agent_ids == {"agent1", "agent2"}
 
-        for agent in agents:
-            if agent["id"] == "agent1":
-                assert agent["name"] == "Agent One"
-                assert agent["description"] == "First agent"
-            else:
-                assert agent["name"] == "Agent Two"
-                assert agent["description"] == "Second agent"
-
     def test_has_agent(self):
         """Test has_agent method."""
         registry = AgentRegistry()
         config = AgentConfig(
             agent_id="default",
-            name="Default",
-            description="Desc",
             model="model",
             provider="provider",
         )
@@ -183,14 +154,11 @@ class TestAgentRegistryYamlLoading:
         yaml_content = """
         agents:
           default:
-            name: "Default Agent"
-            description: "General purpose agent"
             model: "claude-sonnet-4-6"
             provider: "anthropic"
             system_prompt: "You are a helpful assistant."
             tools: ["know", "query"]
-            metadata:
-              version: "1.0"
+            subagents: []
         """
         config_file = tmp_path / "agents.yaml"
         config_file.write_text(yaml_content)
@@ -199,21 +167,17 @@ class TestAgentRegistryYamlLoading:
         config = registry.get("default")
         assert config is not None
         assert config.agent_id == "default"
-        assert config.name == "Default Agent"
-        assert config.description == "General purpose agent"
         assert config.model == "claude-sonnet-4-6"
         assert config.provider == "anthropic"
         assert config.system_prompt == "You are a helpful assistant."
         assert config.tools == ["know", "query"]
-        assert config.metadata == {"version": "1.0"}
+        assert config.subagents == []
 
     def test_load_from_yaml_minimal(self, tmp_path: Path):
         """Test loading YAML with only required fields."""
         yaml_content = """
         agents:
           minimal:
-            name: "Minimal Agent"
-            description: "Just the basics"
             model: "gpt-4"
             provider: "openai"
         """
@@ -224,26 +188,20 @@ class TestAgentRegistryYamlLoading:
         config = registry.get("minimal")
         assert config is not None
         assert config.agent_id == "minimal"
-        assert config.name == "Minimal Agent"
-        assert config.description == "Just the basics"
         assert config.model == "gpt-4"
         assert config.provider == "openai"
         assert config.system_prompt is None
         assert config.tools == []
-        assert config.metadata == {}
+        assert config.subagents == []
 
     def test_load_from_yaml_multiple_agents(self, tmp_path: Path):
         """Test loading multiple agents from YAML."""
         yaml_content = """
         agents:
           agent1:
-            name: "Agent One"
-            description: "First agent"
             model: "model1"
             provider: "provider1"
           agent2:
-            name: "Agent Two"
-            description: "Second agent"
             model: "model2"
             provider: "provider2"
             tools: ["compute"]
@@ -310,10 +268,8 @@ class TestAgentRegistryYamlLoading:
         yaml_content = """
         agents:
           default:
-            name: "Default Agent"
-            # missing description
             model: "claude-sonnet-4-6"
-            provider: "anthropic"
+            # missing provider
         """
         config_file = tmp_path / "agents.yaml"
         config_file.write_text(yaml_content)
@@ -322,18 +278,18 @@ class TestAgentRegistryYamlLoading:
         with pytest.raises(ValueError, match="Missing required fields"):
             registry.load_from_yaml(config_file)
 
-    def test_load_from_yaml_extra_fields_go_to_metadata(self, tmp_path: Path):
-        """Test that extra fields in YAML are not included in metadata."""
+    def test_load_from_yaml_extra_fields_go_to_subagents(self, tmp_path: Path):
+        """Test that extra fields in YAML are handled properly."""
         yaml_content = """
         agents:
           default:
-            name: "Default"
-            description: "Desc"
             model: "model"
             provider: "provider"
             extra_field: "should be ignored"
-            metadata:
-              version: "1.0"
+            subagents:
+              - agent_id: "sub1"
+                model: "submodel1"
+                provider: "subprovider1"
         """
         config_file = tmp_path / "agents.yaml"
         config_file.write_text(yaml_content)
@@ -341,9 +297,9 @@ class TestAgentRegistryYamlLoading:
         registry = AgentRegistry(config_file)
         config = registry.get("default")
         assert config is not None
-        # extra_field should not appear in metadata
-        assert config.metadata == {"version": "1.0"}
-        # The extra field is simply ignored by AgentConfig constructor
+        assert config.subagents == [
+            {"agent_id": "sub1", "model": "submodel1", "provider": "subprovider1"}
+        ]
 
 
 class TestAgentRegistryCreateAgent:
@@ -354,33 +310,27 @@ class TestAgentRegistryCreateAgent:
         registry = AgentRegistry()
         config = AgentConfig(
             agent_id="default",
-            name="Default Agent",
-            description="General purpose",
             model="claude-sonnet-4-6",
             provider="anthropic",
             system_prompt="Be helpful",
             tools=["know", "query"],
-            metadata={"version": "1.0"},
+            subagents=[],
         )
         registry.register("default", config)
 
         agent = registry.create_agent("default")
         assert isinstance(agent, dict)
         assert agent["agent_id"] == "default"
-        assert agent["name"] == "Default Agent"
         assert agent["model"] == "claude-sonnet-4-6"
         assert agent["provider"] == "anthropic"
         assert agent["system_prompt"] == "Be helpful"
         assert agent["tools"] == ["know", "query"]
-        assert agent["metadata"] == {"version": "1.0"}
 
     def test_create_agent_with_model_override(self):
         """Test create_agent with model override."""
         registry = AgentRegistry()
         config = AgentConfig(
             agent_id="default",
-            name="Default",
-            description="Desc",
             model="claude-sonnet-4-6",
             provider="anthropic",
         )
@@ -405,8 +355,6 @@ class TestAgentRegistryIntegration:
         yaml_content = """
         agents:
           default:
-            name: "Default"
-            description: "Desc"
             model: "model"
             provider: "provider"
         """
@@ -422,8 +370,6 @@ class TestAgentRegistryIntegration:
         yaml_content = """
         agents:
           from_yaml:
-            name: "From YAML"
-            description: "Loaded from file"
             model: "model1"
             provider: "provider1"
         """
@@ -433,8 +379,6 @@ class TestAgentRegistryIntegration:
         registry = AgentRegistry(config_file)
         config = AgentConfig(
             agent_id="manual",
-            name="Manual",
-            description="Manually registered",
             model="model2",
             provider="provider2",
         )
