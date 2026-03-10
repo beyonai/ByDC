@@ -1,0 +1,22 @@
+{
+  "devDependencies": {
+    "playwright": "^1.58.2"
+  },
+  "name": "whale_datacloud",
+  "version": "1.0.0",
+  "description": "dataCloud是一个数智引擎，通过智能构建企业级知识网络，面向大模型、智能应用、业务人员的输出业务化组件能力，提升企业数据获取效率及应用推理的准确性。",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "dependencies": {
+    "playwright-core": "^1.58.2"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
