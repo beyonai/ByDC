@@ -38,8 +38,8 @@ class TenantResolver:
 
         try:
             tenant_type = TenantType(tenant_type_str)
-        except ValueError:
-            raise ValueError(f"Unknown tenant type: {tenant_type_str}")
+        except ValueError as err:
+            raise ValueError(f"Unknown tenant type: {tenant_type_str}") from err
 
         if tenant_type == TenantType.PUBLIC:
             return TenantContext(

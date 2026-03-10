@@ -1,15 +1,13 @@
 """Message enqueuer for OpenClaw Gateway."""
 
-import asyncio
 import time
 from datetime import datetime
-from typing import Tuple
 
 from datacloud_agent.queue.manager import QueueManager
 from datacloud_agent.queue.types import (
     DropPolicy,
-    QueueSettings,
     QueuedMessage,
+    QueueSettings,
     QueueState,
 )
 
@@ -17,7 +15,7 @@ from datacloud_agent.queue.types import (
 class MessageEnqueuer:
     """Enqueues messages with deduplication and drop policies."""
 
-    def __init__(self, queue_manager: QueueManager):
+    def __init__(self, queue_manager: QueueManager) -> None:
         """Initialize the enqueuer.
 
         Args:
@@ -52,7 +50,7 @@ class MessageEnqueuer:
         session_key: str,
         message: QueuedMessage,
         settings: QueueSettings,
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """Try to enqueue a message, returning success and reason.
 
         Args:
@@ -76,10 +74,10 @@ class MessageEnqueuer:
             # Check for duplicate prompt in queue (regardless of time)
             if any(m.prompt == message.prompt for m in queue.messages):
                 return False, "duplicate"
-            if len(queue.messages) >= settings.max_size:
-                # Queue is full, apply drop policy
-                if not self._apply_drop_policy(queue, settings.drop_policy):
-                    return False, "queue_full"
+            if len(queue.messages) >= settings.max_size and not self._apply_drop_policy(
+                queue, settings.drop_policy
+            ):
+                return False, "queue_full"
 
             # Add message
             queue.messages.append(message)
@@ -123,7 +121,7 @@ class MessageEnqueuer:
         self._cleanup_dedupe_cache(now)
         return False
 
-    def _cleanup_dedupe_cache(self, now: float):
+    def _cleanup_dedupe_cache(self, now: float) -> None:
         """Remove expired entries from the dedupe cache."""
         expired_keys = [
             key

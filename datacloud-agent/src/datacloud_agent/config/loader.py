@@ -1,13 +1,14 @@
 """Configuration loader utilities for OpenClaw Gateway."""
 
 from pathlib import Path
+from typing import Any
 
 import yaml
 
 from datacloud_agent.config.models import GatewayConfig
 
 
-def load_config_from_dict(data: dict) -> GatewayConfig:
+def load_config_from_dict(data: dict[str, Any]) -> GatewayConfig:
     """Load configuration from a dictionary.
 
     Args:

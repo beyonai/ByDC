@@ -2,25 +2,23 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import uuid
-from typing import Any, AsyncIterator, Dict, List, Optional
+from collections.abc import AsyncIterator
+from typing import Any
 
 from datacloud_agent.api.exceptions import (
     AgentNotFoundError,
-    GatewayError,
     SessionNotFoundError,
 )
 from datacloud_agent.api.types import ChatChunk, ChatResponse
 from datacloud_agent.config.models import GatewayConfig
 from datacloud_agent.core.registry import AgentRegistry
-from datacloud_agent.core.runner import AgentRunner
 from datacloud_agent.core.router import CommandRouter
+from datacloud_agent.core.runner import AgentRunner
 from datacloud_agent.core.session import SessionManager
 from datacloud_agent.events.emitter import EventEmitter
 from datacloud_agent.queue.manager import QueueManager
-from datacloud_agent.queue.types import QueueMode, QueuedMessage, QueueSettings
+from datacloud_agent.queue.types import QueueMode
 from datacloud_agent.tenant.context import TenantContext
 from datacloud_agent.tenant.types import TenantType
 
@@ -43,8 +41,8 @@ class GatewayClient:
 
     def __init__(
         self,
-        config: Optional[GatewayConfig] = None,
-        tenant_id: Optional[str] = None,
+        config: GatewayConfig | None = None,
+        tenant_id: str | None = None,
     ) -> None:
         """Initialize the GatewayClient.
 
@@ -80,8 +78,8 @@ class GatewayClient:
     async def chat(
         self,
         message: str,
-        session_id: Optional[str] = None,
-        agent_id: Optional[str] = None,
+        session_id: str | None = None,
+        agent_id: str | None = None,
         stream: bool = False,
     ) -> ChatResponse:
         """Send a message and get a response.
@@ -138,8 +136,8 @@ class GatewayClient:
     async def chat_stream(
         self,
         message: str,
-        session_id: Optional[str] = None,
-        agent_id: Optional[str] = None,
+        session_id: str | None = None,
+        agent_id: str | None = None,
     ) -> AsyncIterator[ChatChunk]:
         """Send a message and stream the response.
 
@@ -174,7 +172,7 @@ class GatewayClient:
     async def switch_agent(
         self,
         agent_id: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> None:
         """Switch the agent for a session.
 
@@ -208,7 +206,7 @@ class GatewayClient:
         session.agent_id = agent_id
         logger.debug("Switched session %s to agent %s", session.session_id, agent_id)
 
-    async def reset_session(self, session_id: Optional[str] = None) -> None:
+    async def reset_session(self, session_id: str | None = None) -> None:
         """Reset/clear a session.
 
         Args:
@@ -238,7 +236,7 @@ class GatewayClient:
 
         logger.debug("Reset session(s) for tenant: %s", self.tenant_id)
 
-    def list_agents(self) -> List[Dict[str, Any]]:
+    def list_agents(self) -> list[dict[str, Any]]:
         """List available agents.
 
         Returns:
@@ -250,8 +248,8 @@ class GatewayClient:
     async def execute_command(
         self,
         command: str,
-        session_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        session_id: str | None = None,
+    ) -> dict[str, Any]:
         """Execute a slash command.
 
         Args:
@@ -324,8 +322,8 @@ class GatewayClient:
 
     async def _get_or_create_session(
         self,
-        session_id: Optional[str],
-        agent_id: Optional[str],
+        session_id: str | None,
+        agent_id: str | None,
     ) -> Any:
         """Get existing session or create a new one.
 

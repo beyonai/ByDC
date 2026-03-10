@@ -1,12 +1,10 @@
 """System prompt builder for the four‑layer architecture."""
 
-import asyncio
 import logging
-from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from .loader import PromptLoader
-from .types import LayerType, SystemPromptConfig
+from .types import SystemPromptConfig
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +36,7 @@ class SystemPromptBuilder:
             if not files:
                 logger.debug("No files found for layer %s", layer)
                 continue
-            for file_path, content in files:
+            for _, content in files:
                 layers_content.append(content)
 
         full_prompt = "\n\n".join(layers_content)
@@ -74,7 +72,7 @@ class SystemPromptBuilder:
         # Insert ellipsis to indicate omitted middle part
         return f"{head}\n\n[...]\n\n{tail}"
 
-    async def build_with_metadata(self) -> Dict[str, Any]:
+    async def build_with_metadata(self) -> dict[str, Any]:
         """Build the system prompt and return metadata.
 
         Returns:
