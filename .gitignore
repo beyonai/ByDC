@@ -178,3 +178,6 @@ uv.lock
 
 # Sisyphus agent working directory
 .sisyphus/
+
+**/node_modules/
+tmp/*
