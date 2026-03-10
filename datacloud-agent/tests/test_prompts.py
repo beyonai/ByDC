@@ -67,8 +67,6 @@ class TestSystemPromptConfig:
             "IDENTITY.md": LayerType.IDENTITY,
             "USER.md": LayerType.IDENTITY,
             "AGENTS.md": LayerType.COLLABORATION,
-            "knowledge.md": LayerType.KNOWLEDGE,
-            "knowledge": LayerType.KNOWLEDGE,
         }
 
     def test_custom_prompts_dir(self):
@@ -130,16 +128,15 @@ class TestPromptLoader:
         assert len(collab_files) == 1
         assert collab_files[0][0].name == "AGENTS.md"
 
-        # Operation layer (default) should have operations.md and nested.md
+        # Operation layer (default) should have operations.md, knowledge.md, nested.md
         operation_files = grouped[LayerType.OPERATION]
-        assert len(operation_files) == 2
+        assert len(operation_files) == 3
         filenames = {path.name for path, _ in operation_files}
-        assert filenames == {"operations.md", "nested.md"}
+        assert filenames == {"operations.md", "knowledge.md", "nested.md"}
 
-        # Knowledge layer should have knowledge.md
+        # Knowledge layer should be empty (no mapping for knowledge.md)
         knowledge_files = grouped[LayerType.KNOWLEDGE]
-        assert len(knowledge_files) == 1
-        assert knowledge_files[0][0].name == "knowledge.md"
+        assert len(knowledge_files) == 0
 
     @pytest.mark.asyncio
     async def test_load_all_empty_directory(self):
