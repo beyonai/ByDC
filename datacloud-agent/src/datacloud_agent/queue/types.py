@@ -55,5 +55,7 @@ class QueueState:
     session_key: str
     messages: list[QueuedMessage] = field(default_factory=list)
     mode: QueueMode = QueueMode.COLLECT
+    max_size: int = 100
+    drop_policy: DropPolicy = DropPolicy.NEW
     is_processing: bool = False
     last_activity: datetime = field(default_factory=datetime.now)
