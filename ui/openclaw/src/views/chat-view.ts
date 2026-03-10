@@ -1,7 +1,7 @@
 // ui/openclaw/src/views/chat-view.ts
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { chatController, ChatMessage } from '../controllers/chat.js';
+import { chatState, setUpdateCallback, loadSessions, sendMessage } from '../controllers/chat.js';
 import { gateway } from '../gateway.js';
 import { marked } from 'marked';
 
@@ -143,19 +143,27 @@ export class ChatView extends LitElement {
 
   @state() private connectionStatus = false;
   @state() private inputValue = '';
-  @state() private messages: ChatMessage[] = [];
-  @state() private isLoading = false;
-  @state() private error: string | null = null;
+  @state() private _messagesUpdateTrigger = 0; // Used to force re-render when chatState changes
 
   connectedCallback() {
     super.connectedCallback();
 
+    // Set up callback for state updates - bind to this instance
+    const self = this;
+    setUpdateCallback(() => {
+      console.log('[ChatView] Update callback triggered, messages count:', chatState.messages.length);
+      // Increment trigger to force Lit to re-render
+      self._messagesUpdateTrigger++;
+      self.requestUpdate();
+      self.scrollToBottom();
+    });
+
     // Connect to gateway
     gateway.onConnect = () => {
       this.connectionStatus = true;
-      chatController.loadSessions();
+      loadSessions();
     };
-    
+
     gateway.onDisconnect = () => {
       this.connectionStatus = false;
     };
@@ -163,26 +171,6 @@ export class ChatView extends LitElement {
     gateway.connect().catch((err) => {
       console.error('Failed to connect:', err);
     });
-    
-    // Poll for state updates
-    this.startPolling();
-  }
-  
-  private pollInterval?: number;
-  
-  private startPolling() {
-    this.pollInterval = window.setInterval(() => {
-      this.messages = chatController.messages.get();
-      this.isLoading = chatController.isLoading.get();
-      this.error = chatController.error.get();
-    }, 100);
-  }
-  
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    if (this.pollInterval) {
-      clearInterval(this.pollInterval);
-    }
   }
 
   private scrollToBottom() {
@@ -196,10 +184,10 @@ export class ChatView extends LitElement {
 
   private async handleSend() {
     const content = this.inputValue.trim();
-    if (!content || this.isLoading) return;
-    
+    if (!content || chatState.isLoading) return;
+
     this.inputValue = '';
-    await chatController.sendMessage(content);
+    await sendMessage(content);
     this.scrollToBottom();
   }
 
@@ -215,6 +203,9 @@ export class ChatView extends LitElement {
   }
 
   render() {
+    // Access _messagesUpdateTrigger to ensure Lit tracks this dependency
+    console.log('[ChatView] Rendering, messages count:', chatState.messages.length, 'trigger:', this._messagesUpdateTrigger);
+    const messages = chatState.messages;
     return html`
       <div class="header">
         <h1>DataCloud Agent</h1>
@@ -224,17 +215,19 @@ export class ChatView extends LitElement {
         </div>
       </div>
 
-      ${this.error ? html`<div class="error">${this.error}</div>` : ''}
+      ${chatState.error ? html`<div class="error">${chatState.error}</div>` : ''}
 
       <div class="messages">
-        ${this.messages.map((msg) => html`
+        ${messages.map((msg) => {
+          console.log('[ChatView] Rendering message:', msg.role, msg.content.substring(0, 50));
+          return html`
           <div class="message ${msg.role} ${msg.isStreaming ? 'streaming' : ''}">
-            ${msg.role === 'assistant' 
-              ? html`<div innerHTML="${this.renderMarkdown(msg.content)}"></div>`
+            ${msg.role === 'assistant'
+              ? html`<div>${msg.content}</div>`
               : msg.content
             }
           </div>
-        `)}
+        `})}
       </div>
 
       <div class="input-area">
@@ -245,11 +238,11 @@ export class ChatView extends LitElement {
           placeholder="Type your message..."
           rows="1"
         ></textarea>
-        <button 
-          @click="${this.handleSend}" 
-          ?disabled="${this.isLoading || !this.inputValue.trim()}"
+        <button
+          @click="${this.handleSend}"
+          ?disabled="${chatState.isLoading || !this.inputValue.trim()}"
         >
-          ${this.isLoading ? 'Sending...' : 'Send'}
+          ${chatState.isLoading ? 'Sending...' : 'Send'}
         </button>
       </div>
     `;
