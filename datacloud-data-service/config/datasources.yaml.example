@@ -1,0 +1,23 @@
+# 数据源配置示例
+# 复制为 datasources.yaml 并按需修改: cp datasources.yaml.example datasources.yaml
+# 支持 ${ENV_VAR} 环境变量替换，如 password: ${DB_PASSWORD}
+
+datasources:
+  crm_db:
+    alias: crm_db
+    db_type: MYSQL
+    jdbc_url: jdbc:mysql://localhost:3306/crm
+    user: root
+    password: ${DB_PASSWORD}
+    pool_min: 1
+    pool_max: 5
+
+  # SQLite 示例（本地开发）
+  # sqlite_local:
+  #   alias: sqlite_local
+  #   db_type: SQLITE
+  #   jdbc_url: jdbc:sqlite:./data/crm.db
+  #   user: ""
+  #   password: ""
+  #   pool_min: 1
+  #   pool_max: 5

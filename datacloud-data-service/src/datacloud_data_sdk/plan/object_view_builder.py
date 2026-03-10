@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from datacloud_data_sdk.plan.models import (
     ObjectViewField,
     ObjectViewFunction,
+    ObjectViewFunctionParam,
     ObjectViewObject,
     ObjectViewPayload,
     ObjectViewRelation,
@@ -39,14 +40,37 @@ class ObjectViewBuilder:
                     type=f.field_type.lower(),
                     description=f.field_name,
                     aliases=f.aliases,
+                    term_set=f.term_set,
+                    term_type=f.term_type,
+                    dataset_id=f.dataset_id,
                 )
                 for f in cls.fields
             ]
-            functions = [
-                ObjectViewFunction(function_code=fr)
-                for a in cls.actions
-                for fr in a.function_refs
-            ]
+            functions = []
+            for a in cls.actions:
+                for fr in a.function_refs:
+                    params = [
+                        ObjectViewFunctionParam(
+                            param_code=p.param_code,
+                            param_name=p.param_name,
+                            param_type=p.param_type,
+                            direction=p.direction,
+                            required=p.required,
+                            mapping_path=p.mapping_path,
+                            default_value=p.default_value,
+                            term_set=p.term_set,
+                            term_type=p.term_type,
+                            dataset_id=p.dataset_id,
+                        )
+                        for p in a.params
+                    ]
+                    functions.append(
+                        ObjectViewFunction(
+                            function_code=fr,
+                            description=a.description,
+                            params=params,
+                        )
+                    )
             objects.append(
                 ObjectViewObject(
                     object_id=oid,

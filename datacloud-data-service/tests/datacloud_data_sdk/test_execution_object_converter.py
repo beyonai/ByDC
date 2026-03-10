@@ -1,4 +1,14 @@
-from datacloud_data_sdk.plan.models import QueryExecutionPlan, PlanStep, PlanAggregation
+from datacloud_data_sdk.plan.models import (
+    ObjectViewField,
+    ObjectViewFunction,
+    ObjectViewFunctionParam,
+    ObjectViewObject,
+    ObjectViewPayload,
+    ObjectViewSource,
+    PlanAggregation,
+    PlanStep,
+    QueryExecutionPlan,
+)
 from datacloud_data_sdk.plan.execution_object_converter import ExecutionObjectConverter
 from datacloud_data_sdk.executor.models import SqlExecTask, ApiExecTask, ScriptExecTask, KbExecTask
 
@@ -68,6 +78,54 @@ def test_api_step_converts_to_api_exec_task() -> None:
     assert len(tasks) == 1
     assert isinstance(tasks[0], ApiExecTask)
     assert tasks[0].function_code == "fn_get_emp"
+    assert tasks[0].params == {"names": ["邹海天"]}
+
+
+def test_api_step_converts_params_with_mapping_path() -> None:
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[ObjectViewSource(source_id="SRC_EMP", source_type="API")],
+        objects=[
+            ObjectViewObject(
+                object_id="obj1",
+                object_name="员工",
+                source_id="SRC_EMP",
+                fields=[ObjectViewField(name="id", type="string")],
+                functions=[
+                    ObjectViewFunction(
+                        function_code="fn_get_emp",
+                        params=[
+                            ObjectViewFunctionParam(
+                                param_code="emp_no",
+                                param_name="员工工号",
+                                param_type="STRING",
+                                direction="IN",
+                                mapping_path="$.requestBody.sql_param_emp_no",
+                            )
+                        ],
+                    )
+                ],
+            )
+        ],
+    )
+    plan = QueryExecutionPlan(
+        question="查员工",
+        can_answer=True,
+        steps=[
+            PlanStep(
+                step_id="s1",
+                type="API",
+                function_id="fn_get_emp",
+                params={"emp_no": "E001"},
+                output_ref="emp_list",
+            )
+        ],
+        aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1", columns=[]),
+    )
+    tasks = ExecutionObjectConverter().convert(plan, payload)
+    assert len(tasks) == 1
+    assert isinstance(tasks[0], ApiExecTask)
+    assert tasks[0].params == {"sql_param_emp_no": "E001"}
 
 
 def test_script_step_converts_to_script_exec_task() -> None:

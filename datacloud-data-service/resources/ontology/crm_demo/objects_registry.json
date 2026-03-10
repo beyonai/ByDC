@@ -13,7 +13,7 @@
         },
         "servers": [
           {
-            "url": "http://main-data-service:8080"
+            "url": "http://127.0.0.1:8000"
           }
         ],
         "paths": {
@@ -101,7 +101,7 @@
         },
         "servers": [
           {
-            "url": "http://main-data-service:8080"
+            "url": "http://127.0.0.1:8000"
           }
         ],
         "paths": {
@@ -199,7 +199,7 @@
         },
         "servers": [
           {
-            "url": "http://main-data-service:8080"
+            "url": "http://127.0.0.1:8000"
           }
         ],
         "paths": {
@@ -284,7 +284,7 @@
         },
         "servers": [
           {
-            "url": "http://main-data-service:8080"
+            "url": "http://127.0.0.1:8000"
           }
         ],
         "paths": {
@@ -1162,7 +1162,7 @@
         },
         "servers": [
           {
-            "url": "http://main-data-service:8080"
+            "url": "http://127.0.0.1:8000"
           }
         ],
         "paths": {
@@ -1256,7 +1256,7 @@
         },
         "servers": [
           {
-            "url": "http://main-data-service:8080"
+            "url": "http://127.0.0.1:8000"
           }
         ],
         "paths": {
@@ -1343,7 +1343,7 @@
         },
         "servers": [
           {
-            "url": "http://main-data-service:8080"
+            "url": "http://127.0.0.1:8000"
           }
         ],
         "paths": {
@@ -1423,7 +1423,7 @@
         },
         "servers": [
           {
-            "url": "http://main-data-service:8080"
+            "url": "http://127.0.0.1:8000"
           }
         ],
         "paths": {
@@ -1670,7 +1670,7 @@
               "param_type": "ARRAY",
               "direction": "IN",
               "mapping_path": "$.requestBody.userIds",
-              "term_set": "user.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
             },
             {
               "param_code": "userId",
@@ -1738,7 +1738,8 @@
               "param_type": "STRING",
               "direction": "IN",
               "required": true,
-              "mapping_path": "$.parameters.orgId"
+              "mapping_path": "$.parameters.orgId",
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
             },
             {
               "param_code": "includeSubOrgs",
@@ -1901,7 +1902,7 @@
               "param_type": "ARRAY",
               "direction": "IN",
               "mapping_path": "$.requestBody.orgIds",
-              "term_set": "org.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
             },
             {
               "param_code": "orgId",
@@ -1970,7 +1971,7 @@
               "direction": "IN",
               "required": true,
               "mapping_path": "$.parameters.orgId",
-              "term_set": "org.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
             },
             {
               "param_code": "recursive",
@@ -2213,7 +2214,7 @@
               "param_type": "ARRAY",
               "direction": "IN",
               "mapping_path": "$.requestBody.handlerIds",
-              "term_set": "user.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
             },
             {
               "param_code": "priority",
@@ -2221,7 +2222,7 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.priority",
-              "term_set": "priority.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "priority", "termField": "code"}
             },
             {
               "param_code": "urgencyLevel",
@@ -2229,7 +2230,7 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.urgencyLevel",
-              "term_set": "urgencyLevel.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "urgencyLevel", "termField": "code"}
             },
             {
               "param_code": "content",
@@ -2251,7 +2252,7 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.promoter",
-              "term_set": "user.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
             },
             {
               "param_code": "remark",
@@ -2312,7 +2313,7 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.priority",
-              "term_set": "priority.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "priority", "termField": "code"}
             },
             {
               "param_code": "urgencyLevel",
@@ -2320,7 +2321,7 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.urgencyLevel",
-              "term_set": "urgencyLevel.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "urgencyLevel", "termField": "code"}
             },
             {
               "param_code": "orgId",
@@ -2328,7 +2329,7 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.orgId",
-              "term_set": "org.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
             },
             {
               "param_code": "meetingNoteIds",
@@ -2343,7 +2344,7 @@
               "param_type": "ARRAY",
               "direction": "IN",
               "mapping_path": "$.requestBody.statusList",
-              "term_set": "status.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "status", "termField": "code"}
             },
             {
               "param_code": "page",
@@ -2372,7 +2373,7 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.status",
-              "term_set": "status.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "status", "termField": "code"}
             },
             {
               "param_code": "promoter",
@@ -2380,7 +2381,7 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.promoter",
-              "term_set": "user.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
             },
             {
               "param_code": "deadlineStart",
@@ -2774,7 +2775,7 @@
               "direction": "IN",
               "required": true,
               "mapping_path": "$.requestBody.approvalStatus",
-              "term_set": "approvalStatus.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "approvalStatus", "termField": "code"}
             },
             {
               "param_code": "todoIds",
@@ -2852,7 +2853,7 @@
           "field_type": "INTEGER",
           "required": true,
           "source_column": "report_status",
-          "term_set": "reportStatus.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "reportStatus", "termField": "code"}
         },
         {
           "field_code": "belongEmpNo",
@@ -2860,7 +2861,7 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "belong_emp_no",
-          "term_set": "user.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
         },
         {
           "field_code": "belongUserName",
@@ -2868,17 +2869,26 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "belong_user_name",
-          "term_set": "user.name"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
         },
         {
           "field_code": "belongEmpOrgId",
           "field_name": "归属用户所在的组织ID",
           "field_type": "STRING",
           "source_column": "belong_emp_org_id",
-          "term_set": "org.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
         }
       ],
       "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "SQLITE",
+        "jdbc_url": "jdbc:sqlite::memory:",
+        "user": "",
+        "password": "",
+        "pool_min": 1,
+        "pool_max": 5
+      },
       "datasource_alias": "ds_crm",
       "table_name": "sales_daily_report"
     },
@@ -2937,10 +2947,19 @@
           "field_name": "会议参与人员工号",
           "field_type": "ARRAY",
           "source_column": "participant_emp_nos",
-          "term_set": "user.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
         }
       ],
       "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "SQLITE",
+        "jdbc_url": "jdbc:sqlite::memory:",
+        "user": "",
+        "password": "",
+        "pool_min": 1,
+        "pool_max": 5
+      },
       "datasource_alias": "ds_crm",
       "table_name": "sales_meeting_note"
     },
@@ -2974,7 +2993,7 @@
           "field_name": "所属营销部",
           "field_type": "STRING",
           "source_column": "belong_depart",
-          "term_set": "org.name"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "name"}
         },
         {
           "field_code": "customerName",
@@ -3001,7 +3020,7 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "iwhale_cbm_emp_no",
-          "term_set": "user.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
         },
         {
           "field_code": "iwhaleCbmName",
@@ -3009,14 +3028,14 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "iwhale_cbm_name",
-          "term_set": "user.name"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
         },
         {
           "field_code": "iwhaleCbmOrgId",
           "field_name": "商机负责人组织或名称",
           "field_type": "STRING",
           "source_column": "iwhale_cbm_org_id",
-          "term_set": "org.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
         },
         {
           "field_code": "softwareIncomeTime",
@@ -3043,14 +3062,14 @@
           "field_name": "支撑sc工号或名称",
           "field_type": "STRING",
           "source_column": "iwhale_sc_emp_no",
-          "term_set": "user.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
         },
         {
           "field_code": "iwhaleScName",
           "field_name": "浩鲸sc名称",
           "field_type": "STRING",
           "source_column": "iwhale_sc_name",
-          "term_set": "user.name"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
         },
         {
           "field_code": "diliverContent",
@@ -3119,14 +3138,14 @@
           "field_name": "提交人",
           "field_type": "STRING",
           "source_column": "submit_person",
-          "term_set": "user.name"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
         },
         {
           "field_code": "submitOrganization",
           "field_name": "提交组织",
           "field_type": "STRING",
           "source_column": "submit_organization",
-          "term_set": "org.name"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "name"}
         },
         {
           "field_code": "isAliIntegrated",
@@ -3196,6 +3215,15 @@
         }
       ],
       "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "SQLITE",
+        "jdbc_url": "jdbc:sqlite::memory:",
+        "user": "",
+        "password": "",
+        "pool_min": 1,
+        "pool_max": 5
+      },
       "datasource_alias": "ds_crm",
       "table_name": "sales_business_opportunity"
     },
@@ -3228,7 +3256,7 @@
           "field_name": "变更前状态",
           "field_type": "STRING",
           "source_column": "status_before",
-          "term_set": "changeStatus.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "changeStatus", "termField": "code"}
         },
         {
           "field_code": "statusAfter",
@@ -3236,7 +3264,7 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "status_after",
-          "term_set": "changeStatus.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "changeStatus", "termField": "code"}
         },
         {
           "field_code": "changeRemark",
@@ -3250,7 +3278,7 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "changed_by",
-          "term_set": "user.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
         },
         {
           "field_code": "changedTime",
@@ -3261,6 +3289,15 @@
         }
       ],
       "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "SQLITE",
+        "jdbc_url": "jdbc:sqlite::memory:",
+        "user": "",
+        "password": "",
+        "pool_min": 1,
+        "pool_max": 5
+      },
       "datasource_alias": "ds_crm",
       "table_name": "sales_bo_status_change"
     },
@@ -3289,21 +3326,21 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "emp_no",
-          "term_set": "user.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
         },
         {
           "field_code": "name",
           "field_name": "责任人姓名",
           "field_type": "STRING",
           "source_column": "name",
-          "term_set": "user.name"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
         },
         {
           "field_code": "empOrgId",
           "field_name": "责任人组织",
           "field_type": "STRING",
           "source_column": "emp_org_id",
-          "term_set": "org.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
         },
         {
           "field_code": "contactNo",
@@ -3341,6 +3378,15 @@
         }
       ],
       "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "SQLITE",
+        "jdbc_url": "jdbc:sqlite::memory:",
+        "user": "",
+        "password": "",
+        "pool_min": 1,
+        "pool_max": 5
+      },
       "datasource_alias": "ds_crm",
       "table_name": "po_users_kpi_detail"
     },
@@ -3375,7 +3421,7 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "belong_depart",
-          "term_set": "org.name"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "name"}
         },
         {
           "field_code": "type",
@@ -3396,7 +3442,7 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "iwhale_cbm_emp_no",
-          "term_set": "user.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
         },
         {
           "field_code": "iwhaleCbmName",
@@ -3404,14 +3450,14 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "iwhale_cbm_name",
-          "term_set": "user.name"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
         },
         {
           "field_code": "iwhaleCbmOrgId",
           "field_name": "客户维护人组织",
           "field_type": "STRING",
           "source_column": "iwhale_cbm_org_id",
-          "term_set": "org.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
         },
         {
           "field_code": "belongIndustry",
@@ -3467,14 +3513,14 @@
           "field_name": "提交人",
           "field_type": "STRING",
           "source_column": "submit_person",
-          "term_set": "user.name"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
         },
         {
           "field_code": "submitOrganization",
           "field_name": "提交组织",
           "field_type": "STRING",
           "source_column": "submit_organization",
-          "term_set": "org.name"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "name"}
         },
         {
           "field_code": "businessOpportunityProcess",
@@ -3496,6 +3542,15 @@
         }
       ],
       "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "SQLITE",
+        "jdbc_url": "jdbc:sqlite::memory:",
+        "user": "",
+        "password": "",
+        "pool_min": 1,
+        "pool_max": 5
+      },
       "datasource_alias": "ds_crm",
       "table_name": "sales_customer"
     },
@@ -3523,7 +3578,7 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "applicant_emp_no",
-          "term_set": "user.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
         },
         {
           "field_code": "applicantName",
@@ -3531,7 +3586,7 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "applicant_name",
-          "term_set": "user.name"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
         },
         {
           "field_code": "applicantOrgId",
@@ -3539,7 +3594,7 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "applicant_org_id",
-          "term_set": "org.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
         },
         {
           "field_code": "expenseAmount",
@@ -3605,7 +3660,7 @@
               "direction": "IN",
               "required": true,
               "mapping_path": "$.requestBody.applicantEmpNo",
-              "term_set": "user.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
             },
             {
               "param_code": "applicantName",
@@ -3614,7 +3669,7 @@
               "direction": "IN",
               "required": true,
               "mapping_path": "$.requestBody.applicantName",
-              "term_set": "user.name"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
             },
             {
               "param_code": "applicantOrgId",
@@ -3623,7 +3678,7 @@
               "direction": "IN",
               "required": true,
               "mapping_path": "$.requestBody.applicantOrgId",
-              "term_set": "org.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
             },
             {
               "param_code": "expenseAmount",
@@ -3776,7 +3831,7 @@
               "direction": "IN",
               "required": true,
               "mapping_path": "$.requestBody.approvalStatus",
-              "term_set": "approvalStatus.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "approvalStatus", "termField": "code"}
             },
             {
               "param_code": "approvalComment",
@@ -3816,7 +3871,7 @@
               "param_type": "ARRAY",
               "direction": "IN",
               "mapping_path": "$.requestBody.applicantEmpNos",
-              "term_set": "user.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
             },
             {
               "param_code": "applicantOrgId",
@@ -3824,7 +3879,7 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.applicantOrgId",
-              "term_set": "org.code"
+              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
             },
             {
               "param_code": "approvalStatus",
@@ -3980,7 +4035,7 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "emp_no",
-          "term_set": "user.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
         },
         {
           "field_code": "kpiYear",
@@ -3996,6 +4051,15 @@
         }
       ],
       "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "SQLITE",
+        "jdbc_url": "jdbc:sqlite::memory:",
+        "user": "",
+        "password": "",
+        "pool_min": 1,
+        "pool_max": 5
+      },
       "datasource_alias": "ds_crm",
       "table_name": "po_users_kpi_summary"
     },
@@ -4024,7 +4088,7 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "emp_no",
-          "term_set": "user.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
         },
         {
           "field_code": "periodType",
@@ -4066,6 +4130,15 @@
         }
       ],
       "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "SQLITE",
+        "jdbc_url": "jdbc:sqlite::memory:",
+        "user": "",
+        "password": "",
+        "pool_min": 1,
+        "pool_max": 5
+      },
       "datasource_alias": "ds_crm",
       "table_name": "po_users_kpi_completion"
     },
@@ -4094,14 +4167,14 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "org_id",
-          "term_set": "org.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
         },
         {
           "field_code": "orgName",
           "field_name": "组织名称",
           "field_type": "STRING",
           "source_column": "org_name",
-          "term_set": "org.name"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "name"}
         },
         {
           "field_code": "kpiYear",
@@ -4119,6 +4192,15 @@
         }
       ],
       "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "SQLITE",
+        "jdbc_url": "jdbc:sqlite::memory:",
+        "user": "",
+        "password": "",
+        "pool_min": 1,
+        "pool_max": 5
+      },
       "datasource_alias": "ds_crm",
       "table_name": "sales_org_kpi_summary"
     },
@@ -4147,14 +4229,14 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "org_id",
-          "term_set": "org.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
         },
         {
           "field_code": "orgName",
           "field_name": "组织名称",
           "field_type": "STRING",
           "source_column": "org_name",
-          "term_set": "org.name"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "name"}
         },
         {
           "field_code": "periodType",
@@ -4196,6 +4278,15 @@
         }
       ],
       "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "SQLITE",
+        "jdbc_url": "jdbc:sqlite::memory:",
+        "user": "",
+        "password": "",
+        "pool_min": 1,
+        "pool_max": 5
+      },
       "datasource_alias": "ds_crm",
       "table_name": "sales_org_kpi_completion"
     },
@@ -4222,7 +4313,7 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "emp_no",
-          "term_set": "user.code"
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
         },
         {
           "field_code": "attendanceDate",
@@ -4276,6 +4367,15 @@
         }
       ],
       "actions": [],
+      "source_config": {
+        "alias": "ds_attendance",
+        "db_type": "SQLITE",
+        "jdbc_url": "jdbc:sqlite::memory:",
+        "user": "",
+        "password": "",
+        "pool_min": 1,
+        "pool_max": 5
+      },
       "datasource_alias": "ds_attendance",
       "table_name": "sales_emp_attendance"
     }
