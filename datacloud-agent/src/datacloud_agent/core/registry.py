@@ -18,10 +18,11 @@ Example:
     1
 """
 
-import yaml
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
+
+import yaml
 
 
 @dataclass
@@ -44,7 +45,7 @@ class AgentConfig:
     description: str
     model: str
     provider: str
-    system_prompt: Optional[str] = None
+    system_prompt: str | None = None
     tools: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -55,7 +56,7 @@ class AgentRegistry:
     Supports loading from YAML files, registration, and agent creation.
     """
 
-    def __init__(self, config_path: Optional[Path] = None) -> None:
+    def __init__(self, config_path: Path | None = None) -> None:
         """Initialize the registry.
 
         Args:
@@ -88,7 +89,7 @@ class AgentRegistry:
         if not path.exists():
             raise FileNotFoundError(f"Config file not found: {path}")
 
-        with open(path, "r") as f:
+        with open(path) as f:
             data = yaml.safe_load(f)
 
         if not isinstance(data, dict):
@@ -155,7 +156,7 @@ class AgentRegistry:
             return True
         return False
 
-    def get(self, agent_id: str) -> Optional[AgentConfig]:
+    def get(self, agent_id: str) -> AgentConfig | None:
         """Get agent configuration.
 
         Args:
@@ -166,7 +167,7 @@ class AgentRegistry:
         """
         return self._agents.get(agent_id)
 
-    def list_agents(self) -> list[dict]:
+    def list_agents(self) -> list[dict[str, Any]]:
         """List all registered agents.
 
         Returns:
@@ -177,7 +178,7 @@ class AgentRegistry:
             for agent_id, config in self._agents.items()
         ]
 
-    def create_agent(self, agent_id: str, model_override: Optional[str] = None):
+    def create_agent(self, agent_id: str, model_override: str | None = None) -> dict[str, Any]:
         """Create an agent instance using deepagents (mock for now).
 
         Args:
