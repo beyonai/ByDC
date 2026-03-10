@@ -2,6 +2,12 @@
 
 Provides DedupeCache, InboundDebouncer, and AgentRunner classes for handling
 inbound messages with deduplication, debouncing, and queue-based execution.
+
+Integration with deepagents (based on POC validation):
+- POC 1: create_deep_agent works correctly
+- POC 2: Token counting from AIMessage.usage_metadata
+- POC 3: STEER mode using Command(resume=...)
+- POC 6: Streaming support via astream()
 """
 
 from __future__ import annotations
@@ -13,9 +19,16 @@ import time
 from collections import defaultdict
 from typing import Any
 
+from deepagents import create_deep_agent
+from langchain_core.messages import AIMessage
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command
+
 from datacloud_agent.config.models import GatewayConfig
+from datacloud_agent.core.model_config import create_model
 from datacloud_agent.core.registry import AgentRegistry
 from datacloud_agent.core.session import SessionManager
+from datacloud_agent.core.tools import get_business_tools, get_system_prompt
 from datacloud_agent.events.emitter import EventEmitter
 from datacloud_agent.queue.enqueuer import MessageEnqueuer
 from datacloud_agent.queue.manager import QueueManager
@@ -139,6 +152,9 @@ class AgentRunner:
         self._active_sessions: set[str] = set()
         self._active_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._running_tasks: dict[str, asyncio.Task[Any]] = {}
+
+        # Checkpointers for session state persistence (deepagents integration)
+        self._checkpointers: dict[str, InMemorySaver] = {}
 
         # Message enqueuer
         self.message_enqueuer = MessageEnqueuer(queue_manager)
@@ -361,14 +377,17 @@ class AgentRunner:
             return {"status": "queue_full", "session_key": session_key, "queue_mode": "followup"}
 
     async def _steer_run(self, session_key: str, prompt: str) -> dict[str, Any]:
-        """Interrupt active run and steer with new input.
+        """Steer active run with new input using Command(resume=...).
+
+        Based on POC 3 validation: Uses Command(resume=...) to inject a new message
+        into the existing session state, leveraging the checkpointer for persistence.
 
         Args:
             session_key: Session key.
-            prompt: New prompt to execute.
+            prompt: New prompt to inject.
 
         Returns:
-            Execution result.
+            Execution result with agent_id, messages, response, and usage.
         """
         lock = self._active_locks[session_key]
         async with lock:
@@ -384,12 +403,85 @@ class AgentRunner:
             self._active_sessions.add(session_key)
             # Release lock while executing
         try:
-            result = await self._run_agent(session_key, [prompt])
-            return result
+            # Check if we have a checkpointer for this session (POC 3 pattern)
+            if session_key in self._checkpointers:
+                result = await self._steer_with_command(session_key, prompt)
+                return result
+            else:
+                # No checkpointer, fall back to new execution
+                result = await self._run_agent(session_key, [prompt])
+                return result
         finally:
             async with lock:
                 self._active_sessions.discard(session_key)
                 # _run_agent already cleaned up _running_tasks
+
+    async def _steer_with_command(self, session_key: str, prompt: str) -> dict[str, Any]:
+        """Execute STEER using Command(resume=...) pattern from POC 3.
+
+        Args:
+            session_key: Session key.
+            prompt: Prompt to inject.
+
+        Returns:
+            Execution result.
+        """
+        # Parse agent_id from session_key
+        parts = session_key.split(":")
+        if len(parts) != 5 or parts[0] != "tenant" or parts[2] != "agent":
+            raise ValueError(f"Invalid session key format: {session_key}")
+        agent_id = parts[3]
+
+        # Get agent config
+        config = self.agent_registry.get(agent_id)
+        if config is None:
+            raise ValueError(f"Agent '{agent_id}' not found in registry")
+
+        # Get existing checkpointer
+        checkpointer = self._checkpointers[session_key]
+
+        # Create model
+        model = create_model({"model": config.model})
+
+        # Create agent with existing checkpointer
+        agent = create_deep_agent(
+            model=model,
+            system_prompt=config.system_prompt or get_system_prompt(),
+            tools=get_business_tools(),
+            checkpointer=checkpointer,
+        )
+
+        # Use Command(resume=...) to inject new message (POC 3 pattern)
+        invoke_config = {"configurable": {"thread_id": session_key}}
+        result = await agent.ainvoke(
+            Command(resume=prompt),
+            config=invoke_config,
+        )
+
+        # Extract token usage (POC 2 pattern)
+        usage: dict[str, int] = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        for msg in reversed(result.get("messages", [])):
+            if isinstance(msg, AIMessage) and msg.usage_metadata:
+                usage = {
+                    "input_tokens": msg.usage_metadata.get("input_tokens", 0),
+                    "output_tokens": msg.usage_metadata.get("output_tokens", 0),
+                    "total_tokens": msg.usage_metadata.get("total_tokens", 0),
+                }
+                break
+
+        # Extract final response
+        final_content = ""
+        for msg in reversed(result.get("messages", [])):
+            if isinstance(msg, AIMessage) and msg.content:
+                final_content = msg.content
+                break
+
+        return {
+            "agent_id": agent_id,
+            "messages": result.get("messages", []),
+            "response": final_content,
+            "usage": usage,
+        }
 
     async def _interrupt_run(self, session_key: str) -> None:
         """Cancel active run without starting a new one.
@@ -446,14 +538,22 @@ class AgentRunner:
             self._running_tasks.pop(session_key, None)
 
     async def _execute_agent(self, session_key: str, messages: list[str]) -> dict[str, Any]:
-        """Execute agent with messages.
+        """Execute agent with messages using deepagents.
+
+        Based on POC validation results:
+        - POC 1: create_deep_agent works correctly
+        - POC 2: Token counting from AIMessage.usage_metadata
+        - POC 3: Checkpointer for session persistence
 
         Args:
-            session_key: Session key.
+            session_key: Session key (format: tenant:{tenant_id}:agent:{agent_id}:{session_id}).
             messages: List of messages to process.
 
         Returns:
-            Dictionary with execution result.
+            Dictionary with execution result including agent_id, messages, response, and usage.
+
+        Raises:
+            ValueError: If session_key format is invalid or agent not found.
         """
         # Extract agent_id from session_key
         # Format: tenant:{tenant_id}:agent:{agent_id}:{session_id}
@@ -467,16 +567,57 @@ class AgentRunner:
         if config is None:
             raise ValueError(f"Agent '{agent_id}' not found in registry")
 
-        # Create agent instance (mock for now)
-        _agent = self.agent_registry.create_agent(agent_id)
+        # Create or get checkpointer for session persistence (POC 3 pattern)
+        if session_key not in self._checkpointers:
+            self._checkpointers[session_key] = InMemorySaver()
+        checkpointer = self._checkpointers[session_key]
 
-        # Simulate execution
-        # TODO: Replace with actual agent execution
-        await asyncio.sleep(0.01)
+        # Create model using model_config module
+        model = create_model({"model": config.model})
+
+        # Create agent using deepagents (POC 1 pattern)
+        agent = create_deep_agent(
+            model=model,
+            system_prompt=config.system_prompt or get_system_prompt(),
+            tools=get_business_tools(),
+            checkpointer=checkpointer,
+        )
+
+        # Build invoke config with thread_id for checkpointing
+        invoke_config = {"configurable": {"thread_id": session_key}}
+
+        # Build messages in LangChain format
+        formatted_messages = [{"role": "user", "content": m} for m in messages]
+
+        # Execute agent (POC 1 pattern)
+        result = await agent.ainvoke(
+            {"messages": formatted_messages},
+            config=invoke_config,
+        )
+
+        # Extract token usage from AIMessage.usage_metadata (POC 2 pattern)
+        usage: dict[str, int] = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        for msg in reversed(result.get("messages", [])):
+            if isinstance(msg, AIMessage) and msg.usage_metadata:
+                usage = {
+                    "input_tokens": msg.usage_metadata.get("input_tokens", 0),
+                    "output_tokens": msg.usage_metadata.get("output_tokens", 0),
+                    "total_tokens": msg.usage_metadata.get("total_tokens", 0),
+                }
+                break
+
+        # Extract final response content
+        final_content = ""
+        for msg in reversed(result.get("messages", [])):
+            if isinstance(msg, AIMessage) and msg.content:
+                final_content = msg.content
+                break
+
         return {
             "agent_id": agent_id,
-            "messages": messages,
-            "response": f"Processed {len(messages)} message(s)",
+            "messages": result.get("messages", []),
+            "response": final_content,
+            "usage": usage,
         }
 
     async def is_active(self, session_key: str) -> bool:
