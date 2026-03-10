@@ -4,7 +4,7 @@ import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
 class SessionStore:
@@ -47,7 +47,7 @@ class SessionStore:
         with path.open("a", encoding="utf-8") as f:
             f.write(line)
 
-    async def read(self, session_id: str, limit: Optional[int] = None) -> list[dict[str, Any]]:
+    async def read(self, session_id: str, limit: int | None = None) -> list[dict[str, Any]]:
         """Read records from a session file.
 
         Args:
@@ -71,7 +71,7 @@ class SessionStore:
         return records
 
     @staticmethod
-    def _read_lines(path: Path, limit: Optional[int]) -> list[str]:
+    def _read_lines(path: Path, limit: int | None) -> list[str]:
         """Thread‑safe helper to read lines from a file."""
         with path.open("r", encoding="utf-8") as f:
             lines = f.readlines()

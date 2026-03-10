@@ -1,8 +1,8 @@
 """Composite backend with tenant-aware file storage."""
 
 import asyncio
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from datacloud_agent.tenant.context import TenantContext
 
@@ -28,12 +28,12 @@ class TenantAwareFileBackend:
     def __init__(
         self,
         base_dir: Path | str,
-        tenant_context_getter: Optional[Callable[[], Optional[TenantContext]]] = None,
+        tenant_context_getter: Callable[[], TenantContext | None] | None = None,
     ) -> None:
         self.base_dir = Path(base_dir).resolve()
         self._tenant_context_getter = tenant_context_getter
 
-    def _get_tenant_context(self) -> Optional[TenantContext]:
+    def _get_tenant_context(self) -> TenantContext | None:
         """Get the current tenant context."""
         if self._tenant_context_getter is not None:
             return self._tenant_context_getter()
