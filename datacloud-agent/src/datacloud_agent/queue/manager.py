@@ -1,9 +1,14 @@
 """Queue manager for OpenClaw Gateway."""
 
 import asyncio
+import os
 from datetime import datetime
 
+from deepagents import create_deep_agent
+from langchain.chat_models import init_chat_model
+
 from datacloud_agent.queue.types import (
+    DropPolicy,
     QueuedMessage,
     QueueSettings,
     QueueState,
@@ -33,6 +38,8 @@ class QueueManager:
                     session_key=session_key,
                     messages=[],
                     mode=settings.mode,
+                    max_size=settings.max_size,
+                    drop_policy=settings.drop_policy,
                     is_processing=False,
                     last_activity=datetime.now(),
                 )
@@ -61,10 +68,18 @@ class QueueManager:
                 return False
 
             queue = self._queues[session_key]
+
             # Check if queue is full and apply drop policy
-            if len(queue.messages) >= 100:  # default max_size
-                # For now, reject new messages (DropPolicy.NEW behavior)
-                return False
+            if len(queue.messages) >= queue.max_size:
+                if queue.drop_policy == DropPolicy.NEW:
+                    # Reject new messages
+                    return False
+                elif queue.drop_policy == DropPolicy.OLD:
+                    # Drop oldest message
+                    queue.messages.pop(0)
+                elif queue.drop_policy == DropPolicy.SUMMARIZE:
+                    # Summarize old messages asynchronously
+                    await self._summarize_old_messages(session_key, queue)
 
             queue.messages.append(message)
             queue.last_activity = datetime.now()
@@ -124,3 +139,89 @@ class QueueManager:
             if session_key not in self._queues:
                 return 0
             return len(self._queues[session_key].messages)
+
+    async def _summarize_old_messages(self, session_key: str, queue: QueueState) -> None:
+        """
+        Summarize old messages (keep most recent 10, summarize the rest).
+
+        Uses lightweight model for asynchronous summarization.
+        """
+        if len(queue.messages) <= 10:
+            # Too few messages, just drop the oldest
+            queue.messages.pop(0)
+            return
+
+        # Keep most recent 10, summarize the rest
+        messages_to_summarize = queue.messages[:-10]
+        queue.messages = queue.messages[-10:]
+
+        # Asynchronous summarization (non-blocking for queue operations)
+        asyncio.create_task(self._async_summarize(session_key, messages_to_summarize))
+
+    async def _async_summarize(self, session_key: str, messages: list[QueuedMessage]) -> None:
+        """
+        Asynchronously summarize messages using lightweight model.
+
+        Uses environment variables for API configuration:
+        - OPENAI_API_KEY: API key for the model
+        - OPENAI_BASE_URL: Base URL for the API
+
+        On failure, silently drops messages without blocking the queue.
+        """
+        try:
+            # Build summary prompt
+            content = "\n".join(
+                [
+                    f"[{m.timestamp.strftime('%Y-%m-%d %H:%M:%S')}] {m.prompt[:100]}..."
+                    for m in messages
+                ]
+            )
+
+            # Initialize lightweight model using environment variables
+            api_key = os.getenv("OPENAI_API_KEY")
+            base_url = os.getenv("OPENAI_BASE_URL")
+
+            if not api_key:
+                # No API key configured, skip summarization
+                print("Warning: OPENAI_API_KEY not set, skipping summarization")
+                return
+
+            model = init_chat_model(
+                "openai:qwen3.5-plus",
+                api_key=api_key,
+                base_url=base_url,
+            )
+
+            # Create agent for summarization
+            agent = create_deep_agent(
+                model=model,
+                system_prompt="Summarize the following conversation messages concisely in Chinese.",
+            )
+
+            # Invoke summarization
+            result = await agent.ainvoke({"messages": [{"role": "user", "content": content}]})
+
+            # Extract summary from result
+            summary = "[Summary unavailable]"
+            if result.get("messages"):
+                last_message = result["messages"][-1]
+                summary = getattr(last_message, "content", str(last_message))
+
+            # Create summary message
+            summary_msg = QueuedMessage(
+                prompt=f"[历史消息总结] {summary[:500]}",
+                session_key=session_key,
+                priority=10,  # High priority
+                metadata={"is_summary": True, "message_count": len(messages)},
+            )
+
+            # Insert summary at the beginning of the queue
+            lock = self._get_lock(session_key)
+            async with lock:
+                if session_key in self._queues:
+                    self._queues[session_key].messages.insert(0, summary_msg)
+
+        except Exception as e:
+            # Summarization failed, log but don't block
+            print(f"Summarization failed for session {session_key}: {e}")
+            # Messages already removed from queue, summary insertion failed

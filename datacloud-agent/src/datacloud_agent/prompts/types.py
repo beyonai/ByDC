@@ -2,9 +2,8 @@
 
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LayerType(str, Enum):
@@ -27,7 +26,7 @@ class PromptConfig(BaseModel):
 
     path: Path
     layer: LayerType
-    priority: Optional[int] = Field(default=None, ge=0)
+    priority: int | None = Field(default=None, ge=0)
 
 
 class SystemPromptConfig(BaseModel):
@@ -54,18 +53,13 @@ class SystemPromptConfig(BaseModel):
         ]
     )
     default_layer: LayerType = Field(default=LayerType.OPERATION)
-    file_layer_mapping: Dict[str, LayerType] = Field(
+    file_layer_mapping: dict[str, LayerType] = Field(
         default_factory=lambda: {
             "SOUL.md": LayerType.IDENTITY,
             "IDENTITY.md": LayerType.IDENTITY,
             "USER.md": LayerType.IDENTITY,
             "AGENTS.md": LayerType.COLLABORATION,
-            "knowledge.md": LayerType.KNOWLEDGE,
-            "knowledge": LayerType.KNOWLEDGE,
         }
     )
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
