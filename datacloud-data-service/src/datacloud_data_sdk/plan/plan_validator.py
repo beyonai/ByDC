@@ -97,6 +97,8 @@ class PlanValidator:
                 known.add(obj.table.lower())
             for f in obj.fields:
                 known.add(f.name.lower())
+                if f.source_column:
+                    known.add(f.source_column.lower())
 
         # Extract aliases (AS alias, and table aliases like FROM t alias)
         aliases: set[str] = set()
@@ -118,44 +120,50 @@ class PlanValidator:
         return errors
 
     # ------------------------------------------------------------------
-    # API function_id validation
+    # API step validation (object_id, function_id=actionCode, params)
     # ------------------------------------------------------------------
 
     def _validate_function_ids(
         self, step: PlanStep, payload: ObjectViewPayload
     ) -> list[str]:
-        if step.type != "API" or not step.function_id:
+        if step.type != "API":
             return []
 
-        known_functions = {
-            fn.function_code
-            for obj in payload.objects
-            for fn in obj.functions
-        }
-        if step.function_id not in known_functions:
+        if not step.object_id:
+            return [f"Step {step.step_id}: object_id required for API step"]
+
+        object_ids = {obj.object_id for obj in payload.objects}
+        if step.object_id not in object_ids:
+            return [f"Step {step.step_id}: unknown object_id {step.object_id!r}"]
+
+        if not step.function_id:
+            return [f"Step {step.step_id}: function_id (actionCode) required for API step"]
+
+        obj = next(o for o in payload.objects if o.object_id == step.object_id)
+        action_codes = {a.action_code for a in obj.actions}
+        if step.function_id not in action_codes:
             return [
-                f"Step {step.step_id}: unknown function_id {step.function_id!r}"
+                f"Step {step.step_id}: unknown action_code {step.function_id!r} for object {step.object_id!r}"
             ]
         return []
 
     def _validate_api_step_params(
         self, step: PlanStep, payload: ObjectViewPayload
     ) -> list[str]:
-        if step.type != "API" or not step.function_id:
+        if step.type != "API" or not step.object_id or not step.function_id:
             return []
 
-        fn = None
-        for obj in payload.objects:
-            for f in obj.functions:
-                if f.function_code == step.function_id:
-                    fn = f
-                    break
-            if fn is not None:
-                break
-        if fn is None:
+        obj = next((o for o in payload.objects if o.object_id == step.object_id), None)
+        if obj is None:
             return []
 
-        in_params = [p for p in fn.params if p.direction == "IN"]
+        action = next(
+            (a for a in obj.actions if a.action_code == step.function_id), None
+        )
+        if action is None:
+            return []
+
+        in_params = action.input_params
         in_codes = {p.param_code for p in in_params}
         required_codes = {p.param_code for p in in_params if p.required}
 
@@ -163,11 +171,11 @@ class PlanValidator:
         for code in required_codes:
             if code not in step.params:
                 errors.append(
-                    f"Step {step.step_id}: missing required param {code!r} for function {step.function_id!r}"
+                    f"Step {step.step_id}: missing required param {code!r} for action {step.function_id!r}"
                 )
         for key in step.params:
             if key not in in_codes:
                 errors.append(
-                    f"Step {step.step_id}: unknown param {key!r} for function {step.function_id!r}"
+                    f"Step {step.step_id}: unknown param {key!r} for action {step.function_id!r}"
                 )
         return errors

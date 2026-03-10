@@ -1,8 +1,11 @@
 """聚合器抽象基类。"""
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from datacloud_data_sdk.plan.models import PlanAggregation
+
+if TYPE_CHECKING:
+    from datacloud_data_sdk.executor.step_results import StepResults
 
 
 class BaseAggregator(ABC):
@@ -10,7 +13,7 @@ class BaseAggregator(ABC):
     async def aggregate(
         self,
         agg: PlanAggregation,
-        step_results: dict[str, str],
+        step_results: "StepResults",
         **kwargs: Any,
     ) -> list[dict[str, Any]]:
         ...

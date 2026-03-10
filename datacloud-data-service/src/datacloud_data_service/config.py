@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     max_plan_retries: int = 2
     sql_execution_mode: str = "internal"
     trace_log_path: str = "logs/query_trace.log"  # 环境变量 DC_TRACE_LOG_PATH
-    trace_enabled: bool = True  # 环境变量 DC_TRACE_ENABLED
+    trace_enabled: bool = False  # 环境变量 DC_TRACE_ENABLED
     znt_server: str = ""  # 术语服务地址，环境变量 DC_ZNT_SERVER
 
     model_config = {"env_prefix": "DC_", "env_file": ".env", "extra": "ignore"}

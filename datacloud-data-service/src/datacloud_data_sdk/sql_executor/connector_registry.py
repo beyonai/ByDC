@@ -42,6 +42,15 @@ except ImportError:
     pass
 
 try:
+    from datacloud_data_sdk.sql_executor.connectors.opengauss_connector import (
+        OpenGaussConnector,
+    )
+
+    ConnectorRegistry.register("OPENGAUSS", OpenGaussConnector)
+except ImportError:
+    pass
+
+try:
     from datacloud_data_sdk.sql_executor.connectors.clickhouse_connector import (
         ClickHouseConnector,
     )
