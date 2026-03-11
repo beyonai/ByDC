@@ -4,7 +4,7 @@ Creates and configures the FastAPI application with:
 - Lifespan management for startup/shutdown
 - CORS middleware
 - Health check endpoint
-- API routes (to be added in T17)
+- WebSocket endpoint for OpenClaw protocol
 """
 
 import logging
@@ -30,14 +30,14 @@ def create_app() -> FastAPI:
     - Lifespan context manager for startup/shutdown
     - CORS middleware
     - Health check endpoint
-    - Placeholder for API routes
+    - WebSocket endpoint for OpenClaw protocol
 
     Returns:
         Configured FastAPI application instance
     """
     app = FastAPI(
         title=settings.service_name,
-        description="DataCloud Agent Service - FastAPI Gateway Service Layer",
+        description="OpenClaw Gateway Service - WebSocket-based Agent Interface",
         version=settings.service_version,
         lifespan=lifespan,
     )
@@ -65,19 +65,7 @@ def create_app() -> FastAPI:
             "version": settings.service_version,
         }
 
-    # API routes (T17)
-    from routers import agents_router, chat_router, sessions_router
-
-    app.include_router(chat_router, prefix="/v1", tags=["chat"])
-    app.include_router(sessions_router, prefix="/v1", tags=["sessions"])
-    app.include_router(agents_router, prefix="/v1", tags=["agents"])
-
-    # LangGraph compatibility routes (T19)
-    from routers import langgraph
-
-    app.include_router(langgraph.router, tags=["langgraph"])
-
-    # WebSocket endpoint
+    # WebSocket endpoint for OpenClaw protocol
     from websocket import websocket_endpoint
 
     app.websocket("/ws")(websocket_endpoint)
