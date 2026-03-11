@@ -1,4 +1,5 @@
 """参数转换：逻辑参数 -> 物理 API 请求体。"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any

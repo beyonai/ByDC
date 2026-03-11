@@ -53,13 +53,13 @@ async def send_notice(notice_details: list[dict[str, Any]], request: Request | N
         for item in notice_details:
             new_item = dict(item)
             if "senderId" in new_item:
-                new_item["senderId"] = (
-                    await _resolve_user_real_id(new_item.get("senderId")) or new_item.get("senderId")
-                )
+                new_item["senderId"] = await _resolve_user_real_id(
+                    new_item.get("senderId")
+                ) or new_item.get("senderId")
             if "targetId" in new_item:
-                new_item["targetId"] = (
-                    await _resolve_user_real_id(new_item.get("targetId")) or new_item.get("targetId")
-                )
+                new_item["targetId"] = await _resolve_user_real_id(
+                    new_item.get("targetId")
+                ) or new_item.get("targetId")
             resolved.append(new_item)
 
         cookies = {}

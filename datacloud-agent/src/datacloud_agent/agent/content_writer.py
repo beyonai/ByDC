@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-import warnings
-warnings.filterwarnings("ignore", message="Core Pydantic V1 functionality")
-
 """
 Content Builder Agent
 
@@ -19,11 +16,14 @@ Usage:
 import asyncio
 import os
 import sys
+import warnings
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
-
+from deepagents import create_deep_agent
+from deepagents.backends import FilesystemBackend
+from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.tools import tool
 from rich.console import Console
@@ -31,11 +31,8 @@ from rich.live import Live
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.spinner import Spinner
-from rich.text import Text
 
-from deepagents import create_deep_agent
-from deepagents.backends import FilesystemBackend
-from langchain.chat_models import init_chat_model
+warnings.filterwarnings("ignore", message="Core Pydantic V1 functionality")
 
 EXAMPLE_DIR = Path(__file__).parent
 console = Console()
@@ -47,7 +44,7 @@ def web_search(
     query: str,
     max_results: int = 5,
     topic: Literal["general", "news"] = "general",
-) -> dict:
+) -> dict[str, Any]:
     """Search the web for current information.
 
     Args:
@@ -132,7 +129,7 @@ def generate_social_image(prompt: str, platform: str, slug: str) -> str:
         return f"Error: {e}"
 
 
-def load_subagents(config_path: Path) -> list:
+def load_subagents(config_path: Path) -> list[Any]:
     """Load subagent definitions from YAML and wire up tools.
 
     NOTE: This is a custom utility for this example. Unlike `memory` and `skills`,
@@ -164,7 +161,7 @@ def load_subagents(config_path: Path) -> list:
     return subagents
 
 
-def create_content_writer():
+def create_content_writer() -> Any:
     """Create a content writer agent configured by filesystem files."""
     # Configure Qwen model with custom API endpoint
     model = init_chat_model(
@@ -175,9 +172,9 @@ def create_content_writer():
     )
 
     return create_deep_agent(
-        model=model,                      # Custom LLM model
-        memory=["./AGENTS.md"],           # Loaded by MemoryMiddleware
-        skills=["./skills/"],             # Loaded by SkillsMiddleware
+        model=model,  # Custom LLM model
+        memory=["./AGENTS.md"],  # Loaded by MemoryMiddleware
+        skills=["./skills/"],  # Loaded by SkillsMiddleware
         tools=[generate_cover, generate_social_image],  # Image generation
         subagents=load_subagents(EXAMPLE_DIR / "subagents.yaml"),  # Custom helper
         backend=FilesystemBackend(root_dir=EXAMPLE_DIR),
@@ -187,16 +184,16 @@ def create_content_writer():
 class AgentDisplay:
     """Manages the display of agent progress."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.printed_count = 0
         self.current_status = ""
         self.spinner = Spinner("dots", text="Thinking...")
 
-    def update_status(self, status: str):
+    def update_status(self, status: str) -> None:
         self.current_status = status
         self.spinner = Spinner("dots", text=status)
 
-    def print_message(self, msg):
+    def print_message(self, msg: Any) -> None:
         """Print a message with nice formatting."""
         if isinstance(msg, HumanMessage):
             console.print(Panel(str(msg.content), title="You", border_style="blue"))
@@ -204,7 +201,11 @@ class AgentDisplay:
         elif isinstance(msg, AIMessage):
             content = msg.content
             if isinstance(content, list):
-                text_parts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
+                text_parts = [
+                    p.get("text", "")
+                    for p in content
+                    if isinstance(p, dict) and p.get("type") == "text"
+                ]
                 content = "\n".join(text_parts)
 
             if content and content.strip():
@@ -220,7 +221,7 @@ class AgentDisplay:
                         console.print(f"  [bold magenta]>> Researching:[/] {desc[:60]}...")
                         self.update_status(f"Researching: {desc[:40]}...")
                     elif name in ("generate_cover", "generate_social_image"):
-                        console.print(f"  [bold cyan]>> Generating image...[/]")
+                        console.print("  [bold cyan]>> Generating image...[/]")
                         self.update_status("Generating image...")
                     elif name == "write_file":
                         path = args.get("file_path", "file")
@@ -234,19 +235,18 @@ class AgentDisplay:
             name = getattr(msg, "name", "")
             if name in ("generate_cover", "generate_social_image"):
                 if "saved" in msg.content.lower():
-                    console.print(f"  [green]✓ Image saved[/]")
+                    console.print("  [green]✓ Image saved[/]")
                 else:
                     console.print(f"  [red]✗ Image failed: {msg.content}[/]")
             elif name == "write_file":
-                console.print(f"  [green]✓ File written[/]")
+                console.print("  [green]✓ File written[/]")
             elif name == "task":
-                console.print(f"  [green]✓ Research complete[/]")
-            elif name == "web_search":
-                if "error" not in msg.content.lower():
-                    console.print(f"  [green]✓ Found results[/]")
+                console.print("  [green]✓ Research complete[/]")
+            elif name == "web_search" and "error" not in msg.content.lower():
+                console.print("  [green]✓ Found results[/]")
 
 
-async def main():
+async def main() -> None:
     """Run the content writer agent with streaming output."""
     if len(sys.argv) > 1:
         task = " ".join(sys.argv[1:])
@@ -275,7 +275,7 @@ async def main():
                 if len(messages) > display.printed_count:
                     # Temporarily stop spinner to print
                     live.stop()
-                    for msg in messages[display.printed_count:]:
+                    for msg in messages[display.printed_count :]:
                         display.print_message(msg)
                     display.printed_count = len(messages)
                     # Resume spinner

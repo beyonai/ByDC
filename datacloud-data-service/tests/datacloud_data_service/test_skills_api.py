@@ -1,4 +1,5 @@
 """Skills API 单元测试：GET /api/v1/skills/package。"""
+
 from __future__ import annotations
 
 from fastapi.testclient import TestClient

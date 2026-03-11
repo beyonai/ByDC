@@ -10,9 +10,7 @@ from datacloud_data_sdk.ontology.loader import OntologyLoader
 REGISTRY_PATH = Path(__file__).parents[3] / "resources/ontology/crm_demo/objects_registry.json"
 SCENE_PATH = Path(__file__).parents[3] / "resources/ontology/crm_demo/scene_01_data_analysis.json"
 
-_skip_no_registry = pytest.mark.skipif(
-    not REGISTRY_PATH.exists(), reason="CRM registry not found"
-)
+_skip_no_registry = pytest.mark.skipif(not REGISTRY_PATH.exists(), reason="CRM registry not found")
 
 
 @_skip_no_registry
@@ -55,7 +53,9 @@ def test_crm_db_objects_have_table_name() -> None:
     for cls in loader.get_ontology_classes():
         if cls.source_type == "DB":
             assert cls.table_name is not None, f"DB object {cls.object_code} missing table_name"
-            assert cls.datasource_alias is not None, f"DB object {cls.object_code} missing datasource_alias"
+            assert cls.datasource_alias is not None, (
+                f"DB object {cls.object_code} missing datasource_alias"
+            )
 
 
 @_skip_no_registry

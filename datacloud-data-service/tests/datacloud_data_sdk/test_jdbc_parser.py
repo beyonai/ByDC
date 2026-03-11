@@ -1,4 +1,5 @@
 """JDBC URL 解析测试。"""
+
 from datacloud_data_sdk.sql_executor.jdbc_parser import (
     parse_jdbc_url,
     parse_clickhouse_jdbc_url,
@@ -52,9 +53,7 @@ def test_parse_clickhouse_jdbc_url():
 
 
 def test_parse_clickhouse_jdbc_url_with_auth():
-    params = parse_clickhouse_jdbc_url(
-        "jdbc:clickhouse://ch:8123/db?user=readonly&password=secret"
-    )
+    params = parse_clickhouse_jdbc_url("jdbc:clickhouse://ch:8123/db?user=readonly&password=secret")
     assert params["host"] == "ch"
     assert params["port"] == 8123
     assert params["database"] == "db"

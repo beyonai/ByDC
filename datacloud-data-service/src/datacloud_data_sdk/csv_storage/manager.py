@@ -1,4 +1,5 @@
 """CSV 临时存储管理。"""
+
 from __future__ import annotations
 import shutil
 from pathlib import Path
