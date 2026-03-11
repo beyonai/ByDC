@@ -7,17 +7,19 @@ from typing import Any
 from datacloud_data_sdk.aggregator.base import BaseAggregator
 from datacloud_data_sdk.plan.models import PlanAggregation
 
+from datacloud_data_sdk.executor.step_results import StepResults
+
 
 class DirectAggregator(BaseAggregator):
     async def aggregate(
         self,
         agg: PlanAggregation,
-        step_results: dict[str, str],
+        step_results: StepResults,
         **kwargs: Any,
     ) -> list[dict[str, Any]]:
         if not agg.final_step_id:
             return []
-        csv_path = step_results.get(agg.final_step_id, "")
+        csv_path = step_results.get_path(agg.final_step_id)
         if not csv_path or not Path(csv_path).exists():
             return []
         with open(csv_path, newline="", encoding="utf-8") as f:

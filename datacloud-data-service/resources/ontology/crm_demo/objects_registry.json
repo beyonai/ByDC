@@ -1677,49 +1677,49 @@
               "param_name": "用户ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.users[].userId"
+              "mapping_path": "$.users[].userId"
             },
             {
               "param_code": "userName",
               "param_name": "用户名称",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.users[].userName"
+              "mapping_path": "$.users[].userName"
             },
             {
               "param_code": "userCode",
               "param_name": "工号",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.users[].userCode"
+              "mapping_path": "$.users[].userCode"
             },
             {
               "param_code": "orgId",
               "param_name": "组织ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.users[].orgId"
+              "mapping_path": "$.users[].orgId"
             },
             {
               "param_code": "state",
               "param_name": "用户状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.users[].state"
+              "mapping_path": "$.users[].state"
             },
             {
               "param_code": "email",
               "param_name": "邮箱",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.users[].email"
+              "mapping_path": "$.users[].email"
             },
             {
               "param_code": "phone",
               "param_name": "电话",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.users[].phone"
+              "mapping_path": "$.users[].phone"
             }
           ],
           "function_refs": [
@@ -1753,49 +1753,49 @@
               "param_name": "用户ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.users[].userId"
+              "mapping_path": "$.users[].userId"
             },
             {
               "param_code": "userName",
               "param_name": "用户名称",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.users[].userName"
+              "mapping_path": "$.users[].userName"
             },
             {
               "param_code": "userNumber",
               "param_name": "工号",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.users[].userNumber"
+              "mapping_path": "$.users[].userNumber"
             },
             {
               "param_code": "orgId",
               "param_name": "所属组织ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.users[].orgId"
+              "mapping_path": "$.users[].orgId"
             },
             {
               "param_code": "state",
               "param_name": "用户状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.users[].state"
+              "mapping_path": "$.users[].state"
             },
             {
               "param_code": "email",
               "param_name": "邮箱",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.users[].email"
+              "mapping_path": "$.users[].email"
             },
             {
               "param_code": "phone",
               "param_name": "电话",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.users[].phone"
+              "mapping_path": "$.users[].phone"
             }
           ],
           "function_refs": [
@@ -1909,49 +1909,49 @@
               "param_name": "组织ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.organizations[].orgId"
+              "mapping_path": "$.organizations[].orgId"
             },
             {
               "param_code": "orgName",
               "param_name": "组织名称",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.organizations[].orgName"
+              "mapping_path": "$.organizations[].orgName"
             },
             {
               "param_code": "orgCode",
               "param_name": "组织编码",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.organizations[].orgCode"
+              "mapping_path": "$.organizations[].orgCode"
             },
             {
               "param_code": "parentOrgId",
               "param_name": "父组织ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.organizations[].parentOrgId"
+              "mapping_path": "$.organizations[].parentOrgId"
             },
             {
               "param_code": "orgLevel",
               "param_name": "组织层级",
               "param_type": "INTEGER",
               "direction": "OUT",
-              "mapping_path": "$.response.organizations[].orgLevel"
+              "mapping_path": "$.organizations[].orgLevel"
             },
             {
               "param_code": "orgType",
               "param_name": "组织类型",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.organizations[].orgType"
+              "mapping_path": "$.organizations[].orgType"
             },
             {
               "param_code": "orgDesc",
               "param_name": "组织描述",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.organizations[].orgDesc"
+              "mapping_path": "$.organizations[].orgDesc"
             }
           ],
           "function_refs": [
@@ -1985,42 +1985,42 @@
               "param_name": "组织ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.organizations[].orgId"
+              "mapping_path": "$.organizations[].orgId"
             },
             {
               "param_code": "orgName",
               "param_name": "组织名称",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.organizations[].orgName"
+              "mapping_path": "$.organizations[].orgName"
             },
             {
               "param_code": "orgCode",
               "param_name": "组织编码",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.organizations[].orgCode"
+              "mapping_path": "$.organizations[].orgCode"
             },
             {
               "param_code": "parentOrgId",
               "param_name": "父组织ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.organizations[].parentOrgId"
+              "mapping_path": "$.organizations[].parentOrgId"
             },
             {
               "param_code": "orgLevel",
               "param_name": "组织层级",
               "param_type": "INTEGER",
               "direction": "OUT",
-              "mapping_path": "$.response.organizations[].orgLevel"
+              "mapping_path": "$.organizations[].orgLevel"
             },
             {
               "param_code": "orgType",
               "param_name": "组织类型",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.organizations[].orgType"
+              "mapping_path": "$.organizations[].orgType"
             }
           ],
           "function_refs": [
@@ -2266,35 +2266,35 @@
               "param_name": "待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todoId"
+              "mapping_path": "$.todoId"
             },
             {
               "param_code": "errorMsg",
               "param_name": "错误信息",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.errorMsg"
+              "mapping_path": "$.errorMsg"
             },
             {
               "param_code": "status",
               "param_name": "待办状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.status"
+              "mapping_path": "$.status"
             },
             {
               "param_code": "title",
               "param_name": "待办标题",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.title"
+              "mapping_path": "$.title"
             },
             {
               "param_code": "createdAt",
               "param_name": "创建时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.createdAt"
+              "mapping_path": "$.createdAt"
             }
           ],
           "function_refs": [
@@ -2409,105 +2409,105 @@
               "param_name": "待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todos[].todoId"
+              "mapping_path": "$.todos[].todoId"
             },
             {
               "param_code": "title",
               "param_name": "待办标题",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todos[].title"
+              "mapping_path": "$.todos[].title"
             },
             {
               "param_code": "status",
               "param_name": "待办状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todos[].status"
+              "mapping_path": "$.todos[].status"
             },
             {
               "param_code": "priority",
               "param_name": "优先级",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todos[].priority"
+              "mapping_path": "$.todos[].priority"
             },
             {
               "param_code": "urgencyLevel",
               "param_name": "紧急程度",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todos[].urgencyLevel"
+              "mapping_path": "$.todos[].urgencyLevel"
             },
             {
               "param_code": "deadlineAt",
               "param_name": "截止时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todos[].deadlineAt"
+              "mapping_path": "$.todos[].deadlineAt"
             },
             {
               "param_code": "content",
               "param_name": "待办内容",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todos[].content"
+              "mapping_path": "$.todos[].content"
             },
             {
               "param_code": "progress",
               "param_name": "处理进度",
               "param_type": "INTEGER",
               "direction": "OUT",
-              "mapping_path": "$.response.todos[].progress"
+              "mapping_path": "$.todos[].progress"
             },
             {
               "param_code": "createdAt",
               "param_name": "创建时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todos[].createdAt"
+              "mapping_path": "$.todos[].createdAt"
             },
             {
               "param_code": "promoter",
               "param_name": "发起人",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todos[].promoter"
+              "mapping_path": "$.todos[].promoter"
             },
             {
               "param_code": "approvalComment",
               "param_name": "审批意见",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todos[].approvalComment"
+              "mapping_path": "$.todos[].approvalComment"
             },
             {
               "param_code": "approvedAt",
               "param_name": "审批通过时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todos[].approvedAt"
+              "mapping_path": "$.todos[].approvedAt"
             },
             {
               "param_code": "completedAt",
               "param_name": "完成时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todos[].completedAt"
+              "mapping_path": "$.todos[].completedAt"
             },
             {
               "param_code": "meetingNoteId",
               "param_name": "关联会议纪要ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todos[].meetingNoteId"
+              "mapping_path": "$.todos[].meetingNoteId"
             },
             {
               "param_code": "returnReason",
               "param_name": "退回原因",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todos[].returnReason"
+              "mapping_path": "$.todos[].returnReason"
             }
           ],
           "function_refs": [
@@ -2533,14 +2533,14 @@
               "param_name": "待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todoId"
+              "mapping_path": "$.todoId"
             },
             {
               "param_code": "status",
               "param_name": "待办状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.status"
+              "mapping_path": "$.status"
             }
           ],
           "function_refs": [
@@ -2574,14 +2574,14 @@
               "param_name": "待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todoId"
+              "mapping_path": "$.todoId"
             },
             {
               "param_code": "status",
               "param_name": "待办状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.status"
+              "mapping_path": "$.status"
             }
           ],
           "function_refs": [
@@ -2621,7 +2621,7 @@
               "param_name": "被处理的待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todoId"
+              "mapping_path": "$.todoId"
             }
           ],
           "function_refs": [
@@ -2647,7 +2647,7 @@
               "param_name": "删除成功的ID串",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.deletedIds"
+              "mapping_path": "$.deletedIds"
             }
           ],
           "function_refs": [
@@ -2680,14 +2680,14 @@
               "param_name": "被催更的待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todoId"
+              "mapping_path": "$.todoId"
             },
             {
               "param_code": "followUpAt",
               "param_name": "催更时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.followUpAt"
+              "mapping_path": "$.followUpAt"
             }
           ],
           "function_refs": [
@@ -2748,7 +2748,7 @@
               "param_name": "被修改的待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todoId"
+              "mapping_path": "$.todoId"
             }
           ],
           "function_refs": [
@@ -2790,14 +2790,14 @@
               "param_name": "待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.todoId"
+              "mapping_path": "$.todoId"
             },
             {
               "param_code": "approvalStatus",
               "param_name": "审批状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.approvalStatus"
+              "mapping_path": "$.approvalStatus"
             }
           ],
           "function_refs": [
@@ -2882,10 +2882,10 @@
       "actions": [],
       "source_config": {
         "alias": "ds_crm",
-        "db_type": "SQLITE",
-        "jdbc_url": "jdbc:sqlite::memory:",
-        "user": "",
-        "password": "",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
         "pool_min": 1,
         "pool_max": 5
       },
@@ -2953,10 +2953,10 @@
       "actions": [],
       "source_config": {
         "alias": "ds_crm",
-        "db_type": "SQLITE",
-        "jdbc_url": "jdbc:sqlite::memory:",
-        "user": "",
-        "password": "",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
         "pool_min": 1,
         "pool_max": 5
       },
@@ -3217,10 +3217,10 @@
       "actions": [],
       "source_config": {
         "alias": "ds_crm",
-        "db_type": "SQLITE",
-        "jdbc_url": "jdbc:sqlite::memory:",
-        "user": "",
-        "password": "",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
         "pool_min": 1,
         "pool_max": 5
       },
@@ -3291,10 +3291,10 @@
       "actions": [],
       "source_config": {
         "alias": "ds_crm",
-        "db_type": "SQLITE",
-        "jdbc_url": "jdbc:sqlite::memory:",
-        "user": "",
-        "password": "",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
         "pool_min": 1,
         "pool_max": 5
       },
@@ -3380,10 +3380,10 @@
       "actions": [],
       "source_config": {
         "alias": "ds_crm",
-        "db_type": "SQLITE",
-        "jdbc_url": "jdbc:sqlite::memory:",
-        "user": "",
-        "password": "",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
         "pool_min": 1,
         "pool_max": 5
       },
@@ -3544,10 +3544,10 @@
       "actions": [],
       "source_config": {
         "alias": "ds_crm",
-        "db_type": "SQLITE",
-        "jdbc_url": "jdbc:sqlite::memory:",
-        "user": "",
-        "password": "",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
         "pool_min": 1,
         "pool_max": 5
       },
@@ -3714,21 +3714,21 @@
               "param_name": "费用报备ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.id"
+              "mapping_path": "$.id"
             },
             {
               "param_code": "errorMsg",
               "param_name": "错误信息",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.errorMsg"
+              "mapping_path": "$.errorMsg"
             },
             {
               "param_code": "status",
               "param_name": "状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.status"
+              "mapping_path": "$.status"
             }
           ],
           "function_refs": [
@@ -3789,21 +3789,21 @@
               "param_name": "费用报备ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.id"
+              "mapping_path": "$.id"
             },
             {
               "param_code": "status",
               "param_name": "状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.status"
+              "mapping_path": "$.status"
             },
             {
               "param_code": "updatedAt",
               "param_name": "更新时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.updatedAt"
+              "mapping_path": "$.updatedAt"
             }
           ],
           "function_refs": [
@@ -3845,14 +3845,14 @@
               "param_name": "费用报备ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.id"
+              "mapping_path": "$.id"
             },
             {
               "param_code": "approvalStatus",
               "param_name": "审批状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.approvalStatus"
+              "mapping_path": "$.approvalStatus"
             }
           ],
           "function_refs": [
@@ -3921,84 +3921,84 @@
               "param_name": "费用报备ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.expenseReports[].id"
+              "mapping_path": "$.expenseReports[].id"
             },
             {
               "param_code": "applicantEmpNo",
               "param_name": "申请人工号",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.expenseReports[].applicantEmpNo"
+              "mapping_path": "$.expenseReports[].applicantEmpNo"
             },
             {
               "param_code": "applicantName",
               "param_name": "申请人姓名",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.expenseReports[].applicantName"
+              "mapping_path": "$.expenseReports[].applicantName"
             },
             {
               "param_code": "applicantOrgId",
               "param_name": "申请组织ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.expenseReports[].applicantOrgId"
+              "mapping_path": "$.expenseReports[].applicantOrgId"
             },
             {
               "param_code": "expenseAmount",
               "param_name": "申请金额",
               "param_type": "DECIMAL",
               "direction": "OUT",
-              "mapping_path": "$.response.expenseReports[].expenseAmount"
+              "mapping_path": "$.expenseReports[].expenseAmount"
             },
             {
               "param_code": "expenseDesc",
               "param_name": "申请说明",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.expenseReports[].expenseDesc"
+              "mapping_path": "$.expenseReports[].expenseDesc"
             },
             {
               "param_code": "relatedBoId",
               "param_name": "关联商机ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.expenseReports[].relatedBoId"
+              "mapping_path": "$.expenseReports[].relatedBoId"
             },
             {
               "param_code": "relatedCustomerId",
               "param_name": "关联客户ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.expenseReports[].relatedCustomerId"
+              "mapping_path": "$.expenseReports[].relatedCustomerId"
             },
             {
               "param_code": "applyTime",
               "param_name": "申请时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.expenseReports[].applyTime"
+              "mapping_path": "$.expenseReports[].applyTime"
             },
             {
               "param_code": "approvalStatus",
               "param_name": "审批状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.expenseReports[].approvalStatus"
+              "mapping_path": "$.expenseReports[].approvalStatus"
             },
             {
               "param_code": "approvalComment",
               "param_name": "审批意见",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.expenseReports[].approvalComment"
+              "mapping_path": "$.expenseReports[].approvalComment"
             },
             {
               "param_code": "approvedAt",
               "param_name": "审批时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.response.expenseReports[].approvedAt"
+              "mapping_path": "$.expenseReports[].approvedAt"
             }
           ],
           "function_refs": [
@@ -4053,10 +4053,10 @@
       "actions": [],
       "source_config": {
         "alias": "ds_crm",
-        "db_type": "SQLITE",
-        "jdbc_url": "jdbc:sqlite::memory:",
-        "user": "",
-        "password": "",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
         "pool_min": 1,
         "pool_max": 5
       },
@@ -4132,10 +4132,10 @@
       "actions": [],
       "source_config": {
         "alias": "ds_crm",
-        "db_type": "SQLITE",
-        "jdbc_url": "jdbc:sqlite::memory:",
-        "user": "",
-        "password": "",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
         "pool_min": 1,
         "pool_max": 5
       },
@@ -4194,10 +4194,10 @@
       "actions": [],
       "source_config": {
         "alias": "ds_crm",
-        "db_type": "SQLITE",
-        "jdbc_url": "jdbc:sqlite::memory:",
-        "user": "",
-        "password": "",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
         "pool_min": 1,
         "pool_max": 5
       },
@@ -4280,10 +4280,10 @@
       "actions": [],
       "source_config": {
         "alias": "ds_crm",
-        "db_type": "SQLITE",
-        "jdbc_url": "jdbc:sqlite::memory:",
-        "user": "",
-        "password": "",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
         "pool_min": 1,
         "pool_max": 5
       },
@@ -4369,10 +4369,10 @@
       "actions": [],
       "source_config": {
         "alias": "ds_attendance",
-        "db_type": "SQLITE",
-        "jdbc_url": "jdbc:sqlite::memory:",
-        "user": "",
-        "password": "",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
         "pool_min": 1,
         "pool_max": 5
       },

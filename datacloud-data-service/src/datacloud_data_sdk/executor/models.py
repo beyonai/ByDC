@@ -13,6 +13,7 @@ class ApiExecTask:
     csv_table_name: str = ""
     bind_from_step: str = ""
     bind_key: str = ""
+    output_params: list[tuple[str, str]] = field(default_factory=list)  # (param_code, mapping_path)
 
 
 @dataclass
@@ -20,6 +21,7 @@ class SqlExecTask:
     datasource_alias: str
     sql_template: str
     output_ref: str = ""
+    csv_table_name: str = ""
     bind_from_step: str = ""
     bind_key: str = ""
 
@@ -30,6 +32,7 @@ class ScriptExecTask:
     script: str
     params: dict[str, Any] = field(default_factory=dict)
     output_ref: str = ""
+    csv_table_name: str = ""
 
 
 @dataclass
@@ -38,3 +41,4 @@ class KbExecTask:
     query: str
     tags: dict[str, Any] = field(default_factory=dict)
     output_ref: str = ""
+    csv_table_name: str = ""

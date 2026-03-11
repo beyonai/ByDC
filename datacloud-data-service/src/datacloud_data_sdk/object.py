@@ -16,9 +16,7 @@ class Object:
     通过 OntologyLoader.get_object() 获取实例。
     """
 
-    def __init__(
-        self, ontology_class: OntologyClass, relations: list[Relation], loader: Any = None
-    ) -> None:
+    def __init__(self, ontology_class: OntologyClass, relations: list[Relation], loader: Any = None) -> None:
         self._cls = ontology_class
         self._relations = relations
         self._loader = loader
@@ -86,7 +84,7 @@ class Object:
                 return a
         raise ActionNotFoundError(self._cls.object_code, action_code)
 
-    async def query(self, question: str) -> dict[str, object]:
+    async def query(self, question: str, include_plan: bool = True) -> dict[str, object]:
         """自然语言查询：计划 -> 执行 -> 聚合完整管线。"""
         import uuid
         from dataclasses import asdict
@@ -103,10 +101,8 @@ class Object:
         from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
         from datacloud_data_sdk.exceptions import PlanValidationError, CannotAnswerError
 
-        if not hasattr(self, "_loader") or self._loader is None:
-            raise NotImplementedError(
-                "Object.query requires OntologyLoader with configured plan_generator"
-            )
+        if not hasattr(self, '_loader') or self._loader is None:
+            raise NotImplementedError("Object.query requires OntologyLoader with configured plan_generator")
 
         loader = self._loader
         config = loader._config
@@ -148,18 +144,26 @@ class Object:
                     validation_errors=validation_errors_list,
                     term_loader=getattr(config, "term_loader", None),
                 )
+                plan_dict = {
+                    "question": plan.question,
+                    "can_answer": plan.can_answer,
+                    "clarification": plan.clarification,
+                    "steps": [asdict(s) for s in plan.steps],
+                    "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
+                }
                 if observer:
                     try:
-                        plan_dict = {
-                            "question": plan.question,
-                            "can_answer": plan.can_answer,
-                            "clarification": plan.clarification,
-                            "steps": [asdict(s) for s in plan.steps],
-                            "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
-                        }
                         await observer.on_plan_generated(request_id, plan_dict)
                     except Exception:
                         pass
+                try:
+                    import json
+                    import logging
+                    logging.getLogger("datacloud_data_sdk").info(
+                        json.dumps(plan_dict, ensure_ascii=False)
+                    )
+                except Exception:
+                    pass
 
                 if not plan.can_answer:
                     raise CannotAnswerError(plan.clarification)
@@ -192,9 +196,7 @@ class Object:
                         try:
                             plan_dict = {
                                 "steps": [asdict(s) for s in plan.steps],
-                                "aggregation": asdict(plan.aggregation)
-                                if plan.aggregation
-                                else None,
+                                "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
                             }
                             await observer.on_plan_validation_failed(
                                 request_id, result.errors, plan_dict
@@ -225,12 +227,16 @@ class Object:
                 from datacloud_data_sdk.plan.term_resolver import TermResolver
 
                 term_resolver = TermResolver(config.term_loader)
-            tasks = ExecutionObjectConverter(term_resolver=term_resolver).convert(plan, payload)
+            tasks = ExecutionObjectConverter(
+                term_resolver=term_resolver, loader=loader
+            ).convert(plan, payload)
             if observer:
                 try:
                     tasks_dict = [asdict(t) for t in tasks]
                     agg_dict = asdict(plan.aggregation) if plan.aggregation else {}
-                    await observer.on_execution_tasks_ready(request_id, tasks_dict, agg_dict)
+                    await observer.on_execution_tasks_ready(
+                        request_id, tasks_dict, agg_dict
+                    )
                 except Exception:
                     pass
 
@@ -239,13 +245,9 @@ class Object:
             from datacloud_data_sdk.executor.api_executor import ApiExecutor
             from datacloud_data_sdk.executor.script_executor import ScriptExecutor
 
-            ds_manager = (
-                DataSourceManager(config.datasource_configs) if config.datasource_configs else None
-            )
+            ds_manager = DataSourceManager(config.datasource_configs) if config.datasource_configs else None
             sql_exec = SqlExecutor(ds_manager, config.csv_base_dir) if ds_manager else None
-            api_exec = (
-                ApiExecutor(loader._functions, config.csv_base_dir) if loader._functions else None
-            )
+            api_exec = ApiExecutor(loader._functions, config.csv_base_dir) if loader._functions else None
             script_exec = ScriptExecutor(loader)
             kb_exec = (
                 KbExecutor(config.kb_source_configs, config.csv_base_dir)
@@ -258,6 +260,7 @@ class Object:
                 api_executor=api_exec,
                 script_executor=script_exec,
                 kb_executor=kb_exec,
+                csv_base_dir=config.csv_base_dir,
             )
 
             step_results = await executor.run(
@@ -265,15 +268,9 @@ class Object:
             )
             if observer:
                 try:
-                    await observer.on_steps_executed(request_id, step_results)
+                    await observer.on_steps_executed(request_id, step_results.to_legacy_dict())
                 except Exception:
                     pass
-
-            # Map plan step_ids to executor results so aggregation can find them
-            for i, step in enumerate(plan.steps):
-                exec_key = f"step_{i}"
-                if exec_key in step_results:
-                    step_results[step.step_id] = step_results[exec_key]
 
             if plan.aggregation:
                 if plan.aggregation.strategy == "SQLITE_MEM":
@@ -285,11 +282,35 @@ class Object:
             columns = plan.aggregation.columns if plan.aggregation else []
             if observer:
                 try:
-                    await observer.on_aggregation_completed(request_id, records, columns)
+                    await observer.on_aggregation_completed(
+                        request_id, records, columns
+                    )
                 except Exception:
                     pass
 
-            return {"records": records, "meta": {"request_id": request_id, "question": question}}
+            result = {
+                "records": records,
+                "meta": {
+                    "objectId": self._cls.object_code,
+                    "objectName": self._cls.object_name,
+                    "columns": list(columns),
+                    "total": len(records),
+                },
+                "trace": {
+                    "request_id": request_id,
+                    "question": question,
+                    "object_id": self._cls.object_code,
+                },
+            }
+            if include_plan:
+                result["plan"] = {
+                    "question": plan.question,
+                    "can_answer": plan.can_answer,
+                    "clarification": plan.clarification,
+                    "steps": [asdict(s) for s in plan.steps],
+                    "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
+                }
+            return result
 
         except Exception as exc:
             from datacloud_data_sdk.events.trace_logger import log_exception_stack
@@ -299,7 +320,9 @@ class Object:
         finally:
             csv_manager.cleanup(request_id)
 
-    async def invoke_action(self, action_code: str, params: dict[str, object]) -> dict[str, object]:
+    async def invoke_action(
+        self, action_code: str, params: dict[str, object]
+    ) -> dict[str, object]:
         """执行动作（执行层实现后补全）。"""
         action = self._find_action(action_code)
         return await Action(action, loader=self._loader).execute(params)

@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 from datacloud_data_sdk.aggregator.base import BaseAggregator
+from datacloud_data_sdk.executor.step_results import StepResults
 from datacloud_data_sdk.plan.models import PlanAggregation
 
 
@@ -13,15 +14,14 @@ class SqliteAggregator(BaseAggregator):
     async def aggregate(
         self,
         agg: PlanAggregation,
-        step_results: dict[str, str],
+        step_results: StepResults,
         **kwargs: Any,
     ) -> list[dict[str, Any]]:
         csv_table_names = kwargs.get("csv_table_names", agg.csv_table_names or {})
         conn = sqlite3.connect(":memory:")
         conn.row_factory = sqlite3.Row
         try:
-            for step_id, csv_path in step_results.items():
-                table_name = csv_table_names.get(step_id, step_id)
+            for table_name, csv_path in step_results.csv_entries_for_aggregate(csv_table_names):
                 self._load_csv_to_sqlite(conn, table_name, csv_path)
             cursor = conn.execute(agg.sqlite_sql)
             columns = [desc[0] for desc in cursor.description] if cursor.description else []
