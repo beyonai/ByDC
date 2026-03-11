@@ -9,7 +9,7 @@ set -e
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-SERVICE_DIR="$PROJECT_ROOT/service/datacloud-agent-service"
+SERVICE_DIR="$PROJECT_ROOT/datacloud-apps/datacloud-agent-service"
 UI_DIR="$PROJECT_ROOT/ui/openclaw"
 
 # Configuration

@@ -42,7 +42,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/datacloud_agent", "src/dc_agent"]
+packages = ["src/datacloud_agent", "src/datacloud-agent"]
 
 [tool.uv.sources]
 # 声明 workspace 依赖来源

@@ -7,7 +7,7 @@
       "request": "launch",
       "module": "uvicorn",
       "args": ["server:app", "--host", "0.0.0.0", "--port", "8000"],
-      "cwd": "${workspaceFolder}/service/datacloud-agent-service",
+      "cwd": "${workspaceFolder}/datacloud-apps/datacloud-agent-service",
       "env": {
         "OPENAI_API_KEY": "sk-emt6bXBfJl9ncHQtcHJveHkuaXdoYWxlY2xvdWQuY29tXyZf",
         "OPENAI_BASE_URL": "https://lab.iwhalecloud.com/gpt-proxy/v1",
@@ -22,7 +22,7 @@
       "request": "launch",
       "module": "uvicorn",
       "args": ["server:app", "--host", "0.0.0.0", "--port", "8000"],
-      "cwd": "${workspaceFolder}/service/datacloud-agent-service",
+      "cwd": "${workspaceFolder}/datacloud-apps/datacloud-agent-service",
       "env": {},
       "justMyCode": false
     }
