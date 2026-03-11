@@ -148,3 +148,26 @@ def test_rest_query_emits_query_performance_log(caplog, tmp_path) -> None:
     assert "request_id" in data
     assert "stages" in data
     assert "total_ms" in data
+
+
+def test_rest_query_returns_plan_by_default(tmp_path, monkeypatch) -> None:
+    """默认 DC_INCLUDE_PLAN_IN_RESPONSE 未设置时，data 包含 plan。"""
+    monkeypatch.delenv("DC_INCLUDE_PLAN_IN_RESPONSE", raising=False)
+    app = _create_test_app(tmp_path)
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.post("/api/v1/query", json={"question": "查商机"}, headers=HEADERS)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["code"] == 0
+    assert "plan" in data["data"]
+    assert data["data"]["plan"]["can_answer"] is True
+
+
+def test_rest_query_omits_plan_when_env_false(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("DC_INCLUDE_PLAN_IN_RESPONSE", "false")
+    app = _create_test_app(tmp_path)
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.post("/api/v1/query", json={"question": "查商机"}, headers=HEADERS)
+    assert resp.status_code == 200
+    assert resp.json()["code"] == 0
+    assert "plan" not in resp.json()["data"]

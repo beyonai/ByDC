@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from datacloud_data_sdk.executor.kb_executor import KbExecutor
 from datacloud_data_sdk.executor.models import KbExecTask
+from datacloud_data_sdk.executor.step_results import StepResults
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError, KbExecutionError
 
 
@@ -39,7 +40,7 @@ async def test_kb_executor_returns_csv_path() -> None:
                 kb_configs={"kb_docs": {"endpoint": "http://rag:8000"}},
                 csv_base_dir=tmp,
             )
-            csv_path = await executor.execute(task, "req1", {})
+            csv_path = await executor.execute(task, "req1", StepResults())
 
         assert isinstance(csv_path, str)
         assert Path(csv_path).exists()
@@ -73,7 +74,7 @@ async def test_kb_executor_returns_records_with_metadata() -> None:
                 kb_configs={"kb_docs": {"endpoint": "http://rag:8000"}},
                 csv_base_dir=tmp,
             )
-            csv_path = await executor.execute(task, "req1", {})
+            csv_path = await executor.execute(task, "req1", StepResults())
 
         records = _read_csv_records(csv_path)
         assert records[0]["content"] == "内容"
@@ -98,7 +99,7 @@ async def test_kb_executor_simple_content_when_no_metadata() -> None:
                 kb_configs={"kb_docs": {"endpoint": "http://rag:8000"}},
                 csv_base_dir=tmp,
             )
-            csv_path = await executor.execute(task, "req1", {})
+            csv_path = await executor.execute(task, "req1", StepResults())
 
         records = _read_csv_records(csv_path)
         assert records == [{"content": "简单内容"}]
@@ -124,7 +125,7 @@ async def test_kb_executor_request_body() -> None:
                 kb_configs={"kb_docs": {"endpoint": "http://rag:8000"}},
                 csv_base_dir=tmp,
             )
-            await executor.execute(task, "req1", {})
+            await executor.execute(task, "req1", StepResults())
 
     mock_post.assert_called_once()
     call_kwargs = mock_post.call_args[1]
@@ -140,7 +141,7 @@ async def test_kb_executor_raises_on_missing_datasource() -> None:
     executor = KbExecutor(kb_configs={"kb_docs": {"endpoint": "http://rag:8000"}})
 
     with pytest.raises(DataSourceUnavailableError) as exc_info:
-        await executor.execute(task, "req1", {})
+        await executor.execute(task, "req1", StepResults())
 
     assert exc_info.value.alias == "unknown_kb"
 
@@ -152,7 +153,7 @@ async def test_kb_executor_raises_on_missing_endpoint() -> None:
     executor = KbExecutor(kb_configs={"kb_docs": {}})
 
     with pytest.raises(KbExecutionError) as exc_info:
-        await executor.execute(task, "req1", {})
+        await executor.execute(task, "req1", StepResults())
 
     assert exc_info.value.datasource_alias == "kb_docs"
     assert "endpoint" in exc_info.value.cause.lower()
@@ -169,7 +170,7 @@ async def test_kb_executor_raises_on_http_error() -> None:
     with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp):
         executor = KbExecutor(kb_configs={"kb_docs": {"endpoint": "http://rag:8000"}})
         with pytest.raises(KbExecutionError) as exc_info:
-            await executor.execute(task, "req1", {})
+            await executor.execute(task, "req1", StepResults())
 
     assert exc_info.value.datasource_alias == "kb_docs"
     assert "500" in exc_info.value.cause
@@ -190,7 +191,7 @@ async def test_kb_executor_post_url() -> None:
                 kb_configs={"kb_docs": {"endpoint": "http://rag:8000/"}},
                 csv_base_dir=tmp,
             )
-            await executor.execute(task, "req1", {})
+            await executor.execute(task, "req1", StepResults())
 
     assert mock_post.call_args[0][0] == "http://rag:8000/retrieve"
 
@@ -209,7 +210,7 @@ async def test_kb_executor_empty_records_still_writes_csv() -> None:
                 kb_configs={"kb_docs": {"endpoint": "http://rag:8000"}},
                 csv_base_dir=tmp,
             )
-            csv_path = await executor.execute(task, "req1", {})
+            csv_path = await executor.execute(task, "req1", StepResults())
 
         assert isinstance(csv_path, str)
         assert Path(csv_path).exists()
