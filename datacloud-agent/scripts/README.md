@@ -54,10 +54,10 @@ uv run langgraph dev
 
 Agent 将在 `http://127.0.0.1:2024` 启动。
 
-**终端 2 - 启动 UI：**
+**终端 2 - 启动 UI：**（UI 位于仓库根目录 `ui/deep-agents-ui`）
 
 ```bash
-cd ../ui/deep-agents-ui
+cd ../../ui/deep-agents-ui
 
 # 首次运行需要安装依赖
 yarn install
@@ -114,7 +114,8 @@ kill -9 <PID>
 # 重新初始化子模块
 git submodule update --init --recursive
 
-# 如果仍有问题，删除后重新添加
+# 如果仍有问题，在仓库根目录删除后重新添加
+# 在 whale_datacloud 根目录执行：
 rm -rf ui/deep-agents-ui
 git submodule add https://github.com/langchain-ai/deep-agents-ui.git ui/deep-agents-ui
 ```
