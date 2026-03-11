@@ -1,6 +1,6 @@
 """Service configuration module.
 
-Defines service-specific configuration using Pydantic settings.
+Defines OpenClaw service-specific configuration using Pydantic settings.
 """
 
 from pydantic import Field
@@ -8,9 +8,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ServiceSettings(BaseSettings):
-    """Service-specific configuration settings.
+    """OpenClaw service configuration settings.
 
-    These settings control the behavior of the datacloud-agent-service.
+    These settings control the behavior of the OpenClaw Gateway Service.
     """
 
     model_config = SettingsConfigDict(
@@ -21,7 +21,7 @@ class ServiceSettings(BaseSettings):
     )
 
     # Service metadata
-    service_name: str = "datacloud-agent-service"
+    service_name: str = "openclaw-gateway-service"
     service_version: str = "0.1.0"
 
     # Server settings
@@ -30,10 +30,16 @@ class ServiceSettings(BaseSettings):
     reload: bool = False
     workers: int = 1
 
-    # Gateway SDK settings
+    # Gateway SDK settings (for datacloud-agent integration)
     gateway_api_url: str = "http://localhost:8080"
     gateway_timeout: int = 30
     gateway_max_retries: int = 3
+
+    # LLM API settings
+    openai_api_key: str | None = Field(default=None, description="OpenAI API Key")
+    openai_base_url: str = Field(
+        default="https://api.openai.com/v1", description="OpenAI API Base URL"
+    )
 
     # Logging
     log_level: str = "INFO"
