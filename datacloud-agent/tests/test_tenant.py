@@ -236,3 +236,50 @@ class TestTenantResolver:
         assert ctx.tenant_id == "public"
         assert ctx.tenant_type == TenantType.PUBLIC
         assert ctx.session_id == "invalid_key"
+
+    def test_resolve_from_session_new_colon_format(self):
+        """Test resolving tenant from new colon-separated session key format."""
+        resolver = TenantResolver()
+        # Format: tenant:{tenant_id}:agent:{agent_id}:{session_id}
+        ctx = resolver.resolve_from_session("tenant:user001:agent:default:session123")
+
+        assert ctx.tenant_id == "user001"
+        assert ctx.tenant_type == TenantType.USER_PRIVATE
+        assert ctx.session_id == "session123"
+
+    def test_resolve_from_session_new_colon_format_public(self):
+        """Test resolving tenant from new format with public tenant."""
+        resolver = TenantResolver()
+        ctx = resolver.resolve_from_session("tenant:public:agent:default:session456")
+
+        assert ctx.tenant_id == "public"
+        assert ctx.tenant_type == TenantType.PUBLIC
+        assert ctx.session_id == "session456"
+
+    def test_resolve_from_session_new_format_complex_session_id(self):
+        """Test resolving tenant from new format with complex session ID."""
+        resolver = TenantResolver()
+        # Session ID can contain colons
+        ctx = resolver.resolve_from_session("tenant:user001:agent:default:session:123:abc")
+
+        assert ctx.tenant_id == "user001"
+        assert ctx.tenant_type == TenantType.USER_PRIVATE
+        assert ctx.session_id == "session:123:abc"
+
+    def test_resolve_from_session_fallback_to_legacy(self):
+        """Test that legacy format still works as fallback."""
+        resolver = TenantResolver()
+        ctx = resolver.resolve_from_session("user_private_user001_sess123")
+
+        assert ctx.tenant_id == "user001"
+        assert ctx.tenant_type == TenantType.USER_PRIVATE
+        assert ctx.session_id == "sess123"
+
+    def test_resolve_from_session_unknown_format_defaults_to_public(self):
+        """Test that unknown format defaults to public tenant."""
+        resolver = TenantResolver()
+        ctx = resolver.resolve_from_session("totally_invalid_key")
+
+        assert ctx.tenant_id == "public"
+        assert ctx.tenant_type == TenantType.PUBLIC
+        assert ctx.session_id == "totally_invalid_key"

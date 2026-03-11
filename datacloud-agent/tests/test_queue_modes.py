@@ -144,7 +144,7 @@ class TestQueueModesAll:
         runner._interrupt_run = AsyncMock()
         result = await runner.handle_message("session1", "ignored", QueueMode.INTERRUPT)
         assert result["status"] == "interrupted"
-        runner._interrupt_run.assert_called_once_with("session1")
+        runner._interrupt_run.assert_called_once_with("session1", skip_lock=True)
 
     @pytest.mark.asyncio
     async def test_interrupt_mode_policy(self, runner):

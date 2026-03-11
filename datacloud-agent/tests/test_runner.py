@@ -253,3 +253,93 @@ class TestAgentRunner:
         assert result["status"] == "queued"
         assert result["queue_mode"] == "followup"
         runner.message_enqueuer.enqueue.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_interrupt_run_with_skip_lock(
+        self,
+        mock_session_manager,
+        mock_agent_registry,
+        mock_queue_manager,
+        mock_event_emitter,
+        config,
+    ):
+        """Test that _interrupt_run with skip_lock=True avoids reentrancy issues."""
+        runner = AgentRunner(
+            session_manager=mock_session_manager,
+            agent_registry=mock_agent_registry,
+            queue_manager=mock_queue_manager,
+            event_emitter=mock_event_emitter,
+            config=config,
+        )
+
+        session_key = "tenant:test:agent:default:session1"
+
+        # Simulate holding the lock (as handle_message does)
+        lock = runner._active_locks[session_key]
+        async with lock:
+            # This should NOT try to acquire the lock again (would cause reentrancy issue)
+            await runner._interrupt_run(session_key, skip_lock=True)
+
+        # Verify session was cleaned up
+        assert session_key not in runner._active_sessions
+        assert session_key not in runner._running_tasks
+
+    @pytest.mark.asyncio
+    async def test_cleanup_session_removes_all_resources(
+        self,
+        mock_session_manager,
+        mock_agent_registry,
+        mock_queue_manager,
+        mock_event_emitter,
+        config,
+    ):
+        """Test that _cleanup_session removes all session resources."""
+        runner = AgentRunner(
+            session_manager=mock_session_manager,
+            agent_registry=mock_agent_registry,
+            queue_manager=mock_queue_manager,
+            event_emitter=mock_event_emitter,
+            config=config,
+        )
+
+        session_key = "tenant:test:agent:default:session1"
+
+        # Setup: Add session resources
+        runner._active_sessions.add(session_key)
+        runner._checkpointers[session_key] = MagicMock()  # Mock InMemorySaver
+        runner._running_tasks[session_key] = MagicMock()  # Mock Task
+
+        # Execute cleanup
+        await runner._cleanup_session(session_key)
+
+        # Verify all resources are removed
+        assert session_key not in runner._active_sessions
+        assert session_key not in runner._checkpointers
+        assert session_key not in runner._running_tasks
+        assert session_key not in runner._active_locks
+
+    @pytest.mark.asyncio
+    async def test_cleanup_lock_safe_for_nonexistent_session(
+        self,
+        mock_session_manager,
+        mock_agent_registry,
+        mock_queue_manager,
+        mock_event_emitter,
+        config,
+    ):
+        """Test that _cleanup_lock is safe when session doesn't exist."""
+        runner = AgentRunner(
+            session_manager=mock_session_manager,
+            agent_registry=mock_agent_registry,
+            queue_manager=mock_queue_manager,
+            event_emitter=mock_event_emitter,
+            config=config,
+        )
+
+        session_key = "tenant:test:agent:default:nonexistent"
+
+        # Should not raise even if session never existed
+        runner._cleanup_lock(session_key)
+
+        # Should be safe to call multiple times
+        runner._cleanup_lock(session_key)
