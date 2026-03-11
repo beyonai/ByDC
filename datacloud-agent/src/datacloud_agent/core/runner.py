@@ -167,16 +167,31 @@ class AgentRunner:
         """
         self._active_locks.pop(session_key, None)
 
-    async def _cleanup_session(self, session_key: str) -> None:
+    async def _cleanup_session(self, session_key: str, cleanup_checkpointer: bool = False) -> None:
         """Clean up all session resources.
 
         Args:
             session_key: Session key to clean up.
+            cleanup_checkpointer: Whether to clean up checkpointer. Set to True
+                only when the session truly ends (e.g., WebSocket disconnect,
+                explicit reset/delete). Default False to preserve conversation
+                context between messages.
         """
         self._active_sessions.discard(session_key)
         self._running_tasks.pop(session_key, None)
-        self._checkpointers.pop(session_key, None)
+        if cleanup_checkpointer:
+            self._checkpointers.pop(session_key, None)
         self._cleanup_lock(session_key)
+
+    def cleanup_checkpointer(self, session_key: str) -> None:
+        """Clean up checkpointer for a specific session.
+
+        This should be called when a session is explicitly reset or deleted.
+
+        Args:
+            session_key: Session key to clean up.
+        """
+        self._checkpointers.pop(session_key, None)
 
     async def handle_message(
         self, session_key: str, prompt: str, queue_mode: QueueMode
