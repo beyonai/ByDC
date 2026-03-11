@@ -159,6 +159,25 @@ class AgentRunner:
         # Message enqueuer
         self.message_enqueuer = MessageEnqueuer(queue_manager)
 
+    def _cleanup_lock(self, session_key: str) -> None:
+        """Clean up lock for a session.
+
+        Args:
+            session_key: Session key to clean up.
+        """
+        self._active_locks.pop(session_key, None)
+
+    async def _cleanup_session(self, session_key: str) -> None:
+        """Clean up all session resources.
+
+        Args:
+            session_key: Session key to clean up.
+        """
+        self._active_sessions.discard(session_key)
+        self._running_tasks.pop(session_key, None)
+        self._checkpointers.pop(session_key, None)
+        self._cleanup_lock(session_key)
+
     async def handle_message(
         self, session_key: str, prompt: str, queue_mode: QueueMode
     ) -> dict[str, Any]:
@@ -245,7 +264,8 @@ class AgentRunner:
             elif action == QueueAction.INTERRUPT:
                 # INTERRUPT: cancel active run, drop the message
                 # We'll interrupt and return status
-                await self._interrupt_run(session_key)
+                # Pass skip_lock=True since we already hold the session lock
+                await self._interrupt_run(session_key, skip_lock=True)
                 return {
                     "status": "interrupted",
                     "session_key": session_key,
@@ -284,8 +304,7 @@ class AgentRunner:
                 }
             finally:
                 async with lock:
-                    self._active_sessions.discard(session_key)
-                    # _run_agent already cleaned up _running_tasks
+                    await self._cleanup_session(session_key)
         elif action == QueueAction.STEER:
             # STEER mode: interrupt active run and steer with new input
             result = await self._steer_run(session_key, prompt)
@@ -413,8 +432,7 @@ class AgentRunner:
                 return result
         finally:
             async with lock:
-                self._active_sessions.discard(session_key)
-                # _run_agent already cleaned up _running_tasks
+                await self._cleanup_session(session_key)
 
     async def _steer_with_command(self, session_key: str, prompt: str) -> dict[str, Any]:
         """Execute STEER using Command(resume=...) pattern from POC 3.
@@ -483,36 +501,50 @@ class AgentRunner:
             "usage": usage,
         }
 
-    async def _interrupt_run(self, session_key: str) -> None:
+    async def _interrupt_run(self, session_key: str, skip_lock: bool = False) -> None:
         """Cancel active run without starting a new one.
 
         Args:
             session_key: Session key.
+            skip_lock: If True, skip acquiring the lock (used when called from
+                       within a locked context to avoid reentrancy issues).
         """
         lock = self._active_locks[session_key]
-        async with lock:
-            task = self._running_tasks.get(session_key)
-            if task:
-                # Handle both real asyncio.Task and mock objects
-                # For AsyncMock, task.done() returns a coroutine that needs special handling
-                try:
-                    done_result = task.done()
-                    # If done() returns a coroutine (e.g., from AsyncMock), await it to get the actual value
-                    if inspect.isawaitable(done_result):
-                        done_result = await done_result
-                    should_cancel = not done_result
-                except Exception:
-                    # If we can't determine, safest to cancel
-                    should_cancel = True
+        if skip_lock:
+            # Already holding the lock from caller context - execute logic directly
+            await self._interrupt_run_internal(session_key)
+        else:
+            async with lock:
+                await self._interrupt_run_internal(session_key)
 
-                if should_cancel:
-                    task.cancel()
-                    # Only await if it's an actual awaitable (not a mock)
-                    if inspect.isawaitable(task):
-                        with contextlib.suppress(asyncio.CancelledError):
-                            await task
-            self._running_tasks.pop(session_key, None)
-            self._active_sessions.discard(session_key)
+    async def _interrupt_run_internal(self, session_key: str) -> None:
+        """Internal implementation of interrupt logic (assumes lock is held).
+
+        Args:
+            session_key: Session key.
+        """
+        task = self._running_tasks.get(session_key)
+        if task:
+            # Handle both real asyncio.Task and mock objects
+            # For AsyncMock, task.done() returns a coroutine that needs special handling
+            try:
+                done_result = task.done()
+                # If done_result is a coroutine (e.g., from AsyncMock), await it to get the actual value
+                if inspect.isawaitable(done_result):
+                    done_result = await done_result
+                should_cancel = not done_result
+            except Exception:
+                # If we can't determine, safest to cancel
+                should_cancel = True
+
+            if should_cancel:
+                task.cancel()
+                # Only await if it's an actual awaitable (not a mock)
+                if inspect.isawaitable(task):
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await task
+        self._running_tasks.pop(session_key, None)
+        await self._cleanup_session(session_key)
 
     async def _run_agent(self, session_key: str, messages: list[str]) -> dict[str, Any]:
         """Run agent with messages, storing task for cancellation.
