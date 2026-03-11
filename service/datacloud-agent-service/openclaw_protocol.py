@@ -28,7 +28,8 @@ def ensure_default_agent(client: GatewayClient) -> None:
     """
     registry = client._agent_registry
 
-    # Check if default agent already exists
+    # Note: AgentRegistry.get() is synchronous - returns AgentConfig | None
+    # Tests should use MagicMock (not AsyncMock) for this registry method
     if registry.get("default") is not None:
         return
 
