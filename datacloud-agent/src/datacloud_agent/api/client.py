@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
@@ -81,6 +82,7 @@ class GatewayClient:
         session_id: str | None = None,
         agent_id: str | None = None,
         stream: bool = False,
+        timeout: float | None = None,
     ) -> ChatResponse:
         """Send a message and get a response.
 
@@ -89,6 +91,7 @@ class GatewayClient:
             session_id: Optional session ID. Creates new session if not provided.
             agent_id: Optional agent ID. Uses default agent if not provided.
             stream: Whether to stream the response. If True, use chat_stream instead.
+            timeout: Optional timeout in seconds. Raises TimeoutError if exceeded.
 
         Returns:
             ChatResponse with the agent's response.
@@ -96,12 +99,13 @@ class GatewayClient:
         Raises:
             SessionNotFoundError: If session_id is provided but not found.
             AgentNotFoundError: If agent_id is provided but not found.
+            TimeoutError: If the request exceeds the specified timeout.
             GatewayError: For other errors.
         """
         if stream:
             # Collect streamed chunks into a single response
             chunks = []
-            async for chunk in self.chat_stream(message, session_id, agent_id):
+            async for chunk in self.chat_stream(message, session_id, agent_id, timeout):
                 chunks.append(chunk.content)
             content = "".join(chunks)
             return ChatResponse(
@@ -115,14 +119,23 @@ class GatewayClient:
         session_key = session.session_key
 
         # Handle the message through the agent runner
-        result = await self._agent_runner.handle_message(
+        handle_message_coro = self._agent_runner.handle_message(
             session_key=session_key,
             prompt=message,
             queue_mode=QueueMode.COLLECT,
         )
+        try:
+            if timeout is not None:
+                result = await asyncio.wait_for(handle_message_coro, timeout=timeout)
+            else:
+                result = await handle_message_coro
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"Chat request timed out after {timeout} seconds") from None
 
         # Extract response content from result
-        # Result structure: {'status': 'executed', 'session_key': '...', 'result': {'agent_id': '...', 'messages': [...], 'response': '...', 'usage': {...}}}
+        # Result structure:
+        # {'status': 'executed', 'session_key': '...',
+        #  'result': {'agent_id': '...', 'messages': [...], 'response': '...', 'usage': {...}}}
         content = ""
         if isinstance(result, dict):
             inner_result = result.get("result", {})
@@ -147,6 +160,7 @@ class GatewayClient:
         message: str,
         session_id: str | None = None,
         agent_id: str | None = None,
+        timeout: float | None = None,
     ) -> AsyncIterator[ChatChunk]:
         """Send a message and stream the response.
 
@@ -154,6 +168,7 @@ class GatewayClient:
             message: The message to send.
             session_id: Optional session ID. Creates new session if not provided.
             agent_id: Optional agent ID. Uses default agent if not provided.
+            timeout: Optional timeout in seconds. Raises TimeoutError if exceeded.
 
         Yields:
             ChatChunk objects containing response fragments.
@@ -161,6 +176,7 @@ class GatewayClient:
         Raises:
             SessionNotFoundError: If session_id is provided but not found.
             AgentNotFoundError: If agent_id is provided but not found.
+            TimeoutError: If the request exceeds the specified timeout.
         """
         # Get or create session
         session = await self._get_or_create_session(session_id, agent_id)
@@ -168,14 +184,23 @@ class GatewayClient:
 
         # For now, simulate streaming by yielding the full response as one chunk
         # In a real implementation, this would integrate with event streaming
-        result = await self._agent_runner.handle_message(
+        handle_message_coro = self._agent_runner.handle_message(
             session_key=session_key,
             prompt=message,
             queue_mode=QueueMode.COLLECT,
         )
+        try:
+            if timeout is not None:
+                result = await asyncio.wait_for(handle_message_coro, timeout=timeout)
+            else:
+                result = await handle_message_coro
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"Chat stream request timed out after {timeout} seconds") from None
 
         # Extract response content from result
-        # Result structure: {'status': 'executed', 'session_key': '...', 'result': {'agent_id': '...', 'messages': [...], 'response': '...', 'usage': {...}}}
+        # Result structure:
+        # {'status': 'executed', 'session_key': '...',
+        #  'result': {'agent_id': '...', 'messages': [...], 'response': '...', 'usage': {...}}}
         content = ""
         if isinstance(result, dict):
             inner_result = result.get("result", {})
