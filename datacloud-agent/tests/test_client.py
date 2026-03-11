@@ -346,6 +346,152 @@ class TestGatewayClientExecuteCommand:
         assert "error" in result
 
 
+class TestGatewayClientSessionContext:
+    """Tests for session context preservation across multiple chats."""
+
+    @pytest.fixture
+    def client(self):
+        """Create a GatewayClient with mocked dependencies."""
+        client = GatewayClient()
+        client._session_manager = MagicMock()
+        client._agent_runner = MagicMock()
+        client._agent_registry = MagicMock()
+        return client
+
+    @pytest.mark.asyncio
+    async def test_chat_with_same_session_id_preserves_context(self, client):
+        """Test that using the same session_id preserves conversation context.
+
+        This is the key test for the context bug fix. When a user provides
+        the same session_id for multiple chat calls, the same session should
+        be used, enabling conversation continuity.
+        """
+        custom_session_id = "user-provided-session-123"
+
+        # First chat - session doesn't exist yet, should create with custom ID
+        mock_session_1 = MagicMock()
+        mock_session_1.session_id = custom_session_id
+        mock_session_1.session_key = f"tenant:default:agent:default:{custom_session_id}"
+        mock_session_1.agent_id = "default"
+
+        # Mock: first get_session returns None (not found), then create_session returns mock
+        client._session_manager.get_session = AsyncMock(return_value=None)
+        client._session_manager.create_session = AsyncMock(return_value=mock_session_1)
+
+        client._agent_runner.handle_message = AsyncMock(
+            return_value={
+                "status": "executed",
+                "session_key": f"tenant:default:agent:default:{custom_session_id}",
+                "result": {"response": "Hello! How can I help?", "agent_id": "default"},
+            }
+        )
+
+        # First chat
+        response1 = await client.chat("Hello!", session_id=custom_session_id)
+        assert response1.session_id == custom_session_id
+
+        # Verify create_session was called with the custom session_id
+        client._session_manager.create_session.assert_called_once()
+        call_kwargs = client._session_manager.create_session.call_args.kwargs
+        assert call_kwargs.get("session_id") == custom_session_id
+
+        # Second chat - session now exists
+        mock_session_2 = MagicMock()
+        mock_session_2.session_id = custom_session_id
+        mock_session_2.session_key = f"tenant:default:agent:default:{custom_session_id}"
+        mock_session_2.agent_id = "default"
+
+        # Reset mocks: now get_session should return the existing session
+        client._session_manager.get_session = AsyncMock(return_value=mock_session_2)
+        client._session_manager.create_session.reset_mock()
+
+        client._agent_runner.handle_message = AsyncMock(
+            return_value={
+                "status": "executed",
+                "session_key": f"tenant:default:agent:default:{custom_session_id}",
+                "result": {"response": "You said Hello!", "agent_id": "default"},
+            }
+        )
+
+        response2 = await client.chat("What did I say?", session_id=custom_session_id)
+        assert response2.session_id == custom_session_id
+
+        # Verify create_session was NOT called this time (session was found)
+        client._session_manager.create_session.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_chat_with_different_session_ids_isolates_context(self, client):
+        """Test that different session_ids create isolated sessions."""
+        session_id_1 = "session-1"
+        session_id_2 = "session-2"
+
+        # First session
+        mock_session_1 = MagicMock()
+        mock_session_1.session_id = session_id_1
+        mock_session_1.session_key = f"tenant:default:agent:default:{session_id_1}"
+        mock_session_1.agent_id = "default"
+
+        client._session_manager.get_session = AsyncMock(return_value=None)
+        client._session_manager.create_session = AsyncMock(return_value=mock_session_1)
+        client._agent_runner.handle_message = AsyncMock(
+            return_value={
+                "status": "executed",
+                "session_key": f"tenant:default:agent:default:{session_id_1}",
+                "result": {"response": "Response 1", "agent_id": "default"},
+            }
+        )
+
+        response1 = await client.chat("Message 1", session_id=session_id_1)
+        assert response1.session_id == session_id_1
+
+        # Second session - should create a different session
+        mock_session_2 = MagicMock()
+        mock_session_2.session_id = session_id_2
+        mock_session_2.session_key = f"tenant:default:agent:default:{session_id_2}"
+        mock_session_2.agent_id = "default"
+
+        client._session_manager.create_session = AsyncMock(return_value=mock_session_2)
+        client._agent_runner.handle_message = AsyncMock(
+            return_value={
+                "status": "executed",
+                "session_key": f"tenant:default:agent:default:{session_id_2}",
+                "result": {"response": "Response 2", "agent_id": "default"},
+            }
+        )
+
+        response2 = await client.chat("Message 2", session_id=session_id_2)
+        assert response2.session_id == session_id_2
+
+        # Verify create_session was called with different session_ids
+        assert client._session_manager.create_session.call_count == 1
+        call_kwargs = client._session_manager.create_session.call_args.kwargs
+        assert call_kwargs.get("session_id") == session_id_2
+
+    @pytest.mark.asyncio
+    async def test_chat_without_session_id_generates_new_uuid(self, client):
+        """Test that chat without session_id generates a new UUID."""
+        mock_session = MagicMock()
+        mock_session.session_id = "auto-generated-uuid"
+        mock_session.session_key = "tenant:default:agent:default:auto-generated-uuid"
+        mock_session.agent_id = "default"
+
+        client._session_manager.create_session = AsyncMock(return_value=mock_session)
+        client._agent_runner.handle_message = AsyncMock(
+            return_value={
+                "status": "executed",
+                "session_key": "tenant:default:agent:default:auto-generated-uuid",
+                "result": {"response": "Hello!", "agent_id": "default"},
+            }
+        )
+
+        response = await client.chat("Hello!")
+
+        # Verify create_session was called without session_id (None)
+        client._session_manager.create_session.assert_called_once()
+        call_kwargs = client._session_manager.create_session.call_args.kwargs
+        assert call_kwargs.get("session_id") is None
+
+
 class TestGatewayClientIntegration:
     """Integration tests for GatewayClient."""
 
