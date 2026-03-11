@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from datacloud_data_sdk.plan.models import (
+    ObjectViewAction,
     ObjectViewField,
     ObjectViewFunction,
     ObjectViewFunctionParam,
@@ -16,6 +17,17 @@ from datacloud_data_sdk.plan.models import (
 
 if TYPE_CHECKING:
     from datacloud_data_sdk.ontology.loader import OntologyLoader
+    from datacloud_data_sdk.ontology.models import OntologyField
+
+
+def _resolve_source_column(f: OntologyField, datasource_alias: str) -> str | None:
+    """解析字段的物理列名：优先 source_column，否则从 physical_mappings 中取 DB 且 datasource_alias 匹配的 source_ref。"""
+    if f.source_column:
+        return f.source_column
+    for m in f.physical_mappings:
+        if m.source_type == "DB" and m.datasource_alias == datasource_alias:
+            return m.source_ref
+    return None
 
 
 class ObjectViewBuilder:
@@ -35,6 +47,7 @@ class ObjectViewBuilder:
                     source_type=cls.source_type,
                     datasource_alias=cls.datasource_alias or "",
                 )
+            datasource_alias = cls.datasource_alias or ""
             fields = [
                 ObjectViewField(
                     name=f.field_code,
@@ -44,27 +57,42 @@ class ObjectViewBuilder:
                     term_set=f.term_set,
                     term_type=f.term_type,
                     dataset_id=f.dataset_id,
+                    source_column=_resolve_source_column(f, datasource_alias),
                 )
                 for f in cls.fields
             ]
             functions = []
+            actions = []
             for a in cls.actions:
+                params = [
+                    ObjectViewFunctionParam(
+                        param_code=p.param_code,
+                        param_name=p.param_name,
+                        param_type=p.param_type,
+                        direction=p.direction,
+                        required=p.required,
+                        mapping_path=p.mapping_path,
+                        default_value=p.default_value,
+                        term_set=p.term_set,
+                        term_type=p.term_type,
+                        dataset_id=p.dataset_id,
+                    )
+                    for p in a.params
+                ]
+                in_params = [p for p in params if p.direction in ("IN", "INOUT")]
+                out_params = [p for p in params if p.direction in ("OUT", "INOUT")]
+                impl_type = "API" if a.function_refs else "SCRIPT"
+                function_code = a.function_refs[0] if a.function_refs else None
+                actions.append(
+                    ObjectViewAction(
+                        action_code=a.action_code,
+                        input_params=in_params,
+                        output_params=out_params,
+                        implementation_type=impl_type,
+                        function_code=function_code,
+                    )
+                )
                 for fr in a.function_refs:
-                    params = [
-                        ObjectViewFunctionParam(
-                            param_code=p.param_code,
-                            param_name=p.param_name,
-                            param_type=p.param_type,
-                            direction=p.direction,
-                            required=p.required,
-                            mapping_path=p.mapping_path,
-                            default_value=p.default_value,
-                            term_set=p.term_set,
-                            term_type=p.term_type,
-                            dataset_id=p.dataset_id,
-                        )
-                        for p in a.params
-                    ]
                     functions.append(
                         ObjectViewFunction(
                             function_code=fr,
@@ -81,6 +109,7 @@ class ObjectViewBuilder:
                     description=cls.description,
                     fields=fields,
                     functions=functions,
+                    actions=actions,
                 )
             )
 

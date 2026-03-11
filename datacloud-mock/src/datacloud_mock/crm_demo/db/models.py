@@ -13,15 +13,15 @@ class Base(DeclarativeBase):
 
 
 # ---------------------------------------------------------------------------
-# byai schema
+# crm_demo schema
 # ---------------------------------------------------------------------------
 
 
 class PoOrganization(Base):
-    """组织表 byai.po_organization."""
+    """组织表 crm_demo.po_organization."""
 
     __tablename__ = "po_organization"
-    __table_args__ = {"schema": "byai"}
+    __table_args__ = {"schema": "crm_demo"}
 
     org_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     org_code: Mapped[str] = mapped_column(String(250), nullable=False)
@@ -37,10 +37,10 @@ class PoOrganization(Base):
 
 
 class PoUsersOrganization(Base):
-    """用户组织关联表 byai.po_users_organization."""
+    """用户组织关联表 crm_demo.po_users_organization."""
 
     __tablename__ = "po_users_organization"
-    __table_args__ = {"schema": "byai"}
+    __table_args__ = {"schema": "crm_demo"}
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -50,10 +50,10 @@ class PoUsersOrganization(Base):
 
 
 class PoUsers(Base):
-    """用户表 byai.po_users."""
+    """用户表 crm_demo.po_users."""
 
     __tablename__ = "po_users"
-    __table_args__ = {"schema": "byai"}
+    __table_args__ = {"schema": "crm_demo"}
 
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     user_name: Mapped[str] = mapped_column(String(255), nullable=False)

@@ -48,7 +48,25 @@ REGISTRY = {
                     "field_code": "bo_id",
                     "field_name": "商机ID",
                     "field_type": "STRING",
-                }
+                },
+                {
+                    "field_code": "userId",
+                    "field_name": "用户ID",
+                    "field_type": "STRING",
+                    "source_column": "user_id",
+                },
+                {
+                    "field_code": "deptName",
+                    "field_name": "部门名称",
+                    "field_type": "STRING",
+                    "physical_mappings": [
+                        {
+                            "source_type": "DB",
+                            "source_ref": "dept_name",
+                            "datasource_alias": "crm_db",
+                        }
+                    ],
+                },
             ],
             "actions": [],
         },
@@ -107,6 +125,19 @@ def test_object_view_object_has_name_and_description() -> None:
     payload = builder.build(object_ids=["sales_bo", "sales_contract"], view_id="test_view")
     sales_bo = next(o for o in payload.objects if o.object_id == "sales_bo")
     assert sales_bo.object_name == "销售商机"
+
+
+def test_object_view_field_source_column_from_source_column_or_physical_mappings() -> None:
+    """有 source_column 或 physical_mappings 的 field 能正确解析到 ObjectViewField.source_column。"""
+    loader = OntologyLoader()
+    loader.load_from_content(REGISTRY)
+    builder = ObjectViewBuilder(loader)
+    payload = builder.build(object_ids=["sales_bo"], view_id="test_view")
+    sales_bo = next(o for o in payload.objects if o.object_id == "sales_bo")
+    fields_by_code = {f.name: f for f in sales_bo.fields}
+    assert fields_by_code["bo_id"].source_column is None
+    assert fields_by_code["userId"].source_column == "user_id"
+    assert fields_by_code["deptName"].source_column == "dept_name"
 
 
 def test_object_view_function_has_description_and_params() -> None:

@@ -22,7 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 langchain = ["langgraph>=0.2", "langchain-openai>=0.1"]
-sql = ["sqlalchemy[asyncio]>=2.0", "aiomysql>=0.2", "aiosqlite>=0.19", "asyncpg>=0.29"]
+sql = ["sqlalchemy[asyncio]>=2.0", "aiomysql>=0.2", "aiosqlite>=0.19", "asyncpg>=0.29", "opengauss-sqlalchemy>=2.4.0", "sqlparse>=0.5"]
 clickhouse = ["aiochclient[aiohttp]>=2.0"]
 service = ["fastapi>=0.115.0", "uvicorn>=0.32.0", "pydantic-settings>=2.0", "pyyaml>=6.0"]
 all = ["datacloud-data-service[langchain,sql,service]"]
