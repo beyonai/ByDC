@@ -1,14 +1,14 @@
 [project]
-name = "datacloud-agent-service"
+name = "openclaw-gateway-service"
 version = "0.1.0"
-description = "DataCloud Agent Service - FastAPI Gateway Service Layer"
+description = "OpenClaw Gateway Service - WebSocket-based Agent Interface"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [
     { name = "Whale DataCloud Team" }
 ]
-keywords = ["fastapi", "gateway", "agent", "service"]
+keywords = ["websocket", "gateway", "agent", "openclaw"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
