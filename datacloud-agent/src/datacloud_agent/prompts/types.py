@@ -36,7 +36,8 @@ class SystemPromptConfig(BaseModel):
         prompts_dir: Directory containing prompt files (default: "prompts").
         bootstrap_max_chars: Maximum characters for bootstrap (default: 100_000).
         head_tail_ratio: Ratio of head vs tail when truncating (default: 0.7).
-        layer_order: Order of layers in final prompt (default: IDENTITY, OPERATION, KNOWLEDGE, COLLABORATION).
+        layer_order: Order of layers in final prompt
+            (default: IDENTITY, OPERATION, KNOWLEDGE, COLLABORATION).
         default_layer: Default layer for unrecognized .md files (default: OPERATION).
         file_layer_mapping: Mapping from file names to layer types.
     """
