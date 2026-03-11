@@ -1,7 +1,5 @@
 {
-    "dependencies": [
-        "."
-    ],
+    "dependencies": ["../../../../datacloud-agent"],
     "graphs": {
         "graph": "./agent.py:graph"
     },
