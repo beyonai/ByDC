@@ -6,8 +6,32 @@ from urllib.parse import quote_plus, urlparse, urlunparse
 
 from datacloud_data_sdk.exceptions import SqlExecutionError
 from datacloud_data_sdk.sql_executor.base_connector import BaseSourceConnector
-from datacloud_data_sdk.sql_executor.jdbc_parser import parse_jdbc_url
+from datacloud_data_sdk.sql_executor.jdbc_parser import (
+    parse_jdbc_url,
+    extract_current_schema,
+)
 from datacloud_data_sdk.sql_executor.models import DataSourceConfig
+
+_pg_dialect_opengauss_patched = False
+
+
+def _patch_pg_dialect_for_opengauss() -> None:
+    """Patch PGDialect 以兼容 openGauss 的 version 字符串格式。"""
+    global _pg_dialect_opengauss_patched
+    if _pg_dialect_opengauss_patched:
+        return
+    from sqlalchemy.dialects.postgresql.base import PGDialect
+
+    _orig = PGDialect._get_server_version_info
+
+    def _patched(connection: Any) -> tuple[int, ...]:
+        try:
+            return _orig(connection)
+        except Exception:
+            return (9, 2)
+
+    PGDialect._get_server_version_info = _patched
+    _pg_dialect_opengauss_patched = True
 
 
 def _build_sqlalchemy_url(config: DataSourceConfig) -> str:
@@ -38,6 +62,9 @@ class PostgreSQLConnector(BaseSourceConnector):
                 "asyncpg not installed. Install with: pip install asyncpg"
             ) from e
 
+        if getattr(self.config, "open_gauss_compat", False):
+            _patch_pg_dialect_for_opengauss()
+
         url = _build_sqlalchemy_url(self.config)
         pool_min = getattr(self.config, "pool_min", 1) or 1
         pool_max = getattr(self.config, "pool_max", 5) or 5
@@ -45,11 +72,17 @@ class PostgreSQLConnector(BaseSourceConnector):
             pool_max = pool_min
         pool_timeout = getattr(self.config, "pool_timeout", 30.0) or 30.0
 
+        schema = extract_current_schema(self.config.jdbc_url)
+        connect_args: dict[str, Any] = {}
+        if schema:
+            connect_args["server_settings"] = {"search_path": schema}
+
         self._engine = create_async_engine(
             url,
             pool_size=pool_min,
             max_overflow=max(0, pool_max - pool_min),
             pool_timeout=pool_timeout,
+            connect_args=connect_args,
         )
 
     @classmethod
