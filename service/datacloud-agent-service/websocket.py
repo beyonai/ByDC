@@ -1,4 +1,4 @@
-"""WebSocket support for datacloud-agent-service with OpenClaw protocol.
+"""WebSocket support for OpenClaw Gateway Service.
 
 Provides real-time bidirectional communication using OpenClaw Gateway protocol.
 """
@@ -88,6 +88,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # Main message loop
         while True:
+            frame: dict = {}
             try:
                 # Receive text message (JSON frame)
                 data = await websocket.receive_text()
@@ -106,7 +107,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
             except Exception as e:
                 logger.exception("Error handling WebSocket message")
-                await websocket.send_text(json.dumps({"type": "res", "ok": False, "error": str(e)}))
+                frame_id = frame.get("id") if frame else None
+                await websocket.send_text(
+                    json.dumps({"type": "res", "id": frame_id, "ok": False, "error": str(e)})
+                )
 
     except WebSocketDisconnect:
         logger.info("WebSocket connection closed by client")
