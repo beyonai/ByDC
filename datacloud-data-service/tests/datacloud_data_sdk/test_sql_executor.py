@@ -2,6 +2,7 @@ import pytest
 from pathlib import Path
 from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 from datacloud_data_sdk.executor.models import SqlExecTask
+from datacloud_data_sdk.executor.step_results import StepResult, StepResults
 from datacloud_data_sdk.sql_executor.sql_executor import SqlExecutor
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 
@@ -23,7 +24,7 @@ async def test_sql_executor_returns_csv(tmp_path: Path) -> None:
         sql_template="SELECT 1 AS id, 'hello' AS name",
         output_ref="result",
     )
-    result = await executor.execute(task, request_id="req1", step_results={})
+    result = await executor.execute(task, request_id="req1", step_results=StepResults())
     csv_path = Path(result.csv_path)
     assert csv_path.exists()
     content = csv_path.read_text()
@@ -47,8 +48,8 @@ async def test_sql_executor_bind_from_step(tmp_path: Path) -> None:
         bind_key="emp_id",
         output_ref="result",
     )
-    result = await executor.execute(
-        task, request_id="req1", step_results={"step_1_api": str(step_csv)}
-    )
+    sr = StepResults()
+    sr.add(StepResult("step_1_api", "step_1_api", "", str(step_csv), ""))
+    result = await executor.execute(task, request_id="req1", step_results=sr)
     content = Path(result.csv_path).read_text()
     assert "U001" in content

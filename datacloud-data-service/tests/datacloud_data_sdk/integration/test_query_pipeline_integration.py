@@ -72,3 +72,26 @@ async def test_object_query_returns_records(tmp_path: Path) -> None:
         result = await obj.query("查商机")
     assert len(result["records"]) == 1
     assert result["records"][0]["bo_name"] == "5G项目"
+
+
+@pytest.mark.asyncio
+async def test_object_query_returns_plan_when_include_plan_true(tmp_path: Path) -> None:
+    """include_plan=True 时返回 dict 包含 plan。"""
+    loader = OntologyLoader()
+    loader.load_from_content(REGISTRY)
+    loader.configure(
+        plan_generator=MockPlanGenerator(fixed_plan=MOCK_PLAN_DICT),
+        datasource_configs={
+            "test_db": DataSourceConfig(
+                alias="test_db", db_type="SQLITE", jdbc_url="jdbc:sqlite::memory:"
+            )
+        },
+        csv_base_dir=str(tmp_path),
+    )
+    obj = loader.get_object("sales_bo")
+    with InvocationContext(tenant_id="t1"):
+        result = await obj.query("查商机", include_plan=True)
+    assert "plan" in result
+    assert result["plan"]["can_answer"] is True
+    assert len(result["plan"]["steps"]) == 1
+    assert result["plan"]["steps"][0]["step_id"] == "s1"

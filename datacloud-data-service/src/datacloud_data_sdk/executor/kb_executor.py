@@ -10,6 +10,7 @@ from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError, KbExecutionError
 from datacloud_data_sdk.utils.curl_logger import log_curl
 from datacloud_data_sdk.executor.models import KbExecTask
+from datacloud_data_sdk.executor.step_results import StepResults
 from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
 
 
@@ -33,7 +34,7 @@ class KbExecutor:
         self,
         task: KbExecTask,
         request_id: str,
-        step_results: dict[str, str],
+        step_results: StepResults,
     ) -> str:
         """
         执行知识库检索，将 records 写入 CSV 并返回 csv_path。
@@ -103,6 +104,6 @@ class KbExecutor:
                 record.update(metadata)
             records.append(record)
 
-        path = self._csv.get_path(request_id, task.output_ref)
+        path = self._csv.get_path(request_id, task.csv_table_name or task.output_ref)
         ResultConverter.to_csv(records, path)
         return str(path)
