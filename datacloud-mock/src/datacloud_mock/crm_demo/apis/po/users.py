@@ -64,9 +64,7 @@ async def users_query_by_ids(
         except ValueError:
             return {"users": []}
     elif body.names:
-        q = q.where(
-            (PoUsers.user_name.in_(body.names)) | (PoUsers.user_code.in_(body.names))
-        )
+        q = q.where((PoUsers.user_name.in_(body.names)) | (PoUsers.user_code.in_(body.names)))
 
     result = await session.execute(q)
     rows = result.scalars().all()

@@ -1,4 +1,5 @@
 """从 YAML 加载数据源配置，支持 ${ENV_VAR} 环境变量替换。"""
+
 from __future__ import annotations
 
 import os

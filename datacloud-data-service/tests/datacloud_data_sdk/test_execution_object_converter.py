@@ -16,52 +16,67 @@ from datacloud_data_sdk.executor.models import SqlExecTask, ApiExecTask, ScriptE
 PLAN_WITH_SQL = QueryExecutionPlan(
     question="查商机",
     can_answer=True,
-    steps=[PlanStep(
-        step_id="s1", type="SQL", source_id="SRC_CRM",
-        datasource_alias="crm_db",
-        sql_template="SELECT bo_id FROM sales_bo",
-        output_ref="bo_list",
-    )],
+    steps=[
+        PlanStep(
+            step_id="s1",
+            type="SQL",
+            source_id="SRC_CRM",
+            datasource_alias="crm_db",
+            sql_template="SELECT bo_id FROM sales_bo",
+            output_ref="bo_list",
+        )
+    ],
     aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1", columns=[]),
 )
 
 PLAN_WITH_API = QueryExecutionPlan(
     question="查员工",
     can_answer=True,
-    steps=[PlanStep(
-        step_id="s1", type="API", source_id="SRC_EMP",
-        function_id="fn_get_emp",
-        params={"names": ["邹海天"]},
-        output_ref="emp_list",
-        csv_table_name="api_emp",
-    )],
-    aggregation=PlanAggregation(strategy="SQLITE_MEM", sqlite_sql="SELECT * FROM api_emp", columns=[]),
+    steps=[
+        PlanStep(
+            step_id="s1",
+            type="API",
+            source_id="SRC_EMP",
+            function_id="fn_get_emp",
+            params={"names": ["邹海天"]},
+            output_ref="emp_list",
+            csv_table_name="api_emp",
+        )
+    ],
+    aggregation=PlanAggregation(
+        strategy="SQLITE_MEM", sqlite_sql="SELECT * FROM api_emp", columns=[]
+    ),
 )
 
 PLAN_WITH_SCRIPT = QueryExecutionPlan(
     question="计算评分",
     can_answer=True,
-    steps=[PlanStep(
-        step_id="s1", type="SCRIPT",
-        action_code="calc_score",
-        script="def execute(params):\\n    return {'score': 100}",
-        params={"bo_id": "123"},
-        output_ref="score_result",
-    )],
+    steps=[
+        PlanStep(
+            step_id="s1",
+            type="SCRIPT",
+            action_code="calc_score",
+            script="def execute(params):\\n    return {'score': 100}",
+            params={"bo_id": "123"},
+            output_ref="score_result",
+        )
+    ],
     aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1", columns=[]),
 )
 
 PLAN_WITH_KB = QueryExecutionPlan(
     question="检索知识库",
     can_answer=True,
-    steps=[PlanStep(
-        step_id="s1",
-        type="KB",
-        datasource_alias="kb_docs",
-        query="如何配置数据源",
-        tags={"category": "config", "version": "v2"},
-        output_ref="kb_result",
-    )],
+    steps=[
+        PlanStep(
+            step_id="s1",
+            type="KB",
+            datasource_alias="kb_docs",
+            query="如何配置数据源",
+            tags={"category": "config", "version": "v2"},
+            output_ref="kb_result",
+        )
+    ],
     aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1", columns=[]),
 )
 

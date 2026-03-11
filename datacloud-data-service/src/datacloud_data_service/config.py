@@ -1,4 +1,5 @@
 """服务配置，基于 pydantic-settings。"""
+
 from __future__ import annotations
 
 from functools import lru_cache

@@ -21,8 +21,10 @@ async def test_direct_aggregator_returns_records(tmp_path: Path) -> None:
     agg = PlanAggregation(
         strategy="DIRECT",
         final_step_id="step_1",
-        columns=[{"name": "bo_id", "label": "商机ID", "type": "string"},
-                 {"name": "bo_name", "label": "商机名称", "type": "string"}],
+        columns=[
+            {"name": "bo_id", "label": "商机ID", "type": "string"},
+            {"name": "bo_name", "label": "商机名称", "type": "string"},
+        ],
     )
     records = await DirectAggregator().aggregate(agg, {"step_1": csv_path})
     assert records == [{"bo_id": "B001", "bo_name": "5G项目"}]
@@ -35,8 +37,10 @@ async def test_sqlite_aggregator_joins_csvs(tmp_path: Path) -> None:
     agg = PlanAggregation(
         strategy="SQLITE_MEM",
         sqlite_sql="SELECT e.emp_name, b.bo_name FROM api_emp e JOIN db_bo b ON e.emp_id = b.emp_id",
-        columns=[{"name": "emp_name", "label": "员工姓名", "type": "string"},
-                 {"name": "bo_name", "label": "商机名称", "type": "string"}],
+        columns=[
+            {"name": "emp_name", "label": "员工姓名", "type": "string"},
+            {"name": "bo_name", "label": "商机名称", "type": "string"},
+        ],
     )
     records = await SqliteAggregator().aggregate(
         agg,

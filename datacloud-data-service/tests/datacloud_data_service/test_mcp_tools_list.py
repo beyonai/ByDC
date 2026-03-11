@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 def get_client():
     from datacloud_data_service.api.routes import create_app
+
     return TestClient(create_app())
 
 

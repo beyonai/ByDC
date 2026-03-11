@@ -1,4 +1,5 @@
 """聚合器抽象基类。"""
+
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
@@ -12,5 +13,4 @@ class BaseAggregator(ABC):
         agg: PlanAggregation,
         step_results: dict[str, str],
         **kwargs: Any,
-    ) -> list[dict[str, Any]]:
-        ...
+    ) -> list[dict[str, Any]]: ...

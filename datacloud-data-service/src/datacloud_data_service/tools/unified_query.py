@@ -1,4 +1,5 @@
 """UnifiedQuery: unified_data_query 工具封装。"""
+
 from __future__ import annotations
 
 import json
@@ -55,7 +56,9 @@ class UnifiedQuery:
                 result = await view.query(question)
 
             return {
-                "content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False, default=str)}],
+                "content": [
+                    {"type": "text", "text": json.dumps(result, ensure_ascii=False, default=str)}
+                ],
                 "isError": False,
             }
         except Exception as e:

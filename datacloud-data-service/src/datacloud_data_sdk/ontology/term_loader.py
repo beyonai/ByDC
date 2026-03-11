@@ -88,7 +88,9 @@ class TermLoader:
 
         # 支持 resultObject.termInfoList 或顶层 termInfoList/data
         result_obj = data.get("resultObject") or {}
-        raw_list = result_obj.get("termInfoList") or data.get("termInfoList") or data.get("data") or []
+        raw_list = (
+            result_obj.get("termInfoList") or data.get("termInfoList") or data.get("data") or []
+        )
         if not isinstance(raw_list, list):
             raw_list = []
 
@@ -127,9 +129,7 @@ class TermLoader:
         available = self.get_available_values(
             term_set, dataset_id=dataset_id, term_type_code=term_type_code
         )
-        raise ValueError(
-            f"Unknown term {value!r} in {term_set!r}. available: {available}"
-        )
+        raise ValueError(f"Unknown term {value!r} in {term_set!r}. available: {available}")
 
     def get_available_values(
         self,

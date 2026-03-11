@@ -1,4 +1,5 @@
 """ActionToolGenerator: 从本体动作生成 MCP 工具定义。"""
+
 from __future__ import annotations
 
 from typing import Any
