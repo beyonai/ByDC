@@ -177,28 +177,28 @@ async def test_scenario_4_mcp_action_via_service(tmp_path: Path) -> None:
     """场景4：通过 MCP tools/call 调用脚本动作。"""
     from fastapi.testclient import TestClient
     from datacloud_data_service.api.routes import create_app
+    from tests.datacloud_data_service.mcp_test_utils import parse_sse_response
 
     plan = {"can_answer": True, "steps": [], "aggregation": None}
     loader = _make_loader(plan, tmp_path)
 
-    app = create_app()
-    app.state.loader = loader
-    client = TestClient(app)
-
-    resp = client.post(
-        "/api/v1/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": "1",
-            "method": "tools/call",
-            "params": {"name": "calc_score", "arguments": {"bo_id": "B001"}},
-        },
-        headers={"X-Tenant-Id": "t1"},
-    )
-
-    result = resp.json()["result"]
-    assert result["isError"] is False
-    assert "85" in result["content"][0]["text"]
+    app = create_app(loader_override=loader)
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/v1/mcp",
+            json={
+                "jsonrpc": "2.0", "id": "1", "method": "tools/call",
+                "params": {"name": "calc_score", "arguments": {"bo_id": "B001"}},
+            },
+            headers={
+                "Accept": "application/json, text/event-stream",
+                "X-Tenant-Id": "t1",
+            },
+        )
+        data = parse_sse_response(resp)
+        result = data["result"]
+        assert result["isError"] is False
+        assert "85" in result["content"][0]["text"]
 
 
 @pytest.mark.asyncio

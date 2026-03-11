@@ -61,8 +61,17 @@ def _make_performance_log_handler() -> tuple[Any, dict[str, list]]:
 def create_app(
     *,
     datasource_configs: dict | None = None,
+    loader_override: Any | None = None,
 ) -> FastAPI:
     """创建 FastAPI 应用。测试时可传入 datasource_configs 覆盖配置。"""
+    from datacloud_data_service.api.mcp_sdk_handler import (
+        create_mcp_asgi_app,
+        create_mcp_session_manager,
+    )
+
+    _mcp_session_manager = create_mcp_session_manager()
+    _mcp_asgi_app = create_mcp_asgi_app(_mcp_session_manager)
+
     sdk_logger = logging.getLogger("datacloud_data_sdk")
     sdk_logger.setLevel(logging.INFO)
     sdk_logger.propagate = False
@@ -78,17 +87,20 @@ def create_app(
         from datacloud_data_sdk.ontology.loader import OntologyLoader
 
         settings = get_settings()
-        loader = OntologyLoader()
+        if loader_override is not None:
+            loader = loader_override
+            logger.info("Using loader_override for OntologyLoader")
+        else:
+            loader = OntologyLoader()
+            ontology_path = Path(settings.ontology_path)
+            if ontology_path.exists():
+                loader.load_from_path(ontology_path)
+                logger.info("Loaded ontology from %s", ontology_path)
 
-        ontology_path = Path(settings.ontology_path)
-        if ontology_path.exists():
-            loader.load_from_path(ontology_path)
-            logger.info("Loaded ontology from %s", ontology_path)
-
-        scene_path = Path(settings.scene_path)
-        if scene_path.exists():
-            loader.load_scene_from_path(scene_path)
-            logger.info("Loaded scene from %s", scene_path)
+            scene_path = Path(settings.scene_path)
+            if scene_path.exists():
+                loader.load_scene_from_path(scene_path)
+                logger.info("Loaded scene from %s", scene_path)
 
         if settings.llm_api_key:
             try:
@@ -145,12 +157,40 @@ def create_app(
         app.state.loader = loader
         logger.info("OntologyLoader initialized and stored in app.state")
 
-        yield
+        from datacloud_data_service.api.mcp_sdk_handler import set_loader_ref
+
+        set_loader_ref(lambda: app.state.loader)
+        async with _mcp_session_manager.run():
+            yield
 
     app = FastAPI(title="DataCloud Data Service", version="0.1.0", lifespan=_lifespan)
 
-    @app.get("/health")
-    async def health() -> dict:
+    from datacloud_data_service.config import get_settings
+    from fastapi.middleware.cors import CORSMiddleware
+
+    settings_for_cors = get_settings()
+    cors_val = settings_for_cors.cors_origins.strip()
+    if cors_val:
+        if cors_val == "*":
+            app.add_middleware(
+                CORSMiddleware,
+                allow_origins=["*"],
+                allow_credentials=False,
+                allow_methods=["GET", "POST", "OPTIONS"],
+                allow_headers=["*"],
+            )
+        else:
+            origins = [o.strip() for o in cors_val.split(",") if o.strip()]
+            if origins:
+                app.add_middleware(
+                    CORSMiddleware,
+                    allow_origins=origins,
+                    allow_credentials=True,
+                    allow_methods=["GET", "POST", "OPTIONS"],
+                    allow_headers=["*"],
+                )
+
+    async def _health_handler() -> dict:
         result: dict = {"status": "ok"}
         loader = getattr(app.state, "loader", None)
         if loader is None:
@@ -177,9 +217,15 @@ def create_app(
         result["datasources"] = datasources_status
         return result
 
-    from datacloud_data_service.api.mcp_handler import router as mcp_router
+    @app.get("/health")
+    async def health() -> dict:
+        return await _health_handler()
 
-    app.include_router(mcp_router, prefix="/api/v1")
+    @app.get("/api/v1/health")
+    async def health_v1() -> dict:
+        return await _health_handler()
+
+    app.mount("/api/v1/mcp", _mcp_asgi_app)
 
     from datacloud_data_service.api.query import router as query_router
 

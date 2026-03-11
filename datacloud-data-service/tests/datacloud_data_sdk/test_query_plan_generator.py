@@ -287,3 +287,45 @@ def test_serialize_payload_injects_term_hint_for_lookup_field() -> None:
     org_field = result["objects"][0]["fields"][0]
     assert org_field["termType"] == "lookup"
     assert "termHint" in org_field
+
+
+def test_serialize_payload_db_source_includes_db_type() -> None:
+    """DB 类 source 序列化后包含 dbType。"""
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[
+            ObjectViewSource(
+                source_id="SRC_CRM",
+                source_type="DB",
+                datasource_alias="ds_crm",
+                db_type="POSTGRESQL",
+            )
+        ],
+        objects=[],
+        relations=[],
+    )
+    result = _serialize_payload(payload)
+    sources = result.get("sources", [])
+    assert len(sources) == 1
+    assert sources[0].get("dbType") == "POSTGRESQL"
+
+
+def test_serialize_payload_api_source_omits_empty_db_type() -> None:
+    """API 类 source 的 db_type 为空时，序列化结果不包含 dbType。"""
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[
+            ObjectViewSource(
+                source_id="SRC_API",
+                source_type="API",
+                datasource_alias="api_ds",
+                db_type="",
+            )
+        ],
+        objects=[],
+        relations=[],
+    )
+    result = _serialize_payload(payload)
+    sources = result.get("sources", [])
+    assert len(sources) == 1
+    assert "dbType" not in sources[0]
