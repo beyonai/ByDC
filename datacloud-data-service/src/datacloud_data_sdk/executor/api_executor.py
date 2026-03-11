@@ -14,6 +14,8 @@ from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
 from datacloud_data_sdk.utils.curl_logger import log_curl
 from datacloud_data_sdk.exceptions import ApiExecutionError
 from datacloud_data_sdk.executor.models import ApiExecTask
+from datacloud_data_sdk.executor.response_mapping import extract_by_mapping_path
+from datacloud_data_sdk.executor.step_results import StepResults
 from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
 
 
@@ -36,11 +38,11 @@ class ApiExecutor:
         self,
         task: ApiExecTask,
         request_id: str,
-        step_results: dict[str, str] | None = None,
+        step_results: StepResults | None = None,
     ) -> ApiExecResult:
         params = dict(task.params)
         if task.bind_from_step and task.bind_key and step_results:
-            bind_path = step_results.get(task.bind_from_step, "")
+            bind_path = step_results.get_path(task.bind_from_step)
             if bind_path and Path(bind_path).exists():
                 values = self._read_bind_values(bind_path, task.bind_key)
                 if values:
@@ -59,9 +61,17 @@ class ApiExecutor:
             raise ApiExecutionError(task.function_code, resp.status_code, resp.text)
 
         data = resp.json()
-        records = self._extract_records(data)
-        csv_path = self._csv.get_path(request_id, task.output_ref)
-        row_count = ResultConverter.to_csv(records, csv_path)
+        if task.output_params:
+            records = extract_by_mapping_path(
+                data if isinstance(data, dict) else {},
+                task.output_params,
+            )
+            columns = [p[0] for p in task.output_params] if not records else None
+        else:
+            records = self._extract_records(data)
+            columns = None
+        csv_path = self._csv.get_path(request_id, task.csv_table_name or task.output_ref)
+        row_count = ResultConverter.to_csv(records, csv_path, columns=columns)
         return ApiExecResult(csv_path=str(csv_path), row_count=row_count)
 
     def _build_url(self, config: dict[str, Any]) -> str:

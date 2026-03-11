@@ -12,6 +12,12 @@
     "sales_customer",
     "po_users_kpi_summary",
     "sales_org_kpi_summary",
-    "sales_emp_attendance"
+    "sales_emp_attendance",
+    "sales_org_kpi_completion",
+    "po_users_kpi_completion",
+    "sales_expense_report",
+    "sales_bo_status_change",
+    "sales_meeting_note",
+    "todo_items"
   ]
 }

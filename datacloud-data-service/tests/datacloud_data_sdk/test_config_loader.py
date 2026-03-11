@@ -49,6 +49,23 @@ datasources:
     assert cfg.pool_max == 5
 
 
+def test_load_datasources_from_yaml_open_gauss_compat(tmp_path: Path) -> None:
+    """open_gauss_compat 字段解析。"""
+    yaml_path = tmp_path / "datasources.yaml"
+    yaml_path.write_text(
+        """
+datasources:
+  ds_crm:
+    alias: ds_crm
+    db_type: POSTGRESQL
+    jdbc_url: jdbc:postgresql://host:5432/db
+    open_gauss_compat: true
+"""
+    )
+    configs = load_datasources_from_yaml(yaml_path)
+    assert configs["ds_crm"].open_gauss_compat is True
+
+
 def test_load_datasources_from_yaml_env_substitution(tmp_path: Path) -> None:
     """${VAR} 环境变量替换。"""
     os.environ["TEST_DB_PASS"] = "env_secret"

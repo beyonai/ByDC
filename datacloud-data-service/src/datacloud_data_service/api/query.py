@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -11,6 +12,11 @@ from pydantic import BaseModel
 from datacloud_data_sdk.context import InvocationContext
 
 router = APIRouter()
+
+
+def _parse_include_plan() -> bool:
+    v = os.environ.get("DC_INCLUDE_PLAN_IN_RESPONSE", "true").lower()
+    return v not in ("false", "0")
 
 
 class QueryRequest(BaseModel):
@@ -48,10 +54,12 @@ async def query_endpoint(body: QueryRequest, request: Request) -> QueryResponse:
             from datacloud_data_service.tools.unified_query import UnifiedQuery
 
             query = UnifiedQuery(loader)
+            include_plan = _parse_include_plan()
             result = await query.execute(
                 question=body.question,
                 view_id=body.view_id,
                 object_ids=body.object_ids or None,
+                include_plan=include_plan,
             )
 
             if result.get("isError"):

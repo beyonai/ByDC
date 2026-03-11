@@ -3,6 +3,7 @@
 from datacloud_data_sdk.sql_executor.jdbc_parser import (
     parse_jdbc_url,
     parse_clickhouse_jdbc_url,
+    extract_current_schema,
 )
 
 
@@ -24,6 +25,22 @@ def test_parse_doris_url():
 def test_parse_postgresql_url():
     url = parse_jdbc_url("jdbc:postgresql://localhost:5432/analytics", "POSTGRESQL")
     assert url == "postgresql+asyncpg://localhost:5432/analytics"
+
+
+def test_parse_opengauss_url():
+    url = parse_jdbc_url("jdbc:opengauss://host:5432/db", "OPENGAUSS")
+    assert url == "opengauss+asyncpg://host:5432/db"
+    url2 = parse_jdbc_url("jdbc:postgresql://host:5432/db", "OPENGAUSS")
+    assert url2 == "opengauss+asyncpg://host:5432/db"
+
+
+def test_extract_current_schema():
+    jdbc = "jdbc:opengauss://host:5432/db?currentSchema=crm_demo"
+    assert extract_current_schema(jdbc) == "crm_demo"
+    jdbc2 = "jdbc:postgresql://host:5432/db?currentSchema=crm_demo"
+    assert extract_current_schema(jdbc2) == "crm_demo"
+    jdbc3 = "jdbc:postgresql://host:5432/db"
+    assert extract_current_schema(jdbc3) is None
 
 
 def test_parse_clickhouse_jdbc_url():
