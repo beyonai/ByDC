@@ -159,7 +159,9 @@ class View:
                         try:
                             plan_dict = {
                                 "steps": [asdict(s) for s in plan.steps],
-                                "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
+                                "aggregation": asdict(plan.aggregation)
+                                if plan.aggregation
+                                else None,
                             }
                             await observer.on_plan_validation_failed(
                                 request_id, result.errors, plan_dict
@@ -190,31 +192,23 @@ class View:
                 from datacloud_data_sdk.plan.term_resolver import TermResolver
 
                 term_resolver = TermResolver(config.term_loader)
-            tasks = ExecutionObjectConverter(term_resolver=term_resolver).convert(
-                plan, payload
-            )
+            tasks = ExecutionObjectConverter(term_resolver=term_resolver).convert(plan, payload)
             if observer:
                 try:
                     tasks_dict = []
                     for t in tasks:
                         tasks_dict.append(asdict(t))
                     agg_dict = asdict(plan.aggregation) if plan.aggregation else {}
-                    await observer.on_execution_tasks_ready(
-                        request_id, tasks_dict, agg_dict
-                    )
+                    await observer.on_execution_tasks_ready(request_id, tasks_dict, agg_dict)
                 except Exception:
                     pass
 
             ds_manager = (
-                DataSourceManager(config.datasource_configs)
-                if config.datasource_configs
-                else None
+                DataSourceManager(config.datasource_configs) if config.datasource_configs else None
             )
             sql_exec = SqlExecutor(ds_manager, config.csv_base_dir) if ds_manager else None
             api_exec = (
-                ApiExecutor(loader._functions, config.csv_base_dir)
-                if loader._functions
-                else None
+                ApiExecutor(loader._functions, config.csv_base_dir) if loader._functions else None
             )
             script_exec = ScriptExecutor(loader)
             kb_exec = (
@@ -250,16 +244,10 @@ class View:
                     records = await DirectAggregator().aggregate(plan.aggregation, step_results)
             else:
                 records = []
-            columns = (
-                plan.aggregation.columns
-                if plan.aggregation
-                else []
-            )
+            columns = plan.aggregation.columns if plan.aggregation else []
             if observer:
                 try:
-                    await observer.on_aggregation_completed(
-                        request_id, records, list(columns)
-                    )
+                    await observer.on_aggregation_completed(request_id, records, list(columns))
                 except Exception:
                     pass
 

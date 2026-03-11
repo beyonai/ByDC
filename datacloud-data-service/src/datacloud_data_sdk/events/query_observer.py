@@ -1,4 +1,5 @@
 """QueryObserver: 在 Object.query() 管线中发布事件用于可观测性。"""
+
 from __future__ import annotations
 
 import uuid
@@ -75,9 +76,7 @@ class QueryObserver:
         except Exception:
             pass
 
-    async def on_aggregation_completed(
-        self, request_id: str, records: list, columns: list
-    ) -> None:
+    async def on_aggregation_completed(self, request_id: str, records: list, columns: list) -> None:
         try:
             await self._bus.publish(
                 AggregationCompleted(
@@ -116,9 +115,7 @@ class QueryObserver:
         except Exception:
             pass
 
-    async def on_plan_rewritten(
-        self, request_id: str, rewritten_plan: dict
-    ) -> None:
+    async def on_plan_rewritten(self, request_id: str, rewritten_plan: dict) -> None:
         try:
             await self._bus.publish(
                 PlanRewritten(

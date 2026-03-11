@@ -1,4 +1,5 @@
 """ResultConverter: 查询结果 -> CSV 文件。"""
+
 from __future__ import annotations
 import csv
 from pathlib import Path

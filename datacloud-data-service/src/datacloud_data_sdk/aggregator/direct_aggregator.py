@@ -1,4 +1,5 @@
 """DirectAggregator: 直接返回 final step 的 CSV 结果。"""
+
 from __future__ import annotations
 import csv
 from pathlib import Path

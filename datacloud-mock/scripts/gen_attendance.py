@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """生成 2025-01-01 至 2026-03-03 全员考勤数据，含部分员工考勤异常。"""
+
 import csv
 import os
 import random
@@ -23,6 +24,7 @@ ANOMALIES = [
     ("迟到", "早退", False, False, True, True),
 ]
 # 异常类型索引：0=正常, 1=上午缺卡, 2=下午缺卡, 3=全天缺卡, 4=迟到, 5=早退, 6=迟到+早退
+
 
 def main():
     # 读取 common 下所有人：user_id, emp_no (user_number or user_code)
@@ -83,44 +85,71 @@ def main():
             else:
                 if a_early:
                     minute = random.randint(30, 75)
-                    a_time = f"{date_str} 16:{minute%60:02d}:00" if minute < 60 else f"{date_str} 17:{(minute-60):02d}:00"
+                    a_time = (
+                        f"{date_str} 16:{minute % 60:02d}:00"
+                        if minute < 60
+                        else f"{date_str} 17:{(minute - 60):02d}:00"
+                    )
                 else:
                     minute = random.randint(30, 75)
-                    a_time = f"{date_str} 17:{minute%60:02d}:00" if minute < 60 else f"{date_str} 18:{(minute-60):02d}:00"
+                    a_time = (
+                        f"{date_str} 17:{minute % 60:02d}:00"
+                        if minute < 60
+                        else f"{date_str} 18:{(minute - 60):02d}:00"
+                    )
             created = f_time if f_time else (a_time if a_time else f"{date_str} 09:00:00")
-            rows.append({
-                "id": str(rid),
-                "user_id": uid,
-                "emp_no": emp_no,
-                "attendance_date": date_str,
-                "bill_date": bill_year,
-                "forenoon_status": f_st,
-                "afternoon_status": a_st,
-                "forenoon_time": f_time,
-                "afternoon_time": a_time,
-                "created_by": "system",
-                "created_time": created,
-                "updated_by": "",
-                "updated_time": created,
-                "is_deleted": "0",
-                "forenoon_location": "公司" if f_time else "",
-                "afternoon_location": "公司" if a_time else "",
-            })
+            rows.append(
+                {
+                    "id": str(rid),
+                    "user_id": uid,
+                    "emp_no": emp_no,
+                    "attendance_date": date_str,
+                    "bill_date": bill_year,
+                    "forenoon_status": f_st,
+                    "afternoon_status": a_st,
+                    "forenoon_time": f_time,
+                    "afternoon_time": a_time,
+                    "created_by": "system",
+                    "created_time": created,
+                    "updated_by": "",
+                    "updated_time": created,
+                    "is_deleted": "0",
+                    "forenoon_location": "公司" if f_time else "",
+                    "afternoon_location": "公司" if a_time else "",
+                }
+            )
             rid += 1
 
     fieldnames = [
-        "id", "user_id", "emp_no", "attendance_date", "bill_date",
-        "forenoon_status", "afternoon_status", "forenoon_time", "afternoon_time",
-        "created_by", "created_time", "updated_by", "updated_time", "is_deleted",
-        "forenoon_location", "afternoon_location",
+        "id",
+        "user_id",
+        "emp_no",
+        "attendance_date",
+        "bill_date",
+        "forenoon_status",
+        "afternoon_status",
+        "forenoon_time",
+        "afternoon_time",
+        "created_by",
+        "created_time",
+        "updated_by",
+        "updated_time",
+        "is_deleted",
+        "forenoon_location",
+        "afternoon_location",
     ]
     os.makedirs(os.path.dirname(ATTENDANCE_PATH), exist_ok=True)
     with open(ATTENDANCE_PATH, "w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
         w.writeheader()
         w.writerows(rows)
-    anomaly_count = sum(1 for r in rows if r["forenoon_status"] != "正常" or r["afternoon_status"] != "正常")
-    print(f"Wrote {len(rows)} attendance rows ({len(employees)} employees, {len(workdays)} workdays), {anomaly_count} with anomaly.")
+    anomaly_count = sum(
+        1 for r in rows if r["forenoon_status"] != "正常" or r["afternoon_status"] != "正常"
+    )
+    print(
+        f"Wrote {len(rows)} attendance rows ({len(employees)} employees, {len(workdays)} workdays), {anomaly_count} with anomaly."
+    )
+
 
 if __name__ == "__main__":
     random.seed(42)
