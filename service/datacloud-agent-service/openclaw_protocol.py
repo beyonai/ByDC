@@ -1,22 +1,23 @@
 """OpenClaw WebSocket Protocol Handler.
 
 Implements the OpenClaw Gateway protocol for WebSocket communication.
-This allows the OpenClaw UI to communicate with datacloud-agent-service.
+This allows the OpenClaw UI to communicate with the gateway service.
 """
 
 import asyncio
 import logging
 import os
 import uuid
-from typing import Any
 
 from datacloud_agent import GatewayClient
 from datacloud_agent.core import AgentConfig
 
+from config import settings
+
 logger = logging.getLogger(__name__)
 
-# Check if we have API key for real LLM calls
-_HAS_API_KEY = bool(os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY"))
+# Check if we have API key for real LLM calls (check env var directly)
+_HAS_API_KEY = bool(os.getenv("OPENAI_API_KEY") or settings.openai_api_key)
 
 
 def ensure_default_agent(client: GatewayClient) -> None:
@@ -33,7 +34,6 @@ def ensure_default_agent(client: GatewayClient) -> None:
 
     # Create and register a default agent
     try:
-        # Use qwen model which is available in the lab environment
         config = AgentConfig(
             agent_id="default",
             provider="openai",
@@ -77,7 +77,8 @@ class OpenClawProtocolHandler:
 
         try:
             # Route to appropriate handler
-            handler = getattr(self, f"handle_{method.replace('.', '_')}", None)
+            method_name = method.replace(".", "_") if method else ""
+            handler = getattr(self, f"handle_{method_name}", None) if method else None
             if handler:
                 result = await handler(params, send_callback, frame_id)
                 await send_callback({"type": "res", "id": frame_id, "ok": True, "payload": result})
@@ -96,7 +97,7 @@ class OpenClawProtocolHandler:
 
     async def handle_sessions_list(self, params: dict, send_callback, frame_id: str) -> list:
         """List all chat sessions."""
-        # For now, return empty list or implement session storage
+        # Return empty list - sessions are managed per-connection
         return []
 
     async def handle_sessions_create(self, params: dict, send_callback, frame_id: str) -> dict:
@@ -113,7 +114,7 @@ class OpenClawProtocolHandler:
 
     async def handle_chat_history(self, params: dict, send_callback, frame_id: str) -> list:
         """Get chat history for a session."""
-        # Return empty list - messages are stored client-side for now
+        # Return empty list - messages are stored client-side
         return []
 
     async def handle_chat_send(self, params: dict, send_callback, frame_id: str) -> dict:
@@ -136,7 +137,7 @@ class OpenClawProtocolHandler:
                 self._real_stream_response(effective_session_id, message, send_callback)
             )
 
-        return {"sessionId": session_id, "status": "streaming"}
+        return {"sessionId": effective_session_id, "status": "streaming"}
 
     async def _mock_stream_response(self, session_id: str, message: str, send_callback) -> None:
         """Send a mock response when no API key is available."""
@@ -146,13 +147,13 @@ class OpenClawProtocolHandler:
 
             # Send mock response chunks
             mock_response = (
-                f"**你好！** 我是 DataCloud Agent。\n\n"
+                f"**你好！** 我是 OpenClaw Agent。\n\n"
                 f'你发送的消息是："{message}"\n\n'
                 f"> **注意**：当前后端运行在模拟模式下，因为没有配置 LLM API key。\n\n"
-                f"要启用真实 AI 响应，请设置以下环境变量之一：\n"
+                f"要启用真实 AI 响应，请设置以下环境变量：\n"
                 f"- `OPENAI_API_KEY` - 用于 OpenAI 兼容的 API\n"
-                f"- `ANTHROPIC_API_KEY` - 用于 Anthropic Claude\n\n"
-                f"前后端连接已成功建立！✅"
+                f"- `OPENAI_BASE_URL` - API 基础 URL（可选）\n\n"
+                f"前后端连接已成功建立！"
             )
 
             # Stream response in chunks
@@ -197,8 +198,7 @@ class OpenClawProtocolHandler:
         try:
             logger.info(f"Starting real stream response for session {session_id}")
 
-            # Use chat method instead of chat_stream to get full response
-            # Note: chat_stream has a bug where it looks for 'message' field but result has 'response' field
+            # Use chat method to get full response
             response = await self.client.chat(
                 message=message, session_id=session_id, agent_id="default", stream=False
             )
@@ -251,4 +251,4 @@ class OpenClawProtocolHandler:
 
     async def handle_health(self, params: dict, send_callback, frame_id: str) -> dict:
         """Health check."""
-        return {"status": "healthy", "service": "datacloud-agent-service"}
+        return {"status": "healthy", "service": settings.service_name}
