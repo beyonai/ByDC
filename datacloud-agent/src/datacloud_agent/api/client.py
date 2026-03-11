@@ -362,9 +362,10 @@ class GatewayClient:
             if session:
                 return session
 
-        # Create new session
+        # Create new session with the provided session_id (if any)
         session = await self._session_manager.create_session(
             tenant_ctx=self._tenant_ctx,
             agent_id=effective_agent_id,
+            session_id=session_id,
         )
         return session

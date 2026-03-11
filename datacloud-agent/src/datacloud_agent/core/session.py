@@ -123,6 +123,7 @@ class SessionManager:
         tenant_ctx: TenantContext,
         agent_id: str,
         metadata: dict[str, Any] | None = None,
+        session_id: str | None = None,
     ) -> Session:
         """Create a new session for the given tenant and agent.
 
@@ -130,11 +131,12 @@ class SessionManager:
             tenant_ctx: Tenant context.
             agent_id: Agent identifier.
             metadata: Optional extra data for the session.
+            session_id: Optional session ID. If not provided, a new UUID will be generated.
 
         Returns:
             The created Session.
         """
-        session_id = str(uuid.uuid4())
+        session_id = session_id or str(uuid.uuid4())
         session_key = f"tenant:{tenant_ctx.tenant_id}:agent:{agent_id}:{session_id}"
         now = datetime.now(UTC)
 
