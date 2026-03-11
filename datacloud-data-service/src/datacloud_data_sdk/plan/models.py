@@ -11,6 +11,7 @@ class ObjectViewSource:
     source_id: str
     source_type: str  # DB / API / KNOWLEDGE_BASE
     datasource_alias: str = ""
+    db_type: str = ""  # 仅 DB 类有值：POSTGRESQL / MYSQL / OPENGAUSS / SQLITE / CLICKHOUSE
 
 
 @dataclass

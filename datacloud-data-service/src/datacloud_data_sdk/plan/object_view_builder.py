@@ -42,10 +42,14 @@ class ObjectViewBuilder:
             cls = self._loader.get_ontology_class(oid)
             source_id = f"SRC_{(cls.datasource_alias or cls.source_type).upper()}"
             if source_id not in sources:
+                db_type = ""
+                if cls.source_type == "DB" and cls.source_config:
+                    db_type = cls.source_config.get("db_type", "SQLITE")
                 sources[source_id] = ObjectViewSource(
                     source_id=source_id,
                     source_type=cls.source_type,
                     datasource_alias=cls.datasource_alias or "",
+                    db_type=db_type,
                 )
             datasource_alias = cls.datasource_alias or ""
             fields = [
