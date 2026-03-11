@@ -41,7 +41,7 @@ cd ui/openclaw
 
 ```bash
 # 在另一个终端
-cd service/datacloud-agent-service
+cd datacloud-apps/datacloud-agent-service
 ./scripts/start.sh
 ```
 
