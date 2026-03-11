@@ -1,4 +1,5 @@
 """事件处理链注册：将查询管线各阶段事件串联到 EventBus。"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable
@@ -52,6 +53,7 @@ def register_query_handlers(
         for event_cls in all_event_types:
             tracing.subscribe(event_cls, _async_noop, "query")
     elif on_event:
+
         async def _async_on_event(event: Any) -> None:
             on_event(event)
 

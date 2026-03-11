@@ -66,14 +66,19 @@ print(f"  工具列表: {[tool.name for tool in [know, query]]}")
 # 测试1: 直接明确的工具调用指令
 print("\n=== 测试1: 直接明确的工具调用指令 ===")
 result = agent.invoke(
-    {"messages": [{"role": "user", "content": "我需要测试 know 工具，请调用工具，query是‘这是一个测试！’"}]}
+    {
+        "messages": [
+            {"role": "user", "content": "我需要测试 know 工具，请调用工具，query是‘这是一个测试！’"}
+        ]
+    }
 )
 
 aimessage = [mes for mes in result["messages"] if isinstance(mes, AIMessage)]
-tool_calls = [
-    getattr(mes, "tool_calls", []) for mes in aimessage]
+tool_calls = [getattr(mes, "tool_calls", []) for mes in aimessage]
 if tool_calls:
-    print(f"✓ 工具调用发生: {sum([len(parallel_tool_call) for parallel_tool_call in tool_calls])} 次")
+    print(
+        f"✓ 工具调用发生: {sum([len(parallel_tool_call) for parallel_tool_call in tool_calls])} 次"
+    )
     for parallel_tool_call in tool_calls:
         for tc in parallel_tool_call:
             print(f"  工具名称: {tc.get('name', 'unknown')}, 参数: {tc.get('args', {})}")
@@ -90,10 +95,11 @@ print("\n=== 测试2: 自然语言查询（系统提示要求使用工具）==="
 result2 = agent.invoke({"messages": [{"role": "user", "content": "告诉我关于 Python 的知识"}]})
 
 aimessage2 = [mes for mes in result2["messages"] if isinstance(mes, AIMessage)]
-tool_calls2 = [
-    getattr(mes, "tool_calls", []) for mes in aimessage2]
+tool_calls2 = [getattr(mes, "tool_calls", []) for mes in aimessage2]
 if tool_calls2:
-    print(f"✓ 工具调用发生: {sum([len(parallel_tool_call) for parallel_tool_call in tool_calls2])} 次")
+    print(
+        f"✓ 工具调用发生: {sum([len(parallel_tool_call) for parallel_tool_call in tool_calls2])} 次"
+    )
     for parallel_tool_call in tool_calls2:
         for tc in parallel_tool_call:
             print(f"  工具名称: {tc.get('name', 'unknown')}, 参数: {tc.get('args', {})}")
@@ -112,10 +118,11 @@ result3 = agent.invoke(
 )
 
 aimessage3 = [mes for mes in result3["messages"] if isinstance(mes, AIMessage)]
-tool_calls3 = [
-    getattr(mes, "tool_calls", []) for mes in aimessage3]
+tool_calls3 = [getattr(mes, "tool_calls", []) for mes in aimessage3]
 if tool_calls3:
-    print(f"✓ 工具调用发生: {sum([len(parallel_tool_call) for parallel_tool_call in tool_calls3])} 次")
+    print(
+        f"✓ 工具调用发生: {sum([len(parallel_tool_call) for parallel_tool_call in tool_calls3])} 次"
+    )
     for parallel_tool_call in tool_calls3:
         for tc in parallel_tool_call:
             print(f"  工具名称: {tc.get('name', 'unknown')}, 参数: {tc.get('args', {})}")

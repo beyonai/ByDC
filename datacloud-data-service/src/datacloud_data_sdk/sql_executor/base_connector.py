@@ -1,4 +1,5 @@
 """数据源连接器抽象基类。"""
+
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
@@ -11,16 +12,15 @@ class BaseSourceConnector(ABC):
 
     @classmethod
     @abstractmethod
-    def supported_type(cls) -> str:
-        ...
+    def supported_type(cls) -> str: ...
 
     @abstractmethod
-    async def execute(self, sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-        ...
+    async def execute(
+        self, sql: str, params: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]: ...
 
     @abstractmethod
-    async def test_connection(self) -> bool:
-        ...
+    async def test_connection(self) -> bool: ...
 
     async def close(self) -> None:
         pass

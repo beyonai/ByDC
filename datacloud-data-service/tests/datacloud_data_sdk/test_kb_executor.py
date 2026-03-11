@@ -89,9 +89,7 @@ async def test_kb_executor_simple_content_when_no_metadata() -> None:
         task = KbExecTask(datasource_alias="kb_docs", query="test", output_ref="out")
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "results": [{"content": "简单内容"}]
-        }
+        mock_resp.json.return_value = {"results": [{"content": "简单内容"}]}
 
         with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp):
             executor = KbExecutor(

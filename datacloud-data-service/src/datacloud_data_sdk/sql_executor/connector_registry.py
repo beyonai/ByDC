@@ -1,4 +1,5 @@
 """连接器注册表：按 db_type 查找连接器类。"""
+
 from __future__ import annotations
 from typing import Type
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError

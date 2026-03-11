@@ -4,6 +4,7 @@
 从 objects_registry.json 共享库中，按场景声明的对象编码裁剪，
 输出4个自包含的 OBJECT 级场景 JSON 文件。
 """
+
 import json
 import os
 from datetime import datetime, timezone
@@ -86,9 +87,7 @@ def extract_scene(registry: dict, scene_key: str, scene_config: dict) -> dict:
     object_codes = set(scene_config["object_codes"])
 
     # 过滤 objects（保留完整属性和动作）
-    scene_objects = [
-        o for o in registry["objects"] if o["object_code"] in object_codes
-    ]
+    scene_objects = [o for o in registry["objects"] if o["object_code"] in object_codes]
 
     # 收集场景内 objects 动作引用的所有 function_codes
     needed_function_codes: set[str] = set()
@@ -101,17 +100,14 @@ def extract_scene(registry: dict, scene_key: str, scene_config: dict) -> dict:
 
     # 过滤 functions（只包含被引用的）
     scene_functions = [
-        f
-        for f in registry["functions"]
-        if f["function_code"] in needed_function_codes
+        f for f in registry["functions"] if f["function_code"] in needed_function_codes
     ]
 
     # 过滤 relations（source 和 target 都在场景内）
     scene_relations = [
         r
         for r in registry["relations"]
-        if r["source_object_ref"] in object_codes
-        and r["target_object_ref"] in object_codes
+        if r["source_object_ref"] in object_codes and r["target_object_ref"] in object_codes
     ]
 
     return {

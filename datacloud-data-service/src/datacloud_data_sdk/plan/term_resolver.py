@@ -1,4 +1,5 @@
 """TermResolver: 术语标签/名称 → 标准 code 转换。"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -14,9 +15,7 @@ class TermResolver:
     def __init__(self, term_loader: TermLoader | None = None) -> None:
         self._term_loader = term_loader
 
-    def resolve(
-        self, action: OntologyAction, params: dict[str, Any]
-    ) -> dict[str, Any]:
+    def resolve(self, action: OntologyAction, params: dict[str, Any]) -> dict[str, Any]:
         """将参数中的标签/别名值解析为标准 code（供 OntologyAction 使用）。"""
         if not self._term_loader:
             return params
@@ -31,7 +30,9 @@ class TermResolver:
                         p.term_set,
                         value,
                         dataset_id=p.dataset_id,
-                        term_type_code=p.term_set.split(".")[0] if "." in (p.term_set or "") else None,
+                        term_type_code=p.term_set.split(".")[0]
+                        if "." in (p.term_set or "")
+                        else None,
                         keyword=kw,
                     )
                 except ValueError:
@@ -57,7 +58,9 @@ class TermResolver:
                         p.term_set,
                         value,
                         dataset_id=p.dataset_id,
-                        term_type_code=p.term_set.split(".")[0] if "." in (p.term_set or "") else None,
+                        term_type_code=p.term_set.split(".")[0]
+                        if "." in (p.term_set or "")
+                        else None,
                         keyword=kw,
                     )
                 except ValueError:

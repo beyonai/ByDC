@@ -1,4 +1,5 @@
 """测试 config_loader 的 YAML 加载与环境变量替换。"""
+
 from __future__ import annotations
 
 import os

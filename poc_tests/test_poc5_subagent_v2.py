@@ -25,6 +25,7 @@ def get_user_data(query: str) -> str:
     """Mock data for the current user."""
     return f"Data for user user-123: {query}"
 
+
 # 配置子 Agent
 subagents = [
     {
@@ -37,7 +38,7 @@ subagents = [
 print(f"✓ 子 Agent 配置: {subagents}")
 
 agent = create_deep_agent(
-    model=model, 
+    model=model,
     subagents=subagents,
 )
 print("✓ Agent 创建成功")

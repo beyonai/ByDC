@@ -1,4 +1,5 @@
 """DataPermissionRewriter: 注入数据权限条件到 SQL。"""
+
 from __future__ import annotations
 
 import re
@@ -17,9 +18,7 @@ class DataPermissionRewriter:
         if not context.tenant_id:
             return plan
 
-        rewritten_steps = [
-            self._rewrite_step(step, context) for step in plan.steps
-        ]
+        rewritten_steps = [self._rewrite_step(step, context) for step in plan.steps]
         return QueryExecutionPlan(
             question=plan.question,
             can_answer=plan.can_answer,
@@ -56,22 +55,22 @@ class DataPermissionRewriter:
         已有 WHERE → 追加 AND tenant_id = 'xxx'。
         无 WHERE → 在 GROUP BY/ORDER BY/LIMIT 前插入。
         """
-        if not re.search(r'\bFROM\b', sql, re.IGNORECASE):
+        if not re.search(r"\bFROM\b", sql, re.IGNORECASE):
             return sql
 
         condition = f"tenant_id = '{tenant_id}'"
 
-        if re.search(r'\bWHERE\b', sql, re.IGNORECASE):
+        if re.search(r"\bWHERE\b", sql, re.IGNORECASE):
             sql = re.sub(
-                r'(\bWHERE\b\s+)',
-                rf'\g<1>{condition} AND ',
+                r"(\bWHERE\b\s+)",
+                rf"\g<1>{condition} AND ",
                 sql,
                 count=1,
                 flags=re.IGNORECASE,
             )
         else:
             match = re.search(
-                r'\b(GROUP\s+BY|ORDER\s+BY|LIMIT|HAVING)\b',
+                r"\b(GROUP\s+BY|ORDER\s+BY|LIMIT|HAVING)\b",
                 sql,
                 re.IGNORECASE,
             )

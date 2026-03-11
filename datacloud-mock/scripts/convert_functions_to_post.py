@@ -3,6 +3,7 @@
 将 objects_registry.json 中所有 function 的 API 统一为 POST，
 path/query 参数迁移至 requestBody。
 """
+
 import json
 import os
 import re
@@ -60,9 +61,7 @@ def convert_operation(operation: dict, old_path: str) -> tuple[dict, str]:
     # 构建 requestBody schema
     content = body.get("content", {})
     json_content = content.get("application/json", {})
-    schema = json_content.get(
-        "schema", {"type": "object", "properties": {}, "required": []}
-    )
+    schema = json_content.get("schema", {"type": "object", "properties": {}, "required": []})
     props = dict(schema.get("properties", {}))
     required = list(schema.get("required", []))
 

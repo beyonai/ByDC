@@ -16,7 +16,9 @@ class Object:
     通过 OntologyLoader.get_object() 获取实例。
     """
 
-    def __init__(self, ontology_class: OntologyClass, relations: list[Relation], loader: Any = None) -> None:
+    def __init__(
+        self, ontology_class: OntologyClass, relations: list[Relation], loader: Any = None
+    ) -> None:
         self._cls = ontology_class
         self._relations = relations
         self._loader = loader
@@ -101,8 +103,10 @@ class Object:
         from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
         from datacloud_data_sdk.exceptions import PlanValidationError, CannotAnswerError
 
-        if not hasattr(self, '_loader') or self._loader is None:
-            raise NotImplementedError("Object.query requires OntologyLoader with configured plan_generator")
+        if not hasattr(self, "_loader") or self._loader is None:
+            raise NotImplementedError(
+                "Object.query requires OntologyLoader with configured plan_generator"
+            )
 
         loader = self._loader
         config = loader._config
@@ -188,7 +192,9 @@ class Object:
                         try:
                             plan_dict = {
                                 "steps": [asdict(s) for s in plan.steps],
-                                "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
+                                "aggregation": asdict(plan.aggregation)
+                                if plan.aggregation
+                                else None,
                             }
                             await observer.on_plan_validation_failed(
                                 request_id, result.errors, plan_dict
@@ -219,16 +225,12 @@ class Object:
                 from datacloud_data_sdk.plan.term_resolver import TermResolver
 
                 term_resolver = TermResolver(config.term_loader)
-            tasks = ExecutionObjectConverter(term_resolver=term_resolver).convert(
-                plan, payload
-            )
+            tasks = ExecutionObjectConverter(term_resolver=term_resolver).convert(plan, payload)
             if observer:
                 try:
                     tasks_dict = [asdict(t) for t in tasks]
                     agg_dict = asdict(plan.aggregation) if plan.aggregation else {}
-                    await observer.on_execution_tasks_ready(
-                        request_id, tasks_dict, agg_dict
-                    )
+                    await observer.on_execution_tasks_ready(request_id, tasks_dict, agg_dict)
                 except Exception:
                     pass
 
@@ -237,9 +239,13 @@ class Object:
             from datacloud_data_sdk.executor.api_executor import ApiExecutor
             from datacloud_data_sdk.executor.script_executor import ScriptExecutor
 
-            ds_manager = DataSourceManager(config.datasource_configs) if config.datasource_configs else None
+            ds_manager = (
+                DataSourceManager(config.datasource_configs) if config.datasource_configs else None
+            )
             sql_exec = SqlExecutor(ds_manager, config.csv_base_dir) if ds_manager else None
-            api_exec = ApiExecutor(loader._functions, config.csv_base_dir) if loader._functions else None
+            api_exec = (
+                ApiExecutor(loader._functions, config.csv_base_dir) if loader._functions else None
+            )
             script_exec = ScriptExecutor(loader)
             kb_exec = (
                 KbExecutor(config.kb_source_configs, config.csv_base_dir)
@@ -279,9 +285,7 @@ class Object:
             columns = plan.aggregation.columns if plan.aggregation else []
             if observer:
                 try:
-                    await observer.on_aggregation_completed(
-                        request_id, records, columns
-                    )
+                    await observer.on_aggregation_completed(request_id, records, columns)
                 except Exception:
                     pass
 
@@ -295,9 +299,7 @@ class Object:
         finally:
             csv_manager.cleanup(request_id)
 
-    async def invoke_action(
-        self, action_code: str, params: dict[str, object]
-    ) -> dict[str, object]:
+    async def invoke_action(self, action_code: str, params: dict[str, object]) -> dict[str, object]:
         """执行动作（执行层实现后补全）。"""
         action = self._find_action(action_code)
         return await Action(action, loader=self._loader).execute(params)

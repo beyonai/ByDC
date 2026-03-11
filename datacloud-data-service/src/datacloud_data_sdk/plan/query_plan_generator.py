@@ -1,4 +1,5 @@
 """QueryPlanGenerator: LLM 驱动的查询计划生成。"""
+
 from __future__ import annotations
 
 import json
@@ -45,9 +46,7 @@ def camel_to_snake_keys(
             if preserve_children and new_k in preserve_children and isinstance(v, dict):
                 result[new_k] = v
             else:
-                result[new_k] = camel_to_snake_keys(
-                    v, preserve_children=preserve_children
-                )
+                result[new_k] = camel_to_snake_keys(v, preserve_children=preserve_children)
         return result
     if isinstance(d, list):
         return [camel_to_snake_keys(i, preserve_children=preserve_children) for i in d]
@@ -140,13 +139,8 @@ def _serialize_payload(
             params = fn.get("params", [])
             in_params = [p for p in params if p.get("direction") == "IN"]
             out_params = [p for p in params if p.get("direction") == "OUT"]
-            in_serialized = [
-                _serialize_param(p, term_loader) for p in in_params
-            ]
-            out_serialized = [
-                {k: v for k, v in p.items() if v is not None}
-                for p in out_params
-            ]
+            in_serialized = [_serialize_param(p, term_loader) for p in in_params]
+            out_serialized = [{k: v for k, v in p.items() if v is not None} for p in out_params]
             fn["input_params"] = in_serialized
             fn["output_params"] = out_serialized
             del fn["params"]
@@ -195,8 +189,7 @@ class BasePlanGenerator(ABC):
         question: str,
         validation_errors: list[str] | None = None,
         term_loader: Any = None,
-    ) -> QueryExecutionPlan:
-        ...
+    ) -> QueryExecutionPlan: ...
 
 
 class MockPlanGenerator(BasePlanGenerator):
@@ -277,9 +270,7 @@ class LangGraphPlanGenerator(BasePlanGenerator):
             response = await llm.ainvoke(messages)
             content = response.content if hasattr(response, "content") else str(response)
             plan_dict = self._parse_json_response(str(content))
-            data = camel_to_snake_keys(
-                plan_dict, preserve_children={"params", "tags"}
-            )
+            data = camel_to_snake_keys(plan_dict, preserve_children={"params", "tags"})
             return _parse_plan(data, question)  # type: ignore[arg-type]
         except PlanGenerationError:
             raise
@@ -322,7 +313,9 @@ class LangGraphPlanGenerator(BasePlanGenerator):
         try:
             return json.loads(content)
         except json.JSONDecodeError as e:
-            raise PlanGenerationError("", f"Failed to parse LLM JSON response: {e}\nContent: {content[:500]}")
+            raise PlanGenerationError(
+                "", f"Failed to parse LLM JSON response: {e}\nContent: {content[:500]}"
+            )
 
 
 def _parse_plan(data: dict[str, Any], question: str = "") -> QueryExecutionPlan:

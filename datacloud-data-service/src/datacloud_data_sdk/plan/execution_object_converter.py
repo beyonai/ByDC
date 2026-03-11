@@ -1,4 +1,5 @@
 """ExecutionObjectConverter: PlanStep -> ExecTask 对象。"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -50,9 +51,7 @@ class ExecutionObjectConverter:
                 if fn:
                     in_params = [p for p in fn.params if p.direction == "IN"]
                     if self._term_resolver and in_params:
-                        params = self._term_resolver.resolve_params(
-                            step.params, in_params
-                        )
+                        params = self._term_resolver.resolve_params(step.params, in_params)
                     params = map_to_physical(params, in_params)
             return ApiExecTask(
                 function_code=step.function_id,
