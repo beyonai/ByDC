@@ -1,12 +1,11 @@
 """Tests for OpenClaw protocol handler.
 
 Tests the WebSocket protocol handler that enables communication between
-datacloud-agent-service and OpenClaw UI.
+OpenClaw Gateway Service and OpenClaw UI.
 """
 
 import asyncio
 import json
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -333,4 +332,4 @@ class TestOpenClawProtocolIntegration:
             assert response["type"] == "res"
             assert response["ok"] is True
             assert response["payload"]["status"] == "healthy"
-            assert response["payload"]["service"] == "datacloud-agent-service"
+            assert response["payload"]["service"] == "openclaw-gateway-service"
