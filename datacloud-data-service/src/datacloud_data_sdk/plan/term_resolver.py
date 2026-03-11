@@ -5,7 +5,7 @@ from typing import Any
 
 from datacloud_data_sdk.ontology.models import OntologyAction
 from datacloud_data_sdk.ontology.term_loader import TermLoader
-from datacloud_data_sdk.plan.models import ObjectViewFunctionParam
+from datacloud_data_sdk.plan.models import ObjectViewField, ObjectViewFunctionParam
 
 
 class TermResolver:
@@ -13,6 +13,11 @@ class TermResolver:
 
     def __init__(self, term_loader: TermLoader | None = None) -> None:
         self._term_loader = term_loader
+
+    @property
+    def term_loader(self) -> TermLoader | None:
+        """术语加载器，供 sql_term_resolver 等使用。"""
+        return self._term_loader
 
     def resolve(
         self, action: OntologyAction, params: dict[str, Any]
@@ -63,3 +68,26 @@ class TermResolver:
                 except ValueError:
                     pass
         return resolved
+
+    def resolve_fields(
+        self,
+        values: dict[str, Any],
+        field_specs: list[ObjectViewField],
+    ) -> dict[str, Any]:
+        """对含 term_set 的 field 做名称/标签→code 解析（供 KB tags 等使用）。"""
+        if not self._term_loader:
+            return values
+
+        param_specs = [
+            ObjectViewFunctionParam(
+                param_code=f.name,
+                param_name=f.description,
+                param_type=f.type,
+                direction="IN",
+                term_set=f.term_set,
+                term_type=f.term_type,
+                dataset_id=f.dataset_id,
+            )
+            for f in field_specs
+        ]
+        return self.resolve_params(values, param_specs)

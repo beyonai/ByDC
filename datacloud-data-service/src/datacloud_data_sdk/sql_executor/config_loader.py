@@ -46,6 +46,8 @@ def _dict_to_config(alias: str, d: dict) -> DataSourceConfig:
         password=str(d.get("password", "")),
         pool_min=int(d.get("pool_min", 1)),
         pool_max=int(d.get("pool_max", 5)),
+        pool_timeout=float(d.get("pool_timeout", 30.0)),
+        open_gauss_compat=bool(d.get("open_gauss_compat", False)),
     )
 
 

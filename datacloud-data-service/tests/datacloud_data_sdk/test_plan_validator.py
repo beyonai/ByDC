@@ -1,4 +1,5 @@
 from datacloud_data_sdk.plan.models import (
+    ObjectViewAction,
     ObjectViewField,
     ObjectViewFunction,
     ObjectViewFunctionParam,
@@ -145,6 +146,30 @@ def test_sql_field_ref_valid_passes() -> None:
     assert result.valid
 
 
+def test_api_step_missing_object_id_fails() -> None:
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[ObjectViewSource(source_id="SRC_API", source_type="API")],
+        objects=[
+            ObjectViewObject(
+                object_id="obj1", object_name="测试对象", source_id="SRC_API",
+                fields=[], functions=[], actions=[ObjectViewAction(action_code="fn_real", implementation_type="API")],
+            )
+        ],
+    )
+    plan = QueryExecutionPlan(
+        question="test", can_answer=True,
+        steps=[
+            PlanStep(step_id="s1", type="API", source_id="SRC_API",
+                     function_id="fn_real", output_ref="out")
+        ],
+        aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
+    )
+    result = PlanValidator().validate(plan, payload)
+    assert not result.valid
+    assert any("object_id required" in e for e in result.errors)
+
+
 def test_api_step_unknown_function_id_fails() -> None:
     payload = ObjectViewPayload(
         view_id="v1",
@@ -154,6 +179,7 @@ def test_api_step_unknown_function_id_fails() -> None:
                 object_id="obj1", object_name="测试对象", source_id="SRC_API",
                 fields=[ObjectViewField(name="id", type="string")],
                 functions=[ObjectViewFunction(function_code="fn_real")],
+                actions=[ObjectViewAction(action_code="fn_real", implementation_type="API")],
             )
         ],
     )
@@ -161,7 +187,7 @@ def test_api_step_unknown_function_id_fails() -> None:
         question="test", can_answer=True,
         steps=[
             PlanStep(step_id="s1", type="API", source_id="SRC_API",
-                     function_id="fn_nonexistent", output_ref="out")
+                     object_id="obj1", function_id="fn_nonexistent", output_ref="out")
         ],
         aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
     )
@@ -192,6 +218,21 @@ def test_api_step_missing_required_param_fails() -> None:
                         ],
                     )
                 ],
+                actions=[
+                    ObjectViewAction(
+                        action_code="fn_real",
+                        implementation_type="API",
+                        input_params=[
+                            ObjectViewFunctionParam(
+                                param_code="userIds",
+                                param_name="用户ID列表",
+                                param_type="ARRAY",
+                                direction="IN",
+                                required=True,
+                            )
+                        ],
+                    )
+                ],
             )
         ],
     )
@@ -199,7 +240,7 @@ def test_api_step_missing_required_param_fails() -> None:
         question="test", can_answer=True,
         steps=[
             PlanStep(step_id="s1", type="API", source_id="SRC_API",
-                     function_id="fn_real", params={}, output_ref="out")
+                     object_id="obj1", function_id="fn_real", params={}, output_ref="out")
         ],
         aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
     )
@@ -230,6 +271,21 @@ def test_api_step_unknown_param_fails() -> None:
                         ],
                     )
                 ],
+                actions=[
+                    ObjectViewAction(
+                        action_code="fn_real",
+                        implementation_type="API",
+                        input_params=[
+                            ObjectViewFunctionParam(
+                                param_code="userIds",
+                                param_name="用户ID列表",
+                                param_type="ARRAY",
+                                direction="IN",
+                                required=True,
+                            )
+                        ],
+                    )
+                ],
             )
         ],
     )
@@ -237,7 +293,8 @@ def test_api_step_unknown_param_fails() -> None:
         question="test", can_answer=True,
         steps=[
             PlanStep(step_id="s1", type="API", source_id="SRC_API",
-                     function_id="fn_real", params={"userIds": ["x"], "invalid_key": 1},
+                     object_id="obj1", function_id="fn_real",
+                     params={"userIds": ["x"], "invalid_key": 1},
                      output_ref="out")
         ],
         aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
@@ -269,6 +326,21 @@ def test_api_step_valid_params_passes() -> None:
                         ],
                     )
                 ],
+                actions=[
+                    ObjectViewAction(
+                        action_code="fn_real",
+                        implementation_type="API",
+                        input_params=[
+                            ObjectViewFunctionParam(
+                                param_code="userIds",
+                                param_name="用户ID列表",
+                                param_type="ARRAY",
+                                direction="IN",
+                                required=True,
+                            )
+                        ],
+                    )
+                ],
             )
         ],
     )
@@ -276,10 +348,52 @@ def test_api_step_valid_params_passes() -> None:
         question="test", can_answer=True,
         steps=[
             PlanStep(step_id="s1", type="API", source_id="SRC_API",
-                     function_id="fn_real", params={"userIds": ["u1"]},
+                     object_id="obj1", function_id="fn_real", params={"userIds": ["u1"]},
                      output_ref="out")
         ],
         aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
     )
     result = PlanValidator().validate(plan, payload)
     assert result.valid
+
+
+def test_sql_field_ref_source_column_passes() -> None:
+    """SQL 使用 source_column（物理列名）时，校验通过。"""
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1")],
+        objects=[
+            ObjectViewObject(
+                object_id="obj1",
+                object_name="KPI对象",
+                source_id="SRC_DB",
+                table="kpi_table",
+                fields=[
+                    ObjectViewField(name="empNo", type="string", source_column="emp_no"),
+                    ObjectViewField(
+                        name="completedContractAmount",
+                        type="number",
+                        source_column="completed_contract_amount",
+                    ),
+                ],
+            )
+        ],
+        relations=[],
+    )
+    plan = QueryExecutionPlan(
+        question="查KPI",
+        can_answer=True,
+        steps=[
+            PlanStep(
+                step_id="s1",
+                type="SQL",
+                source_id="SRC_DB",
+                datasource_alias="db1",
+                sql_template="SELECT emp_no, completed_contract_amount FROM kpi_table",
+                output_ref="out",
+            )
+        ],
+        aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
+    )
+    result = PlanValidator().validate(plan, payload)
+    assert result.valid, result.errors
