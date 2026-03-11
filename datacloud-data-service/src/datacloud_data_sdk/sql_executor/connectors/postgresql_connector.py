@@ -1,4 +1,5 @@
 """PostgreSQL 连接器。"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -58,9 +59,7 @@ class PostgreSQLConnector(BaseSourceConnector):
         try:
             from sqlalchemy.ext.asyncio import create_async_engine
         except ImportError as e:
-            raise ImportError(
-                "asyncpg not installed. Install with: pip install asyncpg"
-            ) from e
+            raise ImportError("asyncpg not installed. Install with: pip install asyncpg") from e
 
         if getattr(self.config, "open_gauss_compat", False):
             _patch_pg_dialect_for_opengauss()
@@ -89,9 +88,7 @@ class PostgreSQLConnector(BaseSourceConnector):
     def supported_type(cls) -> str:
         return "POSTGRESQL"
 
-    async def execute(
-        self, sql: str, params: dict[str, Any] | None = None
-    ) -> list[dict[str, Any]]:
+    async def execute(self, sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         from sqlalchemy import text
         from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -102,9 +99,7 @@ class PostgreSQLConnector(BaseSourceConnector):
                 columns = result.keys()
                 return [dict(zip(columns, row)) for row in rows]
         except Exception as e:
-            raise SqlExecutionError(
-                self.config.alias, sql, str(e)
-            ) from e
+            raise SqlExecutionError(self.config.alias, sql, str(e)) from e
 
     async def test_connection(self) -> bool:
         try:

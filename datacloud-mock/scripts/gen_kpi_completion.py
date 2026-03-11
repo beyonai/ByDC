@@ -1,14 +1,18 @@
 # -*- coding: utf-8 -*-
 """根据 sales_person_kpi_detail 合同表按周/月聚合，生成个人与组织 KPI 完成统计表。当前时间 2026-03-03。"""
+
 import csv
 import os
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-BASE = os.path.join(os.path.dirname(__file__), "..", "mock-resource", "data", "crm_demo", "modules", "crm")
+BASE = os.path.join(
+    os.path.dirname(__file__), "..", "mock-resource", "data", "crm_demo", "modules", "crm"
+)
 DETAIL_PATH = os.path.join(BASE, "sales_person_kpi_detail.csv")
 USER_COMPLETION_PATH = os.path.join(BASE, "po_users_kpi_completion.csv")
 ORG_COMPLETION_PATH = os.path.join(BASE, "sales_org_kpi_completion.csv")
+
 
 # 金额：合同表里为元，完成表为万元
 def to_wan_yuan(s):
@@ -22,11 +26,13 @@ def to_wan_yuan(s):
     except ValueError:
         return 0.0
 
+
 def week_sunday(dt):
     """该周周日日期，period_value 用 YYYY-MM-DD。"""
     # weekday(): Mon=0 .. Sun=6，周日 = 当日 + (6 - weekday) 天
     sunday = dt + timedelta(days=(6 - dt.weekday()))
     return sunday.strftime("%Y-%m-%d")
+
 
 def main():
     # 个人: (emp_no, period_type, period_value) -> (contract_amount_万, soft_sell_万, count)
@@ -80,39 +86,67 @@ def main():
 
     # 组织名称：从 sales_org_kpi_summary 或 common 取；此处用简表
     org_names = {
-        "6978": "营销一部", "6982": "营销十部", "706": "云智能业务经营中心", "7468": "云业务营销部",
-        "6979": "营销二部", "6980": "营销六部", "6983": "营销五部", "6984": "营销九部",
-        "6985": "营销八部", "6986": "营销七部", "6987": "营销四部", "6988": "营销三部",
-        "7100": "营销十四部", "7471": "营销十一部", "7472": "营销十五部", "7473": "营销十三部", "7474": "营销十二部",
+        "6978": "营销一部",
+        "6982": "营销十部",
+        "706": "云智能业务经营中心",
+        "7468": "云业务营销部",
+        "6979": "营销二部",
+        "6980": "营销六部",
+        "6983": "营销五部",
+        "6984": "营销九部",
+        "6985": "营销八部",
+        "6986": "营销七部",
+        "6987": "营销四部",
+        "6988": "营销三部",
+        "7100": "营销十四部",
+        "7471": "营销十一部",
+        "7472": "营销十五部",
+        "7473": "营销十三部",
+        "7474": "营销十二部",
     }
     now_ts = "2026-03-03 12:00:00"
     created_by = "system"
 
     # 写入 po_users_kpi_completion
     user_fieldnames = [
-        "id", "emp_no", "user_id", "period_type", "period_value", "kpi_year",
-        "completed_contract_amount", "completed_soft_sell", "contract_count",
-        "created_by", "created_time", "updated_by", "updated_time", "is_deleted"
+        "id",
+        "emp_no",
+        "user_id",
+        "period_type",
+        "period_value",
+        "kpi_year",
+        "completed_contract_amount",
+        "completed_soft_sell",
+        "contract_count",
+        "created_by",
+        "created_time",
+        "updated_by",
+        "updated_time",
+        "is_deleted",
     ]
     person_rows = []
-    for (emp_no, period_type, period_value), (contract_wan, soft_wan, cnt) in sorted(person_agg.items()):
+    for (emp_no, period_type, period_value), (contract_wan, soft_wan, cnt) in sorted(
+        person_agg.items()
+    ):
         year = period_value[:4] if period_value else ""
-        person_rows.append({
-            "id": "",
-            "emp_no": emp_no,
-            "user_id": "",
-            "period_type": period_type,
-            "period_value": period_value,
-            "kpi_year": year,
-            "completed_contract_amount": f"{contract_wan:.2f}",
-            "completed_soft_sell": f"{soft_wan:.2f}",
-            "contract_count": str(cnt),
-            "created_by": created_by,
-            "created_time": now_ts,
-            "updated_by": "",
-            "updated_time": now_ts,
-            "is_deleted": "0",
-        })
+        person_rows.append(
+            {
+                "id": "",
+                "emp_no": emp_no,
+                "user_id": "",
+                "period_type": period_type,
+                "period_value": period_value,
+                "kpi_year": year,
+                "completed_contract_amount": f"{contract_wan:.2f}",
+                "completed_soft_sell": f"{soft_wan:.2f}",
+                "contract_count": str(cnt),
+                "created_by": created_by,
+                "created_time": now_ts,
+                "updated_by": "",
+                "updated_time": now_ts,
+                "is_deleted": "0",
+            }
+        )
     for i, row in enumerate(person_rows, start=1):
         row["id"] = str(i)
     with open(USER_COMPLETION_PATH, "w", encoding="utf-8", newline="") as f:
@@ -123,29 +157,42 @@ def main():
 
     # 写入 sales_org_kpi_completion
     org_fieldnames = [
-        "id", "org_id", "org_name", "period_type", "period_value", "kpi_year",
-        "completed_amount", "completed_soft_sell", "contract_count",
-        "created_by", "created_time", "updated_by", "updated_time", "is_deleted"
+        "id",
+        "org_id",
+        "org_name",
+        "period_type",
+        "period_value",
+        "kpi_year",
+        "completed_amount",
+        "completed_soft_sell",
+        "contract_count",
+        "created_by",
+        "created_time",
+        "updated_by",
+        "updated_time",
+        "is_deleted",
     ]
     org_rows = []
     for (org_id, period_type, period_value), (amount_wan, soft_wan, cnt) in sorted(org_agg.items()):
         year = period_value[:4] if period_value else ""
-        org_rows.append({
-            "id": "",
-            "org_id": org_id,
-            "org_name": org_names.get(org_id, ""),
-            "period_type": period_type,
-            "period_value": period_value,
-            "kpi_year": year,
-            "completed_amount": f"{amount_wan:.2f}",
-            "completed_soft_sell": f"{soft_wan:.2f}",
-            "contract_count": str(cnt),
-            "created_by": created_by,
-            "created_time": now_ts,
-            "updated_by": "",
-            "updated_time": now_ts,
-            "is_deleted": "0",
-        })
+        org_rows.append(
+            {
+                "id": "",
+                "org_id": org_id,
+                "org_name": org_names.get(org_id, ""),
+                "period_type": period_type,
+                "period_value": period_value,
+                "kpi_year": year,
+                "completed_amount": f"{amount_wan:.2f}",
+                "completed_soft_sell": f"{soft_wan:.2f}",
+                "contract_count": str(cnt),
+                "created_by": created_by,
+                "created_time": now_ts,
+                "updated_by": "",
+                "updated_time": now_ts,
+                "is_deleted": "0",
+            }
+        )
     for i, row in enumerate(org_rows, start=1):
         row["id"] = str(i)
     with open(ORG_COMPLETION_PATH, "w", encoding="utf-8", newline="") as f:
@@ -153,6 +200,7 @@ def main():
         w.writeheader()
         w.writerows(org_rows)
     print(f"Wrote {len(org_rows)} rows to sales_org_kpi_completion.csv")
+
 
 if __name__ == "__main__":
     main()

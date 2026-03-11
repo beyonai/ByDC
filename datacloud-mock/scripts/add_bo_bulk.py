@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 """追加云智能过去1年商机，使 sales_business_opportunity 中 iwhale_cbm_org_id=6978/706 的商机 >= 100 条"""
+
 import csv
 import os
 from datetime import datetime, timedelta
 import random
 
-BASE = os.path.join(os.path.dirname(__file__), "..", "mock-resource", "data", "crm_demo", "modules", "crm")
+BASE = os.path.join(
+    os.path.dirname(__file__), "..", "mock-resource", "data", "crm_demo", "modules", "crm"
+)
 PATH = os.path.join(BASE, "sales_business_opportunity.csv")
 
 # 有效负责人（common 中存在的工号与姓名）
@@ -19,23 +22,80 @@ OWNERS = [
 ]
 # 真实客户名（参考现有商机与客户表）
 CUSTOMERS = [
-    "南京大数据集团", "中国科技大学", "阿里", "南京新工数字科技有限责任公司", "长沙百旺",
-    "国防科大电子对抗学院", "徐州大数据局", "广陵新城管委会", "随州水务", "中核汇能",
-    "江苏卫生健康学校", "南通大数据局", "江苏满运软件", "江苏省审计厅", "三只松鼠",
-    "蚂蚁集团", "常州排水集团", "国防科大", "苏州纪委", "南京中铁信息工程公司",
-    "江苏交通控股有限公司", "正大天晴药业集团股份有限公司", "江苏金恒信息科技股份有限公司",
-    "江苏省数据集团", "湖南强智科技发展有限公司", "中信泰富特钢集团有限公司", "扬州市大数据集团",
-    "无锡职业技术大学", "江苏红网技术股份有限公司", "北京华晟经世信息技术股份有限公司",
-    "扬州工业职业技术学院", "南京市江宁区城市数字治理中心", "南京医科大学附属口腔医院",
-    "江苏苏豪集团", "南京新工投资集团", "南京医药集团", "南京钢铁股份有限公司",
-    "南京公共交通集团有限公司", "南京金斯瑞生物", "合肥工业大学", "中国科学技术大学",
-    "常州大数据局", "安庆职业技术学院", "江苏开放大学", "台积电（南京）半导体",
-    "南京钢铁集团", "天合光能", "数字江西科技有限公司", "湖南生物机电职业技术学院",
-    "泰州大数据局", "盐城城运中心", "江苏银行", "中国移动江苏公司", "南京莱斯信息",
-    "江苏电力", "浙江大数据局", "安徽交控集团", "山东政务云", "河南教育厅",
+    "南京大数据集团",
+    "中国科技大学",
+    "阿里",
+    "南京新工数字科技有限责任公司",
+    "长沙百旺",
+    "国防科大电子对抗学院",
+    "徐州大数据局",
+    "广陵新城管委会",
+    "随州水务",
+    "中核汇能",
+    "江苏卫生健康学校",
+    "南通大数据局",
+    "江苏满运软件",
+    "江苏省审计厅",
+    "三只松鼠",
+    "蚂蚁集团",
+    "常州排水集团",
+    "国防科大",
+    "苏州纪委",
+    "南京中铁信息工程公司",
+    "江苏交通控股有限公司",
+    "正大天晴药业集团股份有限公司",
+    "江苏金恒信息科技股份有限公司",
+    "江苏省数据集团",
+    "湖南强智科技发展有限公司",
+    "中信泰富特钢集团有限公司",
+    "扬州市大数据集团",
+    "无锡职业技术大学",
+    "江苏红网技术股份有限公司",
+    "北京华晟经世信息技术股份有限公司",
+    "扬州工业职业技术学院",
+    "南京市江宁区城市数字治理中心",
+    "南京医科大学附属口腔医院",
+    "江苏苏豪集团",
+    "南京新工投资集团",
+    "南京医药集团",
+    "南京钢铁股份有限公司",
+    "南京公共交通集团有限公司",
+    "南京金斯瑞生物",
+    "合肥工业大学",
+    "中国科学技术大学",
+    "常州大数据局",
+    "安庆职业技术学院",
+    "江苏开放大学",
+    "台积电（南京）半导体",
+    "南京钢铁集团",
+    "天合光能",
+    "数字江西科技有限公司",
+    "湖南生物机电职业技术学院",
+    "泰州大数据局",
+    "盐城城运中心",
+    "江苏银行",
+    "中国移动江苏公司",
+    "南京莱斯信息",
+    "江苏电力",
+    "浙江大数据局",
+    "安徽交控集团",
+    "山东政务云",
+    "河南教育厅",
 ]
-CONTENT = ["数据中台", "智慧园区", "BI大屏", "知识库", "智能体", "云迁移", "运维服务", "人力外包", "定制开发", "数据治理"]
+CONTENT = [
+    "数据中台",
+    "智慧园区",
+    "BI大屏",
+    "知识库",
+    "智能体",
+    "云迁移",
+    "运维服务",
+    "人力外包",
+    "定制开发",
+    "数据治理",
+]
 STAGES = ["产生采购需求，内部准备", "方案设计，评估与比较", "投标竞争，购买和实施", "立项评估中"]
+
 
 def main():
     with open(PATH, "r", encoding="utf-8") as f:
@@ -132,26 +192,31 @@ def main():
         status = bo_row["business_opportunity_process"]
         changed = bo_row["updated_time"]
         by_ = bo_row["updated_by"]
-        status_rows.append({
-            "id": str(next_sid + i),
-            "bo_id": bid,
-            "opportunity_id": opp_id,
-            "status_before": "",
-            "status_after": status,
-            "change_remark": "初始录入/状态同步",
-            "changed_by": by_,
-            "changed_time": changed,
-            "created_by": by_,
-            "created_time": changed,
-            "updated_by": "",
-            "updated_time": changed,
-            "is_deleted": "0",
-        })
+        status_rows.append(
+            {
+                "id": str(next_sid + i),
+                "bo_id": bid,
+                "opportunity_id": opp_id,
+                "status_before": "",
+                "status_after": status,
+                "change_remark": "初始录入/状态同步",
+                "changed_by": by_,
+                "changed_time": changed,
+                "created_by": by_,
+                "created_time": changed,
+                "updated_by": "",
+                "updated_time": changed,
+                "is_deleted": "0",
+            }
+        )
     with open(path_status, "w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=status_fieldnames)
         w.writeheader()
         w.writerows(status_rows)
-    print(f"Added {add_n} rows to sales_business_opportunity (total {len(rows)}), synced sales_bo_status_change.")
+    print(
+        f"Added {add_n} rows to sales_business_opportunity (total {len(rows)}), synced sales_bo_status_change."
+    )
+
 
 if __name__ == "__main__":
     main()

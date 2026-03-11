@@ -1,4 +1,5 @@
 """ObjectViewBuilder: 从 OntologyLoader 构建 ObjectViewPayload。"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
