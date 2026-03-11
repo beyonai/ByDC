@@ -32,6 +32,7 @@ class ToolRegistry:
     def _unified_query_tool(self) -> dict[str, Any]:
         return {
             "name": "unified_data_query",
+            "title": "统一数据查询",
             "description": "通过自然语言查询数据，支持跨对象关联查询",
             "inputSchema": {
                 "type": "object",
