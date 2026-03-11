@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "OpenClaw Gateway (datacloud-agent-service)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["server:app", "--host", "0.0.0.0", "--port", "8000"],
+      "cwd": "${workspaceFolder}/service/datacloud-agent-service",
+      "env": {
+        "OPENAI_API_KEY": "sk-emt6bXBfJl9ncHQtcHJveHkuaXdoYWxlY2xvdWQuY29tXyZf",
+        "OPENAI_BASE_URL": "https://lab.iwhalecloud.com/gpt-proxy/v1",
+        "DATACLOUD_SERVICE_OPENAI_API_KEY": "sk-emt6bXBfJl9ncHQtcHJveHkuaXdoYWxlY2xvdWQuY29tXyZf",
+        "DATACLOUD_SERVICE_OPENAI_BASE_URL": "https://lab.iwhalecloud.com/gpt-proxy/v1"
+      },
+      "justMyCode": false
+    },
+    {
+      "name": "OpenClaw Gateway (Mock 模式)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["server:app", "--host", "0.0.0.0", "--port", "8000"],
+      "cwd": "${workspaceFolder}/service/datacloud-agent-service",
+      "env": {},
+      "justMyCode": false
+    }
+  ]
+}
