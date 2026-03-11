@@ -121,6 +121,108 @@ class TestGatewayClientChat:
 
         assert response.agent_id == "coder"
 
+    @pytest.mark.asyncio
+    async def test_chat_with_timeout_success(self, client):
+        """Test chat with timeout parameter completes successfully."""
+        # Mock session creation
+        mock_session = MagicMock()
+        mock_session.session_id = "session-123"
+        mock_session.session_key = "tenant:default:agent:default:session-123"
+        mock_session.agent_id = "default"
+        client._session_manager.create_session = AsyncMock(return_value=mock_session)
+
+        # Mock agent runner with delayed response
+        async def delayed_response(*args, **kwargs):
+            await asyncio.sleep(0.01)  # Small delay
+            return {
+                "status": "executed",
+                "session_key": "tenant:default:agent:default:session-123",
+                "result": {"response": "Hello!", "agent_id": "default"},
+            }
+
+        client._agent_runner.handle_message = AsyncMock(side_effect=delayed_response)
+
+        # Should complete successfully within timeout
+        response = await client.chat("Hello!", timeout=1.0)
+
+        assert isinstance(response, ChatResponse)
+        assert response.content == "Hello!"
+
+    @pytest.mark.asyncio
+    async def test_chat_with_timeout_exceeded(self, client):
+        """Test chat raises TimeoutError when timeout is exceeded."""
+        # Mock session creation
+        mock_session = MagicMock()
+        mock_session.session_id = "session-123"
+        mock_session.session_key = "tenant:default:agent:default:session-123"
+        mock_session.agent_id = "default"
+        client._session_manager.create_session = AsyncMock(return_value=mock_session)
+
+        # Mock agent runner with long delay
+        async def slow_response(*args, **kwargs):
+            await asyncio.sleep(10.0)  # Long delay that exceeds timeout
+            return {"status": "executed", "result": {"response": "Too late!"}}
+
+        client._agent_runner.handle_message = AsyncMock(side_effect=slow_response)
+
+        # Should raise TimeoutError
+        with pytest.raises(TimeoutError, match="timed out"):
+            await client.chat("Hello!", timeout=0.01)  # Very short timeout
+
+    @pytest.mark.asyncio
+    async def test_chat_without_timeout_uses_default(self, client):
+        """Test chat without timeout parameter (backward compatibility)."""
+        # Mock session creation
+        mock_session = MagicMock()
+        mock_session.session_id = "session-123"
+        mock_session.session_key = "tenant:default:agent:default:session-123"
+        mock_session.agent_id = "default"
+        client._session_manager.create_session = AsyncMock(return_value=mock_session)
+
+        # Mock agent runner
+        client._agent_runner.handle_message = AsyncMock(
+            return_value={
+                "status": "executed",
+                "session_key": "tenant:default:agent:default:session-123",
+                "result": {"response": "Hello!", "agent_id": "default"},
+            }
+        )
+
+        # Should work without timeout parameter (backward compatibility)
+        response = await client.chat("Hello!")
+
+        assert isinstance(response, ChatResponse)
+        assert response.content == "Hello!"
+
+    @pytest.mark.asyncio
+    async def test_chat_stream_with_timeout(self, client):
+        """Test chat_stream with timeout parameter."""
+        # Mock session creation
+        mock_session = MagicMock()
+        mock_session.session_id = "session-123"
+        mock_session.session_key = "tenant:default:agent:default:session-123"
+        mock_session.agent_id = "default"
+        client._session_manager.create_session = AsyncMock(return_value=mock_session)
+
+        # Mock agent runner with delayed response
+        async def delayed_response(*args, **kwargs):
+            await asyncio.sleep(0.01)
+            return {
+                "status": "executed",
+                "session_key": "tenant:default:agent:default:session-123",
+                "result": {"response": "Hello!", "agent_id": "default"},
+            }
+
+        client._agent_runner.handle_message = AsyncMock(side_effect=delayed_response)
+
+        # Should complete successfully within timeout
+        chunks = []
+        async for chunk in client.chat_stream("Hello!", timeout=1.0):
+            chunks.append(chunk)
+
+        assert len(chunks) > 0
+        assert chunks[0].content == "Hello!"
+
 
 class TestGatewayClientChatStream:
     """Tests for GatewayClient.chat_stream method."""
