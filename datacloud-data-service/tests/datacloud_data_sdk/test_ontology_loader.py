@@ -19,9 +19,7 @@ MINIMAL_REGISTRY = {
             "object_name": "员工",
             "description": "销售员工",
             "source_type": "API",
-            "fields": [
-                {"field_code": "emp_id", "field_name": "员工ID", "field_type": "STRING"}
-            ],
+            "fields": [{"field_code": "emp_id", "field_name": "员工ID", "field_type": "STRING"}],
             "actions": [
                 {
                     "action_code": "query_emp",
@@ -46,9 +44,7 @@ REGISTRY_WITH_SCRIPT = {
             "source_type": "DB",
             "datasource_alias": "crm_db",
             "table_name": "sales_bo",
-            "fields": [
-                {"field_code": "bo_id", "field_name": "商机ID", "field_type": "STRING"}
-            ],
+            "fields": [{"field_code": "bo_id", "field_name": "商机ID", "field_type": "STRING"}],
             "actions": [
                 {
                     "action_code": "calc_score",
@@ -127,6 +123,7 @@ def test_configure_sets_plan_generator() -> None:
 
 def test_configure_sql_execution_mode():
     from datacloud_data_sdk.ontology.loader import OntologyLoader
+
     loader = OntologyLoader()
     loader.configure(sql_execution_mode="external")
     assert loader._config.sql_execution_mode == "external"

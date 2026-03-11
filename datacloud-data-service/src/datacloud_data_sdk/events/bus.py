@@ -1,4 +1,5 @@
 """内存同步事件总线。"""
+
 from __future__ import annotations
 
 from collections import defaultdict

@@ -64,7 +64,9 @@ class OntologyLoader:
             actions = self._parse_actions(obj.get("actions", []), obj["object_code"])
             source_config = obj.get("source_config")
             datasource_alias = (
-                source_config.get("alias") if source_config and isinstance(source_config, dict) else None
+                source_config.get("alias")
+                if source_config and isinstance(source_config, dict)
+                else None
             ) or obj.get("datasource_alias")
             ontology_class = OntologyClass(
                 object_code=obj["object_code"],
@@ -286,9 +288,7 @@ class OntologyLoader:
                 action_name=a.get("action_name", a["action_code"]),
                 description=a.get("description", ""),
                 belong_class=belong_class,
-                params=[
-                    self._parse_action_param(p) for p in a.get("params", [])
-                ],
+                params=[self._parse_action_param(p) for p in a.get("params", [])],
                 function_refs=a.get("function_refs", []),
                 script=a.get("script"),
             )

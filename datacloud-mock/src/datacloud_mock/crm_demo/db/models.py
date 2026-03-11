@@ -159,6 +159,8 @@ class SalesExpenseReport(Base):
     updated_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     updated_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    approval_status: Mapped[str | None] = mapped_column(String(20), nullable=True, default="PENDING")
+    approval_status: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, default="PENDING"
+    )
     approval_comment: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

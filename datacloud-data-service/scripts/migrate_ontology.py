@@ -23,8 +23,7 @@ DEFAULT_SRC = (
     / "datacloud-mock/mock-resource/ontology/crm_demo/modules/objects_registry.json"
 )
 DEFAULT_DST = (
-    Path(__file__).resolve().parents[1]
-    / "resources/ontology/crm_demo/objects_registry.json"
+    Path(__file__).resolve().parents[1] / "resources/ontology/crm_demo/objects_registry.json"
 )
 
 
@@ -157,16 +156,11 @@ def migrate(src_path: Path, dst_path: Path) -> dict[str, Any]:
     result: dict[str, Any] = {
         "functions": [_convert_function(fn) for fn in raw.get("functions", [])],
         "objects": [_convert_object(obj) for obj in raw.get("objects", [])],
-        "relations": [
-            _convert_relation(rel, i)
-            for i, rel in enumerate(raw.get("relations", []))
-        ],
+        "relations": [_convert_relation(rel, i) for i, rel in enumerate(raw.get("relations", []))],
     }
 
     dst_path.parent.mkdir(parents=True, exist_ok=True)
-    dst_path.write_text(
-        json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    dst_path.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     print(f"Migrated: {src_path}")
     print(f"  -> {dst_path}")

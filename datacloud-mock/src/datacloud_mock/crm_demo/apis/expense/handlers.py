@@ -132,7 +132,10 @@ async def expense_approve(body: ExpenseApproveRequest, session: AsyncSession) ->
         await session.execute(
             update(SalesExpenseReport).where(SalesExpenseReport.id == eid).values(**vals)
         )
-    return {"id": body.expenseReportIds[0] if body.expenseReportIds else "", "approvalStatus": db_status}
+    return {
+        "id": body.expenseReportIds[0] if body.expenseReportIds else "",
+        "approvalStatus": db_status,
+    }
 
 
 async def expense_list(body: ExpenseListRequest, session: AsyncSession) -> dict:
