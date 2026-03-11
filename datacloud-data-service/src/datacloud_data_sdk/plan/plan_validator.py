@@ -10,6 +10,8 @@ from datacloud_data_sdk.plan.models import (
     QueryExecutionPlan,
 )
 
+_SUPPORTED_DB_TYPES = {"POSTGRESQL", "MYSQL", "OPENGAUSS", "SQLITE", "CLICKHOUSE"}
+
 _SQL_KEYWORDS = {
     "select", "from", "where", "join", "on", "and", "or", "not", "in",
     "between", "like", "is", "null", "as", "order", "by", "group",
@@ -18,14 +20,38 @@ _SQL_KEYWORDS = {
     "desc", "inner", "left", "right", "outer", "cross", "full", "insert",
     "update", "delete", "create", "drop", "alter", "into", "values",
     "set", "table", "index", "view", "true", "false", "with",
+    "interval", "over", "partition", "range", "rows", "unbounded",
+    "preceding", "following", "default",
 }
 
 _SQL_FUNCTIONS = {
-    "count", "sum", "avg", "max", "min", "coalesce", "ifnull",
-    "cast", "convert", "upper", "lower", "trim", "length", "substr",
-    "substring", "concat", "replace", "round", "abs", "ceil", "floor",
-    "now", "date", "year", "month", "day", "hour", "minute", "second",
-    "iif", "nullif", "group_concat", "date_format", "str_to_date",
+    # 聚合
+    "count", "sum", "avg", "max", "min", "group_concat", "string_agg",
+    "array_agg", "json_agg", "json_build_object",
+    # 空值/类型
+    "coalesce", "ifnull", "nullif", "cast", "convert",
+    # 字符串
+    "upper", "lower", "trim", "ltrim", "rtrim", "length", "char_length",
+    "substr", "substring", "concat", "concat_ws", "replace",
+    "position", "strpos", "split_part", "left", "right", "lpad", "rpad",
+    "regexp_replace", "regexp_match", "repeat",
+    # 数值
+    "round", "abs", "ceil", "floor", "mod", "power", "sqrt", "random",
+    "greatest", "least",
+    # 日期时间 - 标准/PostgreSQL/OpenGauss
+    "now", "current_date", "current_time", "current_timestamp",
+    "localtime", "localtimestamp",
+    "date", "year", "month", "day", "hour", "minute", "second",
+    "extract", "date_trunc", "age", "make_date", "make_interval",
+    "to_char", "to_date", "to_timestamp", "date_part",
+    "date_format", "str_to_date", "date_add", "date_sub",
+    # 条件
+    "iif",
+    # 窗口
+    "row_number", "rank", "dense_rank", "lag", "lead",
+    "first_value", "last_value", "ntile",
+    # 其他
+    "unnest", "generate_series",
 }
 
 _IDENTIFIER_RE = re.compile(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b")
@@ -60,6 +86,7 @@ class PlanValidator:
                     f"Step {step.step_id}: bind_from_step {step.bind_from_step!r} not in plan"
                 )
             errors.extend(self._validate_sql_field_refs(step, payload))
+            errors.extend(self._validate_sql_step_db_type(step, payload))
             errors.extend(self._validate_function_ids(step, payload))
             errors.extend(self._validate_api_step_params(step, payload))
 
@@ -73,6 +100,37 @@ class PlanValidator:
                 )
 
         return ValidationResult(valid=len(errors) == 0, errors=errors)
+
+    # ------------------------------------------------------------------
+    # SQL step db_type validation
+    # ------------------------------------------------------------------
+
+    def _validate_sql_step_db_type(
+        self, step: PlanStep, payload: ObjectViewPayload
+    ) -> list[str]:
+        """校验 SQL 步骤对应数据源的 db_type 存在且合法。"""
+        if step.type != "SQL" or not step.datasource_alias:
+            return []
+
+        source = next(
+            (s for s in payload.sources if s.datasource_alias == step.datasource_alias),
+            None,
+        )
+        if source is None:
+            return []  # 由 source_id 等校验处理
+        if source.source_type != "DB":
+            return []
+
+        db_type = (source.db_type or "").strip().upper()
+        if not db_type:
+            return [
+                f"Step {step.step_id}: DB source {step.datasource_alias!r} missing db_type"
+            ]
+        if db_type not in _SUPPORTED_DB_TYPES:
+            return [
+                f"Step {step.step_id}: unsupported db_type {source.db_type!r} for source {step.datasource_alias!r}"
+            ]
+        return []
 
     # ------------------------------------------------------------------
     # SQL field-reference validation
