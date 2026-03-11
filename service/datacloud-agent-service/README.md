@@ -1,44 +1,58 @@
-# datacloud-agent-service
+# OpenClaw Gateway Service
 
-FastAPI Gateway Service Layer for OpenClaw.
+OpenClaw 的后端服务，提供 WebSocket 接口供前端实时通信。
 
-## Development
+## 项目结构
 
-```bash
-# Install dependencies
-uv sync
-
-# Run the service
-uv run python -m server
-
-# Run tests
-pytest
+```
+service/datacloud-agent-service/
+├── server.py              # FastAPI 入口
+├── websocket.py           # WebSocket 端点
+├── openclaw_protocol.py   # OpenClaw 协议处理
+├── config.py              # 配置管理
+├── lifespan.py            # 生命周期管理
+├── scripts/
+│   └── start.sh           # 启动脚本
+└── tests/                 # 测试文件
 ```
 
-## Quick Start Scripts
+## 功能
 
-The `scripts/` directory contains convenience scripts for running the service.
+- **WebSocket 通信** (`/ws`) - 实时双向通信
+- **健康检查** (`/health`) - 服务状态监控
+- **OpenClaw 协议** - 支持会话管理、聊天消息流式传输
+- **Mock 模式** - 无需 API key 即可测试
 
-### Start Service Only
+## 快速开始
+
+### 1. 启动服务（Mock 模式）
 
 ```bash
+cd service/datacloud-agent-service
 ./scripts/start.sh
 ```
 
-Environment variables:
-- `DATACLOUD_SERVICE_HOST` - Server host (default: 0.0.0.0)
-- `DATACLOUD_SERVICE_PORT` - Server port (default: 8000)
-- `DATACLOUD_SERVICE_RELOAD` - Enable auto-reload (default: false)
+服务将在 http://localhost:8000 运行。
 
-### Start Service with UI
+### 2. 启动服务（真实 LLM）
 
 ```bash
-./scripts/start_with_ui.sh
+export OPENAI_API_KEY="your-api-key"
+export OPENAI_BASE_URL="https://your-endpoint/v1"  # 可选
+./scripts/start.sh
 ```
 
-Environment variables:
-- `DATACLOUD_SERVICE_HOST` - Service host (default: 0.0.0.0)
-- `DATACLOUD_SERVICE_PORT` - Service port (default: 8000)
-- `DATACLOUD_UI_PORT` - UI port (default: 3000)
+### 3. 验证服务
 
-This will start both the FastAPI backend and the Next.js dev server for the UI.
+```bash
+curl http://localhost:8000/health
+```
+
+## 环境变量
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `OPENAI_API_KEY` | OpenAI API Key | 无（Mock 模式） |
+| `OPENAI_BASE_URL` | API 基础 URL | `https://api.openai.com/v1` |
+| `DATACLOUD_SERVICE_HOST` | 服务监听地址 | `0.0.0.0` |
+| `DATACLOUD_SERVICE_PORT` | 服务端口 | `8000` |
