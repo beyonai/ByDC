@@ -108,17 +108,9 @@ lsof -i :3000  # UI 端口
 kill -9 <PID>
 ```
 
-### UI 子模块未初始化
+### UI 目录说明
 
-```bash
-# 重新初始化子模块
-git submodule update --init --recursive
-
-# 如果仍有问题，在仓库根目录删除后重新添加
-# 在 whale_datacloud 根目录执行：
-rm -rf ui/deep-agents-ui
-git submodule add https://github.com/langchain-ai/deep-agents-ui.git ui/deep-agents-ui
-```
+`ui/deep-agents-ui` 已作为仓库的一部分（非子模块），随仓库一起 clone 即可，无需 `git submodule update`。若该目录缺失，请重新 clone 整个 whale_datacloud 仓库。
 
 ### Agent 启动失败
 

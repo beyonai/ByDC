@@ -1,5 +1,7 @@
 # 将 deep-agents-ui 从 datacloud-agent/ui 迁移到 ui（仓库根）
 
+> **当前状态**：`ui/deep-agents-ui` 已改为**仓库内普通目录**（非子模块），随 whale_datacloud 一起 clone 即可。下文为历史迁移说明。
+
 本文说明如何把 `datacloud-agent/ui/deep-agents-ui` 移动到仓库根目录下的 `ui/deep-agents-ui`（与 `ui/openclaw` 同级）。
 
 ## 已完成的配置与引用更新
