@@ -25,7 +25,16 @@ class TestSDKIntegration:
         from unittest.mock import AsyncMock
 
         client._agent_runner.handle_message = AsyncMock(
-            return_value={"message": "Hello from agent!", "status": "success"}
+            return_value={
+                "status": "executed",
+                "session_key": "tenant:default:agent:default:session-123",
+                "result": {
+                    "agent_id": "default",
+                    "response": "Hello from agent!",
+                    "messages": [],
+                    "usage": {},
+                },
+            }
         )
 
         response = await client.chat("Hello!")
@@ -42,7 +51,10 @@ class TestSDKIntegration:
 
         # First, create a session with default agent
         client._agent_runner.handle_message = AsyncMock(
-            return_value={"message": "Default agent response", "status": "success"}
+            return_value={
+                "status": "executed",
+                "result": {"response": "Default agent response", "agent_id": "default"},
+            }
         )
         response1 = await client.chat("Hello default!")
         session_id = response1.session_id
@@ -61,7 +73,10 @@ class TestSDKIntegration:
 
         # Chat with coder agent
         client._agent_runner.handle_message = AsyncMock(
-            return_value={"message": "Coder agent response", "status": "success"}
+            return_value={
+                "status": "executed",
+                "result": {"response": "Coder agent response", "agent_id": "coder"},
+            }
         )
         response2 = await client.chat("Hello coder!", session_id=session_id)
         assert response2.agent_id == "coder"
@@ -111,7 +126,12 @@ class TestSDKIntegration:
         # For simplicity, we'll mock the agent runner and check call arguments.
         from unittest.mock import AsyncMock
 
-        mock_handle = AsyncMock(return_value={"message": "Queued response", "status": "queued"})
+        mock_handle = AsyncMock(
+            return_value={
+                "status": "queued",
+                "result": {"response": "Queued response"},
+            }
+        )
         client._agent_runner.handle_message = mock_handle
 
         # The chat method uses QueueMode.COLLECT by default
@@ -137,7 +157,10 @@ class TestSDKIntegration:
 
         # Create multiple sessions
         client._agent_runner.handle_message = AsyncMock(
-            return_value={"message": "Response", "status": "success"}
+            return_value={
+                "status": "executed",
+                "result": {"response": "Response", "agent_id": "default"},
+            }
         )
 
         response1 = await client.chat("Message 1")
