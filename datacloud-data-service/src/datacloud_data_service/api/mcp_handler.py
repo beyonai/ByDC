@@ -1,5 +1,4 @@
 """MCP JSON-RPC 2.0 handler。"""
-
 from __future__ import annotations
 
 import json
@@ -15,8 +14,8 @@ router = APIRouter()
 
 def _extract_context(request: Request) -> dict[str, str]:
     tenant_id = request.headers.get("X-Tenant-Id", "")
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="X-Tenant-Id header required")
+    # if not tenant_id:
+        # raise HTTPException(status_code=400, detail="X-Tenant-Id header required")
     return {
         "tenant_id": tenant_id,
         "user_id": request.headers.get("X-User-Id", ""),
@@ -34,7 +33,19 @@ def _jsonrpc_error(id: Any, code: int, message: str) -> dict:
     return {"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}}
 
 
+@router.get("/mcp")
+@router.get("/mcp/")
+async def mcp_get_not_supported() -> JSONResponse:
+    """Streamable HTTP：本服务不提供 GET/SSE 流，客户端应直接 POST。返回 405 供客户端识别。"""
+    return JSONResponse(
+        status_code=405,
+        content={"detail": "Use POST for JSON-RPC messages"},
+        headers={"Allow": "POST"},
+    )
+
+
 @router.post("/mcp")
+@router.post("/mcp/")
 async def mcp_endpoint(request: Request) -> JSONResponse:
     ctx_kwargs = _extract_context(request)
     body = await request.json()
@@ -43,7 +54,11 @@ async def mcp_endpoint(request: Request) -> JSONResponse:
     params = body.get("params", {})
 
     with InvocationContext(**ctx_kwargs):
-        if method == "tools/list":
+        if method == "initialize":
+            return JSONResponse(_handle_initialize(rpc_id, params))
+        elif method == "notifications/initialized":
+            return JSONResponse({}, status_code=202)
+        elif method == "tools/list":
             tools = _get_tools_list(request)
             return JSONResponse(_jsonrpc_response(rpc_id, {"tools": tools}))
         elif method == "tools/call":
@@ -51,6 +66,27 @@ async def mcp_endpoint(request: Request) -> JSONResponse:
             return JSONResponse(_jsonrpc_response(rpc_id, result))
         else:
             return JSONResponse(_jsonrpc_error(rpc_id, -32601, f"Method not found: {method}"))
+
+
+def _handle_initialize(rpc_id: Any, params: dict) -> dict:
+    """处理 MCP initialize 请求，返回服务端能力与信息。"""
+    client_protocol = params.get("protocolVersion", "2024-11-05")
+    supported = ("2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25")
+    protocol_version = client_protocol if client_protocol in supported else "2024-11-05"
+    return {
+        "jsonrpc": "2.0",
+        "id": rpc_id,
+        "result": {
+            "protocolVersion": protocol_version,
+            "capabilities": {
+                "tools": {"listChanged": True},
+            },
+            "serverInfo": {
+                "name": "datacloud-data-service",
+                "version": "0.1.0",
+            },
+        },
+    }
 
 
 def _get_tools_list(request: Request) -> list[dict]:
@@ -121,6 +157,7 @@ def _find_action_object(loader: Any, action_code: str) -> str | None:
 def _fallback_unified_query_tool() -> dict:
     return {
         "name": "unified_data_query",
+        "title": "统一数据查询",
         "description": "通过自然语言查询数据",
         "inputSchema": {
             "type": "object",
