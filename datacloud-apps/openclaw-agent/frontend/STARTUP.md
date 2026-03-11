@@ -14,7 +14,7 @@
 ### 1. 启动后端服务
 
 ```bash
-cd service/datacloud-agent-service
+cd datacloud-apps/datacloud-agent-service
 
 # 使用真实 API（推荐）
 export OPENAI_API_KEY="your-api-key"
@@ -151,8 +151,8 @@ uv run gunicorn server:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:
 
 ```
 whale-datacloud/
-├── service/
-│   └── datacloud-agent-service/    # 后端服务
+├── datacloud-apps/
+│   └── datacloud-agent-service/   # 后端服务
 │       ├── server.py                # FastAPI 入口
 │       ├── openclaw_protocol.py     # WebSocket 协议处理
 │       └── websocket.py             # WebSocket 端点
@@ -170,4 +170,4 @@ whale-datacloud/
 ## 相关文档
 
 - [datacloud-agent README](../../datacloud-agent/README.md)
-- [后端服务 README](../../service/datacloud-agent-service/README.md)
+- [后端服务 README](../../datacloud-apps/datacloud-agent-service/README.md)

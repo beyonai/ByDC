@@ -5,7 +5,7 @@ OpenClaw 的后端服务，提供 WebSocket 接口供前端实时通信。
 ## 项目结构
 
 ```
-service/datacloud-agent-service/
+datacloud-apps/datacloud-agent-service/
 ├── server.py              # FastAPI 入口
 ├── websocket.py           # WebSocket 端点
 ├── openclaw_protocol.py   # OpenClaw 协议处理
@@ -28,7 +28,7 @@ service/datacloud-agent-service/
 ### 1. 启动服务（Mock 模式）
 
 ```bash
-cd service/datacloud-agent-service
+cd datacloud-apps/datacloud-agent-service
 ./scripts/start.sh
 ```
 
