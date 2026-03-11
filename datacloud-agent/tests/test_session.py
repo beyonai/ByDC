@@ -113,6 +113,30 @@ class TestSessionManager:
         assert session.agent_id == "coder"
         assert session.metadata == metadata
 
+    async def test_create_session_with_custom_session_id(self):
+        """Test creating a session with a custom session_id."""
+        manager = SessionManager()
+        tenant_ctx = TenantContext(tenant_id="user_002", tenant_type=TenantType.USER_PRIVATE)
+        custom_session_id = "my-custom-session-123"
+
+        session = await manager.create_session(
+            tenant_ctx, agent_id="default", session_id=custom_session_id
+        )
+
+        assert session.session_id == custom_session_id
+        assert session.session_key == "tenant:user_002:agent:default:my-custom-session-123"
+
+    async def test_create_session_without_session_id_generates_uuid(self):
+        """Test that creating a session without session_id generates a UUID."""
+        manager = SessionManager()
+        tenant_ctx = TenantContext(tenant_id="user_003", tenant_type=TenantType.USER_PRIVATE)
+
+        session = await manager.create_session(tenant_ctx, agent_id="default")
+
+        # Should generate a UUID (36 characters with dashes)
+        assert len(session.session_id) == 36
+        assert session.session_id.count("-") == 4
+
     async def test_get_session_found(self):
         """Test retrieving an existing session."""
         manager = SessionManager()
