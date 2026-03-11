@@ -57,7 +57,5 @@ def get_current_context() -> RequestContext:
     """获取当前请求上下文，未设置时抛出异常。"""
     ctx = _ctx_var.get()
     if ctx is None:
-        raise DatacloudError(
-            "InvocationContext not set. Use `with InvocationContext(...):`"
-        )
+        raise DatacloudError("InvocationContext not set. Use `with InvocationContext(...):`")
     return ctx

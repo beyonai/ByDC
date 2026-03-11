@@ -1,4 +1,5 @@
 """SqliteAggregator: 用 SQLite 内存库做跨步骤 JOIN。"""
+
 from __future__ import annotations
 import csv
 import sqlite3

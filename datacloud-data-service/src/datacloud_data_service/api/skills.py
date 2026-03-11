@@ -1,4 +1,5 @@
 """Skills API: GET /package 返回技能包 JSON。"""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request

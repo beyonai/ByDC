@@ -74,7 +74,8 @@ def build_scene_json(
 
     relations_registry = registry.get("relations", [])
     relations = [
-        r for r in relations_registry
+        r
+        for r in relations_registry
         if r.get("source_class") in object_ids and r.get("target_class") in object_ids
     ]
 

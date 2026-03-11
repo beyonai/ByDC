@@ -47,6 +47,7 @@ async def test_tracing_middleware_populates_input_summary() -> None:
     tracing = TracingMiddleware(bus)
     spans: list[EventSpan] = []
     tracing.on_span_complete(spans.append)
+
     async def noop(_: object) -> None:
         pass
 

@@ -52,9 +52,7 @@ def test_event_trace_logger_outputs_event_to_stderr_and_file(tmp_path) -> None:
     bus = EventBus()
     logger.register(bus)
 
-    event = QueryRequestReceived(
-        request_id="r1", trace_id="t1", question="q", object_ids=["o1"]
-    )
+    event = QueryRequestReceived(request_id="r1", trace_id="t1", question="q", object_ids=["o1"])
     with patch("sys.stderr", new_callable=io.StringIO):
         asyncio.run(bus.publish(event))
 
