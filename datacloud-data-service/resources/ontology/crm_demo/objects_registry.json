@@ -13,7 +13,7 @@
         },
         "servers": [
           {
-            "url": "http://127.0.0.1:8000"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -101,7 +101,7 @@
         },
         "servers": [
           {
-            "url": "http://127.0.0.1:8000"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -199,7 +199,7 @@
         },
         "servers": [
           {
-            "url": "http://127.0.0.1:8000"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -284,7 +284,7 @@
         },
         "servers": [
           {
-            "url": "http://127.0.0.1:8000"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -1162,7 +1162,7 @@
         },
         "servers": [
           {
-            "url": "http://127.0.0.1:8000"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -1256,7 +1256,7 @@
         },
         "servers": [
           {
-            "url": "http://127.0.0.1:8000"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -1343,7 +1343,7 @@
         },
         "servers": [
           {
-            "url": "http://127.0.0.1:8000"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -1423,7 +1423,7 @@
         },
         "servers": [
           {
-            "url": "http://127.0.0.1:8000"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -3245,6 +3245,14 @@
           "is_primary_key": true,
           "source_column": "id"
         },
+         {
+          "field_code": "boId",
+          "field_name": "商机id",
+          "field_type": "BIGINT",
+          "required": false,
+          "is_primary_key": false,
+          "source_column": "bo_id"
+        },
         {
           "field_code": "opportunityId",
           "field_name": "商机业务唯一标识",
@@ -3388,7 +3396,7 @@
         "pool_max": 5
       },
       "datasource_alias": "ds_crm",
-      "table_name": "po_users_kpi_detail"
+      "table_name": "sales_person_kpi_summary"
     },
     {
       "object_code": "sales_customer",
@@ -3463,7 +3471,8 @@
           "field_code": "belongIndustry",
           "field_name": "所属行业",
           "field_type": "STRING",
-          "source_column": "belong_industry"
+          "source_column": "belong_industry",
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "customer_belong_industry", "termField": "name"}
         },
         {
           "field_code": "itInvestmentScale",
@@ -4520,7 +4529,7 @@
       "join_keys": [
         {
           "from_field": "id",
-          "to_field": "opportunityId"
+          "to_field": "boId"
         }
       ]
     },
@@ -4611,7 +4620,7 @@
       "join_keys": [
         {
           "from_field": "relatedBoId",
-          "to_field": "opportunityId"
+          "to_field": "id"
         }
       ]
     },
@@ -4676,7 +4685,7 @@
       "join_keys": [
         {
           "from_field": "relatedBoId",
-          "to_field": "opportunityId"
+          "to_field": "id"
         }
       ]
     },
