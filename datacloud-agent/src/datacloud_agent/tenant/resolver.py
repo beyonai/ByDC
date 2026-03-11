@@ -58,10 +58,12 @@ class TenantResolver:
     def resolve_from_session(self, session_key: str) -> TenantContext:
         """Extract tenant from session key.
 
-        Expected session key format:
-        - user_private_{tenant_id}_{session_id}
-        - user_public_{tenant_id}_{session_id}
-        - public_{session_id}
+        Expected session key formats:
+        - New format (colon-separated): tenant:{tenant_id}:agent:{agent_id}:{session_id}
+        - Legacy format (underscore-separated):
+            - user_private_{tenant_id}_{session_id}
+            - user_public_{tenant_id}_{session_id}
+            - public_{session_id}
 
         Args:
             session_key: Session key to extract tenant from.
@@ -69,9 +71,34 @@ class TenantResolver:
         Returns:
             TenantContext extracted from the session key.
         """
+        # First, try to parse the new colon-separated format
+        # Format: tenant:{tenant_id}:agent:{agent_id}:{session_id}
+        new_pattern = r"^tenant:([^:]+):agent:[^:]+:(.+)$"
+        match = re.match(new_pattern, session_key)
+
+        if match:
+            tenant_id = match.group(1)
+            session_id = match.group(2)
+
+            # Determine tenant_type based on tenant_id
+            if tenant_id == "public":
+                return TenantContext(
+                    tenant_id="public",
+                    tenant_type=TenantType.PUBLIC,
+                    session_id=session_id,
+                )
+
+            # Default to user_private for tenant_id that are not "public"
+            return TenantContext(
+                tenant_id=tenant_id,
+                tenant_type=TenantType.USER_PRIVATE,
+                session_id=session_id,
+            )
+
+        # Fall back to the legacy underscore-separated format
         # Pattern: tenant_type_tenantId_sessionId
-        pattern = r"^(user_private|user_public|public)_(.+)$"
-        match = re.match(pattern, session_key)
+        legacy_pattern = r"^(user_private|user_public|public)_(.+)$"
+        match = re.match(legacy_pattern, session_key)
 
         if not match:
             # Default to public if no pattern match
