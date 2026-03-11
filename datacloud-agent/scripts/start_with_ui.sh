@@ -15,6 +15,8 @@ NC='\033[0m' # No Color
 AGENT_TYPE="${1:-content_writer}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# Repo root (whale_datacloud): deep-agents-ui 位于 ui/deep-agents-ui
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  DataCloud Agent + Deep Agents UI${NC}"
@@ -34,8 +36,8 @@ if [ ! -d "$AGENT_DIR" ]; then
     exit 1
 fi
 
-# 检查 UI 目录
-UI_DIR="${PROJECT_ROOT}/ui/deep-agents-ui"
+# 检查 UI 目录（位于仓库根目录 ui/deep-agents-ui）
+UI_DIR="${REPO_ROOT}/ui/deep-agents-ui"
 if [ ! -d "$UI_DIR" ]; then
     echo -e "${RED}错误: UI 目录不存在: ${UI_DIR}${NC}"
     echo "请运行: git submodule update --init --recursive"
