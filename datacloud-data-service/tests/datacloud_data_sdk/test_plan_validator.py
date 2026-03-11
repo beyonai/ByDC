@@ -15,7 +15,7 @@ from datacloud_data_sdk.plan.plan_validator import PlanValidator
 PAYLOAD = ObjectViewPayload(
     view_id="v1",
     sources=[
-        ObjectViewSource(source_id="SRC_CRM", source_type="DB", datasource_alias="crm_db")
+        ObjectViewSource(source_id="SRC_CRM", source_type="DB", datasource_alias="crm_db", db_type="POSTGRESQL")
     ],
     objects=[
         ObjectViewObject(
@@ -90,7 +90,7 @@ def test_direct_plan_missing_final_step_id_fails() -> None:
 def test_sql_field_ref_not_in_object_view_fails() -> None:
     payload = ObjectViewPayload(
         view_id="v1",
-        sources=[ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1")],
+        sources=[ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="POSTGRESQL")],
         objects=[
             ObjectViewObject(
                 object_id="obj1", object_name="测试对象", source_id="SRC_DB",
@@ -120,7 +120,7 @@ def test_sql_field_ref_not_in_object_view_fails() -> None:
 def test_sql_field_ref_valid_passes() -> None:
     payload = ObjectViewPayload(
         view_id="v1",
-        sources=[ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1")],
+        sources=[ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="POSTGRESQL")],
         objects=[
             ObjectViewObject(
                 object_id="obj1", object_name="测试对象", source_id="SRC_DB",
@@ -361,7 +361,7 @@ def test_sql_field_ref_source_column_passes() -> None:
     """SQL 使用 source_column（物理列名）时，校验通过。"""
     payload = ObjectViewPayload(
         view_id="v1",
-        sources=[ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1")],
+        sources=[ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="POSTGRESQL")],
         objects=[
             ObjectViewObject(
                 object_id="obj1",
@@ -397,3 +397,74 @@ def test_sql_field_ref_source_column_passes() -> None:
     )
     result = PlanValidator().validate(plan, payload)
     assert result.valid, result.errors
+
+
+def test_sql_step_db_source_missing_db_type_fails() -> None:
+    """DB 类数据源缺少 db_type 时校验失败。"""
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[
+            ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="")
+        ],
+        objects=[
+            ObjectViewObject(object_id="o1", object_name="测试", source_id="SRC_DB", table="t1", fields=[])
+        ],
+        relations=[],
+    )
+    plan = QueryExecutionPlan(
+        question="test", can_answer=True,
+        steps=[
+            PlanStep(step_id="s1", type="SQL", source_id="SRC_DB", datasource_alias="db1", sql_template="SELECT 1", output_ref="out")
+        ],
+        aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1", columns=[]),
+    )
+    result = PlanValidator().validate(plan, payload)
+    assert not result.valid
+    assert any("missing db_type" in e for e in result.errors)
+
+
+def test_sql_step_db_source_invalid_db_type_fails() -> None:
+    """db_type 不在支持列表时校验失败。"""
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[
+            ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="ORACLE")
+        ],
+        objects=[
+            ObjectViewObject(object_id="o1", object_name="测试", source_id="SRC_DB", table="t1", fields=[])
+        ],
+        relations=[],
+    )
+    plan = QueryExecutionPlan(
+        question="test", can_answer=True,
+        steps=[
+            PlanStep(step_id="s1", type="SQL", source_id="SRC_DB", datasource_alias="db1", sql_template="SELECT 1", output_ref="out")
+        ],
+        aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1", columns=[]),
+    )
+    result = PlanValidator().validate(plan, payload)
+    assert not result.valid
+    assert any("unsupported db_type" in e for e in result.errors)
+
+
+def test_sql_step_db_source_valid_db_type_passes() -> None:
+    """db_type 合法时校验通过。"""
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[
+            ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="POSTGRESQL")
+        ],
+        objects=[
+            ObjectViewObject(object_id="o1", object_name="测试", source_id="SRC_DB", table="t1", fields=[])
+        ],
+        relations=[],
+    )
+    plan = QueryExecutionPlan(
+        question="test", can_answer=True,
+        steps=[
+            PlanStep(step_id="s1", type="SQL", source_id="SRC_DB", datasource_alias="db1", sql_template="SELECT 1", output_ref="out")
+        ],
+        aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1", columns=[]),
+    )
+    result = PlanValidator().validate(plan, payload)
+    assert result.valid

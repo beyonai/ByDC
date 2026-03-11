@@ -22,15 +22,20 @@ class ActionToolGenerator:
             properties: dict[str, Any] = {}
             required: list[str] = []
             for p in in_params:
-                properties[p.param_code] = {
-                    "type": PARAM_TYPE_MAP.get(p.param_type.upper(), "string"),
+                ptype = PARAM_TYPE_MAP.get(p.param_type.upper(), "string")
+                prop: dict[str, Any] = {
+                    "type": ptype,
                     "description": p.param_name,
                 }
+                if ptype == "array":
+                    prop["items"] = {"type": "string"}
+                properties[p.param_code] = prop
                 if p.required:
                     required.append(p.param_code)
 
             tool: dict[str, Any] = {
                 "name": action.action_code,
+                "title": action.action_name or action.action_code,
                 "description": action.description or action.action_name,
                 "inputSchema": {
                     "type": "object",
