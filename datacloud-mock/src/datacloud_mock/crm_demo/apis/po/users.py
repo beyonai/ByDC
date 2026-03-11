@@ -1,7 +1,10 @@
 """人员 API handlers."""
 
+import sys
+import traceback
+
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +28,10 @@ class UsersByOrgRequest(BaseModel):
     """按组织 ID 查询人员."""
 
     orgId: str
-    includeSubOrgs: bool | None = False
+    includeSubOrgs: bool | None = Field(
+        default=False,
+        validation_alias=AliasChoices("includeSubOrgs", "includeSuborgs"),
+    )
 
 
 def _user_to_response(row: PoUsers, org_id: str | None) -> dict:
@@ -34,6 +40,7 @@ def _user_to_response(row: PoUsers, org_id: str | None) -> dict:
         "userId": str(row.user_id),
         "userName": row.user_name,
         "userNumber": row.user_number or "",
+        "userCode": row.user_code or "",
         "orgId": org_id or "",
         "state": row.state,
     }
@@ -59,8 +66,8 @@ async def users_query_by_ids(
     q = select(PoUsers)
     if body.userIds:
         try:
-            ids = [int(x) for x in body.userIds]
-            q = q.where(PoUsers.user_id.in_(ids))
+            # ids = [int(x) for x in body.userIds]
+            q = q.where(PoUsers.user_code.in_(body.userIds))
         except ValueError:
             return {"users": []}
     elif body.names:
@@ -94,17 +101,28 @@ async def users_query_by_org(
 ) -> dict:
     """按组织 ID 查询该组织下的人员列表."""
     try:
+        return await _users_query_by_org_impl(body, session)
+    except Exception:
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
+        raise
+
+
+async def _users_query_by_org_impl(
+    body: UsersByOrgRequest,
+    session: AsyncSession,
+) -> dict:
+    """按组织 ID 查询人员（内部实现）."""
+    try:
         org_id_int = int(body.orgId)
     except ValueError:
         return {"users": []}
 
     # 通过 po_users_organization 找到该组织下的 user_id
-    subq = (
-        select(PoUsersOrganization.user_id)
-        .where(PoUsersOrganization.org_id == org_id_int)
-        .subquery()
+    subq = select(PoUsersOrganization.user_id).where(
+        PoUsersOrganization.org_id == org_id_int
     )
-    q = select(PoUsers).where(PoUsers.user_id.in_(select(subq)))
+    q = select(PoUsers).where(PoUsers.user_id.in_(subq))
     result = await session.execute(q)
     rows = result.scalars().all()
 
