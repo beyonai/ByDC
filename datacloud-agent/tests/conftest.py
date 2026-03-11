@@ -122,24 +122,22 @@ def gateway_client_integration():
         # Register default agent
         default_config = AgentConfig(
             agent_id="default",
-            name="Default Agent",
-            description="General purpose agent",
-            model="claude-sonnet-4-6",
             provider="anthropic",
+            model="claude-sonnet-4-6",
             system_prompt="You are a helpful assistant.",
             tools=["know", "query", "compute", "render", "store"],
+            subagents=[],
         )
         client._agent_registry.register("default", default_config)
 
         # Register coder agent
         coder_config = AgentConfig(
             agent_id="coder",
-            name="Coder Agent",
-            description="Specialized in coding tasks",
-            model="claude-sonnet-4-6",
             provider="anthropic",
+            model="claude-sonnet-4-6",
             system_prompt="You are a coding assistant.",
             tools=["know", "query", "compute"],
+            subagents=[],
         )
         client._agent_registry.register("coder", coder_config)
 
