@@ -1,4 +1,7 @@
-"""Tests for WebSocket support."""
+"""Tests for WebSocket endpoint.
+
+Tests the WebSocket connection and OpenClaw protocol handler integration.
+"""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -16,155 +19,252 @@ def client():
 
 @pytest.fixture
 def mock_gateway_client():
-    """Mock GatewayClient."""
-    with patch("websocket.GatewayClient") as mock_cls:
-        mock_instance = AsyncMock()
-        mock_cls.return_value = mock_instance
-        yield mock_instance
+    """Mock GatewayClient for testing."""
+    mock = AsyncMock()
+    mock._agent_registry = MagicMock()
+    mock._agent_registry.get = MagicMock(return_value=None)
+    mock._agent_registry.register = MagicMock()
+    return mock
 
 
-def test_websocket_connection(client):
+class TestWebSocketConnection:
     """Test WebSocket connection establishment."""
-    with client.websocket_connect("/ws") as websocket:
-        # Send ping to verify connection works
-        websocket.send_json({"type": "ping"})
-        data = websocket.receive_json()
-        assert data["type"] == "pong"
+
+    def test_websocket_connection_established(self, client):
+        """Test that WebSocket connection can be established."""
+        with client.websocket_connect("/ws") as websocket:
+            # Connection should be established without errors
+            assert websocket is not None
+
+    def test_websocket_accepts_valid_frame(self, client):
+        """Test that valid protocol frames are accepted."""
+        with client.websocket_connect("/ws") as websocket:
+            # Send a valid request frame
+            frame = {"type": "req", "id": "test-123", "method": "health", "params": {}}
+            websocket.send_json(frame)
+
+            # Should receive a response
+            response = websocket.receive_json()
+            assert response["type"] == "res"
+            assert response["id"] == "test-123"
+            assert response["ok"] is True
+            assert response["payload"]["status"] == "healthy"
 
 
-def test_websocket_ping(client):
-    """Test ping/pong message."""
-    with client.websocket_connect("/ws") as websocket:
-        websocket.send_json({"type": "ping"})
-        data = websocket.receive_json()
-        assert data["type"] == "pong"
+class TestWebSocketErrorHandling:
+    """Test error handling in WebSocket."""
+
+    def test_invalid_json(self, client):
+        """Test handling of invalid JSON."""
+        with client.websocket_connect("/ws") as websocket:
+            websocket.send_text("invalid json")
+
+            response = websocket.receive_json()
+            assert response["type"] == "res"
+            assert response["ok"] is False
+            assert "Invalid JSON" in response["error"]
+
+    def test_unknown_method(self, client):
+        """Test handling of unknown method."""
+        with client.websocket_connect("/ws") as websocket:
+            frame = {"type": "req", "id": "test-unknown", "method": "unknown.method", "params": {}}
+            websocket.send_json(frame)
+
+            response = websocket.receive_json()
+            assert response["type"] == "res"
+            assert response["ok"] is False
+            assert "Unknown method" in response["error"]
 
 
-@pytest.mark.asyncio
-async def test_websocket_chat(client, mock_gateway_client):
-    """Test chat message streaming."""
-    calls = []
+class TestWebSocketTenantId:
+    """Test tenant ID extraction from WebSocket connection."""
 
-    async def mock_chat_stream(*args, **kwargs):
-        calls.append((args, kwargs))
-        mock_chunk = MagicMock()
-        mock_chunk.content = "Hello, world!"
-        mock_chunk.is_last = True
-        yield mock_chunk
+    def test_tenant_id_from_query(self, client):
+        """Test tenant ID extraction from query parameters."""
+        with patch("websocket.get_websocket_gateway_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_get_client.return_value = mock_client
 
-    # Replace chat_stream with our async generator
-    mock_gateway_client.chat_stream = mock_chat_stream
+            with client.websocket_connect("/ws?tenant_id=test-tenant") as websocket:
+                # Send health check to trigger client creation
+                frame = {"type": "req", "id": "test", "method": "health", "params": {}}
+                websocket.send_json(frame)
+                websocket.receive_json()
 
-    with client.websocket_connect("/ws") as websocket:
-        websocket.send_json(
-            {
-                "type": "chat",
-                "message": "Hello",
-                "session_id": "test-session",
-                "agent_id": "default",
+                # Verify get_websocket_gateway_client called with tenant_id
+                mock_get_client.assert_called_once()
+                args = mock_get_client.call_args[0]
+                assert len(args) >= 2
+                assert args[1] == "test-tenant"
+
+
+class TestWebSocketProtocolMethods:
+    """Test OpenClaw protocol methods via WebSocket."""
+
+    def test_health_method(self, client):
+        """Test health check via WebSocket."""
+        with client.websocket_connect("/ws") as websocket:
+            frame = {"type": "req", "id": "health-check", "method": "health", "params": {}}
+            websocket.send_json(frame)
+
+            response = websocket.receive_json()
+            assert response["type"] == "res"
+            assert response["ok"] is True
+            assert response["payload"]["status"] == "healthy"
+            assert "service" in response["payload"]
+
+    def test_sessions_list_method(self, client):
+        """Test sessions.list method."""
+        with client.websocket_connect("/ws") as websocket:
+            frame = {
+                "type": "req",
+                "id": "sessions-list",
+                "method": "sessions.list",
+                "params": {},
             }
-        )
+            websocket.send_json(frame)
 
-        # Receive chat chunk
-        data = websocket.receive_json()
-        assert data["type"] == "chat_chunk"
-        assert data["content"] == "Hello, world!"
-        assert data["is_last"] is True
+            response = websocket.receive_json()
+            assert response["type"] == "res"
+            assert response["ok"] is True
+            assert response["payload"] == []
 
-        # Verify chat_stream was called with correct arguments
-        assert len(calls) == 1
-        args, kwargs = calls[0]
-        assert kwargs["message"] == "Hello"
-        assert kwargs["session_id"] == "test-session"
-        assert kwargs["agent_id"] == "default"
-
-
-@pytest.mark.asyncio
-async def test_websocket_command(client, mock_gateway_client):
-    """Test command execution."""
-    mock_gateway_client.execute_command.return_value = {
-        "success": True,
-        "command": "help",
-        "message": "Available commands: /model <agent>, /reset, /help",
-    }
-
-    with client.websocket_connect("/ws") as websocket:
-        websocket.send_json(
-            {
-                "type": "command",
-                "command": "/help",
-                "session_id": "test-session",
+    def test_sessions_create_method(self, client):
+        """Test sessions.create method."""
+        with client.websocket_connect("/ws") as websocket:
+            frame = {
+                "type": "req",
+                "id": "session-create",
+                "method": "sessions.create",
+                "params": {"title": "Test Session"},
             }
-        )
+            websocket.send_json(frame)
 
-        data = websocket.receive_json()
-        assert data["type"] == "command_result"
-        assert data["result"]["success"] is True
-        assert data["result"]["command"] == "help"
+            response = websocket.receive_json()
+            assert response["type"] == "res"
+            assert response["ok"] is True
+            assert "id" in response["payload"]
+            assert response["payload"]["title"] == "Test Session"
+            assert "createdAt" in response["payload"]
+            assert "updatedAt" in response["payload"]
 
-        mock_gateway_client.execute_command.assert_called_once_with(
-            command="/help",
-            session_id="test-session",
-        )
+    def test_chat_history_method(self, client):
+        """Test chat.history method."""
+        with client.websocket_connect("/ws") as websocket:
+            frame = {
+                "type": "req",
+                "id": "chat-history",
+                "method": "chat.history",
+                "params": {"sessionId": "test-session"},
+            }
+            websocket.send_json(frame)
+
+            response = websocket.receive_json()
+            assert response["type"] == "res"
+            assert response["ok"] is True
+            assert response["payload"] == []
+
+    def test_chat_send_mock_mode(self, client):
+        """Test chat.send in mock mode (no API key)."""
+        with patch("openclaw_protocol._HAS_API_KEY", False):
+            with client.websocket_connect("/ws") as websocket:
+                # Create session first
+                session_frame = {
+                    "type": "req",
+                    "id": "create-session",
+                    "method": "sessions.create",
+                    "params": {},
+                }
+                websocket.send_json(session_frame)
+                session_response = websocket.receive_json()
+                session_id = session_response["payload"]["id"]
+
+                # Send chat message
+                chat_frame = {
+                    "type": "req",
+                    "id": "chat-send",
+                    "method": "chat.send",
+                    "params": {"sessionId": session_id, "message": "Hello!"},
+                }
+                websocket.send_json(chat_frame)
+
+                # Should receive immediate response confirming streaming started
+                response = websocket.receive_json()
+                assert response["type"] == "res"
+                assert response["ok"] is True
+                assert response["payload"]["status"] == "streaming"
+                assert "sessionId" in response["payload"]
+
+    def test_chat_send_missing_message(self, client):
+        """Test chat.send with missing message returns error."""
+        with client.websocket_connect("/ws") as websocket:
+            frame = {
+                "type": "req",
+                "id": "chat-error",
+                "method": "chat.send",
+                "params": {"sessionId": "test-session"},
+            }
+            websocket.send_json(frame)
+
+            response = websocket.receive_json()
+            assert response["type"] == "res"
+            assert response["ok"] is False
+            assert "Message is required" in response["error"]
 
 
-def test_websocket_invalid_json(client):
-    """Test handling of invalid JSON."""
-    with client.websocket_connect("/ws") as websocket:
-        websocket.send_text("invalid json")
-        data = websocket.receive_json()
-        assert data["type"] == "error"
-        assert "Invalid JSON" in data["error"]
+class TestWebSocketFullWorkflow:
+    """Integration tests for complete WebSocket workflows."""
 
+    def test_complete_chat_workflow(self, client):
+        """Test complete workflow: connect -> create session -> send message."""
+        with patch("openclaw_protocol._HAS_API_KEY", False):
+            with client.websocket_connect("/ws") as websocket:
+                # Step 1: Create a session
+                session_frame = {
+                    "type": "req",
+                    "id": "workflow-session",
+                    "method": "sessions.create",
+                    "params": {"title": "Integration Test"},
+                }
+                websocket.send_json(session_frame)
+                session_response = websocket.receive_json()
 
-def test_websocket_invalid_message_type(client):
-    """Test handling of unknown message type."""
-    with client.websocket_connect("/ws") as websocket:
-        websocket.send_json({"type": "unknown"})
-        data = websocket.receive_json()
-        assert data["type"] == "error"
-        assert "Unknown message type" in data["error"]
+                assert session_response["ok"] is True
+                session_id = session_response["payload"]["id"]
+                assert session_response["payload"]["title"] == "Integration Test"
 
+                # Step 2: Send a message
+                chat_frame = {
+                    "type": "req",
+                    "id": "workflow-chat",
+                    "method": "chat.send",
+                    "params": {"sessionId": session_id, "message": "What can you do?"},
+                }
+                websocket.send_json(chat_frame)
 
-def test_websocket_chat_missing_message(client):
-    """Test chat message validation."""
-    with client.websocket_connect("/ws") as websocket:
-        websocket.send_json({"type": "chat"})
-        data = websocket.receive_json()
-        assert data["type"] == "error"
-        assert "Missing 'message'" in data["error"]
+                # Step 3: Verify streaming started
+                response = websocket.receive_json()
+                assert response["ok"] is True
+                assert response["payload"]["status"] == "streaming"
+                assert "sessionId" in response["payload"]
 
+    def test_multiple_sessions(self, client):
+        """Test creating multiple sessions."""
+        with client.websocket_connect("/ws") as websocket:
+            session_ids = []
 
-def test_websocket_command_missing_command(client):
-    """Test command validation."""
-    with client.websocket_connect("/ws") as websocket:
-        websocket.send_json({"type": "command"})
-        data = websocket.receive_json()
-        assert data["type"] == "error"
-        assert "Missing 'command'" in data["error"]
+            for i in range(3):
+                frame = {
+                    "type": "req",
+                    "id": f"multi-session-{i}",
+                    "method": "sessions.create",
+                    "params": {"title": f"Session {i}"},
+                }
+                websocket.send_json(frame)
+                response = websocket.receive_json()
 
+                assert response["ok"] is True
+                session_ids.append(response["payload"]["id"])
 
-def test_websocket_tenant_id_from_query(client):
-    """Test tenant ID extraction from query parameters."""
-    with patch("websocket.get_websocket_gateway_client") as mock_get_client:
-        mock_client = AsyncMock()
-        mock_get_client.return_value = mock_client
-
-        with client.websocket_connect("/ws?tenant_id=test-tenant") as websocket:
-            websocket.send_json({"type": "ping"})
-            websocket.receive_json()  # pong
-
-            # Verify get_websocket_gateway_client called with tenant_id as second positional arg
-            mock_get_client.assert_called_once()
-            args = mock_get_client.call_args[0]
-            # First arg is websocket object, second is tenant_id
-            assert len(args) >= 2
-            assert args[1] == "test-tenant"
-
-
-def test_websocket_tenant_id_from_header(client):
-    """Test tenant ID extraction from headers."""
-    # TestClient.websocket_connect doesn't support headers directly,
-    # so we need to use the low-level API
-    # This test is skipped for now due to TestClient limitations
-    pass
+            # Verify all sessions have unique IDs
+            assert len(set(session_ids)) == 3
