@@ -9,7 +9,13 @@ from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from datacloud_mock.crm_demo.db import get_session
-from datacloud_mock.crm_demo.db.models import PoOrganization, PoUsers, PoUsersOrganization, TodoItems, TodoItemHandlers
+from datacloud_mock.crm_demo.db.models import (
+    PoOrganization,
+    PoUsers,
+    PoUsersOrganization,
+    TodoItems,
+    TodoItemHandlers,
+)
 from datacloud_mock.crm_demo.notice import send_notice
 
 # --- 状态常量（与 todo.py 一致）---
@@ -47,17 +53,15 @@ def _parse_datetime(s: str | None) -> datetime | None:
 async def _get_org_id_by_user_code(session: AsyncSession, user_code: str) -> int:
     """根据 user_code 或 user_number 查 org_id，无则返回 0."""
     u = await session.execute(
-        select(PoUsers.user_id).where(
-            (PoUsers.user_code == user_code) | (PoUsers.user_number == user_code)
-        ).limit(1)
+        select(PoUsers.user_id)
+        .where((PoUsers.user_code == user_code) | (PoUsers.user_number == user_code))
+        .limit(1)
     )
     uid = u.scalar_one_or_none()
     if not uid:
         return 0
     o = await session.execute(
-        select(PoUsersOrganization.org_id)
-        .where(PoUsersOrganization.user_id == uid)
-        .limit(1)
+        select(PoUsersOrganization.org_id).where(PoUsersOrganization.user_id == uid).limit(1)
     )
     org_row = o.scalar_one_or_none()
     return int(org_row) if org_row else 0
@@ -195,6 +199,7 @@ def _todo_to_list_item(
 def _next_id() -> int:
     """生成唯一 ID（mock 用，替代 snowflake）."""
     import time
+
     return int(time.time() * 1_000_000)
 
 
@@ -272,13 +277,15 @@ async def create_todo(
     notices = []
     for hid in handler_ids:
         if hid != promoter:
-            notices.append({
-                "content": f"待办创建：{body.title}",
-                "priority": 2,
-                "senderId": promoter,
-                "targetId": hid,
-                "title": "新的待办任务",
-            })
+            notices.append(
+                {
+                    "content": f"待办创建：{body.title}",
+                    "priority": 2,
+                    "senderId": promoter,
+                    "targetId": hid,
+                    "title": "新的待办任务",
+                }
+            )
     if notices:
         await send_notice(notices, request)
 
@@ -299,7 +306,9 @@ async def query_todo_list(
     """查询待办列表，逻辑对齐 todo.py query_todo_list."""
     page = body.page or 1
     page_size = body.pageSize or 20
-    sort_by = body.sortBy if body.sortBy in ("created_at", "deadline_at", "updated_at") else "created_at"
+    sort_by = (
+        body.sortBy if body.sortBy in ("created_at", "deadline_at", "updated_at") else "created_at"
+    )
     sort_desc = (body.sortOrder or "desc").lower() == "desc"
 
     q = select(TodoItems)
@@ -315,10 +324,7 @@ async def query_todo_list(
                 sub_handlers = select(TodoItemHandlers.todo_item_id).where(
                     TodoItemHandlers.org_id.in_(org_ids)
                 )
-                conditions.append(
-                    (TodoItems.org_id.in_(org_ids)
-                     | TodoItems.id.in_(sub_handlers))
-                )
+                conditions.append((TodoItems.org_id.in_(org_ids) | TodoItems.id.in_(sub_handlers)))
         except ValueError:
             pass
 
@@ -345,12 +351,8 @@ async def query_todo_list(
     if body.handlerIds:
         hids = [h for h in (body.handlerIds or []) if h]
         if hids:
-            sub = select(TodoItemHandlers.todo_item_id).where(
-                TodoItemHandlers.handler_id.in_(hids)
-            )
-            conditions.append(
-                (TodoItems.handler_id.in_(hids) | TodoItems.id.in_(sub))
-            )
+            sub = select(TodoItemHandlers.todo_item_id).where(TodoItemHandlers.handler_id.in_(hids))
+            conditions.append((TodoItems.handler_id.in_(hids) | TodoItems.id.in_(sub)))
 
     if body.promoter:
         conditions.append(TodoItems.promoter == body.promoter)
@@ -387,6 +389,7 @@ async def query_todo_list(
 
     # count（在 order/limit 之前）
     from sqlalchemy import func as fn
+
     count_q = select(fn.count(TodoItems.id)).select_from(TodoItems)
     for c in conditions:
         count_q = count_q.where(c)
@@ -401,9 +404,7 @@ async def query_todo_list(
 
     # 获取 handlers 和 progress
     todo_ids = [r.id for r in rows]
-    handlers_q = select(TodoItemHandlers).where(
-        TodoItemHandlers.todo_item_id.in_(todo_ids)
-    )
+    handlers_q = select(TodoItemHandlers).where(TodoItemHandlers.todo_item_id.in_(todo_ids))
     handlers_result = await session.execute(handlers_q)
     handlers_rows = handlers_result.scalars().all()
     handlers_by_todo: dict[int, list] = {}
@@ -421,8 +422,7 @@ async def query_todo_list(
                 handle_comment = h.handle_comment
                 break
         handlers_data = [
-            {"handlerId": h.handler_id, "handleComment": h.handle_comment}
-            for h in handlers_list
+            {"handlerId": h.handler_id, "handleComment": h.handle_comment} for h in handlers_list
         ]
         items.append(_todo_to_list_item(r, progress, handle_comment, handlers_data))
 
@@ -528,7 +528,9 @@ async def process_todos(
         except ValueError:
             skipped.append({"todoId": tid_str, "reason": "ID格式错误"})
             continue
-        row = (await session.execute(select(TodoItems).where(TodoItems.id == tid))).scalar_one_or_none()
+        row = (
+            await session.execute(select(TodoItems).where(TodoItems.id == tid))
+        ).scalar_one_or_none()
         if not row:
             skipped.append({"todoId": tid_str, "reason": "待办不存在"})
             continue
@@ -560,9 +562,10 @@ async def process_todos(
             )
         )
         new_status = (
-            CLOSED if current_user == row.promoter
-            else PENDING_REVIEW
-        ) if progress_val >= 100 else row.todo_status
+            (CLOSED if current_user == row.promoter else PENDING_REVIEW)
+            if progress_val >= 100
+            else row.todo_status
+        )
         await session.execute(
             update(TodoItems)
             .where(TodoItems.id == tid)
@@ -570,13 +573,15 @@ async def process_todos(
         )
         # 进度达到 100% 且操作人不是发起人时，通知发起人
         if progress_val >= 100 and current_user != row.promoter:
-            notices.append({
-                "content": f"待办处理：{row.title} 进度已100%，已提交审核",
-                "priority": 2,
-                "senderId": current_user,
-                "targetId": row.promoter,
-                "title": "待办处理进度",
-            })
+            notices.append(
+                {
+                    "content": f"待办处理：{row.title} 进度已100%，已提交审核",
+                    "priority": 2,
+                    "senderId": current_user,
+                    "targetId": row.promoter,
+                    "title": "待办处理进度",
+                }
+            )
         handled_ids.append(tid_str)
     if notices:
         await send_notice(notices, request)
@@ -600,7 +605,9 @@ async def delete_todos(
         except ValueError:
             skipped.append({"todoId": tid_str, "reason": "ID格式错误"})
             continue
-        row = (await session.execute(select(TodoItems).where(TodoItems.id == tid))).scalar_one_or_none()
+        row = (
+            await session.execute(select(TodoItems).where(TodoItems.id == tid))
+        ).scalar_one_or_none()
         if not row:
             skipped.append({"todoId": tid_str, "reason": "待办不存在"})
             continue
@@ -620,7 +627,12 @@ async def urge_todos(
 ) -> dict:
     """批量催更待办，逻辑对齐 todo.py follow_up_todo."""
     if not body.todoIds:
-        return {"todoId": "", "followUpAt": _format_datetime(datetime.now(timezone.utc)), "handledIds": [], "skipped": []}
+        return {
+            "todoId": "",
+            "followUpAt": _format_datetime(datetime.now(timezone.utc)),
+            "handledIds": [],
+            "skipped": [],
+        }
     current_user = _get_current_user(request)
     now = datetime.now(timezone.utc)
     handled_ids = []
@@ -632,7 +644,9 @@ async def urge_todos(
         except ValueError:
             skipped.append({"todoId": tid_str, "reason": "ID格式错误"})
             continue
-        row = (await session.execute(select(TodoItems).where(TodoItems.id == tid))).scalar_one_or_none()
+        row = (
+            await session.execute(select(TodoItems).where(TodoItems.id == tid))
+        ).scalar_one_or_none()
         if not row:
             skipped.append({"todoId": tid_str, "reason": "待办不存在"})
             continue
@@ -651,13 +665,15 @@ async def urge_todos(
             handler_ids.append(row.handler_id)
         for hid in handler_ids:
             if hid != row.promoter:
-                notices.append({
-                    "content": f"催办提醒：{row.title}，内容：{body.followUpContent or ''}",
-                    "priority": 2,
-                    "senderId": current_user,
-                    "targetId": hid,
-                    "title": "待办催办",
-                })
+                notices.append(
+                    {
+                        "content": f"催办提醒：{row.title}，内容：{body.followUpContent or ''}",
+                        "priority": 2,
+                        "senderId": current_user,
+                        "targetId": hid,
+                        "title": "待办催办",
+                    }
+                )
         handled_ids.append(tid_str)
     if notices:
         await send_notice(notices, request)
@@ -699,9 +715,7 @@ async def update_todo(
     if body.handlerIds:
         vals["handler_id"] = body.handlerIds[0]
         # 同步 todo_item_handlers：先删后插
-        await session.execute(
-            delete(TodoItemHandlers).where(TodoItemHandlers.todo_item_id == tid)
-        )
+        await session.execute(delete(TodoItemHandlers).where(TodoItemHandlers.todo_item_id == tid))
         org_id = row.org_id
         for h_id in body.handlerIds:
             th = TodoItemHandlers(
@@ -737,7 +751,9 @@ async def approve_todos(
         except ValueError:
             skipped.append({"todoId": tid_str, "reason": "ID格式错误"})
             continue
-        row = (await session.execute(select(TodoItems).where(TodoItems.id == tid))).scalar_one_or_none()
+        row = (
+            await session.execute(select(TodoItems).where(TodoItems.id == tid))
+        ).scalar_one_or_none()
         if not row:
             skipped.append({"todoId": tid_str, "reason": "待办不存在"})
             continue
@@ -779,13 +795,15 @@ async def approve_todos(
         msg = "审核通过" if body.approvalStatus == "Approving" else "审核不通过"
         for hid in handler_ids:
             if hid != row.promoter:
-                notices.append({
-                    "content": f"待办审批结果：{row.title}，{msg}",
-                    "priority": 2,
-                    "senderId": current_user,
-                    "targetId": hid,
-                    "title": "待办审批结果",
-                })
+                notices.append(
+                    {
+                        "content": f"待办审批结果：{row.title}，{msg}",
+                        "priority": 2,
+                        "senderId": current_user,
+                        "targetId": hid,
+                        "title": "待办审批结果",
+                    }
+                )
         handled_ids.append(tid_str)
     if notices:
         await send_notice(notices, request)

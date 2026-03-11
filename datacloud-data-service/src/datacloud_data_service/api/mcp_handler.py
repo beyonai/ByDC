@@ -1,4 +1,5 @@
 """MCP JSON-RPC 2.0 handler。"""
+
 from __future__ import annotations
 
 import json

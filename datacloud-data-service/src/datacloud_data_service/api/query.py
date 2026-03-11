@@ -1,4 +1,5 @@
 """REST 查询接口。"""
+
 from __future__ import annotations
 
 import json

@@ -173,4 +173,11 @@ cython_debug/
 .idea/vcs.xml
 .idea/whale_datacloud.iml
 uv.lock
-uv.lock
+
+.opencode/
+
+# Sisyphus agent working directory
+.sisyphus/
+
+**/node_modules/
+tmp/*

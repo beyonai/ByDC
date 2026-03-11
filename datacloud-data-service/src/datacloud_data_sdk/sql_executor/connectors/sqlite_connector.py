@@ -1,4 +1,5 @@
 """SQLite 连接器（内存/文件）。"""
+
 from __future__ import annotations
 import sqlite3
 from typing import Any

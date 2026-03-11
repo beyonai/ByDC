@@ -1,4 +1,5 @@
 """ClickHouse 连接器。"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -55,9 +56,7 @@ class ClickHouseConnector(BaseSourceConnector):
     def supported_type(cls) -> str:
         return "CLICKHOUSE"
 
-    async def execute(
-        self, sql: str, params: dict[str, Any] | None = None
-    ) -> list[dict[str, Any]]:
+    async def execute(self, sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         try:
             client = await self._get_client()
             rows = await client.fetch(sql, params=params or {})
@@ -73,9 +72,7 @@ class ClickHouseConnector(BaseSourceConnector):
                     out.append({"value": row})
             return out
         except Exception as e:
-            raise SqlExecutionError(
-                self.config.alias, sql, str(e)
-            ) from e
+            raise SqlExecutionError(self.config.alias, sql, str(e)) from e
 
     async def test_connection(self) -> bool:
         try:

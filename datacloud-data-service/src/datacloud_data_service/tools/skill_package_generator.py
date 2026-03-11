@@ -1,4 +1,5 @@
 """SkillPackageGenerator: 生成 M5 Skills API 所需的技能包。"""
+
 from __future__ import annotations
 
 from typing import Any

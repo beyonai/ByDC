@@ -1,4 +1,5 @@
 """ActionExecutor: 操作类工具的执行流水线。"""
+
 from __future__ import annotations
 
 import json
@@ -40,6 +41,7 @@ class ActionExecutor:
                 break
         if action is None:
             from datacloud_data_sdk.exceptions import ActionNotFoundError
+
             raise ActionNotFoundError(object_code, action_code)
 
         mapper = ParamMapper(action)
@@ -51,6 +53,8 @@ class ActionExecutor:
         result = await obj.invoke_action(action_code, params)
 
         return {
-            "content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False, default=str)}],
+            "content": [
+                {"type": "text", "text": json.dumps(result, ensure_ascii=False, default=str)}
+            ],
             "isError": False,
         }

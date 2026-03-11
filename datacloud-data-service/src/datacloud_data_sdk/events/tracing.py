@@ -1,4 +1,5 @@
 """链路追踪中间件。"""
+
 from __future__ import annotations
 
 import time

@@ -1,4 +1,5 @@
 """ToolRegistry: 工具注册与列表生成。"""
+
 from __future__ import annotations
 
 from typing import Any

@@ -1,4 +1,5 @@
 """SqlExecutor: SQL 执行 + CSV 输出。"""
+
 from __future__ import annotations
 import csv
 from pathlib import Path
@@ -14,7 +15,9 @@ from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
 
 
 class SqlExecutor:
-    def __init__(self, ds_manager: DataSourceManager, csv_base_dir: str = "/tmp/datacloud_csv") -> None:
+    def __init__(
+        self, ds_manager: DataSourceManager, csv_base_dir: str = "/tmp/datacloud_csv"
+    ) -> None:
         self._ds = ds_manager
         self._csv = CsvStorageManager(csv_base_dir)
 
