@@ -79,6 +79,9 @@ async def websocket_endpoint(websocket: WebSocket):
     # Get tenant ID from query or headers
     tenant_id = websocket.query_params.get("tenant_id") or websocket.headers.get("x-tenant-id")
 
+    # Initialize client variable for cleanup
+    client: GatewayClient | None = None
+
     try:
         # Create GatewayClient for this connection
         client = await get_websocket_gateway_client(websocket, tenant_id)
@@ -114,6 +117,14 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info("WebSocket connection closed by client")
+        # Clean up all checkpointers when connection ends to prevent memory leak
+        if client is not None and hasattr(client, "_agent_runner"):
+            try:
+                # Clear all checkpointers for this connection
+                client._agent_runner._checkpointers.clear()
+                logger.debug("Cleaned up all checkpointers for connection")
+            except Exception:
+                logger.exception("Error cleaning up checkpointers")
     except Exception:
         logger.exception("Unexpected error in WebSocket handler")
         with contextlib.suppress(Exception):

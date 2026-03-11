@@ -272,11 +272,15 @@ class GatewayClient:
                 raise SessionNotFoundError(f"Session '{session_id}' not found")
 
             await self._session_manager.reset_session(target_session.session_key)
+            # Clean up checkpointer to clear conversation context
+            self._agent_runner.cleanup_checkpointer(target_session.session_key)
         else:
             # Reset all sessions for this tenant
             sessions = await self._session_manager.list_sessions(tenant_id=self.tenant_id)
             for session in sessions:
                 await self._session_manager.reset_session(session.session_key)
+                # Clean up checkpointer for each session
+                self._agent_runner.cleanup_checkpointer(session.session_key)
 
         logger.debug("Reset session(s) for tenant: %s", self.tenant_id)
 
