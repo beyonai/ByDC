@@ -1,7 +1,10 @@
-"""Router exports for the OpenClaw Gateway Service."""
+"""Router exports for the OpenClaw Gateway Service.
 
-from .agents import router as agents_router
-from .chat import router as chat_router
-from .sessions import router as sessions_router
+This module previously exported REST API routers, but OpenClaw now uses
+WebSocket protocol exclusively. Kept for backward compatibility.
+"""
 
-__all__ = ["chat_router", "sessions_router", "agents_router"]
+# OpenClaw uses WebSocket protocol exclusively via /ws endpoint
+# No REST routers needed
+
+__all__ = []
