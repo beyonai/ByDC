@@ -1,12 +1,29 @@
-"""Pytest fixtures for datacloud-agent tests."""
+"""Pytest fixtures for datacloud-agent tests.
+
+Shared fixtures
+---------------
+initialized_sdk     Session-scoped: call bootstrap.setup() once for the whole
+                    test session (integration tests only).  Requires real env vars.
+workspace_paths     Function-scoped: isolated TaskPaths backed by a tmp_path;
+                    sets DATACLOUD_WORKSPACE_* env vars automatically.
+"""
+
+from __future__ import annotations
 
 import asyncio
 import uuid
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from datacloud_agent.config.models import GatewayConfig
+# ---------------------------------------------------------------------------
+# Legacy fixtures (kept for backward compatibility with existing tests)
+# ---------------------------------------------------------------------------
+try:
+    from datacloud_agent.config.models import GatewayConfig  # old models module
+except ImportError:
+    GatewayConfig = None  # type: ignore[assignment,misc]
 
 
 @pytest.fixture
@@ -162,3 +179,49 @@ def gateway_client_integration():
     if "langchain" not in sys.modules:
         sys.modules.pop("langchain", None)
         sys.modules.pop("langchain.chat_models", None)
+
+
+# ---------------------------------------------------------------------------
+# New fixtures for the superagent framework
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+async def initialized_sdk():
+    """Bootstrap the SDK once for the entire test session.
+
+    Only for integration tests that require a live PostgreSQL database.
+    Requires the following env vars to be set:
+        DATACLOUD_PG_CHECKPOINT_URI
+        DATACLOUD_WORKSPACE_PUBLIC_ROOT
+        DATACLOUD_WORKSPACE_PRIVATE_ROOT
+    """
+    import datacloud_agent.bootstrap as boot  # noqa: PLC0415
+
+    await boot.setup()
+    yield
+    await boot.teardown()
+
+
+@pytest.fixture()
+def workspace_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Isolated TaskPaths backed by a temporary directory.
+
+    Automatically sets DATACLOUD_WORKSPACE_* env vars so that
+    ``build_task_paths`` and ``WorkspaceSettings`` work without real config.
+
+    Returns a factory: ``workspace_paths(user_id, task_id) -> TaskPaths``.
+    """
+    pub = tmp_path / "public"
+    priv = tmp_path / "users"
+    pub.mkdir()
+    priv.mkdir()
+    (pub / "skills").mkdir()
+
+    monkeypatch.setenv("DATACLOUD_WORKSPACE_PUBLIC_ROOT", str(pub))
+    monkeypatch.setenv("DATACLOUD_WORKSPACE_PRIVATE_ROOT", str(priv))
+    monkeypatch.delenv("DATACLOUD_WORKSPACE_TASKS_ROOT", raising=False)
+
+    from datacloud_agent.workspace.paths import build_task_paths  # noqa: PLC0415
+
+    return build_task_paths
