@@ -11,13 +11,13 @@ HITL mechanism
 --------------
 When the Agent encounters ambiguity it calls LangGraph's native
 ``interrupt(value)`` function.  LangGraph freezes the current state into
-a checkpoint and raises ``GraphInterrupt``.  The gateway catches this,
+a checkpoint and raises ``GraphInterrupt``.  The message handler catches this,
 records the checkpoint_id, and emits a callback event to the task
 scheduler so the frontend can show a user-facing confirmation card.
 
 Resume path
 -----------
-The gateway re-enters the compiled graph via ``Command(resume=user_answer)``
+The message handler re-enters the compiled graph via ``Command(resume=user_answer)``
 using the same ``thread_id``.  LangGraph restores the checkpoint and
 continues execution from the interrupted node.
 """
