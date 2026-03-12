@@ -11,7 +11,7 @@
       "name": "Sales Analysis Agent (langgraph dev)",
       "type": "debugpy",
       "request": "launch",
-      "module": "langgraph",
+      "module": "langgraph_cli",
       "args": ["dev", "--host", "127.0.0.1", "--port", "2024", "--no-reload", "--no-browser", "--allow-blocking"],
       "cwd": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend",
       // envFile 让 VSCode 在启动进程前也加载 .env，与 langgraph dev 的读取保持一致
@@ -26,7 +26,7 @@
       "name": "Sales Analysis Agent (langgraph dev, no-reload)",
       "type": "debugpy",
       "request": "launch",
-      "module": "langgraph",
+      "module": "langgraph_cli",
       "args": ["dev", "--host", "127.0.0.1", "--port", "2024", "--no-reload", "--no-browser", "--allow-blocking"],
       "cwd": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend",
       "envFile": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend/.env",
