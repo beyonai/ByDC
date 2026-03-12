@@ -12,6 +12,16 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 
+# Suppress noisy internal heartbeat / file-watcher logs that clutter the console.
+for _noisy in (
+    "watchfiles",
+    "watchfiles.main",
+    "langgraph_runtime_inmem.queue",
+    "langgraph_runtime_inmem._persistence",
+    "langgraph_api.metadata",
+):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
+
 # Directly load the agent.py file since the directory 'datacloud-agent' has a hyphen
 agent_py_path = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "../../../datacloud-agent/src/datacloud-agent/agent.py")

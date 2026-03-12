@@ -10,36 +10,30 @@ Required env vars (loaded by langgraph dev via langgraph.json "env": ".env"):
     DATACLOUD_LLM_REASONING_MODEL  — (optional) model name override
 """
 
+from __future__ import annotations
+
 import logging
 import os
 from typing import Any
-from uuid import UUID
 
-from deepagents import create_deep_agent
+from langchain.agents import create_agent as _lc_create_agent
 from langchain.chat_models import init_chat_model
-from langchain_core.callbacks import BaseCallbackHandler
+from datacloud_agent.tools.data import data_query  # noqa: E402
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 logger = logging.getLogger(__name__)
 
+# 兼容不同版本的 langchain：set_verbose 在 0.1+ 才存在
+try:
+    from langchain.globals import set_verbose as _set_verbose
+    _set_verbose(os.getenv("LANGCHAIN_VERBOSE", "").lower() in ("1", "true"))
+except ImportError:
+    pass
 
-class _LLMLogger(BaseCallbackHandler):
-    """Logs LLM call lifecycle at INFO level so issues are visible in console."""
 
-    def on_llm_start(self, serialized: dict, prompts: list[str], **kwargs: Any) -> None:
-        run_id: UUID = kwargs.get("run_id")
-        short_id = str(run_id)[:8] if run_id else "?"
-        model = serialized.get("kwargs", {}).get("model_name") or serialized.get("name", "?")
-        logger.info("[LLM] ▶ start   run=%s  model=%s  prompts=%d", short_id, model, len(prompts))
-
-    def on_llm_end(self, response: Any, **kwargs: Any) -> None:
-        run_id: UUID = kwargs.get("run_id")
-        short_id = str(run_id)[:8] if run_id else "?"
-        logger.info("[LLM] ✓ finish  run=%s", short_id)
-
-    def on_llm_error(self, error: BaseException, **kwargs: Any) -> None:
-        run_id: UUID = kwargs.get("run_id")
-        short_id = str(run_id)[:8] if run_id else "?"
-        logger.error("[LLM] ✗ error   run=%s  %s: %s", short_id, type(error).__name__, error)
 
 # Fallback values — override via env vars in .env
 _FALLBACK_MODEL = "openai:Qwen/Qwen3-235B-A22B"
@@ -92,17 +86,36 @@ def create_agent(
         api_key=resolved_api_key,
         base_url=resolved_base_url,
         temperature=temperature,
-        callbacks=[_LLMLogger()],
+        timeout=60,       # 防止 LLM API 无响应时永久挂死
+        max_retries=1,
     )
 
     if system_prompt is None:
         system_prompt = (
-            "You are a helpful DataCloud assistant. "
-            "You help users with data analysis and business insights. "
-            "Be concise and accurate."
+            "You are a helpful DataCloud assistant for business data analysis.\n"
+            "You help users with data analysis and business insights.\n\n"
+            "## Tool usage rules\n"
+            "- When the user asks about business data (商机、客户、订单、合同、CRM records, etc.), "
+            "call the `data_query` tool **DIRECTLY and IMMEDIATELY** — do NOT delegate to a subagent via `task`.\n"
+            "- Only use the `task` tool for long multi-step tasks that require file operations or coding.\n"
+            "- `data_query` is always the first choice for any natural-language business data question."
         )
 
-    return create_deep_agent(
-        model=llm,
+    # Use langchain.agents.create_agent directly — bypasses deepagents SubAgentMiddleware
+    # which injects TASK_SYSTEM_PROMPT ("use subagent for all tasks") that overrides our
+    # intent and causes the general-purpose subagent to not receive data_query correctly.
+    compiled = _lc_create_agent(
+        llm,
+        tools=[data_query],
         system_prompt=system_prompt,
     )
+
+    # ── debug: list graph nodes to confirm ToolNode is in graph ───────────
+    try:
+        nodes = list(compiled.get_graph().nodes.keys())
+        logger.info("[dbg] compiled graph nodes: %s", nodes)
+    except Exception as _e:
+        logger.warning("[dbg] get_graph failed: %s", _e)
+    # ──────────────────────────────────────────────────────────────────────
+
+    return compiled
