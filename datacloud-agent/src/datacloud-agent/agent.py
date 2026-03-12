@@ -13,10 +13,11 @@ import logging
 import os
 from typing import Any
 
+from deepagents import create_deep_agent
+from langchain.chat_models import init_chat_model
+
 from datacloud_agent.i18n import get_supported_locales, get_system_prompt
 from datacloud_agent.tools.data import data_query
-from langchain.agents import create_agent as _lc_create_agent
-from langchain.chat_models import init_chat_model
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,16 +25,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-try:
-    from langchain.globals import set_verbose as _set_verbose
-
-    _set_verbose(os.getenv("LANGCHAIN_VERBOSE", "").lower() in ("1", "true"))
-except ImportError:
-    pass
-
 
 _FALLBACK_MODEL = "openai:Qwen/Qwen3-235B-A22B"
-_FALLBACK_API_KEY = "sk-emt6bXBfJl9ncHQtcHJveHkuaXdoYWxlY2xvdWQuY29tXyZf"
 _FALLBACK_BASE_URL = "https://lab.iwhalecloud.com/gpt-proxy/v1"
 
 
@@ -47,7 +40,12 @@ def create_agent(
     system_prompt: str | None = None,
 ) -> Any:
     """Create a deep agent for DataCloud, usable with langgraph dev and deep-agents-ui."""
-    resolved_api_key = api_key or os.getenv("OPENAI_API_KEY") or _FALLBACK_API_KEY
+    resolved_api_key = api_key or os.getenv("OPENAI_API_KEY")
+    if not resolved_api_key:
+        raise ValueError(
+            "API key is required. Set the OPENAI_API_KEY environment variable "
+            "or pass api_key= explicitly."
+        )
     resolved_base_url = base_url or os.getenv("OPENAI_BASE_URL") or _FALLBACK_BASE_URL
     resolved_model = model or os.getenv("DATACLOUD_LLM_REASONING_MODEL") or _FALLBACK_MODEL
     if not resolved_model.startswith("openai:"):
@@ -82,8 +80,8 @@ def create_agent(
     if system_prompt is None:
         system_prompt = get_system_prompt(resolved_locale)
 
-    compiled = _lc_create_agent(
-        llm,
+    compiled = create_deep_agent(
+        model=llm,
         tools=[data_query],
         system_prompt=system_prompt,
     )
