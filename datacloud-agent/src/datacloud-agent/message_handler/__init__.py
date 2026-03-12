@@ -1,4 +1,4 @@
-"""Gateway package — bridge between the task scheduler and the Agent core.
+"""Message handler package — bridge between the task scheduler and the Agent core.
 
 The task scheduler (third-party service) is *not* implemented here.
 This package only contains the client-side adapters:

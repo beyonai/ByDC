@@ -54,7 +54,7 @@ async def insight_node(state: dict[str, Any]) -> dict[str, Any]:
 def _emit_memory_collection_event(state: dict[str, Any]) -> None:
     """Asynchronously signal that memory distillation should start.
 
-    The actual MQ push happens in the gateway layer; here we just set a
-    flag in the state so the gateway can pick it up after streaming ends.
+    The actual MQ push happens in the message handler layer; here we just set a
+    flag in the state so the message handler can pick it up after streaming ends.
     """
     state["_emit_memory_event"] = True

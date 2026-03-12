@@ -8,7 +8,7 @@ Responsibilities
 - Pass the enriched state to the DAG planner.
 
 This module also exposes ``run_agent()``, the top-level coroutine called by
-``gateway.handler.MessageHandler``.
+``message_handler.handler.MessageHandler``.
 """
 
 from __future__ import annotations

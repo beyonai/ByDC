@@ -1,4 +1,4 @@
-"""Message handler — Agent gateway entry point (design §3.1 AGENT_GATEWAY).
+"""Message handler — entry point between task scheduler and Agent core (design §3.1 AGENT_GATEWAY).
 
 Responsibilities (per design flowchart)
 ----------------------------------------
