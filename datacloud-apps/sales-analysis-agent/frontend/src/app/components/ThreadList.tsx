@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { format } from "date-fns";
-import { Loader2, MessageSquare, X } from "lucide-react";
+import { Loader2, MessageSquare, SquarePen, X } from "lucide-react";
 import { useQueryState } from "nuqs";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -24,11 +24,11 @@ import { useThreads } from "@/app/hooks/useThreads";
 type StatusFilter = "all" | "idle" | "busy" | "interrupted" | "error";
 
 const GROUP_LABELS = {
-  interrupted: "Requiring Attention",
-  today: "Today",
-  yesterday: "Yesterday",
-  week: "This Week",
-  older: "Older",
+  interrupted: "需要关注",
+  today: "今天",
+  yesterday: "昨天",
+  week: "本周",
+  older: "更早",
 } as const;
 
 const STATUS_COLORS: Record<ThreadItem["status"], string> = {
@@ -115,6 +115,7 @@ interface ThreadListProps {
   onMutateReady?: (mutate: () => void) => void;
   onClose?: () => void;
   onInterruptCountChange?: (count: number) => void;
+  onNewThread?: () => void;
 }
 
 export function ThreadList({
@@ -122,6 +123,7 @@ export function ThreadList({
   onMutateReady,
   onClose,
   onInterruptCountChange,
+  onNewThread,
 }: ThreadListProps) {
   const [currentThreadId] = useQueryState("threadId");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -209,65 +211,77 @@ export function ThreadList({
   return (
     <div className="absolute inset-0 flex flex-col">
       {/* Header with title, filter, and close button */}
-      <div className="grid flex-shrink-0 grid-cols-[1fr_auto] items-center gap-3 border-b border-border p-4">
-        <h2 className="text-lg font-semibold tracking-tight">Threads</h2>
-        <div className="flex items-center gap-2">
-          <Select
-            value={statusFilter}
-            onValueChange={(v) => setStatusFilter(v as StatusFilter)}
-          >
-            <SelectTrigger className="w-fit">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="end">
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectSeparator />
-              <SelectGroup>
-                <SelectLabel>Active</SelectLabel>
-                <SelectItem value="idle">
-                  <StatusFilterItem
-                    status="idle"
-                    label="Idle"
-                  />
-                </SelectItem>
-                <SelectItem value="busy">
-                  <StatusFilterItem
-                    status="busy"
-                    label="Busy"
-                  />
-                </SelectItem>
-              </SelectGroup>
-              <SelectSeparator />
-              <SelectGroup>
-                <SelectLabel>Attention</SelectLabel>
-                <SelectItem value="interrupted">
-                  <StatusFilterItem
-                    status="interrupted"
-                    label="Interrupted"
-                    badge={interruptedCount}
-                  />
-                </SelectItem>
-                <SelectItem value="error">
-                  <StatusFilterItem
-                    status="error"
-                    label="Error"
-                  />
-                </SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          {onClose && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="h-8 w-8"
-              aria-label="Close threads sidebar"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
+      <div className="flex flex-shrink-0 flex-col gap-2 border-b border-border p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold tracking-tight">会话管理</h2>
+          <div className="flex items-center gap-1">
+            {onNewThread && (
+              <Button
+                size="sm"
+                onClick={onNewThread}
+                className="h-8 border-[#2F6868] bg-[#2F6868] text-white hover:bg-[#2F6868]/80"
+              >
+                <SquarePen className="mr-1.5 h-3.5 w-3.5" />
+                新建会话
+              </Button>
+            )}
+            {onClose && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="h-8 w-8"
+                aria-label="Close threads sidebar"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => setStatusFilter(v as StatusFilter)}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="end">
+            <SelectItem value="all">全部状态</SelectItem>
+            <SelectSeparator />
+            <SelectGroup>
+              <SelectLabel>运行中</SelectLabel>
+              <SelectItem value="idle">
+                <StatusFilterItem
+                  status="idle"
+                  label="空闲"
+                />
+              </SelectItem>
+              <SelectItem value="busy">
+                <StatusFilterItem
+                  status="busy"
+                  label="忙碌"
+                />
+              </SelectItem>
+            </SelectGroup>
+            <SelectSeparator />
+            <SelectGroup>
+              <SelectLabel>需要关注</SelectLabel>
+              <SelectItem value="interrupted">
+                <StatusFilterItem
+                  status="interrupted"
+                  label="已中断"
+                  badge={interruptedCount}
+                />
+              </SelectItem>
+              <SelectItem value="error">
+                <StatusFilterItem
+                  status="error"
+                  label="错误"
+                />
+              </SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
       </div>
 
       <ScrollArea className="h-0 flex-1">

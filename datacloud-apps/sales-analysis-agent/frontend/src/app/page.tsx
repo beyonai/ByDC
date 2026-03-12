@@ -7,7 +7,7 @@ import { ConfigDialog } from "@/app/components/ConfigDialog";
 import { Button } from "@/components/ui/button";
 import { Assistant } from "@langchain/langgraph-sdk";
 import { ClientProvider, useClient } from "@/providers/ClientProvider";
-import { Settings, MessagesSquare, SquarePen } from "lucide-react";
+import { MessagesSquare } from "lucide-react";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -31,7 +31,7 @@ function HomePageInner({
   handleSaveConfig,
 }: HomePageInnerProps) {
   const client = useClient();
-  const [threadId, setThreadId] = useQueryState("threadId");
+  const [_threadId, setThreadId] = useQueryState("threadId");
   const [sidebar, setSidebar] = useQueryState("sidebar");
 
   const [mutateThreads, setMutateThreads] = useState<(() => void) | null>(null);
@@ -113,7 +113,7 @@ function HomePageInner({
       <div className="flex h-screen flex-col">
         <header className="flex h-16 items-center justify-between border-b border-border px-6">
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-semibold">Deep Agent UI</h1>
+            <h1 className="text-xl font-semibold">超级分析智能体</h1>
             {!sidebar && (
               <Button
                 variant="ghost"
@@ -122,7 +122,7 @@ function HomePageInner({
                 className="rounded-md border border-border bg-card p-3 text-foreground hover:bg-accent"
               >
                 <MessagesSquare className="mr-2 h-4 w-4" />
-                Threads
+                会话管理
                 {interruptCount > 0 && (
                   <span className="ml-2 inline-flex min-h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] text-destructive-foreground">
                     {interruptCount}
@@ -132,28 +132,6 @@ function HomePageInner({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <div className="text-sm text-muted-foreground">
-              <span className="font-medium">Assistant:</span>{" "}
-              {config.assistantId}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setConfigDialogOpen(true)}
-            >
-              <Settings className="mr-2 h-4 w-4" />
-              Settings
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setThreadId(null)}
-              disabled={!threadId}
-              className="border-[#2F6868] bg-[#2F6868] text-white hover:bg-[#2F6868]/80"
-            >
-              <SquarePen className="mr-2 h-4 w-4" />
-              New Thread
-            </Button>
           </div>
         </header>
 
@@ -178,6 +156,7 @@ function HomePageInner({
                     onMutateReady={(fn) => setMutateThreads(() => fn)}
                     onClose={() => setSidebar(null)}
                     onInterruptCountChange={setInterruptCount}
+                    onNewThread={() => setThreadId(null)}
                   />
                 </ResizablePanel>
                 <ResizableHandle />
