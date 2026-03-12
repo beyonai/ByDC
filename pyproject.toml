@@ -140,12 +140,22 @@ asyncio_mode = "auto"
 
 [tool.coverage.run]
 source = ["src"]
-branch = true
+branch = true                          # 开启分支覆盖（if/else 两方向都要走到）
+omit = [
+    "*/tests/*",
+    "*/__init__.py",
+]
 
 [tool.coverage.report]
+fail_under = 90                        # 行覆盖率低于 90% 时 CI 报错
+show_missing = true
+skip_covered = false
 exclude_lines = [
     "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@overload",
     "def __repr__",
     "raise AssertionError",
-    "raise NotImplementedError",
+    "^\\s*\\.\\.\\.\\s*$",            # 纯省略号行（抽象方法占位）
 ]
