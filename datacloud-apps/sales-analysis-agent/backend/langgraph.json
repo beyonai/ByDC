@@ -10,7 +10,14 @@
         "ignore": [
             ".langgraph_api",
             "__pycache__",
-            "*.pyc"
+            "*.pyc",
+            "*/__pycache__",
+            "*/__pycache__/*",
+            "*/*/__pycache__",
+            "*/*/__pycache__/*",
+            "*/*/*/__pycache__",
+            "*/*/*/__pycache__/*",
+            "*/*/*/*/__pycache__/*"
         ]
     }
 }
