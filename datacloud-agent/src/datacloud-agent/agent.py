@@ -1,14 +1,10 @@
-"""DataCloud deep agent for use with Deep Agents UI.
+"""DataCloud deep agent — core graph factory.
 
-LLM config is read from environment variables (set in the app's .env file).
-Hard-coded values below are only used as last-resort fallbacks so that
-the module can be imported without any env vars (e.g. in unit tests).
-
-Required env vars (loaded by langgraph dev via langgraph.json "env": ".env"):
-    OPENAI_API_KEY             — API key for the LLM proxy
-    OPENAI_BASE_URL            — Base URL for the LLM proxy
-    DATACLOUD_LLM_REASONING_MODEL  — (optional) model name override
-    DATACLOUD_AGENT_LOCALE     — (optional) zh_CN | en_US, default zh_CN
+Persistence (checkpointing) is handled externally:
+- langgraph dev: injected by the platform via ``langgraph.json`` / ``checkpointer.py``
+  which references ``datacloud_agent.session.pg_opengauss.get_checkpointer``.
+- Standalone SDK: call ``create_agent()`` then compile with your own checkpointer,
+  or use ``datacloud_agent.session.pg_opengauss.make_opengauss_saver`` directly.
 """
 
 from __future__ import annotations
@@ -17,10 +13,10 @@ import logging
 import os
 from typing import Any
 
+from datacloud_agent.i18n import get_supported_locales, get_system_prompt
+from datacloud_agent.tools.data import data_query
 from langchain.agents import create_agent as _lc_create_agent
 from langchain.chat_models import init_chat_model
-from datacloud_agent.tools.data import data_query  # noqa: E402
-from datacloud_agent.i18n import get_system_prompt, get_supported_locales
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,16 +24,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# 兼容不同版本的 langchain：set_verbose 在 0.1+ 才存在
 try:
     from langchain.globals import set_verbose as _set_verbose
+
     _set_verbose(os.getenv("LANGCHAIN_VERBOSE", "").lower() in ("1", "true"))
 except ImportError:
     pass
 
 
-
-# Fallback values — override via env vars in .env
 _FALLBACK_MODEL = "openai:Qwen/Qwen3-235B-A22B"
 _FALLBACK_API_KEY = "sk-emt6bXBfJl9ncHQtcHJveHkuaXdoYWxlY2xvdWQuY29tXyZf"
 _FALLBACK_BASE_URL = "https://lab.iwhalecloud.com/gpt-proxy/v1"
@@ -52,45 +46,18 @@ def create_agent(
     locale: str | None = None,
     system_prompt: str | None = None,
 ) -> Any:
-    """Create a deep agent for DataCloud, usable with langgraph dev and deep-agents-ui.
-
-    Parameters are resolved in this order:
-    1. Explicit argument (if provided)
-    2. Environment variable
-    3. Hard-coded fallback
-
-    Args:
-        model:         Model identifier, e.g. ``openai:Qwen/Qwen3-235B-A22B``.
-        api_key:       API key; falls back to ``OPENAI_API_KEY`` env var.
-        base_url:      Base URL; falls back to ``OPENAI_BASE_URL`` env var.
-        temperature:   Sampling temperature.
-        locale:        Language locale code (``zh_CN`` | ``en_US``).
-                       Falls back to ``DATACLOUD_AGENT_LOCALE`` env var, then ``zh_CN``.
-                       Supported locales: see ``get_supported_locales()``.
-        system_prompt: Fully custom system prompt; if provided, overrides the
-                       locale-based prompt entirely.
-
-    Returns:
-        A LangGraph-compilable deep agent.
-    """
+    """Create a deep agent for DataCloud, usable with langgraph dev and deep-agents-ui."""
     resolved_api_key = api_key or os.getenv("OPENAI_API_KEY") or _FALLBACK_API_KEY
     resolved_base_url = base_url or os.getenv("OPENAI_BASE_URL") or _FALLBACK_BASE_URL
-    resolved_model = (
-        model
-        or os.getenv("DATACLOUD_LLM_REASONING_MODEL")
-        or _FALLBACK_MODEL
-    )
-    # Ensure the model identifier has the openai: provider prefix.
+    resolved_model = model or os.getenv("DATACLOUD_LLM_REASONING_MODEL") or _FALLBACK_MODEL
     if not resolved_model.startswith("openai:"):
         resolved_model = f"openai:{resolved_model}"
 
-    # Resolve locale and warn if unsupported.
     resolved_locale = locale or os.getenv("DATACLOUD_AGENT_LOCALE", "zh_CN")
     supported = get_supported_locales()
     if resolved_locale not in supported:
         logger.warning(
-            "create_agent: locale=%r is not supported (supported: %s). "
-            "Falling back to zh_CN.",
+            "create_agent: locale=%r is not supported (supported: %s). Falling back to zh_CN.",
             resolved_locale,
             supported,
         )
@@ -98,7 +65,9 @@ def create_agent(
 
     logger.info(
         "create_agent: model=%s base_url=%s locale=%s",
-        resolved_model, resolved_base_url, resolved_locale,
+        resolved_model,
+        resolved_base_url,
+        resolved_locale,
     )
 
     llm = init_chat_model(
@@ -113,21 +82,16 @@ def create_agent(
     if system_prompt is None:
         system_prompt = get_system_prompt(resolved_locale)
 
-    # Use langchain.agents.create_agent directly — bypasses deepagents SubAgentMiddleware
-    # which injects TASK_SYSTEM_PROMPT ("use subagent for all tasks") that overrides our
-    # intent and causes the general-purpose subagent to not receive data_query correctly.
     compiled = _lc_create_agent(
         llm,
         tools=[data_query],
         system_prompt=system_prompt,
     )
 
-    # ── debug: list graph nodes to confirm ToolNode is in graph ───────────
     try:
         nodes = list(compiled.get_graph().nodes.keys())
         logger.info("[dbg] compiled graph nodes: %s", nodes)
-    except Exception as _e:
-        logger.warning("[dbg] get_graph failed: %s", _e)
-    # ──────────────────────────────────────────────────────────────────────
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[dbg] get_graph failed: %s", exc)
 
     return compiled
