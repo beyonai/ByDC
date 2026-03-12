@@ -1,9 +1,20 @@
-"""datacloud-agent - DataCloud agent for Deep Agents UI.
+"""datacloud-agent — 超级分析智能体 SDK.
 
-Provides a LangGraph-compatible deep agent using the configured LLM,
-to be served via langgraph dev and used with ui/deep-agents-ui.
+Quick-start::
+
+    import asyncio
+    from datacloud_agent import bootstrap
+    from datacloud_agent.agent import create_agent
+
+    async def main():
+        await bootstrap.setup()   # one-time SDK init (PG tables, env validation)
+        agent = create_agent()
+        ...
+
+    asyncio.run(main())
 """
 
+from . import bootstrap
 from .agent import create_agent
 
-__all__ = ["create_agent"]
+__all__ = ["bootstrap", "create_agent"]
