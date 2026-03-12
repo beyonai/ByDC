@@ -6,9 +6,9 @@ All other modules receive a ``TaskPaths`` dataclass and must not touch env vars.
 Storage layout (from design §4.2.1.1 / §4.2.2.1)
 -------------------------------------------------
 {TASKS_ROOT}/{user_id}/task_{task_id}/
-    inputs/    ← read-write: materials pushed by gateway
+    inputs/    ← read-write: materials pushed by message handler
     temp/      ← read-write: model-generated scratch files
-    outputs/   ← read-write: deliverables collected by gateway
+    outputs/   ← read-write: deliverables collected by message handler
 
 Skills (read-only mounts in running view §4.2.1.2)
 --------------------------------------------------
@@ -48,8 +48,8 @@ def build_task_paths(user_id: str, task_id: str) -> TaskPaths:
     """Construct the ``TaskPaths`` for a specific user+task.
 
     Args:
-        user_id:  The user who owns this task (injected at runtime by gateway).
-        task_id:  The unique task identifier (injected at runtime by gateway).
+        user_id:  The user who owns this task (injected at runtime by message handler).
+        task_id:  The unique task identifier (injected at runtime by message handler).
 
     Returns:
         A frozen ``TaskPaths`` with all paths fully resolved.
