@@ -5,5 +5,12 @@
     "graphs": {
         "graph": "./agent.py:graph"
     },
-    "env": ".env"
+    "env": ".env",
+    "watch": {
+        "ignore": [
+            ".langgraph_api",
+            "__pycache__",
+            "*.pyc"
+        ]
+    }
 }
