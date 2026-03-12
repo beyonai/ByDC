@@ -1,4 +1,4 @@
-# Deep Agents UI
+# 超级分析智能体
 
 本目录为 [Deep Agents UI](https://github.com/langchain-ai/deep-agents-ui) 的代码，作为 whale_datacloud 仓库的一部分嵌套在此，用于连接 LangGraph / Deep Agents 进行对话与调试。
 
