@@ -12,6 +12,27 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class LocaleSettings(BaseSettings):
+    """Locale / language settings for the agent.
+
+    Environment variables (prefix: ``DATACLOUD_AGENT_``):
+        LOCALE  — BCP-47 style locale code. Defaults to ``zh_CN``.
+                  Supported values: zh_CN, en_US.
+                  At runtime, gateway can override per-request via
+                  create_agent(locale=...) rather than the env var.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="DATACLOUD_AGENT_",
+        extra="ignore",
+    )
+
+    locale: str = Field(
+        default="zh_CN",
+        description="Default agent locale (zh_CN | en_US | …)",
+    )
+
+
 class DataServiceSettings(BaseSettings):
     """Settings for the external data-query microservice.
 
