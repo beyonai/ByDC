@@ -19,7 +19,10 @@ classifiers = [
 ]
 
 # 根项目依赖（开发工具等）
-dependencies = []
+dependencies = [
+    "deepagents>=0.4.7",
+    "langchain-openai>=1.1.11",
+]
 
 [dependency-groups]
 dev = [
@@ -29,6 +32,7 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.11",
     "pre-commit>=3.8",
+    "langgraph-cli[inmem]>=0.2.0",
 ]
 
 [project.optional-dependencies]
@@ -62,7 +66,7 @@ members = [
     "datacloud-knowledge-service",
     "datacloud-memory",
     "datacloud-mock",
-    "service/datacloud-agent-service",
+    "datacloud-apps/datacloud-agent-service",
 ]
 
 [tool.uv.sources]
@@ -136,12 +140,22 @@ asyncio_mode = "auto"
 
 [tool.coverage.run]
 source = ["src"]
-branch = true
+branch = true                          # 开启分支覆盖（if/else 两方向都要走到）
+omit = [
+    "*/tests/*",
+    "*/__init__.py",
+]
 
 [tool.coverage.report]
+fail_under = 90                        # 行覆盖率低于 90% 时 CI 报错
+show_missing = true
+skip_covered = false
 exclude_lines = [
     "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@overload",
     "def __repr__",
     "raise AssertionError",
-    "raise NotImplementedError",
+    "^\\s*\\.\\.\\.\\s*$",            # 纯省略号行（抽象方法占位）
 ]
