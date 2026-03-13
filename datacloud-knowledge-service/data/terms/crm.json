@@ -1,0 +1,691 @@
+{
+  "directed": true,
+  "multigraph": true,
+  "graph": {},
+  "nodes": [
+    {
+      "id": "Term:opportunity",
+      "node_type": "Term",
+      "standard_name": "商机",
+      "domain_id": "sales",
+      "library_id": "master",
+      "properties": {
+        "pinyin": "shangji",
+        "aliases": [
+          "机会",
+          "销售机会",
+          "商机项目",
+          "潜在项目"
+        ],
+        "description": "CRM系统中的潜在销售交易记录，表示正在进行的销售过程",
+        "table": "sales_business_opportunity"
+      }
+    },
+    {
+      "id": "Term:customer",
+      "node_type": "Term",
+      "standard_name": "客户",
+      "domain_id": "sales",
+      "library_id": "master",
+      "properties": {
+        "pinyin": "kehu",
+        "aliases": [
+          "客户企业",
+          "account",
+          "甲方",
+          "合作方"
+        ],
+        "description": "销售管理的客户对象，包含企业信息和维护人",
+        "table": "sales_customer"
+      }
+    },
+    {
+      "id": "Term:contract",
+      "node_type": "Term",
+      "standard_name": "合同",
+      "domain_id": "sales",
+      "library_id": "master",
+      "properties": {
+        "pinyin": "hetong",
+        "aliases": [
+          "成交合同",
+          "签约",
+          "订单",
+          "销售合同"
+        ],
+        "description": "已签订的销售合同，记录合同金额、签订时间等",
+        "table": "po_users_kpi_detail"
+      }
+    },
+    {
+      "id": "Term:boFollowUp",
+      "node_type": "Term",
+      "standard_name": "商机跟进",
+      "domain_id": "sales",
+      "library_id": "master",
+      "properties": {
+        "pinyin": "shangjigenjin",
+        "aliases": [
+          "变更推进",
+          "跟进记录",
+          "状态变更",
+          "推进记录"
+        ],
+        "description": "商机的状态变更记录，记录每次推进或变更的时间、人、原因",
+        "table": "sales_bo_status_change"
+      }
+    },
+    {
+      "id": "Term:duChengpeng",
+      "node_type": "Term",
+      "standard_name": "杜成鹏",
+      "domain_id": "sales",
+      "library_id": "master",
+      "properties": {
+        "pinyin": "duchengpeng",
+        "aliases": [
+          "杜总",
+          "成鹏"
+        ],
+        "staff_account": "2302326",
+        "department": "销售部"
+      }
+    },
+    {
+      "id": "Term:aliDu",
+      "node_type": "Term",
+      "standard_name": "阿里杜总",
+      "domain_id": "sales",
+      "library_id": "master",
+      "properties": {
+        "pinyin": "aliduzong",
+        "aliases": [
+          "杜总",
+          "阿里巴巴杜总"
+        ],
+        "description": "阿里系客户联系人，商机推荐人",
+        "company": "阿里巴巴",
+        "role": "推荐人"
+      }
+    },
+    {
+      "id": "TermType:opportunity",
+      "node_type": "TermType",
+      "code": "opportunity",
+      "name": "商机对象",
+      "type": 3,
+      "properties": {
+        "description": "商机业务对象，对应sales_business_opportunity表",
+        "source": "CRM系统",
+        "table": "sales_business_opportunity"
+      }
+    },
+    {
+      "id": "TermType:customer",
+      "node_type": "TermType",
+      "code": "customer",
+      "name": "客户对象",
+      "type": 3,
+      "properties": {
+        "description": "客户业务对象，对应sales_customer表",
+        "source": "CRM系统",
+        "table": "sales_customer"
+      }
+    },
+    {
+      "id": "TermType:contract",
+      "node_type": "TermType",
+      "code": "contract",
+      "name": "合同对象",
+      "type": 3,
+      "properties": {
+        "description": "合同业务对象，对应po_users_kpi_detail表",
+        "source": "CRM系统",
+        "table": "po_users_kpi_detail"
+      }
+    },
+    {
+      "id": "TermType:boFollowUp",
+      "node_type": "TermType",
+      "code": "boFollowUp",
+      "name": "商机跟进对象",
+      "type": 3,
+      "properties": {
+        "description": "商机状态变更记录对象，对应sales_bo_status_change表",
+        "source": "CRM系统",
+        "table": "sales_bo_status_change"
+      }
+    },
+    {
+      "id": "Field:sales_business_opportunity.boName",
+      "node_type": "Field",
+      "field_name": "商机名称",
+      "source_column": "bo_name",
+      "is_primary_key": false,
+      "properties": {
+        "description": "商机项目名称",
+        "data_type": "STRING"
+      }
+    },
+    {
+      "id": "Field:sales_business_opportunity.customerName",
+      "node_type": "Field",
+      "field_name": "客户名称",
+      "source_column": "customer_name",
+      "is_primary_key": false,
+      "properties": {
+        "description": "关联的客户名称",
+        "data_type": "STRING",
+        "term_meta": {
+          "termTypeCode": "customer",
+          "termField": "name"
+        }
+      }
+    },
+    {
+      "id": "Field:sales_business_opportunity.iwhaleCbmEmpNo",
+      "node_type": "Field",
+      "field_name": "商机负责人工号",
+      "source_column": "iwhale_cbm_emp_no",
+      "is_primary_key": false,
+      "properties": {
+        "description": "商机负责人（跟进人）工号或名称",
+        "data_type": "STRING",
+        "term_meta": {
+          "termMasterType": "list",
+          "termTypeCode": "staffName",
+          "termField": "code"
+        }
+      }
+    },
+    {
+      "id": "Field:sales_business_opportunity.businessOpportunityProcess",
+      "node_type": "Field",
+      "field_name": "商机状态",
+      "source_column": "business_opportunity_process",
+      "is_primary_key": false,
+      "properties": {
+        "description": "商机当前状态",
+        "data_type": "STRING"
+      }
+    },
+    {
+      "id": "Field:sales_business_opportunity.opportunityStage",
+      "node_type": "Field",
+      "field_name": "商机进展",
+      "source_column": "opportunity_stage",
+      "is_primary_key": false,
+      "properties": {
+        "description": "商机阶段进展",
+        "data_type": "STRING"
+      }
+    },
+    {
+      "id": "Field:sales_customer.customerName",
+      "node_type": "Field",
+      "field_name": "客户名称",
+      "source_column": "customer_name",
+      "is_primary_key": false,
+      "properties": {
+        "description": "客户企业名称",
+        "data_type": "STRING"
+      }
+    },
+    {
+      "id": "Field:sales_customer.iwhaleCbmEmpNo",
+      "node_type": "Field",
+      "field_name": "客户维护人工号",
+      "source_column": "iwhale_cbm_emp_no",
+      "is_primary_key": false,
+      "properties": {
+        "description": "客户维护人（掌握人）工号或名称",
+        "data_type": "STRING",
+        "term_meta": {
+          "termMasterType": "list",
+          "termTypeCode": "staffName",
+          "termField": "code"
+        }
+      }
+    },
+    {
+      "id": "Field:sales_customer.belongIndustry",
+      "node_type": "Field",
+      "field_name": "所属行业",
+      "source_column": "belong_industry",
+      "is_primary_key": false,
+      "properties": {
+        "description": "客户所属行业，用于同类客户分析",
+        "data_type": "STRING",
+        "term_meta": {
+          "termMasterType": "dict",
+          "termTypeCode": "customer_belong_industry",
+          "termField": "name"
+        }
+      }
+    },
+    {
+      "id": "Field:po_users_kpi_detail.empNo",
+      "node_type": "Field",
+      "field_name": "责任人工号",
+      "source_column": "emp_no",
+      "is_primary_key": false,
+      "properties": {
+        "description": "合同责任人（签订人）工号",
+        "data_type": "STRING",
+        "term_meta": {
+          "termMasterType": "list",
+          "termTypeCode": "staffName",
+          "termField": "code"
+        }
+      }
+    },
+    {
+      "id": "Field:po_users_kpi_detail.contactName",
+      "node_type": "Field",
+      "field_name": "合同名称",
+      "source_column": "contact_name",
+      "is_primary_key": false,
+      "properties": {
+        "description": "合同项目名称",
+        "data_type": "STRING"
+      }
+    },
+    {
+      "id": "Field:po_users_kpi_detail.contactScale",
+      "node_type": "Field",
+      "field_name": "合同金额",
+      "source_column": "contact_scale",
+      "is_primary_key": false,
+      "properties": {
+        "description": "合同金额（万元）",
+        "data_type": "STRING"
+      }
+    },
+    {
+      "id": "Field:sales_bo_status_change.boId",
+      "node_type": "Field",
+      "field_name": "商机id",
+      "source_column": "bo_id",
+      "is_primary_key": false,
+      "properties": {
+        "description": "关联的商机主键",
+        "data_type": "BIGINT"
+      }
+    },
+    {
+      "id": "Field:sales_bo_status_change.statusBefore",
+      "node_type": "Field",
+      "field_name": "变更前状态",
+      "source_column": "status_before",
+      "is_primary_key": false,
+      "properties": {
+        "description": "状态变更前的值",
+        "data_type": "STRING",
+        "term_meta": {
+          "termMasterType": "dict",
+          "termTypeCode": "changeStatus",
+          "termField": "code"
+        }
+      }
+    },
+    {
+      "id": "Field:sales_bo_status_change.statusAfter",
+      "node_type": "Field",
+      "field_name": "变更后状态",
+      "source_column": "status_after",
+      "is_primary_key": false,
+      "properties": {
+        "description": "状态变更后的值",
+        "data_type": "STRING",
+        "term_meta": {
+          "termMasterType": "dict",
+          "termTypeCode": "changeStatus",
+          "termField": "code"
+        }
+      }
+    },
+    {
+      "id": "Field:sales_bo_status_change.changedBy",
+      "node_type": "Field",
+      "field_name": "变更人",
+      "source_column": "changed_by",
+      "is_primary_key": false,
+      "properties": {
+        "description": "执行状态变更操作的人员",
+        "data_type": "STRING",
+        "term_meta": {
+          "termMasterType": "list",
+          "termTypeCode": "staffName",
+          "termField": "code"
+        }
+      }
+    },
+    {
+      "id": "Field:sales_bo_status_change.changedTime",
+      "node_type": "Field",
+      "field_name": "变更时间",
+      "source_column": "changed_time",
+      "is_primary_key": false,
+      "properties": {
+        "description": "状态变更发生的时间",
+        "data_type": "DATETIME"
+      }
+    },
+    {
+      "id": "Object:sales_business_opportunity",
+      "node_type": "Object",
+      "name": "商机对象",
+      "properties": {
+        "source_type": "DB",
+        "tags": ["CRM", "商机"],
+        "datasource_alias": "ds_crm",
+        "table_name": "sales_business_opportunity"
+      }
+    },
+    {
+      "id": "Object:sales_customer",
+      "node_type": "Object",
+      "name": "客户对象",
+      "properties": {
+        "source_type": "DB",
+        "tags": ["CRM", "客户"],
+        "datasource_alias": "ds_crm",
+        "table_name": "sales_customer"
+      }
+    },
+    {
+      "id": "Object:po_users_kpi_detail",
+      "node_type": "Object",
+      "name": "合同对象",
+      "properties": {
+        "source_type": "DB",
+        "tags": ["CRM", "合同", "KPI"],
+        "datasource_alias": "ds_crm",
+        "table_name": "po_users_kpi_detail"
+      }
+    },
+    {
+      "id": "Object:sales_bo_status_change",
+      "node_type": "Object",
+      "name": "商机状态变更对象",
+      "properties": {
+        "source_type": "DB",
+        "tags": ["CRM", "商机状态变更"],
+        "datasource_alias": "ds_crm",
+        "table_name": "sales_bo_status_change"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "Term:opportunity",
+      "target": "TermType:opportunity",
+      "relation": "IS_MEMBER_OF",
+      "key": "is_member_of_opportunity"
+    },
+    {
+      "source": "Term:customer",
+      "target": "TermType:customer",
+      "relation": "IS_MEMBER_OF",
+      "key": "is_member_of_customer"
+    },
+    {
+      "source": "Term:contract",
+      "target": "TermType:contract",
+      "relation": "IS_MEMBER_OF",
+      "key": "is_member_of_contract"
+    },
+    {
+      "source": "Term:boFollowUp",
+      "target": "TermType:boFollowUp",
+      "relation": "IS_MEMBER_OF",
+      "key": "is_member_of_bo_follow_up"
+    },
+    {
+      "source": "Term:duChengpeng",
+      "target": "TermType:staffName",
+      "relation": "IS_MEMBER_OF",
+      "key": "is_member_of_staff_name"
+    },
+    {
+      "source": "Term:aliDu",
+      "target": "TermType:customer",
+      "relation": "IS_INSTANCE_OF",
+      "key": "is_instance_of_customer"
+    },
+    {
+      "source": "TermType:opportunity",
+      "target": "Field:sales_business_opportunity.boName",
+      "relation": "DEFINED_BY_TERM_TYPE",
+      "key": "defines_bo_name"
+    },
+    {
+      "source": "TermType:opportunity",
+      "target": "Field:sales_business_opportunity.customerName",
+      "relation": "DEFINED_BY_TERM_TYPE",
+      "key": "defines_customer_name"
+    },
+    {
+      "source": "TermType:opportunity",
+      "target": "Field:sales_business_opportunity.iwhaleCbmEmpNo",
+      "relation": "DEFINED_BY_TERM_TYPE",
+      "key": "defines_iwhale_cbm_emp_no"
+    },
+    {
+      "source": "TermType:opportunity",
+      "target": "Field:sales_business_opportunity.businessOpportunityProcess",
+      "relation": "DEFINED_BY_TERM_TYPE",
+      "key": "defines_business_opportunity_process"
+    },
+    {
+      "source": "TermType:opportunity",
+      "target": "Field:sales_business_opportunity.opportunityStage",
+      "relation": "DEFINED_BY_TERM_TYPE",
+      "key": "defines_opportunity_stage"
+    },
+    {
+      "source": "TermType:customer",
+      "target": "Field:sales_customer.customerName",
+      "relation": "DEFINED_BY_TERM_TYPE",
+      "key": "defines_customer_customer_name"
+    },
+    {
+      "source": "TermType:customer",
+      "target": "Field:sales_customer.iwhaleCbmEmpNo",
+      "relation": "DEFINED_BY_TERM_TYPE",
+      "key": "defines_customer_iwhale_cbm_emp_no"
+    },
+    {
+      "source": "TermType:customer",
+      "target": "Field:sales_customer.belongIndustry",
+      "relation": "DEFINED_BY_TERM_TYPE",
+      "key": "defines_customer_belong_industry"
+    },
+    {
+      "source": "TermType:contract",
+      "target": "Field:po_users_kpi_detail.empNo",
+      "relation": "DEFINED_BY_TERM_TYPE",
+      "key": "defines_contract_emp_no"
+    },
+    {
+      "source": "TermType:contract",
+      "target": "Field:po_users_kpi_detail.contactName",
+      "relation": "DEFINED_BY_TERM_TYPE",
+      "key": "defines_contract_contact_name"
+    },
+    {
+      "source": "TermType:contract",
+      "target": "Field:po_users_kpi_detail.contactScale",
+      "relation": "DEFINED_BY_TERM_TYPE",
+      "key": "defines_contract_contact_scale"
+    },
+    {
+      "source": "TermType:boFollowUp",
+      "target": "Field:sales_bo_status_change.boId",
+      "relation": "DEFINED_BY_TERM_TYPE",
+      "key": "defines_follow_up_bo_id"
+    },
+    {
+      "source": "TermType:boFollowUp",
+      "target": "Field:sales_bo_status_change.statusBefore",
+      "relation": "DEFINED_BY_TERM_TYPE",
+      "key": "defines_follow_up_status_before"
+    },
+    {
+      "source": "TermType:boFollowUp",
+      "target": "Field:sales_bo_status_change.statusAfter",
+      "relation": "DEFINED_BY_TERM_TYPE",
+      "key": "defines_follow_up_status_after"
+    },
+    {
+      "source": "TermType:boFollowUp",
+      "target": "Field:sales_bo_status_change.changedBy",
+      "relation": "DEFINED_BY_TERM_TYPE",
+      "key": "defines_follow_up_changed_by"
+    },
+    {
+      "source": "TermType:boFollowUp",
+      "target": "Field:sales_bo_status_change.changedTime",
+      "relation": "DEFINED_BY_TERM_TYPE",
+      "key": "defines_follow_up_changed_time"
+    },
+    {
+      "source": "Field:sales_business_opportunity.boName",
+      "target": "Object:sales_business_opportunity",
+      "relation": "HAS_FIELD",
+      "key": "has_field_bo_name"
+    },
+    {
+      "source": "Field:sales_business_opportunity.customerName",
+      "target": "Object:sales_business_opportunity",
+      "relation": "HAS_FIELD",
+      "key": "has_field_customer_name"
+    },
+    {
+      "source": "Field:sales_business_opportunity.iwhaleCbmEmpNo",
+      "target": "Object:sales_business_opportunity",
+      "relation": "HAS_FIELD",
+      "key": "has_field_iwhale_cbm_emp_no"
+    },
+    {
+      "source": "Field:sales_business_opportunity.businessOpportunityProcess",
+      "target": "Object:sales_business_opportunity",
+      "relation": "HAS_FIELD",
+      "key": "has_field_business_opportunity_process"
+    },
+    {
+      "source": "Field:sales_business_opportunity.opportunityStage",
+      "target": "Object:sales_business_opportunity",
+      "relation": "HAS_FIELD",
+      "key": "has_field_opportunity_stage"
+    },
+    {
+      "source": "Field:sales_customer.customerName",
+      "target": "Object:sales_customer",
+      "relation": "HAS_FIELD",
+      "key": "has_field_customer_customer_name"
+    },
+    {
+      "source": "Field:sales_customer.iwhaleCbmEmpNo",
+      "target": "Object:sales_customer",
+      "relation": "HAS_FIELD",
+      "key": "has_field_customer_iwhale_cbm_emp_no"
+    },
+    {
+      "source": "Field:sales_customer.belongIndustry",
+      "target": "Object:sales_customer",
+      "relation": "HAS_FIELD",
+      "key": "has_field_customer_belong_industry"
+    },
+    {
+      "source": "Field:po_users_kpi_detail.empNo",
+      "target": "Object:po_users_kpi_detail",
+      "relation": "HAS_FIELD",
+      "key": "has_field_contract_emp_no"
+    },
+    {
+      "source": "Field:po_users_kpi_detail.contactName",
+      "target": "Object:po_users_kpi_detail",
+      "relation": "HAS_FIELD",
+      "key": "has_field_contract_contact_name"
+    },
+    {
+      "source": "Field:po_users_kpi_detail.contactScale",
+      "target": "Object:po_users_kpi_detail",
+      "relation": "HAS_FIELD",
+      "key": "has_field_contract_contact_scale"
+    },
+    {
+      "source": "Field:sales_bo_status_change.boId",
+      "target": "Object:sales_bo_status_change",
+      "relation": "HAS_FIELD",
+      "key": "has_field_follow_up_bo_id"
+    },
+    {
+      "source": "Field:sales_bo_status_change.statusBefore",
+      "target": "Object:sales_bo_status_change",
+      "relation": "HAS_FIELD",
+      "key": "has_field_follow_up_status_before"
+    },
+    {
+      "source": "Field:sales_bo_status_change.statusAfter",
+      "target": "Object:sales_bo_status_change",
+      "relation": "HAS_FIELD",
+      "key": "has_field_follow_up_status_after"
+    },
+    {
+      "source": "Field:sales_bo_status_change.changedBy",
+      "target": "Object:sales_bo_status_change",
+      "relation": "HAS_FIELD",
+      "key": "has_field_follow_up_changed_by"
+    },
+    {
+      "source": "Field:sales_bo_status_change.changedTime",
+      "target": "Object:sales_bo_status_change",
+      "relation": "HAS_FIELD",
+      "key": "has_field_follow_up_changed_time"
+    },
+    {
+      "source": "Term:opportunity",
+      "target": "Term:customer",
+      "relation": "BELONGS_TO",
+      "key": "opportunity_belongs_to_customer"
+    },
+    {
+      "source": "Term:opportunity",
+      "target": "Term:contract",
+      "relation": "CONVERTS_TO",
+      "key": "opportunity_converts_to_contract"
+    },
+    {
+      "source": "Term:boFollowUp",
+      "target": "Term:opportunity",
+      "relation": "TRACKS",
+      "key": "follow_up_tracks_opportunity"
+    },
+    {
+      "source": "Term:duChengpeng",
+      "target": "Term:opportunity",
+      "relation": "FOLLOWS",
+      "key": "du_chengpeng_follows_opportunity"
+    },
+    {
+      "source": "Term:duChengpeng",
+      "target": "Term:customer",
+      "relation": "MANAGES",
+      "key": "du_chengpeng_manages_customer"
+    },
+    {
+      "source": "Term:duChengpeng",
+      "target": "Term:contract",
+      "relation": "SIGNS",
+      "key": "du_chengpeng_signs_contract"
+    },
+    {
+      "source": "Term:aliDu",
+      "target": "Term:opportunity",
+      "relation": "RECOMMENDS",
+      "key": "ali_du_recommends_opportunity"
+    }
+  ]
+}
