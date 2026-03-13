@@ -6,6 +6,17 @@ from typing import Any
 
 from datacloud_data_sdk.ontology.models import OntologyAction, OntologyActionParam
 
+def _default_query_output_schema() -> dict[str, object]:
+    """虚拟动作默认 output schema。"""
+    return {
+        "type": "object",
+        "properties": {
+            "records": {"type": "array", "items": {"type": "object"}, "description": "记录行"},
+            "total": {"type": "integer", "description": "总条数"},
+        },
+    }
+
+
 PARAM_TYPE_MAP: dict[str, str] = {
     "STRING": "string",
     "NUMBER": "number",
@@ -40,13 +51,26 @@ class Action:
         return bool(self._action.script)
 
     def get_schema(self) -> dict[str, object]:
-        """生成 {input: JSON Schema, output: JSON Schema}。"""
-        in_params = [p for p in self._action.params if p.direction in ("IN", "INOUT")]
-        out_params = [p for p in self._action.params if p.direction in ("OUT", "INOUT")]
-        return {
-            "input": self._build_schema(in_params),
-            "output": self._build_schema(out_params),
+        """生成 {name, title, description, inputSchema, outputSchema}，结果缓存。"""
+        if self._action._schema_cache is not None:
+            return self._action._schema_cache
+        if self._action.input_schema is not None:
+            inp = self._action.input_schema
+            out = self._action.output_schema or _default_query_output_schema()
+        else:
+            in_params = [p for p in self._action.params if p.direction in ("IN", "INOUT")]
+            out_params = [p for p in self._action.params if p.direction in ("OUT", "INOUT")]
+            inp = self._build_schema(in_params)
+            out = self._build_schema(out_params)
+        result = {
+            "name": self._action.action_code,
+            "title": self._action.action_name or self._action.action_code,
+            "description": self._action.description or self._action.action_name or "",
+            "inputSchema": inp,
+            "outputSchema": out,
         }
+        self._action._schema_cache = result
+        return result
 
     def _build_schema(self, params: list[OntologyActionParam]) -> dict[str, object]:
         properties: dict[str, dict[str, object]] = {}
@@ -67,8 +91,11 @@ class Action:
         return schema
 
     async def execute(self, params: dict[str, object]) -> dict[str, object]:
-        """执行动作：script 优先 → API → ActionNotConfiguredError。"""
+        """执行动作：is_virtual 优先 → script → API → ActionNotConfiguredError。"""
         from datacloud_data_sdk.exceptions import ActionNotConfiguredError
+
+        if getattr(self._action, "is_virtual", False):
+            return await self._execute_virtual(dict(params))
 
         if self._action.script:
             return await self._execute_script(dict(params))
@@ -77,6 +104,19 @@ class Action:
             return await self._execute_api(dict(params))
 
         raise ActionNotConfiguredError(self._action.action_code)
+
+    async def _execute_virtual(self, params: dict[str, Any]) -> dict[str, Any]:
+        """执行虚拟查询动作，返回原始数据 {"records": [], "total": 0}。"""
+        from datacloud_data_sdk.executor.dynamic_query_executor import DynamicQueryExecutor
+
+        if not self._loader:
+            from datacloud_data_sdk.exceptions import ActionNotConfiguredError
+
+            raise ActionNotConfiguredError(self._action.action_code)
+
+        object_code = getattr(self._action, "belong_class", "") or ""
+        executor = DynamicQueryExecutor(self._loader)
+        return await executor.execute(object_code, params)
 
     async def _execute_script(self, params: dict[str, Any]) -> dict[str, Any]:
         from datacloud_data_sdk.executor.script_executor import ScriptExecutor

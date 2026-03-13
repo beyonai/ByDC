@@ -16,7 +16,10 @@ class SkillPackageGenerator:
         self._loader = loader
 
     def generate(
-        self, view_id: str | None = None, object_ids: list[str] | None = None
+        self,
+        view_id: str | None = None,
+        object_ids: list[str] | None = None,
+        tool_list_mode: str = "unified",
     ) -> dict[str, Any]:
         """生成技能包。
 
@@ -49,7 +52,10 @@ class SkillPackageGenerator:
                 ).object_name
 
         registry = ToolRegistry(self._loader)
-        tools = registry.list_tools(object_ids=resolved_object_ids)
+        tools = registry.list_tools(
+            object_ids=resolved_object_ids,
+            tool_list_mode=tool_list_mode,
+        )
 
         result_tools: list[dict[str, Any]] = []
         for t in tools:

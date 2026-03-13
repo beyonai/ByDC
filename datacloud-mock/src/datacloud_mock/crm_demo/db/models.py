@@ -1,6 +1,7 @@
 """SQLAlchemy 表映射，基于 DDL.sql."""
 
 from datetime import datetime
+import os
 
 from sqlalchemy import BigInteger, Boolean, DateTime, Integer, Numeric, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -13,7 +14,7 @@ class Base(DeclarativeBase):
 
 
 # ---------------------------------------------------------------------------
-# crm_demo schema
+# crm_demo schema（组织、用户表固定在 crm_demo）
 # ---------------------------------------------------------------------------
 
 
@@ -83,15 +84,17 @@ class PoUsers(Base):
 
 
 # ---------------------------------------------------------------------------
-# search schema
+# 待办相关表：schema 可配置（默认 crm_demo）
 # ---------------------------------------------------------------------------
+
+TODO_SCHEMA = os.getenv("TODO_SCHEMA", "crm_demo")
 
 
 class TodoItems(Base):
     """待办主表 search.todo_items."""
 
     __tablename__ = "todo_items"
-    __table_args__ = {"schema": "search"}
+    __table_args__ = {"schema": TODO_SCHEMA}
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -122,7 +125,7 @@ class TodoItemHandlers(Base):
     """待办处理人关联表 search.todo_item_handlers."""
 
     __tablename__ = "todo_item_handlers"
-    __table_args__ = {"schema": "search"}
+    __table_args__ = {"schema": TODO_SCHEMA}
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     todo_item_id: Mapped[int] = mapped_column(BigInteger, nullable=False)

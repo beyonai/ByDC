@@ -73,7 +73,6 @@ class View:
         from datacloud_data_sdk.plan.data_permission_rewriter import DataPermissionRewriter
         from datacloud_data_sdk.plan.execution_object_converter import ExecutionObjectConverter
         from datacloud_data_sdk.plan.object_view_builder import ObjectViewBuilder
-        from datacloud_data_sdk.plan.plan_validator import PlanValidator
         from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
         from datacloud_data_sdk.sql_executor.sql_executor import SqlExecutor
 
@@ -106,75 +105,45 @@ class View:
                 except Exception:
                     pass
 
-            max_retries = getattr(config.plan_generator, "_max_retries", 2)
-            validation_errors: list[str] | None = None
-            plan = None
-            result = None
-            for retry in range(max_retries + 1):
-                plan = await config.plan_generator.generate(
-                    payload,
-                    question,
-                    validation_errors=validation_errors,
-                    term_loader=getattr(config, "term_loader", None),
-                )
-                plan_dict = {
-                    "question": plan.question,
-                    "can_answer": plan.can_answer,
-                    "clarification": plan.clarification,
-                    "steps": [asdict(s) for s in plan.steps],
-                    "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
-                }
-                if observer:
-                    try:
-                        await observer.on_plan_generated(request_id, plan_dict)
-                    except Exception:
-                        pass
+            plan = await config.plan_generator.generate(
+                payload,
+                question,
+                term_loader=getattr(config, "term_loader", None),
+            )
+            if not plan.can_answer:
+                raise CannotAnswerError(plan.clarification)
+            plan_dict = {
+                "question": plan.question,
+                "can_answer": plan.can_answer,
+                "clarification": plan.clarification,
+                "steps": [asdict(s) for s in plan.steps],
+                "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
+            }
+            if observer:
                 try:
-                    logging.getLogger("datacloud_data_sdk").info(
-                        json.dumps(plan_dict, ensure_ascii=False)
+                    await observer.on_plan_generated(request_id, plan_dict)
+                except Exception:
+                    pass
+            try:
+                logging.getLogger("datacloud_data_sdk").info(
+                    json.dumps(plan_dict, ensure_ascii=False)
+                )
+            except Exception:
+                pass
+
+            if observer:
+                try:
+                    await observer.on_plan_validated(
+                        request_id,
+                        True,
+                        plan_dict,
+                        asdict(payload),
+                        question,
+                        [],
+                        0,
                     )
                 except Exception:
                     pass
-
-                if not plan.can_answer:
-                    raise CannotAnswerError(plan.clarification)
-
-                result = PlanValidator().validate(plan, payload)
-                if observer:
-                    try:
-                        plan_dict = {
-                            "question": plan.question,
-                            "can_answer": plan.can_answer,
-                            "steps": [asdict(s) for s in plan.steps],
-                            "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
-                        }
-                        await observer.on_plan_validated(
-                            request_id,
-                            result.valid,
-                            plan_dict,
-                            asdict(payload),
-                            question,
-                            result.errors,
-                            retry,
-                        )
-                    except Exception:
-                        pass
-                if result.valid:
-                    break
-                validation_errors = result.errors
-                if retry >= max_retries:
-                    if observer:
-                        try:
-                            plan_dict = {
-                                "steps": [asdict(s) for s in plan.steps],
-                                "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
-                            }
-                            await observer.on_plan_validation_failed(
-                                request_id, result.errors, plan_dict
-                            )
-                        except Exception:
-                            pass
-                    raise PlanValidationError(result.errors)
 
             try:
                 ctx = get_current_context()
@@ -289,6 +258,25 @@ class View:
                     "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
                 }
             return result
+        except PlanValidationError as exc:
+            if observer:
+                try:
+                    plan_dict: dict = {}
+                    if exc.plan:
+                        plan_dict = {
+                            "steps": [asdict(s) for s in exc.plan.steps],
+                            "aggregation": (
+                                asdict(exc.plan.aggregation)
+                                if exc.plan.aggregation
+                                else None
+                            ),
+                        }
+                    await observer.on_plan_validation_failed(
+                        request_id, exc.errors, plan_dict
+                    )
+                except Exception:
+                    pass
+            raise
         except Exception as exc:
             from datacloud_data_sdk.events.trace_logger import log_exception_stack
 
