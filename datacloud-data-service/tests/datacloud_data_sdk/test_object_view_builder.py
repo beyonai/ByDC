@@ -33,6 +33,7 @@ REGISTRY = {
                         },
                     ],
                     "function_refs": ["fn_po_users_query_by_ids"],
+                    "action_type": "query",
                 }
             ],
         },

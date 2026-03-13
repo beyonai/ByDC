@@ -46,9 +46,14 @@ async def get_skill_package(
             detail="OntologyLoader not initialized",
         )
 
+    tool_list_mode = request.headers.get("X-Tool-List-Mode", "unified")
+    if tool_list_mode not in ("unified", "per_object"):
+        tool_list_mode = "unified"
+
     generator = SkillPackageGenerator(loader)
     result = generator.generate(
         view_id=view_id.strip() if has_view_id else None,
         object_ids=object_ids_list if has_object_ids else None,
+        tool_list_mode=tool_list_mode,
     )
     return result
