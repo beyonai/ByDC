@@ -1,0 +1,27 @@
+{
+    "dependencies": [
+        "../../../datacloud-agent"
+    ],
+    "graphs": {
+        "graph": "./agent.py:graph"
+    },
+    "env": ".env",
+    "checkpointer": {
+        "backend": "custom",
+        "path": "./checkpointer.py:get_checkpointer"
+    },
+    "watch": {
+        "ignore": [
+            ".langgraph_api",
+            "__pycache__",
+            "*.pyc",
+            "*/__pycache__",
+            "*/__pycache__/*",
+            "*/*/__pycache__",
+            "*/*/__pycache__/*",
+            "*/*/*/__pycache__",
+            "*/*/*/__pycache__/*",
+            "*/*/*/*/__pycache__/*"
+        ]
+    }
+}

@@ -1,3 +1,0 @@
-[submodule "datacloud-agent/ui/deep-agents-ui"]
-	path = ui/deep-agents-ui
-	url = https://github.com/langchain-ai/deep-agents-ui.git
