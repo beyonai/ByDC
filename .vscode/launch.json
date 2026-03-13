@@ -1,28 +1,35 @@
 {
   "version": "0.2.0",
   "configurations": [
+    // ---------------------------------------------------------------
+    // sales-analysis-agent — 超级分析智能体（主入口）
+    // 使用 langgraph dev 启动，env vars 从同目录的 .env 文件加载
+    // （langgraph.json 中已声明 "env": ".env"）
+    // 访问地址：http://127.0.0.1:2024
+    // ---------------------------------------------------------------
     {
-      "name": "OpenClaw Gateway (datacloud-agent-service)",
+      "name": "Sales Analysis Agent (langgraph dev)",
       "type": "debugpy",
       "request": "launch",
-      "module": "uvicorn",
-      "args": ["server:app", "--host", "0.0.0.0", "--port", "8000"],
-      "cwd": "${workspaceFolder}/service/datacloud-agent-service",
-      "env": {
-        "OPENAI_API_KEY": "sk-emt6bXBfJl9ncHQtcHJveHkuaXdoYWxlY2xvdWQuY29tXyZf",
-        "OPENAI_BASE_URL": "https://lab.iwhalecloud.com/gpt-proxy/v1",
-        "DATACLOUD_SERVICE_OPENAI_API_KEY": "sk-emt6bXBfJl9ncHQtcHJveHkuaXdoYWxlY2xvdWQuY29tXyZf",
-        "DATACLOUD_SERVICE_OPENAI_BASE_URL": "https://lab.iwhalecloud.com/gpt-proxy/v1"
-      },
+      "module": "langgraph_cli",
+      "args": ["dev", "--host", "127.0.0.1", "--port", "2024", "--no-reload", "--no-browser", "--allow-blocking"],
+      "cwd": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend",
+      // envFile 让 VSCode 在启动进程前也加载 .env，与 langgraph dev 的读取保持一致
+      "envFile": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend/.env",
+      "env": {},
       "justMyCode": false
     },
+    // ---------------------------------------------------------------
+    // sales-analysis-agent — 仅热重载（不带调试器，启动更快）
+    // ---------------------------------------------------------------
     {
-      "name": "OpenClaw Gateway (Mock 模式)",
+      "name": "Sales Analysis Agent (langgraph dev, no-reload)",
       "type": "debugpy",
       "request": "launch",
-      "module": "uvicorn",
-      "args": ["server:app", "--host", "0.0.0.0", "--port", "8000"],
-      "cwd": "${workspaceFolder}/service/datacloud-agent-service",
+      "module": "langgraph_cli",
+      "args": ["dev", "--host", "127.0.0.1", "--port", "2024", "--no-reload", "--no-browser", "--allow-blocking"],
+      "cwd": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend",
+      "envFile": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend/.env",
       "env": {},
       "justMyCode": false
     }
