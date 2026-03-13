@@ -21,6 +21,9 @@ dependencies = [
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
     "numpy>=1.26",
+    "networkx>=3.0",
+    "matplotlib>=3.7",
+    "pypinyin>=0.50",
 ]
 
 [project.optional-dependencies]
