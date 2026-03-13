@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     ontology_path: str = "resources/ontology/crm_demo/objects_registry.json"
     scene_path: str = "resources/ontology/crm_demo/scene_01_data_analysis.json"
     csv_base_dir: str = "./tmp"
+    # 查询结果溢出：超过阈值时存 CSV 并提供下载，避免模型上下文超长
+    query_result_csv_threshold: int = 10  # 超过此行数则存 CSV
+    query_result_preview_rows: int = 5  # 返回给模型的前几行预览
+    api_base_url: str = "http://127.0.0.1:8080"  # 用于拼接下载地址，如 https://example.com
     max_plan_retries: int = 2
     sql_execution_mode: str = "internal"
     trace_log_path: str = "logs/query_trace.log"  # 环境变量 DC_TRACE_LOG_PATH

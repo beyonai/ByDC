@@ -89,8 +89,7 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
                 return [TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}, ensure_ascii=False))]
             from datacloud_data_service.tools.action_executor import ActionExecutor
 
-            term_loader = getattr(loader._config, "term_loader", None)
-            executor = ActionExecutor(loader, term_loader=term_loader)
+            executor = ActionExecutor(loader)
             result = await executor.execute(object_code, name, arguments)
             text = result.get("content", [{}])[0].get("text", "{}") if result.get("content") else "{}"
             return [TextContent(type="text", text=text)]
@@ -160,7 +159,7 @@ def create_mcp_asgi_app(session_manager: StreamableHTTPSessionManager):
         token = auth.removeprefix("Bearer ").strip() if auth else ""
         tool_mode = headers.get("x-tool-list-mode", "unified")
         if tool_mode not in ("unified", "per_object"):
-            tool_mode = "per_object"
+            tool_mode = "unified"
         ctx_kwargs = {
             "tenant_id": headers.get("x-tenant-id", ""),
             "user_id": headers.get("x-user-id", ""),
