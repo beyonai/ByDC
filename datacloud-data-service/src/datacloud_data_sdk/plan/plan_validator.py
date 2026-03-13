@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import Any, Callable, TypedDict
 
 from datacloud_data_sdk.plan.models import (
     ObjectViewPayload,
@@ -13,45 +14,193 @@ from datacloud_data_sdk.plan.models import (
 _SUPPORTED_DB_TYPES = {"POSTGRESQL", "MYSQL", "OPENGAUSS", "SQLITE", "CLICKHOUSE"}
 
 _SQL_KEYWORDS = {
-    "select", "from", "where", "join", "on", "and", "or", "not", "in",
-    "between", "like", "is", "null", "as", "order", "by", "group",
-    "having", "limit", "offset", "distinct", "all", "union", "intersect",
-    "except", "exists", "case", "when", "then", "else", "end", "asc",
-    "desc", "inner", "left", "right", "outer", "cross", "full", "insert",
-    "update", "delete", "create", "drop", "alter", "into", "values",
-    "set", "table", "index", "view", "true", "false", "with",
-    "interval", "over", "partition", "range", "rows", "unbounded",
-    "preceding", "following", "default",
+    "select",
+    "from",
+    "where",
+    "join",
+    "on",
+    "and",
+    "or",
+    "not",
+    "in",
+    "between",
+    "like",
+    "is",
+    "null",
+    "as",
+    "order",
+    "by",
+    "group",
+    "having",
+    "limit",
+    "offset",
+    "distinct",
+    "all",
+    "union",
+    "intersect",
+    "except",
+    "exists",
+    "case",
+    "when",
+    "then",
+    "else",
+    "end",
+    "asc",
+    "desc",
+    "inner",
+    "left",
+    "right",
+    "outer",
+    "cross",
+    "full",
+    "insert",
+    "update",
+    "delete",
+    "create",
+    "drop",
+    "alter",
+    "into",
+    "values",
+    "set",
+    "table",
+    "index",
+    "view",
+    "true",
+    "false",
+    "with",
+    "interval",
+    "over",
+    "partition",
+    "range",
+    "rows",
+    "unbounded",
+    "preceding",
+    "following",
+    "default",
+}
+
+# PostgreSQL ::type 及 CAST(x AS type) 中的类型名，避免被误判为未知列
+_SQL_TYPES = {
+    "decimal",
+    "numeric",
+    "integer",
+    "int",
+    "bigint",
+    "smallint",
+    "real",
+    "double",
+    "float",
+    "boolean",
+    "bool",
+    "text",
+    "varchar",
+    "char",
+    "timestamp",
+    "timestamptz",
+    "date",
+    "time",
+    "interval",
+    "json",
+    "jsonb",
+    "uuid",
+    "bytea",
+    "serial",
+    "bigserial",
 }
 
 _SQL_FUNCTIONS = {
     # 聚合
-    "count", "sum", "avg", "max", "min", "group_concat", "string_agg",
-    "array_agg", "json_agg", "json_build_object",
+    "count",
+    "sum",
+    "avg",
+    "max",
+    "min",
+    "group_concat",
+    "string_agg",
+    "array_agg",
+    "json_agg",
+    "json_build_object",
     # 空值/类型
-    "coalesce", "ifnull", "nullif", "cast", "convert",
+    "coalesce",
+    "ifnull",
+    "nullif",
+    "cast",
+    "convert",
     # 字符串
-    "upper", "lower", "trim", "ltrim", "rtrim", "length", "char_length",
-    "substr", "substring", "concat", "concat_ws", "replace",
-    "position", "strpos", "split_part", "left", "right", "lpad", "rpad",
-    "regexp_replace", "regexp_match", "repeat",
+    "upper",
+    "lower",
+    "trim",
+    "ltrim",
+    "rtrim",
+    "length",
+    "char_length",
+    "substr",
+    "substring",
+    "concat",
+    "concat_ws",
+    "replace",
+    "position",
+    "strpos",
+    "split_part",
+    "left",
+    "right",
+    "lpad",
+    "rpad",
+    "regexp_replace",
+    "regexp_match",
+    "repeat",
     # 数值
-    "round", "abs", "ceil", "floor", "mod", "power", "sqrt", "random",
-    "greatest", "least",
-    # 日期时间 - 标准/PostgreSQL/OpenGauss
-    "now", "current_date", "current_time", "current_timestamp",
-    "localtime", "localtimestamp",
-    "date", "year", "month", "day", "hour", "minute", "second",
-    "extract", "date_trunc", "age", "make_date", "make_interval",
-    "to_char", "to_date", "to_timestamp", "date_part",
-    "date_format", "str_to_date", "date_add", "date_sub",
+    "round",
+    "abs",
+    "ceil",
+    "floor",
+    "mod",
+    "power",
+    "sqrt",
+    "random",
+    "greatest",
+    "least",
+    # 日期时间 - 标准/PostgreSQL/OpenGauss/MySQL
+    "now",
+    "current_date",
+    "current_time",
+    "current_timestamp",
+    "localtime",
+    "localtimestamp",
+    "date",
+    "year",
+    "month",
+    "day",
+    "hour",
+    "minute",
+    "second",
+    "extract",
+    "date_trunc",
+    "age",
+    "make_date",
+    "make_interval",
+    "to_char",
+    "to_date",
+    "to_timestamp",
+    "date_part",
+    "date_format",
+    "str_to_date",
+    "date_add",
+    "date_sub",
     # 条件
     "iif",
     # 窗口
-    "row_number", "rank", "dense_rank", "lag", "lead",
-    "first_value", "last_value", "ntile",
+    "row_number",
+    "rank",
+    "dense_rank",
+    "lag",
+    "lead",
+    "first_value",
+    "last_value",
+    "ntile",
     # 其他
-    "unnest", "generate_series",
+    "unnest",
+    "generate_series",
 }
 
 _IDENTIFIER_RE = re.compile(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b")
@@ -60,6 +209,109 @@ _TABLE_ALIAS_RE = re.compile(
     r"\b(?:FROM|JOIN)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\b",
     re.IGNORECASE,
 )
+
+try:  # 运行环境未安装 sqlglot 时自动降级为纯 token 校验
+    import sqlglot  # type: ignore[import]
+except Exception:  # pragma: no cover
+    sqlglot = None
+
+
+class SqlValidationError(TypedDict, total=False):
+    code: str
+    message: str
+    detail: dict[str, Any] | None
+
+
+SqlDialectValidator = Callable[
+    [str, ObjectViewPayload, PlanStep],
+    list[SqlValidationError],
+]
+
+
+def _generic_sql_token_validate(
+    sql: str,
+    payload: ObjectViewPayload,
+    step: PlanStep,
+) -> list[SqlValidationError]:
+    """基于 token 的通用 SQL 校验：字段/表/别名/函数/类型是否可识别。"""
+    if not sql:
+        return []
+
+    cleaned = re.sub(r"'[^']*'", "", sql)
+    cleaned = re.sub(r"\b\d+(?:\.\d+)?\b", "", cleaned)
+
+    tokens = set(_IDENTIFIER_RE.findall(cleaned))
+
+    known: set[str] = set()
+    for obj in payload.objects:
+        if obj.table:
+            known.add(obj.table.lower())
+        for f in obj.fields:
+            known.add(f.name.lower())
+            if f.source_column:
+                known.add(f.source_column.lower())
+
+    aliases: set[str] = set()
+    for m in _ALIAS_AS_RE.finditer(cleaned):
+        aliases.add(m.group(1).lower())
+    for m in _TABLE_ALIAS_RE.finditer(cleaned):
+        candidate = m.group(2).lower()
+        if candidate not in _SQL_KEYWORDS:
+            aliases.add(candidate)
+
+    valid = _SQL_KEYWORDS | _SQL_FUNCTIONS | _SQL_TYPES | known | aliases
+
+    errors: list[SqlValidationError] = []
+    for token in sorted(tokens):
+        if token.lower() not in valid:
+            errors.append(
+                {
+                    "code": "UNKNOWN_COLUMN",
+                    "message": f"SQL references unknown column {token!r}",
+                    "detail": {"identifier": token, "step_id": step.step_id},
+                }
+            )
+    return errors
+
+
+def _sqlglot_dialect_validator_factory(dialect: str) -> SqlDialectValidator:
+    """构造基于 sqlglot 的方言校验器：优先做语法解析，其次做通用 token 校验。"""
+
+    def _validator(
+        sql: str,
+        payload: ObjectViewPayload,
+        step: PlanStep,
+    ) -> list[SqlValidationError]:
+        errors: list[SqlValidationError] = []
+
+        if sqlglot is not None:
+            try:
+                sqlglot.parse_one(sql, read=dialect)
+            except Exception as exc:  # pragma: no cover
+                errors.append(
+                    {
+                        "code": "PARSE_ERROR",
+                        "message": f"failed to parse SQL for db_type {dialect}: {exc}",
+                        "detail": {"dialect": dialect, "step_id": step.step_id},
+                    }
+                )
+                return errors
+
+        errors.extend(_generic_sql_token_validate(sql, payload, step))
+        return errors
+
+    return _validator
+
+
+_GENERIC_SQL_VALIDATOR: SqlDialectValidator = _generic_sql_token_validate
+
+_SQL_DIALECT_VALIDATORS: dict[str, SqlDialectValidator] = {
+    "POSTGRESQL": _sqlglot_dialect_validator_factory("postgres"),
+    "OPENGAUSS": _sqlglot_dialect_validator_factory("postgres"),
+    "MYSQL": _sqlglot_dialect_validator_factory("mysql"),
+    "SQLITE": _sqlglot_dialect_validator_factory("sqlite"),
+    "CLICKHOUSE": _sqlglot_dialect_validator_factory("clickhouse"),
+}
 
 
 @dataclass
@@ -85,8 +337,8 @@ class PlanValidator:
                 errors.append(
                     f"Step {step.step_id}: bind_from_step {step.bind_from_step!r} not in plan"
                 )
-            errors.extend(self._validate_sql_field_refs(step, payload))
             errors.extend(self._validate_sql_step_db_type(step, payload))
+            errors.extend(self._validate_sql_step_by_dialect(step, payload))
             errors.extend(self._validate_function_ids(step, payload))
             errors.extend(self._validate_api_step_params(step, payload))
 
@@ -133,49 +385,68 @@ class PlanValidator:
         return []
 
     # ------------------------------------------------------------------
-    # SQL field-reference validation
+    # SQL field / 函数等引用校验（方言感知 + 通用 token）
     # ------------------------------------------------------------------
 
-    def _validate_sql_field_refs(
-        self, step: PlanStep, payload: ObjectViewPayload
+    def _validate_sql_step_by_dialect(
+        self,
+        step: PlanStep,
+        payload: ObjectViewPayload,
     ) -> list[str]:
-        sql = step.sql_template
+        """按数据源方言（db_type）做 SQL 预解析与字段/函数/token 校验。"""
+        if step.type != "SQL":
+            return []
+
+        sql = step.sql_template or ""
         if not sql:
             return []
 
-        # Strip string literals and numeric literals
-        cleaned = re.sub(r"'[^']*'", "", sql)
-        cleaned = re.sub(r"\b\d+(?:\.\d+)?\b", "", cleaned)
+        # 无 datasource_alias 或非 DB 源时，退化为通用 token 校验
+        if not step.datasource_alias:
+            internal_errors = _GENERIC_SQL_VALIDATOR(sql, payload, step)
+            return [
+                self._format_sql_error(step.step_id, err) for err in internal_errors
+            ]
 
-        tokens = set(_IDENTIFIER_RE.findall(cleaned))
+        source = next(
+            (s for s in payload.sources if s.datasource_alias == step.datasource_alias),
+            None,
+        )
+        if source is None or source.source_type != "DB":
+            internal_errors = _GENERIC_SQL_VALIDATOR(sql, payload, step)
+            return [
+                self._format_sql_error(step.step_id, err) for err in internal_errors
+            ]
 
-        known: set[str] = set()
-        for obj in payload.objects:
-            if obj.table:
-                known.add(obj.table.lower())
-            for f in obj.fields:
-                known.add(f.name.lower())
-                if f.source_column:
-                    known.add(f.source_column.lower())
+        db_type = (source.db_type or "").strip().upper()
+        if not db_type:
+            internal_errors = _GENERIC_SQL_VALIDATOR(sql, payload, step)
+            return [
+                self._format_sql_error(step.step_id, err) for err in internal_errors
+            ]
 
-        # Extract aliases (AS alias, and table aliases like FROM t alias)
-        aliases: set[str] = set()
-        for m in _ALIAS_AS_RE.finditer(cleaned):
-            aliases.add(m.group(1).lower())
-        for m in _TABLE_ALIAS_RE.finditer(cleaned):
-            candidate = m.group(2).lower()
-            if candidate not in _SQL_KEYWORDS:
-                aliases.add(candidate)
+        validator = _SQL_DIALECT_VALIDATORS.get(db_type, _GENERIC_SQL_VALIDATOR)
+        internal_errors = validator(sql, payload, step)
+        return [
+            self._format_sql_error(step.step_id, err) for err in internal_errors
+        ]
 
-        valid = _SQL_KEYWORDS | _SQL_FUNCTIONS | known | aliases
+    def _format_sql_error(self, step_id: str, err: SqlValidationError) -> str:
+        code = err.get("code")
+        message = err.get("message", "")
+        if code:
+            return f"Step {step_id}: [{code}] {message}"
+        return f"Step {step_id}: {message}"
 
-        errors: list[str] = []
-        for token in sorted(tokens):
-            if token.lower() not in valid:
-                errors.append(
-                    f"Step {step.step_id}: SQL references unknown column {token!r}"
-                )
-        return errors
+    # 兼容旧的 _validate_sql_field_refs 接口：内部委托到通用 token 校验
+    def _validate_sql_field_refs(
+        self, step: PlanStep, payload: ObjectViewPayload
+    ) -> list[str]:
+        sql = step.sql_template or ""
+        internal_errors = _GENERIC_SQL_VALIDATOR(sql, payload, step)
+        return [
+            self._format_sql_error(step.step_id, err) for err in internal_errors
+        ]
 
     # ------------------------------------------------------------------
     # API step validation (object_id, function_id=actionCode, params)

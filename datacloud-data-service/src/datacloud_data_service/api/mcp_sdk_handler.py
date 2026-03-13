@@ -42,10 +42,12 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
             loader = _get_loader()
             if loader is None:
                 return [_unified_query_tool_fallback()]
+            from datacloud_data_sdk.context import get_tool_list_mode
             from datacloud_data_service.tools.registry import ToolRegistry
 
             registry = ToolRegistry(loader)
-            tools_raw = registry.list_tools()
+            tool_list_mode = get_tool_list_mode()
+            tools_raw = registry.list_tools(tool_list_mode=tool_list_mode)
             result: list[Tool] = []
             for t in tools_raw:
                 t.pop("_meta", None)
@@ -81,16 +83,17 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
                 )
                 text = result["content"][0]["text"] if result.get("content") else "{}"
                 return [TextContent(type="text", text=text)]
-            else:
-                object_code = _find_action_object(loader, name)
-                if object_code is None:
-                    return [TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}, ensure_ascii=False))]
-                from datacloud_data_service.tools.action_executor import ActionExecutor
 
-                executor = ActionExecutor(loader)
-                result = await executor.execute(object_code, name, arguments)
-                text = result.get("content", [{}])[0].get("text", "{}") if result.get("content") else "{}"
-                return [TextContent(type="text", text=text)]
+            object_code = _find_action_object(loader, name)
+            if object_code is None:
+                return [TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}, ensure_ascii=False))]
+            from datacloud_data_service.tools.action_executor import ActionExecutor
+
+            term_loader = getattr(loader._config, "term_loader", None)
+            executor = ActionExecutor(loader, term_loader=term_loader)
+            result = await executor.execute(object_code, name, arguments)
+            text = result.get("content", [{}])[0].get("text", "{}") if result.get("content") else "{}"
+            return [TextContent(type="text", text=text)]
         except Exception as e:
             logger.exception("call_tool failed: %s", e)
             return [TextContent(type="text", text=json.dumps({"error": str(e)}, ensure_ascii=False))]
@@ -155,12 +158,16 @@ def create_mcp_asgi_app(session_manager: StreamableHTTPSessionManager):
         headers = _headers_from_scope(scope)
         auth = headers.get("authorization", "")
         token = auth.removeprefix("Bearer ").strip() if auth else ""
+        tool_mode = headers.get("x-tool-list-mode", "unified")
+        if tool_mode not in ("unified", "per_object"):
+            tool_mode = "per_object"
         ctx_kwargs = {
             "tenant_id": headers.get("x-tenant-id", ""),
             "user_id": headers.get("x-user-id", ""),
             "session_id": headers.get("x-session-id", ""),
             "token": token,
             "system_code": headers.get("x-system-code", ""),
+            "tool_list_mode": tool_mode,
         }
         try:
             with InvocationContext(**ctx_kwargs):

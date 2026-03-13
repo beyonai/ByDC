@@ -68,6 +68,8 @@ class ObjectViewBuilder:
             functions = []
             actions = []
             for a in cls.actions:
+                if a.is_virtual:
+                    continue
                 params = [
                     ObjectViewFunctionParam(
                         param_code=p.param_code,

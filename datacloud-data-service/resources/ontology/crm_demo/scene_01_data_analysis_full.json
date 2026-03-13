@@ -16,7 +16,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -173,7 +173,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -635,7 +635,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -704,7 +704,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -812,7 +812,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -964,7 +964,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -1048,7 +1048,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -1214,7 +1214,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -1471,7 +1471,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -1666,6 +1666,7 @@
           "action_code": "query_users_by_name_or_ids",
           "action_name": "按名称或ID查询人员",
           "description": "按用户ID列表或姓名列表批量查询人员详情",
+          "action_type": "query",
           "params": [
             {
               "param_code": "userIds",
@@ -1739,6 +1740,7 @@
           "action_code": "query_users_by_org_id",
           "action_name": "按组织ID查询人员",
           "description": "按组织ID查询该组织下的人员列表，可选是否包含下级组织",
+          "action_type": "query",
           "params": [
             {
               "param_code": "orgId",
@@ -1908,6 +1910,7 @@
           "action_code": "query_org_by_name_or_id",
           "action_name": "按名称或ID查询组织",
           "description": "按组织ID列表或名称列表批量查询组织详情",
+          "action_type": "query",
           "params": [
             {
               "param_code": "orgIds",
@@ -1981,6 +1984,7 @@
           "action_code": "query_sub_orgs_by_org_id",
           "action_name": "查询下级组织",
           "description": "按组织ID查询其所有直接下级或全部下级组织",
+          "action_type": "query",
           "params": [
             {
               "param_code": "orgId",
@@ -2215,6 +2219,7 @@
           "action_code": "create_todo",
           "action_name": "创建待办",
           "description": "创建待办事项并指定处理人",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "title",
@@ -2349,6 +2354,7 @@
           "action_code": "query_todo_list",
           "action_name": "查询待办列表",
           "description": "查询待办事项列表，支持多种过滤条件",
+          "action_type": "query",
           "params": [
             {
               "param_code": "priority",
@@ -2592,6 +2598,7 @@
           "action_code": "accept_todo",
           "action_name": "接收待办",
           "description": "接收/认领指定待办事项",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "todoId",
@@ -2625,6 +2632,7 @@
           "action_code": "return_todo",
           "action_name": "退回待办",
           "description": "退回指定待办事项并说明原因",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "todoId",
@@ -2666,6 +2674,7 @@
           "action_code": "process_todo",
           "action_name": "处理待办",
           "description": "批量处理待办事项，更新处理意见和进度",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "todoIds",
@@ -2706,6 +2715,7 @@
           "action_code": "delete_todo",
           "action_name": "删除待办",
           "description": "批量删除待办事项",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "todoIds",
@@ -2732,6 +2742,7 @@
           "action_code": "urge_todo",
           "action_name": "催更待办",
           "description": "批量催更待办事项进度",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "todoIds",
@@ -2772,6 +2783,7 @@
           "action_code": "update_todo",
           "action_name": "修改待办",
           "description": "修改待办事项的基本信息",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "todoId",
@@ -2833,6 +2845,7 @@
           "action_code": "approve_todo",
           "action_name": "审批待办",
           "description": "批量审批待办事项（通过或拒绝）",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "approvalComment",
@@ -4110,6 +4123,7 @@
           "action_code": "apply_expense_report",
           "action_name": "申请费用报备",
           "description": "创建费用报备记录",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "applicantEmpNo",
@@ -4213,6 +4227,7 @@
           "action_code": "update_expense_report",
           "action_name": "修改费用报备",
           "description": "修改费用报备记录（审批前）",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "id",
@@ -4288,6 +4303,7 @@
           "action_code": "approve_expense_report",
           "action_name": "审批费用报备",
           "description": "批量审批费用报备（通过或拒绝）",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "expenseReportIds",
@@ -4342,6 +4358,7 @@
           "action_code": "query_expense_report",
           "action_name": "查询费用报备",
           "description": "查询费用报备列表，支持多种过滤条件",
+          "action_type": "query",
           "params": [
             {
               "param_code": "applicantEmpNos",
@@ -4831,6 +4848,7 @@
           "action_code": "create_todo",
           "action_name": "创建待办",
           "description": "创建待办事项并指定处理人",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "title",
@@ -4965,6 +4983,7 @@
           "action_code": "query_todo_list",
           "action_name": "查询待办列表",
           "description": "查询待办事项列表，支持多种过滤条件",
+          "action_type": "query",
           "params": [
             {
               "param_code": "priority",
@@ -5098,105 +5117,105 @@
               "param_name": "待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].todoId"
+              "mapping_path": "$.data[].todoId"
             },
             {
               "param_code": "title",
               "param_name": "待办标题",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].title"
+              "mapping_path": "$.data[].title"
             },
             {
               "param_code": "status",
               "param_name": "待办状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].status"
+              "mapping_path": "$.data[].status"
             },
             {
               "param_code": "priority",
               "param_name": "优先级",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].priority"
+              "mapping_path": "$.data[].priority"
             },
             {
               "param_code": "urgencyLevel",
               "param_name": "紧急程度",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].urgencyLevel"
+              "mapping_path": "$.data[].urgencyLevel"
             },
             {
               "param_code": "deadlineAt",
               "param_name": "截止时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].deadlineAt"
+              "mapping_path": "$.data[].deadlineAt"
             },
             {
               "param_code": "content",
               "param_name": "待办内容",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].content"
+              "mapping_path": "$.data[].content"
             },
             {
               "param_code": "progress",
               "param_name": "处理进度",
               "param_type": "INTEGER",
               "direction": "OUT",
-              "mapping_path": "$.todos[].progress"
+              "mapping_path": "$.data[].progress"
             },
             {
               "param_code": "createdAt",
               "param_name": "创建时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].createdAt"
+              "mapping_path": "$.data[].createdAt"
             },
             {
               "param_code": "promoter",
               "param_name": "发起人",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].promoter"
+              "mapping_path": "$.data[].promoter"
             },
             {
               "param_code": "approvalComment",
               "param_name": "审批意见",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].approvalComment"
+              "mapping_path": "$.data[].approvalComment"
             },
             {
               "param_code": "approvedAt",
               "param_name": "审批通过时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].approvedAt"
+              "mapping_path": "$.data[].approvedAt"
             },
             {
               "param_code": "completedAt",
               "param_name": "完成时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].completedAt"
+              "mapping_path": "$.data[].completedAt"
             },
             {
               "param_code": "meetingNoteId",
               "param_name": "关联会议纪要ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].meetingNoteId"
+              "mapping_path": "$.data[].meetingNoteId"
             },
             {
               "param_code": "returnReason",
               "param_name": "退回原因",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].returnReason"
+              "mapping_path": "$.data[].returnReason"
             }
           ],
           "function_refs": [
@@ -5208,6 +5227,7 @@
           "action_code": "accept_todo",
           "action_name": "接收待办",
           "description": "接收/认领指定待办事项",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "todoId",
@@ -5241,6 +5261,7 @@
           "action_code": "return_todo",
           "action_name": "退回待办",
           "description": "退回指定待办事项并说明原因",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "todoId",
@@ -5282,6 +5303,7 @@
           "action_code": "process_todo",
           "action_name": "处理待办",
           "description": "批量处理待办事项，更新处理意见和进度",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "todoIds",
@@ -5322,6 +5344,7 @@
           "action_code": "delete_todo",
           "action_name": "删除待办",
           "description": "批量删除待办事项",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "todoIds",
@@ -5348,6 +5371,7 @@
           "action_code": "urge_todo",
           "action_name": "催更待办",
           "description": "批量催更待办事项进度",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "todoIds",
@@ -5388,6 +5412,7 @@
           "action_code": "update_todo",
           "action_name": "修改待办",
           "description": "修改待办事项的基本信息",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "todoId",
@@ -5449,6 +5474,7 @@
           "action_code": "approve_todo",
           "action_name": "审批待办",
           "description": "批量审批待办事项（通过或拒绝）",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "approvalComment",

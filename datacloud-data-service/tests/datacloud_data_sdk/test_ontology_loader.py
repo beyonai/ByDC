@@ -24,6 +24,7 @@ MINIMAL_REGISTRY = {
                 {
                     "action_code": "query_emp",
                     "action_name": "查员工",
+                    "action_type": "query",
                     "description": "",
                     "params": [],
                     "function_refs": ["fn_get_emp"],
@@ -49,6 +50,7 @@ REGISTRY_WITH_SCRIPT = {
                 {
                     "action_code": "calc_score",
                     "action_name": "计算评分",
+                    "action_type": "operation",
                     "description": "计算商机评分",
                     "script": "def execute(params):\n    return {'score': 100}",
                     "function_refs": [],
@@ -232,6 +234,7 @@ def test_load_from_content_parses_term_meta_in_fields_and_params() -> None:
                     {
                         "action_code": "query",
                         "action_name": "查询",
+                        "action_type": "query",
                         "params": [
                             {
                                 "param_code": "user",
@@ -264,6 +267,65 @@ def test_load_from_content_parses_term_meta_in_fields_and_params() -> None:
     assert p.term_set == "user.code"
     assert p.term_type == "lookup"
     assert p.dataset_id == 200
+
+
+def test_parse_action_requires_action_type() -> None:
+    """action_type 未配置时加载应跳过该动作。"""
+    loader = OntologyLoader()
+    content = {
+        "objects": [
+            {
+                "object_code": "obj1",
+                "object_name": "测试",
+                "source_type": "DB",
+                "fields": [],
+                "actions": [
+                    {
+                        "action_code": "act1",
+                        "action_name": "动作1",
+                        "description": "",
+                        "params": [],
+                        "function_refs": [],
+                    },
+                ],
+            },
+        ],
+        "functions": [],
+    }
+    loader.load_from_content(content)
+    cls = loader.get_ontology_class("obj1")
+    assert len(cls.actions) == 0  # 未配置 action_type 时跳过，actions 为空
+
+
+def test_parse_action_with_action_type_preserved() -> None:
+    """配置了 action_type 的动作能正确加载。"""
+    loader = OntologyLoader()
+    content = {
+        "objects": [
+            {
+                "object_code": "obj1",
+                "object_name": "测试",
+                "source_type": "DB",
+                "fields": [],
+                "actions": [
+                    {
+                        "action_code": "act1",
+                        "action_name": "动作1",
+                        "action_type": "query",
+                        "description": "查询动作",
+                        "params": [],
+                        "function_refs": [],
+                    },
+                ],
+            },
+        ],
+        "functions": [],
+    }
+    loader.load_from_content(content)
+    cls = loader.get_ontology_class("obj1")
+    assert len(cls.actions) == 1
+    assert cls.actions[0].action_code == "act1"
+    assert cls.actions[0].action_type == "query"
 
 
 def test_load_from_content_auto_injects_datasource_configs() -> None:

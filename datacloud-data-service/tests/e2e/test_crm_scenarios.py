@@ -57,6 +57,7 @@ def _make_loader(plan_dict: dict, tmp_path: Path) -> OntologyLoader:
                             {
                                 "action_code": "calc_score",
                                 "action_name": "计算评分",
+                                "action_type": "operation",
                                 "script": "def execute(params):\n    return {'score': 85}",
                                 "function_refs": [],
                                 "params": [
@@ -97,6 +98,7 @@ def _make_loader(plan_dict: dict, tmp_path: Path) -> OntologyLoader:
                     ),
                 ],
                 function_refs=[],
+                action_type="operation",
                 script="def execute(params):\n    return {'score': 85}",
             )
         )
