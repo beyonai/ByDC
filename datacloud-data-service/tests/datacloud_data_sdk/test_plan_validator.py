@@ -447,6 +447,45 @@ def test_sql_step_db_source_invalid_db_type_fails() -> None:
     assert any("unsupported db_type" in e for e in result.errors)
 
 
+def test_sql_postgresql_type_cast_passes() -> None:
+    """PostgreSQL ::type 类型转换语法（如 contact_scale::DECIMAL）应校验通过。"""
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[
+            ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="ds_crm", db_type="POSTGRESQL")
+        ],
+        objects=[
+            ObjectViewObject(
+                object_id="obj1",
+                object_name="KPI汇总",
+                source_id="SRC_DB",
+                table="sales_person_kpi_summary",
+                fields=[
+                    ObjectViewField(name="contact_scale", type="string"),
+                ],
+            )
+        ],
+        relations=[],
+    )
+    plan = QueryExecutionPlan(
+        question="合同总金额",
+        can_answer=True,
+        steps=[
+            PlanStep(
+                step_id="s1",
+                type="SQL",
+                source_id="SRC_DB",
+                datasource_alias="ds_crm",
+                sql_template="SELECT SUM(contact_scale::DECIMAL) AS totalContractAmount FROM sales_person_kpi_summary WHERE contact_scale IS NOT NULL AND contact_scale != ''",
+                output_ref="out",
+            )
+        ],
+        aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
+    )
+    result = PlanValidator().validate(plan, payload)
+    assert result.valid, result.errors
+
+
 def test_sql_step_db_source_valid_db_type_passes() -> None:
     """db_type 合法时校验通过。"""
     payload = ObjectViewPayload(

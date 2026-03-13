@@ -14,8 +14,9 @@ from datacloud_data_service.tools.term_resolver import TermResolver
 class ActionExecutor:
     """操作类工具执行流水线。
 
-    arguments → ParamMapper.map_names() → TermResolver.resolve()
-    → ParamMapper.map_to_physical() → Object.invoke_action() → MCP content
+    虚拟动作：resolve_filter_values → Object.invoke_action
+    真实动作：ParamMapper → TermResolver → Object.invoke_action
+    统一走 obj.invoke_action，Action 内部分发。
     """
 
     def __init__(
@@ -44,10 +45,17 @@ class ActionExecutor:
 
             raise ActionNotFoundError(object_code, action_code)
 
-        mapper = ParamMapper(action)
-        params = mapper.map_names(arguments)
-        params = self._term_resolver.resolve(action, params)
-        params = mapper.map_to_physical(params)
+        if getattr(action, "is_virtual", False):
+            filters = self._term_resolver.resolve_filter_values(
+                arguments.get("filters", {}),
+                cls.fields,
+            )
+            params = {**arguments, "filters": filters}
+        else:
+            mapper = ParamMapper(action)
+            params = mapper.map_names(arguments)
+            params = self._term_resolver.resolve(action, params)
+            params = mapper.map_to_physical(params)
 
         obj = self._loader.get_object(object_code)
         result = await obj.invoke_action(action_code, params)

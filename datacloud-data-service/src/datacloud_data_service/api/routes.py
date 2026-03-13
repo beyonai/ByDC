@@ -102,6 +102,13 @@ def create_app(
                 loader.load_scene_from_path(scene_path)
                 logger.info("Loaded scene from %s", scene_path)
 
+        from datacloud_data_service.tools.virtual_action_injector import (
+            inject_virtual_actions,
+        )
+
+        inject_virtual_actions(loader)
+        logger.info("Injected virtual actions for DB/KB objects")
+
         if settings.llm_api_key:
             try:
                 from datacloud_data_sdk.plan.query_plan_generator import LangGraphPlanGenerator
@@ -115,13 +122,18 @@ def create_app(
                 )
                 loader.configure(plan_generator=plan_gen)
                 logger.info("Configured LangGraphPlanGenerator with model=%s", settings.llm_model)
-            except ImportError:
-                logger.warning("langchain-openai not installed, LLM plan generation disabled")
+            except ImportError as e:
+                logger.warning(
+                    "langchain-openai not installed, LLM plan generation disabled: %s",
+                    e,
+                    exc_info=True,
+                )
         else:
             logger.warning("DC_LLM_API_KEY not set, LLM plan generation disabled")
 
-        if datasource_configs is not None:
-            loader.configure(datasource_configs=datasource_configs)
+        # configs = datasource_configs if datasource_configs is not None else _build_datasource_configs(settings)
+        # if configs:
+        #     loader.configure(datasource_configs=configs)
 
         from datacloud_data_sdk.events.bus import EventBus
         from datacloud_data_sdk.events.handlers import register_query_handlers
