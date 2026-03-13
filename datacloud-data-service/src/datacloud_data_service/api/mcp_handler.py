@@ -139,8 +139,7 @@ async def _handle_tools_call(request: Request, params: dict) -> dict:
 
     from datacloud_data_service.tools.action_executor import ActionExecutor
 
-    term_loader = getattr(loader._config, "term_loader", None)
-    executor = ActionExecutor(loader, term_loader=term_loader)
+    executor = ActionExecutor(loader)
     try:
         return await executor.execute(object_code, tool_name, arguments)
     except Exception as e:

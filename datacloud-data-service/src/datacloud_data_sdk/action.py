@@ -90,19 +90,64 @@ class Action:
             schema["required"] = required
         return schema
 
+    def _map_names(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        """将 param_name/alias 映射为标准 param_code。"""
+        alias_map: dict[str, str] = {}
+        for p in self._action.params:
+            alias_map[p.param_code] = p.param_code
+            alias_map[p.param_name] = p.param_code
+        mapped: dict[str, Any] = {}
+        for key, value in arguments.items():
+            param_code = alias_map.get(key, key)
+            mapped[param_code] = value
+        return mapped
+
     async def execute(self, params: dict[str, object]) -> dict[str, object]:
-        """执行动作：is_virtual 优先 → script → API → ActionNotConfiguredError。"""
+        """执行动作：参数映射、术语解析、map_to_physical 自闭环，is_virtual 优先 → script → API。"""
         from datacloud_data_sdk.exceptions import ActionNotConfiguredError
 
+        params = dict(params)
+        term_loader = (
+            getattr(self._loader._config, "term_loader", None)
+            if self._loader
+            else None
+        )
+
         if getattr(self._action, "is_virtual", False):
-            return await self._execute_virtual(dict(params))
+            if term_loader and "filters" in params and isinstance(params.get("filters"), dict):
+                cls = self._loader.get_ontology_class(
+                    getattr(self._action, "belong_class", "") or ""
+                )
+                if cls and cls.fields:
+                    from datacloud_data_sdk.plan.term_resolver import TermResolver
+
+                    tr = TermResolver(term_loader)
+                    params["filters"] = tr.resolve_filter_values(
+                        params["filters"], cls.fields
+                    )
+            return await self._execute_virtual(params)
+
+        params = self._map_names(params)
+        if term_loader:
+            from datacloud_data_sdk.plan.term_resolver import TermResolver
+
+            params = TermResolver(term_loader).resolve(self._action, params)
 
         if self._action.script:
-            return await self._execute_script(dict(params))
-
+            return await self._execute_script(params)
         if self._action.function_refs:
-            return await self._execute_api(dict(params))
+            from datacloud_data_sdk.plan.param_converter import (
+                _to_function_param,
+                map_to_physical,
+            )
 
+            in_params = [
+                _to_function_param(p)
+                for p in self._action.params
+                if getattr(p, "direction", "IN") in ("IN", "INOUT")
+            ]
+            physical_params = map_to_physical(params, in_params)
+            return await self._execute_api(physical_params)
         raise ActionNotConfiguredError(self._action.action_code)
 
     async def _execute_virtual(self, params: dict[str, Any]) -> dict[str, Any]:
