@@ -5,27 +5,40 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
 from datacloud_data_sdk.ontology.loader import OntologyLoader
-from datacloud_data_sdk.ontology.term_loader import TermLoader
-from datacloud_data_service.tools.param_mapper import ParamMapper
-from datacloud_data_service.tools.term_resolver import TermResolver
+from datacloud_data_service.tools.query_result_overflow import apply_query_result_overflow
+
+
+def _apply_overflow_if_query(result: dict[str, Any], loader: OntologyLoader) -> dict[str, Any]:
+    """若为查询类动作且数据超阈值，则存 CSV 并返回元数据+下载地址+预览。"""
+    if "records" not in result or "meta" not in result:
+        return result
+    try:
+        from datacloud_data_service.config import get_settings
+
+        settings = get_settings()
+        csv_manager = CsvStorageManager(settings.csv_base_dir)
+        return apply_query_result_overflow(
+            result,
+            threshold=settings.query_result_csv_threshold,
+            preview_rows=settings.query_result_preview_rows,
+            csv_manager=csv_manager,
+            api_base_url=settings.api_base_url,
+        )
+    except Exception:
+        return result
 
 
 class ActionExecutor:
     """操作类工具执行流水线。
 
-    虚拟动作：resolve_filter_values → Object.invoke_action
-    真实动作：ParamMapper → TermResolver → Object.invoke_action
-    统一走 obj.invoke_action，Action 内部分发。
+    参数映射、术语解析均在 SDK Action.execute 内自闭环；
+    ActionExecutor 仅透传 arguments、调用 invoke_action、格式化 MCP 返回。
     """
 
-    def __init__(
-        self,
-        loader: OntologyLoader,
-        term_loader: TermLoader | None = None,
-    ) -> None:
+    def __init__(self, loader: OntologyLoader) -> None:
         self._loader = loader
-        self._term_resolver = TermResolver(term_loader)
 
     async def execute(
         self,
@@ -45,20 +58,16 @@ class ActionExecutor:
 
             raise ActionNotFoundError(object_code, action_code)
 
-        if getattr(action, "is_virtual", False):
-            filters = self._term_resolver.resolve_filter_values(
-                arguments.get("filters", {}),
-                cls.fields,
-            )
-            params = {**arguments, "filters": filters}
-        else:
-            mapper = ParamMapper(action)
-            params = mapper.map_names(arguments)
-            params = self._term_resolver.resolve(action, params)
-            params = mapper.map_to_physical(params)
-
         obj = self._loader.get_object(object_code)
-        result = await obj.invoke_action(action_code, params)
+        result = await obj.invoke_action(action_code, arguments)
+
+        # 查询类动作（is_virtual 或 action_type=query）且 result 含 records+meta 时，数据量大则存 CSV
+        is_query_action = getattr(action, "is_virtual", False) or getattr(
+            action, "action_type", ""
+        ) == "query"
+        has_records_meta = "records" in result and "meta" in result
+        if is_query_action and has_records_meta:
+            result = _apply_overflow_if_query(result, self._loader)
 
         return {
             "content": [
