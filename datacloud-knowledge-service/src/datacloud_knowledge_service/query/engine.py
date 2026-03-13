@@ -421,7 +421,7 @@ class NaturalLanguageGraphQuery:
         return {
             "id": tree.id,
             "name": tree.name,
-            "type": tree.node_type,
+            "node_type": tree.node_type,
             "properties": tree.properties,
             "relation": tree.relation,
             "level": tree.level,
