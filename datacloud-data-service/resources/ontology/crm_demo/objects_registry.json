@@ -2989,7 +2989,7 @@
       ],
       "actions": [],
       "source_config": {
-        "alias": "ds_crm",
+        "alias": "knowledge",
         "db_type": "OPENGAUSS",
         "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
         "user": "gaussdb",
@@ -2997,7 +2997,7 @@
         "pool_min": 1,
         "pool_max": 5
       },
-      "datasource_alias": "ds_crm",
+      "datasource_alias": "knowledge",
       "table_name": "sales_daily_report"
     },
     {
@@ -3065,7 +3065,7 @@
       ],
       "actions": [],
       "source_config": {
-        "alias": "ds_crm",
+        "alias": "knowledge",
         "db_type": "OPENGAUSS",
         "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
         "user": "gaussdb",
@@ -3073,7 +3073,7 @@
         "pool_min": 1,
         "pool_max": 5
       },
-      "datasource_alias": "ds_crm",
+      "datasource_alias": "knowledge",
       "table_name": "sales_meeting_note"
     },
     {
@@ -3770,11 +3770,11 @@
       ],
       "actions": [],
       "source_config": {
-        "alias": "ds_crm",
-        "db_type": "OPENGAUSS",
-        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
-        "user": "gaussdb",
-        "password": "OpenGauss@123",
+        "alias": "onto_crm",
+        "db_type": "MYSQL",
+        "jdbc_url": "jdbc:mysql://172.21.72.158:8003/onto_crm",
+        "user": "root",
+        "password": "root",
         "pool_min": 1,
         "pool_max": 5
       },

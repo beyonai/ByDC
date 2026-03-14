@@ -100,7 +100,6 @@ class PlanStep:
     function_id: str = ""  # type=API 时表示 actionCode
     params: dict[str, Any] = field(default_factory=dict)
     output_ref: str = ""
-    csv_table_name: str = ""
     bind_from_step: str = ""
     bind_key: str = ""
     query: str = ""
@@ -113,7 +112,6 @@ class PlanAggregation:
     final_step_id: str | None = None
     sqlite_sql: str = ""
     columns: list[dict[str, str]] = field(default_factory=list)
-    csv_table_names: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass

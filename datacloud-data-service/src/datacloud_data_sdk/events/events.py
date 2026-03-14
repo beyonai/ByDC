@@ -72,7 +72,6 @@ class ExecutionTasksReady(BaseEvent):
 class StepsExecuted(BaseEvent):
     step_results: dict[str, str] = field(default_factory=dict)
     aggregation: dict = field(default_factory=dict)
-    csv_table_names: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass

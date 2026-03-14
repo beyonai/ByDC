@@ -39,7 +39,7 @@ class Executor:
         for i, task in enumerate(tasks):
             exec_key = f"step_{i}"
             step_id = step_ids[i] if step_ids and i < len(step_ids) else exec_key
-            tbl = getattr(task, "csv_table_name", "") or getattr(task, "output_ref", "") or step_id
+            tbl = getattr(task, "output_ref", "") or step_id
 
             if isinstance(task, SqlExecTask):
                 if self._sql is None:
@@ -67,7 +67,7 @@ class Executor:
                 else:
                     records = [script_result] if isinstance(script_result, dict) else [{"value": str(script_result)}]
                 csv_mgr = CsvStorageManager(self._csv_base_dir)
-                out_path = csv_mgr.get_path(request_id, task.csv_table_name or task.output_ref or step_id)
+                out_path = csv_mgr.get_path(request_id, task.output_ref or step_id)
                 ResultConverter.to_csv(records, out_path)
                 csv_path = str(out_path)
                 step_results.add(
