@@ -247,9 +247,9 @@ def _generic_sql_token_validate(
         if obj.table:
             known.add(obj.table.lower())
         for f in obj.fields:
-            known.add(f.name.lower())
-            if f.source_column:
-                known.add(f.source_column.lower())
+            # SQL 中引用列必须使用 source_column；有 source_column 时禁止使用 name
+            col_name = (f.source_column or f.name).lower()
+            known.add(col_name)
 
     aliases: set[str] = set()
     for m in _ALIAS_AS_RE.finditer(cleaned):
@@ -274,6 +274,133 @@ def _generic_sql_token_validate(
     return errors
 
 
+def _validate_sql_columns_by_ast(
+    expr: Any,
+    payload: ObjectViewPayload,
+    step: PlanStep,
+) -> list[SqlValidationError]:
+    """基于 AST 做表级字段校验。仅校验 SQL 中实际出现的表及其列。"""
+    errors: list[SqlValidationError] = []
+
+    # 从 AST 提取 tables_in_query、alias_to_table
+    tables_in_query: set[str] = set()
+    alias_to_table: dict[str, str] = {}
+    for t in expr.find_all(sqlglot.exp.Table):
+        table_name = (t.name or "").lower()
+        if table_name:
+            tables_in_query.add(table_name)
+            alias_obj = t.alias
+            if isinstance(alias_obj, str):
+                alias_name = alias_obj
+            elif alias_obj:
+                alias_name = (
+                    (alias_obj.this.name if hasattr(alias_obj, "this") and alias_obj.this else None)
+                    or getattr(alias_obj, "name", None)
+                    or table_name
+                )
+            else:
+                alias_name = table_name
+            alias_to_table[alias_name.lower()] = table_name
+
+    # 获取当前 step 的 source
+    source = next(
+        (s for s in payload.sources if s.datasource_alias == step.datasource_alias),
+        None,
+    )
+    if source is None:
+        return errors
+
+    # 构建 table_columns（仅限 tables_in_query 中的表）
+    table_columns: dict[str, set[str]] = {}
+    for obj in payload.objects:
+        if obj.source_id != source.source_id or not obj.table:
+            continue
+        t = obj.table.lower()
+        if t not in tables_in_query:
+            continue
+        cols: set[str] = set()
+        for f in obj.fields:
+            # SQL 中引用列必须使用 source_column（物理列名）；若 field 有 source_column 则只允许 source_column，禁止使用 name
+            col_name = (f.source_column or f.name).lower()
+            cols.add(col_name)
+        table_columns.setdefault(t, set()).update(cols)
+
+    # 遍历 Column 做表级校验
+    for col in expr.find_all(sqlglot.exp.Column):
+        col_name = (getattr(col, "alias_or_name", None) or col.name or "").lower()
+        if not col_name:
+            continue
+        qualifier = (col.table or "").strip().lower() if col.table else ""
+
+        if qualifier:
+            # 带前缀列
+            if qualifier not in alias_to_table:
+                errors.append(
+                    {
+                        "code": "UNKNOWN_TABLE_ALIAS",
+                        "message": f"unknown table alias {qualifier!r} in column {qualifier}.{col_name}",
+                        "detail": {"alias": qualifier, "identifier": col_name, "step_id": step.step_id},
+                    }
+                )
+                continue
+            table_name = alias_to_table[qualifier]
+            if table_name not in table_columns:
+                errors.append(
+                    {
+                        "code": "UNKNOWN_TABLE",
+                        "message": f"unknown table {table_name!r} for alias {qualifier!r} in column {qualifier}.{col_name}",
+                        "detail": {
+                            "table": table_name,
+                            "alias": qualifier,
+                            "identifier": col_name,
+                            "step_id": step.step_id,
+                        },
+                    }
+                )
+                continue
+            if col_name not in table_columns[table_name]:
+                errors.append(
+                    {
+                        "code": "UNKNOWN_COLUMN",
+                        "message": f"SQL references unknown column {col_name!r} on table {table_name!r} (alias {qualifier!r})",
+                        "detail": {
+                            "identifier": col_name,
+                            "table": table_name,
+                            "alias": qualifier,
+                            "step_id": step.step_id,
+                        },
+                    }
+                )
+        else:
+            # 无前缀列：必须唯一归属某表
+            candidate_tables: list[str] = []
+            for t in tables_in_query:
+                if t in table_columns and col_name in table_columns[t]:
+                    candidate_tables.append(t)
+            if len(candidate_tables) == 0:
+                errors.append(
+                    {
+                        "code": "UNKNOWN_COLUMN",
+                        "message": f"SQL references unknown column {col_name!r} which does not exist in any table of current query",
+                        "detail": {"identifier": col_name, "step_id": step.step_id},
+                    }
+                )
+            elif len(candidate_tables) > 1:
+                errors.append(
+                    {
+                        "code": "AMBIGUOUS_COLUMN",
+                        "message": f"ambiguous column {col_name!r} appears in multiple tables, please qualify with table alias",
+                        "detail": {
+                            "identifier": col_name,
+                            "tables": sorted(candidate_tables),
+                            "step_id": step.step_id,
+                        },
+                    }
+                )
+
+    return errors
+
+
 def _sqlglot_dialect_validator_factory(dialect: str) -> SqlDialectValidator:
     """构造基于 sqlglot 的方言校验器：优先做语法解析，其次做通用 token 校验。"""
 
@@ -286,7 +413,7 @@ def _sqlglot_dialect_validator_factory(dialect: str) -> SqlDialectValidator:
 
         if sqlglot is not None:
             try:
-                sqlglot.parse_one(sql, read=dialect)
+                expr = sqlglot.parse_one(sql, read=dialect)
             except Exception as exc:  # pragma: no cover
                 errors.append(
                     {
@@ -296,8 +423,9 @@ def _sqlglot_dialect_validator_factory(dialect: str) -> SqlDialectValidator:
                     }
                 )
                 return errors
-
-        errors.extend(_generic_sql_token_validate(sql, payload, step))
+            errors.extend(_validate_sql_columns_by_ast(expr, payload, step))
+        else:
+            errors.extend(_generic_sql_token_validate(sql, payload, step))
         return errors
 
     return _validator
@@ -329,6 +457,10 @@ class PlanValidator:
         step_ids = {s.step_id for s in plan.steps}
 
         for step in plan.steps:
+            if not (step.output_ref or "").strip():
+                errors.append(
+                    f"Step {step.step_id}: output_ref is required and must be non-empty"
+                )
             if step.source_id and step.source_id not in source_ids:
                 errors.append(
                     f"Step {step.step_id}: unknown source_id {step.source_id!r}"
