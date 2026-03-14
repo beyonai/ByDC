@@ -66,11 +66,15 @@ async def data_query(
         "object_ids": object_ids or [],
     }
 
-    logger.info("[data_query] POST %s  question=%r  user=%s", url, question, user_id)
+    logger.info("[data_query] POST %s  question=%r  user=%s  timeout=%ds", url, question, user_id, cfg.timeout)
 
-    async with httpx.AsyncClient(timeout=cfg.timeout) as client:
-        resp = await client.post(url, headers=headers, json=payload)
-        resp.raise_for_status()
-        result = resp.json()
-        logger.info("[data_query] OK  status=%d", resp.status_code)
-        return result
+    try:
+        async with httpx.AsyncClient(timeout=cfg.timeout) as client:
+            resp = await client.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            result = resp.json()
+            logger.info("[data_query] OK  status=%d", resp.status_code)
+            return result
+    except httpx.ReadTimeout:
+        logger.error("[data_query] ReadTimeout after %ds — data service may be slow or overloaded", cfg.timeout)
+        return {"error": "data_query_timeout", "message": f"数据服务响应超时（{cfg.timeout}s），请稍后重试或增大 DATACLOUD_DATA_SERVICE_TIMEOUT"}

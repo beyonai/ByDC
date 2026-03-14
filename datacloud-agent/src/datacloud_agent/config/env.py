@@ -55,4 +55,25 @@ class DataServiceSettings(BaseSettings):
     tenant_id: str = Field(default="", description="Static X-Tenant-Id header value")
     system_code: str = Field(default="", description="Static X-System-Code header value")
     query_path: str = Field(default="/api/v1/query", description="API path for NL query endpoint")
-    timeout: int = Field(default=60, description="HTTP request timeout in seconds")
+    timeout: int = Field(default=180, description="HTTP request timeout in seconds")
+
+
+class KnowledgeSettings(BaseSettings):
+    """知识图谱查询配置。未配置时 search_knowledge 返回空。"""
+
+    model_config = SettingsConfigDict(env_prefix="DATACLOUD_KNOWLEDGE_", extra="ignore")
+
+    graph_files: str = Field(
+        default="",
+        description="逗号分隔的图谱 JSON 文件路径，如 path/to/base.json,path/to/crm.json",
+    )
+    default_hops: int = Field(
+        default=4,
+        description="默认查询跳数",
+    )
+
+    @property
+    def graph_files_list(self) -> list[str]:
+        if not self.graph_files.strip():
+            return []
+        return [p.strip() for p in self.graph_files.split(",") if p.strip()]
