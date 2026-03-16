@@ -825,3 +825,115 @@ def test_sql_ambiguous_column_fails() -> None:
     result = PlanValidator().validate(plan, payload)
     assert not result.valid
     assert any("AMBIGUOUS_COLUMN" in e or "ambiguous" in e.lower() for e in result.errors)
+
+
+def test_cross_source_join_fails() -> None:
+    """跨源 JOIN 应返回 CROSS_SOURCE_JOIN 错误。"""
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[
+            ObjectViewSource(source_id="SRC_CRM", source_type="DB", datasource_alias="ds_crm", db_type="POSTGRESQL"),
+            ObjectViewSource(source_id="SRC_ONTO", source_type="DB", datasource_alias="onto_crm", db_type="MYSQL"),
+        ],
+        objects=[
+            ObjectViewObject(
+                object_id="sales_business_opportunity",
+                object_name="商机",
+                source_id="SRC_CRM",
+                table="sales_business_opportunity",
+                fields=[
+                    ObjectViewField(name="id", type="string", source_column="id"),
+                    ObjectViewField(name="customer_name", type="string", source_column="customer_name"),
+                ],
+            ),
+            ObjectViewObject(
+                object_id="sales_customer",
+                object_name="客户",
+                source_id="SRC_ONTO",
+                table="sales_customer",
+                fields=[
+                    ObjectViewField(name="id", type="string", source_column="id"),
+                    ObjectViewField(name="customer_name", type="string", source_column="customer_name"),
+                    ObjectViewField(name="belong_industry", type="string", source_column="belong_industry"),
+                ],
+            ),
+        ],
+        relations=[],
+    )
+    plan = QueryExecutionPlan(
+        question="查商机",
+        can_answer=True,
+        steps=[
+            PlanStep(
+                step_id="s1",
+                type="SQL",
+                source_id="SRC_CRM",
+                datasource_alias="ds_crm",
+                sql_template=(
+                    "SELECT bo.id, bo.customer_name, c.belong_industry "
+                    "FROM sales_business_opportunity bo "
+                    "JOIN sales_customer c ON bo.customer_name = c.customer_name"
+                ),
+                output_ref="out",
+            )
+        ],
+        aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1", columns=[]),
+    )
+    result = PlanValidator().validate(plan, payload)
+    assert not result.valid
+    assert any("CROSS_SOURCE_JOIN" in e for e in result.errors)
+    assert any("sales_business_opportunity" in e and "sales_customer" in e for e in result.errors)
+
+
+def test_same_source_join_passes() -> None:
+    """同源两表 JOIN 应通过跨源校验（无 CROSS_SOURCE_JOIN）。"""
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[
+            ObjectViewSource(source_id="SRC_CRM", source_type="DB", datasource_alias="ds_crm", db_type="POSTGRESQL"),
+        ],
+        objects=[
+            ObjectViewObject(
+                object_id="sales_business_opportunity",
+                object_name="商机",
+                source_id="SRC_CRM",
+                table="sales_business_opportunity",
+                fields=[
+                    ObjectViewField(name="id", type="string", source_column="id"),
+                    ObjectViewField(name="customer_name", type="string", source_column="customer_name"),
+                ],
+            ),
+            ObjectViewObject(
+                object_id="sales_customer",
+                object_name="客户",
+                source_id="SRC_CRM",
+                table="sales_customer",
+                fields=[
+                    ObjectViewField(name="id", type="string", source_column="id"),
+                    ObjectViewField(name="customer_name", type="string", source_column="customer_name"),
+                ],
+            ),
+        ],
+        relations=[],
+    )
+    plan = QueryExecutionPlan(
+        question="查商机",
+        can_answer=True,
+        steps=[
+            PlanStep(
+                step_id="s1",
+                type="SQL",
+                source_id="SRC_CRM",
+                datasource_alias="ds_crm",
+                sql_template=(
+                    "SELECT bo.id, c.customer_name "
+                    "FROM sales_business_opportunity bo "
+                    "JOIN sales_customer c ON bo.customer_name = c.customer_name"
+                ),
+                output_ref="out",
+            )
+        ],
+        aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1", columns=[]),
+    )
+    result = PlanValidator().validate(plan, payload)
+    assert not any("CROSS_SOURCE_JOIN" in e for e in result.errors)

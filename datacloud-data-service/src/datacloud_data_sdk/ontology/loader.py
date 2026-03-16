@@ -92,6 +92,8 @@ class OntologyLoader:
                     relation_type=rel.get("relation_type", "ONE_TO_MANY"),
                     join_keys=rel.get("join_keys", []),
                     description=rel.get("description", ""),
+                    resolve_action_code=rel.get("resolve_action_code"),
+                    resolve_param_binding=rel.get("resolve_param_binding"),
                 )
             )
 
@@ -275,6 +277,11 @@ class OntologyLoader:
                     physical_mappings=[
                         FieldPhysicalMapping(**m) for m in f.get("physical_mappings", [])
                     ],
+                    property_kind=f.get("property_kind", "physical"),
+                    derived_config=f.get("derived_config"),
+                    relation_ref=f.get("relation_ref"),
+                    resolve_action_code=f.get("resolve_action_code"),
+                    resolve_param_binding=f.get("resolve_param_binding"),
                 )
             )
         return result
