@@ -1,0 +1,29 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../byai_solution/story/V202602"
+		},
+		{
+			"path": "../../study/MiroFish"
+		},
+		{
+			"path": "../../study/openclaw"
+		},
+		{
+			"path": "../../study/gemini-cli"
+		},
+		{
+			"path": "../../study/claude-code"
+		},
+		{
+			"path": "../../study/context-engineering"
+		},
+		{
+			"path": "../../study/OpenViking"
+		}
+	],
+	"settings": {}
+}
