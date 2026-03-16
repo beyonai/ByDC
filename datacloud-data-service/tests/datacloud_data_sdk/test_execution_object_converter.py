@@ -34,6 +34,7 @@ REGISTRY_API = {
             "actions": [
                 {
                     "action_code": "query_emp",
+                    "action_type": "query",
                     "params": [
                         {"param_code": "names", "direction": "IN", "param_type": "ARRAY"},
                         {"param_code": "userId", "direction": "OUT", "param_type": "STRING", "mapping_path": "$.users[].userId"},
@@ -59,6 +60,7 @@ REGISTRY_SCRIPT = {
             "actions": [
                 {
                     "action_code": "calc_score",
+                    "action_type": "query",
                     "script": "def execute(params):\n    return {'score': 100}",
                     "function_refs": [],
                     "params": [{"param_code": "bo_id", "direction": "IN", "param_type": "STRING"}],
@@ -179,7 +181,8 @@ def test_api_step_converts_to_api_exec_task() -> None:
     tasks = ExecutionObjectConverter(loader=loader).convert(PLAN_WITH_API)
     assert len(tasks) == 1
     assert isinstance(tasks[0], ApiExecTask)
-    assert tasks[0].function_code == "fn_get_emp"
+    assert tasks[0].object_code == "sales_emp"
+    assert tasks[0].action_code == "query_emp"
     assert tasks[0].params == {"names": ["邹海天"]}
 
 
@@ -195,8 +198,9 @@ def test_api_step_converts_params_with_mapping_path() -> None:
                 "fields": [],
                 "actions": [
                     {
-                    "action_code": "get_emp",
-                            "params": [
+                        "action_code": "get_emp",
+                        "action_type": "query",
+                        "params": [
                                 {
                                     "param_code": "emp_no",
                                     "direction": "IN",

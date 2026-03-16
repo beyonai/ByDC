@@ -25,15 +25,54 @@ def build_select_sql(
     where_sql: str,
     db_type: str,
     field_to_col: dict[str, str],
+    derived_expressions: list[tuple[str, str]] | None = None,
+    derived_aggregations: list[dict[str, Any]] | None = None,
+    linked_joins: list[dict[str, Any]] | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
 ) -> tuple[str, list[str]]:
     """构建完整 SELECT SQL 与输出列 key 列表。"""
     q = lambda x: _quote(x, db_type)
     quoted_table = q(table)
+    join_clauses: list[str] = []
 
     if not aggregates:
-        # 无聚合：SELECT 全部 fields
-        select_parts = [f"{q(col)} AS {q(fc)}" for fc, col in fields]
+        # 无聚合：SELECT 全部 fields + derived expressions + derived aggregations + linked target columns
+        # 有 linked_joins 时主表列需加表名前缀避免歧义
+        main_prefix = f"{quoted_table}." if linked_joins else ""
+        select_parts = [f"{main_prefix}{q(col)} AS {q(fc)}" for fc, col in fields]
         col_keys = [fc for fc, _ in fields]
+        if derived_expressions:
+            for alias, expression in derived_expressions:
+                select_parts.append(f"({expression}) AS {q(alias)}")
+                col_keys.append(alias)
+        if derived_aggregations:
+            for da in derived_aggregations:
+                alias = da.get("alias", "")
+                target_table = da.get("target_table", "")
+                target_field = da.get("target_field", "")
+                func = da.get("func", "count").upper()
+                join_from = da.get("join_from", "")
+                join_to = da.get("join_to", "")
+                subquery = f"(SELECT {func}({q(target_field)}) FROM {q(target_table)} o WHERE o.{q(join_to)} = {quoted_table}.{q(join_from)}) AS {q(alias)}"
+                select_parts.append(subquery)
+                col_keys.append(alias)
+        # linked_joins: 追加 target 列，前缀 linked_field_field_code
+        if linked_joins:
+            for idx, lj in enumerate(linked_joins):
+                linked_field = lj.get("linked_field", "")
+                target_table = lj.get("target_table", "")
+                join_from = lj.get("join_from", "")
+                join_to = lj.get("join_to", "")
+                target_fields = lj.get("target_fields", [])
+                talias = f"t{idx}" if idx > 0 else "t"
+                for field_code, col in target_fields:
+                    alias = f"{linked_field}_{field_code}"
+                    select_parts.append(f"{q(talias)}.{q(col)} AS {q(alias)}")
+                    col_keys.append(alias)
+                join_clauses.append(
+                    f"LEFT JOIN {q(target_table)} {q(talias)} ON {quoted_table}.{q(join_from)} = {q(talias)}.{q(join_to)}"
+                )
     elif group_by:
         # 有聚合 + group_by：SELECT group_by 列 + 聚合
         group_cols = [field_to_col.get(gb, gb) for gb in group_by]
@@ -62,11 +101,19 @@ def build_select_sql(
 
     select_clause = ", ".join(select_parts)
     sql = f"SELECT {select_clause} FROM {quoted_table}"
+    if linked_joins:
+        for jc in join_clauses:
+            sql += " " + jc
     if where_sql:
         sql += f" WHERE {where_sql}"
     if group_by:
         group_cols = [field_to_col.get(gb, gb) for gb in group_by]
         sql += " GROUP BY " + ", ".join(q(c) for c in group_cols)
+
+    if limit is not None:
+        sql += f" LIMIT {limit}"
+    if offset is not None:
+        sql += f" OFFSET {offset}"
 
     return sql, col_keys
 

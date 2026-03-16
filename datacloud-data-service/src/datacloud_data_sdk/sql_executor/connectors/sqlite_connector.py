@@ -11,7 +11,9 @@ class SQLiteConnector(BaseSourceConnector):
     def __init__(self, config: DataSourceConfig) -> None:
         super().__init__(config)
         db_path = config.jdbc_url.replace("jdbc:sqlite:", "")
-        self._conn = sqlite3.connect(db_path)
+        # 内存库在跨线程场景（如 TestClient）下需 check_same_thread=False
+        check_same_thread = ":memory:" not in db_path
+        self._conn = sqlite3.connect(db_path, check_same_thread=check_same_thread)
         self._conn.row_factory = sqlite3.Row
 
     @classmethod

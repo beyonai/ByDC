@@ -1700,7 +1700,7 @@
               "param_name": "工号",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.users[].userCode"
+              "mapping_path": "$.users[].userNumber"
             },
             {
               "param_code": "orgId",
@@ -1778,7 +1778,7 @@
               "mapping_path": "$.users[].userName"
             },
             {
-              "param_code": "userNumber",
+              "param_code": "userCode",
               "param_name": "工号",
               "param_type": "STRING",
               "direction": "OUT",
