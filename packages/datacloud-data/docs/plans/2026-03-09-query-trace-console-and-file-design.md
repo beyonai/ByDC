@@ -40,7 +40,7 @@ QueryObserver 发布事件 → EventBus
 ### 3.1 EventTraceLogger
 
 - **职责**：订阅事件，序列化后输出到控制台和文件
-- **位置**：`datacloud_data_sdk/events/trace_logger.py`
+- **位置**：`datacloud_data/events/trace_logger.py`
 - **接口**：
   - `__init__(trace_log_path: str, enabled: bool = True)`
   - `register(bus: EventBus)`：订阅所有查询事件类型
@@ -131,7 +131,7 @@ trace_enabled: bool = True                     # 可选，环境变量 DC_TRACE_
 
 ### 7.5 工具函数位置与路径
 
-- 放在 `datacloud_data_sdk/events/trace_logger.py` 中，与 EventTraceLogger 同模块
+- 放在 `datacloud_data/events/trace_logger.py` 中，与 EventTraceLogger 同模块
 - `path=None` 时，从环境变量 `DC_TRACE_LOG_PATH` 读取，默认 `logs/query_trace.log`，与事件日志共用
 
 ---

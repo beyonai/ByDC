@@ -13,7 +13,7 @@
 ## Task 1: DataSourceConfig 新增 pool_timeout
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/sql_executor/models.py`
+- Modify: `src/datacloud_data/sql_executor/models.py`
 
 **Step 1:** 在 `DataSourceConfig` 中新增 `pool_timeout: float = 30.0`
 
@@ -39,7 +39,7 @@ class DataSourceConfig:
 ## Task 2: MySQLConnector 使用 pool 配置
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/sql_executor/connectors/mysql_connector.py`
+- Modify: `src/datacloud_data/sql_executor/connectors/mysql_connector.py`
 
 **Step 1:** 修改 `_init_engine`，从 config 读取并映射：
 
@@ -76,7 +76,7 @@ def _init_engine(self) -> None:
 ## Task 3: PostgreSQLConnector 使用 pool 配置
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/sql_executor/connectors/postgresql_connector.py`
+- Modify: `src/datacloud_data/sql_executor/connectors/postgresql_connector.py`
 
 **Step 1:** 与 Task 2 相同逻辑，修改 `_init_engine`：
 
@@ -113,7 +113,7 @@ def _init_engine(self) -> None:
 ## Task 4: 单元测试验证 pool 参数
 
 **Files:**
-- Create: `tests/datacloud_data_sdk/test_pool_config.py`
+- Create: `tests/datacloud_data/test_pool_config.py`
 
 **Step 1:** 编写测试，patch `create_async_engine`，验证 MySQLConnector 和 PostgreSQLConnector 传入正确参数
 
@@ -122,7 +122,7 @@ def _init_engine(self) -> None:
 import pytest
 from unittest.mock import patch, MagicMock
 
-from datacloud_data_sdk.sql_executor.models import DataSourceConfig
+from datacloud_data.sql_executor.models import DataSourceConfig
 
 
 def test_mysql_connector_passes_pool_params() -> None:
@@ -138,7 +138,7 @@ def test_mysql_connector_passes_pool_params() -> None:
         "sqlalchemy.ext.asyncio.create_async_engine",
         MagicMock(),
     ) as mock_create:
-        from datacloud_data_sdk.sql_executor.connectors.mysql_connector import (
+        from datacloud_data.sql_executor.connectors.mysql_connector import (
             MySQLConnector,
         )
 
@@ -162,7 +162,7 @@ def test_mysql_connector_pool_max_less_than_min() -> None:
         "sqlalchemy.ext.asyncio.create_async_engine",
         MagicMock(),
     ) as mock_create:
-        from datacloud_data_sdk.sql_executor.connectors.mysql_connector import (
+        from datacloud_data.sql_executor.connectors.mysql_connector import (
             MySQLConnector,
         )
 
@@ -185,7 +185,7 @@ def test_postgresql_connector_passes_pool_params() -> None:
         "sqlalchemy.ext.asyncio.create_async_engine",
         MagicMock(),
     ) as mock_create:
-        from datacloud_data_sdk.sql_executor.connectors.postgresql_connector import (
+        from datacloud_data.sql_executor.connectors.postgresql_connector import (
             PostgreSQLConnector,
         )
 
@@ -197,7 +197,7 @@ def test_postgresql_connector_passes_pool_params() -> None:
         assert call_kw["pool_timeout"] == 30.0
 ```
 
-**Step 2:** 运行 `pytest tests/datacloud_data_sdk/test_pool_config.py -v`
+**Step 2:** 运行 `pytest tests/datacloud_data/test_pool_config.py -v`
 
 Expected: PASS（若 MySQL/PostgreSQL 驱动未安装，ConnectorRegistry 可能未注册，需在 patch 前确保能导入；若导入失败可 `@pytest.mark.skipif`）
 

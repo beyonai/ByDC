@@ -1,5 +1,5 @@
 [project]
-name = "datacloud-data-service"
+name = "datacloud-data"
 version = "0.1.0"
 description = "DataCloud Data Service & SDK - 本体驱动的数据查询与执行框架"
 readme = "README.md"
@@ -40,7 +40,7 @@ service = [
     "mcp>=1.18.0",
     "strawberry-graphql[fastapi]>=0.260",
 ]
-all = ["datacloud-data-service[langchain,sql,service]"]
+all = ["datacloud-data[langchain,sql,service]"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -65,7 +65,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/datacloud_data_sdk", "src/datacloud_data_service"]
+packages = ["src/datacloud_data"]
 
 [tool.uv]
 default-groups = ["dev"]

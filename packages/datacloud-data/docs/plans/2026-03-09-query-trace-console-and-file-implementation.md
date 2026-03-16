@@ -15,7 +15,7 @@
 ## Task 1: 配置项 trace_log_path、trace_enabled
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_service/config.py`
+- Modify: `datacloud-data/src/datacloud_data_service/config.py`
 
 **Step 1: 在 Settings 中增加字段**
 
@@ -34,8 +34,8 @@ Expected: 输出 `logs/query_trace.log True`
 ## Task 2: log_exception_stack 工具函数
 
 **Files:**
-- Create: `datacloud-data-service/src/datacloud_data_sdk/events/trace_logger.py`
-- Test: `datacloud-data-service/tests/datacloud_data_sdk/test_trace_logger.py`
+- Create: `datacloud-data/src/datacloud_data/events/trace_logger.py`
+- Test: `datacloud-data/tests/datacloud_data/test_trace_logger.py`
 
 **Step 1: 编写失败测试**
 
@@ -53,7 +53,7 @@ import pytest
 
 def test_log_exception_stack_outputs_to_stderr_and_file(tmp_path):
     """log_exception_stack 输出到 stderr 和文件。"""
-    from datacloud_data_sdk.events.trace_logger import log_exception_stack
+    from datacloud_data.events.trace_logger import log_exception_stack
 
     log_path = tmp_path / "trace.log"
     try:
@@ -76,7 +76,7 @@ def test_log_exception_stack_outputs_to_stderr_and_file(tmp_path):
 
 **Step 2: 运行测试确认失败**
 
-Run: `pytest datacloud-data-service/tests/datacloud_data_sdk/test_trace_logger.py::test_log_exception_stack_outputs_to_stderr_and_file -v`
+Run: `pytest datacloud-data/tests/datacloud_data/test_trace_logger.py::test_log_exception_stack_outputs_to_stderr_and_file -v`
 Expected: FAIL (ModuleNotFoundError 或 ImportError)
 
 **Step 3: 实现 log_exception_stack**
@@ -128,7 +128,7 @@ def log_exception_stack(
 
 **Step 4: 运行测试确认通过**
 
-Run: `pytest datacloud-data-service/tests/datacloud_data_sdk/test_trace_logger.py::test_log_exception_stack_outputs_to_stderr_and_file -v`
+Run: `pytest datacloud-data/tests/datacloud_data/test_trace_logger.py::test_log_exception_stack_outputs_to_stderr_and_file -v`
 Expected: PASS
 
 ---
@@ -136,17 +136,17 @@ Expected: PASS
 ## Task 3: EventTraceLogger 类与事件序列化
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/events/trace_logger.py`
-- Test: `datacloud-data-service/tests/datacloud_data_sdk/test_trace_logger.py`
+- Modify: `datacloud-data/src/datacloud_data/events/trace_logger.py`
+- Test: `datacloud-data/tests/datacloud_data/test_trace_logger.py`
 
 **Step 1: 编写 EventTraceLogger 测试**
 
 ```python
 def test_event_trace_logger_outputs_event_to_stderr_and_file(tmp_path):
     """EventTraceLogger 将事件输出到 stderr 和文件。"""
-    from datacloud_data_sdk.events.bus import EventBus
-    from datacloud_data_sdk.events.events import QueryRequestReceived
-    from datacloud_data_sdk.events.trace_logger import EventTraceLogger
+    from datacloud_data.events.bus import EventBus
+    from datacloud_data.events.events import QueryRequestReceived
+    from datacloud_data.events.trace_logger import EventTraceLogger
 
     log_path = str(tmp_path / "trace.log")
     logger = EventTraceLogger(trace_log_path=log_path, enabled=True)
@@ -176,19 +176,19 @@ def test_event_trace_logger_outputs_event_to_stderr_and_file(tmp_path):
 
 **Step 3: 运行测试**
 
-Run: `pytest datacloud-data-service/tests/datacloud_data_sdk/test_trace_logger.py -v`
+Run: `pytest datacloud-data/tests/datacloud_data/test_trace_logger.py -v`
 
 ---
 
 ## Task 4: 在 routes.py 中集成 EventTraceLogger
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_service/api/routes.py`
+- Modify: `datacloud-data/src/datacloud_data_service/api/routes.py`
 
 **Step 1: 在 create_app 的 _lifespan 中，register_query_handlers 之后**
 
 ```python
-from datacloud_data_sdk.events.trace_logger import EventTraceLogger
+from datacloud_data.events.trace_logger import EventTraceLogger
 
 # 在 register_query_handlers(bus, tracing=tracing) 之后
 if settings.trace_enabled:
@@ -212,7 +212,7 @@ if settings.trace_enabled:
 ## Task 5: View.query 异常时调用 log_exception_stack
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/view.py`
+- Modify: `datacloud-data/src/datacloud_data/view.py`
 
 **Step 1: 在 query 方法中增加异常捕获**
 
@@ -224,7 +224,7 @@ try:
     ...
     return {...}
 except Exception as exc:
-    from datacloud_data_sdk.events.trace_logger import log_exception_stack
+    from datacloud_data.events.trace_logger import log_exception_stack
     log_exception_stack(exc, request_id=request_id, trace_id=trace_id)
     raise
 finally:
@@ -242,7 +242,7 @@ finally:
 ## Task 6: Object.query 异常时调用 log_exception_stack
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/object.py`
+- Modify: `datacloud-data/src/datacloud_data/object.py`
 
 **Step 1: 与 View.query 相同方式增加 except**
 
@@ -250,7 +250,7 @@ finally:
 
 ```python
 except Exception as exc:
-    from datacloud_data_sdk.events.trace_logger import log_exception_stack
+    from datacloud_data.events.trace_logger import log_exception_stack
     log_exception_stack(exc, request_id=request_id, trace_id=trace_id)
     raise
 ```
@@ -264,13 +264,13 @@ except Exception as exc:
 ## Task 7: UnifiedQuery.execute 异常时调用 log_exception_stack
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_service/tools/unified_query.py`
+- Modify: `datacloud-data/src/datacloud_data_service/tools/unified_query.py`
 
 **Step 1: 在 except 块中增加调用**
 
 ```python
 except Exception as e:
-    from datacloud_data_sdk.events.trace_logger import log_exception_stack
+    from datacloud_data.events.trace_logger import log_exception_stack
     log_exception_stack(e)  # 无 request_id/trace_id
     return {
         "content": [{"type": "text", "text": str(e)}],
@@ -287,7 +287,7 @@ except Exception as e:
 ## Task 8: EventTraceLogger 内部异常时调用 log_exception_stack
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/events/trace_logger.py`
+- Modify: `datacloud-data/src/datacloud_data/events/trace_logger.py`
 
 **Step 1: 在 EventTraceLogger 的事件处理回调中**
 

@@ -203,7 +203,7 @@ async def verify_subagents() -> tuple[bool, str]:
     try:
         from deepagents import create_deep_agent
         from langchain.chat_models import init_chat_model
-        from datacloud_agent.core.subagents import get_default_subagents
+        from datacloud_analysis.core.subagents import get_default_subagents
 
         # 获取默认子Agent配置
         subagents = get_default_subagents()
@@ -319,15 +319,15 @@ async def verify_backend() -> tuple[bool, str]:
         return False, str(e)
 
 
-async def verify_datacloud_agent_integration() -> tuple[bool, str]:
-    """验证 datacloud-agent 核心模块集成"""
-    print("\n=== 验证 8: datacloud-agent 核心模块 ===")
+async def verify_datacloud_analysis_integration() -> tuple[bool, str]:
+    """验证 datacloud-analysis 核心模块集成"""
+    print("\n=== 验证 8: datacloud-analysis 核心模块 ===")
 
     try:
-        from datacloud_agent.core.registry import AgentRegistry, AgentConfig
-        from datacloud_agent.core.runner import AgentRunner
-        from datacloud_agent.core.tools import get_business_tools, get_system_prompt
-        from datacloud_agent.core.subagents import get_default_subagents
+        from datacloud_analysis.core.registry import AgentRegistry, AgentConfig
+        from datacloud_analysis.core.runner import AgentRunner
+        from datacloud_analysis.core.tools import get_business_tools, get_system_prompt
+        from datacloud_analysis.core.subagents import get_default_subagents
 
         # 验证 AgentRegistry
         registry = AgentRegistry()
@@ -350,7 +350,7 @@ async def verify_datacloud_agent_integration() -> tuple[bool, str]:
         subagents = get_default_subagents()
         print(f"✓ 子Agent配置数量: {len(subagents)}")
 
-        return True, "datacloud-agent core modules integrated correctly"
+        return True, "datacloud-analysis core modules integrated correctly"
     except Exception as e:
         print(f"✗ 错误: {e}")
         import traceback
@@ -390,7 +390,7 @@ async def main() -> int:
     passed, msg = await verify_backend()
     results.append(("POC 7: Backend功能", passed, msg))
 
-    passed, msg = await verify_datacloud_agent_integration()
+    passed, msg = await verify_datacloud_analysis_integration()
     results.append(("核心模块集成", passed, msg))
 
     # 输出结果汇总
@@ -417,7 +417,7 @@ async def main() -> int:
         print("5. 子Agent 配置正常工作")
         print("6. astream() 支持流式输出")
         print("7. backend 参数支持多种后端")
-        print("8. datacloud-agent 核心模块正确集成")
+        print("8. datacloud-analysis 核心模块正确集成")
         return 0
     else:
         print("❌ 部分验证失败")

@@ -21,24 +21,24 @@
 
 | 文件 | 修改类型 | 说明 |
 |------|----------|------|
-| `datacloud_data_sdk/ontology/loader.py` | **核心修改** | 1) `load_from_content()` 解析对象上的 `source_config`；2) 新增 `_extract_datasource_configs_from_objects()` 遍历 `source_type=DB` 且含 `source_config` 的对象，产出 `dict[str, DataSourceConfig]`，按 `alias` 去重；3) load 完成后自动调用并写入 `LoaderConfig.datasource_configs` |
-| `datacloud_data_sdk/ontology/models.py` | **扩展** | `OntologyClass` 新增 `source_config: dict \| None` 字段 |
+| `datacloud_data/ontology/loader.py` | **核心修改** | 1) `load_from_content()` 解析对象上的 `source_config`；2) 新增 `_extract_datasource_configs_from_objects()` 遍历 `source_type=DB` 且含 `source_config` 的对象，产出 `dict[str, DataSourceConfig]`，按 `alias` 去重；3) load 完成后自动调用并写入 `LoaderConfig.datasource_configs` |
+| `datacloud_data/ontology/models.py` | **扩展** | `OntologyClass` 新增 `source_config: dict \| None` 字段 |
 
 ### 1.3 配置加载工具层
 
 | 文件 | 修改类型 | 说明 |
 |------|----------|------|
-| `datacloud_data_sdk/sql_executor/config_loader.py` | **扩展/复用** | 1) 保留 `_dict_to_config()`、`_substitute_dict()` 供本体解析复用；2) `load_datasources_from_yaml()` 可保留作兼容或标记废弃 |
+| `datacloud_data/sql_executor/config_loader.py` | **扩展/复用** | 1) 保留 `_dict_to_config()`、`_substitute_dict()` 供本体解析复用；2) `load_datasources_from_yaml()` 可保留作兼容或标记废弃 |
 
 ### 1.4 执行层（基本不变）
 
 | 文件 | 修改类型 | 说明 |
 |------|----------|------|
-| `datacloud_data_sdk/object.py` | **无/微调** | 继续使用 `config.datasource_configs`，来源改为 loader 内部产出 |
-| `datacloud_data_sdk/view.py` | **无** | 同上 |
-| `datacloud_data_sdk/sql_executor/sql_executor.py` | **无** | 仍通过 `DataSourceManager(configs)` 执行 |
-| `datacloud_data_sdk/sql_executor/data_source_manager.py` | **无** | 接口不变 |
-| `datacloud_data_sdk/sql_executor/models.py` | **无** | `DataSourceConfig` 结构不变 |
+| `datacloud_data/object.py` | **无/微调** | 继续使用 `config.datasource_configs`，来源改为 loader 内部产出 |
+| `datacloud_data/view.py` | **无** | 同上 |
+| `datacloud_data/sql_executor/sql_executor.py` | **无** | 仍通过 `DataSourceManager(configs)` 执行 |
+| `datacloud_data/sql_executor/data_source_manager.py` | **无** | 接口不变 |
+| `datacloud_data/sql_executor/models.py` | **无** | `DataSourceConfig` 结构不变 |
 
 ### 1.5 测试层
 
@@ -47,8 +47,8 @@
 | `tests/datacloud_data_service/test_health.py` | **调整** | 若不再支持 `datasource_configs` 入参，需改为通过本体 mock 注入 |
 | `tests/datacloud_data_service/test_rest_query.py` | **调整** | 同上 |
 | `tests/datacloud_data_service/test_skills_api.py` | **调整** | 同上 |
-| `tests/datacloud_data_sdk/test_config_loader.py` | **保留/废弃** | 若 YAML 加载废弃，测试可保留作回归或删除 |
-| `tests/datacloud_data_sdk/integration/test_query_pipeline_integration.py` | **调整** | 改为通过本体内容注入数据源 |
+| `tests/datacloud_data/test_config_loader.py` | **保留/废弃** | 若 YAML 加载废弃，测试可保留作回归或删除 |
+| `tests/datacloud_data/integration/test_query_pipeline_integration.py` | **调整** | 改为通过本体内容注入数据源 |
 | `tests/e2e/test_crm_scenarios.py` | **调整** | 同上 |
 
 ### 1.6 本体资源文件
