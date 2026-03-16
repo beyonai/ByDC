@@ -242,6 +242,7 @@ async def create_todo(
     content = f"{body.title}\n\n{body.content}" if body.content else body.title
 
     todo = TodoItems(
+        id=_next_id(),
         title=body.title,
         todo_content=content,
         deadline_at=_parse_datetime(body.deadlineAt),

@@ -45,7 +45,12 @@ async def todo_list(
     session: AsyncSession = Depends(get_session),
 ):
     """查询待办列表."""
-    return await query_todo_list(body, session, request)
+    items = await query_todo_list(body, session, request)
+    return {
+        "message": "",
+        "code": "",
+        "data": items,
+    }
 
 
 @router.post("/accept")
