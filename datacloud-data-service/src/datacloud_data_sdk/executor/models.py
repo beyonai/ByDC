@@ -7,12 +7,12 @@ from typing import Any
 
 @dataclass
 class ApiExecTask:
-    function_code: str
+    object_code: str
+    action_code: str
     params: dict[str, Any] = field(default_factory=dict)
     output_ref: str = ""
     bind_from_step: str = ""
     bind_key: str = ""
-    output_params: list[tuple[str, str]] = field(default_factory=list)  # (param_code, mapping_path)
 
 
 @dataclass

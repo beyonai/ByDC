@@ -91,3 +91,17 @@ async def test_execute_db_aggregates_meta_columns(executor_with_data: tuple[Dyna
         {"name": "name", "label": "名称", "type": "string"},
         {"name": "金额汇总", "label": "金额汇总", "type": "number"},
     ]
+
+
+@pytest.mark.asyncio
+async def test_execute_db_with_limit_offset(executor_with_data: tuple[DynamicQueryExecutor, OntologyLoader]) -> None:
+    """limit/offset 生效时返回分页后的 records。"""
+    executor, _ = executor_with_data
+    result = await executor.execute(
+        "test_obj",
+        {"filters": {}, "limit": 1, "offset": 1},
+    )
+    assert result["total"] == 1
+    assert len(result["records"]) == 1
+    assert result["records"][0]["id"] == 2
+    assert result["records"][0]["name"] == "b"

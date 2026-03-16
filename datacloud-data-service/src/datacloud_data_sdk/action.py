@@ -125,7 +125,8 @@ class Action:
                     params["filters"] = tr.resolve_filter_values(
                         params["filters"], cls.fields
                     )
-            return await self._execute_virtual(params)
+            result = await self._execute_virtual(params)
+            return self._normalize_to_unified_format(result)
 
         params = self._map_names(params)
         if term_loader:
@@ -134,7 +135,8 @@ class Action:
             params = TermResolver(term_loader).resolve(self._action, params)
 
         if self._action.script:
-            return await self._execute_script(params)
+            result = await self._execute_script(params)
+            return self._normalize_to_unified_format(result)
         if self._action.function_refs:
             from datacloud_data_sdk.plan.param_converter import (
                 _to_function_param,
@@ -147,7 +149,8 @@ class Action:
                 if getattr(p, "direction", "IN") in ("IN", "INOUT")
             ]
             physical_params = map_to_physical(params, in_params)
-            return await self._execute_api(physical_params)
+            result = await self._execute_api(physical_params)
+            return self._normalize_to_unified_format(result)
         raise ActionNotConfiguredError(self._action.action_code)
 
     async def _execute_virtual(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -167,11 +170,31 @@ class Action:
         from datacloud_data_sdk.executor.script_executor import ScriptExecutor
 
         executor = ScriptExecutor(ontology_loader=self._loader)
-        return await executor.execute(
+        result = await executor.execute(
             self._action.script,  # type: ignore[arg-type]
             params,
             action_code=self._action.action_code,
         )
+        if not isinstance(result, dict):
+            return {"records": [], "total": 0, "meta": {"viewId": "auto_view", "columns": [], "total": 0}}
+        out_params = [
+            (p.param_code, p.mapping_path)
+            for p in self._action.params
+            if getattr(p, "direction", "IN") in ("OUT", "INOUT") and getattr(p, "mapping_path", "")
+        ]
+        if out_params:
+            from datacloud_data_sdk.executor.response_mapping import extract_by_mapping_path
+
+            records = extract_by_mapping_path(result, out_params)
+            columns = [p[0] for p in out_params]
+        else:
+            records = self._extract_records_fallback(result)
+            columns = list(records[0].keys()) if records and isinstance(records[0], dict) else []
+        return {
+            "records": records,
+            "total": len(records),
+            "meta": {"viewId": "auto_view", "columns": columns, "total": len(records)},
+        }
 
     async def _execute_api(self, params: dict[str, Any]) -> dict[str, Any]:
         """通过 HTTP API 执行动作。"""
@@ -199,7 +222,25 @@ class Action:
         if resp.status_code >= 400:
             raise ApiExecutionError(function_code, resp.status_code, resp.text)
 
-        return resp.json()
+        raw = resp.json()
+        out_params = [
+            (p.param_code, p.mapping_path)
+            for p in self._action.params
+            if getattr(p, "direction", "IN") in ("OUT", "INOUT") and getattr(p, "mapping_path", "")
+        ]
+        if out_params:
+            from datacloud_data_sdk.executor.response_mapping import extract_by_mapping_path
+
+            records = extract_by_mapping_path(raw, out_params)
+            columns = [p[0] for p in out_params]
+        else:
+            records = self._extract_records_fallback(raw)
+            columns = list(records[0].keys()) if records and isinstance(records[0], dict) else []
+        return {
+            "records": records,
+            "total": len(records),
+            "meta": {"viewId": "auto_view", "columns": columns, "total": len(records)},
+        }
 
     def _build_url(self, config: dict[str, Any]) -> str:
         servers = config.get("servers", [])
@@ -221,3 +262,40 @@ class Action:
         except Exception:
             pass
         return headers
+
+    def _extract_records_fallback(self, data: Any) -> list[dict[str, Any]]:
+        """从 API 原始响应按常见 key 兜底提取 records。"""
+        if isinstance(data, list):
+            return data if data and isinstance(data[0], dict) else [{"value": data}] if data else []
+        if isinstance(data, dict):
+            for key in ("data", "records", "items", "list", "users", "results", "opportunities"):
+                if key in data and isinstance(data[key], list):
+                    return data[key]
+            return [data]
+        return [{"value": data}]
+
+    def _normalize_to_unified_format(self, result: dict[str, Any]) -> dict[str, Any]:
+        """将任意 dict 归一化为 {records, total, meta} 统一结构。"""
+        if not isinstance(result, dict):
+            return {
+                "records": [],
+                "total": 0,
+                "meta": {"viewId": "auto_view", "columns": [], "total": 0},
+            }
+        if "records" in result and "meta" in result:
+            meta = result.get("meta", {})
+            meta.setdefault("viewId", "auto_view")
+            meta.setdefault("total", result.get("total", len(result.get("records", []))))
+            return result
+        records = result.get("records")
+        if records is None:
+            records = [result] if result else []
+        if not isinstance(records, list):
+            records = [result]
+        total = len(records)
+        columns = list(records[0].keys()) if records and isinstance(records[0], dict) else []
+        return {
+            "records": records,
+            "total": total,
+            "meta": {"viewId": "auto_view", "columns": columns, "total": total},
+        }

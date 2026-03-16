@@ -209,6 +209,11 @@ _TABLE_ALIAS_RE = re.compile(
     r"\b(?:FROM|JOIN)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\b",
     re.IGNORECASE,
 )
+# 从 FROM/JOIN 提取表名（不含子查询），用于无 sqlglot 时的跨源校验
+_TABLE_FROM_JOIN_RE = re.compile(
+    r"\b(?:FROM|JOIN)\s+(?!\s*\()(?:\w+\.)?(\w+)",
+    re.IGNORECASE,
+)
 
 try:  # 运行环境未安装 sqlglot 时自动降级为纯 token 校验
     import sqlglot  # type: ignore[import]
@@ -236,6 +241,12 @@ def _generic_sql_token_validate(
     """基于 token 的通用 SQL 校验：字段/表/别名/函数/类型是否可识别。"""
     if not sql:
         return []
+
+    # 无 sqlglot 时也做跨源校验：用正则提取表名
+    tables_in_query = _extract_tables_from_sql_regex(sql)
+    cross_errors = _validate_cross_source_join_from_tables(tables_in_query, payload, step)
+    if cross_errors:
+        return cross_errors
 
     cleaned = re.sub(r"'[^']*'", "", sql)
     cleaned = re.sub(r"\b\d+(?:\.\d+)?\b", "", cleaned)
@@ -274,6 +285,76 @@ def _generic_sql_token_validate(
     return errors
 
 
+def _extract_tables_from_sql_regex(sql: str) -> set[str]:
+    """从 SQL 中通过正则提取 FROM/JOIN 后的表名（不含子查询），用于无 sqlglot 时的跨源校验。"""
+    tables: set[str] = set()
+    for m in _TABLE_FROM_JOIN_RE.finditer(sql):
+        name = m.group(1).lower()
+        if name and name not in _SQL_KEYWORDS:
+            tables.add(name)
+    return tables
+
+
+def _validate_cross_source_join_from_tables(
+    tables_in_query: set[str],
+    payload: ObjectViewPayload,
+    step: PlanStep,
+) -> list[SqlValidationError]:
+    """校验多表是否来自同一数据源，禁止跨源 JOIN。"""
+    if len(tables_in_query) <= 1:
+        return []
+
+    source_by_id: dict[str, Any] = {s.source_id: s for s in payload.sources}
+    table_to_datasource: dict[str, str] = {}
+    for obj in payload.objects:
+        if not obj.table:
+            continue
+        source = source_by_id.get(obj.source_id)
+        if source is None or source.source_type != "DB":
+            continue
+        if source.datasource_alias:
+            table_to_datasource[obj.table.lower()] = source.datasource_alias
+
+    table_datasources: list[tuple[str, str]] = []
+    for t in tables_in_query:
+        if t in table_to_datasource:
+            table_datasources.append((t, table_to_datasource[t]))
+
+    datasources_used = {ds for _, ds in table_datasources}
+    if len(datasources_used) <= 1:
+        return []
+
+    msg_parts = ", ".join(f"{t} ({ds})" for t, ds in sorted(table_datasources))
+    return [
+        {
+            "code": "CROSS_SOURCE_JOIN",
+            "message": f"tables from different datasources cannot be joined in the same step: {msg_parts}",
+            "detail": {
+                "tables_with_datasource": table_datasources,
+                "step_id": step.step_id,
+            },
+        }
+    ]
+
+
+def _validate_cross_source_join(
+    expr: Any,
+    payload: ObjectViewPayload,
+    step: PlanStep,
+) -> list[SqlValidationError]:
+    """校验 SQL 中多表是否来自同一数据源，禁止跨源 JOIN。"""
+    if sqlglot is None:
+        return []
+
+    tables_in_query: set[str] = set()
+    for t in expr.find_all(sqlglot.exp.Table):
+        table_name = (t.name or "").lower()
+        if table_name:
+            tables_in_query.add(table_name)
+
+    return _validate_cross_source_join_from_tables(tables_in_query, payload, step)
+
+
 def _validate_sql_columns_by_ast(
     expr: Any,
     payload: ObjectViewPayload,
@@ -302,6 +383,10 @@ def _validate_sql_columns_by_ast(
                 alias_name = table_name
             alias_to_table[alias_name.lower()] = table_name
 
+    cross_errors = _validate_cross_source_join(expr, payload, step)
+    if cross_errors:
+        return cross_errors
+
     # 获取当前 step 的 source
     source = next(
         (s for s in payload.sources if s.datasource_alias == step.datasource_alias),
@@ -327,10 +412,12 @@ def _validate_sql_columns_by_ast(
 
     # 遍历 Column 做表级校验
     for col in expr.find_all(sqlglot.exp.Column):
-        col_name = (getattr(col, "alias_or_name", None) or col.name or "").lower()
+        col_name_orig = (getattr(col, "alias_or_name", None) or col.name or "").strip()
+        col_name = col_name_orig.lower()
         if not col_name:
             continue
         qualifier = (col.table or "").strip().lower() if col.table else ""
+        qualifier_orig = (col.table or "").strip() if col.table else ""
 
         if qualifier:
             # 带前缀列
@@ -338,8 +425,8 @@ def _validate_sql_columns_by_ast(
                 errors.append(
                     {
                         "code": "UNKNOWN_TABLE_ALIAS",
-                        "message": f"unknown table alias {qualifier!r} in column {qualifier}.{col_name}",
-                        "detail": {"alias": qualifier, "identifier": col_name, "step_id": step.step_id},
+                        "message": f"unknown table alias {qualifier_orig or qualifier!r} in column {(qualifier_orig or qualifier)}.{col_name_orig!r}",
+                        "detail": {"alias": qualifier, "identifier": col_name_orig, "step_id": step.step_id},
                     }
                 )
                 continue
@@ -348,11 +435,11 @@ def _validate_sql_columns_by_ast(
                 errors.append(
                     {
                         "code": "UNKNOWN_TABLE",
-                        "message": f"unknown table {table_name!r} for alias {qualifier!r} in column {qualifier}.{col_name}",
+                        "message": f"unknown table {table_name!r} for alias {qualifier_orig or qualifier!r} in column {(qualifier_orig or qualifier)}.{col_name_orig!r}",
                         "detail": {
                             "table": table_name,
                             "alias": qualifier,
-                            "identifier": col_name,
+                            "identifier": col_name_orig,
                             "step_id": step.step_id,
                         },
                     }
@@ -362,9 +449,9 @@ def _validate_sql_columns_by_ast(
                 errors.append(
                     {
                         "code": "UNKNOWN_COLUMN",
-                        "message": f"SQL references unknown column {col_name!r} on table {table_name!r} (alias {qualifier!r})",
+                        "message": f"column {col_name_orig!r} does not exist on table {table_name!r} (alias {qualifier_orig or qualifier!r})",
                         "detail": {
-                            "identifier": col_name,
+                            "identifier": col_name_orig,
                             "table": table_name,
                             "alias": qualifier,
                             "step_id": step.step_id,
@@ -377,21 +464,27 @@ def _validate_sql_columns_by_ast(
             for t in tables_in_query:
                 if t in table_columns and col_name in table_columns[t]:
                     candidate_tables.append(t)
+            tables_str = ", ".join(sorted(tables_in_query))
             if len(candidate_tables) == 0:
                 errors.append(
                     {
                         "code": "UNKNOWN_COLUMN",
-                        "message": f"SQL references unknown column {col_name!r} which does not exist in any table of current query",
-                        "detail": {"identifier": col_name, "step_id": step.step_id},
+                        "message": f"column {col_name_orig!r} does not exist in any table of current query (tables: {tables_str})",
+                        "detail": {
+                            "identifier": col_name_orig,
+                            "tables": sorted(tables_in_query),
+                            "step_id": step.step_id,
+                        },
                     }
                 )
             elif len(candidate_tables) > 1:
+                ambig_tables = ", ".join(sorted(candidate_tables))
                 errors.append(
                     {
                         "code": "AMBIGUOUS_COLUMN",
-                        "message": f"ambiguous column {col_name!r} appears in multiple tables, please qualify with table alias",
+                        "message": f"ambiguous column {col_name_orig!r} appears in multiple tables ({ambig_tables}), please qualify with table alias",
                         "detail": {
-                            "identifier": col_name,
+                            "identifier": col_name_orig,
                             "tables": sorted(candidate_tables),
                             "step_id": step.step_id,
                         },

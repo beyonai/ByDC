@@ -38,6 +38,7 @@ service = [
     "pydantic-settings>=2.0",
     "pyyaml>=6.0",
     "mcp>=1.18.0",
+    "strawberry-graphql[fastapi]>=0.260",
 ]
 all = ["datacloud-data-service[langchain,sql,service]"]
 dev = [

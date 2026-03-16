@@ -1,4 +1,7 @@
+import json
 import pytest
+from pathlib import Path
+
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.exceptions import ObjectNotFoundError
 
@@ -352,3 +355,73 @@ def test_load_from_content_auto_injects_datasource_configs() -> None:
     loader.load_from_content(content)
     assert loader._config.datasource_configs
     assert "ds_test" in loader._config.datasource_configs
+
+
+def test_load_from_content_parses_property_kind_and_relation_resolve() -> None:
+    """load_from_content 能解析 property_kind、derived_config、relation_ref、resolve_action_code、resolve_param_binding。"""
+    content = {
+        "functions": [],
+        "objects": [{
+            "object_code": "test_obj",
+            "object_name": "测试对象",
+            "source_type": "DB",
+            "fields": [
+                {"field_code": "amount", "field_name": "金额", "field_type": "NUMBER", "source_column": "amount"},
+                {"field_code": "discount_amount", "field_name": "折后金额", "field_type": "NUMBER",
+                 "property_kind": "derived", "derived_config": {"mode": "expression", "expression": "amount * 0.9", "depends_on": ["amount"]}},
+                {"field_code": "opportunities", "field_name": "商机列表", "field_type": "ARRAY",
+                 "property_kind": "linked", "relation_ref": "cust_opp"}
+            ],
+            "actions": []
+        }],
+        "relations": [{
+            "relation_code": "cust_opp",
+            "source_class": "test_obj",
+            "target_class": "opp",
+            "relation_type": "ONE_TO_MANY",
+            "resolve_action_code": "query_opp_by_cust",
+            "resolve_param_binding": {"source_field": "customer_id", "action_param": "customerId"}
+        }]
+    }
+    loader = OntologyLoader()
+    loader.load_from_content(content)
+    cls = loader.get_ontology_class("test_obj")
+    # 断言 fields 解析正确
+    discount_f = next(f for f in cls.fields if f.field_code == "discount_amount")
+    assert discount_f.property_kind == "derived"
+    assert discount_f.derived_config["mode"] == "expression"
+    linked_f = next(f for f in cls.fields if f.field_code == "opportunities")
+    assert linked_f.property_kind == "linked"
+    assert linked_f.relation_ref == "cust_opp"
+    # 断言 relations 解析正确
+    rels = loader.get_ontology_relations()
+    cust_opp = next(r for r in rels if r.relation_code == "cust_opp")
+    assert cust_opp.resolve_action_code == "query_opp_by_cust"
+    assert cust_opp.resolve_param_binding["source_field"] == "customer_id"
+
+
+def test_load_from_directory_loads_objects_and_functions(tmp_path: Path) -> None:
+    """从目录加载时，objects/ 和 functions/ 下的 JSON 被正确解析。"""
+    (tmp_path / "objects").mkdir()
+    (tmp_path / "functions").mkdir()
+    (tmp_path / "views").mkdir()
+
+    (tmp_path / "objects" / "obj_a.json").write_text(json.dumps({
+        "object_code": "obj_a",
+        "object_name": "对象A",
+        "source_type": "DB",
+        "fields": [],
+        "actions": [],
+    }, ensure_ascii=False))
+    (tmp_path / "functions" / "fn_x.json").write_text(json.dumps({
+        "function_code": "fn_x",
+        "function_name": "函数X",
+        "function_type": "API",
+        "api_schema": {},
+    }, ensure_ascii=False))
+
+    loader = OntologyLoader()
+    loader.load_from_path(tmp_path)
+
+    assert loader.get_ontology_class("obj_a").object_name == "对象A"
+    assert loader.get_function_config("fn_x") == {}
