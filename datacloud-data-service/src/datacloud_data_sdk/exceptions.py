@@ -49,9 +49,10 @@ class PlanGenerationError(PlanError):
 
 
 class PlanValidationError(PlanError):
-    def __init__(self, errors: list[str]) -> None:
+    def __init__(self, errors: list[str], plan: object = None) -> None:
         super().__init__(f"Plan validation failed: {errors}")
         self.errors = errors
+        self.plan = plan
 
 
 class CannotAnswerError(PlanError):

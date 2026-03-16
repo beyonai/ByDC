@@ -14,14 +14,16 @@ router = APIRouter()
 
 def _extract_context(request: Request) -> dict[str, str]:
     tenant_id = request.headers.get("X-Tenant-Id", "")
-    # if not tenant_id:
-        # raise HTTPException(status_code=400, detail="X-Tenant-Id header required")
+    tool_mode = request.headers.get("X-Tool-List-Mode", "unified")
+    if tool_mode not in ("unified", "   "):
+        tool_mode = "unified"
     return {
         "tenant_id": tenant_id,
         "user_id": request.headers.get("X-User-Id", ""),
         "session_id": request.headers.get("X-Session-Id", ""),
         "token": request.headers.get("Authorization", "").removeprefix("Bearer ").strip(),
         "system_code": request.headers.get("X-System-Code", ""),
+        "tool_list_mode": tool_mode,
     }
 
 
@@ -95,10 +97,12 @@ def _get_tools_list(request: Request) -> list[dict]:
     if loader is None:
         return [_fallback_unified_query_tool()]
 
+    from datacloud_data_sdk.context import get_tool_list_mode
     from datacloud_data_service.tools.registry import ToolRegistry
 
     registry = ToolRegistry(loader)
-    tools = registry.list_tools()
+    tool_list_mode = get_tool_list_mode()
+    tools = registry.list_tools(tool_list_mode=tool_list_mode)
     for t in tools:
         t.pop("_meta", None)
     return tools
@@ -125,24 +129,24 @@ async def _handle_tools_call(request: Request, params: dict) -> dict:
             view_id=arguments.get("view_id", ""),
             object_ids=arguments.get("object_ids"),
         )
-    else:
-        object_code = _find_action_object(loader, tool_name)
-        if object_code is None:
-            return {
-                "content": [{"type": "text", "text": f"Unknown tool: {tool_name}"}],
-                "isError": True,
-            }
 
-        from datacloud_data_service.tools.action_executor import ActionExecutor
+    object_code = _find_action_object(loader, tool_name)
+    if object_code is None:
+        return {
+            "content": [{"type": "text", "text": f"Unknown tool: {tool_name}"}],
+            "isError": True,
+        }
 
-        executor = ActionExecutor(loader)
-        try:
-            return await executor.execute(object_code, tool_name, arguments)
-        except Exception as e:
-            return {
-                "content": [{"type": "text", "text": str(e)}],
-                "isError": True,
-            }
+    from datacloud_data_service.tools.action_executor import ActionExecutor
+
+    executor = ActionExecutor(loader)
+    try:
+        return await executor.execute(object_code, tool_name, arguments)
+    except Exception as e:
+        return {
+            "content": [{"type": "text", "text": str(e)}],
+            "isError": True,
+        }
 
 
 def _find_action_object(loader: Any, action_code: str) -> str | None:

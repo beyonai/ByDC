@@ -34,6 +34,7 @@ REGISTRY = {
                     "action_code": "query_bo_by_owner",
                     "action_name": "按负责人查商机",
                     "description": "通过负责人ID查询商机列表",
+                    "action_type": "query",
                     "function_refs": ["fn_query_bo"],
                     "params": [
                         {
@@ -49,6 +50,7 @@ REGISTRY = {
                     "action_code": "calc_score",
                     "action_name": "计算评分",
                     "script": "def execute(params):\n    return {'score': 100}",
+                    "action_type": "operation",
                     "function_refs": [],
                     "params": [
                         {"param_code": "bo_id", "param_type": "STRING", "direction": "IN"},
@@ -72,9 +74,10 @@ def _create_app():
 
 def test_tools_list_includes_action_tools():
     with TestClient(_create_app()) as client:
+        headers = {**HEADERS, "X-Tool-List-Mode": "per_object"}
         resp = client.post("/api/v1/mcp", json={
             "jsonrpc": "2.0", "id": "1", "method": "tools/list", "params": {},
-        }, headers=HEADERS)
+        }, headers=headers)
         data = parse_sse_response(resp)
         tools = data["result"]["tools"]
         names = [t["name"] for t in tools]

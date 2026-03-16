@@ -100,7 +100,6 @@ class PlanStep:
     function_id: str = ""  # type=API 时表示 actionCode
     params: dict[str, Any] = field(default_factory=dict)
     output_ref: str = ""
-    csv_table_name: str = ""
     bind_from_step: str = ""
     bind_key: str = ""
     query: str = ""
@@ -113,7 +112,6 @@ class PlanAggregation:
     final_step_id: str | None = None
     sqlite_sql: str = ""
     columns: list[dict[str, str]] = field(default_factory=list)
-    csv_table_names: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -123,3 +121,24 @@ class QueryExecutionPlan:
     clarification: str = ""
     steps: list[PlanStep] = field(default_factory=list)
     aggregation: PlanAggregation | None = None
+
+
+def parse_plan(data: dict[str, Any], question: str = "") -> QueryExecutionPlan:
+    """将 snake_case dict 解析为 QueryExecutionPlan。"""
+    steps = [
+        PlanStep(**{k: v for k, v in s.items() if k in PlanStep.__dataclass_fields__})
+        for s in data.get("steps", [])
+    ]
+    agg_data = data.get("aggregation")
+    aggregation = None
+    if agg_data:
+        aggregation = PlanAggregation(
+            **{k: v for k, v in agg_data.items() if k in PlanAggregation.__dataclass_fields__}
+        )
+    return QueryExecutionPlan(
+        question=data.get("question", question),
+        can_answer=data.get("can_answer", True),
+        clarification=data.get("clarification", ""),
+        steps=steps,
+        aggregation=aggregation,
+    )
