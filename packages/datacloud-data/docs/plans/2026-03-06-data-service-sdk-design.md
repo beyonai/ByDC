@@ -1,4 +1,4 @@
-# datacloud-data-service & datacloud-data-sdk 实现设计
+# datacloud-data & datacloud-data-sdk 实现设计
 
 > **日期**：2026-03-06  
 > **状态**：已确认，待实现  
@@ -33,7 +33,7 @@
 
 | 维度 | 决策 |
 |------|------|
-| **包结构** | 双子包（`datacloud_data_sdk` + `datacloud_data_service`），SDK 开源质量 |
+| **包结构** | 双子包（`datacloud_data` + `datacloud_data_service`），SDK 开源质量 |
 | **LLM 框架** | LangGraph（OpenAI 兼容接口，model/base_url/api_key 可配置） |
 | **SQL 执行** | 内置 `SqlExecutor`（SQLAlchemy AsyncIO），支持切换外部模式 |
 | **测试场景** | CRM 销售场景，`datacloud-mock` 提供 Mock API + DB |
@@ -55,14 +55,14 @@
 ### 2.1 目录树
 
 ```
-datacloud-data-service/
+datacloud-data/
 ├── resources/
 │   └── ontology/
 │       └── crm_demo/                   # 从 datacloud-mock 复用
 │           ├── objects_registry.json
 │           └── scene_01_data_analysis.json
 ├── src/
-│   ├── datacloud_data_sdk/             # SDK 子包（核心逻辑，零 FastAPI 依赖）
+│   ├── datacloud_data/             # SDK 子包（核心逻辑，零 FastAPI 依赖）
 │   │   ├── __init__.py                 # 公开 API 面（OntologyLoader, View, Object, ...）
 │   │   ├── context.py                  # InvocationContext（contextvars）
 │   │   ├── view.py                     # View 实体
@@ -130,7 +130,7 @@ datacloud-data-service/
 │           └── term_resolver.py        # 术语标签 → 标准 code
 │
 ├── tests/
-│   ├── datacloud_data_sdk/
+│   ├── datacloud_data/
 │   │   ├── test_ontology_loader.py
 │   │   ├── test_object_view_builder.py
 │   │   ├── test_plan_validator.py
@@ -154,12 +154,12 @@ datacloud-data-service/
 
 ```toml
 [tool.hatch.build.targets.wheel]
-packages = ["src/datacloud_data_sdk", "src/datacloud_data_service"]
+packages = ["src/datacloud_data", "src/datacloud_data_service"]
 
 [project.optional-dependencies]
 langchain = ["langgraph>=0.2", "langchain-openai>=0.1"]
 sql       = ["sqlalchemy[asyncio]>=2.0", "aiomysql>=0.2", "pymysql>=1.0"]
-all       = ["datacloud-data-service[langchain,sql]"]
+all       = ["datacloud-data[langchain,sql]"]
 dev       = ["pytest>=8.0", "pytest-asyncio>=0.23", "pytest-mock>=3.0", "httpx>=0.27"]
 ```
 
@@ -298,7 +298,7 @@ class OntologyLoader:
 
 ### 3.5 开源质量约束
 
-- **公开 API 面**：`datacloud_data_sdk/__init__.py` 仅暴露 `OntologyLoader`、`View`、`Object`、`Action`、`Relation`、`InvocationContext`、`DatacloudError` 及子类
+- **公开 API 面**：`datacloud_data/__init__.py` 仅暴露 `OntologyLoader`、`View`、`Object`、`Action`、`Relation`、`InvocationContext`、`DatacloudError` 及子类
 - **可选依赖**：核心本体层零依赖；LangGraph / SQL 驱动为可选 extras
 - **抽象接口**：`BasePlanGenerator(ABC)`、`BaseAggregator(ABC)` 允许替换实现
 - **全量类型注解** + **异步优先**（所有 I/O 均为 `async/await`）
@@ -646,8 +646,8 @@ class Settings(BaseSettings):
 
 | 层级 | 目录 | 工具 | 外部依赖 |
 |------|------|------|---------|
-| SDK 单元测试 | `tests/datacloud_data_sdk/` | pytest + pytest-mock | 无 |
-| SDK 集成测试 | `tests/datacloud_data_sdk/integration/` | pytest-asyncio | 仅本地文件 |
+| SDK 单元测试 | `tests/datacloud_data/` | pytest + pytest-mock | 无 |
+| SDK 集成测试 | `tests/datacloud_data/integration/` | pytest-asyncio | 仅本地文件 |
 | 服务层测试 | `tests/datacloud_data_service/` | httpx TestClient + Mock SDK | 无 |
 | CRM 端到端 | `tests/e2e/` | pytest-asyncio | datacloud-mock 服务 |
 

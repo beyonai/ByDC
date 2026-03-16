@@ -13,11 +13,11 @@
 ## Task 1: LoaderConfig 新增 event_bus
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/ontology/loader.py`
+- Modify: `src/datacloud_data/ontology/loader.py`
 
-**Step 1:** 在 `LoaderConfig` 中新增 `event_bus: EventBus | None = None`（需 `from typing import TYPE_CHECKING` 和 `if TYPE_CHECKING: from datacloud_data_sdk.events.bus import EventBus` 避免循环导入，或直接 `Any`）
+**Step 1:** 在 `LoaderConfig` 中新增 `event_bus: EventBus | None = None`（需 `from typing import TYPE_CHECKING` 和 `if TYPE_CHECKING: from datacloud_data.events.bus import EventBus` 避免循环导入，或直接 `Any`）
 
-**Step 2:** 运行 `pytest tests/datacloud_data_sdk/test_ontology_loader.py -v`，确认通过
+**Step 2:** 运行 `pytest tests/datacloud_data/test_ontology_loader.py -v`，确认通过
 
 **Step 3:** `git add` + `git commit -m "feat(loader): add event_bus to LoaderConfig"`
 
@@ -26,8 +26,8 @@
 ## Task 2: register_query_handlers 支持 TracingMiddleware
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/events/handlers.py`
-- Test: `tests/datacloud_data_sdk/test_event_handlers.py`
+- Modify: `src/datacloud_data/events/handlers.py`
+- Test: `tests/datacloud_data/test_event_handlers.py`
 
 **Step 1:** 扩展 `register_query_handlers(bus, on_event=None, tracing=None)`。若 `tracing` 非空，对每个事件类型调用 `tracing.subscribe(event_cls, async_noop, "query")`；否则保持原逻辑 `bus.subscribe(event_cls, _async_on_event)`。
 
@@ -40,8 +40,8 @@
 ## Task 3: TracingMiddleware 填充 EventSpan input_summary
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/events/tracing.py`
-- Test: `tests/datacloud_data_sdk/test_tracing.py`
+- Modify: `src/datacloud_data/events/tracing.py`
+- Test: `tests/datacloud_data/test_tracing.py`
 
 **Step 1:** 新增 `_event_to_input_summary(event: BaseEvent) -> dict`，按事件类型返回摘要（如 QueryRequestReceived → `{"question_len": len(question), "object_ids": object_ids}`）。
 
@@ -56,9 +56,9 @@
 ## Task 4: QueryObserver 补齐事件 + View.query 接入
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/events/query_observer.py`
-- Modify: `src/datacloud_data_sdk/view.py`
-- Test: `tests/datacloud_data_sdk/test_view.py` 或新增集成测试
+- Modify: `src/datacloud_data/events/query_observer.py`
+- Modify: `src/datacloud_data/view.py`
+- Test: `tests/datacloud_data/test_view.py` 或新增集成测试
 
 **Step 1:** QueryObserver 新增 `on_plan_validated(request_id, valid, plan, errors, retry_count)`、`on_plan_rewritten`、`on_execution_tasks_ready`（若 events 中有对应类型）。
 
@@ -73,7 +73,7 @@
 ## Task 5: Object.query 接入 QueryObserver
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/object.py`
+- Modify: `src/datacloud_data/object.py`
 
 **Step 1:** 与 View.query 类似，在 Object.query 各阶段调用 observer.on_*（Object 为单对象，部分事件可能简化）。
 
@@ -99,9 +99,9 @@
 ## Task 7: 计划重试循环
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/view.py`
-- Modify: `src/datacloud_data_sdk/object.py`
-- Test: 新增 `tests/datacloud_data_sdk/test_plan_retry.py`
+- Modify: `src/datacloud_data/view.py`
+- Modify: `src/datacloud_data/object.py`
+- Test: 新增 `tests/datacloud_data/test_plan_retry.py`
 
 **Step 1:** 在 View.query 中，用 `max_retries = getattr(config.plan_generator, '_max_retries', 2)` 或从 Settings 读取。将「generate → validate」放入 `for retry in range(max_retries + 1)`。校验失败时，`plan = await config.plan_generator.generate(payload, question, validation_errors=result.errors)` 并继续循环；成功则 break。超次数则 `raise PlanValidationError(result.errors)`。
 

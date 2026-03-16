@@ -15,14 +15,14 @@
 ## Task 1: OntologyField、OntologyActionParam 增加 term_type、dataset_id
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/ontology/models.py`
-- Test: `datacloud-data-service/tests/datacloud_data_sdk/test_ontology_models.py`
+- Modify: `datacloud-data/src/datacloud_data/ontology/models.py`
+- Test: `datacloud-data/tests/datacloud_data/test_ontology_models.py`
 
 **Step 1: 编写失败测试**
 
 ```python
 def test_ontology_field_has_term_type_and_dataset_id():
-    from datacloud_data_sdk.ontology.models import OntologyField
+    from datacloud_data.ontology.models import OntologyField
     f = OntologyField(
         field_code="x",
         field_name="X",
@@ -37,7 +37,7 @@ def test_ontology_field_has_term_type_and_dataset_id():
 
 **Step 2: 运行测试确认失败**
 
-Run: `cd datacloud-data-service && PYTHONPATH=src pytest tests/datacloud_data_sdk/test_ontology_models.py::test_ontology_field_has_term_type_and_dataset_id -v`
+Run: `cd datacloud-data && PYTHONPATH=src pytest tests/datacloud_data/test_ontology_models.py::test_ontology_field_has_term_type_and_dataset_id -v`
 Expected: FAIL (OntologyField 无 term_type/dataset_id)
 
 **Step 3: 实现**
@@ -52,8 +52,8 @@ Expected: FAIL (OntologyField 无 term_type/dataset_id)
 ## Task 2: Loader 解析 termMeta 并填充 term_set、term_type、dataset_id
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/ontology/loader.py`
-- Test: `datacloud-data-service/tests/datacloud_data_sdk/test_ontology_loader.py`（若无则新建）
+- Modify: `datacloud-data/src/datacloud_data/ontology/loader.py`
+- Test: `datacloud-data/tests/datacloud_data/test_ontology_loader.py`（若无则新建）
 
 **Step 1: 添加 _parse_term_meta 辅助函数**
 
@@ -93,8 +93,8 @@ def _parse_term_meta(raw: dict) -> tuple[str | None, str | None, int | None]:
 ## Task 3: ObjectViewField、ObjectViewFunctionParam 增加 term_type、dataset_id
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/plan/models.py`
-- Test: `datacloud-data-service/tests/datacloud_data_sdk/test_plan_models.py`（若无则 test_object_view_builder）
+- Modify: `datacloud-data/src/datacloud_data/plan/models.py`
+- Test: `datacloud-data/tests/datacloud_data/test_plan_models.py`（若无则 test_object_view_builder）
 
 **Step 1:** 在 ObjectViewField、ObjectViewFunctionParam 中增加 `term_type: str | None = None`、`dataset_id: int | None = None`。
 
@@ -105,34 +105,34 @@ def _parse_term_meta(raw: dict) -> tuple[str | None, str | None, int | None]:
 ## Task 4: ObjectViewBuilder 传入 term_type、dataset_id
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/plan/object_view_builder.py`
+- Modify: `datacloud-data/src/datacloud_data/plan/object_view_builder.py`
 
 **Step 1:** 构建 ObjectViewField 时传入 `term_type=f.term_type`、`dataset_id=f.dataset_id`。
 构建 ObjectViewFunctionParam 时传入 `term_type=p.term_type`、`dataset_id=p.dataset_id`。
 
-**Step 2:** 运行 `pytest tests/datacloud_data_sdk/test_object_view_builder.py -v`。
+**Step 2:** 运行 `pytest tests/datacloud_data/test_object_view_builder.py -v`。
 
 ---
 
 ## Task 5: _serialize_param 优先使用 term_type
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/plan/query_plan_generator.py`
+- Modify: `datacloud-data/src/datacloud_data/plan/query_plan_generator.py`
 
 **Step 1:** 在 _serialize_param 中，若 p 有 term_type：
 - term_type=="enum"：调用 term_loader.get_available_values 获取 labels，注入 termType、termLabels
 - term_type=="lookup"：注入 termType、termHint
 若无 term_type，保持现有逻辑（根据 term_loader 返回值推断）。
 
-**Step 2:** 运行 `pytest tests/datacloud_data_sdk/test_query_plan_generator.py -v`。
+**Step 2:** 运行 `pytest tests/datacloud_data/test_query_plan_generator.py -v`。
 
 ---
 
 ## Task 6: 配置 znt_server 与 .env.example
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_service/config.py`
-- Modify: `datacloud-data-service/.env.example`
+- Modify: `datacloud-data/src/datacloud_data_service/config.py`
+- Modify: `datacloud-data/.env.example`
 
 **Step 1:** 在 Settings 中增加 `znt_server: str = ""`（环境变量 DC_ZNT_SERVER）。
 
@@ -143,8 +143,8 @@ def _parse_term_meta(raw: dict) -> tuple[str | None, str | None, int | None]:
 ## Task 7: TermLoader 扩展 API 模式
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/ontology/term_loader.py`
-- Test: `datacloud-data-service/tests/datacloud_data_sdk/test_term_loader.py`
+- Modify: `datacloud-data/src/datacloud_data/ontology/term_loader.py`
+- Test: `datacloud-data/tests/datacloud_data/test_term_loader.py`
 
 **Step 1: 扩展 TermLoader**
 
@@ -167,7 +167,7 @@ query_plan_generator 的 _serialize_param 调用 get_available_values 时，若 
 ## Task 8（可选）: 字段名兼容 properties / property_code
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/ontology/loader.py`
+- Modify: `datacloud-data/src/datacloud_data/ontology/loader.py`
 
 **Step 1:** 在 load_from_content 中，`fields = obj.get("fields", obj.get("properties", []))`。
 

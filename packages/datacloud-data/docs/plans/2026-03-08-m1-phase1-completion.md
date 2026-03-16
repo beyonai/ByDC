@@ -13,18 +13,18 @@
 ## Task 1: PlanValidator SQL 字段引用校验（#20）
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/plan/plan_validator.py`
-- Test: `tests/datacloud_data_sdk/test_plan_validator.py`
+- Modify: `src/datacloud_data/plan/plan_validator.py`
+- Test: `tests/datacloud_data/test_plan_validator.py`
 
 **Step 1: Write the failing test**
 
 ```python
-# 追加到 tests/datacloud_data_sdk/test_plan_validator.py
+# 追加到 tests/datacloud_data/test_plan_validator.py
 
 def test_sql_field_ref_not_in_object_view_fails():
     """SQL 中引用了 ObjectView 不存在的字段时校验失败。"""
-    from datacloud_data_sdk.plan.plan_validator import PlanValidator, ValidationResult
-    from datacloud_data_sdk.plan.models import (
+    from datacloud_data.plan.plan_validator import PlanValidator, ValidationResult
+    from datacloud_data.plan.models import (
         ObjectViewPayload, ObjectViewSource, ObjectViewObject, ObjectViewField,
         QueryExecutionPlan, PlanStep, PlanAggregation,
     )
@@ -63,8 +63,8 @@ def test_sql_field_ref_not_in_object_view_fails():
 
 def test_sql_field_ref_valid_passes():
     """SQL 中引用的字段全部存在于 ObjectView 时校验通过。"""
-    from datacloud_data_sdk.plan.plan_validator import PlanValidator
-    from datacloud_data_sdk.plan.models import (
+    from datacloud_data.plan.plan_validator import PlanValidator
+    from datacloud_data.plan.models import (
         ObjectViewPayload, ObjectViewSource, ObjectViewObject, ObjectViewField,
         QueryExecutionPlan, PlanStep, PlanAggregation,
     )
@@ -103,7 +103,7 @@ def test_sql_field_ref_valid_passes():
 **Step 2: Run test to verify it fails**
 
 ```bash
-pytest tests/datacloud_data_sdk/test_plan_validator.py::test_sql_field_ref_not_in_object_view_fails -v
+pytest tests/datacloud_data/test_plan_validator.py::test_sql_field_ref_not_in_object_view_fails -v
 ```
 Expected: FAIL
 
@@ -119,14 +119,14 @@ Expected: FAIL
 **Step 4: Run tests to verify they pass**
 
 ```bash
-pytest tests/datacloud_data_sdk/test_plan_validator.py -v
+pytest tests/datacloud_data/test_plan_validator.py -v
 ```
 Expected: ALL PASS
 
 **Step 5: Commit**
 
 ```bash
-git add src/datacloud_data_sdk/plan/plan_validator.py tests/datacloud_data_sdk/test_plan_validator.py
+git add src/datacloud_data/plan/plan_validator.py tests/datacloud_data/test_plan_validator.py
 git commit -m "feat(plan): add SQL field reference validation to PlanValidator"
 ```
 
@@ -135,16 +135,16 @@ git commit -m "feat(plan): add SQL field reference validation to PlanValidator"
 ## Task 2: PlanValidator function_id 校验（#21）
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/plan/plan_validator.py`
-- Test: `tests/datacloud_data_sdk/test_plan_validator.py`
+- Modify: `src/datacloud_data/plan/plan_validator.py`
+- Test: `tests/datacloud_data/test_plan_validator.py`
 
 **Step 1: Write the failing test**
 
 ```python
 def test_api_step_unknown_function_id_fails():
     """API 步骤的 function_id 不在 ObjectView 中时校验失败。"""
-    from datacloud_data_sdk.plan.plan_validator import PlanValidator
-    from datacloud_data_sdk.plan.models import (
+    from datacloud_data.plan.plan_validator import PlanValidator
+    from datacloud_data.plan.models import (
         ObjectViewPayload, ObjectViewSource, ObjectViewObject, ObjectViewField,
         ObjectViewFunction, QueryExecutionPlan, PlanStep, PlanAggregation,
     )
@@ -191,16 +191,16 @@ git commit -m "feat(plan): add function_id existence validation"
 ## Task 3: handlers.py 事件处理链注册（#43）
 
 **Files:**
-- Create: `src/datacloud_data_sdk/events/handlers.py`
-- Test: `tests/datacloud_data_sdk/test_event_handlers.py`
+- Create: `src/datacloud_data/events/handlers.py`
+- Test: `tests/datacloud_data/test_event_handlers.py`
 
 **Step 1: Write the failing test**
 
 ```python
 import pytest
-from datacloud_data_sdk.events.bus import EventBus
-from datacloud_data_sdk.events.events import QueryRequestReceived, ObjectViewBuilt
-from datacloud_data_sdk.events.handlers import register_query_handlers
+from datacloud_data.events.bus import EventBus
+from datacloud_data.events.events import QueryRequestReceived, ObjectViewBuilt
+from datacloud_data.events.handlers import register_query_handlers
 
 
 @pytest.mark.asyncio
@@ -222,8 +222,8 @@ async def test_register_handlers_subscribes_to_events():
 """事件处理链注册：将查询管线各阶段事件串联到 EventBus。"""
 from __future__ import annotations
 from typing import Any, Callable
-from datacloud_data_sdk.events.bus import EventBus
-from datacloud_data_sdk.events.events import (
+from datacloud_data.events.bus import EventBus
+from datacloud_data.events.events import (
     QueryRequestReceived, ObjectViewBuilt, QueryPlanGenerated,
     PlanValidated, PlanRewritten, ExecutionTasksReady,
     StepExecuted, AggregationCompleted,
@@ -272,7 +272,7 @@ import pytest
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
-from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data.ontology.loader import OntologyLoader
 
 HEADERS = {
     "X-Tenant-Id": "t1",
@@ -419,8 +419,8 @@ git commit -m "test(e2e): add 5 CRM end-to-end scenario tests"
 
 **Files:**
 - Modify: `src/datacloud_data_service/config.py`
-- Modify: `src/datacloud_data_sdk/ontology/loader.py`（LoaderConfig 新增字段）
-- Test: `tests/datacloud_data_sdk/test_ontology_loader.py`
+- Modify: `src/datacloud_data/ontology/loader.py`（LoaderConfig 新增字段）
+- Test: `tests/datacloud_data/test_ontology_loader.py`
 
 **Step 1: Write test**
 

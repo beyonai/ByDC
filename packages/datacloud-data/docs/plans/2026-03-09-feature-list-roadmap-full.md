@@ -1,4 +1,4 @@
-# datacloud-data-service 功能清单与开发计划
+# datacloud-data 功能清单与开发计划
 
 > **日期**：2026-03-09 | **组织**：按《数据服务详细设计 2.0》架构层级 | **评估**：全新规划
 
@@ -28,7 +28,7 @@
 
 | # | 层级 | 功能项 | 里程碑 |
 |---|------|--------|--------|
-| 1 | 工程基础 | 双子包目录结构（datacloud_data_sdk + datacloud_data_service） | M0 |
+| 1 | 工程基础 | 双子包目录结构（datacloud_data + datacloud_data_service） | M0 |
 | 2 | 工程基础 | pyproject.toml + 可选依赖分组 | M0 |
 | 3 | 工程基础 | 异常层次（DatacloudError → Ontology/Plan/Execution/Aggregation） | M0 |
 | 4 | 工程基础 | InvocationContext（contextvars 请求上下文） | M0 |

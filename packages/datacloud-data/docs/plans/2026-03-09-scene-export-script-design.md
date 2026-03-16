@@ -65,5 +65,5 @@ python scripts/export_scene_json.py \
 
 ## 5. 文件位置
 
-- 脚本：`datacloud-data-service/scripts/export_scene_json.py`
+- 脚本：`datacloud-data/scripts/export_scene_json.py`
 - 输出示例：`resources/ontology/crm_demo/scene_01_data_analysis_full.json`
