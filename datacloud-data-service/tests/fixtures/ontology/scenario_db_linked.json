@@ -1,0 +1,95 @@
+{
+  "objects": [
+    {
+      "object_code": "customer",
+      "object_name": "客户",
+      "description": "DB 客户对象，用于测试 linked 字段",
+      "source_type": "DB",
+      "source_config": {
+        "alias": "test_db",
+        "db_type": "SQLITE",
+        "jdbc_url": "jdbc:sqlite::memory:"
+      },
+      "table_name": "customer",
+      "datasource_alias": "test_db",
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "主键ID",
+          "field_type": "INTEGER",
+          "source_column": "id",
+          "is_primary_key": true
+        },
+        {
+          "field_code": "name",
+          "field_name": "名称",
+          "field_type": "STRING",
+          "source_column": "name"
+        },
+        {
+          "field_code": "customer_id",
+          "field_name": "客户ID",
+          "field_type": "STRING",
+          "source_column": "customer_id"
+        },
+        {
+          "field_code": "opportunities",
+          "field_name": "商机列表",
+          "field_type": "ARRAY",
+          "property_kind": "linked",
+          "relation_ref": "customer_has_opportunities"
+        }
+      ]
+    },
+    {
+      "object_code": "opportunity",
+      "object_name": "商机",
+      "description": "DB 商机对象",
+      "source_type": "DB",
+      "source_config": {
+        "alias": "test_db",
+        "db_type": "SQLITE",
+        "jdbc_url": "jdbc:sqlite::memory:"
+      },
+      "table_name": "opportunity",
+      "datasource_alias": "test_db",
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "主键ID",
+          "field_type": "INTEGER",
+          "source_column": "id",
+          "is_primary_key": true
+        },
+        {
+          "field_code": "amount",
+          "field_name": "金额",
+          "field_type": "NUMBER",
+          "source_column": "amount"
+        },
+        {
+          "field_code": "customer_id",
+          "field_name": "客户ID",
+          "field_type": "STRING",
+          "source_column": "customer_id"
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "relation_code": "customer_has_opportunities",
+      "relation_name": "客户拥有商机",
+      "source_class": "customer",
+      "target_class": "opportunity",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "customer_id",
+          "to_field": "customer_id"
+        }
+      ]
+    }
+  ],
+  "functions": []
+}
