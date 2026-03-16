@@ -5,7 +5,29 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
 from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_service.tools.query_result_overflow import apply_query_result_overflow
+
+
+def _apply_overflow_if_needed(result: dict[str, Any]) -> dict[str, Any]:
+    """若 records 超阈值，则存 CSV 并返回元数据+下载地址+预览。"""
+    if "records" not in result:
+        return result
+    try:
+        from datacloud_data_service.config import get_settings
+
+        settings = get_settings()
+        csv_manager = CsvStorageManager(settings.csv_base_dir)
+        return apply_query_result_overflow(
+            result,
+            threshold=settings.query_result_csv_threshold,
+            preview_rows=settings.query_result_preview_rows,
+            csv_manager=csv_manager,
+            api_base_url=settings.api_base_url,
+        )
+    except Exception:
+        return result
 
 
 class UnifiedQuery:
@@ -55,6 +77,9 @@ class UnifiedQuery:
                     relations=relations,
                 )
                 result = await view.query(question, include_plan=include_plan)
+
+            # 数据量大时存 CSV，返回元数据+下载地址+前 N 行预览
+            result = _apply_overflow_if_needed(result)
 
             return {
                 "content": [

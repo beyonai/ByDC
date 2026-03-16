@@ -70,7 +70,7 @@ class ApiExecutor:
         else:
             records = self._extract_records(data)
             columns = None
-        csv_path = self._csv.get_path(request_id, task.csv_table_name or task.output_ref)
+        csv_path = self._csv.get_path(request_id, task.output_ref)
         row_count = ResultConverter.to_csv(records, csv_path, columns=columns)
         return ApiExecResult(csv_path=str(csv_path), row_count=row_count)
 

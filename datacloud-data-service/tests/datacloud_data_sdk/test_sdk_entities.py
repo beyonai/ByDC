@@ -53,6 +53,7 @@ REGISTRY = {
                         },
                     ],
                     "function_refs": ["fn_get_bo"],
+                    "action_type": "query",
                 },
                 {
                     "action_code": "calc_score",
@@ -60,6 +61,7 @@ REGISTRY = {
                     "description": "计算商机评分",
                     "script": "def execute(params):\n    return {'score': 100}",
                     "function_refs": [],
+                    "action_type": "operation",
                     "params": [
                         {
                             "param_code": "score",
@@ -92,10 +94,12 @@ def test_action_get_schema_returns_input_output() -> None:
     loader.load_from_content(REGISTRY)
     obj = loader.get_object("sales_bo")
     schema = obj.get_action_schema("query_bo_by_owner")
-    assert "input" in schema
-    assert "output" in schema
-    assert "owner_id" in schema["input"]["properties"]
-    assert schema["input"]["required"] == ["owner_id"]
+    assert "inputSchema" in schema
+    assert "outputSchema" in schema
+    assert "name" in schema
+    assert "description" in schema
+    assert "owner_id" in schema["inputSchema"]["properties"]
+    assert schema["inputSchema"]["required"] == ["owner_id"]
 
 
 def test_list_action_codes_includes_script_action() -> None:
@@ -105,6 +109,16 @@ def test_list_action_codes_includes_script_action() -> None:
     codes = obj.list_action_codes()
     assert "query_bo_by_owner" in codes
     assert "calc_score" in codes
+
+
+def test_action_get_schema_is_cached() -> None:
+    """get_schema 结果缓存，多次调用返回同一对象。"""
+    loader = OntologyLoader()
+    loader.load_from_content(REGISTRY)
+    obj = loader.get_object("sales_bo")
+    s1 = obj.get_action_schema("query_bo_by_owner")
+    s2 = obj.get_action_schema("query_bo_by_owner")
+    assert s1 is s2
 
 
 def test_unknown_action_raises() -> None:

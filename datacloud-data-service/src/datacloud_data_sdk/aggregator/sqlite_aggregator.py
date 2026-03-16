@@ -17,11 +17,10 @@ class SqliteAggregator(BaseAggregator):
         step_results: StepResults,
         **kwargs: Any,
     ) -> list[dict[str, Any]]:
-        csv_table_names = kwargs.get("csv_table_names", agg.csv_table_names or {})
         conn = sqlite3.connect(":memory:")
         conn.row_factory = sqlite3.Row
         try:
-            for table_name, csv_path in step_results.csv_entries_for_aggregate(csv_table_names):
+            for table_name, csv_path in step_results.csv_entries_for_aggregate():
                 self._load_csv_to_sqlite(conn, table_name, csv_path)
             cursor = conn.execute(agg.sqlite_sql)
             columns = [desc[0] for desc in cursor.description] if cursor.description else []

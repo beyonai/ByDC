@@ -282,15 +282,21 @@ class OntologyLoader:
     def _parse_actions(
         self, raw_actions: list[dict[str, Any]], belong_class: str
     ) -> list[OntologyAction]:
-        return [
-            OntologyAction(
-                action_code=a["action_code"],
-                action_name=a.get("action_name", a["action_code"]),
-                description=a.get("description", ""),
-                belong_class=belong_class,
-                params=[self._parse_action_param(p) for p in a.get("params", [])],
-                function_refs=a.get("function_refs", []),
-                script=a.get("script"),
+        result: list[OntologyAction] = []
+        for a in raw_actions:
+            action_type = a.get("action_type")
+            if not action_type:
+                continue  # 未配置 action_type 时跳过该动作
+            result.append(
+                OntologyAction(
+                    action_code=a["action_code"],
+                    action_name=a.get("action_name", a["action_code"]),
+                    description=a.get("description", ""),
+                    belong_class=belong_class,
+                    params=[self._parse_action_param(p) for p in a.get("params", [])],
+                    function_refs=a.get("function_refs", []),
+                    action_type=action_type,
+                    script=a.get("script"),
+                )
             )
-            for a in raw_actions
-        ]
+        return result

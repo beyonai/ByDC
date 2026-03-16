@@ -90,8 +90,7 @@ PLAN_WITH_API = QueryExecutionPlan(
         object_id="sales_emp",
         function_id="query_emp",
         params={"names": ["邹海天"]},
-        output_ref="emp_list",
-        csv_table_name="api_emp",
+        output_ref="api_emp",
     )],
     aggregation=PlanAggregation(strategy="SQLITE_MEM", sqlite_sql="SELECT * FROM api_emp", columns=[]),
 )
