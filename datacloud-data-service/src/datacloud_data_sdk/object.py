@@ -217,7 +217,7 @@ class Object:
 
             ds_manager = DataSourceManager(config.datasource_configs) if config.datasource_configs else None
             sql_exec = SqlExecutor(ds_manager, config.csv_base_dir) if ds_manager else None
-            api_exec = ApiExecutor(loader._functions, config.csv_base_dir) if loader._functions else None
+            api_exec = ApiExecutor(loader, config.csv_base_dir) if loader else None
             script_exec = ScriptExecutor(loader)
             kb_exec = (
                 KbExecutor(config.kb_source_configs, config.csv_base_dir)

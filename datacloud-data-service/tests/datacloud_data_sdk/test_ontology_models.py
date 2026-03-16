@@ -85,3 +85,30 @@ def test_ontology_relation_has_join_keys() -> None:
         description="一个商机可签署多份合同",
     )
     assert rel.join_keys[0]["from_field"] == "bo_id"
+
+
+def test_ontology_field_has_property_kind_and_derived_config() -> None:
+    from datacloud_data_sdk.ontology.models import OntologyField
+    f = OntologyField(
+        field_code="discount_amount",
+        field_name="折后金额",
+        field_type="NUMBER",
+        property_kind="derived",
+        derived_config={"mode": "expression", "expression": "amount * 0.9", "depends_on": ["amount"]},
+    )
+    assert f.property_kind == "derived"
+    assert f.derived_config["mode"] == "expression"
+
+
+def test_ontology_relation_has_resolve_action() -> None:
+    from datacloud_data_sdk.ontology.models import OntologyRelation
+    r = OntologyRelation(
+        relation_code="cust_opp",
+        source_class="customer",
+        target_class="opportunity",
+        relation_type="ONE_TO_MANY",
+        resolve_action_code="query_opp_by_cust",
+        resolve_param_binding={"source_field": "customer_id", "action_param": "customerId"},
+    )
+    assert r.resolve_action_code == "query_opp_by_cust"
+    assert r.resolve_param_binding["source_field"] == "customer_id"

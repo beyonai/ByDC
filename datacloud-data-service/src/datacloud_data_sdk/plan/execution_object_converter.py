@@ -119,7 +119,6 @@ class ExecutionObjectConverter:
 
             raise ActionNotConfiguredError(ontology_action.action_code)
 
-        function_code = ontology_action.function_refs[0]
         params: dict[str, Any] = dict(step.params)
 
         in_params = [
@@ -131,21 +130,11 @@ class ExecutionObjectConverter:
             params = self._term_resolver.resolve_params(params, in_params)
         physical_params = map_to_physical(params, in_params)
 
-        out_params = [
-            (p.param_code, p.mapping_path or "")
-            for p in ontology_action.params
-            if p.direction == "OUT"
-        ]
-        if not out_params:
-            raise ValueError(
-                f"API action {ontology_action.action_code} requires at least one OUT param"
-            )
-
         return ApiExecTask(
-            function_code=function_code,
+            object_code=step.object_id,
+            action_code=step.function_id,
             params=physical_params,
             output_ref=step.output_ref,
             bind_from_step=step.bind_from_step,
             bind_key=step.bind_key,
-            output_params=out_params,
         )

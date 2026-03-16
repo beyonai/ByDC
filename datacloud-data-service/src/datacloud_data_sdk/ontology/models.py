@@ -31,6 +31,12 @@ class OntologyField:
     term_type: str | None = None  # "enum" | "lookup"
     dataset_id: int | None = None
     physical_mappings: list[FieldPhysicalMapping] = field(default_factory=list)
+    # 属性分类：physical / derived / linked
+    property_kind: str = "physical"
+    derived_config: dict | None = None
+    relation_ref: str | None = None
+    resolve_action_code: str | None = None
+    resolve_param_binding: dict | None = None
 
 
 @dataclass
@@ -83,6 +89,8 @@ class OntologyRelation:
     relation_type: str = ""  # ONE_TO_MANY / MANY_TO_ONE / ONE_TO_ONE / MANY_TO_MANY
     join_keys: list[dict[str, str]] = field(default_factory=list)
     description: str = ""
+    resolve_action_code: str | None = None
+    resolve_param_binding: dict | None = None
 
 
 @dataclass

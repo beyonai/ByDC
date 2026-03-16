@@ -70,3 +70,78 @@ def test_build_select_aggregates_with_group_by() -> None:
     )
     assert "GROUP BY" in sql
     assert col_keys == ["region", "金额汇总"]
+
+
+def test_build_select_sql_with_derived_expression() -> None:
+    sql, col_keys = build_select_sql(
+        table="sales_bo",
+        fields=[("id", "id"), ("amount", "amount")],
+        aggregates=None,
+        group_by=None,
+        where_sql="",
+        db_type="SQLITE",
+        field_to_col={"id": "id", "amount": "amount"},
+        derived_expressions=[("discount_amount", "amount * 0.9")],
+    )
+    assert "discount_amount" in col_keys
+    assert "amount * 0.9" in sql or "discount_amount" in sql
+
+
+def test_build_select_sql_with_derived_aggregation() -> None:
+    sql, col_keys = build_select_sql(
+        table="customer",
+        fields=[("id", "id"), ("customer_id", "customer_id")],
+        derived_expressions=None,
+        derived_aggregations=[
+            {"alias": "opportunity_count", "target_table": "opportunity", "target_field": "id", "func": "count", "join_from": "customer_id", "join_to": "customer_id"}
+        ],
+        aggregates=None,
+        group_by=None,
+        where_sql="",
+        db_type="SQLITE",
+        field_to_col={"id": "id", "customer_id": "customer_id"},
+    )
+    assert "opportunity_count" in col_keys
+    assert "opportunity" in sql and "COUNT" in sql.upper()
+
+
+def test_build_select_sql_with_linked_joins() -> None:
+    """linked_joins 生成 LEFT JOIN 与带前缀的 target 列。"""
+    sql, col_keys = build_select_sql(
+        table="customer",
+        fields=[("id", "id"), ("name", "name"), ("customer_id", "customer_id")],
+        aggregates=None,
+        group_by=None,
+        where_sql="",
+        db_type="SQLITE",
+        field_to_col={"id": "id", "name": "name", "customer_id": "customer_id"},
+        linked_joins=[
+            {
+                "linked_field": "opportunities",
+                "target_table": "opportunity",
+                "join_from": "customer_id",
+                "join_to": "customer_id",
+                "target_fields": [("id", "id"), ("amount", "amount")],
+            }
+        ],
+    )
+    assert "opportunities_id" in col_keys
+    assert "opportunities_amount" in col_keys
+    assert "LEFT JOIN" in sql and "opportunity" in sql
+    assert "opportunities_id" in sql or "opportunities_amount" in sql
+
+
+def test_build_select_sql_with_limit_offset() -> None:
+    sql, _ = build_select_sql(
+        table="t",
+        fields=[("id", "id")],
+        aggregates=None,
+        group_by=None,
+        where_sql="",
+        db_type="SQLITE",
+        field_to_col={"id": "id"},
+        limit=10,
+        offset=5,
+    )
+    assert "LIMIT 10" in sql
+    assert "OFFSET 5" in sql
