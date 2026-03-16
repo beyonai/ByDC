@@ -19,7 +19,7 @@ class SQLiteConnector(BaseSourceConnector):
         return "SQLITE"
 
     async def execute(self, sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-        cursor = self._conn.execute(sql)
+        cursor = self._conn.execute(sql, params or [])
         columns = [desc[0] for desc in cursor.description] if cursor.description else []
         rows = cursor.fetchall()
         return [dict(zip(columns, row)) for row in rows]

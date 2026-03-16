@@ -378,7 +378,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -486,7 +486,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -652,7 +652,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -716,7 +716,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -785,7 +785,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -860,7 +860,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -925,7 +925,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -997,7 +997,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -1081,7 +1081,7 @@
         },
         "servers": [
           {
-            "url": "http://todo-service:8090"
+            "url": "http://127.0.0.1:8001"
           }
         ],
         "paths": {
@@ -1670,7 +1670,12 @@
               "param_type": "ARRAY",
               "direction": "IN",
               "mapping_path": "$.requestBody.userIds",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "code"
+              }
             },
             {
               "param_code": "userId",
@@ -1725,7 +1730,8 @@
           "function_refs": [
             "fn_po_users_query_by_ids"
           ],
-          "script": null
+          "script": null,
+          "action_type": "query"
         },
         {
           "action_code": "query_users_by_org_id",
@@ -1739,7 +1745,12 @@
               "direction": "IN",
               "required": true,
               "mapping_path": "$.parameters.orgId",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "orgName",
+                "termField": "code"
+              }
             },
             {
               "param_code": "includeSubOrgs",
@@ -1801,7 +1812,8 @@
           "function_refs": [
             "fn_po_users_query_by_org"
           ],
-          "script": null
+          "script": null,
+          "action_type": "query"
         }
       ],
       "datasource_alias": null,
@@ -1902,7 +1914,12 @@
               "param_type": "ARRAY",
               "direction": "IN",
               "mapping_path": "$.requestBody.orgIds",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "orgName",
+                "termField": "code"
+              }
             },
             {
               "param_code": "orgId",
@@ -1957,7 +1974,8 @@
           "function_refs": [
             "fn_po_org_query_by_ids"
           ],
-          "script": null
+          "script": null,
+          "action_type": "query"
         },
         {
           "action_code": "query_sub_orgs_by_org_id",
@@ -1971,7 +1989,12 @@
               "direction": "IN",
               "required": true,
               "mapping_path": "$.parameters.orgId",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "orgName",
+                "termField": "code"
+              }
             },
             {
               "param_code": "recursive",
@@ -2026,7 +2049,8 @@
           "function_refs": [
             "fn_po_org_query_sub_orgs"
           ],
-          "script": null
+          "script": null,
+          "action_type": "query"
         }
       ],
       "datasource_alias": null,
@@ -2214,7 +2238,12 @@
               "param_type": "ARRAY",
               "direction": "IN",
               "mapping_path": "$.requestBody.handlerIds",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "code"
+              }
             },
             {
               "param_code": "priority",
@@ -2222,7 +2251,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.priority",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "priority", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "priority",
+                "termField": "code"
+              }
             },
             {
               "param_code": "urgencyLevel",
@@ -2230,7 +2264,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.urgencyLevel",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "urgencyLevel", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "urgencyLevel",
+                "termField": "code"
+              }
             },
             {
               "param_code": "content",
@@ -2252,7 +2291,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.promoter",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "code"
+              }
             },
             {
               "param_code": "remark",
@@ -2300,7 +2344,8 @@
           "function_refs": [
             "fn_todo_create"
           ],
-          "script": null
+          "script": null,
+          "action_type": "operation"
         },
         {
           "action_code": "query_todo_list",
@@ -2313,7 +2358,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.priority",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "priority", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "priority",
+                "termField": "code"
+              }
             },
             {
               "param_code": "urgencyLevel",
@@ -2321,7 +2371,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.urgencyLevel",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "urgencyLevel", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "urgencyLevel",
+                "termField": "code"
+              }
             },
             {
               "param_code": "orgId",
@@ -2329,7 +2384,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.orgId",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "orgName",
+                "termField": "code"
+              }
             },
             {
               "param_code": "meetingNoteIds",
@@ -2344,7 +2404,12 @@
               "param_type": "ARRAY",
               "direction": "IN",
               "mapping_path": "$.requestBody.statusList",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "status", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "status",
+                "termField": "code"
+              }
             },
             {
               "param_code": "page",
@@ -2373,7 +2438,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.status",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "status", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "status",
+                "termField": "code"
+              }
             },
             {
               "param_code": "promoter",
@@ -2381,7 +2451,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.promoter",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "code"
+              }
             },
             {
               "param_code": "deadlineStart",
@@ -2409,111 +2484,112 @@
               "param_name": "待办ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].todoId"
+              "mapping_path": "$.data[].todoId"
             },
             {
               "param_code": "title",
               "param_name": "待办标题",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].title"
+              "mapping_path": "$.data[].title"
             },
             {
               "param_code": "status",
               "param_name": "待办状态",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].status"
+              "mapping_path": "$.data[].status"
             },
             {
               "param_code": "priority",
               "param_name": "优先级",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].priority"
+              "mapping_path": "$.data[].priority"
             },
             {
               "param_code": "urgencyLevel",
               "param_name": "紧急程度",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].urgencyLevel"
+              "mapping_path": "$.data[].urgencyLevel"
             },
             {
               "param_code": "deadlineAt",
               "param_name": "截止时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].deadlineAt"
+              "mapping_path": "$.data[].deadlineAt"
             },
             {
               "param_code": "content",
               "param_name": "待办内容",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].content"
+              "mapping_path": "$.data[].content"
             },
             {
               "param_code": "progress",
               "param_name": "处理进度",
               "param_type": "INTEGER",
               "direction": "OUT",
-              "mapping_path": "$.todos[].progress"
+              "mapping_path": "$.data[].progress"
             },
             {
               "param_code": "createdAt",
               "param_name": "创建时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].createdAt"
+              "mapping_path": "$.data[].createdAt"
             },
             {
               "param_code": "promoter",
               "param_name": "发起人",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].promoter"
+              "mapping_path": "$.data[].promoter"
             },
             {
               "param_code": "approvalComment",
               "param_name": "审批意见",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].approvalComment"
+              "mapping_path": "$.data[].approvalComment"
             },
             {
               "param_code": "approvedAt",
               "param_name": "审批通过时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].approvedAt"
+              "mapping_path": "$.data[].approvedAt"
             },
             {
               "param_code": "completedAt",
               "param_name": "完成时间",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].completedAt"
+              "mapping_path": "$.data[].completedAt"
             },
             {
               "param_code": "meetingNoteId",
               "param_name": "关联会议纪要ID",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].meetingNoteId"
+              "mapping_path": "$.data[].meetingNoteId"
             },
             {
               "param_code": "returnReason",
               "param_name": "退回原因",
               "param_type": "STRING",
               "direction": "OUT",
-              "mapping_path": "$.todos[].returnReason"
+              "mapping_path": "$.data[].returnReason"
             }
           ],
           "function_refs": [
             "fn_todo_query_list"
           ],
-          "script": null
+          "script": null,
+          "action_type": "query"
         },
         {
           "action_code": "accept_todo",
@@ -2546,7 +2622,8 @@
           "function_refs": [
             "fn_todo_accept"
           ],
-          "script": null
+          "script": null,
+          "action_type": "operation"
         },
         {
           "action_code": "return_todo",
@@ -2587,7 +2664,8 @@
           "function_refs": [
             "fn_todo_return"
           ],
-          "script": null
+          "script": null,
+          "action_type": "operation"
         },
         {
           "action_code": "process_todo",
@@ -2627,7 +2705,8 @@
           "function_refs": [
             "fn_todo_process"
           ],
-          "script": null
+          "script": null,
+          "action_type": "operation"
         },
         {
           "action_code": "delete_todo",
@@ -2653,7 +2732,8 @@
           "function_refs": [
             "fn_todo_delete"
           ],
-          "script": null
+          "script": null,
+          "action_type": "operation"
         },
         {
           "action_code": "urge_todo",
@@ -2693,7 +2773,8 @@
           "function_refs": [
             "fn_todo_urge"
           ],
-          "script": null
+          "script": null,
+          "action_type": "operation"
         },
         {
           "action_code": "update_todo",
@@ -2754,7 +2835,8 @@
           "function_refs": [
             "fn_todo_update"
           ],
-          "script": null
+          "script": null,
+          "action_type": "operation"
         },
         {
           "action_code": "approve_todo",
@@ -2775,7 +2857,12 @@
               "direction": "IN",
               "required": true,
               "mapping_path": "$.requestBody.approvalStatus",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "approvalStatus", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "approvalStatus",
+                "termField": "code"
+              }
             },
             {
               "param_code": "todoIds",
@@ -2803,7 +2890,8 @@
           "function_refs": [
             "fn_todo_approve"
           ],
-          "script": null
+          "script": null,
+          "action_type": "operation"
         }
       ],
       "datasource_alias": null,
@@ -2853,7 +2941,12 @@
           "field_type": "INTEGER",
           "required": true,
           "source_column": "report_status",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "reportStatus", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "dict",
+            "termTypeCode": "reportStatus",
+            "termField": "code"
+          }
         },
         {
           "field_code": "belongEmpNo",
@@ -2861,7 +2954,12 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "belong_emp_no",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
         },
         {
           "field_code": "belongUserName",
@@ -2869,19 +2967,29 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "belong_user_name",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "name"
+          }
         },
         {
           "field_code": "belongEmpOrgId",
           "field_name": "归属用户所在的组织ID",
           "field_type": "STRING",
           "source_column": "belong_emp_org_id",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "code"
+          }
         }
       ],
       "actions": [],
       "source_config": {
-        "alias": "ds_crm",
+        "alias": "knowledge",
         "db_type": "OPENGAUSS",
         "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
         "user": "gaussdb",
@@ -2889,7 +2997,7 @@
         "pool_min": 1,
         "pool_max": 5
       },
-      "datasource_alias": "ds_crm",
+      "datasource_alias": "knowledge",
       "table_name": "sales_daily_report"
     },
     {
@@ -2947,12 +3055,17 @@
           "field_name": "会议参与人员工号",
           "field_type": "ARRAY",
           "source_column": "participant_emp_nos",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
         }
       ],
       "actions": [],
       "source_config": {
-        "alias": "ds_crm",
+        "alias": "knowledge",
         "db_type": "OPENGAUSS",
         "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
         "user": "gaussdb",
@@ -2960,7 +3073,7 @@
         "pool_min": 1,
         "pool_max": 5
       },
-      "datasource_alias": "ds_crm",
+      "datasource_alias": "knowledge",
       "table_name": "sales_meeting_note"
     },
     {
@@ -2993,7 +3106,12 @@
           "field_name": "所属营销部",
           "field_type": "STRING",
           "source_column": "belong_depart",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "name"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "name"
+          }
         },
         {
           "field_code": "customerName",
@@ -3020,7 +3138,12 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "iwhale_cbm_emp_no",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
         },
         {
           "field_code": "iwhaleCbmName",
@@ -3028,14 +3151,24 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "iwhale_cbm_name",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "name"
+          }
         },
         {
           "field_code": "iwhaleCbmOrgId",
           "field_name": "商机负责人组织或名称",
           "field_type": "STRING",
           "source_column": "iwhale_cbm_org_id",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "code"
+          }
         },
         {
           "field_code": "softwareIncomeTime",
@@ -3062,14 +3195,24 @@
           "field_name": "支撑sc工号或名称",
           "field_type": "STRING",
           "source_column": "iwhale_sc_emp_no",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
         },
         {
           "field_code": "iwhaleScName",
           "field_name": "浩鲸sc名称",
           "field_type": "STRING",
           "source_column": "iwhale_sc_name",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "name"
+          }
         },
         {
           "field_code": "diliverContent",
@@ -3138,14 +3281,24 @@
           "field_name": "提交人",
           "field_type": "STRING",
           "source_column": "submit_person",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "name"
+          }
         },
         {
           "field_code": "submitOrganization",
           "field_name": "提交组织",
           "field_type": "STRING",
           "source_column": "submit_organization",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "name"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "name"
+          }
         },
         {
           "field_code": "isAliIntegrated",
@@ -3245,7 +3398,7 @@
           "is_primary_key": true,
           "source_column": "id"
         },
-         {
+        {
           "field_code": "boId",
           "field_name": "商机id",
           "field_type": "BIGINT",
@@ -3264,7 +3417,12 @@
           "field_name": "变更前状态",
           "field_type": "STRING",
           "source_column": "status_before",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "changeStatus", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "dict",
+            "termTypeCode": "changeStatus",
+            "termField": "code"
+          }
         },
         {
           "field_code": "statusAfter",
@@ -3272,7 +3430,12 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "status_after",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "changeStatus", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "dict",
+            "termTypeCode": "changeStatus",
+            "termField": "code"
+          }
         },
         {
           "field_code": "changeRemark",
@@ -3286,7 +3449,12 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "changed_by",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
         },
         {
           "field_code": "changedTime",
@@ -3334,21 +3502,36 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "emp_no",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
         },
         {
           "field_code": "name",
           "field_name": "责任人姓名",
           "field_type": "STRING",
           "source_column": "name",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "name"
+          }
         },
         {
           "field_code": "empOrgId",
           "field_name": "责任人组织",
           "field_type": "STRING",
           "source_column": "emp_org_id",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "code"
+          }
         },
         {
           "field_code": "contactNo",
@@ -3429,7 +3612,12 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "belong_depart",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "name"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "name"
+          }
         },
         {
           "field_code": "type",
@@ -3450,7 +3638,12 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "iwhale_cbm_emp_no",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
         },
         {
           "field_code": "iwhaleCbmName",
@@ -3458,21 +3651,36 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "iwhale_cbm_name",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "name"
+          }
         },
         {
           "field_code": "iwhaleCbmOrgId",
           "field_name": "客户维护人组织",
           "field_type": "STRING",
           "source_column": "iwhale_cbm_org_id",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "code"
+          }
         },
         {
           "field_code": "belongIndustry",
           "field_name": "所属行业",
           "field_type": "STRING",
           "source_column": "belong_industry",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "customer_belong_industry", "termField": "name"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "dict",
+            "termTypeCode": "customer_belong_industry",
+            "termField": "name"
+          }
         },
         {
           "field_code": "itInvestmentScale",
@@ -3522,14 +3730,24 @@
           "field_name": "提交人",
           "field_type": "STRING",
           "source_column": "submit_person",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "name"
+          }
         },
         {
           "field_code": "submitOrganization",
           "field_name": "提交组织",
           "field_type": "STRING",
           "source_column": "submit_organization",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "name"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "name"
+          }
         },
         {
           "field_code": "businessOpportunityProcess",
@@ -3552,11 +3770,11 @@
       ],
       "actions": [],
       "source_config": {
-        "alias": "ds_crm",
-        "db_type": "OPENGAUSS",
-        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
-        "user": "gaussdb",
-        "password": "OpenGauss@123",
+        "alias": "onto_crm",
+        "db_type": "MYSQL",
+        "jdbc_url": "jdbc:mysql://172.21.72.158:8003/onto_crm",
+        "user": "root",
+        "password": "root",
         "pool_min": 1,
         "pool_max": 5
       },
@@ -3587,7 +3805,12 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "applicant_emp_no",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
         },
         {
           "field_code": "applicantName",
@@ -3595,7 +3818,12 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "applicant_name",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "name"
+          }
         },
         {
           "field_code": "applicantOrgId",
@@ -3603,7 +3831,12 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "applicant_org_id",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "code"
+          }
         },
         {
           "field_code": "expenseAmount",
@@ -3661,6 +3894,7 @@
           "action_code": "apply_expense_report",
           "action_name": "申请费用报备",
           "description": "创建费用报备记录",
+          "action_type": "operation",
           "params": [
             {
               "param_code": "applicantEmpNo",
@@ -3669,7 +3903,12 @@
               "direction": "IN",
               "required": true,
               "mapping_path": "$.requestBody.applicantEmpNo",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "code"
+              }
             },
             {
               "param_code": "applicantName",
@@ -3678,7 +3917,12 @@
               "direction": "IN",
               "required": true,
               "mapping_path": "$.requestBody.applicantName",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "name"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "name"
+              }
             },
             {
               "param_code": "applicantOrgId",
@@ -3687,7 +3931,12 @@
               "direction": "IN",
               "required": true,
               "mapping_path": "$.requestBody.applicantOrgId",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "orgName",
+                "termField": "code"
+              }
             },
             {
               "param_code": "expenseAmount",
@@ -3818,7 +4067,8 @@
           "function_refs": [
             "fn_expense_update"
           ],
-          "script": null
+          "script": null,
+          "action_type": "operation"
         },
         {
           "action_code": "approve_expense_report",
@@ -3840,7 +4090,12 @@
               "direction": "IN",
               "required": true,
               "mapping_path": "$.requestBody.approvalStatus",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "approvalStatus", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "approvalStatus",
+                "termField": "code"
+              }
             },
             {
               "param_code": "approvalComment",
@@ -3867,7 +4122,8 @@
           "function_refs": [
             "fn_expense_approve"
           ],
-          "script": null
+          "script": null,
+          "action_type": "operation"
         },
         {
           "action_code": "query_expense_report",
@@ -3880,7 +4136,12 @@
               "param_type": "ARRAY",
               "direction": "IN",
               "mapping_path": "$.requestBody.applicantEmpNos",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "code"
+              }
             },
             {
               "param_code": "applicantOrgId",
@@ -3888,7 +4149,12 @@
               "param_type": "STRING",
               "direction": "IN",
               "mapping_path": "$.requestBody.applicantOrgId",
-              "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "orgName",
+                "termField": "code"
+              }
             },
             {
               "param_code": "approvalStatus",
@@ -4013,7 +4279,8 @@
           "function_refs": [
             "fn_expense_query"
           ],
-          "script": null
+          "script": null,
+          "action_type": "query"
         }
       ],
       "datasource_alias": null,
@@ -4044,7 +4311,12 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "emp_no",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
         },
         {
           "field_code": "kpiYear",
@@ -4097,7 +4369,12 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "emp_no",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
         },
         {
           "field_code": "periodType",
@@ -4176,14 +4453,24 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "org_id",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "code"
+          }
         },
         {
           "field_code": "orgName",
           "field_name": "组织名称",
           "field_type": "STRING",
           "source_column": "org_name",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "name"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "name"
+          }
         },
         {
           "field_code": "kpiYear",
@@ -4238,14 +4525,24 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "org_id",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "code"
+          }
         },
         {
           "field_code": "orgName",
           "field_name": "组织名称",
           "field_type": "STRING",
           "source_column": "org_name",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "orgName", "termField": "name"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "name"
+          }
         },
         {
           "field_code": "periodType",
@@ -4322,7 +4619,12 @@
           "field_type": "STRING",
           "required": true,
           "source_column": "emp_no",
-          "termMeta": {"datasetId": 760436323052421, "termMasterType": "list", "termTypeCode": "staffName", "termField": "code"}
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
         },
         {
           "field_code": "attendanceDate",

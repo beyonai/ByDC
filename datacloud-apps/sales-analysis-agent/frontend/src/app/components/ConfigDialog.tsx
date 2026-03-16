@@ -27,11 +27,15 @@ export function ConfigDialog({
   onSave,
   initialConfig,
 }: ConfigDialogProps) {
+  /** 本地 langgraph dev 默认值，与 backend/langgraph.json 中 graphs 的 key 一致 */
+  const DEFAULT_DEPLOYMENT_URL = "http://127.0.0.1:2024";
+  const DEFAULT_ASSISTANT_ID = "graph";
+
   const [deploymentUrl, setDeploymentUrl] = useState(
-    initialConfig?.deploymentUrl || ""
+    initialConfig?.deploymentUrl || DEFAULT_DEPLOYMENT_URL
   );
   const [assistantId, setAssistantId] = useState(
-    initialConfig?.assistantId || ""
+    initialConfig?.assistantId || DEFAULT_ASSISTANT_ID
   );
   const [langsmithApiKey, setLangsmithApiKey] = useState(
     initialConfig?.langsmithApiKey || ""
@@ -69,7 +73,8 @@ export function ConfigDialog({
           <DialogTitle>Configuration</DialogTitle>
           <DialogDescription>
             Configure your LangGraph deployment settings. These settings are
-            saved in your browser&apos;s local storage.
+            saved in your browser&apos;s local storage. 本地开发时 Assistant ID 填
+            &quot;graph&quot;（与 backend/langgraph.json 中 graphs 的 key 一致）。
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -77,7 +82,7 @@ export function ConfigDialog({
             <Label htmlFor="deploymentUrl">Deployment URL</Label>
             <Input
               id="deploymentUrl"
-              placeholder="https://<deployment-url>"
+              placeholder="http://127.0.0.1:2024"
               value={deploymentUrl}
               onChange={(e) => setDeploymentUrl(e.target.value)}
             />
@@ -86,7 +91,7 @@ export function ConfigDialog({
             <Label htmlFor="assistantId">Assistant ID</Label>
             <Input
               id="assistantId"
-              placeholder="<assistant-id>"
+              placeholder="graph（本地）或 assistant UUID"
               value={assistantId}
               onChange={(e) => setAssistantId(e.target.value)}
             />

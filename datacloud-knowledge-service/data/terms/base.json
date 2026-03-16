@@ -1,0 +1,119 @@
+{
+  "directed": true,
+  "multigraph": true,
+  "graph": {},
+  "nodes": [
+    {
+      "id": "Term:wangxm",
+      "node_type": "Term",
+      "standard_name": "王小明",
+      "domain_id": "tech",
+      "library_id": "master",
+      "properties": {
+        "pinyin": "wangxiaoming",
+        "aliases": [
+          "小明",
+          "Wang Xiaoming"
+        ],
+        "staff_account": "2302323",
+        "department": "技术部"
+      }
+    },
+    {
+      "id": "Term:wangming",
+      "node_type": "Term",
+      "standard_name": "王铭",
+      "domain_id": "sales",
+      "library_id": "master",
+      "properties": {
+        "pinyin": "wangming",
+        "aliases": [
+          "小王",
+          "小明"
+        ],
+        "staff_account": "2302325",
+        "department": "销售部"
+      }
+    },
+    {
+      "id": "Term:lihong",
+      "node_type": "Term",
+      "standard_name": "李红",
+      "domain_id": "hr",
+      "library_id": "master",
+      "properties": {
+        "pinyin": "lihong",
+        "aliases": [
+          "小李"
+        ],
+        "staff_account": "2302324",
+        "department": "人事部"
+      }
+    },
+    {
+      "id": "Term:sales",
+      "node_type": "Term",
+      "standard_name": "销售",
+      "domain_id": "company",
+      "library_id": "master",
+      "properties": {
+        "pinyin": "xiaoshou",
+        "aliases": [
+          "销售岗位",
+          "销售工作"
+        ],
+        "description": "用户口语中的“做销售/销售工作/销售表现”等。<br />1、**销售评优管理办法**.<br />1）**S 级（标杆级）**：日报全勤且高质量完成，商机转化率超额≥20%，数量超额≥20%，核心 KPI 完成率≥120%；客户满意度 100%，无任何投诉，且新增优质核心客户，客户维护成效突出。<br/>2）**A + 级（优秀级）**：日报全勤无遗漏，商机转化率超额10%-19%，数量超额10%-19%，核心 KPI 完成率 110%-119%；客户无投诉，日常维护到位，客户复购 / 转介绍有正向表现。<br/>3）**A 级（良好级）**：日报按时完成、内容完整，商机转化率达标，数量足额完成，核心 KPI 完成率 100%；客户基本无投诉，常规维护达标，无客户流失问题。<br/>4）**A - 级（基本达标级）**：日报偶有遗漏但均及时补报，转化率80%-99%，数量完成80%-99%，核心 KPI 完成率 80%-99%；客户有轻微投诉且均及时解决，无重大客户流失。<br/>5）**B 级（未达标级）**：日报缺漏频次高、内容不完整，转化率<80%，数量完成<80%，核心 KPI 完成率＜80%；客户投诉多且处理不及时，存在重大客户流失情况。<br /><br />2、**销售考勤管理办法**.<br />"
+      }
+    },
+    {
+      "id": "TermType:staffName",
+      "node_type": "TermType",
+      "code": "staffName",
+      "name": "员工名称",
+      "type": 1,
+      "properties": {
+        "description": "员工名称列表，包含所有有效员工名称",
+        "source": "主数据系统",
+        "validation_rule": "必须是po_users.userName字段的有效值"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "Term:wangxm",
+      "target": "TermType:staffName",
+      "relation": "IS_MEMBER_OF",
+      "key": "is_member_of_staff_name"
+    },
+    {
+      "source": "Term:wangming",
+      "target": "TermType:staffName",
+      "relation": "IS_MEMBER_OF",
+      "key": "is_member_of_staff_name"
+    },
+    {
+      "source": "Term:lihong",
+      "target": "TermType:staffName",
+      "relation": "IS_MEMBER_OF",
+      "key": "is_member_of_staff_name"
+    },
+    {
+      "source": "Term:wangxm",
+      "target": "Term:sales",
+      "relation": "BELONGS_TO",
+      "key": "belongs_to_sales"
+    },
+    {
+      "source": "Term:wangming",
+      "target": "Term:sales",
+      "relation": "BELONGS_TO",
+      "key": "belongs_to_sales"
+    },
+    {
+      "source": "Term:wangxm",
+      "target": "Term:lihong",
+      "relation": "MANAGES",
+      "key": "manages_lihong"
+    }
+  ]
+}

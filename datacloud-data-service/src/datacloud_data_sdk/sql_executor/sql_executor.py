@@ -39,7 +39,7 @@ class SqlExecutor:
         sql = quote_aliases(sql, connector.config.db_type)
         records = await connector.execute(sql)
 
-        out_path = self._csv.get_path(request_id, task.csv_table_name or task.output_ref)
+        out_path = self._csv.get_path(request_id, task.output_ref)
         columns = extract_select_columns(task.sql_template) if not records else None
         row_count = ResultConverter.to_csv(records, out_path, columns=columns)
         return SqlExecResult(csv_path=str(out_path), row_count=row_count)

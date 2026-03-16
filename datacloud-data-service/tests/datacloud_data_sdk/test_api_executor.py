@@ -27,7 +27,6 @@ async def test_api_executor_writes_csv(tmp_path: Path) -> None:
         function_code="fn_get_emp",
         params={"names": ["test"]},
         output_ref="emp_list",
-        csv_table_name="api_emp",
         output_params=[
             ("userId", "$.users[].userId"),
             ("userName", "$.users[].userName"),

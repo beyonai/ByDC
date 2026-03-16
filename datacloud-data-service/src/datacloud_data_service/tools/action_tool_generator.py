@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from datacloud_data_sdk.action import PARAM_TYPE_MAP
+from datacloud_data_sdk.action import Action
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 
 
 class ActionToolGenerator:
-    """将 OntologyAction 转换为 MCP 工具定义。"""
+    """将 OntologyAction 转换为 MCP 工具定义，统一通过 Action.get_schema() 获取 schema。"""
 
     def __init__(self, loader: OntologyLoader) -> None:
         self._loader = loader
@@ -18,33 +18,13 @@ class ActionToolGenerator:
         cls = self._loader.get_ontology_class(object_code)
         tools: list[dict[str, Any]] = []
         for action in cls.actions:
-            in_params = [p for p in action.params if p.direction in ("IN", "INOUT")]
-            properties: dict[str, Any] = {}
-            required: list[str] = []
-            for p in in_params:
-                ptype = PARAM_TYPE_MAP.get(p.param_type.upper(), "string")
-                prop: dict[str, Any] = {
-                    "type": ptype,
-                    "description": p.param_name,
-                }
-                if ptype == "array":
-                    prop["items"] = {"type": "string"}
-                properties[p.param_code] = prop
-                if p.required:
-                    required.append(p.param_code)
-
+            schema = Action(action, loader=self._loader).get_schema()
             tool: dict[str, Any] = {
-                "name": action.action_code,
-                "title": action.action_name or action.action_code,
-                "description": action.description or action.action_name,
-                "inputSchema": {
-                    "type": "object",
-                    "properties": properties,
-                },
+                "name": schema["name"],
+                "title": schema.get("title", schema["name"]),
+                "description": schema.get("description", ""),
+                "inputSchema": schema["inputSchema"],
             }
-            if required:
-                tool["inputSchema"]["required"] = required
-
-            tool["_meta"] = {"object_code": object_code}
+            tool["_meta"] = {"object_code": object_code, "action_type": action.action_type}
             tools.append(tool)
         return tools

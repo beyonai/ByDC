@@ -16,7 +16,10 @@ class ToolRegistry:
         self._action_gen = ActionToolGenerator(loader)
 
     def list_tools(
-        self, view_id: str | None = None, object_ids: list[str] | None = None
+        self,
+        view_id: str | None = None,
+        object_ids: list[str] | None = None,
+        tool_list_mode: str = "unified",
     ) -> list[dict[str, Any]]:
         tools: list[dict[str, Any]] = [self._unified_query_tool()]
 
@@ -25,7 +28,12 @@ class ToolRegistry:
             target_ids = [c.object_code for c in self._loader.get_ontology_classes()]
 
         for oid in target_ids:
-            tools.extend(self._action_gen.generate_tools(oid))
+            for t in self._action_gen.generate_tools(oid):
+                if tool_list_mode == "unified":
+                    if t.get("_meta", {}).get("action_type") == "operation":
+                        tools.append(t)
+                else:
+                    tools.append(t)
 
         return tools
 

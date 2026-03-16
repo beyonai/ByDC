@@ -104,6 +104,6 @@ class KbExecutor:
                 record.update(metadata)
             records.append(record)
 
-        path = self._csv.get_path(request_id, task.csv_table_name or task.output_ref)
+        path = self._csv.get_path(request_id, task.output_ref)
         ResultConverter.to_csv(records, path)
         return str(path)
