@@ -17,12 +17,6 @@
 		},
 		{
 			"path": "../../study/claude-code"
-		},
-		{
-			"path": "../../study/context-engineering"
-		},
-		{
-			"path": "../../study/OpenViking"
 		}
 	],
 	"settings": {}
