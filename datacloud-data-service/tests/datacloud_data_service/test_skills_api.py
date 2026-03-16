@@ -47,11 +47,13 @@ def _create_test_app():
     from fastapi import FastAPI
 
     from datacloud_data_service.api.skills import router as skills_router
+    from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
 
     app = FastAPI()
     loader = OntologyLoader()
     loader.load_from_content(REGISTRY)
     loader.load_scene(SCENE)
+    inject_virtual_actions(loader)
     app.state.loader = loader
     app.include_router(skills_router, prefix="/api/v1/skills")
     return app
@@ -112,3 +114,28 @@ def test_skills_package_missing_params_returns_400() -> None:
         headers=HEADERS,
     )
     assert resp.status_code == 400
+
+
+def test_skills_package_respects_x_tool_list_mode() -> None:
+    """X-Tool-List-Mode: unified 仅返回 operation；per_object 返回全部+虚拟动作。"""
+    app = _create_test_app()
+    client = TestClient(app, raise_server_exceptions=False)
+    resp_unified = client.get(
+        "/api/v1/skills/package",
+        params={"object_ids": "sales_bo"},
+        headers={**HEADERS, "X-Tool-List-Mode": "unified"},
+    )
+    resp_per = client.get(
+        "/api/v1/skills/package",
+        params={"object_ids": "sales_bo"},
+        headers={**HEADERS, "X-Tool-List-Mode": "per_object"},
+    )
+    assert resp_unified.status_code == 200
+    assert resp_per.status_code == 200
+    tools_unified = resp_unified.json().get("tools", [])
+    tools_per = resp_per.json().get("tools", [])
+    names_unified = [t["name"] for t in tools_unified]
+    names_per = [t["name"] for t in tools_per]
+    assert "unified_data_query" in names_unified
+    assert "query_sales_bo" not in names_unified
+    assert "query_sales_bo" in names_per

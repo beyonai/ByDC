@@ -55,7 +55,6 @@ class ExecutionObjectConverter:
                 datasource_alias=step.datasource_alias,
                 sql_template=sql_template,
                 output_ref=step.output_ref,
-                csv_table_name=step.csv_table_name or step.output_ref,
                 bind_from_step=step.bind_from_step,
                 bind_key=step.bind_key,
             )
@@ -72,7 +71,6 @@ class ExecutionObjectConverter:
                 query=step.query,
                 tags=tags,
                 output_ref=step.output_ref,
-                csv_table_name=step.csv_table_name or step.output_ref,
             )
         else:
             raise ValueError(f"Unknown step type: {step.type!r}")
@@ -114,7 +112,6 @@ class ExecutionObjectConverter:
                 script=ontology_action.script,
                 params=step.params,
                 output_ref=step.output_ref,
-                csv_table_name=step.csv_table_name or step.output_ref,
             )
 
         if not ontology_action.function_refs:
@@ -148,7 +145,6 @@ class ExecutionObjectConverter:
             function_code=function_code,
             params=physical_params,
             output_ref=step.output_ref,
-            csv_table_name=step.csv_table_name,
             bind_from_step=step.bind_from_step,
             bind_key=step.bind_key,
             output_params=out_params,

@@ -18,6 +18,7 @@ from langchain.chat_models import init_chat_model
 
 from datacloud_agent.i18n import get_supported_locales, get_system_prompt
 from datacloud_agent.tools.data import data_query
+from datacloud_agent.tools.knowledge import search_knowledge
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,13 +41,22 @@ def create_agent(
     system_prompt: str | None = None,
 ) -> Any:
     """Create a deep agent for DataCloud, usable with langgraph dev and deep-agents-ui."""
-    resolved_api_key = api_key or os.getenv("OPENAI_API_KEY")
+    resolved_api_key = (
+        api_key
+        or os.getenv("OPENAI_API_KEY")
+        or os.getenv("DATACLOUD_LLM_REASONING_API_KEY")
+    )
     if not resolved_api_key:
         raise ValueError(
-            "API key is required. Set the OPENAI_API_KEY environment variable "
-            "or pass api_key= explicitly."
+            "API key is required. Set OPENAI_API_KEY or DATACLOUD_LLM_REASONING_API_KEY "
+            "(or pass api_key= explicitly)."
         )
-    resolved_base_url = base_url or os.getenv("OPENAI_BASE_URL") or _FALLBACK_BASE_URL
+    resolved_base_url = (
+        base_url
+        or os.getenv("OPENAI_BASE_URL")
+        or os.getenv("DATACLOUD_LLM_REASONING_API_BASE")
+        or _FALLBACK_BASE_URL
+    )
     resolved_model = model or os.getenv("DATACLOUD_LLM_REASONING_MODEL") or _FALLBACK_MODEL
     if not resolved_model.startswith("openai:"):
         resolved_model = f"openai:{resolved_model}"
@@ -82,7 +92,7 @@ def create_agent(
 
     compiled = create_deep_agent(
         model=llm,
-        tools=[data_query],
+        tools=[data_query,search_knowledge],
         system_prompt=system_prompt,
     )
 

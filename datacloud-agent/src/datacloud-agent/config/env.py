@@ -125,7 +125,7 @@ class DataServiceSettings(BaseSettings):
         description="API path for the NL query endpoint.",
     )
     timeout: int = Field(
-        default=60,
+        default=180,
         description="HTTP request timeout in seconds.",
     )
 
@@ -138,6 +138,27 @@ class EmbeddingSettings(BaseSettings):
     api_base: str = Field(..., description="Base URL of the embedding API endpoint.")
     api_key: str = Field(..., description="API key.")
     model: str = Field(..., description="Embedding model identifier.")
+
+
+class KnowledgeSettings(BaseSettings):
+    """知识图谱查询配置。未配置时 search_knowledge 返回空。"""
+
+    model_config = SettingsConfigDict(env_prefix="DATACLOUD_KNOWLEDGE_", extra="ignore")
+
+    graph_files: str = Field(
+        default="",
+        description="逗号分隔的图谱 JSON 文件路径，如 path/to/base.json,path/to/crm.json",
+    )
+    default_hops: int = Field(
+        default=4,
+        description="默认查询跳数",
+    )
+
+    @property
+    def graph_files_list(self) -> list[str]:
+        if not self.graph_files.strip():
+            return []
+        return [p.strip() for p in self.graph_files.split(",") if p.strip()]
 
 
 # ---------------------------------------------------------------------------
@@ -173,6 +194,7 @@ class Settings(BaseSettings):
     llm_multimodal: LLMGroupSettings | None = Field(default=None)
 
     embedding: EmbeddingSettings | None = Field(default=None)
+    knowledge: KnowledgeSettings | None = Field(default=None)
 
     @model_validator(mode="after")
     def _load_llm_roles(self) -> "Settings":
@@ -191,6 +213,11 @@ class Settings(BaseSettings):
 
         try:
             object.__setattr__(self, "embedding", EmbeddingSettings())
+        except Exception:  # noqa: BLE001
+            pass
+
+        try:
+            object.__setattr__(self, "knowledge", KnowledgeSettings())
         except Exception:  # noqa: BLE001
             pass
 

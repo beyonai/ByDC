@@ -578,8 +578,10 @@ async def get_checkpointer() -> AsyncIterator[SyncPGCheckpointer]:
         yield wrapped
 
     finally:
-        conn.close()
-        logger.info("PG checkpointer connection closed.")
+        # 不在 context 退出时 close(conn)：LangGraph API 在 startup 后可能退出本 context
+        # 却仍持有 checkpointer 用于后续请求，关闭连接会导致 psycopg.OperationalError:
+        # "the connection is closed"。连接随进程生命周期保持打开。
+        logger.debug("PG checkpointer context exited (connection left open for reuse).")
 
 
 __all__ = [

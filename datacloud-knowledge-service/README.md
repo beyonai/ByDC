@@ -56,7 +56,61 @@
 - OpenAI/Claude: 大语言模型
 ```
 
+### 5. 自然语言图谱查询 (新增)
+
+- **N跳子图查询**：支持自然语言查询，自动解析实体并返回N跳范围内的知识子图
+- **多实体识别**：支持一句话中包含多个实体，分别查询
+- **别名匹配**：支持术语别名、拼音匹配
+- **树形结构展示**：结果以树形结构展示，便于理解关系
+
 ## 快速开始
+
+### 安装
+
+```bash
+pip install -e .
+```
+
+### 使用Python SDK
+
+```python
+from datacloud_knowledge_service import KnowledgeGraphQuery
+
+# 初始化服务，加载图数据
+service = KnowledgeGraphQuery(
+    graph_files=["term_graph.json", "scene_graph.json"],
+    default_hops=4  # 默认查询4跳
+)
+
+# 执行自然语言查询
+result = service.query("杜成鹏跟进的商机")
+
+# 打印查询结果
+print(f"找到实体: {len(result['entities_found'])}")
+for entity in result['entities_found']:
+    print(f"  - {entity['name']} ({entity['match_type']})")
+
+# 打印子图结果
+for subgraph in result['results']:
+    print(f"\n子图: {subgraph['center_entity']['name']}")
+    print(f"  节点数: {subgraph['node_count']}")
+    print(f"  边数: {subgraph['edge_count']}")
+```
+
+### API 接口
+
+```http
+POST /api/v1/query-plan
+Content-Type: application/json
+
+{
+  "question": "王小明作为销售是否优秀？",
+  "context": {
+    "session_id": "session-001",
+    "user_id": "user-001"
+  }
+}
+```
 
 ```bash
 # 安装依赖

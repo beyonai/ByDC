@@ -78,10 +78,8 @@ async def test_sqlite_aggregator_joins_csvs(tmp_path: Path) -> None:
         ],
     )
     sr = StepResults()
-    sr.add(StepResult("step_api_emp", "step_api_emp", "", emp_csv, ""))
-    sr.add(StepResult("step_db_bo", "step_db_bo", "", bo_csv, ""))
-    records = await SqliteAggregator().aggregate(
-        agg, sr, csv_table_names={"step_api_emp": "api_emp", "step_db_bo": "db_bo"}
-    )
+    sr.add(StepResult("step_api_emp", "step_api_emp", "api_emp", emp_csv, "api_emp"))
+    sr.add(StepResult("step_db_bo", "step_db_bo", "db_bo", bo_csv, "db_bo"))
+    records = await SqliteAggregator().aggregate(agg, sr)
     assert records[0]["emp_name"] == "test_user"
     assert records[0]["bo_name"] == "5G项目"

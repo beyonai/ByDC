@@ -42,7 +42,6 @@ class DataPermissionRewriter:
             function_id=step.function_id,
             params=step.params,
             output_ref=step.output_ref,
-            csv_table_name=step.csv_table_name,
             bind_from_step=step.bind_from_step,
             bind_key=step.bind_key,
         )

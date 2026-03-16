@@ -54,6 +54,7 @@ def test_ontology_action_has_script_field() -> None:
         belong_class="sales_bo",
         params=[],
         function_refs=[],
+        action_type="operation",
         script="def execute(params):\n    return {'score': 100}",
     )
     assert action.script is not None
@@ -68,6 +69,7 @@ def test_ontology_action_script_defaults_to_none() -> None:
         belong_class="sales_bo",
         params=[],
         function_refs=["fn_get_bo"],
+        action_type="query",
     )
     assert action.script is None
 

@@ -54,6 +54,8 @@ class OntologyAction:
     """对象动作定义，支持 API 调用或 Python 脚本执行。
 
     执行优先级：script（非空）> function_refs > 抛 ActionNotConfiguredError
+
+    action_type: "query" | "operation"，未配置时该动作在加载时被跳过。
     """
 
     action_code: str
@@ -62,7 +64,12 @@ class OntologyAction:
     belong_class: str
     params: list[OntologyActionParam]
     function_refs: list[str]
+    action_type: str  # "query" | "operation"
     script: str | None = None
+    is_virtual: bool = False
+    input_schema: dict | None = None
+    output_schema: dict | None = None
+    _schema_cache: dict | None = field(default=None, repr=False)
 
 
 @dataclass
