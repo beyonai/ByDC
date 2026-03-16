@@ -27,19 +27,19 @@ clickhouse = ["aioch>=0.0.14"]
 
 ## Task 2: 扩展 jdbc_parser 支持 ClickHouse
 
-**Files:** `src/datacloud_data_sdk/sql_executor/jdbc_parser.py`
+**Files:** `src/datacloud_data/sql_executor/jdbc_parser.py`
 
 **Step 1:** 添加 CLICKHOUSE 分支，将 `jdbc:clickhouse://host:port/db` 转为 aioch 所需的 host/port/database 参数（或连接字符串格式）。
 
-**Step 2:** 添加测试 `tests/datacloud_data_sdk/test_jdbc_parser.py` 验证 MySQL、PostgreSQL、ClickHouse URL 解析。
+**Step 2:** 添加测试 `tests/datacloud_data/test_jdbc_parser.py` 验证 MySQL、PostgreSQL、ClickHouse URL 解析。
 
 ---
 
 ## Task 3: MySQLConnector
 
 **Files:**
-- Create: `src/datacloud_data_sdk/sql_executor/connectors/mysql_connector.py`
-- Modify: `src/datacloud_data_sdk/sql_executor/connector_registry.py`
+- Create: `src/datacloud_data/sql_executor/connectors/mysql_connector.py`
+- Modify: `src/datacloud_data/sql_executor/connector_registry.py`
 
 **Step 1:** 创建 `MySQLConnector`，继承 `BaseSourceConnector`：
 - `supported_type()` 返回 `"MYSQL"`
@@ -57,8 +57,8 @@ clickhouse = ["aioch>=0.0.14"]
 ## Task 4: PostgreSQLConnector
 
 **Files:**
-- Create: `src/datacloud_data_sdk/sql_executor/connectors/postgresql_connector.py`
-- Modify: `src/datacloud_data_sdk/sql_executor/connector_registry.py`
+- Create: `src/datacloud_data/sql_executor/connectors/postgresql_connector.py`
+- Modify: `src/datacloud_data/sql_executor/connector_registry.py`
 
 **Step 1:** 创建 `PostgreSQLConnector`，与 MySQL 类似，URL 前缀 `postgresql+asyncpg://`。
 
@@ -71,8 +71,8 @@ clickhouse = ["aioch>=0.0.14"]
 ## Task 5: ClickHouseConnector
 
 **Files:**
-- Create: `src/datacloud_data_sdk/sql_executor/connectors/clickhouse_connector.py`
-- Modify: `src/datacloud_data_sdk/sql_executor/connector_registry.py`
+- Create: `src/datacloud_data/sql_executor/connectors/clickhouse_connector.py`
+- Modify: `src/datacloud_data/sql_executor/connector_registry.py`
 
 **Step 1:** 创建 `ClickHouseConnector`：
 - 从 jdbc_url 解析 host、port、database（或扩展 jdbc_parser 返回 dict）
@@ -88,7 +88,7 @@ clickhouse = ["aioch>=0.0.14"]
 ## Task 6: DataSourceConfig 环境变量替换
 
 **Files:**
-- Create: `src/datacloud_data_sdk/sql_executor/config_loader.py`
+- Create: `src/datacloud_data/sql_executor/config_loader.py`
 - Modify: `src/datacloud_data_service/config.py`
 
 **Step 1:** 创建 `load_datasources_from_yaml(path)`，解析 yaml，对 `password` 等字段做 `${VAR}` 替换。

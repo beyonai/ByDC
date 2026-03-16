@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 构建可开源的 `datacloud_data_sdk` 与薄接入的 `datacloud_data_service`，完成本体解析（含脚本动作）、查询计划、执行聚合与 MCP/REST 工具链路，并用 CRM Demo 场景验证。
+**Goal:** 构建可开源的 `datacloud_data` 与薄接入的 `datacloud_data_service`，完成本体解析（含脚本动作）、查询计划、执行聚合与 MCP/REST 工具链路，并用 CRM Demo 场景验证。
 
 **Architecture:** 双子包结构，SDK 包含所有核心逻辑（本体层 → 计划层 → 执行层 → 聚合层 → 事件层），服务层只做请求解析、上下文注入与结果包装。全程 TDD：先写失败测试，再最小实现，逐层叠加。
 
@@ -17,21 +17,21 @@
 ### Task 1: 目录结构迁移 + pyproject.toml 双子包
 
 **Files:**
-- Modify: `datacloud-data-service/pyproject.toml`
-- Delete: `datacloud-data-service/src/datacloud_data_service/ontology/`（空目录）
-- Delete: `datacloud-data-service/src/datacloud_data_service/plan/`（空目录）
-- Delete: `datacloud-data-service/src/datacloud_data_service/executor/`（空目录）
-- Delete: `datacloud-data-service/src/datacloud_data_service/aggregator/`（空目录）
-- Delete: `datacloud-data-service/src/datacloud_data_service/events/`（空目录）
-- Delete: `datacloud-data-service/src/datacloud_data_service/csv_storage/`（空目录）
-- Delete: `datacloud-data-service/src/datacloud_data_service/sql_executor/`（空目录）
-- Create: `datacloud-data-service/src/datacloud_data_sdk/__init__.py`
+- Modify: `datacloud-data/pyproject.toml`
+- Delete: `datacloud-data/src/datacloud_data_service/ontology/`（空目录）
+- Delete: `datacloud-data/src/datacloud_data_service/plan/`（空目录）
+- Delete: `datacloud-data/src/datacloud_data_service/executor/`（空目录）
+- Delete: `datacloud-data/src/datacloud_data_service/aggregator/`（空目录）
+- Delete: `datacloud-data/src/datacloud_data_service/events/`（空目录）
+- Delete: `datacloud-data/src/datacloud_data_service/csv_storage/`（空目录）
+- Delete: `datacloud-data/src/datacloud_data_service/sql_executor/`（空目录）
+- Create: `datacloud-data/src/datacloud_data/__init__.py`
 
 **Step 1: 删除 datacloud_data_service 下不应存在的 SDK 子目录**
 
 Run:
 ```bash
-cd datacloud-data-service
+cd datacloud-data
 rm -rf src/datacloud_data_service/ontology
 rm -rf src/datacloud_data_service/plan
 rm -rf src/datacloud_data_service/executor
@@ -41,22 +41,22 @@ rm -rf src/datacloud_data_service/csv_storage
 rm -rf src/datacloud_data_service/sql_executor
 ```
 
-**Step 2: 创建 datacloud_data_sdk 包骨架**
+**Step 2: 创建 datacloud_data 包骨架**
 
 Run:
 ```bash
-mkdir -p src/datacloud_data_sdk
-touch src/datacloud_data_sdk/__init__.py
+mkdir -p src/datacloud_data
+touch src/datacloud_data/__init__.py
 ```
 
 **Step 3: 修改 pyproject.toml**
 
 ```toml
 [tool.hatch.build.targets.wheel]
-packages = ["src/datacloud_data_sdk", "src/datacloud_data_service"]
+packages = ["src/datacloud_data", "src/datacloud_data_service"]
 
 [project]
-name = "datacloud-data-service"
+name = "datacloud-data"
 version = "0.1.0"
 description = "DataCloud Data Service & SDK - 本体驱动的数据查询与执行框架"
 readme = "README.md"
@@ -81,7 +81,7 @@ dependencies = [
 langchain = ["langgraph>=0.2", "langchain-openai>=0.1"]
 sql = ["sqlalchemy[asyncio]>=2.0", "aiomysql>=0.2", "aiosqlite>=0.19"]
 service = ["fastapi>=0.115.0", "uvicorn>=0.32.0", "pydantic-settings>=2.0"]
-all = ["datacloud-data-service[langchain,sql,service]"]
+all = ["datacloud-data[langchain,sql,service]"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -125,25 +125,25 @@ asyncio_mode = "auto"
 
 Run:
 ```bash
-mkdir -p tests/datacloud_data_sdk/integration
+mkdir -p tests/datacloud_data/integration
 mkdir -p tests/datacloud_data_service
 mkdir -p tests/e2e
 touch tests/__init__.py
-touch tests/datacloud_data_sdk/__init__.py
-touch tests/datacloud_data_sdk/integration/__init__.py
+touch tests/datacloud_data/__init__.py
+touch tests/datacloud_data/integration/__init__.py
 touch tests/datacloud_data_service/__init__.py
 touch tests/e2e/__init__.py
 ```
 
 **Step 5: 安装依赖**
 
-Run: `cd datacloud-data-service && uv pip install -e ".[all,dev]"`
+Run: `cd datacloud-data && uv pip install -e ".[all,dev]"`
 
 Expected: 安装成功，无依赖冲突。
 
 **Step 6: 验证双子包可导入**
 
-Run: `cd datacloud-data-service && python -c "import datacloud_data_sdk; import datacloud_data_service; print('OK')"`
+Run: `cd datacloud-data && python -c "import datacloud_data; import datacloud_data_service; print('OK')"`
 
 Expected: 输出 `OK`
 
@@ -154,14 +154,14 @@ Expected: 输出 `OK`
 ### Task 2: 异常层次
 
 **Files:**
-- Create: `datacloud-data-service/src/datacloud_data_sdk/exceptions.py`
-- Create: `datacloud-data-service/tests/datacloud_data_sdk/test_exceptions.py`
+- Create: `datacloud-data/src/datacloud_data/exceptions.py`
+- Create: `datacloud-data/tests/datacloud_data/test_exceptions.py`
 
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data_sdk/test_exceptions.py
-from datacloud_data_sdk.exceptions import (
+# tests/datacloud_data/test_exceptions.py
+from datacloud_data.exceptions import (
     DatacloudError,
     ObjectNotFoundError,
     ActionNotFoundError,
@@ -211,14 +211,14 @@ def test_action_not_configured_error() -> None:
 
 **Step 2: 运行失败测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_exceptions.py -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_exceptions.py -v`
 
 Expected: FAIL，ImportError
 
 **Step 3: 实现异常层次**
 
 ```python
-# src/datacloud_data_sdk/exceptions.py
+# src/datacloud_data/exceptions.py
 """datacloud-data-sdk 结构化异常层次。"""
 
 from __future__ import annotations
@@ -337,10 +337,10 @@ class AggregationError(DatacloudError):
 **Step 4: 更新 `__init__.py` 公开 API**
 
 ```python
-# src/datacloud_data_sdk/__init__.py
+# src/datacloud_data/__init__.py
 """datacloud-data-sdk: 本体驱动的数据查询与执行 SDK。"""
 
-from datacloud_data_sdk.exceptions import (
+from datacloud_data.exceptions import (
     DatacloudError,
     ObjectNotFoundError,
     ActionNotFoundError,
@@ -359,7 +359,7 @@ __all__ = [
 
 **Step 5: 运行测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_exceptions.py -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_exceptions.py -v`
 
 Expected: PASS
 
@@ -368,16 +368,16 @@ Expected: PASS
 ### Task 3: InvocationContext
 
 **Files:**
-- Create: `datacloud-data-service/src/datacloud_data_sdk/context.py`
-- Create: `datacloud-data-service/tests/datacloud_data_sdk/test_context.py`
+- Create: `datacloud-data/src/datacloud_data/context.py`
+- Create: `datacloud-data/tests/datacloud_data/test_context.py`
 
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data_sdk/test_context.py
+# tests/datacloud_data/test_context.py
 import pytest
-from datacloud_data_sdk.context import InvocationContext, get_current_context
-from datacloud_data_sdk.exceptions import DatacloudError
+from datacloud_data.context import InvocationContext, get_current_context
+from datacloud_data.exceptions import DatacloudError
 
 
 def test_context_stores_values() -> None:
@@ -404,14 +404,14 @@ def test_nested_contexts_isolated() -> None:
 
 **Step 2: 运行失败测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_context.py -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_context.py -v`
 
 Expected: FAIL
 
 **Step 3: 实现 InvocationContext**
 
 ```python
-# src/datacloud_data_sdk/context.py
+# src/datacloud_data/context.py
 """请求级上下文，基于 contextvars 实现线程/协程安全。"""
 
 from __future__ import annotations
@@ -420,7 +420,7 @@ import contextvars
 from dataclasses import dataclass
 from types import TracebackType
 
-from datacloud_data_sdk.exceptions import DatacloudError
+from datacloud_data.exceptions import DatacloudError
 
 
 @dataclass
@@ -479,7 +479,7 @@ def get_current_context() -> RequestContext:
 
 **Step 4: 运行测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_context.py -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_context.py -v`
 
 Expected: PASS
 
@@ -488,15 +488,15 @@ Expected: PASS
 ### Task 4: 本体内部模型（含 script 字段）
 
 **Files:**
-- Create: `datacloud-data-service/src/datacloud_data_sdk/ontology/__init__.py`
-- Create: `datacloud-data-service/src/datacloud_data_sdk/ontology/models.py`
-- Create: `datacloud-data-service/tests/datacloud_data_sdk/test_ontology_models.py`
+- Create: `datacloud-data/src/datacloud_data/ontology/__init__.py`
+- Create: `datacloud-data/src/datacloud_data/ontology/models.py`
+- Create: `datacloud-data/tests/datacloud_data/test_ontology_models.py`
 
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data_sdk/test_ontology_models.py
-from datacloud_data_sdk.ontology.models import (
+# tests/datacloud_data/test_ontology_models.py
+from datacloud_data.ontology.models import (
     FieldPhysicalMapping,
     OntologyField,
     OntologyActionParam,
@@ -572,18 +572,18 @@ def test_ontology_relation_has_join_keys() -> None:
 
 **Step 2: 运行失败测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_ontology_models.py -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_ontology_models.py -v`
 
 Expected: FAIL
 
 **Step 3: 实现本体模型**
 
 ```python
-# src/datacloud_data_sdk/ontology/__init__.py
+# src/datacloud_data/ontology/__init__.py
 ```
 
 ```python
-# src/datacloud_data_sdk/ontology/models.py
+# src/datacloud_data/ontology/models.py
 """本体内部模型：OntologyClass / Field / Action / Relation。"""
 
 from __future__ import annotations
@@ -677,7 +677,7 @@ class OntologyClass:
 
 **Step 4: 运行测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_ontology_models.py -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_ontology_models.py -v`
 
 Expected: PASS
 
@@ -686,15 +686,15 @@ Expected: PASS
 ### Task 5: 术语加载器
 
 **Files:**
-- Create: `datacloud-data-service/src/datacloud_data_sdk/ontology/term_loader.py`
-- Create: `datacloud-data-service/tests/datacloud_data_sdk/test_term_loader.py`
+- Create: `datacloud-data/src/datacloud_data/ontology/term_loader.py`
+- Create: `datacloud-data/tests/datacloud_data/test_term_loader.py`
 
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data_sdk/test_term_loader.py
+# tests/datacloud_data/test_term_loader.py
 import pytest
-from datacloud_data_sdk.ontology.term_loader import TermLoader
+from datacloud_data.ontology.term_loader import TermLoader
 
 
 def test_resolve_by_label() -> None:
@@ -734,14 +734,14 @@ def test_get_available_values() -> None:
 
 **Step 2: 运行失败测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_term_loader.py -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_term_loader.py -v`
 
 Expected: FAIL
 
 **Step 3: 实现 TermLoader**
 
 ```python
-# src/datacloud_data_sdk/ontology/term_loader.py
+# src/datacloud_data/ontology/term_loader.py
 """术语集加载与解析：code / label / aliases 多维匹配。"""
 
 from __future__ import annotations
@@ -793,7 +793,7 @@ class TermLoader:
 
 **Step 4: 运行测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_term_loader.py -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_term_loader.py -v`
 
 Expected: PASS
 
@@ -802,16 +802,16 @@ Expected: PASS
 ### Task 6: OntologyLoader（解析标准格式 + configure）
 
 **Files:**
-- Create: `datacloud-data-service/src/datacloud_data_sdk/ontology/loader.py`
-- Create: `datacloud-data-service/tests/datacloud_data_sdk/test_ontology_loader.py`
+- Create: `datacloud-data/src/datacloud_data/ontology/loader.py`
+- Create: `datacloud-data/tests/datacloud_data/test_ontology_loader.py`
 
 **Step 1: 写失败单元测试**
 
 ```python
-# tests/datacloud_data_sdk/test_ontology_loader.py
+# tests/datacloud_data/test_ontology_loader.py
 import pytest
-from datacloud_data_sdk.ontology.loader import OntologyLoader
-from datacloud_data_sdk.exceptions import ObjectNotFoundError
+from datacloud_data.ontology.loader import OntologyLoader
+from datacloud_data.exceptions import ObjectNotFoundError
 
 MINIMAL_REGISTRY = {
     "functions": [
@@ -929,14 +929,14 @@ def test_configure_sets_plan_generator() -> None:
 
 **Step 2: 运行失败测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_ontology_loader.py -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_ontology_loader.py -v`
 
 Expected: FAIL
 
 **Step 3: 实现 OntologyLoader**
 
 ```python
-# src/datacloud_data_sdk/ontology/loader.py
+# src/datacloud_data/ontology/loader.py
 """OntologyLoader: 解析 JSON/YAML 本体 → 内部模型 + 核心实体。"""
 
 from __future__ import annotations
@@ -946,8 +946,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from datacloud_data_sdk.exceptions import ObjectNotFoundError, ActionNotFoundError
-from datacloud_data_sdk.ontology.models import (
+from datacloud_data.exceptions import ObjectNotFoundError, ActionNotFoundError
+from datacloud_data.ontology.models import (
     OntologyClass,
     OntologyField,
     OntologyAction,
@@ -1108,7 +1108,7 @@ class OntologyLoader:
 
 **Step 4: 运行测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_ontology_loader.py -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_ontology_loader.py -v`
 
 Expected: PASS
 
@@ -1117,19 +1117,19 @@ Expected: PASS
 ### Task 7: Relation + Action + Object + OntologyLoader.get_object()
 
 **Files:**
-- Create: `datacloud-data-service/src/datacloud_data_sdk/relation.py`
-- Create: `datacloud-data-service/src/datacloud_data_sdk/action.py`
-- Create: `datacloud-data-service/src/datacloud_data_sdk/object.py`
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/ontology/loader.py`
-- Create: `datacloud-data-service/tests/datacloud_data_sdk/test_sdk_entities.py`
+- Create: `datacloud-data/src/datacloud_data/relation.py`
+- Create: `datacloud-data/src/datacloud_data/action.py`
+- Create: `datacloud-data/src/datacloud_data/object.py`
+- Modify: `datacloud-data/src/datacloud_data/ontology/loader.py`
+- Create: `datacloud-data/tests/datacloud_data/test_sdk_entities.py`
 
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data_sdk/test_sdk_entities.py
+# tests/datacloud_data/test_sdk_entities.py
 import pytest
-from datacloud_data_sdk.ontology.loader import OntologyLoader
-from datacloud_data_sdk.exceptions import ActionNotFoundError
+from datacloud_data.ontology.loader import OntologyLoader
+from datacloud_data.exceptions import ActionNotFoundError
 
 REGISTRY = {
     "functions": [
@@ -1238,14 +1238,14 @@ def test_get_description_shows_script_action() -> None:
 
 **Step 2: 运行失败测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_sdk_entities.py -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_sdk_entities.py -v`
 
 Expected: FAIL
 
 **Step 3: 实现 Relation**
 
 ```python
-# src/datacloud_data_sdk/relation.py
+# src/datacloud_data/relation.py
 """对象间关联关系模型。"""
 
 from __future__ import annotations
@@ -1267,14 +1267,14 @@ class Relation:
 **Step 4: 实现 Action**
 
 ```python
-# src/datacloud_data_sdk/action.py
+# src/datacloud_data/action.py
 """Action 实体：封装 OntologyAction，提供 schema 与执行能力。"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from datacloud_data_sdk.ontology.models import OntologyAction, OntologyActionParam
+from datacloud_data.ontology.models import OntologyAction, OntologyActionParam
 
 PARAM_TYPE_MAP: dict[str, str] = {
     "STRING": "string",
@@ -1336,15 +1336,15 @@ class Action:
 **Step 5: 实现 Object**
 
 ```python
-# src/datacloud_data_sdk/object.py
+# src/datacloud_data/object.py
 """Object 实体：本体对象的运行时表示。"""
 
 from __future__ import annotations
 
-from datacloud_data_sdk.action import Action
-from datacloud_data_sdk.exceptions import ActionNotFoundError
-from datacloud_data_sdk.ontology.models import OntologyAction, OntologyClass
-from datacloud_data_sdk.relation import Relation
+from datacloud_data.action import Action
+from datacloud_data.exceptions import ActionNotFoundError
+from datacloud_data.ontology.models import OntologyAction, OntologyClass
+from datacloud_data.relation import Relation
 
 
 class Object:
@@ -1436,8 +1436,8 @@ class Object:
 
 ```python
 def get_object(self, object_code: str) -> "Object":
-    from datacloud_data_sdk.object import Object
-    from datacloud_data_sdk.relation import Relation
+    from datacloud_data.object import Object
+    from datacloud_data.relation import Relation
 
     cls = self.get_ontology_class(object_code)
     rels = [
@@ -1456,7 +1456,7 @@ def get_object(self, object_code: str) -> "Object":
 
 **Step 7: 运行测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_sdk_entities.py -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_sdk_entities.py -v`
 
 Expected: PASS
 
@@ -1465,15 +1465,15 @@ Expected: PASS
 ### Task 8: View 实体 + OntologyLoader.get_view()
 
 **Files:**
-- Create: `datacloud-data-service/src/datacloud_data_sdk/view.py`
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/ontology/loader.py`
-- Create: `datacloud-data-service/tests/datacloud_data_sdk/test_view.py`
+- Create: `datacloud-data/src/datacloud_data/view.py`
+- Modify: `datacloud-data/src/datacloud_data/ontology/loader.py`
+- Create: `datacloud-data/tests/datacloud_data/test_view.py`
 
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data_sdk/test_view.py
-from datacloud_data_sdk.ontology.loader import OntologyLoader
+# tests/datacloud_data/test_view.py
+from datacloud_data.ontology.loader import OntologyLoader
 
 REGISTRY = {
     "functions": [],
@@ -1545,24 +1545,24 @@ def test_view_list_objects() -> None:
 
 **Step 2: 运行失败测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_view.py -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_view.py -v`
 
 Expected: FAIL
 
 **Step 3: 实现 View**
 
 ```python
-# src/datacloud_data_sdk/view.py
+# src/datacloud_data/view.py
 """View 实体：跨对象的视图聚合，提供自然语言查询与自生说明。"""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from datacloud_data_sdk.relation import Relation
+from datacloud_data.relation import Relation
 
 if TYPE_CHECKING:
-    from datacloud_data_sdk.object import Object
+    from datacloud_data.object import Object
 
 
 class View:
@@ -1638,8 +1638,8 @@ def load_scene_from_path(self, path: str | Path) -> None:
     self.load_scene(content)
 
 def get_view(self, view_id: str) -> "View":
-    from datacloud_data_sdk.view import View
-    from datacloud_data_sdk.relation import Relation
+    from datacloud_data.view import View
+    from datacloud_data.relation import Relation
 
     scene = self._scenes.get(view_id)
     if scene is None:
@@ -1672,7 +1672,7 @@ def get_view(self, view_id: str) -> "View":
 
 **Step 5: 运行测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_view.py -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_view.py -v`
 
 Expected: PASS
 
@@ -1681,13 +1681,13 @@ Expected: PASS
 ### Task 9: 迁移 objects_registry.json 为标准格式 + 集成测试
 
 **Files:**
-- Create: `datacloud-data-service/resources/ontology/crm_demo/objects_registry.json`
-- Create: `datacloud-data-service/resources/ontology/crm_demo/scene_01_data_analysis.json`
-- Create: `datacloud-data-service/tests/datacloud_data_sdk/integration/test_ontology_loader_integration.py`
+- Create: `datacloud-data/resources/ontology/crm_demo/objects_registry.json`
+- Create: `datacloud-data/resources/ontology/crm_demo/scene_01_data_analysis.json`
+- Create: `datacloud-data/tests/datacloud_data/integration/test_ontology_loader_integration.py`
 
 **Step 1: 从 datacloud-mock 复制并转换 objects_registry.json 为标准格式**
 
-编写一个一次性迁移脚本，将 `datacloud-mock/mock-resource/ontology/crm_demo/modules/objects_registry.json` 转换为标准格式（`properties` → `fields`，`property_code` → `field_code`，`object_type` → `source_type` 等），输出到 `datacloud-data-service/resources/ontology/crm_demo/objects_registry.json`。
+编写一个一次性迁移脚本，将 `datacloud-mock/mock-resource/ontology/crm_demo/modules/objects_registry.json` 转换为标准格式（`properties` → `fields`，`property_code` → `field_code`，`object_type` → `source_type` 等），输出到 `datacloud-data/resources/ontology/crm_demo/objects_registry.json`。
 
 关键映射：
 - `object_type: "API"` → `source_type: "API"`
@@ -1710,7 +1710,7 @@ Run: 编写并运行迁移脚本
 Run:
 ```bash
 cp datacloud-mock/mock-resource/ontology/crm_demo/modules/scene_01_data_analysis.json \
-   datacloud-data-service/resources/ontology/crm_demo/
+   datacloud-data/resources/ontology/crm_demo/
 ```
 
 如果 scene 文件格式不兼容，需要做类似适配。
@@ -1718,10 +1718,10 @@ cp datacloud-mock/mock-resource/ontology/crm_demo/modules/scene_01_data_analysis
 **Step 3: 写集成测试**
 
 ```python
-# tests/datacloud_data_sdk/integration/test_ontology_loader_integration.py
+# tests/datacloud_data/integration/test_ontology_loader_integration.py
 import pytest
 from pathlib import Path
-from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data.ontology.loader import OntologyLoader
 
 REGISTRY_PATH = Path(__file__).parents[3] / "resources/ontology/crm_demo/objects_registry.json"
 
@@ -1762,7 +1762,7 @@ def test_get_object_returns_description() -> None:
 
 **Step 4: 运行集成测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/integration/ -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/integration/ -v`
 
 Expected: PASS
 
@@ -1849,17 +1849,17 @@ class ScriptExecTask:
 ### Task 16: ScriptExecutor（新增）
 
 **Files:**
-- Create: `datacloud-data-service/src/datacloud_data_sdk/executor/script_executor.py`
-- Create: `datacloud-data-service/tests/datacloud_data_sdk/test_script_executor.py`
+- Create: `datacloud-data/src/datacloud_data/executor/script_executor.py`
+- Create: `datacloud-data/tests/datacloud_data/test_script_executor.py`
 
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data_sdk/test_script_executor.py
+# tests/datacloud_data/test_script_executor.py
 import pytest
-from datacloud_data_sdk.executor.script_executor import ScriptExecutor
-from datacloud_data_sdk.context import InvocationContext, get_current_context
-from datacloud_data_sdk.exceptions import ScriptExecutionError
+from datacloud_data.executor.script_executor import ScriptExecutor
+from datacloud_data.context import InvocationContext, get_current_context
+from datacloud_data.exceptions import ScriptExecutionError
 
 
 @pytest.mark.asyncio
@@ -1910,14 +1910,14 @@ async def test_script_priority_over_api() -> None:
 
 **Step 2: 运行失败测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_script_executor.py -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_script_executor.py -v`
 
 Expected: FAIL
 
 **Step 3: 实现 ScriptExecutor**
 
 ```python
-# src/datacloud_data_sdk/executor/script_executor.py
+# src/datacloud_data/executor/script_executor.py
 """ScriptExecutor: 执行与动作绑定的 Python 脚本。
 
 脚本约定：必须定义 def execute(params: dict) -> dict
@@ -1930,8 +1930,8 @@ import asyncio
 import traceback
 from typing import Any
 
-from datacloud_data_sdk.context import get_current_context
-from datacloud_data_sdk.exceptions import ScriptExecutionError
+from datacloud_data.context import get_current_context
+from datacloud_data.exceptions import ScriptExecutionError
 
 
 class ScriptExecutor:
@@ -2001,7 +2001,7 @@ class ScriptExecutor:
 
 **Step 4: 运行测试**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_script_executor.py -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_script_executor.py -v`
 
 Expected: PASS
 
@@ -2058,7 +2058,7 @@ async def query(self, question: str) -> dict[str, object]:
 
 ### Task 28: 运行全部测试
 
-Run: `cd datacloud-data-service && pytest tests/ -v --tb=short`
+Run: `cd datacloud-data && pytest tests/ -v --tb=short`
 
 Expected: 全部 PASS
 

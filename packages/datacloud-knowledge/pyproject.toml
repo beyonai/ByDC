@@ -1,5 +1,5 @@
 [project]
-name = "datacloud-knowledge-service"
+name = "datacloud-knowledge"
 version = "0.1.0"
 description = "DataCloud Knowledge Service - 知识检索与查询计划生成服务"
 readme = "README.md"
@@ -34,7 +34,7 @@ dev = [
 ]
 
 [project.scripts]
-datacloud-knowledge-service = "datacloud_knowledge_service.cli:main"
+datacloud-knowledge = "datacloud_knowledge_service.cli:main"
 
 [build-system]
 requires = ["hatchling"]

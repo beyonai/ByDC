@@ -15,15 +15,15 @@
 ## Task 1: ObjectViewFunctionParam 增加 term_set
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/plan/models.py`
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/plan/object_view_builder.py`
-- Test: `datacloud-data-service/tests/datacloud_data_sdk/test_plan_models.py`（若无则新建）
+- Modify: `datacloud-data/src/datacloud_data/plan/models.py`
+- Modify: `datacloud-data/src/datacloud_data/plan/object_view_builder.py`
+- Test: `datacloud-data/tests/datacloud_data/test_plan_models.py`（若无则新建）
 
 **Step 1: 编写失败测试**
 
 ```python
 def test_object_view_function_param_has_term_set():
-    from datacloud_data_sdk.plan.models import ObjectViewFunctionParam
+    from datacloud_data.plan.models import ObjectViewFunctionParam
     p = ObjectViewFunctionParam(
         param_code="orgId",
         param_name="组织",
@@ -36,7 +36,7 @@ def test_object_view_function_param_has_term_set():
 
 **Step 2: 运行测试确认失败**
 
-Run: `pytest datacloud-data-service/tests/datacloud_data_sdk/test_plan_models.py::test_object_view_function_param_has_term_set -v`
+Run: `pytest datacloud-data/tests/datacloud_data/test_plan_models.py::test_object_view_function_param_has_term_set -v`
 Expected: FAIL (ObjectViewFunctionParam 无 term_set 参数)
 
 **Step 3: 实现**
@@ -60,8 +60,8 @@ git add -A && git commit -m "feat(plan): ObjectViewFunctionParam add term_set, O
 ## Task 2: ObjectViewField 增加 term_set
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/plan/models.py`
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/plan/object_view_builder.py`
+- Modify: `datacloud-data/src/datacloud_data/plan/models.py`
+- Modify: `datacloud-data/src/datacloud_data/plan/object_view_builder.py`
 
 **Step 1:** 在 `ObjectViewField` 中增加 `term_set: str | None = None`。
 
@@ -78,14 +78,14 @@ git commit -m "feat(plan): ObjectViewField add term_set for SQL term resolution"
 ## Task 3: ApiExecTask 增加 bind_from_step、bind_key
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/executor/models.py`
-- Test: `datacloud-data-service/tests/datacloud_data_sdk/test_execution_object_converter.py`
+- Modify: `datacloud-data/src/datacloud_data/executor/models.py`
+- Test: `datacloud-data/tests/datacloud_data/test_execution_object_converter.py`
 
 **Step 1: 编写测试**
 
 ```python
 def test_api_exec_task_has_bind_fields():
-    from datacloud_data_sdk.executor.models import ApiExecTask
+    from datacloud_data.executor.models import ApiExecTask
     t = ApiExecTask(
         function_code="fn_x",
         params={},
@@ -110,20 +110,20 @@ git commit -m "feat(executor): ApiExecTask add bind_from_step, bind_key"
 
 ## Task 4: TermResolver 新增 resolve_params（SDK 层）
 
-**依赖关系**：`datacloud_data_sdk` 为核心库，`datacloud_data_service` 依赖 sdk。TermResolver 需在 sdk 中供 ExecutionObjectConverter 使用。在 sdk 中新增 `plan/term_resolver.py`，service 层的 `term_resolver` 可改为 import 并复用。
+**依赖关系**：`datacloud_data` 为核心库，`datacloud_data_service` 依赖 sdk。TermResolver 需在 sdk 中供 ExecutionObjectConverter 使用。在 sdk 中新增 `plan/term_resolver.py`，service 层的 `term_resolver` 可改为 import 并复用。
 
 **Files:**
-- Create: `datacloud-data-service/src/datacloud_data_sdk/plan/term_resolver.py`
-- Modify: `datacloud-data-service/src/datacloud_data_service/tools/term_resolver.py`（改为 import sdk 的 TermResolver 并复用 resolve）
-- Test: `datacloud-data-service/tests/datacloud_data_sdk/test_term_resolver.py`
+- Create: `datacloud-data/src/datacloud_data/plan/term_resolver.py`
+- Modify: `datacloud-data/src/datacloud_data_service/tools/term_resolver.py`（改为 import sdk 的 TermResolver 并复用 resolve）
+- Test: `datacloud-data/tests/datacloud_data/test_term_resolver.py`
 
 **Step 1: 编写失败测试**
 
 ```python
 def test_resolve_params_enum():
-    from datacloud_data_sdk.ontology.term_loader import TermLoader
-    from datacloud_data_sdk.plan.term_resolver import TermResolver
-    from datacloud_data_sdk.plan.models import ObjectViewFunctionParam
+    from datacloud_data.ontology.term_loader import TermLoader
+    from datacloud_data.plan.term_resolver import TermResolver
+    from datacloud_data.plan.models import ObjectViewFunctionParam
 
     loader = TermLoader.from_mapping({
         "status.code": [
@@ -148,8 +148,8 @@ def test_resolve_params_enum():
 from __future__ import annotations
 from typing import Any, TYPE_CHECKING
 if TYPE_CHECKING:
-    from datacloud_data_sdk.plan.models import ObjectViewFunctionParam
-from datacloud_data_sdk.ontology.term_loader import TermLoader
+    from datacloud_data.plan.models import ObjectViewFunctionParam
+from datacloud_data.ontology.term_loader import TermLoader
 
 class TermResolver:
     def __init__(self, term_loader: TermLoader | None = None) -> None:
@@ -190,9 +190,9 @@ git commit -m "feat(plan): TermResolver in sdk with resolve_params for ObjectVie
 ## Task 5: ExecutionObjectConverter 接入 TermResolver（API 步骤）
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/plan/execution_object_converter.py`
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/view.py`
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/object.py`
+- Modify: `datacloud-data/src/datacloud_data/plan/execution_object_converter.py`
+- Modify: `datacloud-data/src/datacloud_data/view.py`
+- Modify: `datacloud-data/src/datacloud_data/object.py`
 
 **Step 1:** ExecutionObjectConverter 构造函数接受 `term_resolver: TermResolver | None = None`。
 
@@ -218,8 +218,8 @@ git commit -m "feat(plan): ExecutionObjectConverter term resolution for API step
 ## Task 6: ApiExecutor 支持 bind_from_step / bind_key
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/executor/api_executor.py`
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/executor/executor.py`
+- Modify: `datacloud-data/src/datacloud_data/executor/api_executor.py`
+- Modify: `datacloud-data/src/datacloud_data/executor/executor.py`
 
 **Step 1:** ApiExecutor.execute 签名增加 `step_results: dict[str, str]` 参数（与 SqlExecutor 一致，便于 Executor 传入）。
 
@@ -243,7 +243,7 @@ git commit -m "feat(executor): ApiExecutor support bind_from_step, bind_key"
 ## Task 7: 序列化 object_view 时拆分为 inputParams/outputParams 并注入 termType/termLabels/termHint
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/plan/query_plan_generator.py`（或独立序列化模块）
+- Modify: `datacloud-data/src/datacloud_data/plan/query_plan_generator.py`（或独立序列化模块）
 - 需接入 TermLoader 以判断 enum/lookup 并注入 termLabels 或 termHint
 
 **Step 1:** 在 `_serialize_payload` 或新增 `_serialize_function_for_llm` 中：
@@ -270,7 +270,7 @@ git commit -m "feat(plan): serialize object_view with inputParams/outputParams a
 ## Task 8: Prompt 增加 function 结构说明、termSet、优先单步、bind 说明
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/plan/query_plan_generator.py`（SYSTEM_PROMPT）
+- Modify: `datacloud-data/src/datacloud_data/plan/query_plan_generator.py`（SYSTEM_PROMPT）
 
 **Step 1:** 在 SYSTEM_PROMPT 的「输出要求」之前插入「对象视图中的 function 结构说明」段落，内容与 `docs/plans/2026-03-09-prompt-and-json-example-for-test.md` 第一节一致，包括：
 - inputParams / outputParams
@@ -294,10 +294,10 @@ git commit -m "feat(plan): SYSTEM_PROMPT add function structure, termSet, single
 **设计**：SQL 步骤支持可选 `params` 与占位符。模型输出 `sqlTemplate: "SELECT * FROM t WHERE status = {status}"` 且 `params: {status: "待办"}` 时，执行前解析 params 中的术语值并替换到 sql_template。
 
 **Files:**
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/plan/models.py`（PlanStep 的 SQL 已有 sql_template，需支持 params）
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/executor/models.py`（SqlExecTask 增加 params 或 resolved_sql）
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/plan/execution_object_converter.py`
-- Modify: `datacloud-data-service/src/datacloud_data_sdk/sql_executor/sql_executor.py`
+- Modify: `datacloud-data/src/datacloud_data/plan/models.py`（PlanStep 的 SQL 已有 sql_template，需支持 params）
+- Modify: `datacloud-data/src/datacloud_data/executor/models.py`（SqlExecTask 增加 params 或 resolved_sql）
+- Modify: `datacloud-data/src/datacloud_data/plan/execution_object_converter.py`
+- Modify: `datacloud-data/src/datacloud_data/sql_executor/sql_executor.py`
 
 **Step 1:** PlanStep 已有 params 字段（通用）。确认 LLM 解析时 SQL 步骤可包含 params。
 
@@ -340,7 +340,7 @@ git commit -m "feat(plan): SQL step term resolution via params placeholder"
 ## Task 11: 集成测试与文档
 
 **Files:**
-- Test: `datacloud-data-service/tests/datacloud_data_sdk/test_term_binding_e2e.py`（可选）
+- Test: `datacloud-data/tests/datacloud_data/test_term_binding_e2e.py`（可选）
 - Modify: `docs/plans/2026-03-09-prompt-and-json-example-for-test.md`（若需）
 
 **Step 1:** 编写端到端测试：objectView 含 term_set 的 function，用户问题含名称，计划输出名称，执行后 API 收到 code。

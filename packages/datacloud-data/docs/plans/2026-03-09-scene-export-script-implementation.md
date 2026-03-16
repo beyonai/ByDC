@@ -15,7 +15,7 @@
 ## Task 1: 编写导出脚本骨架与 CLI
 
 **Files:**
-- Create: `datacloud-data-service/scripts/export_scene_json.py`
+- Create: `datacloud-data/scripts/export_scene_json.py`
 
 **Step 1: 创建脚本文件**
 
@@ -97,7 +97,7 @@ if __name__ == "__main__":
 **Step 2: 验证脚本可运行**
 
 ```bash
-cd datacloud-data-service
+cd datacloud-data
 python scripts/export_scene_json.py --scene resources/ontology/crm_demo/scene_01_data_analysis.json --registry resources/ontology/crm_demo/objects_registry.json --output /tmp/scene_full.json
 ```
 
@@ -115,7 +115,7 @@ git commit -m "feat: add export_scene_json script skeleton"
 ## Task 2: 实现 objects 过滤
 
 **Files:**
-- Modify: `datacloud-data-service/scripts/export_scene_json.py`
+- Modify: `datacloud-data/scripts/export_scene_json.py`
 
 **Step 1: 实现 objects 过滤逻辑**
 
@@ -155,7 +155,7 @@ result = build_scene_json(scene, registry, object_ids, object_ids_list)
 **Step 2: 验证**
 
 ```bash
-cd datacloud-data-service
+cd datacloud-data
 python scripts/export_scene_json.py --scene resources/ontology/crm_demo/scene_01_data_analysis.json --registry resources/ontology/crm_demo/objects_registry.json --output /tmp/scene_full.json
 python -c "
 import json
@@ -179,7 +179,7 @@ git commit -m "feat: filter objects by object_ids"
 ## Task 3: 实现 relations 过滤
 
 **Files:**
-- Modify: `datacloud-data-service/scripts/export_scene_json.py`
+- Modify: `datacloud-data/scripts/export_scene_json.py`
 
 **Step 1: 在 build_scene_json 中添加 relations 过滤**
 
@@ -196,7 +196,7 @@ git commit -m "feat: filter objects by object_ids"
 **Step 2: 验证**
 
 ```bash
-cd datacloud-data-service
+cd datacloud-data
 python scripts/export_scene_json.py --scene resources/ontology/crm_demo/scene_01_data_analysis.json --registry resources/ontology/crm_demo/objects_registry.json --output /tmp/scene_full.json
 python -c "
 import json
@@ -222,7 +222,7 @@ git commit -m "feat: filter relations by object_ids"
 ## Task 4: 实现 functions 过滤
 
 **Files:**
-- Modify: `datacloud-data-service/scripts/export_scene_json.py`
+- Modify: `datacloud-data/scripts/export_scene_json.py`
 
 **Step 1: 收集 function_refs 并过滤 functions**
 
@@ -245,7 +245,7 @@ git commit -m "feat: filter relations by object_ids"
 **Step 2: 验证**
 
 ```bash
-cd datacloud-data-service
+cd datacloud-data
 python scripts/export_scene_json.py --scene resources/ontology/crm_demo/scene_01_data_analysis.json --registry resources/ontology/crm_demo/objects_registry.json --output /tmp/scene_full.json
 python -c "
 import json
@@ -271,7 +271,7 @@ git commit -m "feat: filter functions by object action refs"
 ## Task 5: 添加单元测试
 
 **Files:**
-- Create: `datacloud-data-service/tests/scripts/test_export_scene_json.py`
+- Create: `datacloud-data/tests/scripts/test_export_scene_json.py`
 
 **Step 1: 编写测试**
 
@@ -283,7 +283,7 @@ from pathlib import Path
 
 import pytest
 
-# 假设脚本在 scripts/ 下，项目根为 datacloud-data-service
+# 假设脚本在 scripts/ 下，项目根为 datacloud-data
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCENE_PATH = PROJECT_ROOT / "resources/ontology/crm_demo/scene_01_data_analysis.json"
 REGISTRY_PATH = PROJECT_ROOT / "resources/ontology/crm_demo/objects_registry.json"
@@ -373,7 +373,7 @@ def test_export_scene_json_produces_valid_output(tmp_path):
 **Step 3: 运行测试**
 
 ```bash
-cd datacloud-data-service
+cd datacloud-data
 pytest tests/scripts/test_export_scene_json.py -v
 ```
 
@@ -391,13 +391,13 @@ git commit -m "test: add export_scene_json tests"
 ## Task 6: 生成示例输出并更新 README（可选）
 
 **Files:**
-- Create: `datacloud-data-service/resources/ontology/crm_demo/scene_01_data_analysis_full.json`（通过运行脚本生成）
-- Modify: `datacloud-data-service/README.md`（若有 scripts 说明则补充）
+- Create: `datacloud-data/resources/ontology/crm_demo/scene_01_data_analysis_full.json`（通过运行脚本生成）
+- Modify: `datacloud-data/README.md`（若有 scripts 说明则补充）
 
 **Step 1: 运行脚本生成 full JSON**
 
 ```bash
-cd datacloud-data-service
+cd datacloud-data
 python scripts/export_scene_json.py \
   --scene resources/ontology/crm_demo/scene_01_data_analysis.json \
   --registry resources/ontology/crm_demo/objects_registry.json \

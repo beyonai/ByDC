@@ -74,8 +74,8 @@
 ## Task B1: KbExecTask + PlanStep type=KB
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/executor/models.py`（新增 KbExecTask）
-- Modify: `src/datacloud_data_sdk/plan/models.py`（PlanStep 新增 query、tags 字段）
+- Modify: `src/datacloud_data/executor/models.py`（新增 KbExecTask）
+- Modify: `src/datacloud_data/plan/models.py`（PlanStep 新增 query、tags 字段）
 
 **Step 1:** 在 `executor/models.py` 新增 `KbExecTask(datasource_alias, query, tags, output_ref)`。
 
@@ -90,7 +90,7 @@
 ## Task B2: ExecutionObjectConverter 支持 KB
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/plan/execution_object_converter.py`
+- Modify: `src/datacloud_data/plan/execution_object_converter.py`
 
 **Step 1:** 在 `_convert_step` 中新增 `elif step.type == "KB"`，返回 `KbExecTask(...)`。
 
@@ -105,7 +105,7 @@
 ## Task B3: KbExecutor（KnowledgeBaseConnector）
 
 **Files:**
-- Create: `src/datacloud_data_sdk/executor/kb_executor.py`
+- Create: `src/datacloud_data/executor/kb_executor.py`
 
 **Step 1:** 创建 `KbExecutor`，接收 `kb_configs: dict[alias, {endpoint}]`，`execute(task: KbExecTask) -> list[dict]`。
 
@@ -122,8 +122,8 @@
 ## Task B4: Executor 集成 KbExecutor
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/executor/executor.py`
-- Modify: `src/datacloud_data_sdk/view.py`、`src/datacloud_data_sdk/object.py`（创建 KbExecutor 并传入）
+- Modify: `src/datacloud_data/executor/executor.py`
+- Modify: `src/datacloud_data/view.py`、`src/datacloud_data/object.py`（创建 KbExecutor 并传入）
 
 **Step 1:** Executor 新增 `kb_executor` 参数，在 `run` 中处理 `KbExecTask`。
 
@@ -140,8 +140,8 @@
 ## Task B5: PlanGenerator 支持 KB 步骤
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/plan/query_plan_generator.py`（LangGraphPlanGenerator 的 prompt）
-- Modify: `src/datacloud_data_sdk/plan/query_plan_generator.py`（MockPlanGenerator 支持 KB）
+- Modify: `src/datacloud_data/plan/query_plan_generator.py`（LangGraphPlanGenerator 的 prompt）
+- Modify: `src/datacloud_data/plan/query_plan_generator.py`（MockPlanGenerator 支持 KB）
 
 **Step 1:** 在 LLM prompt 中说明：当 ObjectView 含 source_type=KNOWLEDGE_BASE 时，可生成 type=KB 的 step，含 query、tags。
 
@@ -156,8 +156,8 @@
 ## Task B6: M4 单元测试
 
 **Files:**
-- Create: `tests/datacloud_data_sdk/test_kb_executor.py`
-- Modify: `tests/datacloud_data_sdk/test_execution_object_converter.py`（KB 步骤转换）
+- Create: `tests/datacloud_data/test_kb_executor.py`
+- Modify: `tests/datacloud_data/test_execution_object_converter.py`（KB 步骤转换）
 
 **Step 1:** 测试 ExecutionObjectConverter 将 type=KB 的 PlanStep 转为 KbExecTask。
 
