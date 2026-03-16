@@ -244,8 +244,8 @@ OntologyClass(
 Loader 支持多种加载方式（见《数据服务详细设计2.0》6.1.4.1）；此处以 `load_from_path` 为例：
 
 ```python
-from datacloud_data_sdk.ontology.loader import OntologyLoader
-from datacloud_data_sdk.context import InvocationContext
+from datacloud_data.ontology.loader import OntologyLoader
+from datacloud_data.context import InvocationContext
 
 # 1. 加载本体（也可用 load_from_service、load_from_content）
 loader = OntologyLoader()

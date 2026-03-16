@@ -1,4 +1,4 @@
-# datacloud-data-service
+# datacloud-data
 
 数据服务（Data Service）是 dataCloud 2.0 的核心服务之一，负责执行数据查询、返回数据结果，并提供行列权限控制。
 
@@ -104,7 +104,7 @@ Authorization: Bearer {token}
 ## 项目结构
 
 ```
-datacloud-data-service/
+datacloud-data/
 ├── README.md              # 本文件
 ├── requirements.txt       # Python依赖
 ├── .env.example          # 环境变量示例

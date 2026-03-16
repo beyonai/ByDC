@@ -1,4 +1,4 @@
-# datacloud-data-service & datacloud-data-sdk 设计修订
+# datacloud-data & datacloud-data-sdk 设计修订
 
 > **日期**：2026-03-07
 > **状态**：已确认
@@ -368,7 +368,7 @@ async def query(self, question: str) -> dict:
 
 ### 4.7 R9: 目录结构迁移
 
-删除 `src/datacloud_data_service/` 下的 SDK 子目录（ontology、plan、executor、aggregator、events、csv_storage、sql_executor），新建 `src/datacloud_data_sdk/` 及其子目录。`datacloud_data_service` 只保留 `api/` 和 `tools/`。
+删除 `src/datacloud_data_service/` 下的 SDK 子目录（ontology、plan、executor、aggregator、events、csv_storage、sql_executor），新建 `src/datacloud_data/` 及其子目录。`datacloud_data_service` 只保留 `api/` 和 `tools/`。
 
 ---
 
@@ -376,7 +376,7 @@ async def query(self, question: str) -> dict:
 
 ### 5.1 包设计
 
-- **公开 API 面**：`datacloud_data_sdk/__init__.py` 仅暴露 `OntologyLoader`、`View`、`Object`、`Action`、`Relation`、`InvocationContext`、`DatacloudError` 及子类
+- **公开 API 面**：`datacloud_data/__init__.py` 仅暴露 `OntologyLoader`、`View`、`Object`、`Action`、`Relation`、`InvocationContext`、`DatacloudError` 及子类
 - **可选依赖**：核心本体层零外部依赖；LangGraph / SQL 驱动 / httpx 为可选 extras
 - **抽象接口**：`BasePlanGenerator(ABC)`、`BaseAggregator(ABC)`、`BaseSourceConnector(ABC)` 允许替换实现
 
@@ -557,14 +557,14 @@ DatacloudError（基类）
 ## 7 修订后目录结构
 
 ```
-datacloud-data-service/
+datacloud-data/
 ├── resources/
 │   └── ontology/
 │       └── crm_demo/
 │           ├── objects_registry.json      # 标准格式
 │           └── scene_01_data_analysis.json
 ├── src/
-│   ├── datacloud_data_sdk/                # SDK 子包
+│   ├── datacloud_data/                # SDK 子包
 │   │   ├── __init__.py                    # 公开 API 面
 │   │   ├── context.py                     # InvocationContext
 │   │   ├── view.py                        # View 实体         ← 补全
@@ -641,7 +641,7 @@ datacloud-data-service/
 │           └── term_resolver.py
 │
 ├── tests/
-│   ├── datacloud_data_sdk/
+│   ├── datacloud_data/
 │   │   ├── test_exceptions.py
 │   │   ├── test_context.py
 │   │   ├── test_ontology_models.py

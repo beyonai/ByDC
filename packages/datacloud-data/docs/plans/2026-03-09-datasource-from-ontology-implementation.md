@@ -6,7 +6,7 @@
 
 **Architecture:** 方案 A（对象内嵌 source_config）。OntologyLoader 在 `load_from_content()` 完成后，遍历 `source_type=DB` 且含 `source_config` 的对象，提取并去重，产出 `dict[str, DataSourceConfig]`，写入 `LoaderConfig.datasource_configs`。routes 中若未传入 `datasource_configs`，则依赖 loader 内部产出；`datasources_yaml_path` 废弃。
 
-**Tech Stack:** Python 3.12, pydantic-settings, datacloud_data_sdk (OntologyLoader, DataSourceConfig, config_loader)
+**Tech Stack:** Python 3.12, pydantic-settings, datacloud_data (OntologyLoader, DataSourceConfig, config_loader)
 
 **Design Doc:** `docs/plans/2026-03-09-datasource-from-ontology-design.md`
 
@@ -15,8 +15,8 @@
 ## Task 1: OntologyClass 新增 source_config 字段
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/ontology/models.py`
-- Test: `tests/datacloud_data_sdk/test_ontology_loader.py`
+- Modify: `src/datacloud_data/ontology/models.py`
+- Test: `tests/datacloud_data/test_ontology_loader.py`
 
 **Step 1: Write the failing test**
 
@@ -53,7 +53,7 @@ def test_ontology_class_parses_source_config() -> None:
 
 **Step 2: Run test to verify it fails**
 
-Run: `cd datacloud-data-service && pytest tests/datacloud_data_sdk/test_ontology_loader.py::test_ontology_class_parses_source_config -v`
+Run: `cd datacloud-data && pytest tests/datacloud_data/test_ontology_loader.py::test_ontology_class_parses_source_config -v`
 Expected: FAIL (OntologyClass 无 source_config，或 loader 未解析)
 
 **Step 3: Implement**
@@ -64,13 +64,13 @@ Expected: FAIL (OntologyClass 无 source_config，或 loader 未解析)
 
 **Step 4: Run test**
 
-Run: `pytest tests/datacloud_data_sdk/test_ontology_loader.py::test_ontology_class_parses_source_config -v`
+Run: `pytest tests/datacloud_data/test_ontology_loader.py::test_ontology_class_parses_source_config -v`
 Expected: PASS
 
 **Step 5: Commit**
 
 ```bash
-git add src/datacloud_data_sdk/ontology/models.py src/datacloud_data_sdk/ontology/loader.py tests/datacloud_data_sdk/test_ontology_loader.py
+git add src/datacloud_data/ontology/models.py src/datacloud_data/ontology/loader.py tests/datacloud_data/test_ontology_loader.py
 git commit -m "feat(ontology): add source_config to OntologyClass and parse from objects"
 ```
 
@@ -79,9 +79,9 @@ git commit -m "feat(ontology): add source_config to OntologyClass and parse from
 ## Task 2: Loader 新增 _extract_datasource_configs_from_objects
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/ontology/loader.py`
-- Modify: `src/datacloud_data_sdk/sql_executor/config_loader.py`（确保 `_dict_to_config`、`_substitute_dict` 可被 ontology 模块调用）
-- Test: `tests/datacloud_data_sdk/test_ontology_loader.py`
+- Modify: `src/datacloud_data/ontology/loader.py`
+- Modify: `src/datacloud_data/sql_executor/config_loader.py`（确保 `_dict_to_config`、`_substitute_dict` 可被 ontology 模块调用）
+- Test: `tests/datacloud_data/test_ontology_loader.py`
 
 **Step 1: Write the failing test**
 
@@ -136,7 +136,7 @@ def test_extract_datasource_configs_from_objects() -> None:
 
 **Step 2: Run test**
 
-Run: `pytest tests/datacloud_data_sdk/test_ontology_loader.py::test_extract_datasource_configs_from_objects -v`
+Run: `pytest tests/datacloud_data/test_ontology_loader.py::test_extract_datasource_configs_from_objects -v`
 Expected: FAIL
 
 **Step 3: Implement**
@@ -146,7 +146,7 @@ Expected: FAIL
 ```python
 def _extract_datasource_configs_from_objects(self) -> dict[str, Any]:
     """从 source_type=DB 且含 source_config 的对象提取 DataSourceConfig，按 alias 去重。"""
-    from datacloud_data_sdk.sql_executor.config_loader import (
+    from datacloud_data.sql_executor.config_loader import (
         _dict_to_config,
         _substitute_dict,
     )
@@ -171,7 +171,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add src/datacloud_data_sdk/ontology/loader.py tests/datacloud_data_sdk/test_ontology_loader.py
+git add src/datacloud_data/ontology/loader.py tests/datacloud_data/test_ontology_loader.py
 git commit -m "feat(ontology): add _extract_datasource_configs_from_objects"
 ```
 
@@ -180,8 +180,8 @@ git commit -m "feat(ontology): add _extract_datasource_configs_from_objects"
 ## Task 3: load_from_content 完成后自动注入 datasource_configs
 
 **Files:**
-- Modify: `src/datacloud_data_sdk/ontology/loader.py`
-- Test: `tests/datacloud_data_sdk/test_ontology_loader.py`
+- Modify: `src/datacloud_data/ontology/loader.py`
+- Test: `tests/datacloud_data/test_ontology_loader.py`
 
 **Step 1: Write the failing test**
 
@@ -238,7 +238,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add src/datacloud_data_sdk/ontology/loader.py tests/datacloud_data_sdk/test_ontology_loader.py
+git add src/datacloud_data/ontology/loader.py tests/datacloud_data/test_ontology_loader.py
 git commit -m "feat(ontology): auto-inject datasource_configs after load_from_content"
 ```
 
@@ -331,8 +331,8 @@ git commit -m "feat(ontology): add source_config to DB objects in crm_demo"
 ## Task 6: 更新 .env.example 和 README
 
 **Files:**
-- Modify: `datacloud-data-service/.env.example`
-- Modify: `datacloud-data-service/README.md`
+- Modify: `datacloud-data/.env.example`
+- Modify: `datacloud-data/README.md`
 
 **Step 1: 移除 DC_DATASOURCES_YAML_PATH**
 
@@ -356,7 +356,7 @@ git commit -m "docs: update config docs for datasource-from-ontology"
 **Files:**
 - Modify: `tests/datacloud_data_service/test_rest_query.py`
 - Modify: `tests/datacloud_data_service/test_skills_api.py`
-- Modify: `tests/datacloud_data_sdk/integration/test_query_pipeline_integration.py`
+- Modify: `tests/datacloud_data/integration/test_query_pipeline_integration.py`
 - Modify: `tests/e2e/test_crm_scenarios.py`
 
 **Step 1: 检查各测试**
