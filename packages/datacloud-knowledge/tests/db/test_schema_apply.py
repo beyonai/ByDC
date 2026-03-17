@@ -50,24 +50,28 @@ def _split_sql_statements(sql_content: str) -> list[str]:
     return statements
 
 
-def _execute_ddl_directory(conn: psycopg2.extensions.connection, ddl_dir: Path) -> None:
-    for sql_path in sorted(ddl_dir.glob("*.sql")):
-        sql_content = sql_path.read_text(encoding="utf-8")
-        for statement in _split_sql_statements(sql_content):
-            with conn.cursor() as cur:
-                cur.execute(statement)
+def _execute_sql_file(conn: psycopg2.extensions.connection, sql_path: Path) -> None:
+    """Execute all statements in a single SQL file."""
+    sql_content = sql_path.read_text(encoding="utf-8")
+    for statement in _split_sql_statements(sql_content):
+        with conn.cursor() as cur:
+            cur.execute(statement)
 
 
-@pytest.mark.db_integration
-def test_database_connectivity(db_config: dict[str, str | int]) -> None:
-    """Test that target database can be connected."""
-    conn = psycopg2.connect(
+def _connect(db_config: dict[str, str | int]) -> psycopg2.extensions.connection:
+    return psycopg2.connect(
         host=db_config["host"],
         port=db_config["port"],
         user=db_config["user"],
         password=db_config["password"],
         dbname=db_config["database"],
     )
+
+
+@pytest.mark.db_integration
+def test_database_connectivity(db_config: dict[str, str | int]) -> None:
+    """Test that target database can be connected."""
+    conn = _connect(db_config)
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT 1")
@@ -80,30 +84,51 @@ def test_database_connectivity(db_config: dict[str, str | int]) -> None:
 def test_apply_ddl_and_verify_tables(
     db_config: dict[str, str | int], ddl_dir: Path
 ) -> None:
-    """Apply DDL under whale_datacloud and verify expected tables."""
-    conn = psycopg2.connect(
-        host=db_config["host"],
-        port=db_config["port"],
-        user=db_config["user"],
-        password=db_config["password"],
-        dbname=db_config["database"],
-    )
+    """Drop existing schema objects then create all tables, verify expected set.
+
+    Two-phase approach:
+    - Phase 1 (autocommit=True):  execute 00_create_schema.sql to drop old tables
+      and ensure the schema exists; committed immediately so cleanup is guaranteed.
+    - Phase 2 (transaction):      execute remaining DDL files (01_..99_) to create
+      tables; rolled back atomically if any statement fails.
+    """
+    sql_files = sorted(ddl_dir.glob("*.sql"))
+    init_files = [p for p in sql_files if p.name.startswith("00_")]
+    ddl_files = [p for p in sql_files if not p.name.startswith("00_")]
+
+    # Phase 1: cleanup — autocommit so DROP is committed regardless of later failures
+    conn = _connect(db_config)
+    try:
+        conn.autocommit = True
+        for sql_path in init_files:
+            _execute_sql_file(conn, sql_path)
+    finally:
+        conn.close()
+
+    # Phase 2: create — single transaction; rolls back to empty schema on failure
+    conn = _connect(db_config)
     try:
         conn.autocommit = False
-        _execute_ddl_directory(conn, ddl_dir)
+        for sql_path in ddl_files:
+            _execute_sql_file(conn, sql_path)
         conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
+    # Verify
+    conn = _connect(db_config)
+    try:
         with conn.cursor() as cur:
             cur.execute(
-                """
-                SELECT table_name
-                FROM information_schema.tables
-                WHERE table_schema = %s
-                """,
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = %s",
                 (db_config["schema"],),
             )
             existing = {row[0] for row in cur.fetchall()}
-        missing = sorted(EXPECTED_TABLES - existing)
-        assert not missing, f"missing tables in {db_config['schema']}: {', '.join(missing)}"
     finally:
         conn.close()
+
+    missing = sorted(EXPECTED_TABLES - existing)
+    assert not missing, f"missing tables in {db_config['schema']}: {', '.join(missing)}"
