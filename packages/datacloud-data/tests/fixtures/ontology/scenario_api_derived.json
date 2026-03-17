@@ -1,0 +1,145 @@
+{
+  "objects": [
+    {
+      "object_code": "customer",
+      "object_name": "客户",
+      "description": "API 客户对象，含 opportunity_count 派生聚合",
+      "source_type": "API",
+      "fields": [
+        {
+          "field_code": "customer_id",
+          "field_name": "客户ID",
+          "field_type": "STRING"
+        },
+        {
+          "field_code": "opportunity_count",
+          "field_name": "商机数量",
+          "field_type": "INTEGER",
+          "property_kind": "derived",
+          "derived_config": {
+            "mode": "aggregation",
+            "relation_ref": "customer_has_opportunities",
+            "func": "count",
+            "target_field": "id"
+          }
+        }
+      ],
+      "actions": [
+        {
+          "action_code": "query_customers",
+          "action_name": "查询客户列表",
+          "description": "查询所有客户",
+          "action_type": "query",
+          "params": [],
+          "function_refs": ["fn_query_customers"]
+        },
+        {
+          "action_code": "query_opportunities_by_customer",
+          "action_name": "按客户查商机",
+          "description": "根据客户ID查询商机列表",
+          "action_type": "query",
+          "params": [
+            {
+              "param_code": "customerId",
+              "param_name": "客户ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true
+            }
+          ],
+          "function_refs": ["fn_query_opportunities_by_customer"]
+        }
+      ]
+    },
+    {
+      "object_code": "opportunity",
+      "object_name": "商机",
+      "description": "API 商机对象",
+      "source_type": "API",
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "主键ID",
+          "field_type": "INTEGER"
+        },
+        {
+          "field_code": "amount",
+          "field_name": "金额",
+          "field_type": "NUMBER"
+        },
+        {
+          "field_code": "customer_id",
+          "field_name": "客户ID",
+          "field_type": "STRING"
+        }
+      ],
+      "actions": []
+    }
+  ],
+  "relations": [
+    {
+      "relation_code": "customer_has_opportunities",
+      "relation_name": "客户拥有商机",
+      "source_class": "customer",
+      "target_class": "opportunity",
+      "relation_type": "ONE_TO_MANY",
+      "resolve_action_code": "query_opportunities_by_customer",
+      "resolve_param_binding": {
+        "source_field": "customer_id",
+        "action_param": "customerId"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "function_code": "fn_query_customers",
+      "function_name": "查询客户",
+      "description": "查询客户列表",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {"title": "查询客户", "version": "1.0.0"},
+        "servers": [{"url": "http://127.0.0.1:8001"}],
+        "paths": {
+          "/api/v1/customers": {
+            "get": {
+              "summary": "查询客户列表",
+              "responses": {"200": {"description": "客户列表"}}
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_query_opportunities_by_customer",
+      "function_name": "按客户查商机",
+      "description": "根据客户ID查询商机列表",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {"title": "按客户查商机", "version": "1.0.0"},
+        "servers": [{"url": "http://127.0.0.1:8001"}],
+        "paths": {
+          "/api/v1/opportunities": {
+            "post": {
+              "summary": "按客户ID查商机",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {"customerId": {"type": "string"}},
+                      "required": ["customerId"]
+                    }
+                  }
+                }
+              },
+              "responses": {"200": {"description": "商机列表"}}
+            }
+          }
+        }
+      }
+    }
+  ]
+}
