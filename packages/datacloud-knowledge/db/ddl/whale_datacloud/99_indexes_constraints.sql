@@ -49,7 +49,7 @@ CREATE INDEX IF NOT EXISTS idx_tk_summary_fts
 
 CREATE INDEX IF NOT EXISTS idx_tk_desc_fts
     ON whale_datacloud.term_knowledge
-    USING GIN (to_tsvector('simple', COALESCE(desc, '')));
+    USING GIN (to_tsvector('simple', COALESCE("desc", '')));
 
 CREATE INDEX IF NOT EXISTS idx_tk_ext_doc
     ON whale_datacloud.term_knowledge(ext_system, ext_kb_id, ext_doc_id)
