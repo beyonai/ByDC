@@ -69,7 +69,7 @@ def test_wang_xiaoming():
     print("=" * 70)
     
     # 获取数据文件路径
-    data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+    data_dir = os.path.join(os.path.dirname(__file__), '..', 'examples/crm/data')
     graph_files = [
         os.path.join(data_dir, 'terms', 'base.json'),
         os.path.join(data_dir, 'terms', 'crm.json'),
