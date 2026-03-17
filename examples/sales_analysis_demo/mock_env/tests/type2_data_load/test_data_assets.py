@@ -8,6 +8,7 @@ from pathlib import Path
 import psycopg2
 import pytest
 from dotenv import dotenv_values
+from psycopg2 import errors
 from psycopg2.extras import execute_values
 from psycopg2 import sql
 
@@ -15,38 +16,110 @@ from psycopg2 import sql
 @pytest.mark.type2_data
 @pytest.mark.integration
 def test_init_po_organization_to_crm_demo(mock_env_root) -> None:
-    csv_path = Path(mock_env_root) / "resource" / "data" / "org" / "po_organization.csv"
-    _load_csv_into_table(csv_path, "crm_demo", "po_organization")
+    _init_table_from_csv(mock_env_root, "po_organization")
 
 
 @pytest.mark.type2_data
 @pytest.mark.integration
 def test_init_po_users_organization_to_crm_demo(mock_env_root) -> None:
-    csv_path = (
-        Path(mock_env_root) / "resource" / "data" / "org" / "po_users_organization.csv"
-    )
-    _load_csv_into_table(csv_path, "crm_demo", "po_users_organization")
+    _init_table_from_csv(mock_env_root, "po_users_organization")
 
 
 @pytest.mark.type2_data
 @pytest.mark.integration
 def test_init_po_users_to_crm_demo(mock_env_root) -> None:
-    csv_path = Path(mock_env_root) / "resource" / "data" / "org" / "po_users.csv"
-    _load_csv_into_table(csv_path, "crm_demo", "po_users")
+    _init_table_from_csv(mock_env_root, "po_users")
 
 
 @pytest.mark.type2_data
 @pytest.mark.integration
 def test_init_todo_items_to_crm_demo(mock_env_root) -> None:
-    csv_path = Path(mock_env_root) / "resource" / "data" / "todo" / "todo_items.csv"
-    _load_csv_into_table(csv_path, "crm_demo", "todo_items")
+    _init_table_from_csv(mock_env_root, "todo_items")
 
 
 @pytest.mark.type2_data
 @pytest.mark.integration
 def test_init_todo_item_handlers_to_crm_demo(mock_env_root) -> None:
-    csv_path = Path(mock_env_root) / "resource" / "data" / "todo" / "todo_item_handlers.csv"
-    _load_csv_into_table(csv_path, "crm_demo", "todo_item_handlers")
+    _init_table_from_csv(mock_env_root, "todo_item_handlers")
+
+
+@pytest.mark.type2_data
+@pytest.mark.integration
+def test_init_po_users_kpi_completion_to_crm_demo(mock_env_root) -> None:
+    _init_table_from_csv(mock_env_root, "po_users_kpi_completion")
+
+
+@pytest.mark.type2_data
+@pytest.mark.integration
+def test_init_po_users_kpi_summary_to_crm_demo(mock_env_root) -> None:
+    _init_table_from_csv(mock_env_root, "po_users_kpi_summary")
+
+
+@pytest.mark.type2_data
+@pytest.mark.integration
+def test_init_sales_bo_status_change_to_crm_demo(mock_env_root) -> None:
+    _init_table_from_csv(mock_env_root, "sales_bo_status_change")
+
+
+@pytest.mark.type2_data
+@pytest.mark.integration
+def test_init_sales_business_opportunity_to_crm_demo(mock_env_root) -> None:
+    _init_table_from_csv(mock_env_root, "sales_business_opportunity")
+
+
+@pytest.mark.type2_data
+@pytest.mark.integration
+def test_init_sales_customer_to_crm_demo(mock_env_root) -> None:
+    _init_table_from_csv(mock_env_root, "sales_customer")
+
+
+@pytest.mark.type2_data
+@pytest.mark.integration
+def test_init_sales_daily_report_to_crm_demo(mock_env_root) -> None:
+    _init_table_from_csv(mock_env_root, "sales_daily_report")
+
+
+@pytest.mark.type2_data
+@pytest.mark.integration
+def test_init_sales_emp_attendance_to_crm_demo(mock_env_root) -> None:
+    _init_table_from_csv(mock_env_root, "sales_emp_attendance")
+
+
+@pytest.mark.type2_data
+@pytest.mark.integration
+def test_init_sales_expense_report_to_crm_demo(mock_env_root) -> None:
+    _init_table_from_csv(mock_env_root, "sales_expense_report")
+
+
+@pytest.mark.type2_data
+@pytest.mark.integration
+def test_init_sales_meeting_note_to_crm_demo(mock_env_root) -> None:
+    _init_table_from_csv(mock_env_root, "sales_meeting_note")
+
+
+@pytest.mark.type2_data
+@pytest.mark.integration
+def test_init_sales_org_kpi_completion_to_crm_demo(mock_env_root) -> None:
+    _init_table_from_csv(mock_env_root, "sales_org_kpi_completion")
+
+
+@pytest.mark.type2_data
+@pytest.mark.integration
+def test_init_sales_org_kpi_summary_to_crm_demo(mock_env_root) -> None:
+    _init_table_from_csv(mock_env_root, "sales_org_kpi_summary")
+
+
+@pytest.mark.type2_data
+@pytest.mark.integration
+def test_init_sales_person_kpi_summary_to_crm_demo(mock_env_root) -> None:
+    _init_table_from_csv(mock_env_root, "sales_person_kpi_summary")
+
+
+def _init_table_from_csv(mock_env_root: Path, table: str) -> None:
+    mock_env_root = Path(mock_env_root)
+    csv_path = _find_csv_for_table(mock_env_root, table)
+    assert csv_path is not None, f"csv not found for table {table} under resource/data"
+    _load_csv_into_table(csv_path, "crm_demo", table)
 
 
 def _load_csv_into_table(csv_path: Path, schema: str, table: str) -> None:
@@ -67,11 +140,17 @@ def _load_csv_into_table(csv_path: Path, schema: str, table: str) -> None:
             cur.execute(
                 sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(schema))
             )
-            cur.execute(
-                sql.SQL("TRUNCATE TABLE {}.{} CASCADE").format(
-                    sql.Identifier(schema), sql.Identifier(table)
+            try:
+                cur.execute(
+                    sql.SQL("TRUNCATE TABLE {}.{} CASCADE").format(
+                        sql.Identifier(schema), sql.Identifier(table)
+                    )
                 )
-            )
+            except errors.UndefinedTable as exc:
+                raise AssertionError(
+                    f"target table {schema}.{table} does not exist. "
+                    "Run type1_db_schema DDL initialization before type2 data load."
+                ) from exc
             columns = _read_csv_header(csv_path)
             rows = _read_normalized_csv_rows(csv_path, len(columns))
             insert_sql = sql.SQL("INSERT INTO {}.{} ({}) VALUES %s").format(
@@ -140,3 +219,10 @@ def _read_normalized_csv_rows(csv_path: Path, expected_columns: int) -> list[lis
                 raw_row = raw_row[:expected_columns]
             rows.append([None if value == "" else value for value in raw_row])
     return rows
+
+
+def _find_csv_for_table(mock_env_root: Path, table: str) -> Path | None:
+    matches = sorted((mock_env_root / "resource" / "data").rglob(f"{table}.csv"))
+    if not matches:
+        return None
+    return matches[0]
