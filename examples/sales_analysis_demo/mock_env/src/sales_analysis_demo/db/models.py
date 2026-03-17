@@ -146,7 +146,7 @@ class SalesExpenseReport(Base):
     """费用报备表 public.sales_expense_report."""
 
     __tablename__ = "sales_expense_report"
-    __table_args__ = {"schema": "public"}
+    __table_args__ = {"schema": "crm_demo"}
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     applicant_emp_no: Mapped[str] = mapped_column(String(32), nullable=False)
