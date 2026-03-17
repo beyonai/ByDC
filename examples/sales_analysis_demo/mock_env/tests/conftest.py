@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from dotenv import dotenv_values
 
 
 def _mock_env_root() -> Path:
@@ -17,6 +18,23 @@ ROOT = _mock_env_root()
 SRC_PATH = ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
+
+
+def _load_test_env_defaults() -> None:
+    repo_root = ROOT.parent.parent.parent
+    candidates = (
+        repo_root / ".vscode" / ".env.test",
+        ROOT / ".env.test",
+    )
+    for env_file in candidates:
+        if not env_file.exists():
+            continue
+        for key, value in dotenv_values(env_file).items():
+            if key and value is not None and key not in os.environ:
+                os.environ[key] = value
+
+
+_load_test_env_defaults()
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -34,18 +52,27 @@ def mock_env_root() -> Path:
 
 
 @pytest.fixture(scope="session")
-def ddl_sql_path(mock_env_root: Path) -> Path:
-    return mock_env_root / "db" / "crm_demo" / "sql" / "DDL.sql"
-
-
-@pytest.fixture(scope="session")
 def resource_data_dir(mock_env_root: Path) -> Path:
-    return mock_env_root / "resource" / "data" / "crm_demo"
+    candidates = (
+        mock_env_root / "resource" / "data",
+        mock_env_root / "resource" / "data" / "crm_demo",
+    )
+    for path in candidates:
+        if path.exists():
+            return path
+    return candidates[0]
 
 
 @pytest.fixture(scope="session")
 def resource_knowledge_dir(mock_env_root: Path) -> Path:
-    return mock_env_root / "resource" / "knowledge" / "crm_demo"
+    candidates = (
+        mock_env_root / "resource" / "knowledge",
+        mock_env_root / "resource" / "knowledge" / "crm_demo",
+    )
+    for path in candidates:
+        if path.exists():
+            return path
+    return candidates[0]
 
 
 @pytest.fixture(scope="session")
