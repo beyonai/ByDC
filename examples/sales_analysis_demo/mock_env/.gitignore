@@ -1,5 +1,5 @@
 # 本体构建输出（自包含 JSON，由 build.py 生成）
-ontology/crm_demo/dist/
+resource/knowledge/crm_demo/ontology/dist/
 
 # 错误日志（调试用）
 error.log
