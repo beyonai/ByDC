@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS whale_datacloud.term_library (
+    library_id VARCHAR(64) NOT NULL PRIMARY KEY,
+    library_name VARCHAR(255) NOT NULL,
+    created_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
