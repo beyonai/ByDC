@@ -33,6 +33,7 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "httpx>=0.27",
+    "psycopg2-binary>=2.9",
 ]
 
 [project.scripts]
@@ -44,9 +45,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sales_analysis_demo"]
-
-[tool.uv]
-default-groups = ["dev"]
 
 # ============================================
 # Ruff 配置
