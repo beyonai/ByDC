@@ -1,4 +1,4 @@
-# datacloud-mock
+# sales-analysis-demo
 
 DataCloud Mock 是 dataCloud 2.0 的**数据仿真系统**，用于提供 API Mock 响应、数据示例与本体等，支撑开发与联调。
 
@@ -13,46 +13,41 @@ DataCloud Mock 是 dataCloud 2.0 的**数据仿真系统**，用于提供 API Mo
 
 按「文档 / 本体 / 服务代码 / 测试」分离，子系统在各自顶层目录下再分子目录。
 
-```
-datacloud-mock/
+```text
+sales-analysis-demo/
 ├── README.md                 # 本说明
 ├── pyproject.toml            # 项目与依赖
 │
-├── mock-resource/            # 仿真资源（数据、本体、术语统一入口）
-│   ├── data/                 # 数据（CSV、配置等，按子系统分子目录）
+├── resource/                 # 仿真资源统一入口（结构化数据、知识、非结构化数据）
+│   ├── data/                 # 结构化业务数据（表数据、CSV/SQL）
 │   │   └── crm_demo/
 │   │       └── ...
-│   ├── ontology/             # 本体知识（OWL 等，按子系统分子目录）
+│   ├── knowledge/            # 知识资源（本体 + 术语）
 │   │   └── crm_demo/
-│   │       └── ...
-│   └── terminology/          # 术语知识（术语表、词典等）
+│   │       ├── ontology/
+│   │       └── terminology/
+│   └── files/                # 非结构化数据（文档、附件、原始文件）
 │       └── ...
 │
 ├── docs/                     # 文档（按子系统分子文件夹）
 │   └── crm_demo/             # 示例：CRM 演示子系统文档
 │       └── *.md
 │
-├── ontology/                 # 本体（按子系统分子文件夹，再按 common / modules）
-│   └── crm_demo/
-│       ├── common/           # 公共本体
-│       │   └── *.owl
-│       └── modules/          # 模块本体（注意是 modules 不是 moduels）
-│           └── *.owl
+├── data_tools/               # 资源加工脚本（数据修正、生成、本体处理）
+│   └── *.py
+│
+├── scripts/                  # 运行脚本（启动、初始化、测试）
+│   └── *.sh
 │
 ├── src/
-│   └── datacloud_mock/       # 仿真服务代码（包名：下划线）
+│   └── sales_analysis_demo/  # 仿真服务代码（包名：下划线）
 │       ├── __init__.py
 │       ├── main.py           # 服务总入口（FastAPI app）
-│       └── crm_demo/         # 示例：CRM 演示子系统
-│           ├── __init__.py
-│           ├── apis/         # 该子系统的 API 路由
-│           │   └── __init__.py
-│           └── data_init/    # 数据初始化脚本（建议用下划线，便于 import）
-│               └── __init__.py
-│
-├── data/                     # 数据文件（CSV、配置等，可按子系统分子目录）
-│   └── crm_demo/
-│       └── ...
+│       ├── apis/             # API 路由
+│       │   └── __init__.py
+│       ├── db/               # 数据库访问层
+│       │   └── __init__.py
+│       └── notice.py         # 业务通知逻辑
 │
 └── tests/                    # 测试用例（按子系统分子目录）
     └── crm_demo/
@@ -61,22 +56,22 @@ datacloud-mock/
 
 ### Python 工程上的建议
 
-- **包与目录名**：Python 包名用**下划线**（如 `data_init`），不要用连字符（`data-init` 不能作为包导入）。
-- **服务入口**：统一从 `src/datacloud_mock/main.py` 的 FastAPI `app` 启动；各子系统的路由在 `main.py` 中挂载（mount 或 include_router）。
+- **包与目录名**：Python 包名用**下划线**（如 `sales_analysis_demo`），不要用连字符（`sales-analysis-demo` 不能作为包导入）。
+- **服务入口**：统一从 `src/sales_analysis_demo/main.py` 的 FastAPI `app` 启动；各子系统的路由在 `main.py` 中挂载（mount 或 include_router）。
 
 ---
 
-## mock-resource（仿真资源）
+## resource（仿真资源）
 
-仿真资源统一放在 **`mock-resource/`** 下，按用途分为三个子目录：
+仿真资源统一放在 **`resource/`** 下，按用途分为三个子目录：
 
 | 目录 | 用途 |
-|------|------|
-| **mock-resource/data** | 放数据（CSV、配置等，可按子系统如 `crm_demo` 再分子目录） |
-| **mock-resource/ontology** | 放本体知识（OWL 等本体文件，按子系统分子目录） |
-| **mock-resource/terminology** | 放术语知识（术语表、词典等） |
+| ------ | ------ |
+| **resource/data** | 放结构化数据（业务表数据、CSV、导入 SQL 等，可按子系统如 `crm_demo` 再分子目录） |
+| **resource/knowledge** | 放知识（本体 ontology + 术语 terminology，按子系统分子目录） |
+| **resource/files** | 放非结构化数据文件（文档、附件、原始文件等） |
 
-服务与脚本在引用数据、本体或术语时，可优先从 `mock-resource` 对应子目录读取。
+服务与脚本统一从 `resource` 下读取，避免多入口路径。
 
 ---
 
@@ -118,25 +113,24 @@ mkdir -p ontology/crm_demo/modules
 
 ---
 
-## 3. 服务代码（src/datacloud_mock）
+## 3. 服务代码（src/sales_analysis_demo）
 
-- **用途**：仿真的 API 与数据初始化逻辑，可被 `main.py` 统一启动。
+- **用途**：仿真的 API 服务逻辑，可被 `main.py` 统一启动。
 - **规则**：
-  - 包根目录：`src/datacloud_mock/`
+  - 包根目录：`src/sales_analysis_demo/`
   - **总入口**：`main.py`，其中创建 FastAPI `app`，并挂载各子系统的路由。
-  - 按子系统分子包：`datacloud_mock/<子系统名>/`，如 `crm_demo/`
-  - 每个子系统下建议：
-    - `apis/`：该子系统的接口（Blueprint/Router），在 `main.py` 中挂载。
-    - `data_init/`：数据初始化脚本（建表、导入 CSV 等）；若需被其他代码 import，目录名用下划线 `data_init`。
+  - 推荐直接在 `sales_analysis_demo/` 下分层：
+    - `apis/`：接口（Blueprint/Router），在 `main.py` 中挂载。
+    - `db/`：数据库连接与模型。
+    - 初始化逻辑统一放在 `scripts/` 与 `tests/`，避免耦合到服务运行时包。
 
 **创建示例**：
 
 ```bash
-mkdir -p src/datacloud_mock/crm_demo/apis
-mkdir -p src/datacloud_mock/crm_demo/data_init
-touch src/datacloud_mock/crm_demo/__init__.py
-touch src/datacloud_mock/crm_demo/apis/__init__.py
-touch src/datacloud_mock/crm_demo/data_init/__init__.py
+mkdir -p src/sales_analysis_demo/apis
+mkdir -p src/sales_analysis_demo/db
+touch src/sales_analysis_demo/apis/__init__.py
+touch src/sales_analysis_demo/db/__init__.py
 ```
 
 在 `main.py` 中挂载子系统路由示例：
@@ -144,9 +138,9 @@ touch src/datacloud_mock/crm_demo/data_init/__init__.py
 ```python
 # 在 main.py 中
 from fastapi import FastAPI
-from datacloud_mock.crm_demo.apis import router as crm_router
+from sales_analysis_demo.apis import router as crm_router
 
-app = FastAPI(title="datacloud-mock")
+app = FastAPI(title="sales-analysis-demo")
 app.include_router(crm_router, prefix="/crm_demo", tags=["crm_demo"])
 ```
 
@@ -157,23 +151,28 @@ app.include_router(crm_router, prefix="/crm_demo", tags=["crm_demo"])
 - **用途**：单测、接口测试等。
 - **规则**：
   - 根目录：`tests/`
-  - 按子系统：`tests/<子系统名>/`，如 `tests/crm_demo/`
+  - 按测试类型或模块分组：如 `tests/type1_db_schema/`、`tests/type3_api_service/`
   - 测试文件命名：`test_*.py`，便于 pytest 自动发现。
 
 **创建示例**：
 
 ```bash
-mkdir -p tests/crm_demo
+mkdir -p tests/type1_db_schema
 # 添加 test_xxx.py
 ```
 
 ---
 
-## 5. 数据文件（data）
+## 5. 结构化数据（resource/data）
 
-- **用途**：CSV 示例、配置等，与代码分离。
-- **规则**：可按子系统建 `data/<子系统名>/`，其下再按业务或模块分子目录。
-- **推荐**：仿真数据优先放在 **`mock-resource/data/`**，与本体、术语统一管理（参见 [mock-resource（仿真资源）](#mock-resource仿真资源)）。
+- **用途**：结构化业务数据（CSV、导入 SQL 等），与代码分离。
+- **规则**：按子系统建 `resource/data/<子系统名>/`，其下再按业务或模块分子目录。
+- **推荐**：数据、本体、术语统一放 `resource` 下管理（参见 [resource（仿真资源）](#resource仿真资源)）。
+
+## 6. 非结构化数据（resource/files）
+
+- **用途**：文档、附件、原始文件等非结构化数据。
+- **规则**：按场景或主题分子目录组织，避免与结构化表数据混放。
 
 ---
 
@@ -184,7 +183,7 @@ mkdir -p tests/crm_demo
 ```bash
 # 在仓库根目录（含 pyproject.toml 的目录）
 uv sync
-uv run uvicorn datacloud_mock.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn sales_analysis_demo.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 - 默认地址：<http://127.0.0.1:8000>
@@ -195,16 +194,29 @@ uv run uvicorn datacloud_mock.main:app --reload --host 0.0.0.0 --port 8000
 若在 `main.py` 中写了 `if __name__ == "__main__": uvicorn.run(app, ...)`，则：
 
 ```bash
-uv run python -m datacloud_mock.main
+uv run python -m sales_analysis_demo.main
 ```
 
 ### 方式三：命令行入口（若已配置 pyproject scripts）
 
 ```bash
-uv run datacloud-mock
+uv run sales-analysis-demo
 ```
 
-（当前 `pyproject.toml` 中配置为 `datacloud_mock.cli:main`，若未实现 `cli.py` 则此命令可能不可用，以方式一为准。）
+（当前 `pyproject.toml` 中配置为 `sales_analysis_demo.cli:main`，若未实现 `cli.py` 则此命令可能不可用，以方式一为准。）
+
+### 方式四：使用 scripts 目录脚本
+
+```bash
+# 初始化/刷新资源
+bash scripts/bootstrap_resources.sh
+
+# 启动 mock API
+bash scripts/start_mock_api.sh
+
+# 执行 mock_env 测试
+bash scripts/run_mock_tests.sh
+```
 
 ---
 
@@ -215,7 +227,7 @@ uv run datacloud-mock
 uv sync
 
 # 启动服务（任选一种）
-uv run uvicorn datacloud_mock.main:app --reload --port 8000
+uv run uvicorn sales_analysis_demo.main:app --reload --port 8000
 
 # 运行测试
 uv run pytest tests/ -v
