@@ -256,17 +256,17 @@ def main():
     if os.path.isfile(p):
         all_changes["sales_business_opportunity"] = fix_csv_bo(p, ctx)
     # 2) 合同
-    p = os.path.join(CRM, "sales_person_kpi_detail.csv")
+    p = os.path.join(CRM, "sales_person_kpi_summary.csv")
     if os.path.isfile(p):
-        all_changes["sales_person_kpi_detail"] = fix_csv_kpi_detail(p, ctx)
+        all_changes["sales_person_kpi_summary"] = fix_csv_kpi_detail(p, ctx)
     # 3) 客户
     p = os.path.join(CRM, "sales_customer.csv")
     if os.path.isfile(p):
         all_changes["sales_customer"] = fix_csv_customer(p, ctx)
     # 4) 个人KPI
-    p = os.path.join(CRM, "sales_person_kpi_summary.csv")
+    p = os.path.join(CRM, "po_users_kpi_summary.csv")
     if os.path.isfile(p):
-        all_changes["sales_person_kpi_summary"] = fix_csv_kpi_summary(p, ctx)
+        all_changes["po_users_kpi_summary"] = fix_csv_kpi_summary(p, ctx)
     # 5) 组织KPI
     p = os.path.join(CRM, "sales_org_kpi_summary.csv")
     if os.path.isfile(p):
