@@ -174,6 +174,18 @@ datacloud-knowledge-service/
 - [知识服务模块设计](../../story/V202602/feature_datacloud2.0设计/知识服务_模块设计/知识服务_模块设计.md)
 - [dataCloud 2.0 概要设计](../../story/V202602/feature_datacloud2.0设计/dataCloud2.0概要设计.md)
 
+## 数据库资产管理
+
+`datacloud-knowledge-service` 在包内维护 `whale_datacloud` 模式下的数据库资产：
+
+- `db/er/whale_datacloud.mmd`：ER 关系图（Mermaid）
+- `db/ddl/whale_datacloud/*.sql`：按顺序执行的 DDL
+- `db/scripts/apply_whale_datacloud.py`：执行 DDL
+- `db/scripts/verify_whale_datacloud.py`：校验核心表
+- `tests/db/test_schema_apply.py`：数据库连接与 DDL 应用测试
+
+使用方式见 `db/README.md`。
+
 ## 许可证
 
 MIT License
