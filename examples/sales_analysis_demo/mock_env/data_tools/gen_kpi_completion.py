@@ -9,7 +9,7 @@ from collections import defaultdict
 BASE = os.path.join(
     os.path.dirname(__file__), "..", "resource", "data", "crm_demo", "modules", "crm"
 )
-DETAIL_PATH = os.path.join(BASE, "sales_person_kpi_detail.csv")
+DETAIL_PATH = os.path.join(BASE, "sales_person_kpi_summary.csv")
 USER_COMPLETION_PATH = os.path.join(BASE, "po_users_kpi_completion.csv")
 ORG_COMPLETION_PATH = os.path.join(BASE, "sales_org_kpi_completion.csv")
 
