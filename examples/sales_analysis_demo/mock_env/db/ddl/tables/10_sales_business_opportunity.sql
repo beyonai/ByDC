@@ -15,7 +15,7 @@ CREATE TABLE crm_demo.sales_business_opportunity (
 	iwhale_cbm_name varchar(32) NOT NULL, -- 商机负责人名称
 	iwhale_cbm_org_id varchar(32) NULL DEFAULT NULL::character varying, -- 商机负责人组织
 	software_income_time date NULL, -- 软收计入时间
-	it_investment_scale varchar(32) NOT NULL, -- 客户IT投资规模（万元）
+	it_investment_scale varchar(32) NULL, -- 客户IT投资规模（万元）
 	win_bid int2 NOT NULL, -- 是否中标：1为中标，0为未中标
 	iwhale_sc_emp_no varchar(32) NULL DEFAULT NULL::character varying, -- 支撑sc工号
 	iwhale_sc_name varchar(32) NULL DEFAULT NULL::character varying, -- 浩鲸sc名称
