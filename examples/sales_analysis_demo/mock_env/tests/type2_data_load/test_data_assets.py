@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import traceback
 from pathlib import Path
 
 import psycopg2
@@ -158,15 +159,32 @@ def _load_csv_into_table(csv_path: Path, schema: str, table: str) -> None:
                 sql.Identifier(table),
                 sql.SQL(", ").join(sql.Identifier(col) for col in columns),
             )
-            if rows:
-                execute_values(cur, insert_sql.as_string(conn), rows, page_size=500)
+            try:
+                if rows:
+                    execute_values(cur, insert_sql.as_string(conn), rows, page_size=500)
 
-            cur.execute(
-                sql.SQL("SELECT count(*) FROM {}.{}").format(
-                    sql.Identifier(schema), sql.Identifier(table)
+                cur.execute(
+                    sql.SQL("SELECT count(*) FROM {}.{}").format(
+                        sql.Identifier(schema), sql.Identifier(table)
+                    )
                 )
-            )
-            db_count = int(cur.fetchone()[0])
+                db_count = int(cur.fetchone()[0])
+            except Exception as exa:
+                print("\n[load_csv_into_table] exception while loading csv into db")
+                print(f"  csv_path={csv_path}")
+                print(f"  target={schema}.{table}")
+                print(f"  columns({len(columns)})={columns}")
+                print(f"  row_count(csv)={row_count}, rows_to_insert={len(rows)}")
+                try:
+                    sql_text = insert_sql.as_string(conn)
+                except Exception as exc:
+                    sql_text = f"<failed to render insert_sql: {exc!r}>"
+                print(f"  insert_sql={sql_text}")
+                if rows:
+                    print(f"  first_row={rows[0]}")
+                    print(f"  last_row={rows[-1]}")
+                traceback.print_exc()
+                raise
             assert db_count == row_count, (
                 f"row count mismatch for {schema}.{table}: csv={row_count}, db={db_count}"
             )
