@@ -33,7 +33,7 @@ dev = [
     "mypy>=1.11",
     "pre-commit>=3.8",
     "langgraph-cli[inmem]>=0.2.0",
-    "datacloud-agent",
+    "datacloud-analysis",
 ]
 
 [project.optional-dependencies]
@@ -62,22 +62,18 @@ packages = ["src/whale_datacloud"]
 # ============================================
 [tool.uv.workspace]
 members = [
-    "datacloud-agent",
-    "datacloud-data-service",
-    "datacloud-knowledge-service",
-    "datacloud-memory",
-    "datacloud-mock",
-    "datacloud-apps/datacloud-agent-service",
+    "packages/datacloud-analysis",
+    "packages/datacloud-data",
+    "packages/datacloud-knowledge",
+    "packages/datacloud-memory",
 ]
 
 [tool.uv.sources]
 # 声明 workspace 成员，供其他子项目依赖
-datacloud-agent = { workspace = true }
-datacloud-data-service = { workspace = true }
-datacloud-knowledge-service = { workspace = true }
+datacloud-analysis = { workspace = true }
+datacloud-data = { workspace = true }
+datacloud-knowledge = { workspace = true }
 datacloud-memory = { workspace = true }
-datacloud-mock = { workspace = true }
-datacloud-agent-service = { workspace = true }
 
 [tool.uv]
 default-groups = ["dev"]

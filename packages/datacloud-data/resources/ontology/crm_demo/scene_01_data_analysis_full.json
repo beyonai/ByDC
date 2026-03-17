@@ -1,0 +1,5847 @@
+{
+  "view_id": "scene_01_data_analysis",
+  "view_name": "在线查数分析场景",
+  "description": "销售数据分析场景，支持简单查询、跨库联合检索、非结构化融合检索",
+  "functions": [
+    {
+      "function_code": "fn_todo_urge",
+      "function_name": "催更待办",
+      "description": "批量催更待办事项进度",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "催更待办",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/todos/batch/urge": {
+            "post": {
+              "summary": "批量催更待办",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "required": [
+                        "todoIds"
+                      ],
+                      "properties": {
+                        "todoIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "待办ID列表"
+                        },
+                        "followUpContent": {
+                          "type": "string",
+                          "description": "催更内容"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "催更结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "todoId": {
+                            "type": "string"
+                          },
+                          "followUpAt": {
+                            "type": "string",
+                            "description": "催更时间，格式 YYYY-MM-DD HH:mm:ss"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_po_org_query_by_ids",
+      "function_name": "按名称/ID查询组织",
+      "description": "按组织ID或名称列表批量查询组织详情",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "按名称/ID查询组织",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/po/organizations/query": {
+            "post": {
+              "summary": "按组织ID或名称查询组织",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "orgIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "组织ID列表"
+                        },
+                        "orgNames": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "组织名称列表"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "组织列表",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "organizations": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "org_id": {
+                                  "type": "string"
+                                },
+                                "org_name": {
+                                  "type": "string"
+                                },
+                                "org_code": {
+                                  "type": "string"
+                                },
+                                "parent_org_id": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_accept",
+      "function_name": "接收待办",
+      "description": "接收/认领指定待办事项",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "接收待办",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/todos/accept": {
+            "post": {
+              "summary": "接收待办",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "todoId": {
+                          "type": "string",
+                          "description": "待办ID"
+                        }
+                      },
+                      "required": [
+                        "todoId"
+                      ]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "接收结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "todoId": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_po_users_query_by_org",
+      "function_name": "按组织ID查询人员",
+      "description": "按组织ID查询该组织下的人员列表",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "按组织ID查询人员",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/po/users/by-org": {
+            "post": {
+              "summary": "按组织ID查询人员",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "orgId": {
+                          "type": "string",
+                          "description": "组织ID"
+                        },
+                        "includeSubOrgs": {
+                          "type": "boolean",
+                          "description": "是否包含下级组织人员"
+                        }
+                      },
+                      "required": [
+                        "orgId"
+                      ]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "人员列表",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "users": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "userId": {
+                                  "type": "string",
+                                  "description": "用户ID"
+                                },
+                                "userName": {
+                                  "type": "string",
+                                  "description": "用户名称"
+                                },
+                                "userNumber": {
+                                  "type": "string",
+                                  "description": "工号"
+                                },
+                                "orgId": {
+                                  "type": "string",
+                                  "description": "组织ID"
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "description": "用户状态"
+                                },
+                                "email": {
+                                  "type": "string",
+                                  "description": "用户邮箱"
+                                },
+                                "phone": {
+                                  "type": "string",
+                                  "description": "用户电话"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_expense_apply",
+      "function_name": "申请费用报备",
+      "description": "创建费用报备记录",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "申请费用报备",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/expense-reports": {
+            "post": {
+              "summary": "申请费用报备",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "required": [
+                        "applicantEmpNo",
+                        "applicantName",
+                        "applicantOrgId",
+                        "expenseAmount"
+                      ],
+                      "properties": {
+                        "applicantEmpNo": {
+                          "type": "string",
+                          "description": "申请人工号或名称"
+                        },
+                        "applicantName": {
+                          "type": "string",
+                          "description": "申请人姓名"
+                        },
+                        "applicantOrgId": {
+                          "type": "string",
+                          "description": "申请组织ID"
+                        },
+                        "expenseAmount": {
+                          "type": "number",
+                          "description": "申请金额（元）"
+                        },
+                        "expenseDesc": {
+                          "type": "string",
+                          "description": "申请说明"
+                        },
+                        "relatedBoId": {
+                          "type": "string",
+                          "description": "关联商机ID"
+                        },
+                        "relatedCustomerId": {
+                          "type": "string",
+                          "description": "关联客户ID"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "创建结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "errorMsg": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_expense_approve",
+      "function_name": "审批费用报备",
+      "description": "批量审批费用报备（通过或拒绝）",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "审批费用报备",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/expense-reports/batch/approve": {
+            "post": {
+              "summary": "批量审批费用报备",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "expenseReportIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "费用报备ID列表"
+                        },
+                        "approvalStatus": {
+                          "type": "string",
+                          "description": "审批状态：Approving(通过) 或 Rejected(拒绝)",
+                          "enum": [
+                            "Approving",
+                            "Rejected"
+                          ]
+                        },
+                        "approvalComment": {
+                          "type": "string",
+                          "description": "审批意见"
+                        }
+                      },
+                      "required": [
+                        "expenseReportIds",
+                        "approvalStatus"
+                      ]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "审批结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "approvalStatus": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_expense_query",
+      "function_name": "查询费用报备",
+      "description": "查询费用报备列表，支持多种过滤条件",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "查询费用报备",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/expense-reports/list": {
+            "post": {
+              "summary": "查询费用报备列表",
+              "requestBody": {
+                "required": false,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "applicantEmpNos": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "申请人工号列表"
+                        },
+                        "applicantOrgId": {
+                          "type": "string",
+                          "description": "申请组织ID"
+                        },
+                        "approvalStatus": {
+                          "type": "string",
+                          "description": "审批状态"
+                        },
+                        "applyTimeStart": {
+                          "type": "string",
+                          "description": "申请时间起，格式yyyy-MM-dd HH:mm:ss"
+                        },
+                        "applyTimeEnd": {
+                          "type": "string",
+                          "description": "申请时间止，格式yyyy-MM-dd HH:mm:ss"
+                        },
+                        "page": {
+                          "type": "integer",
+                          "description": "页码"
+                        },
+                        "pageSize": {
+                          "type": "integer",
+                          "description": "每页条数"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "费用报备列表",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "expenseReports": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "applicantEmpNo": {
+                                  "type": "string"
+                                },
+                                "applicantName": {
+                                  "type": "string"
+                                },
+                                "applicantOrgId": {
+                                  "type": "string"
+                                },
+                                "expenseAmount": {
+                                  "type": "number"
+                                },
+                                "expenseDesc": {
+                                  "type": "string"
+                                },
+                                "relatedBoId": {
+                                  "type": "string"
+                                },
+                                "relatedCustomerId": {
+                                  "type": "string"
+                                },
+                                "applyTime": {
+                                  "type": "string"
+                                },
+                                "approvalStatus": {
+                                  "type": "string"
+                                },
+                                "approvalComment": {
+                                  "type": "string"
+                                },
+                                "approvedAt": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_return",
+      "function_name": "退回待办",
+      "description": "退回指定待办事项并说明原因",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "退回待办",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/todos/return": {
+            "post": {
+              "summary": "退回待办",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "returnReason": {
+                          "type": "string",
+                          "description": "退回原因"
+                        },
+                        "todoId": {
+                          "type": "string",
+                          "description": "待办ID"
+                        }
+                      },
+                      "required": [
+                        "returnReason",
+                        "todoId"
+                      ]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "退回结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "todoId": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_create",
+      "function_name": "创建待办",
+      "description": "创建待办事项并指定处理人",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "创建待办",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/todos": {
+            "post": {
+              "summary": "创建待办",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "required": [
+                        "title"
+                      ],
+                      "properties": {
+                        "title": {
+                          "type": "string",
+                          "description": "待办标题"
+                        },
+                        "deadlineAt": {
+                          "type": "string",
+                          "description": "截止时间，格式 yyyy-MM-dd HH:mm:ss"
+                        },
+                        "handlerIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "处理人ID列表"
+                        },
+                        "priority": {
+                          "type": "string",
+                          "description": "优先级"
+                        },
+                        "urgencyLevel": {
+                          "type": "string",
+                          "description": "紧急程度"
+                        },
+                        "content": {
+                          "type": "string",
+                          "description": "待办内容"
+                        },
+                        "meetingNoteId": {
+                          "type": "string",
+                          "description": "关联的会议纪要id"
+                        },
+                        "promoter": {
+                          "type": "string",
+                          "description": "单据人/发起人名称或员工工号"
+                        },
+                        "remark": {
+                          "type": "string",
+                          "description": "备注"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "创建结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "todoId": {
+                            "type": "string"
+                          },
+                          "errorMsg": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_delete",
+      "function_name": "删除待办",
+      "description": "批量删除待办事项",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "删除待办",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/todos/batch": {
+            "post": {
+              "summary": "批量删除待办",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "todoIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "待办ID列表"
+                        }
+                      },
+                      "required": [
+                        "todoIds"
+                      ]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "删除结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "deletedIds": {
+                            "type": "string",
+                            "description": "删除成功的ID串"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_expense_update",
+      "function_name": "修改费用报备",
+      "description": "修改费用报备记录（审批前）",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "修改费用报备",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/expense-reports/update": {
+            "post": {
+              "summary": "修改费用报备",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "expenseAmount": {
+                          "type": "number",
+                          "description": "申请金额（元）"
+                        },
+                        "expenseDesc": {
+                          "type": "string",
+                          "description": "申请说明"
+                        },
+                        "relatedBoId": {
+                          "type": "string",
+                          "description": "关联商机ID"
+                        },
+                        "relatedCustomerId": {
+                          "type": "string",
+                          "description": "关联客户ID"
+                        },
+                        "applicantOrgId": {
+                          "type": "string",
+                          "description": "申请组织ID"
+                        },
+                        "id": {
+                          "type": "string",
+                          "description": "费用报备ID"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "修改结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_update",
+      "function_name": "修改待办",
+      "description": "修改待办事项的基本信息",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "修改待办",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/todos/update": {
+            "post": {
+              "summary": "修改待办",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "planFinishTime": {
+                          "type": "string",
+                          "description": "计划完成时间，格式 yyyy-MM-dd HH:mm:ss"
+                        },
+                        "handlerIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "处理人"
+                        },
+                        "priority": {
+                          "type": "string",
+                          "description": "优先级"
+                        },
+                        "urgencyLevel": {
+                          "type": "string",
+                          "description": "紧急程度"
+                        },
+                        "content": {
+                          "type": "string",
+                          "description": "待办内容"
+                        },
+                        "todoId": {
+                          "type": "string",
+                          "description": "待办ID"
+                        }
+                      },
+                      "required": [
+                        "todoId"
+                      ]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "修改结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "todoId": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_query_list",
+      "function_name": "查询待办列表",
+      "description": "查询待办事项列表，支持多种过滤条件",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "查询待办列表",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/todos/list": {
+            "post": {
+              "summary": "查询待办列表",
+              "requestBody": {
+                "required": false,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "priority": {
+                          "type": "string",
+                          "description": "优先级"
+                        },
+                        "urgencyLevel": {
+                          "type": "string",
+                          "description": "紧急程度"
+                        },
+                        "orgId": {
+                          "type": "string",
+                          "description": "组织ID"
+                        },
+                        "meetingNoteIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "会议纪要ID列表"
+                        },
+                        "statusList": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "待办状态列表"
+                        },
+                        "page": {
+                          "type": "string",
+                          "description": "页码"
+                        },
+                        "keyword": {
+                          "type": "string",
+                          "description": "关键词搜索"
+                        },
+                        "deadlineEnd": {
+                          "type": "string",
+                          "description": "截止时间结束，格式yyyy-MM-dd HH:mm:ss"
+                        },
+                        "status": {
+                          "type": "string",
+                          "description": "待办状态"
+                        },
+                        "promoter": {
+                          "type": "string",
+                          "description": "单据人/发起人员工工号"
+                        },
+                        "deadlineStart": {
+                          "type": "string",
+                          "description": "截止开始时间，格式yyyy-MM-dd HH:mm:ss"
+                        },
+                        "pageSize": {
+                          "type": "string",
+                          "description": "页大小"
+                        },
+                        "includeSubOrgs": {
+                          "type": "string",
+                          "description": "是否查询下级组织，true 是，false 否"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "待办列表",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "todoId": {
+                              "type": "string"
+                            },
+                            "deadlineAt": {
+                              "type": "string"
+                            },
+                            "approvalComment": {
+                              "type": "string"
+                            },
+                            "priority": {
+                              "type": "string"
+                            },
+                            "urgencyLevel": {
+                              "type": "string"
+                            },
+                            "content": {
+                              "type": "string"
+                            },
+                            "progress": {
+                              "type": "integer"
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "completedAt": {
+                              "type": "string"
+                            },
+                            "meetingNoteId": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "approvedAt": {
+                              "type": "string"
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "handleContent": {
+                              "type": "string"
+                            },
+                            "handlers": {
+                              "type": "array",
+                              "items": {
+                                "type": "object"
+                              }
+                            },
+                            "returnReason": {
+                              "type": "string"
+                            },
+                            "promoter": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_process",
+      "function_name": "处理待办",
+      "description": "批量处理待办事项，更新处理意见和进度",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "处理待办",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/todos/batch/process": {
+            "post": {
+              "summary": "批量处理待办",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "todoIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "待办ID列表"
+                        },
+                        "handleComment": {
+                          "type": "string",
+                          "description": "处理意见/备注"
+                        },
+                        "progress": {
+                          "type": "integer",
+                          "description": "处理进度 0-100",
+                          "minimum": 0,
+                          "maximum": 100
+                        }
+                      },
+                      "required": [
+                        "todoIds"
+                      ]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "处理结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "todoId": {
+                            "type": "string",
+                            "description": "被处理的待办ID"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_po_users_query_by_ids",
+      "function_name": "按名称/ID查询人员",
+      "description": "按用户ID或姓名列表批量查询人员详情",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "按名称/ID查询人员",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/po/users/query": {
+            "post": {
+              "summary": "按用户ID或名称查询人员",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "userIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "用户ID列表（与names二选一）"
+                        },
+                        "names": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "用户名称列表（与userIds二选一）"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "人员列表",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "users": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "userId": {
+                                  "type": "string"
+                                },
+                                "userName": {
+                                  "type": "string"
+                                },
+                                "userNumber": {
+                                  "type": "string"
+                                },
+                                "orgId": {
+                                  "type": "string"
+                                },
+                                "state": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_po_org_query_sub_orgs",
+      "function_name": "查询下级组织",
+      "description": "按组织ID查询其下级组织列表",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "查询下级组织",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/po/organizations/children": {
+            "post": {
+              "summary": "查询指定组织的下级组织",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "orgId": {
+                          "type": "string",
+                          "description": "组织ID"
+                        },
+                        "recursive": {
+                          "type": "boolean",
+                          "description": "是否递归查询所有下级"
+                        }
+                      },
+                      "required": [
+                        "orgId"
+                      ]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "下级组织列表",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "organizations": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "orgId": {
+                                  "type": "string",
+                                  "description": "组织ID"
+                                },
+                                "orgName": {
+                                  "type": "string",
+                                  "description": "组织名称"
+                                },
+                                "orgCode": {
+                                  "type": "string",
+                                  "description": "组织编码"
+                                },
+                                "parentOrgId": {
+                                  "type": "string",
+                                  "description": "父组织ID"
+                                },
+                                "orgLevel": {
+                                  "type": "integer",
+                                  "description": "组织层级"
+                                },
+                                "orgType": {
+                                  "type": "string",
+                                  "description": "组织类型"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "function_code": "fn_todo_approve",
+      "function_name": "审批待办",
+      "description": "批量审批待办事项（通过或拒绝）",
+      "function_type": "API",
+      "api_schema": {
+        "openapi": "3.0.3",
+        "info": {
+          "title": "审批待办",
+          "version": "1.0.0"
+        },
+        "servers": [
+          {
+            "url": "http://127.0.0.1:8001"
+          }
+        ],
+        "paths": {
+          "/api/v1/todos/batch/approve": {
+            "post": {
+              "summary": "批量审批待办",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "approvalComment": {
+                          "type": "string",
+                          "description": "审批意见"
+                        },
+                        "approvalStatus": {
+                          "type": "string",
+                          "description": "审批状态：Approving(通过) 或 Rejected(拒绝)",
+                          "enum": [
+                            "Approving",
+                            "Rejected"
+                          ]
+                        },
+                        "todoIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "待办ID列表"
+                        }
+                      },
+                      "required": [
+                        "approvalStatus",
+                        "todoIds"
+                      ]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "审批结果",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "todoId": {
+                            "type": "string"
+                          },
+                          "approvalStatus": {
+                            "type": "string",
+                            "description": "审批状态：Approving(通过) 或 Rejected(拒绝)"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "objects": [
+    {
+      "object_code": "po_users",
+      "object_name": "人员信息",
+      "description": "主数据系统人员对象，包含用户基本信息、状态、组织归属等",
+      "source_type": "API",
+      "tags": [
+        "人员",
+        "主数据"
+      ],
+      "fields": [
+        {
+          "field_code": "userId",
+          "field_name": "用户唯一标识",
+          "field_type": "BIGINT",
+          "required": true,
+          "is_primary_key": true,
+          "source_column": "user_id"
+        },
+        {
+          "field_code": "userName",
+          "field_name": "用户名称",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "user_name"
+        },
+        {
+          "field_code": "email",
+          "field_name": "用户邮箱",
+          "field_type": "STRING",
+          "source_column": "email"
+        },
+        {
+          "field_code": "phone",
+          "field_name": "用户电话",
+          "field_type": "STRING",
+          "source_column": "phone"
+        },
+        {
+          "field_code": "userCode",
+          "field_name": "用户登录标识",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "user_code"
+        },
+        {
+          "field_code": "address",
+          "field_name": "用户地址",
+          "field_type": "TEXT",
+          "source_column": "address"
+        },
+        {
+          "field_code": "remark",
+          "field_name": "用户备注",
+          "field_type": "STRING",
+          "source_column": "remark"
+        },
+        {
+          "field_code": "userExpDate",
+          "field_name": "用户过期日期",
+          "field_type": "TIMESTAMP",
+          "source_column": "user_exp_date"
+        },
+        {
+          "field_code": "createDate",
+          "field_name": "记录创建日期",
+          "field_type": "TIMESTAMP",
+          "required": true,
+          "source_column": "create_date"
+        },
+        {
+          "field_code": "updateDate",
+          "field_name": "记录更新日期",
+          "field_type": "TIMESTAMP",
+          "source_column": "update_date"
+        },
+        {
+          "field_code": "state",
+          "field_name": "用户状态",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "state"
+        },
+        {
+          "field_code": "isLocked",
+          "field_name": "是否锁定",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "is_locked"
+        },
+        {
+          "field_code": "lastLoginDate",
+          "field_name": "最后一次登录时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "last_login_date"
+        },
+        {
+          "field_code": "thumbnailUri",
+          "field_name": "用户头像URL地址",
+          "field_type": "STRING",
+          "source_column": "thumbnail_uri"
+        },
+        {
+          "field_code": "extAttr",
+          "field_name": "用户扩展信息",
+          "field_type": "STRING",
+          "source_column": "ext_attr"
+        },
+        {
+          "field_code": "userNumber",
+          "field_name": "工号",
+          "field_type": "STRING",
+          "source_column": "user_number"
+        },
+        {
+          "field_code": "stationId",
+          "field_name": "所属驻地",
+          "field_type": "BIGINT",
+          "source_column": "station_id"
+        }
+      ],
+      "actions": [
+        {
+          "action_code": "query_users_by_name_or_ids",
+          "action_name": "按名称或ID查询人员",
+          "description": "按用户ID列表或姓名列表批量查询人员详情",
+          "action_type": "query",
+          "params": [
+            {
+              "param_code": "userIds",
+              "param_name": "用户名称或id列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.userIds",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "userId",
+              "param_name": "用户ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.users[].userId"
+            },
+            {
+              "param_code": "userName",
+              "param_name": "用户名称",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.users[].userName"
+            },
+            {
+              "param_code": "userCode",
+              "param_name": "工号",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.users[].userNumber"
+            },
+            {
+              "param_code": "orgId",
+              "param_name": "组织ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.users[].orgId"
+            },
+            {
+              "param_code": "state",
+              "param_name": "用户状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.users[].state"
+            },
+            {
+              "param_code": "email",
+              "param_name": "邮箱",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.users[].email"
+            },
+            {
+              "param_code": "phone",
+              "param_name": "电话",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.users[].phone"
+            }
+          ],
+          "function_refs": [
+            "fn_po_users_query_by_ids"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "query_users_by_org_id",
+          "action_name": "按组织ID查询人员",
+          "description": "按组织ID查询该组织下的人员列表，可选是否包含下级组织",
+          "action_type": "query",
+          "params": [
+            {
+              "param_code": "orgId",
+              "param_name": "组织ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.parameters.orgId",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "orgName",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "includeSubOrgs",
+              "param_name": "是否包含下级组织",
+              "param_type": "BOOLEAN",
+              "direction": "IN",
+              "mapping_path": "$.parameters.includeSubOrgs"
+            },
+            {
+              "param_code": "userId",
+              "param_name": "用户ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.users[].userId"
+            },
+            {
+              "param_code": "userName",
+              "param_name": "用户名称",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.users[].userName"
+            },
+            {
+              "param_code": "userCode",
+              "param_name": "工号",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.users[].userNumber"
+            },
+            {
+              "param_code": "orgId",
+              "param_name": "所属组织ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.users[].orgId"
+            },
+            {
+              "param_code": "state",
+              "param_name": "用户状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.users[].state"
+            },
+            {
+              "param_code": "email",
+              "param_name": "邮箱",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.users[].email"
+            },
+            {
+              "param_code": "phone",
+              "param_name": "电话",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.users[].phone"
+            }
+          ],
+          "function_refs": [
+            "fn_po_users_query_by_org"
+          ],
+          "script": null
+        }
+      ],
+      "datasource_alias": null,
+      "table_name": null
+    },
+    {
+      "object_code": "po_organization",
+      "object_name": "组织信息",
+      "description": "主数据系统组织对象，包含组织层级、编码、类型等信息",
+      "source_type": "API",
+      "tags": [
+        "组织",
+        "主数据"
+      ],
+      "fields": [
+        {
+          "field_code": "orgId",
+          "field_name": "组织ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "is_primary_key": true,
+          "source_column": "org_id"
+        },
+        {
+          "field_code": "orgCode",
+          "field_name": "组织编码",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "org_code"
+        },
+        {
+          "field_code": "orgName",
+          "field_name": "组织名称",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "org_name"
+        },
+        {
+          "field_code": "orgType",
+          "field_name": "组织类型",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "org_type"
+        },
+        {
+          "field_code": "parentOrgId",
+          "field_name": "父组织标识",
+          "field_type": "BIGINT",
+          "required": true,
+          "source_column": "parent_org_id"
+        },
+        {
+          "field_code": "orgLevel",
+          "field_name": "组织层级",
+          "field_type": "INTEGER",
+          "source_column": "org_level"
+        },
+        {
+          "field_code": "orgIndex",
+          "field_name": "同层排序字段",
+          "field_type": "INTEGER",
+          "source_column": "org_index"
+        },
+        {
+          "field_code": "createDate",
+          "field_name": "创建时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "create_date"
+        },
+        {
+          "field_code": "updateDate",
+          "field_name": "更新时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "update_date"
+        },
+        {
+          "field_code": "pathCode",
+          "field_name": "组织路径",
+          "field_type": "STRING",
+          "source_column": "path_code"
+        },
+        {
+          "field_code": "orgDesc",
+          "field_name": "组织描述",
+          "field_type": "STRING",
+          "source_column": "org_desc"
+        }
+      ],
+      "actions": [
+        {
+          "action_code": "query_org_by_name_or_id",
+          "action_name": "按名称或ID查询组织",
+          "description": "按组织ID列表或名称列表批量查询组织详情",
+          "action_type": "query",
+          "params": [
+            {
+              "param_code": "orgIds",
+              "param_name": "组织ID或名称列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.orgIds",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "orgName",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "orgId",
+              "param_name": "组织ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.organizations[].orgId"
+            },
+            {
+              "param_code": "orgName",
+              "param_name": "组织名称",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.organizations[].orgName"
+            },
+            {
+              "param_code": "orgCode",
+              "param_name": "组织编码",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.organizations[].orgCode"
+            },
+            {
+              "param_code": "parentOrgId",
+              "param_name": "父组织ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.organizations[].parentOrgId"
+            },
+            {
+              "param_code": "orgLevel",
+              "param_name": "组织层级",
+              "param_type": "INTEGER",
+              "direction": "OUT",
+              "mapping_path": "$.organizations[].orgLevel"
+            },
+            {
+              "param_code": "orgType",
+              "param_name": "组织类型",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.organizations[].orgType"
+            },
+            {
+              "param_code": "orgDesc",
+              "param_name": "组织描述",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.organizations[].orgDesc"
+            }
+          ],
+          "function_refs": [
+            "fn_po_org_query_by_ids"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "query_sub_orgs_by_org_id",
+          "action_name": "查询下级组织",
+          "description": "按组织ID查询其所有直接下级或全部下级组织",
+          "action_type": "query",
+          "params": [
+            {
+              "param_code": "orgId",
+              "param_name": "组织名称或ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.parameters.orgId",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "orgName",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "recursive",
+              "param_name": "是否递归",
+              "param_type": "BOOLEAN",
+              "direction": "IN",
+              "mapping_path": "$.parameters.recursive"
+            },
+            {
+              "param_code": "orgId",
+              "param_name": "组织ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.organizations[].orgId"
+            },
+            {
+              "param_code": "orgName",
+              "param_name": "组织名称",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.organizations[].orgName"
+            },
+            {
+              "param_code": "orgCode",
+              "param_name": "组织编码",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.organizations[].orgCode"
+            },
+            {
+              "param_code": "parentOrgId",
+              "param_name": "父组织ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.organizations[].parentOrgId"
+            },
+            {
+              "param_code": "orgLevel",
+              "param_name": "组织层级",
+              "param_type": "INTEGER",
+              "direction": "OUT",
+              "mapping_path": "$.organizations[].orgLevel"
+            },
+            {
+              "param_code": "orgType",
+              "param_name": "组织类型",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.organizations[].orgType"
+            }
+          ],
+          "function_refs": [
+            "fn_po_org_query_sub_orgs"
+          ],
+          "script": null
+        }
+      ],
+      "datasource_alias": null,
+      "table_name": null
+    },
+    {
+      "object_code": "todo_items",
+      "object_name": "待办事项",
+      "description": "待办系统对象，包含待办标题、内容、状态、优先级、处理人等信息",
+      "source_type": "API",
+      "tags": [
+        "待办",
+        "任务"
+      ],
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "待办ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "is_primary_key": true,
+          "source_column": "id"
+        },
+        {
+          "field_code": "title",
+          "field_name": "待办标题",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "title"
+        },
+        {
+          "field_code": "todoContent",
+          "field_name": "待办内容",
+          "field_type": "TEXT",
+          "source_column": "todo_content"
+        },
+        {
+          "field_code": "deadlineAt",
+          "field_name": "截止时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "deadline_at"
+        },
+        {
+          "field_code": "todoPriority",
+          "field_name": "优先级",
+          "field_type": "STRING",
+          "source_column": "todo_priority"
+        },
+        {
+          "field_code": "todoStatus",
+          "field_name": "待办状态",
+          "field_type": "STRING",
+          "source_column": "todo_status"
+        },
+        {
+          "field_code": "createdBy",
+          "field_name": "创建人ID",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "created_by"
+        },
+        {
+          "field_code": "promoter",
+          "field_name": "发起人ID",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "promoter"
+        },
+        {
+          "field_code": "orgId",
+          "field_name": "组织ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "source_column": "org_id"
+        },
+        {
+          "field_code": "handlerId",
+          "field_name": "主处理人ID",
+          "field_type": "STRING",
+          "source_column": "handler_id"
+        },
+        {
+          "field_code": "createdAt",
+          "field_name": "创建时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "created_at"
+        },
+        {
+          "field_code": "updatedAt",
+          "field_name": "更新时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "updated_at"
+        },
+        {
+          "field_code": "completedAt",
+          "field_name": "完成时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "completed_at"
+        },
+        {
+          "field_code": "cancelledAt",
+          "field_name": "取消时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "cancelled_at"
+        },
+        {
+          "field_code": "cancelledReason",
+          "field_name": "取消原因",
+          "field_type": "TEXT",
+          "source_column": "cancelled_reason"
+        },
+        {
+          "field_code": "approvedAt",
+          "field_name": "审批通过时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "approved_at"
+        },
+        {
+          "field_code": "rejectedAt",
+          "field_name": "审批拒绝时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "rejected_at"
+        },
+        {
+          "field_code": "approvalComment",
+          "field_name": "审批意见",
+          "field_type": "TEXT",
+          "source_column": "approval_comment"
+        },
+        {
+          "field_code": "urgencyLevel",
+          "field_name": "紧急程度",
+          "field_type": "STRING",
+          "source_column": "urgency_level"
+        },
+        {
+          "field_code": "remark",
+          "field_name": "备注",
+          "field_type": "STRING",
+          "source_column": "remark"
+        },
+        {
+          "field_code": "meetingNoteId",
+          "field_name": "关联会议纪要ID",
+          "field_type": "BIGINT",
+          "source_column": "meeting_note_id"
+        },
+        {
+          "field_code": "returnReason",
+          "field_name": "退回理由",
+          "field_type": "STRING",
+          "source_column": "return_reason"
+        },
+        {
+          "field_code": "returnedAt",
+          "field_name": "退回时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "returned_at"
+        }
+      ],
+      "actions": [
+        {
+          "action_code": "create_todo",
+          "action_name": "创建待办",
+          "description": "创建待办事项并指定处理人",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "title",
+              "param_name": "待办标题",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.title"
+            },
+            {
+              "param_code": "deadlineAt",
+              "param_name": "截止时间",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.deadlineAt"
+            },
+            {
+              "param_code": "handlerIds",
+              "param_name": "处理人ID或名称列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.handlerIds",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "priority",
+              "param_name": "优先级",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.priority",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "priority",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "urgencyLevel",
+              "param_name": "紧急程度",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.urgencyLevel",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "urgencyLevel",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "content",
+              "param_name": "待办内容",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.content"
+            },
+            {
+              "param_code": "meetingNoteId",
+              "param_name": "会议纪要ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.meetingNoteId"
+            },
+            {
+              "param_code": "promoter",
+              "param_name": "发起人工号或名称",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.promoter",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "remark",
+              "param_name": "备注",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.remark"
+            },
+            {
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todoId"
+            },
+            {
+              "param_code": "errorMsg",
+              "param_name": "错误信息",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.errorMsg"
+            },
+            {
+              "param_code": "status",
+              "param_name": "待办状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.status"
+            },
+            {
+              "param_code": "title",
+              "param_name": "待办标题",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.title"
+            },
+            {
+              "param_code": "createdAt",
+              "param_name": "创建时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.createdAt"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_create"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "query_todo_list",
+          "action_name": "查询待办列表",
+          "description": "查询待办事项列表，支持多种过滤条件",
+          "action_type": "query",
+          "params": [
+            {
+              "param_code": "priority",
+              "param_name": "优先级",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.priority",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "priority",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "urgencyLevel",
+              "param_name": "紧急程度",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.urgencyLevel",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "urgencyLevel",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "orgId",
+              "param_name": "组织ID或名称",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.orgId",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "orgName",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "meetingNoteIds",
+              "param_name": "会议纪要ID列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.meetingNoteIds"
+            },
+            {
+              "param_code": "statusList",
+              "param_name": "状态列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.statusList",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "status",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "page",
+              "param_name": "页码",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.page"
+            },
+            {
+              "param_code": "keyword",
+              "param_name": "关键词",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.keyword"
+            },
+            {
+              "param_code": "deadlineEnd",
+              "param_name": "截止时间结束",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.deadlineEnd"
+            },
+            {
+              "param_code": "status",
+              "param_name": "待办状态",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.status",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "status",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "promoter",
+              "param_name": "发起人工号或名称",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.promoter",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "deadlineStart",
+              "param_name": "截止时间开始",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.deadlineStart"
+            },
+            {
+              "param_code": "pageSize",
+              "param_name": "页大小",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.pageSize"
+            },
+            {
+              "param_code": "includeSubOrgs",
+              "param_name": "是否查询下级",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.includeSubOrgs"
+            },
+            {
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todos[].todoId"
+            },
+            {
+              "param_code": "title",
+              "param_name": "待办标题",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todos[].title"
+            },
+            {
+              "param_code": "status",
+              "param_name": "待办状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todos[].status"
+            },
+            {
+              "param_code": "priority",
+              "param_name": "优先级",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todos[].priority"
+            },
+            {
+              "param_code": "urgencyLevel",
+              "param_name": "紧急程度",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todos[].urgencyLevel"
+            },
+            {
+              "param_code": "deadlineAt",
+              "param_name": "截止时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todos[].deadlineAt"
+            },
+            {
+              "param_code": "content",
+              "param_name": "待办内容",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todos[].content"
+            },
+            {
+              "param_code": "progress",
+              "param_name": "处理进度",
+              "param_type": "INTEGER",
+              "direction": "OUT",
+              "mapping_path": "$.todos[].progress"
+            },
+            {
+              "param_code": "createdAt",
+              "param_name": "创建时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todos[].createdAt"
+            },
+            {
+              "param_code": "promoter",
+              "param_name": "发起人",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todos[].promoter"
+            },
+            {
+              "param_code": "approvalComment",
+              "param_name": "审批意见",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todos[].approvalComment"
+            },
+            {
+              "param_code": "approvedAt",
+              "param_name": "审批通过时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todos[].approvedAt"
+            },
+            {
+              "param_code": "completedAt",
+              "param_name": "完成时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todos[].completedAt"
+            },
+            {
+              "param_code": "meetingNoteId",
+              "param_name": "关联会议纪要ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todos[].meetingNoteId"
+            },
+            {
+              "param_code": "returnReason",
+              "param_name": "退回原因",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todos[].returnReason"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_query_list"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "accept_todo",
+          "action_name": "接收待办",
+          "description": "接收/认领指定待办事项",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.parameters.todoId"
+            },
+            {
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todoId"
+            },
+            {
+              "param_code": "status",
+              "param_name": "待办状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.status"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_accept"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "return_todo",
+          "action_name": "退回待办",
+          "description": "退回指定待办事项并说明原因",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.parameters.todoId"
+            },
+            {
+              "param_code": "returnReason",
+              "param_name": "退回原因",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.returnReason"
+            },
+            {
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todoId"
+            },
+            {
+              "param_code": "status",
+              "param_name": "待办状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.status"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_return"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "process_todo",
+          "action_name": "处理待办",
+          "description": "批量处理待办事项，更新处理意见和进度",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "todoIds",
+              "param_name": "待办ID列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.todoIds"
+            },
+            {
+              "param_code": "handleComment",
+              "param_name": "处理意见",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.handleComment"
+            },
+            {
+              "param_code": "progress",
+              "param_name": "处理进度0-100",
+              "param_type": "INTEGER",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.progress"
+            },
+            {
+              "param_code": "todoId",
+              "param_name": "被处理的待办ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todoId"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_process"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "delete_todo",
+          "action_name": "删除待办",
+          "description": "批量删除待办事项",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "todoIds",
+              "param_name": "待办ID列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.todoIds"
+            },
+            {
+              "param_code": "deletedIds",
+              "param_name": "删除成功的ID串",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.deletedIds"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_delete"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "urge_todo",
+          "action_name": "催更待办",
+          "description": "批量催更待办事项进度",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "todoIds",
+              "param_name": "待办ID列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.todoIds"
+            },
+            {
+              "param_code": "followUpContent",
+              "param_name": "催更内容",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.followUpContent"
+            },
+            {
+              "param_code": "todoId",
+              "param_name": "被催更的待办ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todoId"
+            },
+            {
+              "param_code": "followUpAt",
+              "param_name": "催更时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.followUpAt"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_urge"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "update_todo",
+          "action_name": "修改待办",
+          "description": "修改待办事项的基本信息",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.parameters.todoId"
+            },
+            {
+              "param_code": "planFinishTime",
+              "param_name": "计划完成时间",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.planFinishTime"
+            },
+            {
+              "param_code": "handlerIds",
+              "param_name": "处理人列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.handlerIds"
+            },
+            {
+              "param_code": "priority",
+              "param_name": "优先级",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.priority"
+            },
+            {
+              "param_code": "urgencyLevel",
+              "param_name": "紧急程度",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.urgencyLevel"
+            },
+            {
+              "param_code": "content",
+              "param_name": "待办内容",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.content"
+            },
+            {
+              "param_code": "todoId",
+              "param_name": "被修改的待办ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todoId"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_update"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "approve_todo",
+          "action_name": "审批待办",
+          "description": "批量审批待办事项（通过或拒绝）",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "approvalComment",
+              "param_name": "审批意见",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.approvalComment"
+            },
+            {
+              "param_code": "approvalStatus",
+              "param_name": "审批状态",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.approvalStatus",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "approvalStatus",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "todoIds",
+              "param_name": "待办ID列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.todoIds"
+            },
+            {
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todoId"
+            },
+            {
+              "param_code": "approvalStatus",
+              "param_name": "审批状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.approvalStatus"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_approve"
+          ],
+          "script": null
+        }
+      ],
+      "datasource_alias": null,
+      "table_name": null
+    },
+    {
+      "object_code": "sales_daily_report",
+      "object_name": "日报对象",
+      "description": "钉钉来源的员工日报记录，包含每日工作汇报内容",
+      "source_type": "KNOWLEDGE_BASE",
+      "tags": [
+        "日报",
+        "非结构化"
+      ],
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "主键ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "is_primary_key": true,
+          "source_column": "id"
+        },
+        {
+          "field_code": "reportDate",
+          "field_name": "日报日期",
+          "field_type": "DATE",
+          "required": true,
+          "source_column": "report_date"
+        },
+        {
+          "field_code": "reportTitle",
+          "field_name": "日报标题",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "report_title"
+        },
+        {
+          "field_code": "reportContent",
+          "field_name": "日报内容",
+          "field_type": "JSON",
+          "source_column": "report_content"
+        },
+        {
+          "field_code": "reportStatus",
+          "field_name": "日报状态",
+          "field_type": "INTEGER",
+          "required": true,
+          "source_column": "report_status",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "dict",
+            "termTypeCode": "reportStatus",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "belongEmpNo",
+          "field_name": "员工工号或名称",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "belong_emp_no",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "belongUserName",
+          "field_name": "员工姓名",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "belong_user_name",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "name"
+          }
+        },
+        {
+          "field_code": "belongEmpOrgId",
+          "field_name": "归属用户所在的组织ID",
+          "field_type": "STRING",
+          "source_column": "belong_emp_org_id",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "code"
+          }
+        }
+      ],
+      "actions": [],
+      "source_config": {
+        "alias": "knowledge",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
+        "pool_min": 1,
+        "pool_max": 5
+      },
+      "datasource_alias": "knowledge",
+      "table_name": "sales_daily_report"
+    },
+    {
+      "object_code": "sales_business_opportunity",
+      "object_name": "商机对象",
+      "description": "宜搭CRM商机表，记录销售商机全生命周期数据",
+      "source_type": "DB",
+      "tags": [
+        "CRM",
+        "商机"
+      ],
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "主键ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "is_primary_key": true,
+          "source_column": "id"
+        },
+        {
+          "field_code": "boName",
+          "field_name": "商机名称",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "bo_name"
+        },
+        {
+          "field_code": "belongDepart",
+          "field_name": "所属营销部",
+          "field_type": "STRING",
+          "source_column": "belong_depart",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "name"
+          }
+        },
+        {
+          "field_code": "customerName",
+          "field_name": "客户名称",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "customer_name"
+        },
+        {
+          "field_code": "orderDate",
+          "field_name": "落单时间",
+          "field_type": "DATE",
+          "source_column": "order_date"
+        },
+        {
+          "field_code": "bidOpeningTime",
+          "field_name": "主标开标时间",
+          "field_type": "DATE",
+          "source_column": "bid_opening_time"
+        },
+        {
+          "field_code": "iwhaleCbmEmpNo",
+          "field_name": "商机负责人工号或名称",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "iwhale_cbm_emp_no",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "iwhaleCbmName",
+          "field_name": "商机负责人名称",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "iwhale_cbm_name",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "name"
+          }
+        },
+        {
+          "field_code": "iwhaleCbmOrgId",
+          "field_name": "商机负责人组织或名称",
+          "field_type": "STRING",
+          "source_column": "iwhale_cbm_org_id",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "softwareIncomeTime",
+          "field_name": "软收计入时间",
+          "field_type": "DATE",
+          "source_column": "software_income_time"
+        },
+        {
+          "field_code": "itInvestmentScale",
+          "field_name": "客户IT投资规模（万元）",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "it_investment_scale"
+        },
+        {
+          "field_code": "winBid",
+          "field_name": "是否中标",
+          "field_type": "INTEGER",
+          "required": true,
+          "source_column": "win_bid"
+        },
+        {
+          "field_code": "iwhaleScEmpNo",
+          "field_name": "支撑sc工号或名称",
+          "field_type": "STRING",
+          "source_column": "iwhale_sc_emp_no",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "iwhaleScName",
+          "field_name": "浩鲸sc名称",
+          "field_type": "STRING",
+          "source_column": "iwhale_sc_name",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "name"
+          }
+        },
+        {
+          "field_code": "diliverContent",
+          "field_name": "合同交付内容",
+          "field_type": "STRING",
+          "source_column": "diliver_content"
+        },
+        {
+          "field_code": "type",
+          "field_name": "商机类型",
+          "field_type": "STRING",
+          "source_column": "type"
+        },
+        {
+          "field_code": "performanceType",
+          "field_name": "业绩类型",
+          "field_type": "STRING",
+          "source_column": "performance_type"
+        },
+        {
+          "field_code": "earlyDiliver",
+          "field_name": "是否提前交付",
+          "field_type": "INTEGER",
+          "source_column": "early_diliver"
+        },
+        {
+          "field_code": "businessOpportunityProcess",
+          "field_name": "商机状态",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "business_opportunity_process"
+        },
+        {
+          "field_code": "contractScale",
+          "field_name": "合同额（万）",
+          "field_type": "STRING",
+          "source_column": "contract_scale"
+        },
+        {
+          "field_code": "softwareSaleScale",
+          "field_name": "软销规模（万元）",
+          "field_type": "STRING",
+          "source_column": "software_sale_scale"
+        },
+        {
+          "field_code": "softwareIncomeScale",
+          "field_name": "软收计入规模（万元）",
+          "field_type": "STRING",
+          "source_column": "software_income_scale"
+        },
+        {
+          "field_code": "orderRate",
+          "field_name": "落单几率",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "order_rate"
+        },
+        {
+          "field_code": "businessOpportunityDesc",
+          "field_name": "商机具体进展描述",
+          "field_type": "STRING",
+          "source_column": "business_opportunity_desc"
+        },
+        {
+          "field_code": "submitPerson",
+          "field_name": "提交人",
+          "field_type": "STRING",
+          "source_column": "submit_person",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "name"
+          }
+        },
+        {
+          "field_code": "submitOrganization",
+          "field_name": "提交组织",
+          "field_type": "STRING",
+          "source_column": "submit_organization",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "name"
+          }
+        },
+        {
+          "field_code": "isAliIntegrated",
+          "field_name": "是否集成阿里产品",
+          "field_type": "INTEGER",
+          "source_column": "is_ali_integrated"
+        },
+        {
+          "field_code": "opportunityNature",
+          "field_name": "商机性质",
+          "field_type": "STRING",
+          "source_column": "opportunity_nature"
+        },
+        {
+          "field_code": "opportunitySource",
+          "field_name": "商机来源",
+          "field_type": "STRING",
+          "source_column": "opportunity_source"
+        },
+        {
+          "field_code": "sourceDescription",
+          "field_name": "来源说明",
+          "field_type": "STRING",
+          "source_column": "source_description"
+        },
+        {
+          "field_code": "opportunityStage",
+          "field_name": "商机进展",
+          "field_type": "STRING",
+          "source_column": "opportunity_stage"
+        },
+        {
+          "field_code": "opportunityId",
+          "field_name": "商机ID",
+          "field_type": "STRING",
+          "source_column": "opportunity_id"
+        },
+        {
+          "field_code": "instanceId",
+          "field_name": "实例ID",
+          "field_type": "STRING",
+          "source_column": "instance_id"
+        },
+        {
+          "field_code": "instanceTitle",
+          "field_name": "实例标题",
+          "field_type": "STRING",
+          "source_column": "instance_title"
+        },
+        {
+          "field_code": "prepayExpectedDate",
+          "field_name": "预测回款时间【预付款】",
+          "field_type": "DATE",
+          "source_column": "prepay_expected_date"
+        },
+        {
+          "field_code": "prepayExpectedAmount",
+          "field_name": "预测回款金额【预付款】(万元)",
+          "field_type": "STRING",
+          "source_column": "prepay_expected_amount"
+        },
+        {
+          "field_code": "customerTaxId",
+          "field_name": "客户纳税号",
+          "field_type": "STRING",
+          "source_column": "customer_tax_id"
+        }
+      ],
+      "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
+        "pool_min": 1,
+        "pool_max": 5
+      },
+      "datasource_alias": "ds_crm",
+      "table_name": "sales_business_opportunity"
+    },
+    {
+      "object_code": "po_users_kpi_detail",
+      "object_name": "合同对象",
+      "description": "个人合同表，记录员工签订的合同信息，用于KPI完成统计",
+      "source_type": "DB",
+      "tags": [
+        "CRM",
+        "合同",
+        "KPI"
+      ],
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "主键ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "is_primary_key": true,
+          "source_column": "id"
+        },
+        {
+          "field_code": "empNo",
+          "field_name": "责任人工号或名称",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "emp_no",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "name",
+          "field_name": "责任人姓名",
+          "field_type": "STRING",
+          "source_column": "name",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "name"
+          }
+        },
+        {
+          "field_code": "empOrgId",
+          "field_name": "责任人组织",
+          "field_type": "STRING",
+          "source_column": "emp_org_id",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "contactNo",
+          "field_name": "合同号",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "contact_no"
+        },
+        {
+          "field_code": "contactName",
+          "field_name": "合同名称",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "contact_name"
+        },
+        {
+          "field_code": "contactDate",
+          "field_name": "合同时间",
+          "field_type": "DATE",
+          "required": true,
+          "source_column": "contact_date"
+        },
+        {
+          "field_code": "softSell",
+          "field_name": "软销金额",
+          "field_type": "STRING",
+          "source_column": "soft_sell"
+        },
+        {
+          "field_code": "contactScale",
+          "field_name": "合同金额",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "contact_scale"
+        }
+      ],
+      "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
+        "pool_min": 1,
+        "pool_max": 5
+      },
+      "datasource_alias": "ds_crm",
+      "table_name": "sales_person_kpi_summary"
+    },
+    {
+      "object_code": "sales_customer",
+      "object_name": "客户对象",
+      "description": "CRM客户表，记录客户基本信息及年度销售数据",
+      "source_type": "DB",
+      "tags": [
+        "CRM",
+        "客户"
+      ],
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "主键ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "is_primary_key": true,
+          "source_column": "id"
+        },
+        {
+          "field_code": "customerName",
+          "field_name": "客户名称",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "customer_name"
+        },
+        {
+          "field_code": "belongDepart",
+          "field_name": "所属营销部",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "belong_depart",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "name"
+          }
+        },
+        {
+          "field_code": "type",
+          "field_name": "客户类别",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "type"
+        },
+        {
+          "field_code": "buildContent",
+          "field_name": "建设内容",
+          "field_type": "STRING",
+          "source_column": "build_content"
+        },
+        {
+          "field_code": "iwhaleCbmEmpNo",
+          "field_name": "客户维护人工号或名称",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "iwhale_cbm_emp_no",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "iwhaleCbmName",
+          "field_name": "客户维护人名称",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "iwhale_cbm_name",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "name"
+          }
+        },
+        {
+          "field_code": "iwhaleCbmOrgId",
+          "field_name": "客户维护人组织",
+          "field_type": "STRING",
+          "source_column": "iwhale_cbm_org_id",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "belongIndustry",
+          "field_name": "所属行业",
+          "field_type": "STRING",
+          "source_column": "belong_industry",
+          "termMeta": {"datasetId": 760436323052421, "termMasterType": "dict", "termTypeCode": "customer_belong_industry", "termField": "name"}
+        },
+        {
+          "field_code": "itInvestmentScale",
+          "field_name": "客户IT投资规模（万元）",
+          "field_type": "STRING",
+          "source_column": "it_investment_scale"
+        },
+        {
+          "field_code": "dataYear",
+          "field_name": "数据年份",
+          "field_type": "YEAR",
+          "required": true,
+          "source_column": "data_year"
+        },
+        {
+          "field_code": "softwareSaleScale",
+          "field_name": "软销规模（万元）",
+          "field_type": "STRING",
+          "source_column": "software_sale_scale"
+        },
+        {
+          "field_code": "nextYearPredictScale",
+          "field_name": "明年预计软销规模",
+          "field_type": "STRING",
+          "source_column": "next_year_predict_scale"
+        },
+        {
+          "field_code": "contractScale",
+          "field_name": "合同额（万元）",
+          "field_type": "STRING",
+          "source_column": "contract_scale"
+        },
+        {
+          "field_code": "process",
+          "field_name": "目前进展",
+          "field_type": "STRING",
+          "source_column": "process"
+        },
+        {
+          "field_code": "mainBusiness",
+          "field_name": "主营业务",
+          "field_type": "STRING",
+          "source_column": "main_business"
+        },
+        {
+          "field_code": "submitPerson",
+          "field_name": "提交人",
+          "field_type": "STRING",
+          "source_column": "submit_person",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "name"
+          }
+        },
+        {
+          "field_code": "submitOrganization",
+          "field_name": "提交组织",
+          "field_type": "STRING",
+          "source_column": "submit_organization",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "name"
+          }
+        },
+        {
+          "field_code": "businessOpportunityProcess",
+          "field_name": "商机进展",
+          "field_type": "STRING",
+          "source_column": "business_opportunity_process"
+        },
+        {
+          "field_code": "customerTaxId",
+          "field_name": "客户纳税号",
+          "field_type": "STRING",
+          "source_column": "customer_tax_id"
+        },
+        {
+          "field_code": "instanceId",
+          "field_name": "实例ID",
+          "field_type": "STRING",
+          "source_column": "instance_id"
+        }
+      ],
+      "actions": [],
+      "source_config": {
+        "alias": "onto_crm",
+        "db_type": "MYSQL",
+        "jdbc_url": "jdbc:mysql://172.21.72.158:8003/onto_crm",
+        "user": "root",
+        "password": "root",
+        "pool_min": 1,
+        "pool_max": 5
+      },
+      "datasource_alias": "ds_crm",
+      "table_name": "sales_customer"
+    },
+    {
+      "object_code": "po_users_kpi_summary",
+      "object_name": "个人KPI对象",
+      "description": "个人KPI目标表，记录员工年度KPI目标金额",
+      "source_type": "DB",
+      "tags": [
+        "CRM",
+        "KPI",
+        "个人"
+      ],
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "主键ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "is_primary_key": true,
+          "source_column": "id"
+        },
+        {
+          "field_code": "empNo",
+          "field_name": "责任人工号",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "emp_no",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "kpiYear",
+          "field_name": "kpi年度",
+          "field_type": "STRING",
+          "source_column": "kpi_year"
+        },
+        {
+          "field_code": "kpiSum",
+          "field_name": "KPI目标金额",
+          "field_type": "STRING",
+          "source_column": "kpi_sum"
+        }
+      ],
+      "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
+        "pool_min": 1,
+        "pool_max": 5
+      },
+      "datasource_alias": "ds_crm",
+      "table_name": "po_users_kpi_summary"
+    },
+    {
+      "object_code": "sales_org_kpi_summary",
+      "object_name": "组织KPI对象",
+      "description": "组织KPI目标表，记录组织年度KPI目标",
+      "source_type": "DB",
+      "tags": [
+        "CRM",
+        "KPI",
+        "组织"
+      ],
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "主键ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "is_primary_key": true,
+          "source_column": "id"
+        },
+        {
+          "field_code": "orgId",
+          "field_name": "组织ID或名称",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "org_id",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "orgName",
+          "field_name": "组织名称",
+          "field_type": "STRING",
+          "source_column": "org_name",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "name"
+          }
+        },
+        {
+          "field_code": "kpiYear",
+          "field_name": "kpi年度",
+          "field_type": "YEAR",
+          "required": true,
+          "source_column": "kpi_year"
+        },
+        {
+          "field_code": "kpiSum",
+          "field_name": "KPI目标",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "kpi_sum"
+        }
+      ],
+      "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
+        "pool_min": 1,
+        "pool_max": 5
+      },
+      "datasource_alias": "ds_crm",
+      "table_name": "sales_org_kpi_summary"
+    },
+    {
+      "object_code": "sales_emp_attendance",
+      "object_name": "员工考勤对象",
+      "description": "员工考勤表，记录员工每日上下午打卡情况",
+      "source_type": "DB",
+      "tags": [
+        "考勤"
+      ],
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "主键ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "is_primary_key": true,
+          "source_column": "id"
+        },
+        {
+          "field_code": "empNo",
+          "field_name": "工号或名称",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "emp_no",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "attendanceDate",
+          "field_name": "考勤日",
+          "field_type": "DATE",
+          "required": true,
+          "source_column": "attendance_date"
+        },
+        {
+          "field_code": "billDate",
+          "field_name": "账期",
+          "field_type": "YEAR",
+          "required": true,
+          "source_column": "bill_date"
+        },
+        {
+          "field_code": "forenoonStatus",
+          "field_name": "上午打卡结果",
+          "field_type": "STRING",
+          "source_column": "forenoon_status"
+        },
+        {
+          "field_code": "afternoonStatus",
+          "field_name": "下午打卡结果",
+          "field_type": "STRING",
+          "source_column": "afternoon_status"
+        },
+        {
+          "field_code": "forenoonTime",
+          "field_name": "上午实际打卡时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "forenoon_time"
+        },
+        {
+          "field_code": "afternoonTime",
+          "field_name": "下午实际打卡时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "afternoon_time"
+        },
+        {
+          "field_code": "forenoonLocation",
+          "field_name": "上午打卡地点",
+          "field_type": "STRING",
+          "source_column": "forenoon_location"
+        },
+        {
+          "field_code": "afternoonLocation",
+          "field_name": "下午打卡地点",
+          "field_type": "STRING",
+          "source_column": "afternoon_location"
+        }
+      ],
+      "actions": [],
+      "source_config": {
+        "alias": "ds_attendance",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
+        "pool_min": 1,
+        "pool_max": 5
+      },
+      "datasource_alias": "ds_attendance",
+      "table_name": "sales_emp_attendance"
+    },
+    {
+      "object_code": "sales_org_kpi_completion",
+      "object_name": "组织KPI完成统计对象",
+      "description": "组织KPI完成统计表，按周/月账期统计组织KPI完成情况",
+      "source_type": "DB",
+      "tags": [
+        "CRM",
+        "KPI",
+        "组织完成统计"
+      ],
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "主键ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "is_primary_key": true,
+          "source_column": "id"
+        },
+        {
+          "field_code": "orgId",
+          "field_name": "组织ID或名称",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "org_id",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "orgName",
+          "field_name": "组织名称",
+          "field_type": "STRING",
+          "source_column": "org_name",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "name"
+          }
+        },
+        {
+          "field_code": "periodType",
+          "field_name": "账期类型",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "period_type"
+        },
+        {
+          "field_code": "periodValue",
+          "field_name": "账期值",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "period_value"
+        },
+        {
+          "field_code": "kpiYear",
+          "field_name": "对应KPI年度",
+          "field_type": "STRING",
+          "source_column": "kpi_year"
+        },
+        {
+          "field_code": "completedAmount",
+          "field_name": "该账期组织汇总完成金额（万元）",
+          "field_type": "DECIMAL",
+          "source_column": "completed_amount"
+        },
+        {
+          "field_code": "completedSoftSell",
+          "field_name": "该账期组织汇总软销金额（万元）",
+          "field_type": "DECIMAL",
+          "source_column": "completed_soft_sell"
+        },
+        {
+          "field_code": "contractCount",
+          "field_name": "该账期组织签约合同笔数",
+          "field_type": "INTEGER",
+          "source_column": "contract_count"
+        }
+      ],
+      "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
+        "pool_min": 1,
+        "pool_max": 5
+      },
+      "datasource_alias": "ds_crm",
+      "table_name": "sales_org_kpi_completion"
+    },
+    {
+      "object_code": "po_users_kpi_completion",
+      "object_name": "个人KPI完成统计对象",
+      "description": "个人KPI完成统计表，按周/月账期统计员工KPI完成情况",
+      "source_type": "DB",
+      "tags": [
+        "CRM",
+        "KPI",
+        "完成统计"
+      ],
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "主键ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "is_primary_key": true,
+          "source_column": "id"
+        },
+        {
+          "field_code": "empNo",
+          "field_name": "责任人工号",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "emp_no",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "periodType",
+          "field_name": "账期类型",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "period_type"
+        },
+        {
+          "field_code": "periodValue",
+          "field_name": "账期值",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "period_value"
+        },
+        {
+          "field_code": "kpiYear",
+          "field_name": "对应KPI年度",
+          "field_type": "STRING",
+          "source_column": "kpi_year"
+        },
+        {
+          "field_code": "completedContractAmount",
+          "field_name": "该账期已完成合同金额（万元）",
+          "field_type": "DECIMAL",
+          "source_column": "completed_contract_amount"
+        },
+        {
+          "field_code": "completedSoftSell",
+          "field_name": "该账期已完成软销金额（万元）",
+          "field_type": "DECIMAL",
+          "source_column": "completed_soft_sell"
+        },
+        {
+          "field_code": "contractCount",
+          "field_name": "该账期签约合同笔数",
+          "field_type": "INTEGER",
+          "source_column": "contract_count"
+        }
+      ],
+      "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
+        "pool_min": 1,
+        "pool_max": 5
+      },
+      "datasource_alias": "ds_crm",
+      "table_name": "po_users_kpi_completion"
+    },
+    {
+      "object_code": "sales_expense_report",
+      "object_name": "费用报备对象",
+      "description": "销售费用报备表，记录营销费用申请信息",
+      "source_type": "API",
+      "tags": [
+        "CRM",
+        "费用"
+      ],
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "主键ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "is_primary_key": true,
+          "source_column": "id"
+        },
+        {
+          "field_code": "applicantEmpNo",
+          "field_name": "申请人工号或名称",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "applicant_emp_no",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "applicantName",
+          "field_name": "申请人姓名",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "applicant_name",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "name"
+          }
+        },
+        {
+          "field_code": "applicantOrgId",
+          "field_name": "申请组织ID",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "applicant_org_id",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "orgName",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "expenseAmount",
+          "field_name": "申请金额（元）",
+          "field_type": "DECIMAL",
+          "required": true,
+          "source_column": "expense_amount"
+        },
+        {
+          "field_code": "expenseDesc",
+          "field_name": "申请说明",
+          "field_type": "STRING",
+          "source_column": "expense_desc"
+        },
+        {
+          "field_code": "relatedBoId",
+          "field_name": "关联商机ID",
+          "field_type": "STRING",
+          "source_column": "related_bo_id"
+        },
+        {
+          "field_code": "relatedCustomerId",
+          "field_name": "关联客户ID",
+          "field_type": "STRING",
+          "source_column": "related_customer_id"
+        },
+        {
+          "field_code": "applyTime",
+          "field_name": "申请时间",
+          "field_type": "TIMESTAMP",
+          "required": true,
+          "source_column": "apply_time"
+        },
+        {
+          "field_code": "approvalStatus",
+          "field_name": "审批状态",
+          "field_type": "STRING",
+          "source_column": "approval_status"
+        },
+        {
+          "field_code": "approvalComment",
+          "field_name": "审批意见",
+          "field_type": "STRING",
+          "source_column": "approval_comment"
+        },
+        {
+          "field_code": "approvedAt",
+          "field_name": "审批时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "approved_at"
+        }
+      ],
+      "actions": [
+        {
+          "action_code": "apply_expense_report",
+          "action_name": "申请费用报备",
+          "description": "创建费用报备记录",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "applicantEmpNo",
+              "param_name": "申请人工号或名称",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.applicantEmpNo",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "applicantName",
+              "param_name": "申请人姓名",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.applicantName",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "name"
+              }
+            },
+            {
+              "param_code": "applicantOrgId",
+              "param_name": "申请组织ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.applicantOrgId",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "orgName",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "expenseAmount",
+              "param_name": "申请金额（元）",
+              "param_type": "DECIMAL",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.expenseAmount"
+            },
+            {
+              "param_code": "expenseDesc",
+              "param_name": "申请说明",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.expenseDesc"
+            },
+            {
+              "param_code": "relatedBoId",
+              "param_name": "关联商机ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.relatedBoId"
+            },
+            {
+              "param_code": "relatedCustomerId",
+              "param_name": "关联客户ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.relatedCustomerId"
+            },
+            {
+              "param_code": "id",
+              "param_name": "费用报备ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.id"
+            },
+            {
+              "param_code": "errorMsg",
+              "param_name": "错误信息",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.errorMsg"
+            },
+            {
+              "param_code": "status",
+              "param_name": "状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.status"
+            }
+          ],
+          "function_refs": [
+            "fn_expense_apply"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "update_expense_report",
+          "action_name": "修改费用报备",
+          "description": "修改费用报备记录（审批前）",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "id",
+              "param_name": "费用报备ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.parameters.id"
+            },
+            {
+              "param_code": "expenseAmount",
+              "param_name": "申请金额（元）",
+              "param_type": "DECIMAL",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.expenseAmount"
+            },
+            {
+              "param_code": "expenseDesc",
+              "param_name": "申请说明",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.expenseDesc"
+            },
+            {
+              "param_code": "relatedBoId",
+              "param_name": "关联商机ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.relatedBoId"
+            },
+            {
+              "param_code": "relatedCustomerId",
+              "param_name": "关联客户ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.relatedCustomerId"
+            },
+            {
+              "param_code": "applicantOrgId",
+              "param_name": "申请组织ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.applicantOrgId"
+            },
+            {
+              "param_code": "id",
+              "param_name": "费用报备ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.id"
+            },
+            {
+              "param_code": "status",
+              "param_name": "状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.status"
+            },
+            {
+              "param_code": "updatedAt",
+              "param_name": "更新时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.updatedAt"
+            }
+          ],
+          "function_refs": [
+            "fn_expense_update"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "approve_expense_report",
+          "action_name": "审批费用报备",
+          "description": "批量审批费用报备（通过或拒绝）",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "expenseReportIds",
+              "param_name": "费用报备ID列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.expenseReportIds"
+            },
+            {
+              "param_code": "approvalStatus",
+              "param_name": "审批状态",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.approvalStatus",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "approvalStatus",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "approvalComment",
+              "param_name": "审批意见",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.approvalComment"
+            },
+            {
+              "param_code": "id",
+              "param_name": "费用报备ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.id"
+            },
+            {
+              "param_code": "approvalStatus",
+              "param_name": "审批状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.approvalStatus"
+            }
+          ],
+          "function_refs": [
+            "fn_expense_approve"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "query_expense_report",
+          "action_name": "查询费用报备",
+          "description": "查询费用报备列表，支持多种过滤条件",
+          "action_type": "query",
+          "params": [
+            {
+              "param_code": "applicantEmpNos",
+              "param_name": "申请人工号列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.applicantEmpNos",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "applicantOrgId",
+              "param_name": "申请组织ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.applicantOrgId",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "orgName",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "approvalStatus",
+              "param_name": "审批状态",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.approvalStatus"
+            },
+            {
+              "param_code": "applyTimeStart",
+              "param_name": "申请时间起",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.applyTimeStart"
+            },
+            {
+              "param_code": "applyTimeEnd",
+              "param_name": "申请时间止",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.applyTimeEnd"
+            },
+            {
+              "param_code": "page",
+              "param_name": "页码",
+              "param_type": "INTEGER",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.page"
+            },
+            {
+              "param_code": "pageSize",
+              "param_name": "每页条数",
+              "param_type": "INTEGER",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.pageSize"
+            },
+            {
+              "param_code": "id",
+              "param_name": "费用报备ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.expenseReports[].id"
+            },
+            {
+              "param_code": "applicantEmpNo",
+              "param_name": "申请人工号",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.expenseReports[].applicantEmpNo"
+            },
+            {
+              "param_code": "applicantName",
+              "param_name": "申请人姓名",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.expenseReports[].applicantName"
+            },
+            {
+              "param_code": "applicantOrgId",
+              "param_name": "申请组织ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.expenseReports[].applicantOrgId"
+            },
+            {
+              "param_code": "expenseAmount",
+              "param_name": "申请金额",
+              "param_type": "DECIMAL",
+              "direction": "OUT",
+              "mapping_path": "$.expenseReports[].expenseAmount"
+            },
+            {
+              "param_code": "expenseDesc",
+              "param_name": "申请说明",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.expenseReports[].expenseDesc"
+            },
+            {
+              "param_code": "relatedBoId",
+              "param_name": "关联商机ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.expenseReports[].relatedBoId"
+            },
+            {
+              "param_code": "relatedCustomerId",
+              "param_name": "关联客户ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.expenseReports[].relatedCustomerId"
+            },
+            {
+              "param_code": "applyTime",
+              "param_name": "申请时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.expenseReports[].applyTime"
+            },
+            {
+              "param_code": "approvalStatus",
+              "param_name": "审批状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.expenseReports[].approvalStatus"
+            },
+            {
+              "param_code": "approvalComment",
+              "param_name": "审批意见",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.expenseReports[].approvalComment"
+            },
+            {
+              "param_code": "approvedAt",
+              "param_name": "审批时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.expenseReports[].approvedAt"
+            }
+          ],
+          "function_refs": [
+            "fn_expense_query"
+          ],
+          "script": null
+        }
+      ],
+      "datasource_alias": null,
+      "table_name": null
+    },
+    {
+      "object_code": "sales_bo_status_change",
+      "object_name": "商机状态变更对象",
+      "description": "商机状态每次变更的记录，用于审计与行为轨迹分析",
+      "source_type": "DB",
+      "tags": [
+        "CRM",
+        "商机状态变更"
+      ],
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "主键ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "is_primary_key": true,
+          "source_column": "id"
+        },
+         {
+          "field_code": "boId",
+          "field_name": "商机id",
+          "field_type": "BIGINT",
+          "required": false,
+          "is_primary_key": false,
+          "source_column": "bo_id"
+        },
+        {
+          "field_code": "opportunityId",
+          "field_name": "商机业务唯一标识",
+          "field_type": "STRING",
+          "source_column": "opportunity_id"
+        },
+        {
+          "field_code": "statusBefore",
+          "field_name": "变更前状态",
+          "field_type": "STRING",
+          "source_column": "status_before",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "dict",
+            "termTypeCode": "changeStatus",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "statusAfter",
+          "field_name": "变更后状态",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "status_after",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "dict",
+            "termTypeCode": "changeStatus",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "changeRemark",
+          "field_name": "变更说明",
+          "field_type": "STRING",
+          "source_column": "change_remark"
+        },
+        {
+          "field_code": "changedBy",
+          "field_name": "变更人",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "changed_by",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "changedTime",
+          "field_name": "变更时间",
+          "field_type": "TIMESTAMP",
+          "required": true,
+          "source_column": "changed_time"
+        }
+      ],
+      "actions": [],
+      "source_config": {
+        "alias": "ds_crm",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
+        "pool_min": 1,
+        "pool_max": 5
+      },
+      "datasource_alias": "ds_crm",
+      "table_name": "sales_bo_status_change"
+    },
+    {
+      "object_code": "sales_meeting_note",
+      "object_name": "会议纪要对象",
+      "description": "钉钉来源的会议纪要记录，包含会议内容及关联商机客户",
+      "source_type": "KNOWLEDGE_BASE",
+      "tags": [
+        "会议纪要",
+        "非结构化"
+      ],
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "主键ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "is_primary_key": true,
+          "source_column": "id"
+        },
+        {
+          "field_code": "meetingTitle",
+          "field_name": "会议纪要标题",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "meeting_title"
+        },
+        {
+          "field_code": "meetingContent",
+          "field_name": "会议内容",
+          "field_type": "TEXT",
+          "source_column": "meeting_content"
+        },
+        {
+          "field_code": "startTime",
+          "field_name": "发起时间",
+          "field_type": "TIMESTAMP",
+          "required": true,
+          "source_column": "start_time"
+        },
+        {
+          "field_code": "relatedBoId",
+          "field_name": "关联商机ID",
+          "field_type": "STRING",
+          "source_column": "related_bo_id"
+        },
+        {
+          "field_code": "relatedCustomerId",
+          "field_name": "关联客户ID",
+          "field_type": "STRING",
+          "source_column": "related_customer_id"
+        },
+        {
+          "field_code": "participantEmpNos",
+          "field_name": "会议参与人员工号",
+          "field_type": "ARRAY",
+          "source_column": "participant_emp_nos",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "list",
+            "termTypeCode": "staffName",
+            "termField": "code"
+          }
+        }
+      ],
+      "actions": [],
+      "source_config": {
+        "alias": "knowledge",
+        "db_type": "OPENGAUSS",
+        "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+        "user": "gaussdb",
+        "password": "OpenGauss@123",
+        "pool_min": 1,
+        "pool_max": 5
+      },
+      "datasource_alias": "knowledge",
+      "table_name": "sales_meeting_note"
+    },
+    {
+      "object_code": "todo_items",
+      "object_name": "待办事项",
+      "description": "待办系统对象，包含待办标题、内容、状态、优先级、处理人等信息",
+      "source_type": "API",
+      "tags": [
+        "待办",
+        "任务"
+      ],
+      "fields": [
+        {
+          "field_code": "id",
+          "field_name": "待办ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "is_primary_key": true,
+          "source_column": "id"
+        },
+        {
+          "field_code": "title",
+          "field_name": "待办标题",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "title"
+        },
+        {
+          "field_code": "todoContent",
+          "field_name": "待办内容",
+          "field_type": "TEXT",
+          "source_column": "todo_content"
+        },
+        {
+          "field_code": "deadlineAt",
+          "field_name": "截止时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "deadline_at"
+        },
+        {
+          "field_code": "todoPriority",
+          "field_name": "优先级",
+          "field_type": "STRING",
+          "source_column": "todo_priority"
+        },
+        {
+          "field_code": "todoStatus",
+          "field_name": "待办状态",
+          "field_type": "STRING",
+          "source_column": "todo_status"
+        },
+        {
+          "field_code": "createdBy",
+          "field_name": "创建人ID",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "created_by"
+        },
+        {
+          "field_code": "promoter",
+          "field_name": "发起人ID",
+          "field_type": "STRING",
+          "required": true,
+          "source_column": "promoter"
+        },
+        {
+          "field_code": "orgId",
+          "field_name": "组织ID",
+          "field_type": "BIGINT",
+          "required": true,
+          "source_column": "org_id"
+        },
+        {
+          "field_code": "handlerId",
+          "field_name": "主处理人ID",
+          "field_type": "STRING",
+          "source_column": "handler_id"
+        },
+        {
+          "field_code": "createdAt",
+          "field_name": "创建时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "created_at"
+        },
+        {
+          "field_code": "updatedAt",
+          "field_name": "更新时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "updated_at"
+        },
+        {
+          "field_code": "completedAt",
+          "field_name": "完成时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "completed_at"
+        },
+        {
+          "field_code": "cancelledAt",
+          "field_name": "取消时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "cancelled_at"
+        },
+        {
+          "field_code": "cancelledReason",
+          "field_name": "取消原因",
+          "field_type": "TEXT",
+          "source_column": "cancelled_reason"
+        },
+        {
+          "field_code": "approvedAt",
+          "field_name": "审批通过时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "approved_at"
+        },
+        {
+          "field_code": "rejectedAt",
+          "field_name": "审批拒绝时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "rejected_at"
+        },
+        {
+          "field_code": "approvalComment",
+          "field_name": "审批意见",
+          "field_type": "TEXT",
+          "source_column": "approval_comment"
+        },
+        {
+          "field_code": "urgencyLevel",
+          "field_name": "紧急程度",
+          "field_type": "STRING",
+          "source_column": "urgency_level"
+        },
+        {
+          "field_code": "remark",
+          "field_name": "备注",
+          "field_type": "STRING",
+          "source_column": "remark"
+        },
+        {
+          "field_code": "meetingNoteId",
+          "field_name": "关联会议纪要ID",
+          "field_type": "BIGINT",
+          "source_column": "meeting_note_id"
+        },
+        {
+          "field_code": "returnReason",
+          "field_name": "退回理由",
+          "field_type": "STRING",
+          "source_column": "return_reason"
+        },
+        {
+          "field_code": "returnedAt",
+          "field_name": "退回时间",
+          "field_type": "TIMESTAMP",
+          "source_column": "returned_at"
+        }
+      ],
+      "actions": [
+        {
+          "action_code": "create_todo",
+          "action_name": "创建待办",
+          "description": "创建待办事项并指定处理人",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "title",
+              "param_name": "待办标题",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.title"
+            },
+            {
+              "param_code": "deadlineAt",
+              "param_name": "截止时间",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.deadlineAt"
+            },
+            {
+              "param_code": "handlerIds",
+              "param_name": "处理人ID或名称列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.handlerIds",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "priority",
+              "param_name": "优先级",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.priority",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "priority",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "urgencyLevel",
+              "param_name": "紧急程度",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.urgencyLevel",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "urgencyLevel",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "content",
+              "param_name": "待办内容",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.content"
+            },
+            {
+              "param_code": "meetingNoteId",
+              "param_name": "会议纪要ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.meetingNoteId"
+            },
+            {
+              "param_code": "promoter",
+              "param_name": "发起人工号或名称",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.promoter",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "remark",
+              "param_name": "备注",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.remark"
+            },
+            {
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todoId"
+            },
+            {
+              "param_code": "errorMsg",
+              "param_name": "错误信息",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.errorMsg"
+            },
+            {
+              "param_code": "status",
+              "param_name": "待办状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.status"
+            },
+            {
+              "param_code": "title",
+              "param_name": "待办标题",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.title"
+            },
+            {
+              "param_code": "createdAt",
+              "param_name": "创建时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.createdAt"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_create"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "query_todo_list",
+          "action_name": "查询待办列表",
+          "description": "查询待办事项列表，支持多种过滤条件",
+          "action_type": "query",
+          "params": [
+            {
+              "param_code": "priority",
+              "param_name": "优先级",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.priority",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "priority",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "urgencyLevel",
+              "param_name": "紧急程度",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.urgencyLevel",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "urgencyLevel",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "orgId",
+              "param_name": "组织ID或名称",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.orgId",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "orgName",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "meetingNoteIds",
+              "param_name": "会议纪要ID列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.meetingNoteIds"
+            },
+            {
+              "param_code": "statusList",
+              "param_name": "状态列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.statusList",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "status",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "page",
+              "param_name": "页码",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.page"
+            },
+            {
+              "param_code": "keyword",
+              "param_name": "关键词",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.keyword"
+            },
+            {
+              "param_code": "deadlineEnd",
+              "param_name": "截止时间结束",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.deadlineEnd"
+            },
+            {
+              "param_code": "status",
+              "param_name": "待办状态",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.status",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "status",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "promoter",
+              "param_name": "发起人工号或名称",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.promoter",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "staffName",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "deadlineStart",
+              "param_name": "截止时间开始",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.deadlineStart"
+            },
+            {
+              "param_code": "pageSize",
+              "param_name": "页大小",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.pageSize"
+            },
+            {
+              "param_code": "includeSubOrgs",
+              "param_name": "是否查询下级",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.includeSubOrgs"
+            },
+            {
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.data[].todoId"
+            },
+            {
+              "param_code": "title",
+              "param_name": "待办标题",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.data[].title"
+            },
+            {
+              "param_code": "status",
+              "param_name": "待办状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.data[].status"
+            },
+            {
+              "param_code": "priority",
+              "param_name": "优先级",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.data[].priority"
+            },
+            {
+              "param_code": "urgencyLevel",
+              "param_name": "紧急程度",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.data[].urgencyLevel"
+            },
+            {
+              "param_code": "deadlineAt",
+              "param_name": "截止时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.data[].deadlineAt"
+            },
+            {
+              "param_code": "content",
+              "param_name": "待办内容",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.data[].content"
+            },
+            {
+              "param_code": "progress",
+              "param_name": "处理进度",
+              "param_type": "INTEGER",
+              "direction": "OUT",
+              "mapping_path": "$.data[].progress"
+            },
+            {
+              "param_code": "createdAt",
+              "param_name": "创建时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.data[].createdAt"
+            },
+            {
+              "param_code": "promoter",
+              "param_name": "发起人",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.data[].promoter"
+            },
+            {
+              "param_code": "approvalComment",
+              "param_name": "审批意见",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.data[].approvalComment"
+            },
+            {
+              "param_code": "approvedAt",
+              "param_name": "审批通过时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.data[].approvedAt"
+            },
+            {
+              "param_code": "completedAt",
+              "param_name": "完成时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.data[].completedAt"
+            },
+            {
+              "param_code": "meetingNoteId",
+              "param_name": "关联会议纪要ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.data[].meetingNoteId"
+            },
+            {
+              "param_code": "returnReason",
+              "param_name": "退回原因",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.data[].returnReason"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_query_list"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "accept_todo",
+          "action_name": "接收待办",
+          "description": "接收/认领指定待办事项",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.parameters.todoId"
+            },
+            {
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todoId"
+            },
+            {
+              "param_code": "status",
+              "param_name": "待办状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.status"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_accept"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "return_todo",
+          "action_name": "退回待办",
+          "description": "退回指定待办事项并说明原因",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.parameters.todoId"
+            },
+            {
+              "param_code": "returnReason",
+              "param_name": "退回原因",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.returnReason"
+            },
+            {
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todoId"
+            },
+            {
+              "param_code": "status",
+              "param_name": "待办状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.status"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_return"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "process_todo",
+          "action_name": "处理待办",
+          "description": "批量处理待办事项，更新处理意见和进度",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "todoIds",
+              "param_name": "待办ID列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.todoIds"
+            },
+            {
+              "param_code": "handleComment",
+              "param_name": "处理意见",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.handleComment"
+            },
+            {
+              "param_code": "progress",
+              "param_name": "处理进度0-100",
+              "param_type": "INTEGER",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.progress"
+            },
+            {
+              "param_code": "todoId",
+              "param_name": "被处理的待办ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todoId"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_process"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "delete_todo",
+          "action_name": "删除待办",
+          "description": "批量删除待办事项",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "todoIds",
+              "param_name": "待办ID列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.todoIds"
+            },
+            {
+              "param_code": "deletedIds",
+              "param_name": "删除成功的ID串",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.deletedIds"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_delete"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "urge_todo",
+          "action_name": "催更待办",
+          "description": "批量催更待办事项进度",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "todoIds",
+              "param_name": "待办ID列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.todoIds"
+            },
+            {
+              "param_code": "followUpContent",
+              "param_name": "催更内容",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.followUpContent"
+            },
+            {
+              "param_code": "todoId",
+              "param_name": "被催更的待办ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todoId"
+            },
+            {
+              "param_code": "followUpAt",
+              "param_name": "催更时间",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.followUpAt"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_urge"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "update_todo",
+          "action_name": "修改待办",
+          "description": "修改待办事项的基本信息",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.parameters.todoId"
+            },
+            {
+              "param_code": "planFinishTime",
+              "param_name": "计划完成时间",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.planFinishTime"
+            },
+            {
+              "param_code": "handlerIds",
+              "param_name": "处理人列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.handlerIds"
+            },
+            {
+              "param_code": "priority",
+              "param_name": "优先级",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.priority"
+            },
+            {
+              "param_code": "urgencyLevel",
+              "param_name": "紧急程度",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.urgencyLevel"
+            },
+            {
+              "param_code": "content",
+              "param_name": "待办内容",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.content"
+            },
+            {
+              "param_code": "todoId",
+              "param_name": "被修改的待办ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todoId"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_update"
+          ],
+          "script": null
+        },
+        {
+          "action_code": "approve_todo",
+          "action_name": "审批待办",
+          "description": "批量审批待办事项（通过或拒绝）",
+          "action_type": "operation",
+          "params": [
+            {
+              "param_code": "approvalComment",
+              "param_name": "审批意见",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.approvalComment"
+            },
+            {
+              "param_code": "approvalStatus",
+              "param_name": "审批状态",
+              "param_type": "STRING",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.approvalStatus",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "approvalStatus",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "todoIds",
+              "param_name": "待办ID列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "required": true,
+              "mapping_path": "$.requestBody.todoIds"
+            },
+            {
+              "param_code": "todoId",
+              "param_name": "待办ID",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.todoId"
+            },
+            {
+              "param_code": "approvalStatus",
+              "param_name": "审批状态",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.approvalStatus"
+            }
+          ],
+          "function_refs": [
+            "fn_todo_approve"
+          ],
+          "script": null
+        }
+      ],
+      "datasource_alias": null,
+      "table_name": null
+    }
+  ],
+  "relations": [
+    {
+      "relation_code": "rel_po_users__po_organization_0",
+      "relation_name": "人员归属组织",
+      "source_class": "po_users",
+      "target_class": "po_organization",
+      "relation_type": "MANY_TO_ONE",
+      "join_keys": [
+        {
+          "from_field": "orgId",
+          "to_field": "orgId"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_organization__po_organization_1",
+      "relation_name": "组织父子层级",
+      "source_class": "po_organization",
+      "target_class": "po_organization",
+      "relation_type": "MANY_TO_ONE",
+      "join_keys": [
+        {
+          "from_field": "parentOrgId",
+          "to_field": "orgId"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__po_users_kpi_summary_2",
+      "relation_name": "人员有个人KPI",
+      "source_class": "po_users",
+      "target_class": "po_users_kpi_summary",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "empNo"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__po_users_kpi_completion_3",
+      "relation_name": "人员有个人KPI完成统计",
+      "source_class": "po_users",
+      "target_class": "po_users_kpi_completion",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "empNo"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__po_users_kpi_detail_4",
+      "relation_name": "人员有合同",
+      "source_class": "po_users",
+      "target_class": "po_users_kpi_detail",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "empNo"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_organization__po_users_kpi_detail_5",
+      "relation_name": "组织有合同",
+      "source_class": "po_organization",
+      "target_class": "po_users_kpi_detail",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "orgId",
+          "to_field": "empOrgId"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_organization__sales_org_kpi_summary_6",
+      "relation_name": "组织有组织KPI",
+      "source_class": "po_organization",
+      "target_class": "sales_org_kpi_summary",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "orgId",
+          "to_field": "orgId"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_organization__sales_org_kpi_completion_7",
+      "relation_name": "组织有组织KPI完成统计",
+      "source_class": "po_organization",
+      "target_class": "sales_org_kpi_completion",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "orgId",
+          "to_field": "orgId"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__sales_emp_attendance_8",
+      "relation_name": "人员有考勤",
+      "source_class": "po_users",
+      "target_class": "sales_emp_attendance",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "empNo"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__sales_daily_report_9",
+      "relation_name": "人员有日报",
+      "source_class": "po_users",
+      "target_class": "sales_daily_report",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "belongEmpNo"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_sales_business_opportunity__sales_bo_status_change_10",
+      "relation_name": "商机有状态变更记录",
+      "source_class": "sales_business_opportunity",
+      "target_class": "sales_bo_status_change",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "id",
+          "to_field": "boId"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__sales_business_opportunity_11",
+      "relation_name": "人员负责商机",
+      "source_class": "po_users",
+      "target_class": "sales_business_opportunity",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "iwhaleCbmEmpNo"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_organization__sales_business_opportunity_12",
+      "relation_name": "组织负责商机",
+      "source_class": "po_organization",
+      "target_class": "sales_business_opportunity",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "orgId",
+          "to_field": "iwhaleCbmOrgId"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_sales_business_opportunity__sales_customer_13",
+      "relation_name": "商机关联客户",
+      "source_class": "sales_business_opportunity",
+      "target_class": "sales_customer",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "customerName",
+          "to_field": "customerName"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__sales_customer_14",
+      "relation_name": "人员维护客户",
+      "source_class": "po_users",
+      "target_class": "sales_customer",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "iwhaleCbmEmpNo"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__sales_expense_report_15",
+      "relation_name": "费用申请人",
+      "source_class": "po_users",
+      "target_class": "sales_expense_report",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "applicantEmpNo"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_organization__sales_expense_report_16",
+      "relation_name": "费用申请组织",
+      "source_class": "po_organization",
+      "target_class": "sales_expense_report",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "orgId",
+          "to_field": "applicantOrgId"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_sales_expense_report__sales_business_opportunity_17",
+      "relation_name": "费用关联商机",
+      "source_class": "sales_expense_report",
+      "target_class": "sales_business_opportunity",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "relatedBoId",
+          "to_field": "id"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_sales_expense_report__sales_customer_18",
+      "relation_name": "费用关联客户",
+      "source_class": "sales_expense_report",
+      "target_class": "sales_customer",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "relatedCustomerId",
+          "to_field": "id"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__todo_items_19",
+      "relation_name": "人员创建待办",
+      "source_class": "po_users",
+      "target_class": "todo_items",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "promoter"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__todo_items_20",
+      "relation_name": "人员需处理待办",
+      "source_class": "po_users",
+      "target_class": "todo_items",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "handlerIds"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__sales_meeting_note_21",
+      "relation_name": "人员创建会议纪要",
+      "source_class": "po_users",
+      "target_class": "sales_meeting_note",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "participantEmpNos"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_sales_meeting_note__sales_business_opportunity_22",
+      "relation_name": "会议纪要关联商机",
+      "source_class": "sales_meeting_note",
+      "target_class": "sales_business_opportunity",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "relatedBoId",
+          "to_field": "id"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_sales_meeting_note__sales_customer_23",
+      "relation_name": "会议纪要关联客户",
+      "source_class": "sales_meeting_note",
+      "target_class": "sales_customer",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "relatedCustomerId",
+          "to_field": "id"
+        }
+      ]
+    }
+  ]
+}
