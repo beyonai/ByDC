@@ -1,11 +1,11 @@
 {
-  "python.defaultInterpreterPath": "${workspaceFolder}/examples/sales_analysis_demo/mock_env/.venv/Scripts/python.exe",
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": false,
-  "python.testing.cwd": "${workspaceFolder}/examples/sales_analysis_demo/mock_env",
+  "python.testing.cwd": "${workspaceFolder}/packages/datacloud-knowledge",
   "python.testing.pytestArgs": [
     "tests",
-    "-q"
+    "-v"
   ],
   "python.envFile": "${workspaceFolder}/.vscode/.env.test"
 }
