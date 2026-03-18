@@ -26,6 +26,9 @@ try:
 except ImportError as e:
     logger.warning("expense router skipped (missing deps): %s", e)
 
+from sales_analysis_demo.apis.knowledge.router import router as knowledge_router
+router.include_router(knowledge_router)
+
 
 @router.get("/")
 def crm_demo_root() -> dict:
