@@ -1,4 +1,5 @@
 {"op": "add", "term_code": "TERM_EMP", "term_name": "员工", "term_type_code": "ONTOLOGY_OBJ", "domain_code": "DOMAIN_001", "library_code": "LIB_001", "desc_summary": "企业员工概念术语"}
+{"op": "add", "term_code": "TERM_SALES", "term_name": "销售", "term_type_code": "GENERAL", "domain_code": "DOMAIN_001", "library_code": "LIB_001", "desc_summary": "销售角色通用概念，指承担签单、回款职责的员工岗位；考核核心指标为合同完成额与 KPI 达成率"}
 {"op": "add", "term_code": "TERM_XIAOMING", "term_name": "王小明", "term_type_code": "EMPLOYEE", "domain_code": "DOMAIN_002", "library_code": "LIB_001", "parent_term_code": "TERM_EMP", "desc_summary": "销售员工王小明，归属华东大区"}
 {"op": "add", "term_code": "TERM_ORG", "term_name": "组织", "term_type_code": "ONTOLOGY_OBJ", "domain_code": "DOMAIN_001", "library_code": "LIB_001", "desc_summary": "企业组织架构概念"}
 {"op": "add", "term_code": "TERM_CONTRACT", "term_name": "合同", "term_type_code": "ONTOLOGY_OBJ", "domain_code": "DOMAIN_001", "library_code": "LIB_001", "desc_summary": "销售合同概念术语"}

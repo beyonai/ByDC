@@ -93,4 +93,4 @@
 {"op": "add", "term_code": "staffName_0027031699", "term_name": "张育强", "term_type_code": "staffName", "domain_code": "DOMAIN_001", "library_code": "LIB_001", "parent_term_code": "TERM_EMP"}
 {"op": "add", "term_code": "staffName_0027000128", "term_name": "金堃", "term_type_code": "staffName", "domain_code": "DOMAIN_001", "library_code": "LIB_001", "parent_term_code": "TERM_EMP"}
 {"op": "add", "term_code": "staffName_adminvip", "term_name": "adminvip", "term_type_code": "staffName", "domain_code": "DOMAIN_001", "library_code": "LIB_001", "parent_term_code": "TERM_EMP"}
-{"op": "add", "term_code": "staffName_0027024630", "term_name": "王小明", "term_type_code": "staffName", "domain_code": "DOMAIN_001", "library_code": "LIB_001", "parent_term_code": "TERM_EMP"}
+{"op": "add", "term_code": "staffName_0027024630", "term_name": "王小明", "term_type_code": "staffName", "domain_code": "DOMAIN_001", "library_code": "LIB_001", "parent_term_code": "TERM_EMP", "term_tags": {"TERM_SALES": {"type": "role", "value": "销售"}}}
