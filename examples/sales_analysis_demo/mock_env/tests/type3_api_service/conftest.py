@@ -11,7 +11,7 @@ _env_path = (
     .parents[2]  # .../mock_env
     / "src"
     / "sales_analysis_demo"
-    / ".env"
+    / ".env.example"
 )
 if _env_path.exists():
     # 使用 override=True 覆盖上层（例如 mock_env/.env）里的同名变量
