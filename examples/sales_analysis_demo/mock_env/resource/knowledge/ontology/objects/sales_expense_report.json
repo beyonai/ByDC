@@ -63,6 +63,19 @@
       "source_column": "expense_amount"
     },
     {
+      "field_code": "discountExpenseAmount",
+      "field_name": "折后申请金额（元）",
+      "field_type": "DECIMAL",
+      "property_kind": "derived",
+      "derived_config": {
+        "mode": "expression",
+        "expression": "expenseAmount * 0.9",
+        "depends_on": [
+          "expenseAmount"
+        ]
+      }
+    },
+    {
       "field_code": "expenseDesc",
       "field_name": "申请说明",
       "field_type": "STRING",
