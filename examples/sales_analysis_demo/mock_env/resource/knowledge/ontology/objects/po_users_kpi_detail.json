@@ -1,0 +1,105 @@
+{
+  "object_code": "po_users_kpi_detail",
+  "object_name": "合同对象",
+  "description": "个人合同表，记录员工签订的合同信息，用于KPI完成统计",
+  "source_type": "DB",
+  "tags": [
+    "CRM",
+    "合同",
+    "KPI"
+  ],
+  "fields": [
+    {
+      "field_code": "id",
+      "field_name": "主键ID",
+      "field_type": "BIGINT",
+      "required": true,
+      "is_primary_key": true,
+      "source_column": "id"
+    },
+    {
+      "field_code": "empNo",
+      "field_name": "责任人工号或名称",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "emp_no",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "staffName",
+        "termField": "code"
+      }
+    },
+    {
+      "field_code": "name",
+      "field_name": "责任人姓名",
+      "field_type": "STRING",
+      "source_column": "name",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "staffName",
+        "termField": "name"
+      }
+    },
+    {
+      "field_code": "empOrgId",
+      "field_name": "责任人组织",
+      "field_type": "STRING",
+      "source_column": "emp_org_id",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "orgName",
+        "termField": "code"
+      }
+    },
+    {
+      "field_code": "contactNo",
+      "field_name": "合同号",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "contact_no"
+    },
+    {
+      "field_code": "contactName",
+      "field_name": "合同名称",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "contact_name"
+    },
+    {
+      "field_code": "contactDate",
+      "field_name": "合同时间",
+      "field_type": "DATE",
+      "required": true,
+      "source_column": "contact_date"
+    },
+    {
+      "field_code": "softSell",
+      "field_name": "软销金额",
+      "field_type": "STRING",
+      "source_column": "soft_sell"
+    },
+    {
+      "field_code": "contactScale",
+      "field_name": "合同金额",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "contact_scale"
+    }
+  ],
+  "source_config": {
+    "alias": "ds_crm",
+    "db_type": "OPENGAUSS",
+    "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+    "user": "gaussdb",
+    "password": "OpenGauss@123",
+    "pool_min": 1,
+    "pool_max": 5
+  },
+  "datasource_alias": "ds_crm",
+  "table_name": "sales_person_kpi_summary",
+  "action_refs": [],
+  "relations": []
+}

@@ -1,0 +1,35 @@
+{
+  "action_code": "accept_todo",
+  "action_name": "接收待办",
+  "description": "接收/认领指定待办事项",
+  "action_type": "operation",
+  "params": [
+    {
+      "param_code": "todoId",
+      "param_name": "待办ID",
+      "param_type": "STRING",
+      "direction": "IN",
+      "required": true,
+      "mapping_path": "$.parameters.todoId"
+    },
+    {
+      "param_code": "todoId",
+      "param_name": "待办ID",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.todoId"
+    },
+    {
+      "param_code": "status",
+      "param_name": "待办状态",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.status"
+    }
+  ],
+  "function_refs": [
+    "fn_todo_accept"
+  ],
+  "script": null,
+  "belong_class": "todo_items"
+}
