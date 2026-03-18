@@ -8,7 +8,7 @@ import logging
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
-from datacloud_knowledge.file_store import FileManager
+from ...file_store import FileManager
 
 from ..deps import get_file_manager
 from ..schema import ImportResult, TermCreateResponse, TermUpdateResponse
