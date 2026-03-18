@@ -6,17 +6,17 @@
   "import_steps": [
     {
       "type": "meta",
-      "file": "meta/domains.json",
+      "file": "meta/domains.jsonl",
       "description": "业务领域定义"
     },
     {
       "type": "meta",
-      "file": "meta/libraries.json",
+      "file": "meta/libraries.jsonl",
       "description": "知识库定义"
     },
     {
       "type": "term_types",
-      "file": "term_types/custom.json",
+      "file": "term_types/custom.jsonl",
       "description": "用户自定义术语类型（字典/列表/本体扩展）"
     },
     {
