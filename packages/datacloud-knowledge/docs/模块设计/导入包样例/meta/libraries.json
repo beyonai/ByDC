@@ -1,8 +1,0 @@
-{
-  "type": "libraries",
-  "items": [
-    { "op": "add", "library_code": "hr_kb",    "library_name": "人力资源知识库" },
-    { "op": "add", "library_code": "crm_kb",   "library_name": "CRM知识库" },
-    { "op": "add", "library_code": "sales_kb", "library_name": "销售业务知识库" }
-  ]
-}

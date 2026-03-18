@@ -40,46 +40,33 @@
   "description": "本次导入说明",
   "created_at": "2026-03-18",
   "import_steps": [
-    { "type": "meta",       "file": "meta/domains.json",          "description": "..." },
-    { "type": "meta",       "file": "meta/libraries.json",         "description": "..." },
-    { "type": "term_types", "file": "term_types/custom.json",      "description": "..." },
+    { "type": "meta",       "file": "meta/domains.jsonl",          "description": "..." },
+    { "type": "meta",       "file": "meta/libraries.jsonl",         "description": "..." },
+    { "type": "term_types", "file": "term_types/custom.jsonl",      "description": "..." },
     { "type": "terms",      "file": "terms/sales.jsonl",           "description": "...", "count": 13 },
     { "type": "relations",  "file": "relations/sales.jsonl",       "description": "...", "count": 5  }
   ]
 }
 ```
 
-### meta/domains.json
+### meta/domains.jsonl
 
-```json
-{
-  "type": "domains",
-  "items": [
-    { "op": "add", "domain_code": "sales", "domain_name": "销售领域", "parent_code": "", "domain_desc": "..." }
-  ]
-}
+```jsonl
+{"op":"add","domain_code":"sales","domain_name":"销售领域","domain_desc":"..."}
+{"op":"add","domain_code":"sales_crm","domain_name":"CRM子领域","parent_code":"sales"}
 ```
 
-### meta/libraries.json
+### meta/libraries.jsonl
 
-```json
-{
-  "type": "libraries",
-  "items": [
-    { "op": "add", "library_code": "crm_kb", "library_name": "CRM知识库" }
-  ]
-}
+```jsonl
+{"op":"add","library_code":"crm_kb","library_name":"CRM知识库"}
+{"op":"add","library_code":"hr_kb","library_name":"人力资源知识库"}
 ```
 
-### term_types/custom.json
+### term_types/custom.jsonl
 
-```json
-{
-  "type": "term_types",
-  "items": [
-    { "op": "add", "type_code": "CUSTOMER_TYPE", "type_name": "客户类型", "type_desc": "...", "type_category": "字典术语", "is_builtin": false }
-  ]
-}
+```jsonl
+{"op":"add","type_code":"CUSTOMER_TYPE","type_name":"客户类型","type_desc":"...","type_category":"字典术语","is_builtin":false}
 ```
 
 ### terms/*.jsonl（每行一条）
