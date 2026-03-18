@@ -103,10 +103,20 @@ def apply_seed() -> None:
 
 
 def main() -> None:
-    """Apply DDL then seed data for whale_datacloud schema."""
+    """Apply DDL then seed data for whale_datacloud schema.
+
+    Usage:
+        python apply_whale_datacloud.py            # 完整初始化（DDL + Seed）
+        python apply_whale_datacloud.py --seed-only  # 仅执行 Seed（幂等，不 drop 表）
+    """
+    import sys
+
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    apply_ddl()
-    apply_seed()
+    if "--seed-only" in sys.argv:
+        apply_seed()
+    else:
+        apply_ddl()
+        apply_seed()
 
 
 if __name__ == "__main__":
