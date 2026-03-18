@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-# ── 把 knowledge_build 模块所在目录加入 sys.path ──────────────────────────────
-# packages/datacloud-knowledge/src/datacloud_knowledge/
+# ── 把 datacloud_knowledge 包所在目录加入 sys.path ────────────────────────────
+# packages/datacloud-knowledge/src/  ← 在此级别挂载，使 datacloud_knowledge 成为顶层包
 _REPO_ROOT = Path(__file__).resolve().parents[5]   # repo root
 
 _KB_SRC = (
@@ -25,7 +25,6 @@ _KB_SRC = (
     / "packages"
     / "datacloud-knowledge"
     / "src"
-    / "datacloud_knowledge"
 )
 if str(_KB_SRC) not in sys.path:
     sys.path.insert(0, str(_KB_SRC))
@@ -43,7 +42,7 @@ def knowledge_client():
 
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-    from knowledge_build.router import router as kb_router
+    from datacloud_knowledge.knowledge_build.router import router as kb_router
 
     app = FastAPI(title="knowledge-build-test")
     app.include_router(kb_router)
