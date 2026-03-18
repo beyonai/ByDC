@@ -1,0 +1,156 @@
+{
+  "object_code": "sales_expense_report",
+  "object_name": "费用报备对象",
+  "description": "销售费用报备表，记录营销费用申请信息",
+  "source_type": "API",
+  "tags": [
+    "CRM",
+    "费用"
+  ],
+  "fields": [
+    {
+      "field_code": "id",
+      "field_name": "主键ID",
+      "field_type": "BIGINT",
+      "required": true,
+      "is_primary_key": true,
+      "source_column": "id"
+    },
+    {
+      "field_code": "applicantEmpNo",
+      "field_name": "申请人工号或名称",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "applicant_emp_no",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "staffName",
+        "termField": "code"
+      }
+    },
+    {
+      "field_code": "applicantName",
+      "field_name": "申请人姓名",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "applicant_name",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "staffName",
+        "termField": "name"
+      }
+    },
+    {
+      "field_code": "applicantOrgId",
+      "field_name": "申请组织ID",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "applicant_org_id",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "orgName",
+        "termField": "code"
+      }
+    },
+    {
+      "field_code": "expenseAmount",
+      "field_name": "申请金额（元）",
+      "field_type": "DECIMAL",
+      "required": true,
+      "source_column": "expense_amount"
+    },
+    {
+      "field_code": "discountExpenseAmount",
+      "field_name": "折后申请金额（元）",
+      "field_type": "DECIMAL",
+      "property_kind": "derived",
+      "derived_config": {
+        "mode": "expression",
+        "expression": "expenseAmount * 0.9",
+        "depends_on": [
+          "expenseAmount"
+        ]
+      }
+    },
+    {
+      "field_code": "expenseDesc",
+      "field_name": "申请说明",
+      "field_type": "STRING",
+      "source_column": "expense_desc"
+    },
+    {
+      "field_code": "relatedBoId",
+      "field_name": "关联商机ID",
+      "field_type": "STRING",
+      "source_column": "related_bo_id"
+    },
+    {
+      "field_code": "relatedCustomerId",
+      "field_name": "关联客户ID",
+      "field_type": "STRING",
+      "source_column": "related_customer_id"
+    },
+    {
+      "field_code": "applyTime",
+      "field_name": "申请时间",
+      "field_type": "TIMESTAMP",
+      "required": true,
+      "source_column": "apply_time"
+    },
+    {
+      "field_code": "approvalStatus",
+      "field_name": "审批状态",
+      "field_type": "STRING",
+      "source_column": "approval_status"
+    },
+    {
+      "field_code": "approvalComment",
+      "field_name": "审批意见",
+      "field_type": "STRING",
+      "source_column": "approval_comment"
+    },
+    {
+      "field_code": "approvedAt",
+      "field_name": "审批时间",
+      "field_type": "TIMESTAMP",
+      "source_column": "approved_at"
+    }
+  ],
+  "datasource_alias": null,
+  "table_name": null,
+  "action_refs": [
+    "apply_expense_report",
+    "update_expense_report",
+    "approve_expense_report",
+    "query_expense_report"
+  ],
+  "relations": [
+    {
+      "target_class": "sales_business_opportunity",
+      "relation_type": "ONE_TO_MANY",
+      "relation_code": "rel_sales_expense_report__sales_business_opportunity_17",
+      "relation_name": "费用关联商机",
+      "join_keys": [
+        {
+          "from_field": "relatedBoId",
+          "to_field": "id"
+        }
+      ]
+    },
+    {
+      "target_class": "sales_customer",
+      "relation_type": "ONE_TO_MANY",
+      "relation_code": "rel_sales_expense_report__sales_customer_18",
+      "relation_name": "费用关联客户",
+      "join_keys": [
+        {
+          "from_field": "relatedCustomerId",
+          "to_field": "id"
+        }
+      ]
+    }
+  ]
+}

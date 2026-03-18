@@ -1,0 +1,136 @@
+{
+  "action_code": "create_todo",
+  "action_name": "创建待办",
+  "description": "创建待办事项并指定处理人",
+  "action_type": "operation",
+  "params": [
+    {
+      "param_code": "title",
+      "param_name": "待办标题",
+      "param_type": "STRING",
+      "direction": "IN",
+      "required": true,
+      "mapping_path": "$.requestBody.title"
+    },
+    {
+      "param_code": "deadlineAt",
+      "param_name": "截止时间",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.deadlineAt"
+    },
+    {
+      "param_code": "handlerIds",
+      "param_name": "处理人ID或名称列表",
+      "param_type": "ARRAY",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.handlerIds",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "staffName",
+        "termField": "code"
+      }
+    },
+    {
+      "param_code": "priority",
+      "param_name": "优先级",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.priority",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "dict",
+        "termTypeCode": "priority",
+        "termField": "code"
+      }
+    },
+    {
+      "param_code": "urgencyLevel",
+      "param_name": "紧急程度",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.urgencyLevel",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "dict",
+        "termTypeCode": "urgencyLevel",
+        "termField": "code"
+      }
+    },
+    {
+      "param_code": "content",
+      "param_name": "待办内容",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.content"
+    },
+    {
+      "param_code": "meetingNoteId",
+      "param_name": "会议纪要ID",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.meetingNoteId"
+    },
+    {
+      "param_code": "promoter",
+      "param_name": "发起人工号或名称",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.promoter",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "staffName",
+        "termField": "code"
+      }
+    },
+    {
+      "param_code": "remark",
+      "param_name": "备注",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.remark"
+    },
+    {
+      "param_code": "todoId",
+      "param_name": "待办ID",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.todoId"
+    },
+    {
+      "param_code": "errorMsg",
+      "param_name": "错误信息",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.errorMsg"
+    },
+    {
+      "param_code": "status",
+      "param_name": "待办状态",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.status"
+    },
+    {
+      "param_code": "title",
+      "param_name": "待办标题",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.title"
+    },
+    {
+      "param_code": "createdAt",
+      "param_name": "创建时间",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.createdAt"
+    }
+  ],
+  "function_refs": [
+    "fn_todo_create"
+  ],
+  "script": null,
+  "belong_class": "todo_items"
+}
