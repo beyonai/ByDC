@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "package_id": "sales_init_20260318",
+  "description": "销售领域知识库首次初始化，包含 HR 人员组织、销售业务对象、待办流程等本体术语",
+  "created_at": "2026-03-18",
+  "import_steps": [
+    {
+      "type": "meta",
+      "file": "meta/domains.json",
+      "description": "业务领域定义"
+    },
+    {
+      "type": "meta",
+      "file": "meta/libraries.json",
+      "description": "知识库定义"
+    },
+    {
+      "type": "term_types",
+      "file": "term_types/custom.json",
+      "description": "用户自定义术语类型（字典/列表/本体扩展）"
+    },
+    {
+      "type": "terms",
+      "file": "terms/hr_ontology.jsonl",
+      "description": "HR 领域本体术语（人员、组织）",
+      "count": 2
+    },
+    {
+      "type": "terms",
+      "file": "terms/sales_ontology.jsonl",
+      "description": "销售领域本体术语（客户、商机、费用报销等）",
+      "count": 13
+    },
+    {
+      "type": "relations",
+      "file": "relations/sales.jsonl",
+      "description": "销售领域术语间关系",
+      "count": 5
+    }
+  ]
+}
