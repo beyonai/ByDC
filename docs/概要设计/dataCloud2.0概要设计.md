@@ -1,6 +1,6 @@
 # dataCloud方案设计
 
-## 0 战略定位
+## 0 openClaw&dataCloud关系
 
 ### 0.1 行业竞品
 
