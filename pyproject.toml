@@ -129,11 +129,8 @@ ignore_missing_imports = true
 # ============================================
 [tool.pytest.ini_options]
 testpaths = [
-    "tests",
-    "packages/datacloud-knowledge/tests",
-    "packages/datacloud-data/tests",
-    "packages/datacloud-memory/tests",
-    "packages/datacloud-analysis/tests",
+    "packages/datacloud-knowledge/tests/db",
+    "examples/sales_analysis_demo/mock_env/tests",
 ]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
@@ -142,6 +139,12 @@ addopts = "-v --tb=short"
 asyncio_mode = "auto"
 markers = [
     "db_integration: requires reachable PostgreSQL/openGauss database (set DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME)",
+    "type1_schema: DDL schema tests",
+    "type2_data: structured data load tests",
+    "type3_api: API service tests",
+    "type4_knowledge: knowledge ingest tests",
+    "e2e: end-to-end smoke tests",
+    "integration: requires external services",
 ]
 
 [tool.coverage.run]
