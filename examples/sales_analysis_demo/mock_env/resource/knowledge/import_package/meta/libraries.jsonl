@@ -1,0 +1,6 @@
+{"op": "add", "library_code": "LIB_001", "library_name": "HR系统术语库"}
+{"op": "add", "library_code": "LIB_002", "library_name": "CRM术语库"}
+{"op": "add", "library_code": "LIB_003", "library_name": "基础业务术语"}
+{"op": "add", "library_code": "LIB_004", "library_name": "手动补充术语"}
+{"op": "add", "library_code": "LIB_005", "library_name": "2026Q1导入批次"}
+{"op": "add", "library_code": "LIB_006", "library_name": "产品文档知识库"}
