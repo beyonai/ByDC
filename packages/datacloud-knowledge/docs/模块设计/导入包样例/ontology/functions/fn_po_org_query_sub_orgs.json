@@ -1,0 +1,94 @@
+{
+  "function_code": "fn_po_org_query_sub_orgs",
+  "function_name": "查询下级组织",
+  "description": "按组织ID查询其下级组织列表",
+  "function_type": "API",
+  "api_schema": {
+    "openapi": "3.0.3",
+    "info": {
+      "title": "查询下级组织",
+      "version": "1.0.0"
+    },
+    "servers": [
+      {
+        "url": "http://127.0.0.1:8001"
+      }
+    ],
+    "paths": {
+      "/api/v1/po/organizations/children": {
+        "post": {
+          "summary": "查询指定组织的下级组织",
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "orgId": {
+                      "type": "string",
+                      "description": "组织ID"
+                    },
+                    "recursive": {
+                      "type": "boolean",
+                      "description": "是否递归查询所有下级"
+                    }
+                  },
+                  "required": [
+                    "orgId"
+                  ]
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "下级组织列表",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "organizations": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "orgId": {
+                              "type": "string",
+                              "description": "组织ID"
+                            },
+                            "orgName": {
+                              "type": "string",
+                              "description": "组织名称"
+                            },
+                            "orgCode": {
+                              "type": "string",
+                              "description": "组织编码"
+                            },
+                            "parentOrgId": {
+                              "type": "string",
+                              "description": "父组织ID"
+                            },
+                            "orgLevel": {
+                              "type": "integer",
+                              "description": "组织层级"
+                            },
+                            "orgType": {
+                              "type": "string",
+                              "description": "组织类型"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

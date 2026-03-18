@@ -1,0 +1,85 @@
+{
+  "object_code": "po_users_kpi_completion",
+  "object_name": "个人KPI完成统计对象",
+  "description": "个人KPI完成统计表，按周/月账期统计员工KPI完成情况",
+  "source_type": "DB",
+  "tags": [
+    "CRM",
+    "KPI",
+    "完成统计"
+  ],
+  "fields": [
+    {
+      "field_code": "id",
+      "field_name": "主键ID",
+      "field_type": "BIGINT",
+      "required": true,
+      "is_primary_key": true,
+      "source_column": "id"
+    },
+    {
+      "field_code": "empNo",
+      "field_name": "责任人工号",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "emp_no",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "staffName",
+        "termField": "code"
+      }
+    },
+    {
+      "field_code": "periodType",
+      "field_name": "账期类型",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "period_type"
+    },
+    {
+      "field_code": "periodValue",
+      "field_name": "账期值",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "period_value"
+    },
+    {
+      "field_code": "kpiYear",
+      "field_name": "对应KPI年度",
+      "field_type": "STRING",
+      "source_column": "kpi_year"
+    },
+    {
+      "field_code": "completedContractAmount",
+      "field_name": "该账期已完成合同金额（万元）",
+      "field_type": "DECIMAL",
+      "source_column": "completed_contract_amount"
+    },
+    {
+      "field_code": "completedSoftSell",
+      "field_name": "该账期已完成软销金额（万元）",
+      "field_type": "DECIMAL",
+      "source_column": "completed_soft_sell"
+    },
+    {
+      "field_code": "contractCount",
+      "field_name": "该账期签约合同笔数",
+      "field_type": "INTEGER",
+      "source_column": "contract_count"
+    }
+  ],
+  "source_config": {
+    "alias": "ds_crm",
+    "db_type": "OPENGAUSS",
+    "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+    "user": "gaussdb",
+    "password": "OpenGauss@123",
+    "pool_min": 1,
+    "pool_max": 5
+  },
+  "datasource_alias": "ds_crm",
+  "table_name": "po_users_kpi_completion",
+  "action_refs": [],
+  "relations": []
+}

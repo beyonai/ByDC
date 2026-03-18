@@ -1,0 +1,65 @@
+{
+  "function_code": "fn_todo_delete",
+  "function_name": "删除待办",
+  "description": "批量删除待办事项",
+  "function_type": "API",
+  "api_schema": {
+    "openapi": "3.0.3",
+    "info": {
+      "title": "删除待办",
+      "version": "1.0.0"
+    },
+    "servers": [
+      {
+        "url": "http://127.0.0.1:8001"
+      }
+    ],
+    "paths": {
+      "/api/v1/todos/batch": {
+        "post": {
+          "summary": "批量删除待办",
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "todoIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "待办ID列表"
+                    }
+                  },
+                  "required": [
+                    "todoIds"
+                  ]
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "删除结果",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "deletedIds": {
+                        "type": "string",
+                        "description": "删除成功的ID串"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

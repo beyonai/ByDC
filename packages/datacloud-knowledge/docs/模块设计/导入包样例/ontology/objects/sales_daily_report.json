@@ -1,0 +1,104 @@
+{
+  "object_code": "sales_daily_report",
+  "object_name": "日报对象",
+  "description": "钉钉来源的员工日报记录，包含每日工作汇报内容",
+  "source_type": "KNOWLEDGE_BASE",
+  "tags": [
+    "日报",
+    "非结构化"
+  ],
+  "fields": [
+    {
+      "field_code": "id",
+      "field_name": "主键ID",
+      "field_type": "BIGINT",
+      "required": true,
+      "is_primary_key": true,
+      "source_column": "id"
+    },
+    {
+      "field_code": "reportDate",
+      "field_name": "日报日期",
+      "field_type": "DATE",
+      "required": true,
+      "source_column": "report_date"
+    },
+    {
+      "field_code": "reportTitle",
+      "field_name": "日报标题",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "report_title"
+    },
+    {
+      "field_code": "reportContent",
+      "field_name": "日报内容",
+      "field_type": "JSON",
+      "source_column": "report_content"
+    },
+    {
+      "field_code": "reportStatus",
+      "field_name": "日报状态",
+      "field_type": "INTEGER",
+      "required": true,
+      "source_column": "report_status",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "dict",
+        "termTypeCode": "reportStatus",
+        "termField": "code"
+      }
+    },
+    {
+      "field_code": "belongEmpNo",
+      "field_name": "员工工号或名称",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "belong_emp_no",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "staffName",
+        "termField": "code"
+      }
+    },
+    {
+      "field_code": "belongUserName",
+      "field_name": "员工姓名",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "belong_user_name",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "staffName",
+        "termField": "name"
+      }
+    },
+    {
+      "field_code": "belongEmpOrgId",
+      "field_name": "归属用户所在的组织ID",
+      "field_type": "STRING",
+      "source_column": "belong_emp_org_id",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "orgName",
+        "termField": "code"
+      }
+    }
+  ],
+  "source_config": {
+    "alias": "knowledge",
+    "db_type": "OPENGAUSS",
+    "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+    "user": "gaussdb",
+    "password": "OpenGauss@123",
+    "pool_min": 1,
+    "pool_max": 5
+  },
+  "datasource_alias": "knowledge",
+  "table_name": "sales_daily_report",
+  "action_refs": [],
+  "relations": []
+}
