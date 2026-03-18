@@ -1,0 +1,166 @@
+{
+  "function_code": "fn_todo_query_list",
+  "function_name": "查询待办列表",
+  "description": "查询待办事项列表，支持多种过滤条件",
+  "function_type": "API",
+  "api_schema": {
+    "openapi": "3.0.3",
+    "info": {
+      "title": "查询待办列表",
+      "version": "1.0.0"
+    },
+    "servers": [
+      {
+        "url": "http://127.0.0.1:8001"
+      }
+    ],
+    "paths": {
+      "/api/v1/todos/list": {
+        "post": {
+          "summary": "查询待办列表",
+          "requestBody": {
+            "required": false,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "priority": {
+                      "type": "string",
+                      "description": "优先级"
+                    },
+                    "urgencyLevel": {
+                      "type": "string",
+                      "description": "紧急程度"
+                    },
+                    "orgId": {
+                      "type": "string",
+                      "description": "组织ID"
+                    },
+                    "meetingNoteIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "会议纪要ID列表"
+                    },
+                    "statusList": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "待办状态列表"
+                    },
+                    "page": {
+                      "type": "string",
+                      "description": "页码"
+                    },
+                    "keyword": {
+                      "type": "string",
+                      "description": "关键词搜索"
+                    },
+                    "deadlineEnd": {
+                      "type": "string",
+                      "description": "截止时间结束，格式yyyy-MM-dd HH:mm:ss"
+                    },
+                    "status": {
+                      "type": "string",
+                      "description": "待办状态"
+                    },
+                    "promoter": {
+                      "type": "string",
+                      "description": "单据人/发起人员工工号"
+                    },
+                    "deadlineStart": {
+                      "type": "string",
+                      "description": "截止开始时间，格式yyyy-MM-dd HH:mm:ss"
+                    },
+                    "pageSize": {
+                      "type": "string",
+                      "description": "页大小"
+                    },
+                    "includeSubOrgs": {
+                      "type": "string",
+                      "description": "是否查询下级组织，true 是，false 否"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "待办列表",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "todoId": {
+                          "type": "string"
+                        },
+                        "deadlineAt": {
+                          "type": "string"
+                        },
+                        "approvalComment": {
+                          "type": "string"
+                        },
+                        "priority": {
+                          "type": "string"
+                        },
+                        "urgencyLevel": {
+                          "type": "string"
+                        },
+                        "content": {
+                          "type": "string"
+                        },
+                        "progress": {
+                          "type": "integer"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "completedAt": {
+                          "type": "string"
+                        },
+                        "meetingNoteId": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "approvedAt": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "handleContent": {
+                          "type": "string"
+                        },
+                        "handlers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        },
+                        "returnReason": {
+                          "type": "string"
+                        },
+                        "promoter": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
