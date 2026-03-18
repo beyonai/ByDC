@@ -19,3 +19,16 @@ CREATE TABLE IF NOT EXISTS whale_datacloud.term (
     CONSTRAINT fk_term_library
         FOREIGN KEY (library_id) REFERENCES whale_datacloud.term_library(library_id)
 );
+
+COMMENT ON TABLE whale_datacloud.term IS '术语主表：存储所有术语及其核心属性';
+COMMENT ON COLUMN whale_datacloud.term.term_id        IS '术语ID，主键';
+COMMENT ON COLUMN whale_datacloud.term.term_name      IS '术语标准名称，全局唯一规范名';
+COMMENT ON COLUMN whale_datacloud.term.desc_summary   IS '术语描述摘要，约100字，用于快速展示；完整知识在 term_knowledge 表';
+COMMENT ON COLUMN whale_datacloud.term.parent_term_id IS '父术语ID：NULL=概念术语，有值=实例术语（指向所属概念的 term_id）';
+COMMENT ON COLUMN whale_datacloud.term.owl_doc_id     IS 'OWL本体定义文件ID，仅本体术语（type_category=3）填写，其余为 NULL';
+COMMENT ON COLUMN whale_datacloud.term.domain_id      IS '所属领域ID，外键关联 domain 表';
+COMMENT ON COLUMN whale_datacloud.term.term_type_code IS '术语类型编码，外键关联 term_type(type_code)';
+COMMENT ON COLUMN whale_datacloud.term.library_id     IS '所属术语库ID，外键关联 term_library 表，允许为空';
+COMMENT ON COLUMN whale_datacloud.term.term_tags      IS '术语标签属性，JSONB 格式；key=标签维度术语ID，value={type, value}';
+COMMENT ON COLUMN whale_datacloud.term.created_time   IS '创建时间';
+COMMENT ON COLUMN whale_datacloud.term.updated_time   IS '更新时间';
