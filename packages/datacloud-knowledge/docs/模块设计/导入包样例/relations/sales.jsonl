@@ -1,0 +1,5 @@
+{"op":"add","source_term_code":"po_users","target_term_code":"po_organization","relation_name":"人员_归属_组织","relation_category":"ONTOLOGY","cardinality":"N:1"}
+{"op":"add","source_term_code":"po_users","target_term_code":"sales_customer","relation_name":"人员_维护_客户","relation_category":"BUSINESS","cardinality":"1:N","action_term_code":"action_query_customer"}
+{"op":"add","source_term_code":"po_users","target_term_code":"todo_items","relation_name":"人员_创建_待办","relation_category":"BUSINESS","cardinality":"1:N","action_term_code":"action_create_todo"}
+{"op":"add","source_term_code":"sales_business_opportunity","target_term_code":"sales_customer","relation_name":"商机_关联_客户","relation_category":"ONTOLOGY","cardinality":"N:1"}
+{"op":"add","source_term_code":"sales_expense_report","target_term_code":"sales_business_opportunity","relation_name":"报销单_关联_商机","relation_category":"BUSINESS","cardinality":"N:1"}
