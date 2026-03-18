@@ -1,3 +1,4 @@
+```mermaid
 erDiagram
     TermLibrary ||--o{ Term : "来源"
     Domain ||--o{ Term : "包含"
@@ -9,80 +10,83 @@ erDiagram
     Term ||--o{ TermName : "名称"
     Term ||--o{ TermKnowledge : "关联知识"
     TermName ||--o{ TermVocabulary : "去重派生"
-
+    
     Domain {
         VARCHAR(64) domain_id PK "领域ID"
         VARCHAR(255) domain_name "领域名称"
         VARCHAR(64) parent_id FK "父级领域ID"
         TEXT domain_desc "领域描述"
-        TIMESTAMP created_time "创建时间"
-        TIMESTAMP updated_time "更新时间"
+        DATETIME created_time "创建时间"
+        DATETIME updated_time "更新时间"
     }
-
+    
     TermType {
-        VARCHAR(32) type_code PK "术语类型编码"
+        BIGSERIAL type_id PK "自增主键"
+        VARCHAR(32) type_code UK "术语类型编码-唯一"
         VARCHAR(255) type_name "术语类型名称"
         TEXT type_desc "术语类型描述"
-        INT type "大分类：1=列表,2=字典,3=本体,4=文档"
-        TIMESTAMP created_time "创建时间"
-        TIMESTAMP updated_time "更新时间"
+        INT type_category "大分类：1=列表,2=字典,3=本体,4=文档"
+        BOOLEAN is_builtin "是否内置-true=系统预置不可删,false=用户自定义"
+        DATETIME created_time "创建时间"
+        DATETIME updated_time "更新时间"
     }
-
+    
     TermLibrary {
         VARCHAR(64) library_id PK "术语库ID"
         VARCHAR(255) library_name "术语库名称"
-        TIMESTAMP created_time "创建时间"
-        TIMESTAMP updated_time "更新时间"
+        DATETIME created_time "创建时间"
+        DATETIME updated_time "更新时间"
     }
-
+    
     Term {
         VARCHAR(64) term_id PK "术语ID"
         VARCHAR(255) term_name "术语标准名称"
-        TEXT desc_summary "术语描述摘要"
+        TEXT desc_summary "术语描述摘要，一般为描述的前100个字"
         VARCHAR(64) parent_term_id FK "父术语ID-NULL=概念,有值=实例"
-        VARCHAR(128) owl_doc_id "OWL本体定义文件ID"
+        VARCHAR(128) owl_doc_id "OWL本体定义文件ID-仅本体术语填写"
         VARCHAR(64) domain_id FK "所属领域ID"
         VARCHAR(32) term_type_code FK "术语类型编码"
         VARCHAR(64) library_id FK "所属术语库ID"
-        JSONB term_tags "术语标签属性"
-        TIMESTAMP created_time "创建时间"
-        TIMESTAMP updated_time "更新时间"
+        JSONB term_tags "术语标签属性-结构化键值对"
+        DATETIME created_time "创建时间"
+        DATETIME updated_time "更新时间"
     }
 
     TermKnowledge {
         VARCHAR(64) knowledge_id PK "知识ID"
         VARCHAR(64) term_id FK "归属术语ID"
-        TEXT desc_summary "知识摘要"
-        TEXT desc "知识原文"
-        VARCHAR(32) ext_system "外部系统编码"
-        VARCHAR(128) ext_kb_id "外部知识库ID"
-        VARCHAR(128) ext_doc_id "外部文档ID"
+        TEXT desc_summary "知识摘要-内部落地"
+        TEXT desc "知识原文-内部落地"
+        VARCHAR(32) ext_system "外部系统编码-外挂模式"
+        VARCHAR(128) ext_kb_id "外部知识库ID-外挂模式"
+        VARCHAR(128) ext_doc_id "外部文档ID-外挂模式"
         INT sort_order "排序"
-        TIMESTAMP created_time "创建时间"
-        TIMESTAMP updated_time "更新时间"
+        DATETIME created_time "创建时间"
+        DATETIME updated_time "更新时间"
     }
-
+    
     TermRelation {
         VARCHAR(64) relation_id PK "关系ID"
         VARCHAR(64) source_term_id FK "源术语ID"
         VARCHAR(64) target_term_id FK "目标术语ID"
-        VARCHAR(255) relation_name "关系名称"
+        VARCHAR(255) relation_name "关系名称-源术语_动词_目标术语"
         VARCHAR(16) relation_category "关系类别-ONTOLOGY/BUSINESS"
         VARCHAR(8) cardinality "数量约束-1:1/1:N/N:1/N:N"
-        VARCHAR(64) action_term_id FK "绑定的动作术语ID"
-        TIMESTAMP created_time "创建时间"
-        TIMESTAMP updated_time "更新时间"
+        VARCHAR(64) action_term_id FK "绑定的动作术语ID-ACTION类型"
+        DATETIME created_time "创建时间"
+        DATETIME updated_time "更新时间"
     }
-
+    
     TermName {
         VARCHAR(64) name_id PK "名称ID"
         VARCHAR(64) term_id FK "术语ID"
         VARCHAR(255) name_text "名称文本"
-        TIMESTAMP created_time "创建时间"
-        TIMESTAMP updated_time "更新时间"
+        DATETIME created_time "创建时间"
+        DATETIME updated_time "更新时间"
     }
 
     TermVocabulary {
         BIGSERIAL vocab_id PK "词汇ID"
         VARCHAR(255) word UK "词汇文本-唯一"
     }
+```
