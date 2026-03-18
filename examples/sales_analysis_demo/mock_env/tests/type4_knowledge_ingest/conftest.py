@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 # ── 把 knowledge_build 模块所在目录加入 sys.path ──────────────────────────────
-# packages/datacloud-knowledge/src/datacloud-knowledge/
+# packages/datacloud-knowledge/src/datacloud_knowledge/
 _REPO_ROOT = Path(__file__).resolve().parents[5]   # repo root
 
 _KB_SRC = (
@@ -25,7 +25,7 @@ _KB_SRC = (
     / "packages"
     / "datacloud-knowledge"
     / "src"
-    / "datacloud-knowledge"
+    / "datacloud_knowledge"
 )
 if str(_KB_SRC) not in sys.path:
     sys.path.insert(0, str(_KB_SRC))
