@@ -1,0 +1,75 @@
+{
+  "action_code": "query_org_by_name_or_id",
+  "action_name": "按名称或ID查询组织",
+  "description": "按组织ID列表或名称列表批量查询组织详情",
+  "action_type": "query",
+  "params": [
+    {
+      "param_code": "orgIds",
+      "param_name": "组织ID或名称列表",
+      "param_type": "ARRAY",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.orgIds",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "orgName",
+        "termField": "code"
+      }
+    },
+    {
+      "param_code": "orgId",
+      "param_name": "组织ID",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.organizations[].orgId"
+    },
+    {
+      "param_code": "orgName",
+      "param_name": "组织名称",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.organizations[].orgName"
+    },
+    {
+      "param_code": "orgCode",
+      "param_name": "组织编码",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.organizations[].orgCode"
+    },
+    {
+      "param_code": "parentOrgId",
+      "param_name": "父组织ID",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.organizations[].parentOrgId"
+    },
+    {
+      "param_code": "orgLevel",
+      "param_name": "组织层级",
+      "param_type": "INTEGER",
+      "direction": "OUT",
+      "mapping_path": "$.organizations[].orgLevel"
+    },
+    {
+      "param_code": "orgType",
+      "param_name": "组织类型",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.organizations[].orgType"
+    },
+    {
+      "param_code": "orgDesc",
+      "param_name": "组织描述",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.organizations[].orgDesc"
+    }
+  ],
+  "function_refs": [
+    "fn_po_org_query_by_ids"
+  ],
+  "script": null,
+  "belong_class": "po_organization"
+}
