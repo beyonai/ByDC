@@ -1,0 +1,80 @@
+{
+  "function_code": "fn_expense_approve",
+  "function_name": "审批费用报备",
+  "description": "批量审批费用报备（通过或拒绝）",
+  "function_type": "API",
+  "api_schema": {
+    "openapi": "3.0.3",
+    "info": {
+      "title": "审批费用报备",
+      "version": "1.0.0"
+    },
+    "servers": [
+      {
+        "url": "http://127.0.0.1:8001"
+      }
+    ],
+    "paths": {
+      "/api/v1/expense-reports/batch/approve": {
+        "post": {
+          "summary": "批量审批费用报备",
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "expenseReportIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "费用报备ID列表"
+                    },
+                    "approvalStatus": {
+                      "type": "string",
+                      "description": "审批状态：Approving(通过) 或 Rejected(拒绝)",
+                      "enum": [
+                        "Approving",
+                        "Rejected"
+                      ]
+                    },
+                    "approvalComment": {
+                      "type": "string",
+                      "description": "审批意见"
+                    }
+                  },
+                  "required": [
+                    "expenseReportIds",
+                    "approvalStatus"
+                  ]
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "审批结果",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "approvalStatus": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

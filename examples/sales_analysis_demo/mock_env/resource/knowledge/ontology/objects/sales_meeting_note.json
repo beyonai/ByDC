@@ -1,0 +1,102 @@
+{
+  "object_code": "sales_meeting_note",
+  "object_name": "会议纪要对象",
+  "description": "钉钉来源的会议纪要记录，包含会议内容及关联商机客户",
+  "source_type": "KNOWLEDGE_BASE",
+  "tags": [
+    "会议纪要",
+    "非结构化"
+  ],
+  "fields": [
+    {
+      "field_code": "id",
+      "field_name": "主键ID",
+      "field_type": "BIGINT",
+      "required": true,
+      "is_primary_key": true,
+      "source_column": "id"
+    },
+    {
+      "field_code": "meetingTitle",
+      "field_name": "会议纪要标题",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "meeting_title"
+    },
+    {
+      "field_code": "meetingContent",
+      "field_name": "会议内容",
+      "field_type": "TEXT",
+      "source_column": "meeting_content"
+    },
+    {
+      "field_code": "startTime",
+      "field_name": "发起时间",
+      "field_type": "TIMESTAMP",
+      "required": true,
+      "source_column": "start_time"
+    },
+    {
+      "field_code": "relatedBoId",
+      "field_name": "关联商机ID",
+      "field_type": "STRING",
+      "source_column": "related_bo_id"
+    },
+    {
+      "field_code": "relatedCustomerId",
+      "field_name": "关联客户ID",
+      "field_type": "STRING",
+      "source_column": "related_customer_id"
+    },
+    {
+      "field_code": "participantEmpNos",
+      "field_name": "会议参与人员工号",
+      "field_type": "ARRAY",
+      "source_column": "participant_emp_nos",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "staffName",
+        "termField": "code"
+      }
+    }
+  ],
+  "source_config": {
+    "alias": "knowledge",
+    "db_type": "OPENGAUSS",
+    "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+    "user": "gaussdb",
+    "password": "OpenGauss@123",
+    "pool_min": 1,
+    "pool_max": 5
+  },
+  "datasource_alias": "knowledge",
+  "table_name": "sales_meeting_note",
+  "action_refs": [],
+  "relations": [
+    {
+      "target_class": "sales_business_opportunity",
+      "relation_type": "ONE_TO_MANY",
+      "relation_code": "rel_sales_meeting_note__sales_business_opportunity_22",
+      "relation_name": "会议纪要关联商机",
+      "join_keys": [
+        {
+          "from_field": "relatedBoId",
+          "to_field": "id"
+        }
+      ]
+    },
+    {
+      "target_class": "sales_customer",
+      "relation_type": "ONE_TO_MANY",
+      "relation_code": "rel_sales_meeting_note__sales_customer_23",
+      "relation_name": "会议纪要关联客户",
+      "join_keys": [
+        {
+          "from_field": "relatedCustomerId",
+          "to_field": "id"
+        }
+      ]
+    }
+  ]
+}

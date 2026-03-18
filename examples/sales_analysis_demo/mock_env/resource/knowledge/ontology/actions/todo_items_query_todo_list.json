@@ -1,0 +1,245 @@
+{
+  "action_code": "query_todo_list",
+  "action_name": "查询待办列表",
+  "description": "查询待办事项列表，支持多种过滤条件",
+  "action_type": "query",
+  "params": [
+    {
+      "param_code": "priority",
+      "param_name": "优先级",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.priority",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "dict",
+        "termTypeCode": "priority",
+        "termField": "code"
+      }
+    },
+    {
+      "param_code": "urgencyLevel",
+      "param_name": "紧急程度",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.urgencyLevel",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "dict",
+        "termTypeCode": "urgencyLevel",
+        "termField": "code"
+      }
+    },
+    {
+      "param_code": "orgId",
+      "param_name": "组织ID或名称",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.orgId",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "orgName",
+        "termField": "code"
+      }
+    },
+    {
+      "param_code": "meetingNoteIds",
+      "param_name": "会议纪要ID列表",
+      "param_type": "ARRAY",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.meetingNoteIds"
+    },
+    {
+      "param_code": "statusList",
+      "param_name": "状态列表",
+      "param_type": "ARRAY",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.statusList",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "dict",
+        "termTypeCode": "status",
+        "termField": "code"
+      }
+    },
+    {
+      "param_code": "page",
+      "param_name": "页码",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.page"
+    },
+    {
+      "param_code": "keyword",
+      "param_name": "关键词",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.keyword"
+    },
+    {
+      "param_code": "deadlineEnd",
+      "param_name": "截止时间结束",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.deadlineEnd"
+    },
+    {
+      "param_code": "status",
+      "param_name": "待办状态",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.status",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "dict",
+        "termTypeCode": "status",
+        "termField": "code"
+      }
+    },
+    {
+      "param_code": "promoter",
+      "param_name": "发起人工号或名称",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.promoter",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "staffName",
+        "termField": "code"
+      }
+    },
+    {
+      "param_code": "deadlineStart",
+      "param_name": "截止时间开始",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.deadlineStart"
+    },
+    {
+      "param_code": "pageSize",
+      "param_name": "页大小",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.pageSize"
+    },
+    {
+      "param_code": "includeSubOrgs",
+      "param_name": "是否查询下级",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.includeSubOrgs"
+    },
+    {
+      "param_code": "todoId",
+      "param_name": "待办ID",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.todos[].todoId"
+    },
+    {
+      "param_code": "title",
+      "param_name": "待办标题",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.todos[].title"
+    },
+    {
+      "param_code": "status",
+      "param_name": "待办状态",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.todos[].status"
+    },
+    {
+      "param_code": "priority",
+      "param_name": "优先级",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.todos[].priority"
+    },
+    {
+      "param_code": "urgencyLevel",
+      "param_name": "紧急程度",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.todos[].urgencyLevel"
+    },
+    {
+      "param_code": "deadlineAt",
+      "param_name": "截止时间",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.todos[].deadlineAt"
+    },
+    {
+      "param_code": "content",
+      "param_name": "待办内容",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.todos[].content"
+    },
+    {
+      "param_code": "progress",
+      "param_name": "处理进度",
+      "param_type": "INTEGER",
+      "direction": "OUT",
+      "mapping_path": "$.todos[].progress"
+    },
+    {
+      "param_code": "createdAt",
+      "param_name": "创建时间",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.todos[].createdAt"
+    },
+    {
+      "param_code": "promoter",
+      "param_name": "发起人",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.todos[].promoter"
+    },
+    {
+      "param_code": "approvalComment",
+      "param_name": "审批意见",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.todos[].approvalComment"
+    },
+    {
+      "param_code": "approvedAt",
+      "param_name": "审批通过时间",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.todos[].approvedAt"
+    },
+    {
+      "param_code": "completedAt",
+      "param_name": "完成时间",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.todos[].completedAt"
+    },
+    {
+      "param_code": "meetingNoteId",
+      "param_name": "关联会议纪要ID",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.todos[].meetingNoteId"
+    },
+    {
+      "param_code": "returnReason",
+      "param_name": "退回原因",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.todos[].returnReason"
+    }
+  ],
+  "function_refs": [
+    "fn_todo_query_list"
+  ],
+  "script": null,
+  "belong_class": "todo_items"
+}
