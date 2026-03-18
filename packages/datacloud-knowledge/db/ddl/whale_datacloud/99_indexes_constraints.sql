@@ -79,6 +79,6 @@ CREATE INDEX IF NOT EXISTS idx_tn_name_text
 CREATE INDEX IF NOT EXISTS idx_tn_term
     ON whale_datacloud.term_name(term_id);
 
--- term_vocabulary
+-- term_vocabulary：唯一索引保障去重查询极速（不依赖实时 DISTINCT）
 CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_word
     ON whale_datacloud.term_vocabulary(word);
