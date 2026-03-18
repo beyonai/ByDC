@@ -14,7 +14,7 @@ CREATE INDEX IF NOT EXISTS idx_type_name
     ON whale_datacloud.term_type(type_name);
 
 CREATE INDEX IF NOT EXISTS idx_type_category
-    ON whale_datacloud.term_type(type);
+    ON whale_datacloud.term_type(type_category);
 
 -- term
 CREATE INDEX IF NOT EXISTS idx_term_tags
