@@ -1,0 +1,330 @@
+{
+  "object_code": "sales_business_opportunity",
+  "object_name": "商机对象",
+  "description": "宜搭CRM商机表，记录销售商机全生命周期数据",
+  "source_type": "DB",
+  "tags": [
+    "CRM",
+    "商机"
+  ],
+  "fields": [
+    {
+      "field_code": "id",
+      "field_name": "主键ID",
+      "field_type": "BIGINT",
+      "required": true,
+      "is_primary_key": true,
+      "source_column": "id"
+    },
+    {
+      "field_code": "boName",
+      "field_name": "商机名称",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "bo_name"
+    },
+    {
+      "field_code": "belongDepart",
+      "field_name": "所属营销部",
+      "field_type": "STRING",
+      "source_column": "belong_depart",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "orgName",
+        "termField": "name"
+      }
+    },
+    {
+      "field_code": "customerName",
+      "field_name": "客户名称",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "customer_name"
+    },
+    {
+      "field_code": "orderDate",
+      "field_name": "落单时间",
+      "field_type": "DATE",
+      "source_column": "order_date"
+    },
+    {
+      "field_code": "bidOpeningTime",
+      "field_name": "主标开标时间",
+      "field_type": "DATE",
+      "source_column": "bid_opening_time"
+    },
+    {
+      "field_code": "iwhaleCbmEmpNo",
+      "field_name": "商机负责人工号或名称",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "iwhale_cbm_emp_no",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "staffName",
+        "termField": "code"
+      }
+    },
+    {
+      "field_code": "iwhaleCbmName",
+      "field_name": "商机负责人名称",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "iwhale_cbm_name",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "staffName",
+        "termField": "name"
+      }
+    },
+    {
+      "field_code": "iwhaleCbmOrgId",
+      "field_name": "商机负责人组织或名称",
+      "field_type": "STRING",
+      "source_column": "iwhale_cbm_org_id",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "orgName",
+        "termField": "code"
+      }
+    },
+    {
+      "field_code": "softwareIncomeTime",
+      "field_name": "软收计入时间",
+      "field_type": "DATE",
+      "source_column": "software_income_time"
+    },
+    {
+      "field_code": "itInvestmentScale",
+      "field_name": "客户IT投资规模（万元）",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "it_investment_scale"
+    },
+    {
+      "field_code": "winBid",
+      "field_name": "是否中标",
+      "field_type": "INTEGER",
+      "required": true,
+      "source_column": "win_bid"
+    },
+    {
+      "field_code": "iwhaleScEmpNo",
+      "field_name": "支撑sc工号或名称",
+      "field_type": "STRING",
+      "source_column": "iwhale_sc_emp_no",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "staffName",
+        "termField": "code"
+      }
+    },
+    {
+      "field_code": "iwhaleScName",
+      "field_name": "浩鲸sc名称",
+      "field_type": "STRING",
+      "source_column": "iwhale_sc_name",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "staffName",
+        "termField": "name"
+      }
+    },
+    {
+      "field_code": "diliverContent",
+      "field_name": "合同交付内容",
+      "field_type": "STRING",
+      "source_column": "diliver_content"
+    },
+    {
+      "field_code": "type",
+      "field_name": "商机类型",
+      "field_type": "STRING",
+      "source_column": "type"
+    },
+    {
+      "field_code": "performanceType",
+      "field_name": "业绩类型",
+      "field_type": "STRING",
+      "source_column": "performance_type"
+    },
+    {
+      "field_code": "earlyDiliver",
+      "field_name": "是否提前交付",
+      "field_type": "INTEGER",
+      "source_column": "early_diliver"
+    },
+    {
+      "field_code": "businessOpportunityProcess",
+      "field_name": "商机状态",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "business_opportunity_process"
+    },
+    {
+      "field_code": "contractScale",
+      "field_name": "合同额（万）",
+      "field_type": "STRING",
+      "source_column": "contract_scale"
+    },
+    {
+      "field_code": "softwareSaleScale",
+      "field_name": "软销规模（万元）",
+      "field_type": "STRING",
+      "source_column": "software_sale_scale"
+    },
+    {
+      "field_code": "softwareIncomeScale",
+      "field_name": "软收计入规模（万元）",
+      "field_type": "STRING",
+      "source_column": "software_income_scale"
+    },
+    {
+      "field_code": "orderRate",
+      "field_name": "落单几率",
+      "field_type": "STRING",
+      "required": true,
+      "source_column": "order_rate"
+    },
+    {
+      "field_code": "businessOpportunityDesc",
+      "field_name": "商机具体进展描述",
+      "field_type": "STRING",
+      "source_column": "business_opportunity_desc"
+    },
+    {
+      "field_code": "submitPerson",
+      "field_name": "提交人",
+      "field_type": "STRING",
+      "source_column": "submit_person",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "staffName",
+        "termField": "name"
+      }
+    },
+    {
+      "field_code": "submitOrganization",
+      "field_name": "提交组织",
+      "field_type": "STRING",
+      "source_column": "submit_organization",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "list",
+        "termTypeCode": "orgName",
+        "termField": "name"
+      }
+    },
+    {
+      "field_code": "isAliIntegrated",
+      "field_name": "是否集成阿里产品",
+      "field_type": "INTEGER",
+      "source_column": "is_ali_integrated"
+    },
+    {
+      "field_code": "opportunityNature",
+      "field_name": "商机性质",
+      "field_type": "STRING",
+      "source_column": "opportunity_nature"
+    },
+    {
+      "field_code": "opportunitySource",
+      "field_name": "商机来源",
+      "field_type": "STRING",
+      "source_column": "opportunity_source"
+    },
+    {
+      "field_code": "sourceDescription",
+      "field_name": "来源说明",
+      "field_type": "STRING",
+      "source_column": "source_description"
+    },
+    {
+      "field_code": "opportunityStage",
+      "field_name": "商机进展",
+      "field_type": "STRING",
+      "source_column": "opportunity_stage"
+    },
+    {
+      "field_code": "opportunityId",
+      "field_name": "商机ID",
+      "field_type": "STRING",
+      "source_column": "opportunity_id"
+    },
+    {
+      "field_code": "instanceId",
+      "field_name": "实例ID",
+      "field_type": "STRING",
+      "source_column": "instance_id"
+    },
+    {
+      "field_code": "instanceTitle",
+      "field_name": "实例标题",
+      "field_type": "STRING",
+      "source_column": "instance_title"
+    },
+    {
+      "field_code": "prepayExpectedDate",
+      "field_name": "预测回款时间【预付款】",
+      "field_type": "DATE",
+      "source_column": "prepay_expected_date"
+    },
+    {
+      "field_code": "prepayExpectedAmount",
+      "field_name": "预测回款金额【预付款】(万元)",
+      "field_type": "STRING",
+      "source_column": "prepay_expected_amount"
+    },
+    {
+      "field_code": "customerTaxId",
+      "field_name": "客户纳税号",
+      "field_type": "STRING",
+      "source_column": "customer_tax_id"
+    }
+  ],
+  "source_config": {
+    "alias": "ds_crm",
+    "db_type": "OPENGAUSS",
+    "jdbc_url": "jdbc:opengauss://10.10.196.92:2703/postgres?currentSchema=crm_demo",
+    "user": "gaussdb",
+    "password": "OpenGauss@123",
+    "pool_min": 1,
+    "pool_max": 5
+  },
+  "datasource_alias": "ds_crm",
+  "table_name": "sales_business_opportunity",
+  "action_refs": [],
+  "relations": [
+    {
+      "target_class": "sales_bo_status_change",
+      "relation_type": "ONE_TO_MANY",
+      "relation_code": "rel_sales_business_opportunity__sales_bo_status_change_10",
+      "relation_name": "商机有状态变更记录",
+      "join_keys": [
+        {
+          "from_field": "id",
+          "to_field": "boId"
+        }
+      ]
+    },
+    {
+      "target_class": "sales_customer",
+      "relation_type": "ONE_TO_MANY",
+      "relation_code": "rel_sales_business_opportunity__sales_customer_13",
+      "relation_name": "商机关联客户",
+      "join_keys": [
+        {
+          "from_field": "customerName",
+          "to_field": "customerName"
+        }
+      ]
+    }
+  ]
+}
