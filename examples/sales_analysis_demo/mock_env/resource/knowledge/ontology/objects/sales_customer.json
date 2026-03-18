@@ -183,6 +183,13 @@
       "field_name": "实例ID",
       "field_type": "STRING",
       "source_column": "instance_id"
+    },
+    {
+      "field_code": "businessOpportunities",
+      "field_name": "商机列表",
+      "field_type": "ARRAY",
+      "property_kind": "linked",
+      "relation_ref": "rel_sales_customer__sales_business_opportunity_19"
     }
   ],
   "source_config": {
@@ -197,5 +204,18 @@
   "datasource_alias": "ds_crm",
   "table_name": "sales_customer",
   "action_refs": [],
-  "relations": []
+  "relations": [
+    {
+      "target_class": "sales_business_opportunity",
+      "relation_type": "ONE_TO_MANY",
+      "relation_code": "rel_sales_customer__sales_business_opportunity_19",
+      "relation_name": "客户拥有商机",
+      "join_keys": [
+        {
+          "from_field": "customerName",
+          "to_field": "customerName"
+        }
+      ]
+    }
+  ]
 }
