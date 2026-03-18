@@ -130,6 +130,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = [
     "packages/datacloud-knowledge/tests/db",
+    "packages/datacloud-knowledge/tests/ontology",
     "examples/sales_analysis_demo/mock_env/tests",
 ]
 python_files = ["test_*.py", "*_test.py"]
