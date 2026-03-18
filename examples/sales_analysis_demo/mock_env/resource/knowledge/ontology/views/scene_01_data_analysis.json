@@ -1,0 +1,336 @@
+{
+  "view_id": "scene_01_data_analysis",
+  "view_name": "在线查数分析场景",
+  "description": "销售数据分析场景，支持简单查询、跨库联合检索、非结构化融合检索",
+  "object_ids": [
+    "po_users",
+    "po_organization",
+    "todo_items",
+    "sales_daily_report",
+    "sales_business_opportunity",
+    "po_users_kpi_detail",
+    "sales_customer",
+    "po_users_kpi_summary",
+    "sales_org_kpi_summary",
+    "sales_emp_attendance",
+    "sales_org_kpi_completion",
+    "po_users_kpi_completion",
+    "sales_expense_report",
+    "sales_bo_status_change",
+    "sales_meeting_note"
+  ],
+  "relations": [
+    {
+      "relation_code": "rel_po_users__po_organization_0",
+      "relation_name": "人员归属组织",
+      "source_class": "po_users",
+      "target_class": "po_organization",
+      "relation_type": "MANY_TO_ONE",
+      "join_keys": [
+        {
+          "from_field": "orgId",
+          "to_field": "orgId"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_organization__po_organization_1",
+      "relation_name": "组织父子层级",
+      "source_class": "po_organization",
+      "target_class": "po_organization",
+      "relation_type": "MANY_TO_ONE",
+      "join_keys": [
+        {
+          "from_field": "parentOrgId",
+          "to_field": "orgId"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__po_users_kpi_summary_2",
+      "relation_name": "人员有个人KPI",
+      "source_class": "po_users",
+      "target_class": "po_users_kpi_summary",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "empNo"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__po_users_kpi_completion_3",
+      "relation_name": "人员有个人KPI完成统计",
+      "source_class": "po_users",
+      "target_class": "po_users_kpi_completion",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "empNo"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__po_users_kpi_detail_4",
+      "relation_name": "人员有合同",
+      "source_class": "po_users",
+      "target_class": "po_users_kpi_detail",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "empNo"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_organization__po_users_kpi_detail_5",
+      "relation_name": "组织有合同",
+      "source_class": "po_organization",
+      "target_class": "po_users_kpi_detail",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "orgId",
+          "to_field": "empOrgId"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_organization__sales_org_kpi_summary_6",
+      "relation_name": "组织有组织KPI",
+      "source_class": "po_organization",
+      "target_class": "sales_org_kpi_summary",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "orgId",
+          "to_field": "orgId"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_organization__sales_org_kpi_completion_7",
+      "relation_name": "组织有组织KPI完成统计",
+      "source_class": "po_organization",
+      "target_class": "sales_org_kpi_completion",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "orgId",
+          "to_field": "orgId"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__sales_emp_attendance_8",
+      "relation_name": "人员有考勤",
+      "source_class": "po_users",
+      "target_class": "sales_emp_attendance",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "empNo"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__sales_daily_report_9",
+      "relation_name": "人员有日报",
+      "source_class": "po_users",
+      "target_class": "sales_daily_report",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "belongEmpNo"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_sales_business_opportunity__sales_bo_status_change_10",
+      "relation_name": "商机有状态变更记录",
+      "source_class": "sales_business_opportunity",
+      "target_class": "sales_bo_status_change",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "id",
+          "to_field": "boId"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__sales_business_opportunity_11",
+      "relation_name": "人员负责商机",
+      "source_class": "po_users",
+      "target_class": "sales_business_opportunity",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "iwhaleCbmEmpNo"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_organization__sales_business_opportunity_12",
+      "relation_name": "组织负责商机",
+      "source_class": "po_organization",
+      "target_class": "sales_business_opportunity",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "orgId",
+          "to_field": "iwhaleCbmOrgId"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_sales_business_opportunity__sales_customer_13",
+      "relation_name": "商机关联客户",
+      "source_class": "sales_business_opportunity",
+      "target_class": "sales_customer",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "customerName",
+          "to_field": "customerName"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__sales_customer_14",
+      "relation_name": "人员维护客户",
+      "source_class": "po_users",
+      "target_class": "sales_customer",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "iwhaleCbmEmpNo"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__sales_expense_report_15",
+      "relation_name": "费用申请人",
+      "source_class": "po_users",
+      "target_class": "sales_expense_report",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "applicantEmpNo"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_organization__sales_expense_report_16",
+      "relation_name": "费用申请组织",
+      "source_class": "po_organization",
+      "target_class": "sales_expense_report",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "orgId",
+          "to_field": "applicantOrgId"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_sales_expense_report__sales_business_opportunity_17",
+      "relation_name": "费用关联商机",
+      "source_class": "sales_expense_report",
+      "target_class": "sales_business_opportunity",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "relatedBoId",
+          "to_field": "id"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_sales_expense_report__sales_customer_18",
+      "relation_name": "费用关联客户",
+      "source_class": "sales_expense_report",
+      "target_class": "sales_customer",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "relatedCustomerId",
+          "to_field": "id"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__todo_items_19",
+      "relation_name": "人员创建待办",
+      "source_class": "po_users",
+      "target_class": "todo_items",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "promoter"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__todo_items_20",
+      "relation_name": "人员需处理待办",
+      "source_class": "po_users",
+      "target_class": "todo_items",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "handlerIds"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_po_users__sales_meeting_note_21",
+      "relation_name": "人员创建会议纪要",
+      "source_class": "po_users",
+      "target_class": "sales_meeting_note",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "userCode",
+          "to_field": "participantEmpNos"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_sales_meeting_note__sales_business_opportunity_22",
+      "relation_name": "会议纪要关联商机",
+      "source_class": "sales_meeting_note",
+      "target_class": "sales_business_opportunity",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "relatedBoId",
+          "to_field": "id"
+        }
+      ]
+    },
+    {
+      "relation_code": "rel_sales_meeting_note__sales_customer_23",
+      "relation_name": "会议纪要关联客户",
+      "source_class": "sales_meeting_note",
+      "target_class": "sales_customer",
+      "relation_type": "ONE_TO_MANY",
+      "join_keys": [
+        {
+          "from_field": "relatedCustomerId",
+          "to_field": "id"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "function_code": "fn_expense_update",
+  "function_name": "修改费用报备",
+  "description": "修改费用报备记录（审批前）",
+  "function_type": "API",
+  "api_schema": {
+    "openapi": "3.0.3",
+    "info": {
+      "title": "修改费用报备",
+      "version": "1.0.0"
+    },
+    "servers": [
+      {
+        "url": "http://127.0.0.1:8001"
+      }
+    ],
+    "paths": {
+      "/api/v1/expense-reports/update": {
+        "post": {
+          "summary": "修改费用报备",
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "expenseAmount": {
+                      "type": "number",
+                      "description": "申请金额（元）"
+                    },
+                    "expenseDesc": {
+                      "type": "string",
+                      "description": "申请说明"
+                    },
+                    "relatedBoId": {
+                      "type": "string",
+                      "description": "关联商机ID"
+                    },
+                    "relatedCustomerId": {
+                      "type": "string",
+                      "description": "关联客户ID"
+                    },
+                    "applicantOrgId": {
+                      "type": "string",
+                      "description": "申请组织ID"
+                    },
+                    "id": {
+                      "type": "string",
+                      "description": "费用报备ID"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "修改结果",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "updatedAt": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
