@@ -1,0 +1,38 @@
+{
+  "type": "term_types",
+  "_comment": "仅填写用户自定义类型（is_builtin=false）。系统内置类型已预置，无需在此声明：EMPLOYEE(员工,1) / GENERAL(通用字典,2) / ONTOLOGY_VIEW(视图,3) / ONTOLOGY_OBJ(对象,3) / ONTOLOGY_ACTION(动作,3) / ONTOLOGY_FUNC(函数,3)",
+  "items": [
+    {
+      "op": "add",
+      "type_code": "CUSTOMER_TYPE",
+      "type_name": "客户类型",
+      "type_desc": "客户行业分类字典，如金融、制造、零售等",
+      "type_category": "字典术语",
+      "is_builtin": false
+    },
+    {
+      "op": "add",
+      "type_code": "BO_STATUS",
+      "type_name": "商机状态",
+      "type_desc": "商机所处阶段枚举，如意向、谈判、赢单、输单等",
+      "type_category": "字典术语",
+      "is_builtin": false
+    },
+    {
+      "op": "add",
+      "type_code": "EXPENSE_TYPE",
+      "type_name": "费用类型",
+      "type_desc": "报销费用的业务类别，如差旅费、招待费、交通费等",
+      "type_category": "字典术语",
+      "is_builtin": false
+    },
+    {
+      "op": "add",
+      "type_code": "KPI_INDICATOR",
+      "type_name": "KPI指标",
+      "type_desc": "销售考核指标，如合同额、回款率、客户数等",
+      "type_category": "字典术语",
+      "is_builtin": false
+    }
+  ]
+}
