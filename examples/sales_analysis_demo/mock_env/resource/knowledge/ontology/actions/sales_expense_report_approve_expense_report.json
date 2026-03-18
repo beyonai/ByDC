@@ -1,0 +1,56 @@
+{
+  "action_code": "approve_expense_report",
+  "action_name": "审批费用报备",
+  "description": "批量审批费用报备（通过或拒绝）",
+  "action_type": "operation",
+  "params": [
+    {
+      "param_code": "expenseReportIds",
+      "param_name": "费用报备ID列表",
+      "param_type": "ARRAY",
+      "direction": "IN",
+      "required": true,
+      "mapping_path": "$.requestBody.expenseReportIds"
+    },
+    {
+      "param_code": "approvalStatus",
+      "param_name": "审批状态",
+      "param_type": "STRING",
+      "direction": "IN",
+      "required": true,
+      "mapping_path": "$.requestBody.approvalStatus",
+      "termMeta": {
+        "datasetId": 760436323052421,
+        "termMasterType": "dict",
+        "termTypeCode": "approvalStatus",
+        "termField": "code"
+      }
+    },
+    {
+      "param_code": "approvalComment",
+      "param_name": "审批意见",
+      "param_type": "STRING",
+      "direction": "IN",
+      "mapping_path": "$.requestBody.approvalComment"
+    },
+    {
+      "param_code": "id",
+      "param_name": "费用报备ID",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.id"
+    },
+    {
+      "param_code": "approvalStatus",
+      "param_name": "审批状态",
+      "param_type": "STRING",
+      "direction": "OUT",
+      "mapping_path": "$.approvalStatus"
+    }
+  ],
+  "function_refs": [
+    "fn_expense_approve"
+  ],
+  "script": null,
+  "belong_class": "sales_expense_report"
+}
