@@ -2,9 +2,8 @@
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": false,
-  "python.testing.cwd": "${workspaceFolder}/packages/datacloud-knowledge",
+  "python.testing.cwd": "${workspaceFolder}",
   "python.testing.pytestArgs": [
-    "tests",
     "-v"
   ],
   "python.envFile": "${workspaceFolder}/.vscode/.env.test"
