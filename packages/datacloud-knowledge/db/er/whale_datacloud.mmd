@@ -33,6 +33,7 @@ erDiagram
     
     TermLibrary {
         VARCHAR(64) library_id PK "术语库ID"
+        VARCHAR(32) library_code UK "术语库编码-全局唯一"
         VARCHAR(255) library_name "术语库名称"
         DATETIME created_time "创建时间"
         DATETIME updated_time "更新时间"
@@ -40,6 +41,7 @@ erDiagram
     
     Term {
         VARCHAR(64) term_id PK "术语ID"
+        VARCHAR(64) term_code UK "术语编码-全局唯一"
         VARCHAR(255) term_name "术语标准名称"
         TEXT desc_summary "术语描述摘要，一般为描述的前100个字"
         VARCHAR(64) parent_term_id FK "父术语ID-NULL=概念,有值=实例"
@@ -48,6 +50,7 @@ erDiagram
         VARCHAR(32) term_type_code FK "术语类型编码"
         VARCHAR(64) library_id FK "所属术语库ID"
         JSONB term_tags "术语标签属性-结构化键值对"
+        JSONB ext_attrs "自定义扩展属性-键值对"
         DATETIME created_time "创建时间"
         DATETIME updated_time "更新时间"
     }
@@ -73,6 +76,7 @@ erDiagram
         VARCHAR(16) relation_category "关系类别-ONTOLOGY/BUSINESS"
         VARCHAR(8) cardinality "数量约束-1:1/1:N/N:1/N:N"
         VARCHAR(64) action_term_id FK "绑定的动作术语ID-ACTION类型"
+        JSONB ext_attrs "自定义扩展属性-键值对"
         DATETIME created_time "创建时间"
         DATETIME updated_time "更新时间"
     }

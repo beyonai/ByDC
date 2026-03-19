@@ -109,7 +109,7 @@ def gen_meta() -> None:
     _write_jsonl(_OUTPUT / "meta/libraries.jsonl", [
         {
             "op":           "add",
-            "library_code": lib["library_id"],
+            "library_code": lib.get("library_code", lib["library_id"]),
             "library_name": lib["library_name"],
         }
         for lib in libraries

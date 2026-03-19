@@ -1,7 +1,7 @@
-library_id,library_name
-LIB_001,HR系统术语库
-LIB_002,CRM术语库
-LIB_003,基础业务术语
-LIB_004,手动补充术语
-LIB_005,2026Q1导入批次
-LIB_006,产品文档知识库
+library_id,library_code,library_name
+LIB_001,LIB_001,HR系统术语库
+LIB_002,LIB_002,CRM术语库
+LIB_003,LIB_003,基础业务术语
+LIB_004,LIB_004,手动补充术语
+LIB_005,LIB_005,2026Q1导入批次
+LIB_006,LIB_006,产品文档知识库
