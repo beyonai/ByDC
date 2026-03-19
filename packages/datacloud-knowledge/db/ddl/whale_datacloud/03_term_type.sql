@@ -1,12 +1,14 @@
 CREATE TABLE IF NOT EXISTS whale_datacloud.term_type (
     type_id       BIGSERIAL    NOT NULL PRIMARY KEY,
-    type_code     VARCHAR(32)  NOT NULL UNIQUE,
+    type_code     VARCHAR(32)  NOT NULL,
     type_name     VARCHAR(255) NOT NULL,
     type_desc     TEXT,
     type_category INTEGER      NOT NULL,
     is_builtin    BOOLEAN      NOT NULL DEFAULT FALSE,
     created_time  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_time  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_time  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_term_type_type_code UNIQUE (type_code),
+    CONSTRAINT chk_term_type_type_code CHECK (type_code ~ '^[A-Za-z][A-Za-z0-9_]{1,31}$')
 );
 
 COMMENT ON TABLE whale_datacloud.term_type IS '术语类型表：定义术语的分类编码体系，扁平化设计';

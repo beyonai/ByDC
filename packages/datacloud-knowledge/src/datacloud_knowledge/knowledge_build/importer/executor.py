@@ -3,9 +3,9 @@
 前提：调用方已通过 precheck.run() 校验，此处不再做格式校验。
 字段映射（JSONL → DB）：
   domain_code   → domain.domain_id
-  library_code  → term_library.library_id
+  library_code  → term_library.library_id 与 term_library.library_code（同值）
   type_code     → term_type.type_code  （用 type_code 做 upsert key）
-  term_code     → term.term_id
+  term_code     → term.term_id 与 term.term_code（同值）
   relation_code → term_relation.relation_id
 """
 
@@ -14,12 +14,26 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from pathlib import Path
 
 import psycopg2
 import psycopg2.extensions
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_term_code(s: str) -> str:
+    """Normalize term_code to satisfy DB constraint ^[A-Z][A-Z0-9_]{1,63}$.
+
+    Replace non-alphanumeric with underscore, uppercase, ensure first char is letter.
+    """
+    if not s:
+        return "T_EMPTY"
+    normalized = re.sub(r"[^A-Za-z0-9_]", "_", s).upper()[:64]
+    if not normalized or normalized[0] not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+        normalized = "T" + (normalized or "0")
+    return normalized[:64]
 
 # ── DB 连接 ───────────────────────────────────────────────────────────────────
 
@@ -63,7 +77,7 @@ def _process_domain(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -> 
             (obj.get("domain_name"), obj.get("domain_desc"), domain_id),
         )
         stats["domains"]["updated"] += cur.rowcount
-    else:  # add / upsert
+    else:  # add / upsert（幂等，兼容重复运行；OpenGauss 可能不支持 ON CONFLICT）
         parent_code = obj.get("parent_code")
         cur.execute(
             "SELECT 1 FROM whale_datacloud.domain WHERE domain_id = %s", (domain_id,)
@@ -80,13 +94,28 @@ def _process_domain(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -> 
             )
             stats["domains"]["updated"] += 1
         else:
-            cur.execute(
-                """INSERT INTO whale_datacloud.domain
-                       (domain_id, domain_name, parent_id, domain_desc)
-                   VALUES (%s, %s, %s, %s)""",
-                (domain_id, obj["domain_name"], parent_code, obj.get("domain_desc")),
-            )
-            stats["domains"]["inserted"] += 1
+            try:
+                cur.execute(
+                    """INSERT INTO whale_datacloud.domain
+                           (domain_id, domain_name, parent_id, domain_desc)
+                       VALUES (%s, %s, %s, %s)""",
+                    (domain_id, obj["domain_name"], parent_code, obj.get("domain_desc")),
+                )
+                stats["domains"]["inserted"] += 1
+            except psycopg2.IntegrityError as e:
+                if "unique constraint" in str(e).lower() or "duplicate key" in str(e).lower():
+                    cur.execute(
+                        """UPDATE whale_datacloud.domain
+                              SET domain_name  = %s,
+                                  domain_desc  = COALESCE(%s, domain_desc),
+                                  parent_id    = %s,
+                                  updated_time = CURRENT_TIMESTAMP
+                            WHERE domain_id = %s""",
+                        (obj["domain_name"], obj.get("domain_desc"), parent_code, domain_id),
+                    )
+                    stats["domains"]["updated"] += 1
+                else:
+                    raise
 
 
 def _process_library(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -> None:
@@ -103,10 +132,11 @@ def _process_library(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) ->
     elif op == "update":
         cur.execute(
             """UPDATE whale_datacloud.term_library
-                  SET library_name = COALESCE(%s, library_name),
+                  SET library_code = %s,
+                      library_name = COALESCE(%s, library_name),
                       updated_time = CURRENT_TIMESTAMP
                 WHERE library_id = %s""",
-            (obj.get("library_name"), library_id),
+            (library_id, obj.get("library_name"), library_id),
         )
         stats["libraries"]["updated"] += cur.rowcount
     else:
@@ -116,16 +146,18 @@ def _process_library(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) ->
         if cur.fetchone():
             cur.execute(
                 """UPDATE whale_datacloud.term_library
-                      SET library_name = %s,
+                      SET library_code = %s,
+                          library_name = %s,
                           updated_time = CURRENT_TIMESTAMP
                     WHERE library_id = %s""",
-                (obj["library_name"], library_id),
+                (library_id, obj["library_name"], library_id),
             )
             stats["libraries"]["updated"] += 1
         else:
             cur.execute(
-                "INSERT INTO whale_datacloud.term_library (library_id, library_name) VALUES (%s, %s)",
-                (library_id, obj["library_name"]),
+                """INSERT INTO whale_datacloud.term_library (library_id, library_code, library_name)
+                   VALUES (%s, %s, %s)""",
+                (library_id, library_id, obj["library_name"]),
             )
             stats["libraries"]["inserted"] += 1
 
@@ -232,7 +264,7 @@ def _sync_term_names(
 def _process_term(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -> None:
     """写入 whale_datacloud.term 及同步 term_name。"""
     op = obj.get("op", "add")
-    term_id = obj["term_code"]
+    term_id = _normalize_term_code(obj["term_code"])
 
     if op == "delete":
         cur.execute(
@@ -272,7 +304,8 @@ def _process_term(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -> No
         if cur.fetchone():
             cur.execute(
                 """UPDATE whale_datacloud.term
-                      SET term_name      = %s,
+                      SET term_code      = %s,
+                          term_name      = %s,
                           desc_summary   = COALESCE(%s, desc_summary),
                           domain_id      = %s,
                           term_type_code = %s,
@@ -282,6 +315,7 @@ def _process_term(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -> No
                           updated_time   = CURRENT_TIMESTAMP
                     WHERE term_id = %s""",
                 (
+                    term_id,
                     obj["term_name"],
                     obj.get("desc_summary"),
                     obj["domain_code"],
@@ -296,10 +330,11 @@ def _process_term(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -> No
         else:
             cur.execute(
                 """INSERT INTO whale_datacloud.term
-                       (term_id, term_name, desc_summary, domain_id,
+                       (term_id, term_code, term_name, desc_summary, domain_id,
                         term_type_code, library_id, owl_doc_id, term_tags)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)""",
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)""",
                 (
+                    term_id,
                     term_id,
                     obj["term_name"],
                     obj.get("desc_summary"),
@@ -349,8 +384,8 @@ def _process_relation(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -
                           updated_time      = CURRENT_TIMESTAMP
                     WHERE relation_id = %s""",
                 (
-                    obj["source_term_code"],
-                    obj["target_term_code"],
+                    _normalize_term_code(obj["source_term_code"]),
+                    _normalize_term_code(obj["target_term_code"]),
                     obj["relation_name"],
                     obj.get("relation_category", "BUSINESS"),
                     obj.get("cardinality"),
@@ -366,8 +401,8 @@ def _process_relation(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -
                    VALUES (%s, %s, %s, %s, %s, %s)""",
                 (
                     relation_id,
-                    obj["source_term_code"],
-                    obj["target_term_code"],
+                    _normalize_term_code(obj["source_term_code"]),
+                    _normalize_term_code(obj["target_term_code"]),
                     obj["relation_name"],
                     obj.get("relation_category", "BUSINESS"),
                     obj.get("cardinality"),
@@ -449,7 +484,7 @@ def _process_knowledge(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) 
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
                 (
                     knowledge_id,
-                    obj["term_code"],
+                    _normalize_term_code(obj["term_code"]),
                     obj.get("desc_summary"),
                     obj.get("desc"),
                     obj.get("ext_system"),

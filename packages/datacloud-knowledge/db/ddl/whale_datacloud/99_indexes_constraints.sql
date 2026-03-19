@@ -20,6 +20,9 @@ CREATE INDEX IF NOT EXISTS idx_type_category
 CREATE INDEX IF NOT EXISTS idx_term_tags
     ON whale_datacloud.term USING GIN (term_tags);
 
+CREATE INDEX IF NOT EXISTS idx_term_ext_attrs
+    ON whale_datacloud.term USING GIN (ext_attrs);
+
 CREATE INDEX IF NOT EXISTS idx_term_name
     ON whale_datacloud.term(term_name);
 
@@ -71,6 +74,9 @@ CREATE INDEX IF NOT EXISTS idx_tr_category
 CREATE INDEX IF NOT EXISTS idx_tr_action
     ON whale_datacloud.term_relation(action_term_id)
     WHERE action_term_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_tr_ext_attrs
+    ON whale_datacloud.term_relation USING GIN (ext_attrs);
 
 -- term_name
 CREATE INDEX IF NOT EXISTS idx_tn_name_text
