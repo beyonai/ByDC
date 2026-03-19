@@ -16,8 +16,29 @@ import psycopg2
 logger = logging.getLogger(__name__)
 
 _ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = _ROOT.parents[1]
 _DDL_DIR  = _ROOT / "db" / "ddl"  / "whale_datacloud"
 _SEED_DIR = _ROOT / "db" / "seed" / "whale_datacloud"
+
+
+def _load_env_if_needed() -> None:
+    """若 DB_HOST 未设置，尝试从 .vscode/.env.test 或 .env.test 加载。"""
+    if os.getenv("DB_HOST"):
+        return
+    for candidate in (_REPO_ROOT / ".vscode" / ".env.test", _REPO_ROOT / ".env.test"):
+        if not candidate.exists():
+            continue
+        for line in candidate.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                k, _, v = line.partition("=")
+                k = k.strip()
+                v = v.strip().strip("'\"")
+                if k and k not in os.environ:
+                    os.environ[k] = v
+        break
 
 
 def _required_env(name: str) -> str:
@@ -108,9 +129,12 @@ def main() -> None:
     Usage:
         python apply_whale_datacloud.py            # 完整初始化（DDL + Seed）
         python apply_whale_datacloud.py --seed-only  # 仅执行 Seed（幂等，不 drop 表）
+
+    环境变量 DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME 可从 .vscode/.env.test 自动加载。
     """
     import sys
 
+    _load_env_if_needed()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     if "--seed-only" in sys.argv:
         apply_seed()
