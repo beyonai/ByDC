@@ -8,13 +8,7 @@ CREATE TABLE IF NOT EXISTS whale_datacloud.term_relation (
     action_term_id    VARCHAR(64),
     ext_attrs         JSONB        NOT NULL DEFAULT '{}'::jsonb,
     created_time      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_time      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_tr_source
-        FOREIGN KEY (source_term_id) REFERENCES whale_datacloud.term(term_id),
-    CONSTRAINT fk_tr_target
-        FOREIGN KEY (target_term_id) REFERENCES whale_datacloud.term(term_id),
-    CONSTRAINT fk_tr_action
-        FOREIGN KEY (action_term_id) REFERENCES whale_datacloud.term(term_id)
+    updated_time      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE whale_datacloud.term_relation IS '术语关系表：存储术语间的本体论结构关系（ONTOLOGY）和业务自定义关系（BUSINESS）';

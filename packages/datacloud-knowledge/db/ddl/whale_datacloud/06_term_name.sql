@@ -3,9 +3,7 @@ CREATE TABLE IF NOT EXISTS whale_datacloud.term_name (
     term_id      VARCHAR(64)  NOT NULL,
     name_text    VARCHAR(255) NOT NULL,
     created_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_term_name_term
-        FOREIGN KEY (term_id) REFERENCES whale_datacloud.term(term_id)
+    updated_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE whale_datacloud.term_name IS '术语名称表：存储术语的所有名称（标准名称、别名、缩写等）；name_text=term.term_name 为标准名称，其余为别名';
