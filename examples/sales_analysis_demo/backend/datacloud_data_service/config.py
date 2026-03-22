@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     trace_log_path: str = "logs/query_trace.log"  # 环境变量 DC_TRACE_LOG_PATH
     trace_enabled: bool = False  # 环境变量 DC_TRACE_ENABLED
     znt_server: str = ""  # 术语服务地址，环境变量 DC_ZNT_SERVER
+    term_loader_type: str = "kb"  # 术语加载器类型: kb | api，环境变量 DC_TERM_LOADER_TYPE
     # CORS 允许的源，逗号分隔，如 "http://localhost:3000,http://127.0.0.1:3000"
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
