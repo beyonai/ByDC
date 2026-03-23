@@ -30,7 +30,7 @@ sys.path.insert(
     ),
 )
 
-from datacloud_knowledge_service import SQLKnowledgeGraphQuery, TreeNode
+from datacloud_knowledge import SQLKnowledgeGraphQuery, TreeNode
 
 
 def dict_to_tree(tree_dict: dict) -> TreeNode:
