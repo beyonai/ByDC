@@ -158,13 +158,11 @@ def create_app(
         loader.configure(csv_base_dir=settings.csv_base_dir)
         loader.configure(sql_execution_mode=settings.sql_execution_mode)
 
-        if settings.znt_server:
-            from datacloud_data.ontology.term_loader import TermLoader
+        from datacloud_data.ontology.term_loader import TermLoader
 
-            term_loader = TermLoader()
-            term_loader.configure_api(settings.znt_server)
-            loader.configure(term_loader=term_loader)
-            logger.info("Configured TermLoader with znt_server=%s", settings.znt_server)
+        term_loader = TermLoader.from_config({})
+        loader.configure(term_loader=term_loader)
+        logger.info("Configured TermLoader")
 
         app.state.loader = loader
         logger.info("OntologyLoader initialized and stored in app.state")
