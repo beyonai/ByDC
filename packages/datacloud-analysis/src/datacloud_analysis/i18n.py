@@ -15,5 +15,5 @@ def get_system_prompt(locale: str) -> str:
             "Help users analyze data, answer questions, and provide insights."
         )
     return (
-        "你是一个数据分析助手，帮助用户分析数据、回答问题并提供洞察。"
+        "调用search_knowledge，再调用data_query，最后回答用户问题。"
     )
