@@ -13,7 +13,7 @@ pytest.importorskip("numpy")
 pytest.importorskip("matplotlib")
 pytest.importorskip("pypinyin")
 
-from datacloud_knowledge_service import KnowledgeGraphQuery
+from datacloud_knowledge import KnowledgeGraphQuery
 
 
 def test_knowledge_graph_query():
