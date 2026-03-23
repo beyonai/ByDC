@@ -97,7 +97,7 @@ def main():
     env_path = Path(__file__).resolve().parents[2] / ".env.example"
     if env_path.exists():
         load_dotenv(env_path, override=True)
-    service = SQLKnowledgeGraphQuery(default_hops=4)
+    service = SQLKnowledgeGraphQuery(default_hops=2)
 
     result = execute_nl_query(query, service)
     print_query_results(result, "亩产效益最低的10家企业")
