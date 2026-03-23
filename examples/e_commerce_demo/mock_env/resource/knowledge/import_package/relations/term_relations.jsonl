@@ -4,6 +4,7 @@
 {"op": "add", "source_term_code": "scene_01_data_analysis", "target_term_code": "dws_enterprise_wide", "relation_name": "场景_包含_企业", "relation_category": "ONTOLOGY", "cardinality": "1:N", "relation_code": "REL_EC_004"}
 {"op": "add", "source_term_code": "scene_01_data_analysis", "target_term_code": "dws_grid_wide", "relation_name": "场景_包含_网格", "relation_category": "ONTOLOGY", "cardinality": "1:N", "relation_code": "REL_EC_005"}
 {"op": "add", "source_term_code": "scene_01_data_analysis", "target_term_code": "dws_industry_wide", "relation_name": "场景_包含_产业链", "relation_category": "ONTOLOGY", "cardinality": "1:N", "relation_code": "REL_EC_006"}
+{"op": "add", "source_term_code": "scene_01_data_analysis", "target_term_code": "analysis_report", "relation_name": "场景_包含_分析报告", "relation_category": "ONTOLOGY", "cardinality": "1:N", "relation_code": "REL_EC_045"}
 {"op": "add", "source_term_code": "annual_revenue_report", "target_term_code": "dws_enterprise_wide", "relation_name": "企业申报营收_归属_企业表", "relation_category": "BUSINESS", "cardinality": "N:1", "relation_code": "REL_EC_007"}
 {"op": "add", "source_term_code": "tax_declared", "target_term_code": "dws_enterprise_wide", "relation_name": "企业申报税额_归属_企业表", "relation_category": "BUSINESS", "cardinality": "N:1", "relation_code": "REL_EC_008"}
 {"op": "add", "source_term_code": "risk_score", "target_term_code": "dws_enterprise_wide", "relation_name": "企业风险分_归属_企业表", "relation_category": "BUSINESS", "cardinality": "N:1", "relation_code": "REL_EC_009"}

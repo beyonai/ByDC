@@ -26,6 +26,7 @@ class SqlExecTask:
 
 @dataclass
 class ScriptExecTask:
+    object_code: str
     action_code: str
     script: str
     params: dict[str, Any] = field(default_factory=dict)

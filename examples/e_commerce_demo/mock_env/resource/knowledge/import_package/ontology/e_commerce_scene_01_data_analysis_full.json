@@ -1,13 +1,13 @@
 {
   "view_id": "scene_01_data_analysis",
   "view_name": "电商产业在线查数分析场景",
-  "description": "基于企业、网格、产业链三张 DWS 宽表的在线查数分析场景，支持按年切片的多维检索与关联分析。",
+  "description": "基于企业、网格、产业链三张 DWS 宽表及分析报告对象的在线查数分析场景，支持按年切片的多维检索与关联分析；报告按 mock_env/resource/reports/{分类}/区_*.md、网格_*.md 组织。",
   "functions": [],
   "objects": [
     {
       "object_code": "dws_enterprise_wide",
       "object_name": "企业大宽表",
-      "description": "电商 demo 企业维度 DWS 宽表，含申报/开票/风险/产业链/资产等汇总指标",
+      "description": "电商 demo 企业维度 DWS 宽表，含申报/开票/风险/产业链/资产等汇总指标，指标：单位亩产效益=企业申报营收/占地面积（亩）",
       "source_type": "DB",
       "tags": [
         "电商",
@@ -100,13 +100,13 @@
         {
           "field_code": "poiLatitude",
           "field_name": "企业POI纬度",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "poi_latitude"
         },
         {
           "field_code": "poiLongitude",
           "field_name": "企业POI经度",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "poi_longitude"
         },
         {
@@ -118,61 +118,61 @@
         {
           "field_code": "annualRevenueReport",
           "field_name": "企业申报营收",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "annual_revenue_report"
         },
         {
           "field_code": "taxDeclared",
           "field_name": "企业申报税额",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "tax_declared"
         },
         {
           "field_code": "landAreaMu",
           "field_name": "占地面积（亩）",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "land_area_mu"
         },
         {
           "field_code": "powerConsumption",
           "field_name": "年度用电量（千瓦时）",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "power_consumption"
         },
         {
           "field_code": "waterConsumption",
           "field_name": "年度用水量（吨）",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "water_consumption"
         },
         {
           "field_code": "logisticsHeatIndex",
           "field_name": "所在网格的年度平均物流热力指数",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "logistics_heat_index"
         },
         {
           "field_code": "revenueAiInferred",
           "field_name": "AI推演营收",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "revenue_ai_inferred"
         },
         {
           "field_code": "taxAiInferred",
           "field_name": "AI推演税额",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "tax_ai_inferred"
         },
         {
           "field_code": "taxGapRatio",
           "field_name": "税负差异率",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "tax_gap_ratio"
         },
         {
           "field_code": "riskScore",
           "field_name": "企业风险分",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "risk_score"
         },
         {
@@ -214,7 +214,7 @@
         {
           "field_code": "rdIntensity",
           "field_name": "研发强度",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "rd_intensity"
         },
         {
@@ -262,13 +262,13 @@
         {
           "field_code": "invoiceIssuedAmount",
           "field_name": "期内开票总额（万元）",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "invoice_issued_amount"
         },
         {
           "field_code": "invoiceReceivedAmount",
           "field_name": "期内收票总额（万元）",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "invoice_received_amount"
         },
         {
@@ -280,13 +280,13 @@
         {
           "field_code": "invoiceItemVarianceScore",
           "field_name": "进销项品目背离度评分",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "invoice_item_variance_score"
         },
         {
           "field_code": "peakInvoicingRatio",
           "field_name": "顶额开票占比",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "peak_invoicing_ratio"
         },
         {
@@ -328,7 +328,7 @@
         {
           "field_code": "maxInfluenceRadiusKm",
           "field_name": "最大影响半径",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "max_influence_radius_km"
         },
         {
@@ -358,13 +358,13 @@
         {
           "field_code": "primaryAssetLandMu",
           "field_name": "主经营资产占地(亩)",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "primary_asset_land_mu"
         },
         {
           "field_code": "primaryAssetFloorSqm",
           "field_name": "主经营资产建面(平米)",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "primary_asset_floor_sqm"
         },
         {
@@ -376,7 +376,7 @@
         {
           "field_code": "occupancyTotalAreaSqm",
           "field_name": "企业占用面积汇总",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "occupancy_total_area_sqm"
         },
         {
@@ -388,13 +388,13 @@
         {
           "field_code": "invoiceIssuedAmtYear",
           "field_name": "当年开票额",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "invoice_issued_amt_year"
         },
         {
           "field_code": "invoiceReceivedAmtYear",
           "field_name": "当年收票额",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "invoice_received_amt_year"
         },
         {
@@ -424,13 +424,13 @@
         {
           "field_code": "supplierStrengthSum",
           "field_name": "供应方关系强度和",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "supplier_strength_sum"
         },
         {
           "field_code": "buyerStrengthSum",
           "field_name": "采购方关系强度和",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "buyer_strength_sum"
         },
         {
@@ -550,13 +550,13 @@
         {
           "field_code": "areaMu",
           "field_name": "网格面积(亩)",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "area_mu"
         },
         {
           "field_code": "areaKilometer",
           "field_name": "网格面积(平方公里)",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "area_kilometer"
         },
         {
@@ -586,19 +586,19 @@
         {
           "field_code": "totalAnnualRevenue",
           "field_name": "企业申报营收汇总",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "total_annual_revenue"
         },
         {
           "field_code": "totalTaxDeclared",
           "field_name": "企业申报税额汇总",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "total_tax_declared"
         },
         {
           "field_code": "avgRiskScore",
           "field_name": "企业平均风险分",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "avg_risk_score"
         },
         {
@@ -628,13 +628,13 @@
         {
           "field_code": "totalLandAreaMu",
           "field_name": "资产占地汇总(亩)",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "total_land_area_mu"
         },
         {
           "field_code": "totalFloorAreaSqm",
           "field_name": "资产建面汇总(平米)",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "total_floor_area_sqm"
         },
         {
@@ -646,13 +646,13 @@
         {
           "field_code": "outputPerMu",
           "field_name": "亩产效益",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "output_per_mu"
         },
         {
           "field_code": "vitalityIdx",
           "field_name": "综合活力指数",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "vitality_idx"
         },
         {
@@ -670,25 +670,25 @@
         {
           "field_code": "humanFlowIdx",
           "field_name": "人流指数(日)",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "human_flow_idx"
         },
         {
           "field_code": "trafficFlowIdxDay",
           "field_name": "车流指数(日)",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "traffic_flow_idx_day"
         },
         {
           "field_code": "nightLightIdxDay",
           "field_name": "夜间灯光指数(日)",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "night_light_idx_day"
         },
         {
           "field_code": "logisticsHeatIdxDay",
           "field_name": "物流热力指数(日)",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "logistics_heat_idx_day"
         },
         {
@@ -700,31 +700,31 @@
         {
           "field_code": "peopleFlowIdxMonth",
           "field_name": "人流指数(月)",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "people_flow_idx_month"
         },
         {
           "field_code": "trafficFlowIdxMonth",
           "field_name": "车流指数(月)",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "traffic_flow_idx_month"
         },
         {
           "field_code": "logisticsIdxMonth",
           "field_name": "物流指数(月)",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "logistics_idx_month"
         },
         {
           "field_code": "nightLightIdxMonth",
           "field_name": "夜间灯光指数(月)",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "night_light_idx_month"
         },
         {
           "field_code": "riskWeightMonth",
           "field_name": "风险权重(月)",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "risk_weight_month"
         },
         {
@@ -856,19 +856,19 @@
         {
           "field_code": "totalAnnualRevenue",
           "field_name": "申报营收汇总",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "total_annual_revenue"
         },
         {
           "field_code": "totalTaxDeclared",
           "field_name": "申报税额汇总",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "total_tax_declared"
         },
         {
           "field_code": "avgRiskScore",
           "field_name": "平均风险分",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "avg_risk_score"
         },
         {
@@ -880,13 +880,13 @@
         {
           "field_code": "invoiceIssuedAmtYear",
           "field_name": "当年开票额",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "invoice_issued_amt_year"
         },
         {
           "field_code": "invoiceReceivedAmtYear",
           "field_name": "当年收票额",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "invoice_received_amt_year"
         },
         {
@@ -910,7 +910,7 @@
         {
           "field_code": "relationStrengthSum",
           "field_name": "关系强度汇总",
-          "field_type": "STRING",
+          "field_type": "NUMBER",
           "source_column": "relation_strength_sum"
         },
         {
@@ -939,6 +939,116 @@
       },
       "datasource_alias": "ds_e_commerce",
       "table_name": "dws_industry_wide"
+    },
+    {
+      "object_code": "analysis_report",
+      "object_name": "分析报告",
+      "description": "按分类与网格/区域名称查询 Markdown 分析报告",
+      "source_type": "API",
+      "tags": [
+        "电商",
+        "报告"
+      ],
+      "fields": [
+        {
+          "field_code": "gridNames",
+          "field_name": "网格名称列表",
+          "field_type": "ARRAY"
+        },
+        {
+          "field_code": "regionNames",
+          "field_name": "区域名称列表",
+          "field_type": "ARRAY"
+        },
+        {
+          "field_code": "category",
+          "field_name": "报告分类",
+          "field_type": "STRING",
+          "termMeta": {
+            "datasetId": 760436323052421,
+            "termMasterType": "dict",
+            "termTypeCode": "report_category",
+            "termField": "code"
+          }
+        },
+        {
+          "field_code": "reportName",
+          "field_name": "报告名称",
+          "field_type": "STRING"
+        },
+        {
+          "field_code": "reportContent",
+          "field_name": "报告内容",
+          "field_type": "STRING"
+        },
+        {
+          "field_code": "reportAddress",
+          "field_name": "报告地址",
+          "field_type": "STRING"
+        }
+      ],
+      "actions": [
+        {
+          "action_code": "query_reports_by_scope",
+          "action_name": "按网格区域与分类查询报告",
+          "description": "根据分类及网格/区域名称列表读取 Markdown；两列表为空时返回该分类下全部报告；reports 根目录：环境变量优先，否则相对 cwd / 向上查找 mock_env/resource/reports",
+          "action_type": "query",
+          "function_refs": [],
+          "script": "import os\n\ndef _root_from_cwd():\n    cwd = os.path.abspath(os.getcwd())\n    rels = (\n        (\"resource\", \"reports\"),\n        (\"mock_env\", \"resource\", \"reports\"),\n        (\"examples\", \"e_commerce_demo\", \"mock_env\", \"resource\", \"reports\"),\n    )\n    seen = set()\n    for parts in rels:\n        p = os.path.normpath(os.path.join(cwd, *parts))\n        if p not in seen:\n            seen.add(p)\n            if os.path.isdir(p):\n                return p\n    cur = cwd\n    for _ in range(10):\n        p = os.path.join(cur, \"mock_env\", \"resource\", \"reports\")\n        if p not in seen:\n            seen.add(p)\n            if os.path.isdir(p):\n                return p\n        parent = os.path.dirname(cur)\n        if parent == cur:\n            break\n        cur = parent\n    return \"\"\n\ndef _root():\n    env = os.environ.get(\"DATACLOUD_E_COMMERCE_REPORTS_ROOT\", \"\").strip()\n    if env and os.path.isdir(env):\n        return env\n    return _root_from_cwd()\n\ndef _title_from_md(text):\n    for line in text.splitlines():\n        s = line.strip()\n        if s.startswith(\"#\"):\n            return s.lstrip(\"#\").strip() or None\n    return None\n\ndef _load_one(base, category, filename):\n    path = os.path.join(base, category, filename)\n    if not os.path.isfile(path):\n        return None\n    with open(path, encoding=\"utf-8\") as f:\n        body = f.read()\n    stem = filename[:-3] if filename.endswith(\".md\") else filename\n    name = _title_from_md(body) or stem\n    addr = \"reports/%s/%s\" % (category, filename)\n    return {\"reportName\": name, \"reportContent\": body, \"reportAddress\": addr}\n\ndef execute(params):\n    params = params or {}\n    category = (params.get(\"category\") or \"\").strip()\n    grids = params.get(\"gridNames\") or []\n    regions = params.get(\"regionNames\") or []\n    base = _root()\n    if not base or not category:\n        return {\"reports\": []}\n    cat_dir = os.path.join(base, category)\n    if not os.path.isdir(cat_dir):\n        return {\"reports\": []}\n\n    seen = set()\n    out = []\n\n    def add_file(fn):\n        if fn in seen:\n            return\n        rec = _load_one(base, category, fn)\n        if rec:\n            seen.add(fn)\n            out.append(rec)\n\n    for g in grids:\n        if g:\n            add_file(\"网格_%s.md\" % str(g).strip())\n    for r in regions:\n        if r:\n            add_file(\"区_%s.md\" % str(r).strip())\n\n    if not grids and not regions:\n        for fn in sorted(os.listdir(cat_dir)):\n            if fn.endswith(\".md\"):\n                add_file(fn)\n\n    return {\"reports\": out}\n",
+          "params": [
+            {
+              "param_code": "gridNames",
+              "param_name": "网格名称列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.gridNames"
+            },
+            {
+              "param_code": "regionNames",
+              "param_name": "区域名称列表",
+              "param_type": "ARRAY",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.regionNames"
+            },
+            {
+              "param_code": "category",
+              "param_name": "报告分类",
+              "param_type": "STRING",
+              "direction": "IN",
+              "mapping_path": "$.requestBody.category",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "dict",
+                "termTypeCode": "report_category",
+                "termField": "code"
+              }
+            },
+            {
+              "param_code": "reportName",
+              "param_name": "报告名称",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.reports[].reportName"
+            },
+            {
+              "param_code": "reportContent",
+              "param_name": "报告内容",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.reports[].reportContent"
+            },
+            {
+              "param_code": "reportAddress",
+              "param_name": "报告地址",
+              "param_type": "STRING",
+              "direction": "OUT",
+              "mapping_path": "$.reports[].reportAddress"
+            }
+          ]
+        }
+      ],
+      "datasource_alias": null,
+      "table_name": null
     }
   ],
   "relations": [

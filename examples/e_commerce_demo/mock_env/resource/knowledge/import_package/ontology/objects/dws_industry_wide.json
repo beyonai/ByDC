@@ -106,19 +106,19 @@
     {
       "field_code": "totalAnnualRevenue",
       "field_name": "申报营收汇总",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "total_annual_revenue"
     },
     {
       "field_code": "totalTaxDeclared",
       "field_name": "申报税额汇总",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "total_tax_declared"
     },
     {
       "field_code": "avgRiskScore",
       "field_name": "平均风险分",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "avg_risk_score"
     },
     {
@@ -130,13 +130,13 @@
     {
       "field_code": "invoiceIssuedAmtYear",
       "field_name": "当年开票额",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "invoice_issued_amt_year"
     },
     {
       "field_code": "invoiceReceivedAmtYear",
       "field_name": "当年收票额",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "invoice_received_amt_year"
     },
     {
@@ -160,7 +160,7 @@
     {
       "field_code": "relationStrengthSum",
       "field_name": "关系强度汇总",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "relation_strength_sum"
     },
     {

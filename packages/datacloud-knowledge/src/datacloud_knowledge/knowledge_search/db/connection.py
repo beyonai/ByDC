@@ -6,6 +6,7 @@ from typing import Iterator
 from urllib.parse import quote_plus
 
 from sqlalchemy import create_engine
+from sqlalchemy.dialects.postgresql.base import PGDialect
 from sqlalchemy.orm import Session, sessionmaker
 
 
@@ -28,6 +29,9 @@ def _build_database_url() -> str:
 
 
 DATABASE_URL = _build_database_url()
+
+if os.getenv("KNOWLEDGE_DB_TYPE", "").lower() == "opengauss":
+    PGDialect._get_server_version_info = lambda self, conn: (15, 0)
 
 engine = create_engine(
     DATABASE_URL,
