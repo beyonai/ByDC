@@ -69,33 +69,27 @@ def _get_knowledge_service() -> Any | None:
 
 
 @tool
-async def search_knowledge(query: str, top_k: int = 5) -> list[dict[str, Any]]:
-    """Search the enterprise knowledge graph for relevant context.
+async def search_knowledge(query: str, n_hops: int = 4) -> str:
+    """Search the enterprise knowledge graph and return semantic tree text.
 
     Queries the knowledge graph to retrieve entities, relationships, and KPI definitions.
-    For example, "王小明优秀吗" (Is Wang Xiaoming excellent?) returns the person entity,
-    their KPI associations, and evaluation criteria needed to determine excellence.
+    Returns a tree-structured semantic text description.
 
     Args:
         query: Natural-language search query (e.g. person name, KPI, or evaluation question).
-        top_k: Maximum number of knowledge snippets to return.
+        n_hops: Number of hops for graph traversal (default: 4).
 
     Returns:
-        List of ``{title, content, source}`` dicts.
+        Semantic tree text describing the knowledge subgraph.
     """
     service = _get_knowledge_service()
     if service is None:
-        return []
+        return "(知识服务未初始化)"
     try:
-        result = await asyncio.to_thread(service.query, query, None)
+        from datacloud_knowledge import nl_to_semantic_tree
+
+        result = await asyncio.to_thread(nl_to_semantic_tree, query, service, n_hops)
     except Exception as e:
-        logger.error("KnowledgeGraphQuery.query failed: %s", e)
-        return []
-    snippets = []
-    for subgraph in result.get("results", [])[:top_k]:
-        center = subgraph.get("center_entity", {})
-        title = f"{center.get('name', '')} 相关子图"
-        tree_dict = subgraph.get("tree")
-        content = _tree_to_text(tree_dict) if tree_dict else "(无树形结构)"
-        snippets.append({"title": title, "content": content, "source": "knowledge_graph"})
-    return snippets
+        logger.error("nl_to_semantic_tree failed: %s", e)
+        return f"(查询失败: {e})"
+    return result
