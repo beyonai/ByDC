@@ -41,6 +41,7 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "type1_schema: DDL schema tests")
     config.addinivalue_line("markers", "type2_data: structured data load tests")
     config.addinivalue_line("markers", "type4_knowledge: knowledge ingest tests")
+    config.addinivalue_line("markers", "type5_nl_knowledge: natural language knowledge query tests")
     config.addinivalue_line("markers", "e2e: end-to-end smoke tests")
     config.addinivalue_line("markers", "integration: requires external services")
 

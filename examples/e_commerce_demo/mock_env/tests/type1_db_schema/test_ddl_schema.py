@@ -11,9 +11,9 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from dotenv import dotenv_values
 
-from tests.fixtures.db_client import create_test_engine, execute_sql_script
+from fixtures.db_client import create_test_engine, execute_sql_script
 
-# e_commerce_demo 使用 MySQL（建表语句为 MySQL 风格），此处 schema 即数据库名
+# e_commerce_demo：DDL 为 PostgreSQL/OpenGauss 风格，此处 schema 即数据库名
 SCHEMA = "e_commerce_demo"
 TABLES = ("dws_enterprise_wide", "dws_grid_wide", "dws_industry_wide")
 
@@ -21,12 +21,14 @@ TABLES = ("dws_enterprise_wide", "dws_grid_wide", "dws_industry_wide")
 @pytest.mark.type1_schema
 def test_ddl_file_exists_and_contains_core_tables(mock_env_root: Path) -> None:
     table_sql_paths = _resolve_table_sql_paths(mock_env_root)
-    assert table_sql_paths, "no SQL files found under db/ddl/tables/"
+    assert table_sql_paths, "no SQL files found under db/pg/ddl/tables/"
     ddl = _read_ddl_from_table_files(table_sql_paths)
     for table in TABLES:
-        assert f"CREATE TABLE `{SCHEMA}`.`{table}`" in ddl, (
-            f"DDL 中未找到 CREATE TABLE `{SCHEMA}`.`{table}`，"
-            "请检查 db/ddl/tables/ 下的 .sql 文件"
+        # PostgreSQL：CREATE TABLE IF NOT EXISTS schema.table (...)
+        expected = f"CREATE TABLE IF NOT EXISTS {SCHEMA}.{table}"
+        assert expected in ddl, (
+            f"DDL 中未找到 {expected}，"
+            "请检查 db/pg/ddl/tables/ 下的 .sql 文件"
         )
 
 
@@ -103,7 +105,7 @@ def test_drop_then_create_tables_with_env_example(mock_env_root: Path) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _resolve_table_sql_paths(mock_env_root: Path) -> list[Path]:
-    tables_dir = mock_env_root / "db" / "ddl" / "tables"
+    tables_dir = mock_env_root / "db" / "pg" / "ddl" / "tables"
     if not tables_dir.exists():
         raise FileNotFoundError(f"tables ddl dir not found: {tables_dir}")
     paths = sorted(tables_dir.glob("*.sql"))

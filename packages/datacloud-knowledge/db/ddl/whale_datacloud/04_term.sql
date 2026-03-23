@@ -11,22 +11,12 @@ CREATE TABLE IF NOT EXISTS whale_datacloud.term (
     term_tags      JSONB        NOT NULL DEFAULT '{}'::jsonb,
     ext_attrs      JSONB        NOT NULL DEFAULT '{}'::jsonb,
     created_time   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_time   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uq_term_term_code UNIQUE (term_code),
-    CONSTRAINT chk_term_term_code CHECK (term_code ~ '^[A-Za-z][A-Za-z0-9_]{1,63}$'),
-    CONSTRAINT fk_term_parent
-        FOREIGN KEY (parent_term_id) REFERENCES whale_datacloud.term(term_id),
-    CONSTRAINT fk_term_domain
-        FOREIGN KEY (domain_id) REFERENCES whale_datacloud.domain(domain_id),
-    CONSTRAINT fk_term_term_type
-        FOREIGN KEY (term_type_code) REFERENCES whale_datacloud.term_type(type_code),
-    CONSTRAINT fk_term_library
-        FOREIGN KEY (library_id) REFERENCES whale_datacloud.term_library(library_id)
+    updated_time   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE whale_datacloud.term IS '术语主表：存储所有术语及其核心属性';
 COMMENT ON COLUMN whale_datacloud.term.term_id        IS '术语ID，主键';
-COMMENT ON COLUMN whale_datacloud.term.term_code      IS '术语编码，全局唯一，大写字母+数字+下划线';
+COMMENT ON COLUMN whale_datacloud.term.term_code      IS '术语编码';
 COMMENT ON COLUMN whale_datacloud.term.term_name      IS '术语标准名称，全局唯一规范名';
 COMMENT ON COLUMN whale_datacloud.term.desc_summary   IS '术语描述摘要，约100字，用于快速展示；完整知识在 term_knowledge 表';
 COMMENT ON COLUMN whale_datacloud.term.parent_term_id IS '父术语ID：NULL=概念术语，有值=实例术语（指向所属概念的 term_id）';
