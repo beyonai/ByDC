@@ -260,7 +260,7 @@ class KbTermLoader(TermLoader):
                 if syn:
                     aliases = [s.strip() for s in str(syn).split(",") if s.strip()]
             entries.append(TermEntry(
-                code=item.term_id,
+                code=item.term_code,
                 label=item.term_name,
                 aliases=aliases,
             ))

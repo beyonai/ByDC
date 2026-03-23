@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from sqlalchemy import cast, func, select
-from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, NUMERIC, TIMESTAMP
+from sqlalchemy.dialects.postgresql import NUMERIC, TIMESTAMP
 
 from .db import get_session
 from .db.models import Term
 from .types import SearchTermsResult, TagFilter, TermItem
+
+logger = logging.getLogger(__name__)
 
 
 def search_terms_by_type(
@@ -26,70 +29,75 @@ def search_terms_by_type(
         raise ValueError("offset 必须 >= 0")
 
     canonical_type = _normalize_type_code(term_type_code)
-    where, params = _build_where(
-        term_type_code=canonical_type,
-        term_codes=term_codes,
-        keyword=keyword,
-        tags=tags,
-    )
 
-    with get_session() as session:
-        base_filters = _build_filters(
-            canonical_type=canonical_type,
-            term_codes=term_codes,
-            keyword=keyword,
-            tags=tags,
-        )
-
-        total = int(
-            session.execute(
-                select(func.count()).select_from(Term).where(*base_filters)
-            ).scalar_one()
-        )
-
-        score_col = None
-        if keyword:
-            vec = func.to_tsvector("simple", func.coalesce(Term.term_name, ""))
-            q = func.websearch_to_tsquery("simple", keyword)
-            score_col = cast(func.ts_rank_cd(vec, q), DOUBLE_PRECISION).label("score")
-
-        stmt = (
-            select(
-                Term.term_id,
-                Term.term_name,
-                Term.term_type_code,
-                Term.desc_summary,
-                Term.term_tags,
-                Term.owl_doc_id,
-                Term.created_time,
-                Term.updated_time,
-                *([score_col] if score_col is not None else []),
+    try:
+        with get_session() as session:
+            base_filters = _build_filters(
+                canonical_type=canonical_type,
+                term_codes=term_codes,
+                keyword=keyword,
+                tags=tags,
             )
-            .where(*base_filters)
-            .limit(limit)
-            .offset(offset)
+
+            total = int(
+                session.execute(
+                    select(func.count()).select_from(Term).where(*base_filters)
+                ).scalar_one()
+            )
+
+            score_col = None
+
+            stmt = (
+                select(
+                    Term.term_id,
+                    Term.term_code,
+                    Term.term_name,
+                    Term.term_type_code,
+                    Term.desc_summary,
+                    Term.term_tags,
+                    Term.owl_doc_id,
+                    Term.created_time,
+                    Term.updated_time,
+                    *([score_col] if score_col is not None else []),
+                )
+                .where(*base_filters)
+                .limit(limit)
+                .offset(offset)
+            )
+
+            stmt = _apply_order_by(stmt, order_by=order_by, score_col=score_col)
+
+            rows = session.execute(stmt).all()
+    except Exception as e:
+        logger.exception(
+            "search_terms_by_type failed: term_type_code=%s, term_codes=%s, keyword=%s, tags=%s, limit=%s, offset=%s",
+            term_type_code,
+            term_codes,
+            keyword,
+            tags,
+            limit,
+            offset,
         )
-
-        stmt = _apply_order_by(stmt, order_by=order_by, score_col=score_col)
-
-        rows = session.execute(stmt).all()
+        raise
 
     items: list[TermItem] = []
     for row in rows:
         # row is tuple with optional score at end
         term_id = str(row[0])
-        term_name = str(row[1])
-        ttype = str(row[2])
-        desc_summary = row[3]
-        term_tags = row[4] or {}
-        owl_doc_id = row[5]
-        created_time = row[6]
-        updated_time = row[7]
-        score = float(row[8]) if len(row) > 8 and row[8] is not None else None
+        term_code = str(row[1])
+        term_name = str(row[2])
+        ttype = str(row[3])
+        desc_summary = row[4]
+        term_tags = row[5] or {}
+        owl_doc_id = row[6]
+        created_time = row[7]
+        updated_time = row[8]
+        score = float(row[9]) if len(row) > 9 and row[9] is not None else None
 
         items.append(
             TermItem(
                 term_id=term_id,
+                term_code=term_code,
                 term_name=term_name,
                 term_type_code=ttype,
                 desc_summary=desc_summary,
@@ -135,9 +143,7 @@ def _build_filters(
         filters.append(Term.term_id.in_(term_codes))
 
     if keyword:
-        vec = func.to_tsvector("simple", func.coalesce(Term.term_name, ""))
-        q = func.websearch_to_tsquery("simple", keyword)
-        filters.append(vec.op("@@")(q))
+        filters.append(func.coalesce(Term.term_name, "").ilike(f"%{keyword}%"))
 
     for tf in tags or []:
         filters.append(_tag_filter_expr(tf))

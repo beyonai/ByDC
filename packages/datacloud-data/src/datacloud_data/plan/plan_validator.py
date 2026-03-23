@@ -410,12 +410,24 @@ def _validate_sql_columns_by_ast(
             cols.add(col_name)
         table_columns.setdefault(t, set()).update(cols)
 
+    # 提取 SELECT 列表中的别名（如 "SELECT col AS alias" 中的 alias）
+    select_aliases: set[str] = set()
+    for alias_node in expr.find_all(sqlglot.exp.Alias):
+        alias_name = (alias_node.alias or "").strip().lower()
+        if alias_name:
+            select_aliases.add(alias_name)
+
     # 遍历 Column 做表级校验
     for col in expr.find_all(sqlglot.exp.Column):
         col_name_orig = (getattr(col, "alias_or_name", None) or col.name or "").strip()
         col_name = col_name_orig.lower()
         if not col_name:
             continue
+
+        # 如果是 SELECT 列表中定义的别名，则跳过校验（ORDER BY 可引用 SELECT 别名）
+        if col_name in select_aliases:
+            continue
+
         qualifier = (col.table or "").strip().lower() if col.table else ""
         qualifier_orig = (col.table or "").strip() if col.table else ""
 
