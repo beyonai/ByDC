@@ -14,7 +14,7 @@
 {"op": "add", "source_term_code": "supplier_rel_cnt", "target_term_code": "dws_enterprise_wide", "relation_name": "供应方关系数_归属_企业表", "relation_category": "BUSINESS", "cardinality": "N:1", "relation_code": "REL_EC_013"}
 {"op": "add", "source_term_code": "buyer_rel_cnt", "target_term_code": "dws_enterprise_wide", "relation_name": "采购方关系数_归属_企业表", "relation_category": "BUSINESS", "cardinality": "N:1", "relation_code": "REL_EC_014"}
 {"op": "add", "source_term_code": "occupancy_asset_cnt", "target_term_code": "dws_enterprise_wide", "relation_name": "占用资产数_归属_企业表", "relation_category": "BUSINESS", "cardinality": "N:1", "relation_code": "REL_EC_015"}
-{"op": "add", "source_term_code": "revenue_per_mu", "target_term_code": "dws_enterprise_wide", "relation_name": "亩产效益_归属_企业表", "relation_category": "BUSINESS", "cardinality": "N:1", "relation_code": "REL_EC_016"}
+{"op": "delete", "source_term_code": "revenue_per_mu", "target_term_code": "dws_enterprise_wide", "relation_name": "亩产效益_归属_企业表", "relation_category": "BUSINESS", "cardinality": "N:1", "relation_code": "REL_EC_016"}
 {"op": "add", "source_term_code": "total_annual_revenue", "target_term_code": "dws_grid_wide", "relation_name": "网格营收汇总_归属_网格表", "relation_category": "BUSINESS", "cardinality": "N:1", "relation_code": "REL_EC_017"}
 {"op": "add", "source_term_code": "total_tax_declared", "target_term_code": "dws_grid_wide", "relation_name": "网格税额汇总_归属_网格表", "relation_category": "BUSINESS", "cardinality": "N:1", "relation_code": "REL_EC_018"}
 {"op": "add", "source_term_code": "output_per_mu", "target_term_code": "dws_grid_wide", "relation_name": "网格亩产效益_归属_网格表", "relation_category": "BUSINESS", "cardinality": "N:1", "relation_code": "REL_EC_019"}
@@ -43,3 +43,7 @@
 {"op": "add", "source_term_code": "enterprise", "target_term_code": "dws_enterprise_wide", "relation_name": "企业维度_对应_企业表", "relation_category": "BUSINESS", "cardinality": "1:1", "relation_code": "REL_EC_042"}
 {"op": "add", "source_term_code": "grid", "target_term_code": "dws_grid_wide", "relation_name": "网格维度_对应_网格表", "relation_category": "BUSINESS", "cardinality": "1:1", "relation_code": "REL_EC_043"}
 {"op": "add", "source_term_code": "chain", "target_term_code": "dws_industry_wide", "relation_name": "产业链维度_对应_产业链表", "relation_category": "BUSINESS", "cardinality": "1:1", "relation_code": "REL_EC_044"}
+{"op": "add", "source_term_code": "REGION_NAME_264668", "target_term_code": "dws_enterprise_wide", "relation_name": "区域_包含_企业", "relation_category": "BUSINESS", "cardinality": "1:N", "relation_code": "REL_EC_045"}
+{"op": "add", "source_term_code": "land_area_mu", "target_term_code": "dws_enterprise_wide", "relation_name": "企业占地_归属_企业表", "relation_category": "BUSINESS", "cardinality": "N:1", "relation_code": "REL_EC_046"}
+{"op": "add", "source_term_code": "revenue_per_mu", "target_term_code": "annual_revenue_report", "relation_name": "企业亩产效益_计算依赖_营收", "relation_category": "DERIVATION", "cardinality": "N:1", "relation_code": "REL_DERIVE_001", "ext_attrs": {"role": "numerator"}}
+{"op": "add", "source_term_code": "revenue_per_mu", "target_term_code": "land_area_mu", "relation_name": "企业亩产效益_计算依赖_占地", "relation_category": "DERIVATION", "cardinality": "N:1", "relation_code": "REL_DERIVE_002", "ext_attrs": {"role": "denominator"}}

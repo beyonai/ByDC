@@ -73,3 +73,6 @@
 {"op": "add", "term_code": "PATTERN_03", "term_name": "低报收入/隐匿收入", "term_type_code": "latest_pattern_name", "domain_code": "DOMAIN_002", "library_code": "LIB_002", "parent_term_code": "TERM_TYPE_LATEST_PATTERN_NAME"}
 {"op": "add", "term_code": "PATTERN_01", "term_name": "空壳公司/虚开发票", "term_type_code": "latest_pattern_name", "domain_code": "DOMAIN_002", "library_code": "LIB_002", "parent_term_code": "TERM_TYPE_LATEST_PATTERN_NAME"}
 {"op": "add", "term_code": "PATTERN_04", "term_name": "进销项背离/虚列成本", "term_type_code": "latest_pattern_name", "domain_code": "DOMAIN_002", "library_code": "LIB_002", "parent_term_code": "TERM_TYPE_LATEST_PATTERN_NAME"}
+{"op": "add", "term_code": "land_area_mu", "term_name": "企业占地面积（亩）", "term_type_code": "enterprise_metric", "domain_code": "DOMAIN_002", "library_code": "LIB_002", "parent_term_code": "TERM_TYPE_ENTERPRISE_METRIC"}
+{"op": "add", "term_code": "area_mu", "term_name": "网格面积（亩）", "term_type_code": "grid_metric", "domain_code": "DOMAIN_002", "library_code": "LIB_002", "parent_term_code": "TERM_TYPE_GRID_METRIC"}
+{"op": "add", "term_code": "total_land_area_mu", "term_name": "网格资产占地汇总（亩）", "term_type_code": "grid_metric", "domain_code": "DOMAIN_002", "library_code": "LIB_002", "parent_term_code": "TERM_TYPE_GRID_METRIC"}
