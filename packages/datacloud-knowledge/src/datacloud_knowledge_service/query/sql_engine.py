@@ -133,6 +133,9 @@ class SQLGraphQuery:
     def _build_name_index(self) -> Dict[str, List[Tuple[str, str, str]]]:
         """Build name -> term_id index from DB (cached).
 
+        TODO: 存在 OOM（内存溢出）风险。如果 term 表数据量过大（如海量企业/网格实例），
+        全量拉取会导致内存耗尽。后续需要结合 jieba 分词服务和外部索引进行重构。
+
         Returns:
             Dict mapping name -> [(term_id, node_type, match_type), ...]
         """
@@ -172,6 +175,10 @@ class SQLGraphQuery:
 
     def extract_entities(self, query: str) -> List[QueryEntity]:
         """Extract matching entities from natural language query.
+
+        TODO: 存在严重的性能瓶颈。当前使用 for 循环对字典中的每个实体进行正则匹配，
+        时间复杂度为 O(N)。在海量实例（如 10 万+ 企业）场景下，一句话查询会耗时极长。
+        后续需统一替换为基于 jieba 的分词召回能力（如结合 BK-Tree / Trie 树算法）。
 
         Strategy:
         1. Find all matches (exact, alias)
@@ -639,6 +646,9 @@ class SQLGraphQuery:
     def _build_name_index(self) -> Dict[str, List[Tuple[str, str, str]]]:
         """Build name -> term_id index from DB (cached).
 
+        TODO: 存在 OOM（内存溢出）风险。如果 term 表数据量过大（如海量企业/网格实例），
+        全量拉取会导致内存耗尽。后续需要结合 jieba 分词服务和外部索引进行重构。
+
         Returns:
             Dict mapping name -> [(term_id, node_type, match_type), ...]
         """
@@ -678,6 +688,10 @@ class SQLGraphQuery:
 
     def extract_entities(self, query: str) -> List[QueryEntity]:
         """Extract matching entities from natural language query.
+
+        TODO: 存在严重的性能瓶颈。当前使用 for 循环对字典中的每个实体进行正则匹配，
+        时间复杂度为 O(N)。在海量实例（如 10 万+ 企业）场景下，一句话查询会耗时极长。
+        后续需统一替换为基于 jieba 的分词召回能力（如结合 BK-Tree / Trie 树算法）。
 
         Strategy:
         1. Find all matches (exact, alias)
