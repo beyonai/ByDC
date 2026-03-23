@@ -182,3 +182,5 @@ uv.lock
 **/node_modules/
 tmp/*
 whale_datacloud.code-workspace
+
+pyrefly.toml

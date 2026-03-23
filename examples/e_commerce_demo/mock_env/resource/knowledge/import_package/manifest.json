@@ -31,6 +31,18 @@
       "file": "terms/list_terms.jsonl",
       "description": "列表术语（亦庄术语库，DOMAIN_002/LIB_002）",
       "count": 16032
+    },
+    {
+      "type": "terms",
+      "file": "terms/ontology_terms.jsonl",
+      "description": "本体术语（对象/视图，单体 full 与 sales 格式一致）",
+      "count": 4
+    },
+    {
+      "type": "relations",
+      "file": "relations/term_relations.jsonl",
+      "description": "术语关系（本体结构 + 业务度量归属）",
+      "count": 44
     }
   ]
 }
