@@ -139,6 +139,9 @@ class SQLKnowledgeGraphQuery:
     def _build_name_index(self) -> Dict[str, List[Tuple[str, str, str]]]:
         """Build name -> term_id index from DB (cached).
 
+        TODO: 存在 OOM（内存溢出）风险。如果 term 表数据量过大（如海量企业/网格实例），
+        全量拉取会导致内存耗尽。后续需要结合 jieba 分词服务和外部索引进行重构。
+
         Uses term_name table to get all names (standard names + aliases)
         based on the term-term_name-term_vocabulary relationship:
         - term: stores term metadata (term_id, term_name as standard name, term_type_code)
