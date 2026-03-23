@@ -776,6 +776,7 @@ all = [
     { name = "aiomysql" },
     { name = "aiosqlite" },
     { name = "asyncpg" },
+    { name = "datacloud-knowledge" },
     { name = "fastapi" },
     { name = "langchain-openai" },
     { name = "langgraph" },
@@ -799,6 +800,9 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-mock" },
     { name = "ruff" },
+]
+knowledge = [
+    { name = "datacloud-knowledge" },
 ]
 langchain = [
     { name = "langchain-openai" },
@@ -838,7 +842,8 @@ requires-dist = [
     { name = "aiomysql", marker = "extra == 'sql'", specifier = ">=0.2" },
     { name = "aiosqlite", marker = "extra == 'sql'", specifier = ">=0.19" },
     { name = "asyncpg", marker = "extra == 'sql'", specifier = ">=0.29" },
-    { name = "datacloud-data", extras = ["langchain", "sql", "service"], marker = "extra == 'all'", editable = "packages/datacloud-data" },
+    { name = "datacloud-data", extras = ["langchain", "sql", "service", "knowledge"], marker = "extra == 'all'", editable = "packages/datacloud-data" },
+    { name = "datacloud-knowledge", marker = "extra == 'knowledge'", editable = "packages/datacloud-knowledge" },
     { name = "fastapi", marker = "extra == 'service'", specifier = ">=0.115.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "langchain-openai", marker = "extra == 'langchain'", specifier = ">=0.1" },
@@ -859,7 +864,7 @@ requires-dist = [
     { name = "strawberry-graphql", extras = ["fastapi"], marker = "extra == 'service'", specifier = ">=0.260" },
     { name = "uvicorn", marker = "extra == 'service'", specifier = ">=0.32.0" },
 ]
-provides-extras = ["langchain", "sql", "clickhouse", "service", "all", "dev"]
+provides-extras = ["langchain", "sql", "clickhouse", "service", "all", "knowledge", "dev"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -895,6 +900,7 @@ dev = [
     { name = "psycopg2-binary" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "sqlalchemy" },
 ]
 
 [package.metadata]
@@ -913,6 +919,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
     { name = "python-multipart", specifier = ">=0.0.12" },
+    { name = "sqlalchemy", marker = "extra == 'dev'", specifier = ">=2.0" },
     { name = "uvicorn", specifier = ">=0.32.0" },
 ]
 provides-extras = ["dev"]
