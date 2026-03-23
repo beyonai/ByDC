@@ -1,0 +1,258 @@
+{
+  "object_code": "dws_grid_wide",
+  "object_name": "网格大宽表",
+  "description": "电商 demo 经营网格维度 DWS 宽表，含企业汇总、资产、IoT 与活力类指标",
+  "source_type": "DB",
+  "tags": [
+    "电商",
+    "DWS",
+    "网格"
+  ],
+  "fields": [
+    {
+      "field_code": "gridId",
+      "field_name": "网格ID",
+      "field_type": "STRING",
+      "source_column": "grid_id",
+      "is_primary_key": true,
+      "required": true
+    },
+    {
+      "field_code": "dataYear",
+      "field_name": "数据年份",
+      "field_type": "INTEGER",
+      "source_column": "data_year",
+      "is_primary_key": true,
+      "required": true
+    },
+    {
+      "field_code": "gridCode",
+      "field_name": "网格编码",
+      "field_type": "STRING",
+      "source_column": "grid_code"
+    },
+    {
+      "field_code": "gridName",
+      "field_name": "网格名称",
+      "field_type": "STRING",
+      "source_column": "grid_name"
+    },
+    {
+      "field_code": "regionId",
+      "field_name": "区域ID",
+      "field_type": "STRING",
+      "source_column": "region_id"
+    },
+    {
+      "field_code": "regionName",
+      "field_name": "区域名称",
+      "field_type": "STRING",
+      "source_column": "region_name"
+    },
+    {
+      "field_code": "polygon",
+      "field_name": "网格边界坐标",
+      "field_type": "STRING",
+      "source_column": "polygon"
+    },
+    {
+      "field_code": "areaMu",
+      "field_name": "网格面积(亩)",
+      "field_type": "STRING",
+      "source_column": "area_mu"
+    },
+    {
+      "field_code": "areaKilometer",
+      "field_name": "网格面积(平方公里)",
+      "field_type": "STRING",
+      "source_column": "area_kilometer"
+    },
+    {
+      "field_code": "centerPoint",
+      "field_name": "中心点",
+      "field_type": "STRING",
+      "source_column": "center_point"
+    },
+    {
+      "field_code": "enterpriseCnt",
+      "field_name": "企业数量",
+      "field_type": "INTEGER",
+      "source_column": "enterprise_cnt"
+    },
+    {
+      "field_code": "scaleEnterpriseCnt",
+      "field_name": "规上企业数",
+      "field_type": "INTEGER",
+      "source_column": "scale_enterprise_cnt"
+    },
+    {
+      "field_code": "highTechCnt",
+      "field_name": "高新企业数",
+      "field_type": "INTEGER",
+      "source_column": "high_tech_cnt"
+    },
+    {
+      "field_code": "totalAnnualRevenue",
+      "field_name": "企业申报营收汇总",
+      "field_type": "STRING",
+      "source_column": "total_annual_revenue"
+    },
+    {
+      "field_code": "totalTaxDeclared",
+      "field_name": "企业申报税额汇总",
+      "field_type": "STRING",
+      "source_column": "total_tax_declared"
+    },
+    {
+      "field_code": "avgRiskScore",
+      "field_name": "企业平均风险分",
+      "field_type": "STRING",
+      "source_column": "avg_risk_score"
+    },
+    {
+      "field_code": "highRiskCnt",
+      "field_name": "高风险企业数",
+      "field_type": "INTEGER",
+      "source_column": "high_risk_cnt"
+    },
+    {
+      "field_code": "assetCnt",
+      "field_name": "资产数量",
+      "field_type": "INTEGER",
+      "source_column": "asset_cnt"
+    },
+    {
+      "field_code": "occupiedAssetCnt",
+      "field_name": "已占用资产数",
+      "field_type": "INTEGER",
+      "source_column": "occupied_asset_cnt"
+    },
+    {
+      "field_code": "vacantAssetCnt",
+      "field_name": "空置资产数",
+      "field_type": "INTEGER",
+      "source_column": "vacant_asset_cnt"
+    },
+    {
+      "field_code": "totalLandAreaMu",
+      "field_name": "资产占地汇总(亩)",
+      "field_type": "STRING",
+      "source_column": "total_land_area_mu"
+    },
+    {
+      "field_code": "totalFloorAreaSqm",
+      "field_name": "资产建面汇总(平米)",
+      "field_type": "STRING",
+      "source_column": "total_floor_area_sqm"
+    },
+    {
+      "field_code": "kpiMonthTime",
+      "field_name": "KPI月份",
+      "field_type": "DATE",
+      "source_column": "kpi_month_time"
+    },
+    {
+      "field_code": "outputPerMu",
+      "field_name": "亩产效益",
+      "field_type": "STRING",
+      "source_column": "output_per_mu"
+    },
+    {
+      "field_code": "vitalityIdx",
+      "field_name": "综合活力指数",
+      "field_type": "STRING",
+      "source_column": "vitality_idx"
+    },
+    {
+      "field_code": "weaknessTag",
+      "field_name": "活力短板",
+      "field_type": "STRING",
+      "source_column": "weakness_tag"
+    },
+    {
+      "field_code": "iotLatestDate",
+      "field_name": "IoT最新日期",
+      "field_type": "DATE",
+      "source_column": "iot_latest_date"
+    },
+    {
+      "field_code": "humanFlowIdx",
+      "field_name": "人流指数(日)",
+      "field_type": "STRING",
+      "source_column": "human_flow_idx"
+    },
+    {
+      "field_code": "trafficFlowIdxDay",
+      "field_name": "车流指数(日)",
+      "field_type": "STRING",
+      "source_column": "traffic_flow_idx_day"
+    },
+    {
+      "field_code": "nightLightIdxDay",
+      "field_name": "夜间灯光指数(日)",
+      "field_type": "STRING",
+      "source_column": "night_light_idx_day"
+    },
+    {
+      "field_code": "logisticsHeatIdxDay",
+      "field_name": "物流热力指数(日)",
+      "field_type": "STRING",
+      "source_column": "logistics_heat_idx_day"
+    },
+    {
+      "field_code": "iotMonthTime",
+      "field_name": "IoT月级日期",
+      "field_type": "DATE",
+      "source_column": "iot_month_time"
+    },
+    {
+      "field_code": "peopleFlowIdxMonth",
+      "field_name": "人流指数(月)",
+      "field_type": "STRING",
+      "source_column": "people_flow_idx_month"
+    },
+    {
+      "field_code": "trafficFlowIdxMonth",
+      "field_name": "车流指数(月)",
+      "field_type": "STRING",
+      "source_column": "traffic_flow_idx_month"
+    },
+    {
+      "field_code": "logisticsIdxMonth",
+      "field_name": "物流指数(月)",
+      "field_type": "STRING",
+      "source_column": "logistics_idx_month"
+    },
+    {
+      "field_code": "nightLightIdxMonth",
+      "field_name": "夜间灯光指数(月)",
+      "field_type": "STRING",
+      "source_column": "night_light_idx_month"
+    },
+    {
+      "field_code": "riskWeightMonth",
+      "field_name": "风险权重(月)",
+      "field_type": "STRING",
+      "source_column": "risk_weight_month"
+    },
+    {
+      "field_code": "etlTime",
+      "field_name": "装载时间",
+      "field_type": "TIMESTAMP",
+      "source_column": "etl_time",
+      "required": true
+    }
+  ],
+  "actions": [],
+  "source_config": {
+    "alias": "ds_e_commerce",
+    "db_type": "MYSQL",
+    "jdbc_url": "jdbc:mysql://10.10.168.207:3306/aigc_sales_assistant?useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull&allowMultiQueries=true&useSSL=false&autoReconnect=true&failOverReadOnly=false&serverTimezone=Asia/Shanghai",
+    "user": "root",
+    "password": "abc123456",
+    "pool_min": 1,
+    "pool_max": 5
+  },
+  "datasource_alias": "ds_e_commerce",
+  "table_name": "dws_grid_wide"
+}

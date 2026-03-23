@@ -22,6 +22,8 @@ classifiers = [
 dependencies = [
     "deepagents>=0.4.7",
     "langchain-openai>=1.1.11",
+    "psycopg2-binary>=2.9.11",
+    "sqlalchemy>=2.0.48",
 ]
 
 [dependency-groups]
