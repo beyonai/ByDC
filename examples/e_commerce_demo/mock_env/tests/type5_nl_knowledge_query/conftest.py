@@ -59,7 +59,7 @@ def knowledge_service():
 
     # 导入并创建服务
     try:
-        from datacloud_knowledge_service import SQLKnowledgeGraphQuery
+        from datacloud_knowledge import SQLKnowledgeGraphQuery
 
         service = SQLKnowledgeGraphQuery(default_hops=4)
         return service

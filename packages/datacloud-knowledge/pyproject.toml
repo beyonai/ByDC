@@ -38,9 +38,6 @@ dev = [
     "SQLAlchemy>=2.0",
 ]
 
-[project.scripts]
-datacloud-knowledge-service = "datacloud_knowledge_service.cli:main"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
