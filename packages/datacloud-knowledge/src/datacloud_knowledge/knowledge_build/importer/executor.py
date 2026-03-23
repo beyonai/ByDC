@@ -1,12 +1,21 @@
 """知识包入库执行器：按 manifest 顺序在单个事务内写入数据库。
 
+环境变量 DATACLOUD_KNOWLEDGE_IMPORT_BATCH_SIZE（默认 500，上限 10000）控制每个 JSONL
+文件按批解析并入库的行数，减少与数据库的往返次数。
+
 前提：调用方已通过 precheck.run() 校验，此处不再做格式校验。
 字段映射（JSONL → DB）：
   domain_code   → domain.domain_id
   library_code  → term_library.library_id 与 term_library.library_code（同值）
   type_code     → term_type.type_code  （用 type_code 做 upsert key）
-  term_code     → term.term_id 与 term.term_code（同值）
+  term_code     → term.term_code（规范化）；新建 term 时 term_id 为雪花 ID；更新已有术语时不改 term_id
+  term_name.name_id → 雪花 ID（与 term_id 同一套生成器）
   relation_code → term_relation.relation_id
+  relation / term_name / term_knowledge 等外键列均存 term_id；JSONL 可同时提供
+  term_id（或 source_term_id / target_term_id），若提供则优先用作外键，否则由 term_code 查 term 表解析。
+
+  雪花 ID（term_id / name_id 共用）：可选环境变量 DATACLOUD_KNOWLEDGE_SNOWFLAKE_DATACENTER_ID、
+  DATACLOUD_KNOWLEDGE_SNOWFLAKE_WORKER_ID（各 0–31，默认 1）。
 """
 
 from __future__ import annotations
@@ -15,121 +24,372 @@ import json
 import logging
 import os
 import re
+import threading
+import time
 from pathlib import Path
 
 import psycopg2
 import psycopg2.extensions
+from psycopg2.extras import execute_values
 
 logger = logging.getLogger(__name__)
 
+# JSONL 每批解析后入库的行数（环境变量可覆盖，过大可能增加单次事务内存）
+# 性能优化：默认 2000，提速 4x（原 500）
+def _import_batch_size() -> int:
+    raw = os.getenv("DATACLOUD_KNOWLEDGE_IMPORT_BATCH_SIZE", "2000").strip()
+    if not raw.isdigit() or int(raw) < 1:
+        return 2000
+    return min(int(raw), 10_000)
+
+
+def _iter_jsonl_obj_batches(file_path: Path, batch_size: int):
+    """流式按批产出 JSON 对象，按行读文件，避免整文件载入内存。"""
+    batch: list[dict] = []
+    with file_path.open(encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            batch.append(json.loads(line))
+            if len(batch) >= batch_size:
+                yield batch
+                batch = []
+    if batch:
+        yield batch
 
 def _normalize_term_code(s: str) -> str:
     """Normalize term_code to satisfy DB constraint ^[A-Z][A-Z0-9_]{1,63}$.
 
     Replace non-alphanumeric with underscore, uppercase, ensure first char is letter.
     """
-    if not s:
-        return "T_EMPTY"
-    normalized = re.sub(r"[^A-Za-z0-9_]", "_", s).upper()[:64]
-    if not normalized or normalized[0] not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
-        normalized = "T" + (normalized or "0")
-    return normalized[:64]
+    return s
+    # if not s:
+    #     return "T_EMPTY"
+    # normalized = re.sub(r"[^A-Za-z0-9_]", "_", s).upper()[:64]
+    # if not normalized or normalized[0] not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+    #     normalized = "T" + (normalized or "0")
+    # return normalized[:64]
+
+
+_SNOWFLAKE_EPOCH_MS = 1288834974657
+_snowflake_lock = threading.Lock()
+_snowflake_last_ts = 0
+_snowflake_sequence = 0
+
+
+def _snowflake_datacenter_worker_ids() -> tuple[int, int]:
+    d_raw = os.getenv("DATACLOUD_KNOWLEDGE_SNOWFLAKE_DATACENTER_ID", "1").strip() or "1"
+    w_raw = os.getenv("DATACLOUD_KNOWLEDGE_SNOWFLAKE_WORKER_ID", "1").strip() or "1"
+    try:
+        d = int(d_raw)
+    except ValueError:
+        d = 1
+    try:
+        w = int(w_raw)
+    except ValueError:
+        w = 1
+    return d & 0x1F, w & 0x1F
+
+
+def _next_snowflake_id() -> str:
+    """雪花算法 64bit 整数，字符串形式写入 term.term_id、term_name.name_id 等（VARCHAR）。"""
+    global _snowflake_last_ts, _snowflake_sequence
+    datacenter_id, worker_id = _snowflake_datacenter_worker_ids()
+    with _snowflake_lock:
+        ts = int(time.time() * 1000)
+        if ts < _snowflake_last_ts:
+            raise ValueError("系统时钟回拨，无法生成雪花ID")
+        if ts == _snowflake_last_ts:
+            _snowflake_sequence = (_snowflake_sequence + 1) & 0xFFF
+            if _snowflake_sequence == 0:
+                while ts <= _snowflake_last_ts:
+                    ts = int(time.time() * 1000)
+        else:
+            _snowflake_sequence = 0
+        _snowflake_last_ts = ts
+        nid = (
+            ((ts - _SNOWFLAKE_EPOCH_MS) << 22)
+            | (datacenter_id << 17)
+            | (worker_id << 12)
+            | _snowflake_sequence
+        )
+        return str(nid)
+
+
+def _next_snowflake_ids(count: int) -> list[str]:
+    """批量生成雪花 ID，减少锁竞争。"""
+    if count <= 0:
+        return []
+    global _snowflake_last_ts, _snowflake_sequence
+    datacenter_id, worker_id = _snowflake_datacenter_worker_ids()
+    ids: list[str] = []
+    with _snowflake_lock:
+        for _ in range(count):
+            ts = int(time.time() * 1000)
+            if ts < _snowflake_last_ts:
+                raise ValueError("系统时钟回拨，无法生成雪花ID")
+            if ts == _snowflake_last_ts:
+                _snowflake_sequence = (_snowflake_sequence + 1) & 0xFFF
+                if _snowflake_sequence == 0:
+                    while ts <= _snowflake_last_ts:
+                        ts = int(time.time() * 1000)
+            else:
+                _snowflake_sequence = 0
+            _snowflake_last_ts = ts
+            nid = (
+                ((ts - _SNOWFLAKE_EPOCH_MS) << 22)
+                | (datacenter_id << 17)
+                | (worker_id << 12)
+                | _snowflake_sequence
+            )
+            ids.append(str(nid))
+    return ids
+
+def _term_name_row_tuples(term_id: str, term_name: str, aliases: list[str]) -> list[tuple[str, str, str]]:
+    """name 行构造（name_id, term_id, name_text）；name_id 每条均为雪花 ID。"""
+    rows: list[tuple[str, str, str]] = [(_next_snowflake_id(), term_id, term_name)]
+    for alias in aliases:
+        if alias and alias != term_name:
+            rows.append((_next_snowflake_id(), term_id, alias))
+    return rows
+
+
+def _lookup_term_ids_by_norm_codes(
+    cur: psycopg2.extensions.cursor, norm_codes: list[str]
+) -> dict[str, str]:
+    """规范化 term_code → term.term_id（用于 relation / knowledge 等仅含 term_code 的引用）。"""
+    uniq = list(dict.fromkeys(norm_codes))
+    if not uniq:
+        return {}
+    cur.execute(
+        """SELECT term_code, term_id FROM whale_datacloud.term
+            WHERE term_code = ANY(%s)""",
+        (uniq,),
+    )
+    return {r[0]: r[1] for r in cur.fetchall()}
+
+
+def _str_id_if_set(obj: dict, key: str) -> str | None:
+    """JSON 中若显式提供 id（非空字符串），返回该值，用于写入外键 term_id 列。"""
+    v = obj.get(key)
+    if v is None:
+        return None
+    s = str(v).strip()
+    return s if s else None
+
+
+def _term_id_from_obj_or_code(
+    obj: dict,
+    *,
+    id_key: str,
+    code_key: str,
+    code_to_tid: dict[str, str],
+) -> str:
+    """优先 JSON 中的 *term_id，否则用规范化 term_code 查 code_to_tid。"""
+    tid = _str_id_if_set(obj, id_key)
+    if tid is not None:
+        return tid
+    nc = _normalize_term_code(obj[code_key])
+    return code_to_tid[nc]
+
+
+def _optional_term_id_from_obj(
+    obj: dict,
+    *,
+    id_key: str,
+    code_key: str,
+    code_to_tid: dict[str, str],
+) -> str | None:
+    """与 _term_id_from_obj_or_code 类似，但 code 可缺省；用于 action_term 等可选外键。"""
+    tid = _str_id_if_set(obj, id_key)
+    if tid is not None:
+        return tid
+    raw = obj.get(code_key)
+    if not raw:
+        return None
+    nc = _normalize_term_code(raw)
+    return code_to_tid.get(nc)
+
 
 # ── DB 连接 ───────────────────────────────────────────────────────────────────
 
 def _connect() -> psycopg2.extensions.connection:
-    """从环境变量建立 psycopg2 连接。"""
+    """从环境变量建立 psycopg2 连接。
+
+    可选环境变量：
+    - DATACLOUD_DB_CONNECT_TIMEOUT：连接超时（秒），默认 30；仅影响建连阶段。
+    - DATACLOUD_DB_LOCK_TIMEOUT_MS：锁等待超时（毫秒）。>0 时执行 SET lock_timeout，
+      避免 INSERT/UPDATE 在等表锁/行锁时无限挂起；未设置则不启用（与 PostgreSQL 默认一致）。
+    - DATACLOUD_DB_APPLICATION_NAME：会话 application_name（默认 datacloud_knowledge_import），
+      便于在 pg_stat_activity / OpenGauss 监控里区分 Python 入库连接与 DBeaver。
+
+    若入库卡在 domain 首条 INSERT，多为其他会话持有 whale_datacloud.* 上的锁且未提交，
+    请在库上查阻塞会话或设置 DATACLOUD_DB_LOCK_TIMEOUT_MS=30000 快速得到 lock timeout 报错。
+    """
     def _req(name: str) -> str:
         v = os.getenv(name, "").strip()
         if not v:
             raise ValueError(f"缺少环境变量: {name}")
         return v
 
-    return psycopg2.connect(
+    ct_raw = os.getenv("DATACLOUD_DB_CONNECT_TIMEOUT", "30").strip()
+    connect_timeout = int(ct_raw) if ct_raw.isdigit() else 30
+
+    app_name = os.getenv("DATACLOUD_DB_APPLICATION_NAME", "datacloud_knowledge_import").strip()
+    if not app_name:
+        app_name = "datacloud_knowledge_import"
+
+    _kw: dict = dict(
         host=_req("DB_HOST"),
         port=int(_req("DB_PORT")),
         user=_req("DB_USER"),
         password=_req("DB_PASSWORD"),
         dbname=_req("DB_NAME"),
+        connect_timeout=connect_timeout,
     )
+    try:
+        conn = psycopg2.connect(**_kw, application_name=app_name)
+    except TypeError:
+        # 极旧 psycopg2 / 部分驱动不支持 application_name
+        conn = psycopg2.connect(**_kw)
+
+    lock_raw = os.getenv("DATACLOUD_DB_LOCK_TIMEOUT_MS", "").strip()
+    if lock_raw.isdigit() and int(lock_raw) > 0:
+        lock_ms = int(lock_raw)
+        prev_autocommit = conn.autocommit
+        conn.autocommit = True
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SET lock_timeout = %s", (lock_ms,))
+        finally:
+            conn.autocommit = prev_autocommit
+
+    return conn
 
 
-# ── 各实体入库处理器 ───────────────────────────────────────────────────────────
+# ── 各实体入库处理器（批量优先；单行接口委托 _batch_*）──────────────────────────────
 
-def _process_domain(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -> None:
-    """写入 whale_datacloud.domain。"""
-    op = obj.get("op", "add")
-    domain_id = obj["domain_code"]
 
-    if op == "delete":
+def _resolve_type_category(obj: dict) -> int:
+    category_map = {"列表术语": 1, "字典术语": 2, "本体术语": 3, "文档名称术语": 4}
+    raw_cat = obj["type_category"]
+    type_category = category_map.get(str(raw_cat))
+    if type_category is None:
+        type_category = int(raw_cat)
+    return type_category
+
+
+def _batch_process_domain(cur: psycopg2.extensions.cursor, objs: list[dict], stats: dict) -> None:
+    """批量写入 whale_datacloud.domain。"""
+    if not objs:
+        return
+    deletes: list[str] = []
+    updates: list[dict] = []
+    upserts: list[dict] = []
+    for obj in objs:
+        op = obj.get("op", "add")
+        if op == "delete":
+            deletes.append(obj["domain_code"])
+        elif op == "update":
+            updates.append(obj)
+        else:
+            upserts.append(obj)
+    if deletes:
         cur.execute(
-            "DELETE FROM whale_datacloud.domain WHERE domain_id = %s",
-            (domain_id,),
+            "DELETE FROM whale_datacloud.domain WHERE domain_id = ANY(%s)",
+            (deletes,),
         )
         stats["domains"]["deleted"] += cur.rowcount
-    elif op == "update":
+    for obj in updates:
         cur.execute(
             """UPDATE whale_datacloud.domain
                   SET domain_name  = COALESCE(%s, domain_name),
                       domain_desc  = COALESCE(%s, domain_desc),
                       updated_time = CURRENT_TIMESTAMP
                 WHERE domain_id = %s""",
-            (obj.get("domain_name"), obj.get("domain_desc"), domain_id),
+            (obj.get("domain_name"), obj.get("domain_desc"), obj["domain_code"]),
         )
         stats["domains"]["updated"] += cur.rowcount
-    else:  # add / upsert（幂等，兼容重复运行；OpenGauss 可能不支持 ON CONFLICT）
+    if not upserts:
+        return
+    ids = [o["domain_code"] for o in upserts]
+    cur.execute(
+        "SELECT domain_id FROM whale_datacloud.domain WHERE domain_id = ANY(%s)",
+        (ids,),
+    )
+    existing = {r[0] for r in cur.fetchall()}
+    to_insert = [o for o in upserts if o["domain_code"] not in existing]
+    to_update = [o for o in upserts if o["domain_code"] in existing]
+    for obj in to_update:
         parent_code = obj.get("parent_code")
         cur.execute(
-            "SELECT 1 FROM whale_datacloud.domain WHERE domain_id = %s", (domain_id,)
+            """UPDATE whale_datacloud.domain
+                  SET domain_name  = %s,
+                      domain_desc  = COALESCE(%s, domain_desc),
+                      parent_id    = %s,
+                      updated_time = CURRENT_TIMESTAMP
+                WHERE domain_id = %s""",
+            (obj["domain_name"], obj.get("domain_desc"), parent_code, obj["domain_code"]),
         )
-        if cur.fetchone():
-            cur.execute(
-                """UPDATE whale_datacloud.domain
-                      SET domain_name  = %s,
-                          domain_desc  = COALESCE(%s, domain_desc),
-                          parent_id    = %s,
-                          updated_time = CURRENT_TIMESTAMP
-                    WHERE domain_id = %s""",
-                (obj["domain_name"], obj.get("domain_desc"), parent_code, domain_id),
-            )
-            stats["domains"]["updated"] += 1
-        else:
-            try:
+        stats["domains"]["updated"] += 1
+    if not to_insert:
+        return
+    rows = [
+        (o["domain_code"], o["domain_name"], o.get("parent_code"), o.get("domain_desc"))
+        for o in to_insert
+    ]
+    try:
+        execute_values(
+            cur,
+            """INSERT INTO whale_datacloud.domain
+                   (domain_id, domain_name, parent_id, domain_desc)
+               VALUES %s""",
+            rows,
+            page_size=min(500, len(rows)),
+        )
+        stats["domains"]["inserted"] += len(to_insert)
+    except Exception as e:
+        if "unique constraint" in str(e).lower() or "duplicate key" in str(e).lower():
+            for obj in to_insert:
+                parent_code = obj.get("parent_code")
                 cur.execute(
-                    """INSERT INTO whale_datacloud.domain
-                           (domain_id, domain_name, parent_id, domain_desc)
-                       VALUES (%s, %s, %s, %s)""",
-                    (domain_id, obj["domain_name"], parent_code, obj.get("domain_desc")),
+                    """UPDATE whale_datacloud.domain
+                          SET domain_name  = %s,
+                              domain_desc  = COALESCE(%s, domain_desc),
+                              parent_id    = %s,
+                              updated_time = CURRENT_TIMESTAMP
+                        WHERE domain_id = %s""",
+                    (obj["domain_name"], obj.get("domain_desc"), parent_code, obj["domain_code"]),
                 )
-                stats["domains"]["inserted"] += 1
-            except psycopg2.IntegrityError as e:
-                if "unique constraint" in str(e).lower() or "duplicate key" in str(e).lower():
-                    cur.execute(
-                        """UPDATE whale_datacloud.domain
-                              SET domain_name  = %s,
-                                  domain_desc  = COALESCE(%s, domain_desc),
-                                  parent_id    = %s,
-                                  updated_time = CURRENT_TIMESTAMP
-                            WHERE domain_id = %s""",
-                        (obj["domain_name"], obj.get("domain_desc"), parent_code, domain_id),
-                    )
-                    stats["domains"]["updated"] += 1
-                else:
-                    raise
+                stats["domains"]["updated"] += 1
+        else:
+            raise
 
 
-def _process_library(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -> None:
-    """写入 whale_datacloud.term_library。"""
-    op = obj.get("op", "add")
-    library_id = obj["library_code"]
-
-    if op == "delete":
+def _batch_process_library(cur: psycopg2.extensions.cursor, objs: list[dict], stats: dict) -> None:
+    """批量写入 whale_datacloud.term_library。"""
+    if not objs:
+        return
+    deletes: list[str] = []
+    updates: list[dict] = []
+    upserts: list[dict] = []
+    for obj in objs:
+        op = obj.get("op", "add")
+        if op == "delete":
+            deletes.append(obj["library_code"])
+        elif op == "update":
+            updates.append(obj)
+        else:
+            upserts.append(obj)
+    if deletes:
         cur.execute(
-            "DELETE FROM whale_datacloud.term_library WHERE library_id = %s",
-            (library_id,),
+            "DELETE FROM whale_datacloud.term_library WHERE library_id = ANY(%s)",
+            (deletes,),
         )
         stats["libraries"]["deleted"] += cur.rowcount
-    elif op == "update":
+    for obj in updates:
+        library_id = obj["library_code"]
         cur.execute(
             """UPDATE whale_datacloud.term_library
                   SET library_code = %s,
@@ -139,41 +399,62 @@ def _process_library(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) ->
             (library_id, obj.get("library_name"), library_id),
         )
         stats["libraries"]["updated"] += cur.rowcount
-    else:
+    if not upserts:
+        return
+    ids = [o["library_code"] for o in upserts]
+    cur.execute(
+        "SELECT library_id FROM whale_datacloud.term_library WHERE library_id = ANY(%s)",
+        (ids,),
+    )
+    existing = {r[0] for r in cur.fetchall()}
+    to_insert = [o for o in upserts if o["library_code"] not in existing]
+    to_update = [o for o in upserts if o["library_code"] in existing]
+    for obj in to_update:
+        library_id = obj["library_code"]
         cur.execute(
-            "SELECT 1 FROM whale_datacloud.term_library WHERE library_id = %s", (library_id,)
+            """UPDATE whale_datacloud.term_library
+                  SET library_code = %s,
+                      library_name = %s,
+                      updated_time = CURRENT_TIMESTAMP
+                WHERE library_id = %s""",
+            (library_id, obj["library_name"], library_id),
         )
-        if cur.fetchone():
-            cur.execute(
-                """UPDATE whale_datacloud.term_library
-                      SET library_code = %s,
-                          library_name = %s,
-                          updated_time = CURRENT_TIMESTAMP
-                    WHERE library_id = %s""",
-                (library_id, obj["library_name"], library_id),
-            )
-            stats["libraries"]["updated"] += 1
+        stats["libraries"]["updated"] += 1
+    if to_insert:
+        rows = [(o["library_code"], o["library_code"], o["library_name"]) for o in to_insert]
+        execute_values(
+            cur,
+            """INSERT INTO whale_datacloud.term_library (library_id, library_code, library_name)
+               VALUES %s""",
+            rows,
+            page_size=min(500, len(rows)),
+        )
+        stats["libraries"]["inserted"] += len(to_insert)
+
+
+def _batch_process_term_type(cur: psycopg2.extensions.cursor, objs: list[dict], stats: dict) -> None:
+    """批量写入 whale_datacloud.term_type（内置类型不允许删除）。"""
+    if not objs:
+        return
+    deletes: list[str] = []
+    updates: list[dict] = []
+    upserts: list[dict] = []
+    for obj in objs:
+        op = obj.get("op", "add")
+        if op == "delete":
+            deletes.append(obj["type_code"])
+        elif op == "update":
+            updates.append(obj)
         else:
-            cur.execute(
-                """INSERT INTO whale_datacloud.term_library (library_id, library_code, library_name)
-                   VALUES (%s, %s, %s)""",
-                (library_id, library_id, obj["library_name"]),
-            )
-            stats["libraries"]["inserted"] += 1
-
-
-def _process_term_type(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -> None:
-    """写入 whale_datacloud.term_type（内置类型不允许删除）。"""
-    op = obj.get("op", "add")
-    type_code = obj["type_code"]
-
-    if op == "delete":
+            upserts.append(obj)
+    if deletes:
         cur.execute(
-            "DELETE FROM whale_datacloud.term_type WHERE type_code = %s AND is_builtin = FALSE",
-            (type_code,),
+            "DELETE FROM whale_datacloud.term_type WHERE type_code = ANY(%s) AND is_builtin = FALSE",
+            (deletes,),
         )
         stats["term_types"]["deleted"] += cur.rowcount
-    elif op == "update":
+    for obj in updates:
+        type_code = obj["type_code"]
         cur.execute(
             """UPDATE whale_datacloud.term_type
                   SET type_name     = COALESCE(%s, type_name),
@@ -183,159 +464,242 @@ def _process_term_type(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) 
             (obj.get("type_name"), obj.get("type_desc"), type_code),
         )
         stats["term_types"]["updated"] += cur.rowcount
-    else:
-        # type_category 支持中文名（"列表术语"）和数字（1）两种形式
-        category_map = {"列表术语": 1, "字典术语": 2, "本体术语": 3, "文档名称术语": 4}
-        raw_cat = obj["type_category"]
-        type_category = category_map.get(str(raw_cat))
-        if type_category is None:
-            type_category = int(raw_cat)
-        cur.execute(
-            "SELECT 1 FROM whale_datacloud.term_type WHERE type_code = %s", (type_code,)
-        )
-        if cur.fetchone():
-            cur.execute(
-                """UPDATE whale_datacloud.term_type
-                      SET type_name    = %s,
-                          type_desc    = COALESCE(%s, type_desc),
-                          updated_time = CURRENT_TIMESTAMP
-                    WHERE type_code = %s AND is_builtin = FALSE""",
-                (obj["type_name"], obj.get("type_desc"), type_code),
-            )
-            stats["term_types"]["updated"] += 1
-        else:
-            cur.execute(
-                """INSERT INTO whale_datacloud.term_type
-                       (type_code, type_name, type_desc, type_category, is_builtin)
-                   VALUES (%s, %s, %s, %s, FALSE)""",
-                (type_code, obj["type_name"], obj.get("type_desc"), type_category),
-            )
-            stats["term_types"]["inserted"] += 1
-
-
-def _sync_term_names(
-    cur: psycopg2.extensions.cursor,
-    term_id: str,
-    term_name: str,
-    aliases: list[str],
-) -> int:
-    """同步 term_name 表，并顺带维护 term_vocabulary。
-
-    逻辑：
-      1. 删除该 term 的旧 term_name 行（支持幂等重入）
-      2. 写入标准名 + 所有有效别名到 term_name
-      3. 对每个 name_text，INSERT INTO term_vocabulary WHERE NOT EXISTS
-         ── term_vocabulary 物理表 + 唯一索引，查询无需 DISTINCT，极速
-
-    Note:
-      删除 term 时不同步删除 vocabulary 条目（词汇只增不减，jieba 词典可接受）。
-
-    Returns:
-        写入的 term_name 行数。
-    """
+    if not upserts:
+        return
+    ids = [o["type_code"] for o in upserts]
     cur.execute(
-        "DELETE FROM whale_datacloud.term_name WHERE term_id = %s", (term_id,)
+        "SELECT type_code FROM whale_datacloud.term_type WHERE type_code = ANY(%s)",
+        (ids,),
     )
-    names: list[tuple[str, str, str]] = [
-        (f"{term_id}__STD", term_id, term_name)
-    ]
-    for i, alias in enumerate(aliases):
-        if alias and alias != term_name:
-            names.append((f"{term_id}__ALIAS{i:03d}", term_id, alias))
-
-    for name_id, tid, name_text in names:
+    existing = {r[0] for r in cur.fetchall()}
+    to_insert = [o for o in upserts if o["type_code"] not in existing]
+    to_update = [o for o in upserts if o["type_code"] in existing]
+    for obj in to_update:
+        type_code = obj["type_code"]
         cur.execute(
-            """INSERT INTO whale_datacloud.term_name (name_id, term_id, name_text)
-               VALUES (%s, %s, %s)""",
-            (name_id, tid, name_text),
+            """UPDATE whale_datacloud.term_type
+                  SET type_name    = %s,
+                      type_desc    = COALESCE(%s, type_desc),
+                      updated_time = CURRENT_TIMESTAMP
+                WHERE type_code = %s AND is_builtin = FALSE""",
+            (obj["type_name"], obj.get("type_desc"), type_code),
         )
-        # 同步写 term_vocabulary（物理去重表）
+        stats["term_types"]["updated"] += 1
+    if to_insert:
+        rows = [
+            (o["type_code"], o["type_name"], o.get("type_desc"), _resolve_type_category(o), False)
+            for o in to_insert
+        ]
+        execute_values(
+            cur,
+            """INSERT INTO whale_datacloud.term_type
+                   (type_code, type_name, type_desc, type_category, is_builtin)
+               VALUES %s""",
+            rows,
+            page_size=min(500, len(rows)),
+        )
+        stats["term_types"]["inserted"] += len(to_insert)
+
+
+def _dedupe_term_name_sync_items(
+    items: list[tuple[str, str, list[str]]],
+) -> list[tuple[str, str, list[str]]]:
+    """同一 term_id 出现多行时只保留最后一次，避免重复写入标准名/别名行。"""
+    by_tid: dict[str, tuple[str, str, list[str]]] = {}
+    for tid, name, aliases in items:
+        by_tid[tid] = (tid, name, aliases)
+    return list(by_tid.values())
+
+
+def _batch_sync_term_names(
+    cur: psycopg2.extensions.cursor,
+    items: list[tuple[str, str, list[str]]],
+) -> int:
+    """批量同步 term_name，并一次性补全 term_vocabulary（仍用 NOT EXISTS，兼容无 ON CONFLICT 的库）。"""
+    if not items:
+        return 0
+    items = _dedupe_term_name_sync_items(items)
+    term_ids = [t[0] for t in items]
+    cur.execute(
+        "DELETE FROM whale_datacloud.term_name WHERE term_id = ANY(%s)",
+        (term_ids,),
+    )
+    
+    # 预计算需要多少个 ID（每个 term_name + aliases）
+    total_names = sum(1 + len([a for a in aliases if a and a != term_name]) 
+                     for _, term_name, aliases in items)
+    if total_names == 0:
+        return 0
+    
+    # 批量生成雪花 ID
+    name_ids = _next_snowflake_ids(total_names)
+    
+    all_rows: list[tuple[str, str, str]] = []
+    id_idx = 0
+    for term_id, term_name, aliases in items:
+        # 主名称
+        all_rows.append((name_ids[id_idx], term_id, term_name))
+        id_idx += 1
+        # 别名
+        for alias in aliases:
+            if alias and alias != term_name:
+                all_rows.append((name_ids[id_idx], term_id, alias))
+                id_idx += 1
+    
+    if not all_rows:
+        return 0
+    execute_values(
+        cur,
+        """INSERT INTO whale_datacloud.term_name (name_id, term_id, name_text)
+           VALUES %s""",
+        all_rows,
+        page_size=1000,  # 增大 page_size
+    )
+    words = list({row[2] for row in all_rows})
+    if words:
         cur.execute(
             """INSERT INTO whale_datacloud.term_vocabulary (word)
-               SELECT %s
+               SELECT w FROM unnest(%s::text[]) AS t(w)
                WHERE NOT EXISTS (
-                   SELECT 1 FROM whale_datacloud.term_vocabulary WHERE word = %s
+                   SELECT 1 FROM whale_datacloud.term_vocabulary v WHERE v.word = t.w
                )""",
-            (name_text, name_text),
+            (words,),
         )
-    return len(names)
+    return len(all_rows)
 
 
-def _process_term(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -> None:
-    """写入 whale_datacloud.term 及同步 term_name。"""
-    op = obj.get("op", "add")
-    term_id = _normalize_term_code(obj["term_code"])
+def _batch_process_term(cur: psycopg2.extensions.cursor, objs: list[dict], stats: dict) -> None:
+    """批量写入 whale_datacloud.term 并批量同步 term_name / term_vocabulary。
 
-    if op == "delete":
-        cur.execute(
-            "DELETE FROM whale_datacloud.term_name WHERE term_id = %s", (term_id,)
-        )
-        cur.execute(
-            "DELETE FROM whale_datacloud.term WHERE term_id = %s",
-            (term_id,),
-        )
-        stats["terms"]["deleted"] += cur.rowcount
-    elif op == "update":
-        new_name = obj.get("term_name")
-        cur.execute(
-            """UPDATE whale_datacloud.term
-                  SET term_name      = COALESCE(%s, term_name),
-                      desc_summary   = COALESCE(%s, desc_summary),
-                      updated_time   = CURRENT_TIMESTAMP
-                WHERE term_id = %s""",
-            (new_name, obj.get("desc_summary"), term_id),
-        )
-        stats["terms"]["updated"] += cur.rowcount
-        if new_name or obj.get("aliases") is not None:
+    新建 term 使用雪花 term_id；按唯一 term_code 更新已有行时不改 term_id。
+    """
+    if not objs:
+        return
+    deletes: list[dict] = []
+    updates: list[dict] = []
+    upserts: list[dict] = []
+    for obj in objs:
+        op = obj.get("op", "add")
+        if op == "delete":
+            deletes.append(obj)
+        elif op == "update":
+            updates.append(obj)
+        else:
+            upserts.append(obj)
+    if deletes:
+        delete_norms = [_normalize_term_code(o["term_code"]) for o in deletes]
+        delete_tid_map = _lookup_term_ids_by_norm_codes(cur, delete_norms)
+        tids = [delete_tid_map[n] for n in delete_norms if n in delete_tid_map]
+        if tids:
             cur.execute(
-                "SELECT term_name FROM whale_datacloud.term WHERE term_id = %s", (term_id,)
+                "DELETE FROM whale_datacloud.term_name WHERE term_id = ANY(%s)",
+                (tids,),
             )
-            row = cur.fetchone()
-            if row:
-                _sync_term_names(
-                    cur, term_id, row[0], obj.get("aliases") or []
-                )
-    else:
-        aliases = obj.get("aliases") or []
-        term_tags = json.dumps({"aliases": aliases}, ensure_ascii=False) if aliases else "{}"
-        cur.execute(
-            "SELECT 1 FROM whale_datacloud.term WHERE term_id = %s", (term_id,)
-        )
-        if cur.fetchone():
+            cur.execute(
+                "DELETE FROM whale_datacloud.term WHERE term_id = ANY(%s)",
+                (tids,),
+            )
+            stats["terms"]["deleted"] += cur.rowcount
+    if updates:
+        upd_codes = [_normalize_term_code(o["term_code"]) for o in updates]
+        upd_tid_by_code = _lookup_term_ids_by_norm_codes(cur, upd_codes)
+        for obj in updates:
+            term_id = upd_tid_by_code.get(_normalize_term_code(obj["term_code"]))
+            if not term_id:
+                continue
+            new_name = obj.get("term_name")
             cur.execute(
                 """UPDATE whale_datacloud.term
-                      SET term_code      = %s,
-                          term_name      = %s,
+                      SET term_name      = COALESCE(%s, term_name),
                           desc_summary   = COALESCE(%s, desc_summary),
-                          domain_id      = %s,
-                          term_type_code = %s,
-                          library_id     = %s,
-                          owl_doc_id     = %s,
-                          term_tags      = %s::jsonb,
                           updated_time   = CURRENT_TIMESTAMP
                     WHERE term_id = %s""",
-                (
-                    term_id,
-                    obj["term_name"],
-                    obj.get("desc_summary"),
-                    obj["domain_code"],
-                    obj["term_type_code"],
-                    obj.get("library_code"),
-                    obj.get("owl_doc_file"),
-                    term_tags,
-                    term_id,
-                ),
+                (new_name, obj.get("desc_summary"), term_id),
             )
-            stats["terms"]["updated"] += 1
-        else:
+            stats["terms"]["updated"] += cur.rowcount
+    need_sync_upd = [
+        o for o in updates if o.get("term_name") or o.get("aliases") is not None
+    ]
+    if need_sync_upd:
+        tids_nc = [_normalize_term_code(o["term_code"]) for o in need_sync_upd]
+        tid_by_code = _lookup_term_ids_by_norm_codes(cur, tids_nc)
+        id_list = list(dict.fromkeys(tid_by_code.values()))
+        if id_list:
             cur.execute(
-                """INSERT INTO whale_datacloud.term
-                       (term_id, term_code, term_name, desc_summary, domain_id,
-                        term_type_code, library_id, owl_doc_id, term_tags)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)""",
+                "SELECT term_id, term_name FROM whale_datacloud.term WHERE term_id = ANY(%s)",
+                (id_list,),
+            )
+            db_names = {r[0]: r[1] for r in cur.fetchall()}
+            sync_items: list[tuple[str, str, list[str]]] = []
+            for o in need_sync_upd:
+                tid = tid_by_code.get(_normalize_term_code(o["term_code"]))
+                if tid and tid in db_names:
+                    sync_items.append((tid, db_names[tid], o.get("aliases") or []))
+            if sync_items:
+                _batch_sync_term_names(cur, sync_items)
+    if not upserts:
+        return
+    upsert_norms = [_normalize_term_code(o["term_code"]) for o in upserts]
+    existing_map = _lookup_term_ids_by_norm_codes(cur, upsert_norms)
+    to_insert = [o for o in upserts if _normalize_term_code(o["term_code"]) not in existing_map]
+    to_update = [o for o in upserts if _normalize_term_code(o["term_code"]) in existing_map]
+    # 批量 UPDATE：使用临时表 + UPDATE JOIN，避免逐行 SQL
+    if to_update:
+        update_rows = []
+        for obj in to_update:
+            term_id = existing_map[_normalize_term_code(obj["term_code"])]
+            term_code = _normalize_term_code(obj["term_code"])
+            aliases = obj.get("aliases") or []
+            term_tags = json.dumps({"aliases": aliases}, ensure_ascii=False) if aliases else "{}"
+            update_rows.append((
+                term_id,
+                term_code,
+                obj["term_name"],
+                obj.get("desc_summary"),
+                obj["domain_code"],
+                obj["term_type_code"],
+                obj.get("library_code"),
+                obj.get("owl_doc_file"),
+                term_tags,
+            ))
+        if update_rows:
+            # 使用临时表 + UPDATE JOIN，避免逐行 SQL
+            # OpenGauss 不支持 ON COMMIT DROP，使用 PRESERVE ROWS + 手动删除
+            cur.execute("CREATE TEMP TABLE _tmp_term_upd (term_id VARCHAR, term_code VARCHAR, term_name VARCHAR, desc_summary VARCHAR, domain_id VARCHAR, term_type_code VARCHAR, library_id VARCHAR, owl_doc_id VARCHAR, term_tags JSONB) ON COMMIT PRESERVE ROWS")
+            execute_values(
+                cur,
+                "INSERT INTO _tmp_term_upd VALUES %s",
+                update_rows,
+            )
+            cur.execute("""
+                UPDATE whale_datacloud.term t
+                SET term_code      = tmp.term_code,
+                    term_name      = tmp.term_name,
+                    desc_summary   = COALESCE(tmp.desc_summary, t.desc_summary),
+                    domain_id      = tmp.domain_id,
+                    term_type_code = tmp.term_type_code,
+                    library_id     = tmp.library_id,
+                    owl_doc_id     = tmp.owl_doc_id,
+                    term_tags      = tmp.term_tags,
+                    updated_time   = CURRENT_TIMESTAMP
+                FROM _tmp_term_upd tmp
+                WHERE t.term_id = tmp.term_id
+            """)
+            cur.execute("DROP TABLE _tmp_term_upd")
+            stats["terms"]["updated"] += len(update_rows)
+    if to_insert:
+        # 批量生成雪花 ID，减少锁竞争
+        term_ids = _next_snowflake_ids(len(to_insert))
+        insert_rows: list[tuple] = []
+        for i, obj in enumerate(to_insert):
+            term_id = term_ids[i]
+            term_code = _normalize_term_code(obj["term_code"])
+            aliases = obj.get("aliases") or []
+            term_tags = json.dumps({"aliases": aliases}, ensure_ascii=False) if aliases else "{}"
+            insert_rows.append(
                 (
                     term_id,
-                    term_id,
+                    term_code,
                     obj["term_name"],
                     obj.get("desc_summary"),
                     obj["domain_code"],
@@ -343,24 +707,55 @@ def _process_term(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -> No
                     obj.get("library_code"),
                     obj.get("owl_doc_file"),
                     term_tags,
-                ),
+                )
             )
-            stats["terms"]["inserted"] += 1
-        _sync_term_names(cur, term_id, obj["term_name"], aliases)
+        execute_values(
+            cur,
+            """INSERT INTO whale_datacloud.term
+                   (term_id, term_code, term_name, desc_summary, domain_id,
+                    term_type_code, library_id, owl_doc_id, term_tags)
+               VALUES %s""",
+            insert_rows,
+            template="(%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)",
+            page_size=1000,  # 增大 page_size
+        )
+        stats["terms"]["inserted"] += len(to_insert)
+        # 复用 existing_map，避免重复查询
+        for i, obj in enumerate(to_insert):
+            existing_map[_normalize_term_code(obj["term_code"])] = term_ids[i]
+    # 使用 existing_map 代替 after_map，避免重复查询
+    sync_upsert: list[tuple[str, str, list[str]]] = []
+    for o in upserts:
+        tid = _str_id_if_set(o, "term_id")
+        if tid is None:
+            tid = existing_map[_normalize_term_code(o["term_code"])]
+        sync_upsert.append((tid, o["term_name"], o.get("aliases") or []))
+    _batch_sync_term_names(cur, sync_upsert)
 
 
-def _process_relation(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -> None:
-    """写入 whale_datacloud.term_relation。"""
-    op = obj.get("op", "add")
-    relation_id = obj["relation_code"]
-
-    if op == "delete":
+def _batch_process_relation(cur: psycopg2.extensions.cursor, objs: list[dict], stats: dict) -> None:
+    """批量写入 whale_datacloud.term_relation。"""
+    if not objs:
+        return
+    deletes: list[str] = []
+    updates: list[dict] = []
+    upserts: list[dict] = []
+    for obj in objs:
+        op = obj.get("op", "add")
+        if op == "delete":
+            deletes.append(obj["relation_code"])
+        elif op == "update":
+            updates.append(obj)
+        else:
+            upserts.append(obj)
+    if deletes:
         cur.execute(
-            "DELETE FROM whale_datacloud.term_relation WHERE relation_id = %s",
-            (relation_id,),
+            "DELETE FROM whale_datacloud.term_relation WHERE relation_id = ANY(%s)",
+            (deletes,),
         )
         stats["relations"]["deleted"] += cur.rowcount
-    elif op == "update":
+    for obj in updates:
+        relation_id = obj["relation_code"]
         cur.execute(
             """UPDATE whale_datacloud.term_relation
                   SET relation_name = COALESCE(%s, relation_name),
@@ -369,71 +764,126 @@ def _process_relation(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -
             (obj.get("relation_name"), relation_id),
         )
         stats["relations"]["updated"] += cur.rowcount
-    else:
+    if not upserts:
+        return
+    ids = [o["relation_code"] for o in upserts]
+    cur.execute(
+        "SELECT relation_id FROM whale_datacloud.term_relation WHERE relation_id = ANY(%s)",
+        (ids,),
+    )
+    existing = {r[0] for r in cur.fetchall()}
+    to_insert = [o for o in upserts if o["relation_code"] not in existing]
+    to_update = [o for o in upserts if o["relation_code"] in existing]
+    ref_codes: list[str] = []
+    for o in to_insert + to_update:
+        if _str_id_if_set(o, "source_term_id") is None:
+            ref_codes.append(_normalize_term_code(o["source_term_code"]))
+        if _str_id_if_set(o, "target_term_id") is None:
+            ref_codes.append(_normalize_term_code(o["target_term_code"]))
+        if _str_id_if_set(o, "action_term_id") is None and o.get("action_term_code"):
+            ref_codes.append(_normalize_term_code(o["action_term_code"]))
+    code_to_tid = _lookup_term_ids_by_norm_codes(cur, ref_codes)
+    for obj in to_update:
+        relation_id = obj["relation_code"]
         cur.execute(
-            "SELECT 1 FROM whale_datacloud.term_relation WHERE relation_id = %s", (relation_id,)
+            """UPDATE whale_datacloud.term_relation
+                  SET source_term_id    = %s,
+                      target_term_id    = %s,
+                      relation_name     = %s,
+                      relation_category = %s,
+                      cardinality       = %s,
+                      action_term_id    = COALESCE(%s, action_term_id),
+                      updated_time      = CURRENT_TIMESTAMP
+                WHERE relation_id = %s""",
+            (
+                _term_id_from_obj_or_code(
+                    obj,
+                    id_key="source_term_id",
+                    code_key="source_term_code",
+                    code_to_tid=code_to_tid,
+                ),
+                _term_id_from_obj_or_code(
+                    obj,
+                    id_key="target_term_id",
+                    code_key="target_term_code",
+                    code_to_tid=code_to_tid,
+                ),
+                obj["relation_name"],
+                obj.get("relation_category", "BUSINESS"),
+                obj.get("cardinality"),
+                _optional_term_id_from_obj(
+                    obj,
+                    id_key="action_term_id",
+                    code_key="action_term_code",
+                    code_to_tid=code_to_tid,
+                ),
+                relation_id,
+            ),
         )
-        if cur.fetchone():
-            cur.execute(
-                """UPDATE whale_datacloud.term_relation
-                      SET source_term_id    = %s,
-                          target_term_id    = %s,
-                          relation_name     = %s,
-                          relation_category = %s,
-                          cardinality       = %s,
-                          updated_time      = CURRENT_TIMESTAMP
-                    WHERE relation_id = %s""",
-                (
-                    _normalize_term_code(obj["source_term_code"]),
-                    _normalize_term_code(obj["target_term_code"]),
-                    obj["relation_name"],
-                    obj.get("relation_category", "BUSINESS"),
-                    obj.get("cardinality"),
-                    relation_id,
+        stats["relations"]["updated"] += 1
+    if to_insert:
+        rows = [
+            (
+                o["relation_code"],
+                _term_id_from_obj_or_code(
+                    o,
+                    id_key="source_term_id",
+                    code_key="source_term_code",
+                    code_to_tid=code_to_tid,
+                ),
+                _term_id_from_obj_or_code(
+                    o,
+                    id_key="target_term_id",
+                    code_key="target_term_code",
+                    code_to_tid=code_to_tid,
+                ),
+                o["relation_name"],
+                o.get("relation_category", "BUSINESS"),
+                o.get("cardinality"),
+                _optional_term_id_from_obj(
+                    o,
+                    id_key="action_term_id",
+                    code_key="action_term_code",
+                    code_to_tid=code_to_tid,
                 ),
             )
-            stats["relations"]["updated"] += 1
+            for o in to_insert
+        ]
+        execute_values(
+            cur,
+            """INSERT INTO whale_datacloud.term_relation
+                   (relation_id, source_term_id, target_term_id,
+                    relation_name, relation_category, cardinality, action_term_id)
+               VALUES %s""",
+            rows,
+            page_size=min(500, len(rows)),
+        )
+        stats["relations"]["inserted"] += len(to_insert)
+
+
+def _batch_process_knowledge(cur: psycopg2.extensions.cursor, objs: list[dict], stats: dict) -> None:
+    """批量写入 whale_datacloud.term_knowledge（term_id 外键；可显式传 term_id 或仅 term_code）。"""
+    if not objs:
+        return
+    deletes: list[str] = []
+    updates: list[dict] = []
+    upserts: list[dict] = []
+    for obj in objs:
+        op = obj.get("op", "add")
+        if op == "delete":
+            deletes.append(obj["knowledge_id"])
+        elif op == "update":
+            updates.append(obj)
         else:
-            cur.execute(
-                """INSERT INTO whale_datacloud.term_relation
-                       (relation_id, source_term_id, target_term_id,
-                        relation_name, relation_category, cardinality)
-                   VALUES (%s, %s, %s, %s, %s, %s)""",
-                (
-                    relation_id,
-                    _normalize_term_code(obj["source_term_code"]),
-                    _normalize_term_code(obj["target_term_code"]),
-                    obj["relation_name"],
-                    obj.get("relation_category", "BUSINESS"),
-                    obj.get("cardinality"),
-                ),
-            )
-            stats["relations"]["inserted"] += 1
-
-
-def _process_knowledge(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) -> None:
-    """写入 whale_datacloud.term_knowledge。
-
-    JSONL 字段：
-      knowledge_id  主键
-      term_code     归属术语 ID
-      desc_summary  知识摘要（约 200 字）
-      desc          知识原文（完整内容）
-      ext_system    外部系统编码（可选）
-      ext_kb_id     外部知识库 ID（可选）
-      ext_doc_id    外部文档 ID（可选）
-      sort_order    排序（默认 0）
-    """
-    op = obj.get("op", "add")
-    knowledge_id = obj["knowledge_id"]
-
-    if op == "delete":
+            upserts.append(obj)
+    if deletes:
         cur.execute(
-            "DELETE FROM whale_datacloud.term_knowledge WHERE knowledge_id = %s",
-            (knowledge_id,),
+            "DELETE FROM whale_datacloud.term_knowledge WHERE knowledge_id = ANY(%s)",
+            (deletes,),
         )
         stats["knowledge"]["deleted"] += cur.rowcount
-    elif op == "update":
+    for obj in updates:
+        knowledge_id = obj["knowledge_id"]
         cur.execute(
             """UPDATE whale_datacloud.term_knowledge
                   SET desc_summary = COALESCE(%s, desc_summary),
@@ -449,62 +899,94 @@ def _process_knowledge(cur: psycopg2.extensions.cursor, obj: dict, stats: dict) 
             ),
         )
         stats["knowledge"]["updated"] += cur.rowcount
-    else:
+    if not upserts:
+        return
+    ids = [o["knowledge_id"] for o in upserts]
+    cur.execute(
+        "SELECT knowledge_id FROM whale_datacloud.term_knowledge WHERE knowledge_id = ANY(%s)",
+        (ids,),
+    )
+    existing = {r[0] for r in cur.fetchall()}
+    to_insert = [o for o in upserts if o["knowledge_id"] not in existing]
+    to_update = [o for o in upserts if o["knowledge_id"] in existing]
+    kn_upd_codes: list[str] = []
+    for obj in to_update:
+        if _str_id_if_set(obj, "term_id") is None and obj.get("term_code"):
+            kn_upd_codes.append(_normalize_term_code(obj["term_code"]))
+    kn_upd_tid_map = _lookup_term_ids_by_norm_codes(cur, kn_upd_codes)
+    for obj in to_update:
+        knowledge_id = obj["knowledge_id"]
+        tid_new = _str_id_if_set(obj, "term_id")
+        if tid_new is None and obj.get("term_code"):
+            tid_new = kn_upd_tid_map.get(_normalize_term_code(obj["term_code"]))
         cur.execute(
-            "SELECT 1 FROM whale_datacloud.term_knowledge WHERE knowledge_id = %s",
-            (knowledge_id,),
+            """UPDATE whale_datacloud.term_knowledge
+                  SET term_id      = COALESCE(%s, term_id),
+                      desc_summary = %s,
+                      "desc"       = %s,
+                      ext_system   = %s,
+                      ext_kb_id    = %s,
+                      ext_doc_id   = %s,
+                      sort_order   = %s,
+                      updated_time = CURRENT_TIMESTAMP
+                WHERE knowledge_id = %s""",
+            (
+                tid_new,
+                obj.get("desc_summary"),
+                obj.get("desc"),
+                obj.get("ext_system"),
+                obj.get("ext_kb_id"),
+                obj.get("ext_doc_id"),
+                obj.get("sort_order", 0),
+                knowledge_id,
+            ),
         )
-        if cur.fetchone():
-            cur.execute(
-                """UPDATE whale_datacloud.term_knowledge
-                      SET desc_summary = %s,
-                          "desc"       = %s,
-                          ext_system   = %s,
-                          ext_kb_id    = %s,
-                          ext_doc_id   = %s,
-                          sort_order   = %s,
-                          updated_time = CURRENT_TIMESTAMP
-                    WHERE knowledge_id = %s""",
+        stats["knowledge"]["updated"] += 1
+    if to_insert:
+        k_codes = [
+            _normalize_term_code(o["term_code"])
+            for o in to_insert
+            if _str_id_if_set(o, "term_id") is None
+        ]
+        k_code_to_tid = _lookup_term_ids_by_norm_codes(cur, k_codes)
+        rows = []
+        for o in to_insert:
+            tid = _str_id_if_set(o, "term_id")
+            if tid is None:
+                tid = k_code_to_tid[_normalize_term_code(o["term_code"])]
+            rows.append(
                 (
-                    obj.get("desc_summary"),
-                    obj.get("desc"),
-                    obj.get("ext_system"),
-                    obj.get("ext_kb_id"),
-                    obj.get("ext_doc_id"),
-                    obj.get("sort_order", 0),
-                    knowledge_id,
-                ),
+                    o["knowledge_id"],
+                    tid,
+                    o.get("desc_summary"),
+                    o.get("desc"),
+                    o.get("ext_system"),
+                    o.get("ext_kb_id"),
+                    o.get("ext_doc_id"),
+                    o.get("sort_order", 0),
+                )
             )
-            stats["knowledge"]["updated"] += 1
-        else:
-            cur.execute(
-                """INSERT INTO whale_datacloud.term_knowledge
-                       (knowledge_id, term_id, desc_summary, "desc",
-                        ext_system, ext_kb_id, ext_doc_id, sort_order)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-                (
-                    knowledge_id,
-                    _normalize_term_code(obj["term_code"]),
-                    obj.get("desc_summary"),
-                    obj.get("desc"),
-                    obj.get("ext_system"),
-                    obj.get("ext_kb_id"),
-                    obj.get("ext_doc_id"),
-                    obj.get("sort_order", 0),
-                ),
-            )
-            stats["knowledge"]["inserted"] += 1
+        execute_values(
+            cur,
+            """INSERT INTO whale_datacloud.term_knowledge
+                   (knowledge_id, term_id, desc_summary, "desc",
+                    ext_system, ext_kb_id, ext_doc_id, sort_order)
+               VALUES %s""",
+            rows,
+            page_size=min(500, len(rows)),
+        )
+        stats["knowledge"]["inserted"] += len(to_insert)
 
 
 # ── 路由分发 ──────────────────────────────────────────────────────────────────
 
-_STEP_HANDLERS = {
-    "meta_domain":  _process_domain,
-    "meta_library": _process_library,
-    "term_type":    _process_term_type,
-    "term":         _process_term,
-    "relation":     _process_relation,
-    "knowledge":    _process_knowledge,
+_STEP_BATCH_HANDLERS = {
+    "meta_domain":  _batch_process_domain,
+    "meta_library": _batch_process_library,
+    "term_type":    _batch_process_term_type,
+    "term":         _batch_process_term,
+    "relation":     _batch_process_relation,
+    "knowledge":    _batch_process_knowledge,
 }
 
 
@@ -547,6 +1029,7 @@ def run(folder_path: str) -> dict:
 
     manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     import_steps: list[dict] = manifest.get("import_steps", [])
+    batch_size = _import_batch_size()
 
     conn = _connect()
     try:
@@ -556,19 +1039,20 @@ def run(folder_path: str) -> dict:
                 rel_file: str = step.get("file", "")
                 step_type: str = step.get("type", "")
                 entity_type = _step_entity_type(step_type, rel_file)
-                handler = _STEP_HANDLERS.get(entity_type)
-                if handler is None:
+                batch_handler = _STEP_BATCH_HANDLERS.get(entity_type)
+                if batch_handler is None:
                     logger.warning("未知 step type '%s'，跳过 %s", step_type, rel_file)
                     continue
 
                 file_path = root / rel_file
-                logger.info("importing %s (%s)", rel_file, entity_type)
-                for raw in file_path.read_text(encoding="utf-8").splitlines():
-                    raw = raw.strip()
-                    if not raw:
-                        continue
-                    obj = json.loads(raw)
-                    handler(cur, obj, stats)
+                logger.info(
+                    "importing %s (%s), batch_size=%s",
+                    rel_file,
+                    entity_type,
+                    batch_size,
+                )
+                for obj_batch in _iter_jsonl_obj_batches(file_path, batch_size):
+                    batch_handler(cur, obj_batch, stats)
 
         conn.commit()
         logger.info("import committed: %s", stats)

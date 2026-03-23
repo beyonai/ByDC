@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-# ── 把 datacloud_knowledge 包所在目录加入 sys.path ────────────────────────────
+# ── 把 datacloud_knowledge 和 e_commerce_demo 包所在目录加入 sys.path ────────
 _REPO_ROOT = Path(__file__).resolve().parents[5]   # repo root
 
 _KB_SRC = (
@@ -27,6 +27,13 @@ _KB_SRC = (
 if str(_KB_SRC) not in sys.path:
     sys.path.insert(0, str(_KB_SRC))
 
+# e_commerce_demo 包路径
+_ECOMM_SRC = (
+    Path(__file__).resolve().parents[2]  # mock_env
+    / "src"
+)
+if str(_ECOMM_SRC) not in sys.path:
+    sys.path.insert(0, str(_ECOMM_SRC))
 
 @pytest.fixture(scope="session")
 def knowledge_client():

@@ -55,7 +55,7 @@ def _get_knowledge_service() -> Any | None:
                 "DATACLOUD_KNOWLEDGE_GRAPH_FILES not configured; search_knowledge returns empty."
             )
             return None
-        from datacloud_knowledge_service import KnowledgeGraphQuery
+        from datacloud_knowledge import KnowledgeGraphQuery
 
         svc = KnowledgeGraphQuery(
             graph_files=cfg.graph_files_list,

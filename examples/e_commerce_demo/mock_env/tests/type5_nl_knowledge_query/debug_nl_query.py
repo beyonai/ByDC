@@ -1,13 +1,4 @@
-#!/usr/bin/env python3
-"""测试知识图谱查询 - 验证"王小明他优秀吗"查询（SQL-native 实现）"""
-
-import os
-import sys
-
-import pytest
-
-# 将项目根目录加入路径
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+from pathlib import Path
 
 from datacloud_knowledge import SQLKnowledgeGraphQuery, TreeNode
 
@@ -57,41 +48,29 @@ def print_tree(node: TreeNode, prefix: str = "", is_last: bool = True) -> str:
     return "\n".join(lines)
 
 
-def test_wang_xiaoming():
-    """测试查询王小明他优秀吗（SQL-native 实现）"""
-    print("=" * 70)
-    print("测试: 王小明他优秀吗")
-    print("=" * 70)
+def execute_nl_query(query_text: str, service: SQLKnowledgeGraphQuery | None = None) -> dict:
+    """执行自然语言查询并返回结果"""
+    if service is None:
+        service = SQLKnowledgeGraphQuery(default_hops=4)
 
-    # 从 .env.example 加载环境变量
-    from dotenv import load_dotenv
-
-    env_path = os.path.join(os.path.dirname(__file__), ".env.example")
-    load_dotenv(env_path, override=True)
-
-    # 创建 SQL-native 服务实例
-    print("\n初始化 SQLKnowledgeGraphQuery...")
-    service = SQLKnowledgeGraphQuery(default_hops=4)
-    print("✓ 服务初始化成功（使用 PostgreSQL 递归 CTE）")
-
-    # 执行查询
-    print("\n" + "=" * 70)
-    print("执行查询: '王小明他优秀吗'")
-    print("=" * 70)
-
-    result = service.query("王小明他优秀吗")
+    print(f"\n执行查询: '{query_text}'")
+    result = service.query(query_text)
 
     # 打印识别的实体
-    print(f"\n识别到的中心实体: {len(result.get('entities_found', []))} 个")
-    print("(按匹配优先级排序: 精确匹配 > 别名匹配)")
-    for i, entity in enumerate(result.get("entities_found", []), 1):
+    entities = result.get("entities_found", [])
+    print(f"识别到的中心实体: {len(entities)} 个")
+    for i, entity in enumerate(entities, 1):
         match_type_str = "精确匹配" if entity.get("match_type") == "standard_name" else "别名匹配"
         print(f"  {i}. {entity['name']} ({entity['node_type']}) - {match_type_str}")
 
-    # 打印树形子图结果
-    print("\n" + "=" * 70)
-    print("树形子图结果:")
-    print("=" * 70)
+    return result
+
+
+def print_query_results(result: dict, query_name: str) -> None:
+    """打印查询结果"""
+    print(f"\n{'=' * 70}")
+    print(f"【{query_name}】查询结果")
+    print(f"{'=' * 70}")
 
     results = result.get("results", [])
     if results:
@@ -99,32 +78,29 @@ def test_wang_xiaoming():
             center_entity = subgraph.get("center_entity", {})
             print(f"\n【中心实体 {i}】{center_entity.get('name')}")
             print(f"节点数: {subgraph.get('node_count')}, 边数: {subgraph.get('edge_count')}")
-            print(f"\n树形结构:")
 
             tree_dict = subgraph.get("tree")
             if tree_dict:
                 tree = dict_to_tree(tree_dict)
+                print(f"\n树形结构:")
                 print(print_tree(tree, prefix="", is_last=True))
             else:
                 print("  (无树形结构)")
     else:
         print("\n✗ 未返回子图结果")
 
-    print("\n" + "=" * 70)
-    print("测试完成")
-    print("=" * 70)
+def main():
+    query = '帮我看一下"北京亦庄经济技术开发区"区域内单位亩产效益最低的10家企业'
 
-    assert len(result.get("entities_found", [])) > 0, (
-        "未识别到任何实体，请确认 PG 中已导入相关术语数据"
-    )
+    from dotenv import load_dotenv
 
+    env_path = Path(__file__).resolve().parents[2] / ".env.example"
+    if env_path.exists():
+        load_dotenv(env_path, override=True)
+    service = SQLKnowledgeGraphQuery(default_hops=4)
 
-if __name__ == "__main__":
-    try:
-        test_wang_xiaoming()
-        sys.exit(0)
-    except SystemExit as e:
-        sys.exit(e.code)
-    except Exception as e:
-        print(f"\n✗ 测试失败: {e}")
-        sys.exit(1)
+    result = execute_nl_query(query, service)
+    print_query_results(result, "亩产效益最低的10家企业")
+
+if __name__ == '__main__':
+    main()
