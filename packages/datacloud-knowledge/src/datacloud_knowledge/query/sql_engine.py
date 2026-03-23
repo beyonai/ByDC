@@ -659,6 +659,91 @@ class SQLKnowledgeGraphQuery:
             "children": [self._tree_to_dict(child) for child in tree.children],
         }
 
+    def to_semantic_string(
+        self,
+        natural_language: str,
+        n_hops: Optional[int] = None,
+    ) -> str:
+        """将自然语言查询转换为富含语义的树形文本描述.
+
+        Args:
+            natural_language: 自然语言查询文本
+            n_hops: 查询跳数，默认使用 self.default_hops
+
+        Returns:
+            树形结构的语义文本描述
+        """
+        result = self.query(natural_language, n_hops=n_hops)
+        return self._format_result_as_tree_text(result)
+
+    def _format_result_as_tree_text(self, result: Dict[str, Any]) -> str:
+        """将查询结果格式化为树形文本."""
+        lines = []
+        lines.append(f"查询: {result.get('query', '')}")
+
+        entities = result.get("entities_found", [])
+        if not entities:
+            lines.append("未找到匹配的实体")
+            return "\n".join(lines)
+
+        lines.append(f"识别到 {len(entities)} 个实体:")
+        for i, entity in enumerate(entities, 1):
+            match_type_str = "精确匹配" if entity.get("match_type") == "standard_name" else "别名匹配"
+            lines.append(f"  {i}. {entity['name']} ({entity['node_type']}) - {match_type_str}")
+
+        results = result.get("results", [])
+        if not results:
+            lines.append("\n未返回子图结果")
+            return "\n".join(lines)
+
+        for i, subgraph in enumerate(results, 1):
+            center_entity = subgraph.get("center_entity", {})
+            lines.append("")
+            lines.append(f"【中心实体 {i}】{center_entity.get('name')}")
+            lines.append(f"节点数: {subgraph.get('node_count')}, 边数: {subgraph.get('edge_count')}")
+
+            tree_dict = subgraph.get("tree")
+            if tree_dict:
+                lines.append("\n知识图谱:")
+                lines.append(self._tree_dict_to_text(tree_dict, ""))
+
+        return "\n".join(lines)
+
+    def _tree_dict_to_text(
+        self, node_dict: Dict[str, Any], prefix: str = "", is_last: bool = True
+    ) -> str:
+        """将树形字典转换为树形文本."""
+        lines = []
+
+        connector = "└── " if is_last else "├── "
+        relation_str = f"[{node_dict.get('relation', '')}] -> " if node_dict.get('relation') else ""
+        lines.append(
+            f"{prefix}{connector}{relation_str}{node_dict.get('name', '')} [{node_dict.get('node_type', '')}]"
+        )
+
+        new_prefix = prefix + ("    " if is_last else "│   ")
+
+        properties = node_dict.get("properties", {})
+        children = node_dict.get("children", [])
+
+        if properties:
+            lines.append(f"{new_prefix}├── 属性:")
+            prop_prefix = new_prefix + "│   "
+            props = list(properties.items())
+            for j, (key, value) in enumerate(props):
+                is_last_prop = (j == len(props) - 1) and not children
+                prop_connector = "└── " if is_last_prop else "├── "
+                value_str = str(value)
+                if len(value_str) > 100:
+                    value_str = value_str[:97] + "..."
+                lines.append(f"{prop_prefix}{prop_connector}{key}: {value_str}")
+
+        for k, child in enumerate(children):
+            is_last_child = k == len(children) - 1
+            lines.append(self._tree_dict_to_text(child, new_prefix, is_last_child))
+
+        return "\n".join(lines)
+
 
 # ============================================================================
 # Backward Compatibility Wrapper
@@ -741,6 +826,45 @@ def create_sql_graph_query(
     return SQLKnowledgeGraphQuery(db_config=config, schema=schema)
 
 
+def nl_to_semantic_tree(
+    natural_language: str,
+    service: Optional["SQLKnowledgeGraphQuery"] = None,
+    n_hops: int = 4,
+) -> str:
+    """将自然语言查询转换为富含语义的树形文本描述.
+
+    这是 SDK 提供的便捷函数，直接输入自然语言，输出语义化的树形文本。
+
+    Args:
+        natural_language: 自然语言查询文本
+        service: SQLKnowledgeGraphQuery 实例（可选，不传则自动创建）
+        n_hops: 查询跳数，默认 4
+
+    Returns:
+        树形结构的语义文本描述
+
+    Example:
+        >>> text = nl_to_semantic_tree('北京亦庄经济技术开发区亩产效益最低的10家企业')
+        >>> print(text)
+        查询: 北京亦庄经济技术开发区亩产效益最低的10家企业
+        识别到 1 个实体:
+          1. 北京亦庄经济技术开发区 (区域) - 精确匹配
+        【中心实体 1】北京亦庄经济技术开发区
+        节点数: 15, 边数: 14
+        知识图谱:
+        └── 北京亦庄经济技术开发区 [区域]
+            ├── [位于] -> 北京市 [城市]
+            ├── [包含] -> 企业A [企业]
+            └── 属性:
+                └── area_code: 110105
+    """
+    if service is None:
+        service = SQLKnowledgeGraphQuery(default_hops=n_hops)
+    return service.to_semantic_string(natural_language, n_hops=n_hops)
+
+
+# Backward compatibility alias
+
 # Backward compatibility alias
 SQLGraphQuery = SQLKnowledgeGraphQuery
 
@@ -757,4 +881,5 @@ __all__ = [
     "TreeNode",
     "SubgraphResult",
     "create_sql_graph_query",
+    "nl_to_semantic_tree",
 ]
