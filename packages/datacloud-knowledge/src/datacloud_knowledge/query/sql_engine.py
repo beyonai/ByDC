@@ -363,8 +363,6 @@ class SQLKnowledgeGraphQuery:
         self,
         entity: QueryEntity,
         n_hops: int = 4,
-        include_incoming: bool = True,
-        include_outgoing: bool = True,
     ) -> SubgraphResult:
         """Query N-hop subgraph using SQL recursive CTE.
 
@@ -381,7 +379,7 @@ class SQLKnowledgeGraphQuery:
                 # Single SQL query for BFS N-hop traversal
                 # Returns: term_id, term_name, term_type_code, depth, path, parent_id, relation
                 cur.execute(
-                    self._bfs_cte_sql(include_incoming, include_outgoing), (entity.node_id, n_hops)
+                    self._bfs_cte_sql(), (entity.node_id, n_hops)
                 )
 
                 rows = cur.fetchall()
@@ -389,15 +387,22 @@ class SQLKnowledgeGraphQuery:
                 if not rows:
                     return SubgraphResult(center_entity=entity, hops=n_hops)
 
-                # Build nodes, edges, and parent map from results
+                # Build nodes, edges, and path-based tree from results
+                # Key insight: use path (not term_id) as unique identifier to allow
+                # same physical node to appear in different branches of the tree
                 nodes: Dict[str, Dict[str, Any]] = {}
                 edges: List[Dict[str, Any]] = []
-                parent_map: Dict[str, Tuple[str, str]] = {}  # child -> (parent, relation)
+
+                # path_edges: maps path_tuple -> list of (child_path_tuple, relation)
+                # This allows building a tree where same node can appear multiple times
+                # if reached via different paths
+                path_edges: Dict[Tuple[str, ...], List[Tuple[Tuple[str, ...], str]]] = {}
+                path_to_node: Dict[Tuple[str, ...], Dict[str, Any]] = {}
 
                 for row in rows:
                     term_id, term_name, term_type, depth, path, parent_id, relation = row
 
-                    # Store node
+                    # Store node (first occurrence)
                     if term_id not in nodes:
                         nodes[term_id] = {
                             "_id": term_id,
@@ -407,20 +412,52 @@ class SQLKnowledgeGraphQuery:
                             "depth": depth,
                         }
 
-                    # Store edge (if has parent)
-                    if parent_id and relation:
-                        parent_map[term_id] = (parent_id, relation)
-                        edges.append(
-                            {
-                                "source": parent_id,
-                                "target": term_id,
-                                "relation": relation,
-                                "data": {"relation": relation},
-                            }
-                        )
+                    # Convert path array to tuple for dict key
+                    path_tuple = tuple(path) if path else (term_id,)
 
-                # Build tree structure
-                tree = self._build_tree_from_parent_map(entity.node_id, nodes, parent_map, n_hops)
+                    # Store path -> node mapping
+                    if path_tuple not in path_to_node:
+                        path_to_node[path_tuple] = {
+                            "term_id": term_id,
+                            "name": term_name,
+                            "node_type": term_type,
+                            "depth": depth,
+                        }
+
+                    # Store edge based on path (not just term_id)
+                    # This allows multiple edges to same target via different paths
+                    if parent_id and relation:
+                        # Find parent's path (current path without last element)
+                        parent_path = path_tuple[:-1] if len(path_tuple) > 1 else (parent_id,)
+
+                        if parent_path not in path_edges:
+                            path_edges[parent_path] = []
+
+                        # Add child path with relation
+                        child_entry = (path_tuple, relation)
+                        if child_entry not in path_edges[parent_path]:
+                            path_edges[parent_path].append(child_entry)
+
+                        # Also store flat edge for API response (deduplicate)
+                        if not any(
+                            e["source"] == parent_id
+                            and e["target"] == term_id
+                            and e["relation"] == relation
+                            for e in edges
+                        ):
+                            edges.append(
+                                {
+                                    "source": parent_id,
+                                    "target": term_id,
+                                    "relation": relation,
+                                    "data": {"relation": relation},
+                                }
+                            )
+
+                # Build tree structure using path-based edges
+                tree = self._build_tree_from_path_edges(
+                    entity.node_id, nodes, path_edges, path_to_node, n_hops
+                )
 
                 result = SubgraphResult(
                     center_entity=entity,
@@ -432,47 +469,17 @@ class SQLKnowledgeGraphQuery:
 
                 return result
 
-    def _bfs_cte_sql(self, include_incoming: bool, include_outgoing: bool) -> str:
+    def _bfs_cte_sql(self) -> str:
         """Generate BFS recursive CTE SQL.
 
+        Simplified: only forward traversal (双向边已在数据层存储).
+        
         The CTE traverses the graph from a starting node:
         - Anchor: starting term_id
-        - Recursive: expand via term_relation (outgoing and/or incoming)
+        - Recursive: expand via term_relation (forward edges only)
         - Cycle detection: path array tracking
         - Depth limit: n_hops parameter
         """
-        # Base CTE structure
-        outgoing_sql = f"""
-            SELECT 
-                tr.source_term_id,
-                tr.target_term_id,
-                tr.relation_name,
-                'out' AS direction
-            FROM {self.schema}.term_relation tr
-        """
-
-        incoming_sql = f"""
-            SELECT 
-                tr.target_term_id AS source_term_id,
-                tr.source_term_id AS target_term_id,
-                tr.relation_name || '_REVERSE' AS relation_name,
-                'in' AS direction
-            FROM {self.schema}.term_relation tr
-        """
-
-        # Combine edge directions based on parameters
-        if include_outgoing and include_incoming:
-            edge_sql = f"({outgoing_sql} UNION ALL {incoming_sql})"
-        elif include_outgoing:
-            edge_sql = f"({outgoing_sql})"
-        elif include_incoming:
-            edge_sql = f"({incoming_sql})"
-        else:
-            # No traversal - just return starting node
-            edge_sql = (
-                "SELECT NULL::varchar, NULL::varchar, NULL::varchar, NULL::varchar WHERE false"
-            )
-
         return f"""
             WITH RECURSIVE traversal AS (
                 -- Anchor: starting node (depth 0)
@@ -489,7 +496,7 @@ class SQLKnowledgeGraphQuery:
                 
                 UNION ALL
                 
-                -- Recursive: expand neighbors
+                -- Recursive: expand neighbors via forward edges
                 SELECT 
                     e.target_term_id,
                     t2.term_name,
@@ -499,7 +506,7 @@ class SQLKnowledgeGraphQuery:
                     tr.term_id,  -- current becomes parent
                     e.relation_name
                 FROM traversal tr
-                JOIN {edge_sql} e ON tr.term_id = e.source_term_id
+                JOIN {self.schema}.term_relation e ON tr.term_id = e.source_term_id
                 JOIN {self.schema}.term t2 ON t2.term_id = e.target_term_id
                 WHERE tr.depth < %s
                   AND NOT e.target_term_id = ANY(tr.path)  -- cycle detection
@@ -514,22 +521,30 @@ class SQLKnowledgeGraphQuery:
                 parent_id,
                 relation
             FROM traversal
-            
         """
 
-    def _build_tree_from_parent_map(
+    def _build_tree_from_path_edges(
         self,
         root_id: str,
         nodes: Dict[str, Dict[str, Any]],
-        parent_map: Dict[str, Tuple[str, str]],
+        path_edges: Dict[Tuple[str, ...], List[Tuple[Tuple[str, ...], str]]],
+        path_to_node: Dict[Tuple[str, ...], Dict[str, Any]],
         max_depth: int,
     ) -> TreeNode:
-        """Build TreeNode hierarchy from parent-child relationships.
+        """Build TreeNode hierarchy from path-based edges.
 
-        Uses BFS to construct tree from flat parent_map:
-        - parent_map[child_id] = (parent_id, relation)
+        n        This allows the same physical node to appear in multiple branches
+                of the tree when reached via different paths (fixes multi-parent issue).
+
+        n        Args:
+                    root_id: Root term ID
+                    nodes: term_id -> node data mapping
+                    path_edges: path_tuple -> [(child_path_tuple, relation), ...]
+                    path_to_node: path_tuple -> {term_id, name, node_type, depth}
+                    max_depth: Maximum depth to traverse
         """
         root_data = nodes.get(root_id, {})
+        root_path = (root_id,)
 
         root = TreeNode(
             id=root_id,
@@ -539,38 +554,38 @@ class SQLKnowledgeGraphQuery:
             level=0,
         )
 
-        # BFS to attach children
-        visited: Set[str] = {root_id}
-        queue: List[Tuple[str, TreeNode, int]] = [(root_id, root, 0)]
+        # DFS to build tree, tracking by path (not term_id)
+        # This allows same node to appear multiple times in different branches
+        visited_paths: Set[Tuple[str, ...]] = {root_path}
+        stack: List[Tuple[Tuple[str, ...], TreeNode, int]] = [(root_path, root, 0)]
 
-        while queue:
-            current_id, current_node, current_level = queue.pop(0)
+        while stack:
+            current_path, current_node, current_level = stack.pop()
 
             if current_level >= max_depth:
                 continue
 
-            # Find all children of current node
-            for child_id, (parent_id, relation) in parent_map.items():
-                if parent_id == current_id and child_id not in visited:
-                    visited.add(child_id)
-                    child_data = nodes.get(child_id, {})
+            # Find all children of current path
+            children = path_edges.get(current_path, [])
+            for child_path, relation in children:
+                if child_path in visited_paths:
+                    continue
+                visited_paths.add(child_path)
 
-                    # Format relation for display
-                    display_relation = relation
-                    if relation.endswith("_REVERSE"):
-                        display_relation = f"<-{relation[:-8]}"
+                child_data = path_to_node.get(child_path, {})
+                child_term_id = child_data.get("term_id", child_path[-1] if child_path else "")
 
-                    child = TreeNode(
-                        id=child_id,
-                        name=child_data.get("name", child_id),
-                        node_type=child_data.get("node_type", "Unknown"),
-                        properties={},
-                        relation=display_relation,
-                        level=current_level + 1,
-                    )
+                child = TreeNode(
+                    id=child_term_id,
+                    name=child_data.get("name", child_term_id),
+                    node_type=child_data.get("node_type", "Unknown"),
+                    properties={},
+                    relation=relation,  # 直接使用原始关系名（双边存储后无需处理_REVERSE）
+                    level=current_level + 1,
+                )
 
-                    current_node.children.append(child)
-                    queue.append((child_id, child, current_level + 1))
+                current_node.children.append(child)
+                stack.append((child_path, child, current_level + 1))
 
         return root
 
@@ -578,8 +593,6 @@ class SQLKnowledgeGraphQuery:
         self,
         natural_language: str,
         n_hops: Optional[int] = None,
-        include_incoming: bool = True,
-        include_outgoing: bool = True,
     ) -> Dict[str, Any]:
         """Main query interface - matches original API."""
         hops = n_hops if n_hops is not None else self.default_hops
@@ -600,8 +613,6 @@ class SQLKnowledgeGraphQuery:
             subgraph = self.query_n_hop_subgraph(
                 entity,
                 n_hops=hops,
-                include_incoming=include_incoming,
-                include_outgoing=include_outgoing,
             )
             results.append(self._format_subgraph_result(subgraph))
 
@@ -690,16 +701,12 @@ class KnowledgeGraphQuery:
         self,
         question: str,
         n_hops: Optional[int] = None,
-        include_incoming: bool = True,
-        include_outgoing: bool = True,
     ) -> Dict[str, Any]:
         """Execute natural language query."""
         hops = n_hops or self.default_hops
         return self.sql_engine.query(
             question,
             n_hops=hops,
-            include_incoming=include_incoming,
-            include_outgoing=include_outgoing,
         )
 
     def query_entities(self, question: str, n_hops: Optional[int] = None) -> List[QueryEntity]:
