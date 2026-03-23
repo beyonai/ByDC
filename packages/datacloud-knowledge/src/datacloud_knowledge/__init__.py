@@ -31,6 +31,7 @@ from .query.sql_engine import (
     SQLGraphQuery,
     SQLKnowledgeGraphQuery,
     create_sql_graph_query,
+    nl_to_semantic_tree,
 )
 
 __version__ = "0.2.0"
@@ -152,6 +153,7 @@ __all__ = [
     "SQLKnowledgeGraphQuery",
     "SQLGraphQuery",
     "create_sql_graph_query",
+    "nl_to_semantic_tree",
     "KnowledgeGraphQuery",
     "MetadataGraph",
     "DomainNode",
