@@ -30,7 +30,7 @@ sys.path.insert(
     ),
 )
 
-from datacloud_knowledge import SQLKnowledgeGraphQuery, TreeNode
+from datacloud_knowledge import SQLKnowledgeGraphQuery, TreeNode, nl_to_semantic_tree
 
 
 def dict_to_tree(tree_dict: dict) -> TreeNode:
@@ -118,6 +118,92 @@ def print_query_results(result: dict, query_name: str) -> None:
                 print("  (无树形结构)")
     else:
         print("\n✗ 未返回子图结果")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 测试类：nl_to_semantic_tree 函数测试
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class TestNlToSemanticTree:
+    """nl_to_semantic_tree 函数测试"""
+
+    @pytest.fixture(scope="class")
+    def service(self):
+        """创建知识图谱查询服务实例"""
+        from dotenv import load_dotenv
+
+        env_path = Path(__file__).resolve().parents[5] / ".env.example"
+        if env_path.exists():
+            load_dotenv(env_path, override=True)
+        return SQLKnowledgeGraphQuery(default_hops=2)
+
+    def test_nl_to_semantic_tree_yizhuang_output(self, service):
+        """测试：nl_to_semantic_tree 输出严格匹配预期结果
+
+        查询：帮我看一下"北京亦庄经济技术开发区"区域内单位亩产效益最低的10家企业
+        """
+        query = '帮我看一下"北京亦庄经济技术开发区"区域内单位亩产效益最低的10家企业'
+        result = nl_to_semantic_tree(query, service=service, n_hops=2)
+
+        expected_output = """查询: 帮我看一下"北京亦庄经济技术开发区"区域内单位亩产效益最低的10家企业
+识别到 6 个实体:
+  1. 北京亦庄经济技术开发区 (region_name) - 精确匹配
+  2. 亩产效益 (enterprise_metric) - 别名匹配
+  3. 低 (risk_level) - 精确匹配
+  4. 低 (todo_priority) - 精确匹配
+  5. 低 (urgency_level) - 精确匹配
+  6. 企业 (belong_industry) - 精确匹配
+
+【中心实体 1】北京亦庄经济技术开发区
+节点数: 4, 边数: 3
+
+知识图谱:
+└── 北京亦庄经济技术开发区 [region_name]
+    └── [区域_包含_企业] -> 企业大宽表 [ONTOLOGY_OBJ]
+        ├── [企业_归属_网格] -> 网格大宽表 [ONTOLOGY_OBJ]
+        └── [企业_归属_产业链] -> 产业维度大宽表 [ONTOLOGY_OBJ]
+
+【中心实体 2】亩产效益
+节点数: 4, 边数: 4
+
+知识图谱:
+└── 企业亩产效益 [enterprise_metric]
+    ├── [企业亩产效益_计算依赖_营收] -> 企业申报营收 [enterprise_metric]
+    │   └── [企业申报营收_归属_企业表] -> 企业大宽表 [ONTOLOGY_OBJ]
+    └── [企业亩产效益_计算依赖_占地] -> 企业占地面积（亩） [enterprise_metric]
+        └── [企业占地_归属_企业表] -> 企业大宽表 [ONTOLOGY_OBJ]
+
+【中心实体 3】低
+节点数: 4, 边数: 3
+
+知识图谱:
+└── 低 [risk_level]
+    └── [低风险_分类_企业] -> 企业大宽表 [ONTOLOGY_OBJ]
+        ├── [企业_归属_网格] -> 网格大宽表 [ONTOLOGY_OBJ]
+        └── [企业_归属_产业链] -> 产业维度大宽表 [ONTOLOGY_OBJ]
+
+【中心实体 4】低
+节点数: 1, 边数: 0
+
+知识图谱:
+└── 低 [todo_priority]
+
+【中心实体 5】低
+节点数: 1, 边数: 0
+
+知识图谱:
+└── 低 [urgency_level]
+
+【中心实体 6】企业
+节点数: 1, 边数: 0
+
+知识图谱:
+└── 企业 [belong_industry]"""
+
+        assert result == expected_output, (
+            f"输出不匹配预期结果:\n实际输出:\n{result}\n\n预期输出:\n{expected_output}"
+        )
 
 
 # ════════════════════════════════════════════════════════════════════════════
