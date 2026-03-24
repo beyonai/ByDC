@@ -25,6 +25,7 @@ _REQUIRED: dict[str, list[str]] = {
     "term_type":      ["type_code", "type_name", "type_category"],
     "term":           ["term_code", "term_name", "term_type_code", "domain_code"],
     "relation":       ["relation_code", "source_term_code", "target_term_code", "relation_name"],
+    "knowledge":      ["knowledge_id", "term_code"],
 }
 
 # 内置 term_type_code，无需在导入包中定义
@@ -177,7 +178,7 @@ def run(folder_path: str) -> dict:
         step_type: str = step.get("type", "")
         entity_type = _step_entity_type(step_type, rel_file)
 
-        if entity_type not in ("term", "relation"):
+        if entity_type not in ("term", "relation", "knowledge"):
             continue
 
         for lineno, obj in enumerate(rows, start=1):
@@ -228,6 +229,17 @@ def run(folder_path: str) -> dict:
                         }
                         all_errors.append(err)
                         _append_file_error(file_results, rel_file, err)
+
+            elif entity_type == "knowledge":
+                term_code = obj.get("term_code")
+                if term_code and term_code not in defined_term_codes:
+                    err = {
+                        "file": rel_file,
+                        "line": lineno,
+                        "error": f"term_code '{term_code}' 未在 terms/ 文件中定义（也不在数据库中）",
+                    }
+                    all_errors.append(err)
+                    _append_file_error(file_results, rel_file, err)
 
     status = "failed" if all_errors else "ok"
     logger.info("precheck %s: %d rows, %d errors", status, total_rows, len(all_errors))
