@@ -32,6 +32,13 @@ from .query.sql_engine import (
     SQLKnowledgeGraphQuery,
     create_sql_graph_query,
     nl_to_semantic_tree,
+    get_singleton_service,
+    reset_singleton_service,
+)
+from .query.vocab_cache import (
+    VocabularyCache,
+    DEFAULT_CACHE_DIR,
+    CACHE_DIR_ENV,
 )
 
 __version__ = "0.2.0"
@@ -88,7 +95,7 @@ class KnowledgeGraphQuery(SQLKnowledgeGraphQuery):
         Returns:
             术语数据字典，如果未找到则返回None
         """
-        entities = self.sql_engine.extract_entities(name)
+        entities = self.extract_entities(name)
         if entities:
             entity = entities[0]
             return {
@@ -154,7 +161,14 @@ __all__ = [
     "SQLGraphQuery",
     "create_sql_graph_query",
     "nl_to_semantic_tree",
+    "get_singleton_service",
+    "reset_singleton_service",
     "KnowledgeGraphQuery",
+    # Cache exports
+    "VocabularyCache",
+    "DEFAULT_CACHE_DIR",
+    "CACHE_DIR_ENV",
+    # Graph exports
     "MetadataGraph",
     "DomainNode",
     "TermLibraryNode",
