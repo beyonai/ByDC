@@ -169,6 +169,14 @@ class TestNlToSemanticTree:
 
 知识图谱:
 └── 企业亩产效益 [enterprise_metric]
+    ├── 属性:
+    │   ├── knowledge:
+    │       【企业亩产效益计算公式】
+    │       ## 计算公式
+    │       
+    │       企业亩产效益 = 企业申报营收 / 企业占地面积（亩）
+    │       
+    │       
     ├── [企业亩产效益_计算依赖_营收] -> 企业申报营收 [enterprise_metric]
     │   └── [企业申报营收_归属_企业表] -> 企业大宽表 [ONTOLOGY_OBJ]
     └── [企业亩产效益_计算依赖_占地] -> 企业占地面积（亩） [enterprise_metric]
