@@ -454,6 +454,39 @@ class SQLKnowledgeGraphQuery:
                                 }
                             )
 
+                # Batch fetch knowledge facts for all nodes (post-processing)
+                # This is more efficient than JOIN in recursive CTE
+                if nodes:
+                    cur.execute(
+                        f"""
+                        SELECT term_id, knowledge_id, desc_summary, "desc"
+                        FROM {self.schema}.term_knowledge
+                        WHERE term_id = ANY(%s)
+                        """,
+                        (list(nodes.keys()),),
+                    )
+                    knowledge_rows = cur.fetchall()
+                    
+                    # Group knowledge by term_id (one term can have multiple knowledge)
+                    # Combine desc_summary and desc into a single content field for better display
+                    knowledge_map: Dict[str, List[str]] = {}
+                    for k_row in knowledge_rows:
+                        k_term_id, k_id, k_summary, k_desc = k_row
+                        if k_term_id not in knowledge_map:
+                            knowledge_map[k_term_id] = []
+                        # Combine summary and full desc into one formatted string
+                        parts = []
+                        if k_summary:
+                            parts.append(f"【{k_summary}】")
+                        if k_desc:
+                            parts.append(k_desc)
+                        knowledge_map[k_term_id].append("\n".join(parts) if parts else "")
+                    
+                    # Attach knowledge to nodes
+                    for term_id, node in nodes.items():
+                        if term_id in knowledge_map:
+                            node["knowledge"] = "\n\n".join(knowledge_map[term_id])
+
                 # Build tree structure using path-based edges
                 tree = self._build_tree_from_path_edges(
                     entity.node_id, nodes, path_edges, path_to_node, n_hops
@@ -550,7 +583,7 @@ class SQLKnowledgeGraphQuery:
             id=root_id,
             name=root_data.get("name", root_id),
             node_type=root_data.get("node_type", "Unknown"),
-            properties={},
+            properties={"knowledge": root_data.get("knowledge", [])} if root_data.get("knowledge") else {},
             level=0,
         )
 
@@ -574,12 +607,13 @@ class SQLKnowledgeGraphQuery:
 
                 child_data = path_to_node.get(child_path, {})
                 child_term_id = child_data.get("term_id", child_path[-1] if child_path else "")
+                child_node_data = nodes.get(child_term_id, {})
 
                 child = TreeNode(
                     id=child_term_id,
                     name=child_data.get("name", child_term_id),
                     node_type=child_data.get("node_type", "Unknown"),
-                    properties={},
+                    properties={"knowledge": child_node_data.get("knowledge", [])} if child_node_data.get("knowledge") else {},
                     relation=relation,  # 直接使用原始关系名（双边存储后无需处理_REVERSE）
                     level=current_level + 1,
                 )
@@ -733,10 +767,19 @@ class SQLKnowledgeGraphQuery:
             for j, (key, value) in enumerate(props):
                 is_last_prop = (j == len(props) - 1) and not children
                 prop_connector = "└── " if is_last_prop else "├── "
-                value_str = str(value)
-                if len(value_str) > 100:
-                    value_str = value_str[:97] + "..."
-                lines.append(f"{prop_prefix}{prop_connector}{key}: {value_str}")
+                
+                # Special handling for knowledge - display full content with line breaks
+                if key == "knowledge":
+                    lines.append(f"{prop_prefix}{prop_connector}{key}:")
+                    # Split knowledge into lines and indent each line
+                    knowledge_lines = str(value).split("\n")
+                    for k_line in knowledge_lines:
+                        lines.append(f"{prop_prefix}    {k_line}")
+                else:
+                    value_str = str(value)
+                    if len(value_str) > 100:
+                        value_str = value_str[:97] + "..."
+                    lines.append(f"{prop_prefix}{prop_connector}{key}: {value_str}")
 
         for k, child in enumerate(children):
             is_last_child = k == len(children) - 1
