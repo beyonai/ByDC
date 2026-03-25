@@ -1,10 +1,10 @@
 import pytest
 from pathlib import Path
-from datacloud_data.sql_executor.models import DataSourceConfig
-from datacloud_data.executor.models import SqlExecTask
-from datacloud_data.executor.step_results import StepResult, StepResults
-from datacloud_data.sql_executor.sql_executor import SqlExecutor
-from datacloud_data.sql_executor.data_source_manager import DataSourceManager
+from datacloud_data_sdk.sql_executor.models import DataSourceConfig
+from datacloud_data_sdk.executor.models import SqlExecTask
+from datacloud_data_sdk.executor.step_results import StepResult, StepResults
+from datacloud_data_sdk.sql_executor.sql_executor import SqlExecutor
+from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 
 SQLITE_CONFIG = DataSourceConfig(
     alias="test_db",

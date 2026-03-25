@@ -74,7 +74,7 @@ pip install -e .
 ### 使用Python SDK
 
 ```python
-from datacloud_knowledge_service import KnowledgeGraphQuery
+from datacloud_knowledge import KnowledgeGraphQuery
 
 # 初始化服务，加载图数据
 service = KnowledgeGraphQuery(

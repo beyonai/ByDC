@@ -1,7 +1,7 @@
 """GraphQL Schema 从本体（OntologyClass 列表）生成的测试。"""
 
-from datacloud_data.ontology.models import OntologyClass, OntologyField, OntologyRelation
-from datacloud_data.graphql.schema_generator import generate_schema
+from datacloud_data_sdk.ontology.models import OntologyClass, OntologyField, OntologyRelation
+from datacloud_data_sdk.graphql.schema_generator import generate_schema
 
 
 def test_generate_schema_from_ontology_class_basic() -> None:

@@ -16030,3 +16030,4 @@
 {"op": "add", "term_code": "100802", "term_name": "风电装备", "term_type_code": "industry_name", "domain_code": "DOMAIN_002", "library_code": "LIB_002", "parent_term_code": "TERM_TYPE_INDUSTRY_NAME"}
 {"op": "add", "term_code": "100402", "term_name": "高端医疗器械", "term_type_code": "industry_name", "domain_code": "DOMAIN_002", "library_code": "LIB_002", "parent_term_code": "TERM_TYPE_INDUSTRY_NAME"}
 {"op": "add", "term_code": "1003", "term_name": "高端装备制造产业", "term_type_code": "industry_name", "domain_code": "DOMAIN_002", "library_code": "LIB_002", "parent_term_code": "TERM_TYPE_INDUSTRY_NAME"}
+{"op": "add", "term_code": "REGION_NAME_264668", "term_name": "北京亦庄经济技术开发区", "term_type_code": "region_name", "domain_code": "DOMAIN_002", "library_code": "LIB_002", "parent_term_code": "TERM_TYPE_REGION_NAME"}

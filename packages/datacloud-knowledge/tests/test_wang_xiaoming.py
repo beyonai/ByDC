@@ -9,7 +9,7 @@ import pytest
 # 将项目根目录加入路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from datacloud_knowledge_service import SQLKnowledgeGraphQuery, TreeNode
+from datacloud_knowledge import SQLKnowledgeGraphQuery, TreeNode
 
 
 def dict_to_tree(tree_dict: dict) -> TreeNode:

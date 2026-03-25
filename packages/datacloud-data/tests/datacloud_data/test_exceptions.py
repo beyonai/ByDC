@@ -1,4 +1,4 @@
-from datacloud_data.exceptions import (
+from datacloud_data_sdk.exceptions import (
     DatacloudError,
     ObjectNotFoundError,
     ActionNotFoundError,

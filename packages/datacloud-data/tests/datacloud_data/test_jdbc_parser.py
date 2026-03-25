@@ -1,6 +1,6 @@
 """JDBC URL 解析测试。"""
 
-from datacloud_data.sql_executor.jdbc_parser import (
+from datacloud_data_sdk.sql_executor.jdbc_parser import (
     parse_jdbc_url,
     parse_clickhouse_jdbc_url,
     extract_current_schema,

@@ -94,13 +94,13 @@
     {
       "field_code": "poiLatitude",
       "field_name": "企业POI纬度",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "poi_latitude"
     },
     {
       "field_code": "poiLongitude",
       "field_name": "企业POI经度",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "poi_longitude"
     },
     {
@@ -112,61 +112,61 @@
     {
       "field_code": "annualRevenueReport",
       "field_name": "企业申报营收",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "annual_revenue_report"
     },
     {
       "field_code": "taxDeclared",
       "field_name": "企业申报税额",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "tax_declared"
     },
     {
       "field_code": "landAreaMu",
       "field_name": "占地面积（亩）",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "land_area_mu"
     },
     {
       "field_code": "powerConsumption",
       "field_name": "年度用电量（千瓦时）",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "power_consumption"
     },
     {
       "field_code": "waterConsumption",
       "field_name": "年度用水量（吨）",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "water_consumption"
     },
     {
       "field_code": "logisticsHeatIndex",
       "field_name": "所在网格的年度平均物流热力指数",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "logistics_heat_index"
     },
     {
       "field_code": "revenueAiInferred",
       "field_name": "AI推演营收",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "revenue_ai_inferred"
     },
     {
       "field_code": "taxAiInferred",
       "field_name": "AI推演税额",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "tax_ai_inferred"
     },
     {
       "field_code": "taxGapRatio",
       "field_name": "税负差异率",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "tax_gap_ratio"
     },
     {
       "field_code": "riskScore",
       "field_name": "企业风险分",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "risk_score"
     },
     {
@@ -208,7 +208,7 @@
     {
       "field_code": "rdIntensity",
       "field_name": "研发强度",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "rd_intensity"
     },
     {
@@ -256,13 +256,13 @@
     {
       "field_code": "invoiceIssuedAmount",
       "field_name": "期内开票总额（万元）",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "invoice_issued_amount"
     },
     {
       "field_code": "invoiceReceivedAmount",
       "field_name": "期内收票总额（万元）",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "invoice_received_amount"
     },
     {
@@ -274,13 +274,13 @@
     {
       "field_code": "invoiceItemVarianceScore",
       "field_name": "进销项品目背离度评分",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "invoice_item_variance_score"
     },
     {
       "field_code": "peakInvoicingRatio",
       "field_name": "顶额开票占比",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "peak_invoicing_ratio"
     },
     {
@@ -322,7 +322,7 @@
     {
       "field_code": "maxInfluenceRadiusKm",
       "field_name": "最大影响半径",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "max_influence_radius_km"
     },
     {
@@ -352,13 +352,13 @@
     {
       "field_code": "primaryAssetLandMu",
       "field_name": "主经营资产占地(亩)",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "primary_asset_land_mu"
     },
     {
       "field_code": "primaryAssetFloorSqm",
       "field_name": "主经营资产建面(平米)",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "primary_asset_floor_sqm"
     },
     {
@@ -370,7 +370,7 @@
     {
       "field_code": "occupancyTotalAreaSqm",
       "field_name": "企业占用面积汇总",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "occupancy_total_area_sqm"
     },
     {
@@ -382,13 +382,13 @@
     {
       "field_code": "invoiceIssuedAmtYear",
       "field_name": "当年开票额",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "invoice_issued_amt_year"
     },
     {
       "field_code": "invoiceReceivedAmtYear",
       "field_name": "当年收票额",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "invoice_received_amt_year"
     },
     {
@@ -418,13 +418,13 @@
     {
       "field_code": "supplierStrengthSum",
       "field_name": "供应方关系强度和",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "supplier_strength_sum"
     },
     {
       "field_code": "buyerStrengthSum",
       "field_name": "采购方关系强度和",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "buyer_strength_sum"
     },
     {
