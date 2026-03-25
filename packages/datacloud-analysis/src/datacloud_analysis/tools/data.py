@@ -73,6 +73,51 @@ async def data_query(
             resp = await client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
             result = resp.json()
+            
+            if result.get("code") == 0:
+                data = result.get("data", {})
+                if data.get("resultType") == "normal" and "records" in data:
+                    records = data["records"]
+                    meta = data.get("meta", {})
+                    total = data.get("total", len(records))
+                    
+                    try:
+                        from gateway_sdk.worker.sandbox.hook_sandbox import active_workspace
+                        workspace_dir = active_workspace.get()
+                    except ImportError:
+                        workspace_dir = None
+                        
+                    if not workspace_dir:
+                        workspace_dir = os.path.join(os.getenv("DATACLOUD_GATEWAY_WORKSPACE_DIR", "/tmp/datacloud"), session_id)
+                        
+                    import uuid
+                    import json
+                    
+                    file_name = f"data_query_{uuid.uuid4().hex[:8]}.jsonl"
+                    file_path = os.path.join(workspace_dir, file_name)
+                    os.makedirs(workspace_dir, exist_ok=True)
+                    
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        meta_row = {
+                            "_type": "meta", 
+                            "columns": meta.get("columns", []), 
+                            "total": total, 
+                            "download_url": meta.get("download_url")
+                        }
+                        f.write(json.dumps(meta_row, ensure_ascii=False) + "\n")
+                        for row in records:
+                            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                    
+                    return {
+                        "status": "success",
+                        "file_path": file_path,
+                        "total": total,
+                        "columns": meta.get("columns", []),
+                        "preview": records[:5],
+                        "original_download_url": meta.get("download_url"),
+                        "overflow_notice": data.get("overflow_notice", "")
+                    }
+                    
             logger.info("[data_query] OK  status=%d", resp.status_code)
             return result
     except httpx.ReadTimeout:
