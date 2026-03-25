@@ -1,4 +1,19 @@
-"""Object 实体：本体对象的运行时表示。"""
+"""
+对象(Object)实体模块
+
+本模块定义了 Object 类，作为本体对象的运行时表示。
+Object 封装了 OntologyClass 及其关联关系，提供自生说明、动作调用与查询能力。
+
+核心功能：
+- 自生说明：生成 Markdown 格式的对象文档，包含字段、动作、关联等信息
+- 动作管理：列出、获取、执行对象上的动作
+- 自然语言查询：通过 LLM 将自然语言转换为查询计划并执行
+
+使用示例：
+    obj = loader.get_object("po_users")
+    description = obj.get_description()  # 获取对象说明
+    result = await obj.query("查询所有活跃用户")  # 自然语言查询
+"""
 
 from __future__ import annotations
 
@@ -11,22 +26,55 @@ from datacloud_data_sdk.relation import Relation
 
 
 class Object:
-    """本体对象实体，提供自生说明、动作调用与查询能力。
-
+    """
+    本体对象实体类
+    
+    提供对象的自生说明、动作调用与查询能力。
     通过 OntologyLoader.get_object() 获取实例。
+    
+    Attributes:
+        _cls: 本体类定义
+        _relations: 对象的关联关系列表
+        _loader: 本体加载器引用
+    
+    Example:
+        obj = loader.get_object("po_users")
+        print(obj.get_description())
+        result = await obj.query("查询部门为研发的用户")
     """
 
     def __init__(self, ontology_class: OntologyClass, relations: list[Relation], loader: Any = None) -> None:
+        """
+        初始化对象实体
+        
+        Args:
+            ontology_class: 本体类定义
+            relations: 对象的关联关系列表
+            loader: 本体加载器实例
+        """
         self._cls = ontology_class
         self._relations = relations
         self._loader = loader
 
     @property
     def object_code(self) -> str:
+        """对象代码，唯一标识此对象"""
         return self._cls.object_code
 
     def get_description(self) -> str:
-        """生成 Markdown 格式的对象自生说明。"""
+        """
+        生成 Markdown 格式的对象自生说明
+        
+        包含以下信息：
+        - 对象名称和代码
+        - 数据来源（数据源、表名）
+        - 字段列表（代码、名称、类型、描述）
+        - 动作列表（代码、类型、入参）
+        - 关联关系
+        
+        Returns:
+            str: Markdown 格式的对象说明文档
+        """
         lines = [
             f"## 对象：{self._cls.object_name}（{self._cls.object_code}）",
             "",
@@ -68,24 +116,81 @@ class Object:
         return "\n".join(lines)
 
     def get_action_schema(self, action_code: str) -> dict[str, object]:
-        """获取动作的 input/output JSON Schema。"""
+        """
+        获取动作的 JSON Schema
+        
+        Args:
+            action_code: 动作代码
+        
+        Returns:
+            dict: 包含 name, title, description, inputSchema, outputSchema 的字典
+        
+        Raises:
+            ActionNotFoundError: 动作不存在时抛出
+        """
         action = self._find_action(action_code)
         return Action(action, loader=self._loader).get_schema()
 
     def list_action_codes(self) -> list[str]:
+        """
+        列出对象上所有动作的代码
+        
+        Returns:
+            list[str]: 动作代码列表
+        """
         return [a.action_code for a in self._cls.actions]
 
     def get_relations(self) -> list[Relation]:
+        """
+        获取对象的关联关系列表
+        
+        Returns:
+            list[Relation]: 关联关系列表
+        """
         return self._relations
 
     def _find_action(self, action_code: str) -> OntologyAction:
+        """
+        查找指定代码的动作
+        
+        Args:
+            action_code: 动作代码
+        
+        Returns:
+            OntologyAction: 找到的动作定义
+        
+        Raises:
+            ActionNotFoundError: 动作不存在时抛出
+        """
         for a in self._cls.actions:
             if a.action_code == action_code:
                 return a
         raise ActionNotFoundError(self._cls.object_code, action_code)
 
     async def query(self, question: str, include_plan: bool = True) -> dict[str, object]:
-        """自然语言查询：计划 -> 执行 -> 聚合完整管线。"""
+        """
+        自然语言查询
+        
+        完整的查询管线：
+        1. 构建对象视图载荷
+        2. 生成查询计划（通过 LLM）
+        3. 验证计划
+        4. 应用数据权限重写
+        5. 转换为执行任务
+        6. 执行查询
+        7. 聚合结果
+        
+        Args:
+            question: 自然语言查询问题
+            include_plan: 是否在结果中包含执行计划
+        
+        Returns:
+            dict: 查询结果，包含 records, total, meta 等字段
+        
+        Raises:
+            CannotAnswerError: 无法回答问题时抛出
+            PlanValidationError: 计划验证失败时抛出
+        """
         import uuid
         from dataclasses import asdict
 

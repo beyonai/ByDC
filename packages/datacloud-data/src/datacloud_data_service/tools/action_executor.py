@@ -1,4 +1,21 @@
-"""ActionExecutor: 操作类工具的执行流水线。"""
+"""
+动作执行器模块
+
+本模块提供操作类工具的执行流水线，处理动作调用和结果格式化。
+
+核心功能：
+- 执行对象动作（API 调用或脚本执行）
+- 查询类动作结果溢出处理
+- MCP 格式结果封装
+
+使用示例：
+    executor = ActionExecutor(loader)
+    result = await executor.execute(
+        object_code="user",
+        action_code="create_user",
+        arguments={"name": "张三"}
+    )
+"""
 
 from __future__ import annotations
 
@@ -11,7 +28,18 @@ from datacloud_data_service.tools.query_result_overflow import apply_query_resul
 
 
 def _apply_overflow_if_query(result: dict[str, Any], loader: OntologyLoader) -> dict[str, Any]:
-    """若为查询类动作且数据超阈值，则存 CSV 并返回元数据+下载地址+预览。"""
+    """
+    对查询类动作应用溢出处理
+    
+    当查询结果记录数超过阈值时，将数据存储为 CSV 文件。
+    
+    Args:
+        result: 原始查询结果
+        loader: 本体加载器实例
+    
+    Returns:
+        dict: 处理后的结果
+    """
     if "records" not in result or "meta" not in result:
         return result
     try:
@@ -31,13 +59,27 @@ def _apply_overflow_if_query(result: dict[str, Any], loader: OntologyLoader) -> 
 
 
 class ActionExecutor:
-    """操作类工具执行流水线。
-
+    """
+    操作类工具执行流水线
+    
     参数映射、术语解析均在 SDK Action.execute 内自闭环；
     ActionExecutor 仅透传 arguments、调用 invoke_action、格式化 MCP 返回。
+    
+    Attributes:
+        _loader: 本体加载器实例
+    
+    Example:
+        executor = ActionExecutor(loader)
+        result = await executor.execute("order", "cancel_order", {"order_id": "123"})
     """
 
     def __init__(self, loader: OntologyLoader) -> None:
+        """
+        初始化动作执行器
+        
+        Args:
+            loader: 本体加载器实例
+        """
         self._loader = loader
 
     async def execute(
@@ -46,7 +88,26 @@ class ActionExecutor:
         action_code: str,
         arguments: dict[str, Any],
     ) -> dict[str, Any]:
-        """执行操作类动作，返回 MCP content 格式。"""
+        """
+        执行操作类动作
+        
+        执行流程：
+        1. 查找动作定义
+        2. 调用对象动作执行
+        3. 查询类动作应用溢出处理
+        4. 格式化为 MCP 返回格式
+        
+        Args:
+            object_code: 对象代码
+            action_code: 动作代码
+            arguments: 动作参数
+        
+        Returns:
+            dict: MCP 格式的执行结果
+        
+        Raises:
+            ActionNotFoundError: 动作不存在时抛出
+        """
         cls = self._loader.get_ontology_class(object_code)
         action = None
         for a in cls.actions:
