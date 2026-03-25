@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import pytest
 
-from datacloud_data.ontology.term_loader import TermLoader
-from datacloud_data.plan.models import (
+from datacloud_data_sdk.ontology.term_loader import TermLoader
+from datacloud_data_sdk.plan.models import (
     ObjectViewField,
     ObjectViewObject,
     ObjectViewPayload,
     ObjectViewSource,
 )
-from datacloud_data.plan.sql_term_resolver import resolve_sql_literals
+from datacloud_data_sdk.plan.sql_term_resolver import resolve_sql_literals
 
 
 def test_resolve_sql_literals_col_equals_value() -> None:

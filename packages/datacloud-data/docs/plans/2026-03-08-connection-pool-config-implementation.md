@@ -122,7 +122,7 @@ def _init_engine(self) -> None:
 import pytest
 from unittest.mock import patch, MagicMock
 
-from datacloud_data.sql_executor.models import DataSourceConfig
+from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 
 
 def test_mysql_connector_passes_pool_params() -> None:
@@ -138,7 +138,7 @@ def test_mysql_connector_passes_pool_params() -> None:
         "sqlalchemy.ext.asyncio.create_async_engine",
         MagicMock(),
     ) as mock_create:
-        from datacloud_data.sql_executor.connectors.mysql_connector import (
+        from datacloud_data_sdk.sql_executor.connectors.mysql_connector import (
             MySQLConnector,
         )
 
@@ -162,7 +162,7 @@ def test_mysql_connector_pool_max_less_than_min() -> None:
         "sqlalchemy.ext.asyncio.create_async_engine",
         MagicMock(),
     ) as mock_create:
-        from datacloud_data.sql_executor.connectors.mysql_connector import (
+        from datacloud_data_sdk.sql_executor.connectors.mysql_connector import (
             MySQLConnector,
         )
 
@@ -185,7 +185,7 @@ def test_postgresql_connector_passes_pool_params() -> None:
         "sqlalchemy.ext.asyncio.create_async_engine",
         MagicMock(),
     ) as mock_create:
-        from datacloud_data.sql_executor.connectors.postgresql_connector import (
+        from datacloud_data_sdk.sql_executor.connectors.postgresql_connector import (
             PostgreSQLConnector,
         )
 

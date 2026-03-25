@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from datacloud_data.ontology.loader import OntologyLoader
+from datacloud_data_sdk.ontology.loader import OntologyLoader
 
 HEADERS = {
     "X-Tenant-Id": "t1",

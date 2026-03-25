@@ -23,7 +23,7 @@
 
 ```python
 def test_object_view_function_param_has_term_set():
-    from datacloud_data.plan.models import ObjectViewFunctionParam
+    from datacloud_data_sdk.plan.models import ObjectViewFunctionParam
     p = ObjectViewFunctionParam(
         param_code="orgId",
         param_name="组织",
@@ -85,7 +85,7 @@ git commit -m "feat(plan): ObjectViewField add term_set for SQL term resolution"
 
 ```python
 def test_api_exec_task_has_bind_fields():
-    from datacloud_data.executor.models import ApiExecTask
+    from datacloud_data_sdk.executor.models import ApiExecTask
     t = ApiExecTask(
         function_code="fn_x",
         params={},
@@ -121,9 +121,9 @@ git commit -m "feat(executor): ApiExecTask add bind_from_step, bind_key"
 
 ```python
 def test_resolve_params_enum():
-    from datacloud_data.ontology.term_loader import TermLoader
-    from datacloud_data.plan.term_resolver import TermResolver
-    from datacloud_data.plan.models import ObjectViewFunctionParam
+    from datacloud_data_sdk.ontology.term_loader import TermLoader
+    from datacloud_data_sdk.plan.term_resolver import TermResolver
+    from datacloud_data_sdk.plan.models import ObjectViewFunctionParam
 
     loader = TermLoader.from_mapping({
         "status.code": [
@@ -148,8 +148,8 @@ def test_resolve_params_enum():
 from __future__ import annotations
 from typing import Any, TYPE_CHECKING
 if TYPE_CHECKING:
-    from datacloud_data.plan.models import ObjectViewFunctionParam
-from datacloud_data.ontology.term_loader import TermLoader
+    from datacloud_data_sdk.plan.models import ObjectViewFunctionParam
+from datacloud_data_sdk.ontology.term_loader import TermLoader
 
 class TermResolver:
     def __init__(self, term_loader: TermLoader | None = None) -> None:

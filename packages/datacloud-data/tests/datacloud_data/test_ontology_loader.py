@@ -2,8 +2,8 @@ import json
 import pytest
 from pathlib import Path
 
-from datacloud_data.ontology.loader import OntologyLoader
-from datacloud_data.exceptions import ObjectNotFoundError
+from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.exceptions import ObjectNotFoundError
 
 MINIMAL_REGISTRY = {
     "functions": [
@@ -127,7 +127,7 @@ def test_configure_sets_plan_generator() -> None:
 
 
 def test_configure_sql_execution_mode():
-    from datacloud_data.ontology.loader import OntologyLoader
+    from datacloud_data_sdk.ontology.loader import OntologyLoader
 
     loader = OntologyLoader()
     loader.configure(sql_execution_mode="external")

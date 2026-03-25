@@ -53,7 +53,7 @@ import pytest
 
 def test_log_exception_stack_outputs_to_stderr_and_file(tmp_path):
     """log_exception_stack 输出到 stderr 和文件。"""
-    from datacloud_data.events.trace_logger import log_exception_stack
+    from datacloud_data_sdk.events.trace_logger import log_exception_stack
 
     log_path = tmp_path / "trace.log"
     try:
@@ -144,9 +144,9 @@ Expected: PASS
 ```python
 def test_event_trace_logger_outputs_event_to_stderr_and_file(tmp_path):
     """EventTraceLogger 将事件输出到 stderr 和文件。"""
-    from datacloud_data.events.bus import EventBus
-    from datacloud_data.events.events import QueryRequestReceived
-    from datacloud_data.events.trace_logger import EventTraceLogger
+    from datacloud_data_sdk.events.bus import EventBus
+    from datacloud_data_sdk.events.events import QueryRequestReceived
+    from datacloud_data_sdk.events.trace_logger import EventTraceLogger
 
     log_path = str(tmp_path / "trace.log")
     logger = EventTraceLogger(trace_log_path=log_path, enabled=True)
@@ -188,7 +188,7 @@ Run: `pytest datacloud-data/tests/datacloud_data/test_trace_logger.py -v`
 **Step 1: 在 create_app 的 _lifespan 中，register_query_handlers 之后**
 
 ```python
-from datacloud_data.events.trace_logger import EventTraceLogger
+from datacloud_data_sdk.events.trace_logger import EventTraceLogger
 
 # 在 register_query_handlers(bus, tracing=tracing) 之后
 if settings.trace_enabled:
@@ -224,7 +224,7 @@ try:
     ...
     return {...}
 except Exception as exc:
-    from datacloud_data.events.trace_logger import log_exception_stack
+    from datacloud_data_sdk.events.trace_logger import log_exception_stack
     log_exception_stack(exc, request_id=request_id, trace_id=trace_id)
     raise
 finally:
@@ -250,7 +250,7 @@ finally:
 
 ```python
 except Exception as exc:
-    from datacloud_data.events.trace_logger import log_exception_stack
+    from datacloud_data_sdk.events.trace_logger import log_exception_stack
     log_exception_stack(exc, request_id=request_id, trace_id=trace_id)
     raise
 ```
@@ -270,7 +270,7 @@ except Exception as exc:
 
 ```python
 except Exception as e:
-    from datacloud_data.events.trace_logger import log_exception_stack
+    from datacloud_data_sdk.events.trace_logger import log_exception_stack
     log_exception_stack(e)  # 无 request_id/trace_id
     return {
         "content": [{"type": "text", "text": str(e)}],

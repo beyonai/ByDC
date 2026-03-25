@@ -2,7 +2,7 @@
 
 import pytest
 
-from datacloud_data.graphql.arg_converter import where_to_filters
+from datacloud_data_sdk.graphql.arg_converter import where_to_filters
 
 
 def test_where_to_filters_converts_eq() -> None:

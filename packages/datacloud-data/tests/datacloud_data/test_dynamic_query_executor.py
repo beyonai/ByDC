@@ -2,9 +2,9 @@
 
 import pytest
 
-from datacloud_data.executor.dynamic_query_executor import DynamicQueryExecutor
-from datacloud_data.ontology.loader import OntologyLoader
-from datacloud_data.sql_executor.data_source_manager import DataSourceManager
+from datacloud_data_sdk.executor.dynamic_query_executor import DynamicQueryExecutor
+from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 
 
 @pytest.fixture
