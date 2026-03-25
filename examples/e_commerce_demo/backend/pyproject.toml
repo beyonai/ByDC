@@ -1,0 +1,22 @@
+[project]
+name = "datacloud-service"
+version = "0.1.0"
+description = "DataCloud 产业大脑 Gateway Worker Service"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "gateway-sdk",
+    "python-dotenv>=1.0.0",
+    "datacloud-analysis",
+    "langchain-openai>=1.1.11",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["datacloud_service"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true

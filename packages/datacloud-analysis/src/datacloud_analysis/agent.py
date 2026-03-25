@@ -13,22 +13,14 @@ import logging
 import os
 from typing import Any
 
-from deepagents import create_deep_agent
-from langchain.chat_models import init_chat_model
-
-from datacloud_analysis.i18n import get_supported_locales, get_system_prompt
-from datacloud_analysis.tools.data import data_query
-from datacloud_analysis.tools.knowledge import search_knowledge
+from datacloud_analysis.i18n import get_supported_locales
+from datacloud_analysis.orchestration.graph_builder import build_analysis_graph
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
-
-
-_FALLBACK_MODEL = "openai:Qwen/Qwen3-235B-A22B"
-_FALLBACK_BASE_URL = "https://lab.iwhalecloud.com/gpt-proxy/v1"
 
 
 def create_agent(
@@ -41,26 +33,8 @@ def create_agent(
     system_prompt: str | None = None,
 ) -> Any:
     """Create a deep agent for DataCloud, usable with langgraph dev and deep-agents-ui."""
-    resolved_api_key = (
-        api_key
-        or os.getenv("OPENAI_API_KEY")
-        or os.getenv("DATACLOUD_LLM_REASONING_API_KEY")
-    )
-    if not resolved_api_key:
-        raise ValueError(
-            "API key is required. Set OPENAI_API_KEY or DATACLOUD_LLM_REASONING_API_KEY "
-            "(or pass api_key= explicitly)."
-        )
-    resolved_base_url = (
-        base_url
-        or os.getenv("OPENAI_BASE_URL")
-        or os.getenv("DATACLOUD_LLM_REASONING_API_BASE")
-        or _FALLBACK_BASE_URL
-    )
-    resolved_model = model or os.getenv("DATACLOUD_LLM_REASONING_MODEL") or _FALLBACK_MODEL
-    if not resolved_model.startswith("openai:"):
-        resolved_model = f"openai:{resolved_model}"
-
+    
+    # 语言和环境的日志预警可以保留，这里为了兼容现有 SDK 初始化
     resolved_locale = locale or os.getenv("DATACLOUD_AGENT_LOCALE", "zh_CN")
     supported = get_supported_locales()
     if resolved_locale not in supported:
@@ -71,30 +45,9 @@ def create_agent(
         )
         resolved_locale = "zh_CN"
 
-    logger.info(
-        "create_agent: model=%s base_url=%s locale=%s",
-        resolved_model,
-        resolved_base_url,
-        resolved_locale,
-    )
+    logger.info("create_agent: locale=%s (Custom StateGraph)", resolved_locale)
 
-    llm = init_chat_model(
-        model=resolved_model,
-        api_key=resolved_api_key,
-        base_url=resolved_base_url,
-        temperature=temperature,
-        timeout=60,
-        max_retries=1,
-    )
-
-    if system_prompt is None:
-        system_prompt = get_system_prompt(resolved_locale)
-
-    compiled = create_deep_agent(
-        model=llm,
-        tools=[data_query,search_knowledge],
-        system_prompt=system_prompt,
-    )
+    compiled = build_analysis_graph().compile()
 
     try:
         nodes = list(compiled.get_graph().nodes.keys())
