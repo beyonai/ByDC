@@ -39,11 +39,41 @@ async def insight_node(state: AgentState) -> dict:
     logger.debug("insight_node: synthesising final answer …")
 
     messages = state.get("messages", [])
+    context = state.get("gateway_context")
+
+    model = os.getenv("DATACLOUD_LLM_REASONING_MODEL", "openai:Qwen/Qwen3-235B-A22B")
+    if not model.startswith("openai:"):
+        model = f"openai:{model}"
+        
+    llm = init_chat_model(
+        model=model,
+        api_key=os.getenv("OPENAI_API_KEY") or os.getenv("DATACLOUD_LLM_REASONING_API_KEY"),
+        base_url=os.getenv("OPENAI_BASE_URL") or os.getenv("DATACLOUD_LLM_REASONING_API_BASE"),
+    )
+
     if state.get("clarify_needed"):
-        # 如果前面判定需要追问，此时直接让 LLM 构造追问语句
-        # 或者直接取 intent 里的内容作为追问
-        intent = state.get("intent", "能具体说明一下吗？")
-        return {"messages": [AIMessage(content=intent)]}
+        intent = state.get("intent", "未匹配到具体查询意图")
+        
+        # 依然向前端发个标题让界面显得连贯
+        if context is not None:
+            await context.emit_chunk(
+                StreamChunkEvent(content="意图澄清与对话"),
+                event_type=EventType.REASONING_LOG_DELTA.value,
+                content_type=SseReasonMessageType.think_title.value,
+            )
+            await context.emit_chunk(
+                StreamChunkEvent(content=f"识别为闲聊或未明确数据意图：{intent}"),
+                event_type=EventType.REASONING_LOG_DELTA.value,
+                content_type=SseReasonMessageType.think_text.value,
+            )
+            
+        sys_prompt = f"""你是一个高级数据分析管家。
+检测到用户的问题可能不在我们的业务查询范围内，或者意图不清晰（系统内部识别意图：{intent}）。
+请以高情商、友好的助手口吻回复用户，婉拒无关闲聊，告知你仅负责企业风险查证、账单流水分发、销售数据查询等专业业务查询，并引导用户在授权范围内重新提问。"""
+        
+        # 让 LLM 生成高情商回答，同时 worker 会完美监听到流
+        response = await llm.ainvoke(messages + [SystemMessage(content=sys_prompt)])
+        return {"messages": [response]}
 
     results = state.get("results", [])
     
@@ -129,15 +159,7 @@ async def insight_node(state: AgentState) -> dict:
         )
 
 
-    model = os.getenv("DATACLOUD_LLM_REASONING_MODEL", "openai:Qwen/Qwen3-235B-A22B")
-    if not model.startswith("openai:"):
-        model = f"openai:{model}"
-        
-    llm = init_chat_model(
-        model=model,
-        api_key=os.getenv("OPENAI_API_KEY") or os.getenv("DATACLOUD_LLM_REASONING_API_KEY"),
-        base_url=os.getenv("OPENAI_BASE_URL") or os.getenv("DATACLOUD_LLM_REASONING_API_BASE"),
-    )
+
 
     sys_prompt = f"""你是一个高级数据分析师。
 以下是各个子任务执行后的数据结果集合（部分数据已为您转化为格式化的 Markdown 表格）：
