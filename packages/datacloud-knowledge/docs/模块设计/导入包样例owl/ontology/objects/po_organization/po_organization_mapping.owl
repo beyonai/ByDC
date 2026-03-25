@@ -10,6 +10,10 @@
         <rdfs:label>实体映射</rdfs:label>
     </owl:Class>
     
+    <owl:Class rdf:about="#Mapping">
+        <rdfs:label>映射关系</rdfs:label>
+    </owl:Class>
+    
     <!-- 具体的实体映射实例 -->
     <owl:NamedIndividual rdf:about="#po_organization_mapping">
         <rdf:type rdf:resource="#EntityMapping"/>
@@ -17,7 +21,17 @@
         <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">组织信息</entity_name>
         <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">主数据系统组织对象，包含组织层级、编码、类型等信息</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-        <mapping rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{ "property_code": "orgId", "property_name": "组织ID", "source_table_code": "tab_or", "source_column_code": "org_id", "source_datasource_code": "hive154"}]</mapping>
+        <mapping rdf:resource="#orgId_mapping"/>
+    </owl:NamedIndividual>
+    
+    <!-- 映射实例 -->
+    <owl:NamedIndividual rdf:about="#orgId_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">orgId</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">组织ID</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">tab_or</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_id</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">hive154</source_datasource_code>
     </owl:NamedIndividual>
     
     <!-- 属性定义 -->
@@ -46,4 +60,30 @@
         <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
     </owl:DatatypeProperty>
     
+    <!-- 映射属性定义 -->
+    <owl:DatatypeProperty rdf:about="#property_code">
+        <rdfs:domain rdf:resource="#Mapping"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    </owl:DatatypeProperty>
+    
+    <owl:DatatypeProperty rdf:about="#property_name">
+        <rdfs:domain rdf:resource="#Mapping"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    </owl:DatatypeProperty>
+    
+    <owl:DatatypeProperty rdf:about="#source_table_code">
+        <rdfs:domain rdf:resource="#Mapping"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    </owl:DatatypeProperty>
+    
+    
+    <owl:DatatypeProperty rdf:about="#source_column_code">
+        <rdfs:domain rdf:resource="#Mapping"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    </owl:DatatypeProperty>
+    
+    <owl:DatatypeProperty rdf:about="#source_datasource_code">
+        <rdfs:domain rdf:resource="#Mapping"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    </owl:DatatypeProperty>
 </rdf:RDF>
