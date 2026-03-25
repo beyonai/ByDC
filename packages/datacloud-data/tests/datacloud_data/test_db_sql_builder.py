@@ -2,7 +2,7 @@
 
 import pytest
 
-from datacloud_data.executor.db_sql_builder import build_select_sql, build_where_clause
+from datacloud_data_sdk.executor.db_sql_builder import build_select_sql, build_where_clause
 
 
 def test_build_where_from_filters() -> None:

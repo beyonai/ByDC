@@ -1,7 +1,7 @@
 import pytest
 
-from datacloud_data.events.bus import EventBus
-from datacloud_data.events.events import ObjectViewBuilt
+from datacloud_data_sdk.events.bus import EventBus
+from datacloud_data_sdk.events.events import ObjectViewBuilt
 
 
 @pytest.mark.asyncio

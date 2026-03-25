@@ -1,4 +1,4 @@
-from datacloud_data.plan.models import (
+from datacloud_data_sdk.plan.models import (
     ObjectViewAction,
     ObjectViewField,
     ObjectViewFunction,
@@ -10,7 +10,7 @@ from datacloud_data.plan.models import (
     PlanStep,
     QueryExecutionPlan,
 )
-from datacloud_data.plan.plan_validator import PlanValidator
+from datacloud_data_sdk.plan.plan_validator import PlanValidator
 
 PAYLOAD = ObjectViewPayload(
     view_id="v1",

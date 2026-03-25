@@ -3,8 +3,8 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from datacloud_data.agents.plan_agent import PlanAgent
-from datacloud_data.plan.models import (
+from datacloud_data_sdk.agents.plan_agent import PlanAgent
+from datacloud_data_sdk.plan.models import (
     ObjectViewPayload,
     ObjectViewSource,
     PlanAggregation,
@@ -183,7 +183,7 @@ def test_route_after_validate_can_answer_false_returns_end() -> None:
 
 def test_route_after_validate_valid_returns_end() -> None:
     """校验通过时路由到 __end__。"""
-    from datacloud_data.plan.plan_validator import ValidationResult
+    from datacloud_data_sdk.plan.plan_validator import ValidationResult
 
     agent = PlanAgent()
     plan = QueryExecutionPlan(
@@ -195,7 +195,7 @@ def test_route_after_validate_valid_returns_end() -> None:
 
 def test_route_after_validate_invalid_with_retries_returns_generate() -> None:
     """校验失败且 retry_count < max_retries 时路由到 generate。"""
-    from datacloud_data.plan.plan_validator import ValidationResult
+    from datacloud_data_sdk.plan.plan_validator import ValidationResult
 
     agent = PlanAgent(max_retries=2)
     plan = QueryExecutionPlan(
@@ -211,7 +211,7 @@ def test_route_after_validate_invalid_with_retries_returns_generate() -> None:
 
 def test_route_after_validate_invalid_exhausted_returns_end() -> None:
     """校验失败且 retry_count > max_retries 时路由到 __end__（已耗尽重试）。"""
-    from datacloud_data.plan.plan_validator import ValidationResult
+    from datacloud_data_sdk.plan.plan_validator import ValidationResult
 
     agent = PlanAgent(max_retries=2)
     plan = QueryExecutionPlan(

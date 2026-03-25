@@ -3,11 +3,11 @@
 import pytest
 from pathlib import Path
 
-from datacloud_data.context import InvocationContext
-from datacloud_data.exceptions import CannotAnswerError
-from datacloud_data.ontology.loader import OntologyLoader
-from datacloud_data.plan.query_plan_generator import MockPlanGenerator
-from datacloud_data.sql_executor.models import DataSourceConfig
+from datacloud_data_sdk.context import InvocationContext
+from datacloud_data_sdk.exceptions import CannotAnswerError
+from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.plan.query_plan_generator import MockPlanGenerator
+from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 
 
 REGISTRY_PATH = (
@@ -77,7 +77,7 @@ def _make_loader(plan_dict: dict, tmp_path: Path) -> OntologyLoader:
     # Inject calc_score action if loaded from real registry (which has no actions)
     cls = loader.get_ontology_class("sales_business_opportunity")
     if not cls.actions:
-        from datacloud_data.ontology.models import OntologyAction, OntologyActionParam
+        from datacloud_data_sdk.ontology.models import OntologyAction, OntologyActionParam
 
         cls.actions.append(
             OntologyAction(
