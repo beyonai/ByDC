@@ -11,7 +11,9 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from gateway_sdk import run_worker
@@ -19,37 +21,80 @@ from gateway_sdk import run_worker
 from datacloud_service.worker import DataCloudWorker
 
 
+@dataclass(frozen=True)
+class WorkerConfig:
+    """Gateway worker settings read from os.environ (after backend/.env is loaded)."""
+
+    api_key: str | None
+    base_url: str | None
+    model_name: str
+    worker_id: str
+    redis_host: str
+    redis_port: int
+    redis_db: int
+    redis_password: str | None
+    redis_username: str | None
+    consumer_group: str
+    workspace_dir: str
+
+    @classmethod
+    def from_environ(cls) -> WorkerConfig:
+        """Build config from the current environment."""
+
+        def opt(key: str) -> str | None:
+            raw = os.environ.get(key)
+            return raw.strip() if raw and raw.strip() else None
+
+        def as_int(key: str, default: int) -> int:
+            raw = os.environ.get(key)
+            return int(raw.strip(), 10) if raw and raw.strip() else default
+
+        return cls(
+            api_key=os.environ.get("OPENAI_API_KEY"),
+            base_url=os.environ.get("OPENAI_BASE_URL"),
+            model_name=os.environ.get("DATACLOUD_LLM_REASONING_MODEL", "Qwen/Qwen3-235B-A22B"),
+            worker_id=os.environ.get("DATACLOUD_GATEWAY_WORKER_ID", "datacloud"),
+            redis_host=os.environ.get("DATACLOUD_GATEWAY_REDIS_HOST", "localhost"),
+            redis_port=as_int("DATACLOUD_GATEWAY_REDIS_PORT", 6379),
+            redis_db=as_int("DATACLOUD_GATEWAY_REDIS_DB", 0),
+            redis_password=opt("DATACLOUD_GATEWAY_REDIS_PASSWORD"),
+            redis_username=opt("DATACLOUD_GATEWAY_REDIS_USERNAME"),
+            consumer_group=os.environ.get("DATACLOUD_GATEWAY_CONSUMER_GROUP", "datacloud"),
+            workspace_dir=os.environ.get("DATACLOUD_GATEWAY_WORKSPACE_DIR", "/tmp/datacloud"),
+        )
+
+    def run_worker_kwargs(self) -> dict[str, Any]:
+        """Arguments for gateway_sdk.run_worker (excluding worker_class)."""
+        return {
+            "worker_id": self.worker_id,
+            "redis_host": self.redis_host,
+            "redis_port": self.redis_port,
+            "redis_db": self.redis_db,
+            "redis_password": self.redis_password,
+            "redis_username": self.redis_username,
+            "consumer_group": self.consumer_group,
+            "workspace_dir": self.workspace_dir,
+            "api_key": self.api_key,
+            "base_url": self.base_url,
+            "model_name": self.model_name,
+        }
+
+
 def main() -> None:
     """Load environment variables and start the DataCloud gateway worker."""
-    # 优先加载 backend/.env（与本文件同级的父目录）
-    env_path = Path(__file__).resolve().parents[1] / ".env"
-    load_dotenv(dotenv_path=env_path)
+    load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
+    cfg = WorkerConfig.from_environ()
 
-    api_key = os.environ.get("OPENAI_API_KEY")
-    base_url = os.environ.get("OPENAI_BASE_URL")
-    model_name = os.environ.get("DATACLOUD_LLM_REASONING_MODEL", "Qwen/Qwen3-235B-A22B")
-
-    if not api_key:
+    if not cfg.api_key:
         print("⚠️  警告: OPENAI_API_KEY 未设置，LLM 调用将失败，请检查 .env 文件。")
 
-    print("▶  正在启动 DataCloudWorker ...")
-    print(f"   model   : {model_name}")
-    print(f"   base_url: {base_url or '(OpenAI 默认)'}")
-
-    run_worker(
-        worker_class=DataCloudWorker,
-        worker_id="datacloud",
-        redis_host="10.10.168.204",
-        redis_port=6379,
-        redis_db=0,
-        redis_password="admin123",
-        redis_username="default",
-        consumer_group="datacloud",
-        workspace_dir="/tmp/datacloud",
-        api_key=api_key,
-        base_url=base_url,
-        model_name=model_name,
+    print(
+        "▶  正在启动 DataCloudWorker ...\n"
+        f"   model={cfg.model_name}  base_url={cfg.base_url or '(OpenAI 默认)'}\n"
+        f"   redis={cfg.redis_host}:{cfg.redis_port}/{cfg.redis_db}  worker_id={cfg.worker_id}"
     )
+
+    run_worker(worker_class=DataCloudWorker, **cfg.run_worker_kwargs())
 
 
 if __name__ == "__main__":
