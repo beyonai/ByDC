@@ -1,7 +1,21 @@
-"""ScriptExecutor: 执行与动作绑定的 Python 脚本。
+"""
+脚本执行器模块
 
-脚本约定：必须定义 def execute(params: dict) -> dict
-注入环境：context（RequestContext）、loader（OntologyLoader，可选）、httpx 模块
+本模块提供 Python 脚本的执行能力，用于执行与动作绑定的脚本代码。
+脚本在沙箱环境中执行，支持注入上下文和外部依赖。
+
+脚本约定：
+- 必须定义 `def execute(params: dict) -> dict` 函数
+- 函数接收参数字典，返回结果字典
+
+注入环境：
+- context: RequestContext，当前请求上下文
+- loader: OntologyLoader，本体加载器（可选）
+- httpx: HTTP 客户端模块（如果已安装）
+
+使用示例：
+    executor = ScriptExecutor(ontology_loader)
+    result = await executor.execute(script_code, {"param1": "value1"})
 """
 
 from __future__ import annotations
@@ -15,9 +29,29 @@ from datacloud_data_sdk.exceptions import ScriptExecutionError
 
 
 class ScriptExecutor:
-    """执行预定义 Python 脚本的执行器。"""
+    """
+    脚本执行器
+    
+    执行预定义的 Python 脚本代码，支持超时控制和错误处理。
+    
+    Attributes:
+        _loader: 本体加载器引用，可注入到脚本环境中
+    
+    Example:
+        executor = ScriptExecutor(loader)
+        result = await executor.execute(
+            "def execute(params): return {'result': params['x'] * 2}",
+            {"x": 5}
+        )
+    """
 
     def __init__(self, ontology_loader: Any = None) -> None:
+        """
+        初始化脚本执行器
+        
+        Args:
+            ontology_loader: 本体加载器实例，可选注入到脚本环境
+        """
         self._loader = ontology_loader
 
     async def execute(
@@ -27,7 +61,27 @@ class ScriptExecutor:
         action_code: str = "<inline>",
         timeout: float = 30.0,
     ) -> dict[str, Any]:
-        """编译并执行脚本，返回结果 dict。"""
+        """
+        编译并执行脚本
+        
+        执行流程：
+        1. 获取当前请求上下文
+        2. 构建脚本命名空间，注入依赖
+        3. 编译并执行脚本
+        4. 调用 execute 函数获取结果
+        
+        Args:
+            script: Python 脚本代码
+            params: 传递给 execute 函数的参数
+            action_code: 动作代码，用于错误信息
+            timeout: 执行超时时间（秒）
+        
+        Returns:
+            dict: execute 函数返回的结果字典
+        
+        Raises:
+            ScriptExecutionError: 脚本语法错误、执行错误或超时时抛出
+        """
         try:
             ctx = get_current_context()
         except Exception:
