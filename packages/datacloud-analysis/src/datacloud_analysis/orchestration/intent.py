@@ -2,87 +2,91 @@
 
 Responsibilities
 ----------------
-- Load short-term memory context from the checkpointer (conversation history).
-- Fetch ``global_rules`` from long-term memory and mount ``MEMORY.md``.
-- Call the *quick* LLM to classify intent and attach 1-hop knowledge snippets.
-- Pass the enriched state to the DAG planner.
-
-This module also exposes ``run_agent()``, the top-level coroutine called by
-``message_handler.handler.MessageHandler``.
+- Call the knowledge tool to classify intent and attach 1-hop knowledge snippets.
+- Determine if the intent is clear or ambiguous.
 """
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import Any, AsyncIterator
+import os
+from typing import cast
 
-from datacloud_analysis.workspace.paths import TaskPaths
+from langchain.chat_models import init_chat_model
+from langchain_core.messages import HumanMessage, SystemMessage
+
+from datacloud_analysis.orchestration.state import AgentState
+from datacloud_analysis.tools.knowledge import search_knowledge
 
 logger = logging.getLogger(__name__)
 
 
-async def run_agent(
-    user_message: Any,
-    task_paths: TaskPaths,
-    run_config: dict[str, Any],
-) -> AsyncIterator[dict[str, Any]]:
-    """Top-level Agent runner.  Builds and streams the LangGraph graph.
+async def intent_node(state: AgentState) -> dict:
+    """Classify intent and attach knowledge context, then rewrite the query.
 
     Args:
-        user_message: The user's question string, or a LangGraph ``Command``
-                      object when resuming from an HITL interrupt.
-        task_paths:   Resolved file-system paths for this task.
-        run_config:   LangGraph config dict (thread_id + metadata).
+        state: The current AgentState.
 
-    Yields:
-        LangGraph stream events.
-    """
-    from datacloud_analysis.session.checkpointer import get_checkpointer  # noqa: PLC0415
-
-    graph = _build_graph(task_paths)
-    checkpointer = get_checkpointer()
-    compiled = graph.compile(checkpointer=checkpointer)
-
-    async for event in compiled.astream(
-        {"messages": [{"role": "user", "content": user_message}]},
-        config=run_config,
-        stream_mode="values",
-    ):
-        yield event
-
-
-def _build_graph(task_paths: TaskPaths) -> Any:
-    """Assemble the LangGraph StateGraph for one task.
-
-    Node wiring (design §3.1):
-        START → intent_node → dag_node → loop_node → insight_node → END
-    """
-    from langgraph.graph import END, START, StateGraph  # noqa: PLC0415
-    from langgraph.graph.message import MessagesState  # noqa: PLC0415
-
-    from datacloud_analysis.orchestration.dag import dag_node  # noqa: PLC0415
-    from datacloud_analysis.orchestration.insight import insight_node  # noqa: PLC0415
-    from datacloud_analysis.orchestration.loop import loop_node  # noqa: PLC0415
-
-    builder = StateGraph(MessagesState)
-    builder.add_node("intent", _intent_node)
-    builder.add_node("dag", dag_node)
-    builder.add_node("loop", loop_node)
-    builder.add_node("insight", insight_node)
-
-    builder.add_edge(START, "intent")
-    builder.add_edge("intent", "dag")
-    builder.add_edge("dag", "loop")
-    builder.add_edge("loop", "insight")
-    builder.add_edge("insight", END)
-
-    return builder
-
-
-async def _intent_node(state: dict[str, Any]) -> dict[str, Any]:
-    """Classify intent and attach short-term + global memory context.
-
-    TODO: implement with quick LLM call and memory loader.
+    Returns:
+        State updates containing the rewritten intent and clarify_needed flag.
     """
     logger.debug("intent_node: classifying intent …")
-    return state
+
+    messages = state.get("messages", [])
+    if not messages:
+        return {"intent": "", "clarify_needed": False}
+
+    last_user_msg = messages[-1].content if hasattr(messages[-1], "content") else str(messages[-1])
+
+    # 1. Search knowledge
+    knowledge_snippets = await search_knowledge.ainvoke({"query": str(last_user_msg)})
+    knowledge_text = json.dumps(knowledge_snippets, ensure_ascii=False) if knowledge_snippets else "无"
+
+    # 2. Call LLM to rewrite and check intent
+    model = os.getenv("DATACLOUD_LLM_REASONING_MODEL", "openai:Qwen/Qwen3-235B-A22B")
+    if not model.startswith("openai:"):
+        model = f"openai:{model}"
+
+    llm = init_chat_model(
+        model=model,
+        api_key=os.getenv("OPENAI_API_KEY") or os.getenv("DATACLOUD_LLM_REASONING_API_KEY"),
+        base_url=os.getenv("OPENAI_BASE_URL") or os.getenv("DATACLOUD_LLM_REASONING_API_BASE"),
+    )
+
+    sys_prompt = f"""你是一个意图识别与改写专家。
+用户原始问题：{last_user_msg}
+
+相关业务知识：
+{knowledge_text}
+
+请判断用户意图是否清晰，并结合业务知识改写问题。
+如果问题缺乏关键维度（如时间、明确指标），请判定为“不清晰”。
+
+返回格式必须为严格的 JSON，包含两个字段：
+- "rewritten_intent": "改写后的清晰问题，或者如果需要追问，填入追问内容"
+- "clarify_needed": true/false
+"""
+
+    response = await llm.ainvoke([SystemMessage(content=sys_prompt)])
+
+    try:
+        content = cast(str, response.content)
+        # 尝试提取 JSON
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+
+        result = json.loads(content)
+        rewritten_intent = result.get("rewritten_intent", str(last_user_msg))
+        clarify_needed = result.get("clarify_needed", False)
+    except Exception as e:
+        logger.warning("Failed to parse intent JSON, fallback to default. Error: %s", e)
+        rewritten_intent = str(last_user_msg)
+        clarify_needed = False
+
+    return {
+        "intent": rewritten_intent,
+        "clarify_needed": clarify_needed,
+    }
