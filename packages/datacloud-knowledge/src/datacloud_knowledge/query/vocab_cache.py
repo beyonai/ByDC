@@ -28,15 +28,6 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
-import mmap
-import os
-import pickle
-import struct
-import tempfile
-from dataclasses import dataclass, asdict
-from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, BinaryIO
 
 # Default cache directory
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "datacloud_knowledge"
@@ -46,7 +37,6 @@ CACHE_DIR_ENV = "DATACLOUD_KNOWLEDGE_CACHE_DIR"
 
 # Cache file name template
 CACHE_FILE_NAME = "vocab_cache_{schema}.bin"
-
 # Header size (4KB, page-aligned)
 HEADER_SIZE = 4096
 
@@ -378,7 +368,7 @@ class VocabularyCache:
 
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
-        stats = {
+        stats: Dict[str, Any] = {
             "cache_file": str(self.cache_file),
             "exists": self.cache_file.exists(),
         }

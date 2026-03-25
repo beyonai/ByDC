@@ -2,7 +2,7 @@ from datacloud_knowledge import reset_singleton_service
 from pathlib import Path
 from dotenv import load_dotenv
 
-from datacloud_knowledge import SQLKnowledgeGraphQuery, TreeNode, nl_to_semantic_tree
+from datacloud_knowledge import nl_to_semantic_tree
 
 def main():
 

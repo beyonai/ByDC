@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/database/ontology#">
+
+    <owl:Class rdf:about="#DatabaseDefinition"><rdfs:label>数据源信息定义</rdfs:label></owl:Class>
+    <owl:NamedIndividual rdf:about="#database_resource_csv">
+        <rdf:type rdf:resource="#DatabaseDefinition"/>
+        <dbCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">resource_csv</dbCode>
+        <dbType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">csv</dbType>
+        <dbParams rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"paramName": "dataDir", "paramValue": "/mnt/d/codex/whale_datacloud/examples/e_commerce_demo/mock_env/resource/data"}, {"paramName": "pattern", "paramValue": "*.csv"}, {"paramName": "encoding", "paramValue": "utf-8"}]</dbParams>
+    </owl:NamedIndividual>
+    <owl:DatatypeProperty rdf:about="#dbCode"><rdfs:domain rdf:resource="#DatabaseDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#dbType"><rdfs:domain rdf:resource="#DatabaseDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#dbParams"><rdfs:domain rdf:resource="#DatabaseDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+</rdf:RDF>
