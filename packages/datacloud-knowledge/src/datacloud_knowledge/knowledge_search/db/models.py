@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy import Boolean, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+KNOWLEDGE_SCHEMA = os.getenv("KNOWLEDGE_SCHEMA", "whale_datacloud")
 
 
 class Base(DeclarativeBase):
@@ -14,9 +17,10 @@ class Base(DeclarativeBase):
 
 class Term(Base):
     __tablename__ = "term"
-    __table_args__ = {"schema": "whale_datacloud"}
+    __table_args__ = {"schema": KNOWLEDGE_SCHEMA}
 
     term_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    term_code: Mapped[str] = mapped_column(String(255), nullable=False)
     term_name: Mapped[str] = mapped_column(String(255), nullable=False)
     desc_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     parent_term_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -31,7 +35,7 @@ class Term(Base):
 
 class TermRelation(Base):
     __tablename__ = "term_relation"
-    __table_args__ = {"schema": "whale_datacloud"}
+    __table_args__ = {"schema": KNOWLEDGE_SCHEMA}
 
     relation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     source_term_id: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -46,7 +50,7 @@ class TermRelation(Base):
 
 class TermType(Base):
     __tablename__ = "term_type"
-    __table_args__ = {"schema": "whale_datacloud"}
+    __table_args__ = {"schema": KNOWLEDGE_SCHEMA}
 
     type_code: Mapped[str] = mapped_column(String(32), primary_key=True)
     type_name: Mapped[str] = mapped_column(String(255), nullable=False)

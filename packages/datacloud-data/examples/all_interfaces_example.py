@@ -16,9 +16,9 @@ from pathlib import Path
 # 确保 src 在 path 中
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from datacloud_data import OntologyLoader, InvocationContext
-from datacloud_data.plan.query_plan_generator import MockPlanGenerator
-from datacloud_data.sql_executor.models import DataSourceConfig
+from datacloud_data_sdk import OntologyLoader, InvocationContext
+from datacloud_data_sdk.plan.query_plan_generator import MockPlanGenerator
+from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 
 
 REGISTRY = {

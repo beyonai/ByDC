@@ -1,7 +1,7 @@
 """测试 param_converter。"""
 
-from datacloud_data.plan.models import ObjectViewFunctionParam
-from datacloud_data.plan.param_converter import map_to_physical
+from datacloud_data_sdk.plan.models import ObjectViewFunctionParam
+from datacloud_data_sdk.plan.param_converter import map_to_physical
 
 
 def test_map_to_physical_simple() -> None:

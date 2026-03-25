@@ -1,5 +1,5 @@
-from datacloud_data.ontology.loader import OntologyLoader
-from datacloud_data.plan.object_view_builder import ObjectViewBuilder
+from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.plan.object_view_builder import ObjectViewBuilder
 
 REGISTRY = {
     "functions": [],

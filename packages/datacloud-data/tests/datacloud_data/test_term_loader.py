@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from datacloud_data.ontology.term_loader import (
+from datacloud_data_sdk.ontology.term_loader import (
     ApiTermLoader,
     KbTermLoader,
     TermLoader,
@@ -63,7 +63,7 @@ def test_kb_term_loader_resolve_by_label() -> None:
         MagicMock(term_id="SIGNED", term_name="已签约", term_tags={"synonyms": "签了合同"}),
     ]
     with patch(
-        "datacloud_data.ontology.term_loader.search_terms_by_type",
+        "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
         return_value=mock_result,
     ) as mock_search:
         loader = KbTermLoader()
@@ -80,7 +80,7 @@ def test_kb_term_loader_resolve_by_alias() -> None:
         MagicMock(term_id="SIGNED", term_name="已签约", term_tags={"synonyms": "签了合同"}),
     ]
     with patch(
-        "datacloud_data.ontology.term_loader.search_terms_by_type",
+        "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
         return_value=mock_result,
     ):
         loader = KbTermLoader()
@@ -92,7 +92,7 @@ def test_kb_term_loader_resolve_unknown_raises() -> None:
     mock_result = MagicMock()
     mock_result.items = []
     with patch(
-        "datacloud_data.ontology.term_loader.search_terms_by_type",
+        "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
         return_value=mock_result,
     ):
         loader = KbTermLoader()
@@ -107,7 +107,7 @@ def test_kb_term_loader_get_available_values() -> None:
         MagicMock(term_id="PENDING", term_name="待签约", term_tags={}),
     ]
     with patch(
-        "datacloud_data.ontology.term_loader.search_terms_by_type",
+        "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
         return_value=mock_result,
     ):
         loader = KbTermLoader()
@@ -122,7 +122,7 @@ def test_kb_term_loader_get_codes() -> None:
         MagicMock(term_id="SIGNED", term_name="已签约", term_tags={}),
     ]
     with patch(
-        "datacloud_data.ontology.term_loader.search_terms_by_type",
+        "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
         return_value=mock_result,
     ):
         loader = KbTermLoader()
@@ -136,7 +136,7 @@ def test_kb_term_loader_resolve_code_explicit_type() -> None:
         MagicMock(term_id="REGION_CODE", term_name="华北", term_tags={}),
     ]
     with patch(
-        "datacloud_data.ontology.term_loader.search_terms_by_type",
+        "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
         return_value=mock_result,
     ) as mock_search:
         loader = KbTermLoader()

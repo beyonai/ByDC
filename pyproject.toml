@@ -24,6 +24,7 @@ dependencies = [
     "langchain-openai>=1.1.11",
     "psycopg2-binary>=2.9.11",
     "sqlalchemy>=2.0.48",
+    "datacloud-data",
 ]
 
 [dependency-groups]
@@ -83,6 +84,11 @@ gateway-sdk = { path = "../byai_be_python_next/gateway_sdk", editable = true }
 
 [tool.uv]
 default-groups = ["dev"]
+
+[[tool.uv.index]]
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true
+explicit = false
 
 # ============================================
 # Ruff 配置 - 代码格式化和 lint
