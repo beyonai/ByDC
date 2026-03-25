@@ -45,8 +45,8 @@ rm -rf src/datacloud_data_service/sql_executor
 
 Run:
 ```bash
-mkdir -p src/datacloud_data
-touch src/datacloud_data/__init__.py
+mkdir -p src/datacloud_data_sdk
+touch src/datacloud_data_sdk/__init__.py
 ```
 
 **Step 3: 修改 pyproject.toml**
@@ -125,12 +125,12 @@ asyncio_mode = "auto"
 
 Run:
 ```bash
-mkdir -p tests/datacloud_data/integration
+mkdir -p tests/datacloud_data_sdk/integration
 mkdir -p tests/datacloud_data_service
 mkdir -p tests/e2e
 touch tests/__init__.py
-touch tests/datacloud_data/__init__.py
-touch tests/datacloud_data/integration/__init__.py
+touch tests/datacloud_data_sdk/__init__.py
+touch tests/datacloud_data_sdk/integration/__init__.py
 touch tests/datacloud_data_service/__init__.py
 touch tests/e2e/__init__.py
 ```
@@ -160,8 +160,8 @@ Expected: 输出 `OK`
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_exceptions.py
-from datacloud_data.exceptions import (
+# tests/datacloud_data_sdk/test_exceptions.py
+from datacloud_data_sdk.exceptions import (
     DatacloudError,
     ObjectNotFoundError,
     ActionNotFoundError,
@@ -218,7 +218,7 @@ Expected: FAIL，ImportError
 **Step 3: 实现异常层次**
 
 ```python
-# src/datacloud_data/exceptions.py
+# src/datacloud_data_sdk/exceptions.py
 """datacloud-data-sdk 结构化异常层次。"""
 
 from __future__ import annotations
@@ -337,10 +337,10 @@ class AggregationError(DatacloudError):
 **Step 4: 更新 `__init__.py` 公开 API**
 
 ```python
-# src/datacloud_data/__init__.py
+# src/datacloud_data_sdk/__init__.py
 """datacloud-data-sdk: 本体驱动的数据查询与执行 SDK。"""
 
-from datacloud_data.exceptions import (
+from datacloud_data_sdk.exceptions import (
     DatacloudError,
     ObjectNotFoundError,
     ActionNotFoundError,
@@ -374,10 +374,10 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_context.py
+# tests/datacloud_data_sdk/test_context.py
 import pytest
-from datacloud_data.context import InvocationContext, get_current_context
-from datacloud_data.exceptions import DatacloudError
+from datacloud_data_sdk.context import InvocationContext, get_current_context
+from datacloud_data_sdk.exceptions import DatacloudError
 
 
 def test_context_stores_values() -> None:
@@ -411,7 +411,7 @@ Expected: FAIL
 **Step 3: 实现 InvocationContext**
 
 ```python
-# src/datacloud_data/context.py
+# src/datacloud_data_sdk/context.py
 """请求级上下文，基于 contextvars 实现线程/协程安全。"""
 
 from __future__ import annotations
@@ -420,7 +420,7 @@ import contextvars
 from dataclasses import dataclass
 from types import TracebackType
 
-from datacloud_data.exceptions import DatacloudError
+from datacloud_data_sdk.exceptions import DatacloudError
 
 
 @dataclass
@@ -495,8 +495,8 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_ontology_models.py
-from datacloud_data.ontology.models import (
+# tests/datacloud_data_sdk/test_ontology_models.py
+from datacloud_data_sdk.ontology.models import (
     FieldPhysicalMapping,
     OntologyField,
     OntologyActionParam,
@@ -579,11 +579,11 @@ Expected: FAIL
 **Step 3: 实现本体模型**
 
 ```python
-# src/datacloud_data/ontology/__init__.py
+# src/datacloud_data_sdk/ontology/__init__.py
 ```
 
 ```python
-# src/datacloud_data/ontology/models.py
+# src/datacloud_data_sdk/ontology/models.py
 """本体内部模型：OntologyClass / Field / Action / Relation。"""
 
 from __future__ import annotations
@@ -692,9 +692,9 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_term_loader.py
+# tests/datacloud_data_sdk/test_term_loader.py
 import pytest
-from datacloud_data.ontology.term_loader import TermLoader
+from datacloud_data_sdk.ontology.term_loader import TermLoader
 
 
 def test_resolve_by_label() -> None:
@@ -741,7 +741,7 @@ Expected: FAIL
 **Step 3: 实现 TermLoader**
 
 ```python
-# src/datacloud_data/ontology/term_loader.py
+# src/datacloud_data_sdk/ontology/term_loader.py
 """术语集加载与解析：code / label / aliases 多维匹配。"""
 
 from __future__ import annotations
@@ -808,10 +808,10 @@ Expected: PASS
 **Step 1: 写失败单元测试**
 
 ```python
-# tests/datacloud_data/test_ontology_loader.py
+# tests/datacloud_data_sdk/test_ontology_loader.py
 import pytest
-from datacloud_data.ontology.loader import OntologyLoader
-from datacloud_data.exceptions import ObjectNotFoundError
+from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.exceptions import ObjectNotFoundError
 
 MINIMAL_REGISTRY = {
     "functions": [
@@ -936,7 +936,7 @@ Expected: FAIL
 **Step 3: 实现 OntologyLoader**
 
 ```python
-# src/datacloud_data/ontology/loader.py
+# src/datacloud_data_sdk/ontology/loader.py
 """OntologyLoader: 解析 JSON/YAML 本体 → 内部模型 + 核心实体。"""
 
 from __future__ import annotations
@@ -946,8 +946,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from datacloud_data.exceptions import ObjectNotFoundError, ActionNotFoundError
-from datacloud_data.ontology.models import (
+from datacloud_data_sdk.exceptions import ObjectNotFoundError, ActionNotFoundError
+from datacloud_data_sdk.ontology.models import (
     OntologyClass,
     OntologyField,
     OntologyAction,
@@ -1126,10 +1126,10 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_sdk_entities.py
+# tests/datacloud_data_sdk/test_sdk_entities.py
 import pytest
-from datacloud_data.ontology.loader import OntologyLoader
-from datacloud_data.exceptions import ActionNotFoundError
+from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.exceptions import ActionNotFoundError
 
 REGISTRY = {
     "functions": [
@@ -1245,7 +1245,7 @@ Expected: FAIL
 **Step 3: 实现 Relation**
 
 ```python
-# src/datacloud_data/relation.py
+# src/datacloud_data_sdk/relation.py
 """对象间关联关系模型。"""
 
 from __future__ import annotations
@@ -1267,14 +1267,14 @@ class Relation:
 **Step 4: 实现 Action**
 
 ```python
-# src/datacloud_data/action.py
+# src/datacloud_data_sdk/action.py
 """Action 实体：封装 OntologyAction，提供 schema 与执行能力。"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from datacloud_data.ontology.models import OntologyAction, OntologyActionParam
+from datacloud_data_sdk.ontology.models import OntologyAction, OntologyActionParam
 
 PARAM_TYPE_MAP: dict[str, str] = {
     "STRING": "string",
@@ -1336,15 +1336,15 @@ class Action:
 **Step 5: 实现 Object**
 
 ```python
-# src/datacloud_data/object.py
+# src/datacloud_data_sdk/object.py
 """Object 实体：本体对象的运行时表示。"""
 
 from __future__ import annotations
 
-from datacloud_data.action import Action
-from datacloud_data.exceptions import ActionNotFoundError
-from datacloud_data.ontology.models import OntologyAction, OntologyClass
-from datacloud_data.relation import Relation
+from datacloud_data_sdk.action import Action
+from datacloud_data_sdk.exceptions import ActionNotFoundError
+from datacloud_data_sdk.ontology.models import OntologyAction, OntologyClass
+from datacloud_data_sdk.relation import Relation
 
 
 class Object:
@@ -1436,8 +1436,8 @@ class Object:
 
 ```python
 def get_object(self, object_code: str) -> "Object":
-    from datacloud_data.object import Object
-    from datacloud_data.relation import Relation
+    from datacloud_data_sdk.object import Object
+    from datacloud_data_sdk.relation import Relation
 
     cls = self.get_ontology_class(object_code)
     rels = [
@@ -1472,8 +1472,8 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_view.py
-from datacloud_data.ontology.loader import OntologyLoader
+# tests/datacloud_data_sdk/test_view.py
+from datacloud_data_sdk.ontology.loader import OntologyLoader
 
 REGISTRY = {
     "functions": [],
@@ -1552,17 +1552,17 @@ Expected: FAIL
 **Step 3: 实现 View**
 
 ```python
-# src/datacloud_data/view.py
+# src/datacloud_data_sdk/view.py
 """View 实体：跨对象的视图聚合，提供自然语言查询与自生说明。"""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from datacloud_data.relation import Relation
+from datacloud_data_sdk.relation import Relation
 
 if TYPE_CHECKING:
-    from datacloud_data.object import Object
+    from datacloud_data_sdk.object import Object
 
 
 class View:
@@ -1638,8 +1638,8 @@ def load_scene_from_path(self, path: str | Path) -> None:
     self.load_scene(content)
 
 def get_view(self, view_id: str) -> "View":
-    from datacloud_data.view import View
-    from datacloud_data.relation import Relation
+    from datacloud_data_sdk.view import View
+    from datacloud_data_sdk.relation import Relation
 
     scene = self._scenes.get(view_id)
     if scene is None:
@@ -1718,10 +1718,10 @@ cp datacloud-mock/mock-resource/ontology/crm_demo/modules/scene_01_data_analysis
 **Step 3: 写集成测试**
 
 ```python
-# tests/datacloud_data/integration/test_ontology_loader_integration.py
+# tests/datacloud_data_sdk/integration/test_ontology_loader_integration.py
 import pytest
 from pathlib import Path
-from datacloud_data.ontology.loader import OntologyLoader
+from datacloud_data_sdk.ontology.loader import OntologyLoader
 
 REGISTRY_PATH = Path(__file__).parents[3] / "resources/ontology/crm_demo/objects_registry.json"
 
@@ -1855,11 +1855,11 @@ class ScriptExecTask:
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_script_executor.py
+# tests/datacloud_data_sdk/test_script_executor.py
 import pytest
-from datacloud_data.executor.script_executor import ScriptExecutor
-from datacloud_data.context import InvocationContext, get_current_context
-from datacloud_data.exceptions import ScriptExecutionError
+from datacloud_data_sdk.executor.script_executor import ScriptExecutor
+from datacloud_data_sdk.context import InvocationContext, get_current_context
+from datacloud_data_sdk.exceptions import ScriptExecutionError
 
 
 @pytest.mark.asyncio
@@ -1917,7 +1917,7 @@ Expected: FAIL
 **Step 3: 实现 ScriptExecutor**
 
 ```python
-# src/datacloud_data/executor/script_executor.py
+# src/datacloud_data_sdk/executor/script_executor.py
 """ScriptExecutor: 执行与动作绑定的 Python 脚本。
 
 脚本约定：必须定义 def execute(params: dict) -> dict
@@ -1930,8 +1930,8 @@ import asyncio
 import traceback
 from typing import Any
 
-from datacloud_data.context import get_current_context
-from datacloud_data.exceptions import ScriptExecutionError
+from datacloud_data_sdk.context import get_current_context
+from datacloud_data_sdk.exceptions import ScriptExecutionError
 
 
 class ScriptExecutor:

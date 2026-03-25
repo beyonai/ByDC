@@ -3,9 +3,9 @@ import logging
 
 from fastapi.testclient import TestClient
 
-from datacloud_data.ontology.loader import OntologyLoader
-from datacloud_data.plan.query_plan_generator import MockPlanGenerator
-from datacloud_data.sql_executor.models import DataSourceConfig
+from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.plan.query_plan_generator import MockPlanGenerator
+from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 
 HEADERS = {
     "X-Tenant-Id": "t1",

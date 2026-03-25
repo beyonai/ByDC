@@ -58,8 +58,8 @@ Expected: 安装成功，无依赖冲突。
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_exceptions.py
-from datacloud_data.exceptions import (
+# tests/datacloud_data_sdk/test_exceptions.py
+from datacloud_data_sdk.exceptions import (
     DatacloudError,
     ObjectNotFoundError,
     ActionNotFoundError,
@@ -99,7 +99,7 @@ Expected: FAIL，ImportError
 **Step 3: 实现异常层次**
 
 ```python
-# src/datacloud_data/exceptions.py
+# src/datacloud_data_sdk/exceptions.py
 class DatacloudError(Exception):
     pass
 
@@ -178,10 +178,10 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_context.py
+# tests/datacloud_data_sdk/test_context.py
 import pytest
-from datacloud_data.context import InvocationContext, get_current_context
-from datacloud_data.exceptions import DatacloudError
+from datacloud_data_sdk.context import InvocationContext, get_current_context
+from datacloud_data_sdk.exceptions import DatacloudError
 
 
 def test_context_stores_values() -> None:
@@ -215,12 +215,12 @@ Expected: FAIL
 **Step 3: 实现 InvocationContext**
 
 ```python
-# src/datacloud_data/context.py
+# src/datacloud_data_sdk/context.py
 from __future__ import annotations
 import contextvars
 from dataclasses import dataclass, field
 from types import TracebackType
-from datacloud_data.exceptions import DatacloudError
+from datacloud_data_sdk.exceptions import DatacloudError
 
 @dataclass
 class RequestContext:
@@ -278,8 +278,8 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_ontology_models.py
-from datacloud_data.ontology.models import (
+# tests/datacloud_data_sdk/test_ontology_models.py
+from datacloud_data_sdk.ontology.models import (
     FieldPhysicalMapping,
     OntologyField,
     OntologyActionParam,
@@ -337,7 +337,7 @@ Expected: FAIL
 **Step 3: 实现本体模型**
 
 ```python
-# src/datacloud_data/ontology/models.py
+# src/datacloud_data_sdk/ontology/models.py
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
@@ -423,9 +423,9 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_term_loader.py
+# tests/datacloud_data_sdk/test_term_loader.py
 import pytest
-from datacloud_data.ontology.term_loader import TermLoader
+from datacloud_data_sdk.ontology.term_loader import TermLoader
 
 
 def test_resolve_by_label() -> None:
@@ -472,7 +472,7 @@ Expected: FAIL
 **Step 3: 实现 TermLoader**
 
 ```python
-# src/datacloud_data/ontology/term_loader.py
+# src/datacloud_data_sdk/ontology/term_loader.py
 from __future__ import annotations
 from dataclasses import dataclass, field
 
@@ -529,10 +529,10 @@ Expected: PASS
 **Step 1: 写失败单元测试**
 
 ```python
-# tests/datacloud_data/test_ontology_loader.py
+# tests/datacloud_data_sdk/test_ontology_loader.py
 import pytest
-from datacloud_data.ontology.loader import OntologyLoader
-from datacloud_data.exceptions import ObjectNotFoundError
+from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.exceptions import ObjectNotFoundError
 
 MINIMAL_REGISTRY = {
     "functions": [
@@ -598,15 +598,15 @@ Expected: FAIL
 **Step 3: 实现 OntologyLoader**
 
 ```python
-# src/datacloud_data/ontology/loader.py
+# src/datacloud_data_sdk/ontology/loader.py
 from __future__ import annotations
 import json
 from pathlib import Path
-from datacloud_data.ontology.models import (
+from datacloud_data_sdk.ontology.models import (
     OntologyClass, OntologyField, OntologyAction, OntologyActionParam,
     OntologyRelation, FieldPhysicalMapping,
 )
-from datacloud_data.exceptions import ObjectNotFoundError, ActionNotFoundError
+from datacloud_data_sdk.exceptions import ObjectNotFoundError, ActionNotFoundError
 
 
 class OntologyLoader:
@@ -713,10 +713,10 @@ Expected: PASS
 **Step 5: 写集成测试（使用真实 objects_registry.json）**
 
 ```python
-# tests/datacloud_data/integration/test_ontology_loader_integration.py
+# tests/datacloud_data_sdk/integration/test_ontology_loader_integration.py
 import pytest
 from pathlib import Path
-from datacloud_data.ontology.loader import OntologyLoader
+from datacloud_data_sdk.ontology.loader import OntologyLoader
 
 REGISTRY_PATH = Path(__file__).parents[3] / "resources/ontology/crm_demo/objects_registry.json"
 
@@ -768,9 +768,9 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_sdk_entities.py
-from datacloud_data.ontology.loader import OntologyLoader
-from datacloud_data.exceptions import ActionNotFoundError
+# tests/datacloud_data_sdk/test_sdk_entities.py
+from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.exceptions import ActionNotFoundError
 import pytest
 
 REGISTRY = {
@@ -886,7 +886,7 @@ class Relation:
 ```python
 from __future__ import annotations
 from dataclasses import dataclass
-from datacloud_data.ontology.models import OntologyAction, OntologyActionParam
+from datacloud_data_sdk.ontology.models import OntologyAction, OntologyActionParam
 
 PARAM_TYPE_MAP = {
     "STRING": "string", "NUMBER": "number", "DECIMAL": "number",
@@ -931,10 +931,10 @@ class Action:
 
 ```python
 from __future__ import annotations
-from datacloud_data.ontology.models import OntologyClass
-from datacloud_data.action import Action
-from datacloud_data.relation import Relation
-from datacloud_data.exceptions import ActionNotFoundError
+from datacloud_data_sdk.ontology.models import OntologyClass
+from datacloud_data_sdk.action import Action
+from datacloud_data_sdk.relation import Relation
+from datacloud_data_sdk.exceptions import ActionNotFoundError
 
 
 class Object:
@@ -1000,8 +1000,8 @@ class Object:
 
 ```python
 def get_object(self, object_code: str) -> "Object":
-    from datacloud_data.object import Object
-    from datacloud_data.relation import Relation
+    from datacloud_data_sdk.object import Object
+    from datacloud_data_sdk.relation import Relation
     cls = self.get_ontology_class(object_code)
     rels = [
         Relation(
@@ -1038,9 +1038,9 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_object_view_builder.py
-from datacloud_data.ontology.loader import OntologyLoader
-from datacloud_data.plan.object_view_builder import ObjectViewBuilder
+# tests/datacloud_data_sdk/test_object_view_builder.py
+from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.plan.object_view_builder import ObjectViewBuilder
 
 REGISTRY = {
     "functions": [],
@@ -1136,12 +1136,12 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_plan_validator.py
-from datacloud_data.plan.models import (
+# tests/datacloud_data_sdk/test_plan_validator.py
+from datacloud_data_sdk.plan.models import (
     ObjectViewPayload, ObjectViewSource, ObjectViewObject, ObjectViewField,
     ObjectViewRelation, QueryExecutionPlan, PlanStep, PlanAggregation,
 )
-from datacloud_data.plan.plan_validator import PlanValidator
+from datacloud_data_sdk.plan.plan_validator import PlanValidator
 
 PAYLOAD = ObjectViewPayload(
     view_id="v1",
@@ -1235,11 +1235,11 @@ Expected: PASS
 **Step 1: 写失败测试（使用 MockPlanGenerator）**
 
 ```python
-# tests/datacloud_data/test_query_plan_generator.py
+# tests/datacloud_data_sdk/test_query_plan_generator.py
 import pytest
 import json
-from datacloud_data.plan.query_plan_generator import BasePlanGenerator, MockPlanGenerator
-from datacloud_data.plan.models import ObjectViewPayload, QueryExecutionPlan
+from datacloud_data_sdk.plan.query_plan_generator import BasePlanGenerator, MockPlanGenerator
+from datacloud_data_sdk.plan.models import ObjectViewPayload, QueryExecutionPlan
 
 PAYLOAD = ObjectViewPayload(view_id="v1", sources=[], objects=[], relations=[])
 
@@ -1304,10 +1304,10 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_execution_object_converter.py
-from datacloud_data.plan.models import QueryExecutionPlan, PlanStep, PlanAggregation
-from datacloud_data.plan.execution_object_converter import ExecutionObjectConverter
-from datacloud_data.executor.models import SqlExecTask, ApiExecTask
+# tests/datacloud_data_sdk/test_execution_object_converter.py
+from datacloud_data_sdk.plan.models import QueryExecutionPlan, PlanStep, PlanAggregation
+from datacloud_data_sdk.plan.execution_object_converter import ExecutionObjectConverter
+from datacloud_data_sdk.executor.models import SqlExecTask, ApiExecTask
 
 
 PLAN_WITH_SQL = QueryExecutionPlan(
@@ -1387,9 +1387,9 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_connector_registry.py
-from datacloud_data.sql_executor.connector_registry import ConnectorRegistry
-from datacloud_data.sql_executor.connectors.sqlite_connector import SQLiteConnector
+# tests/datacloud_data_sdk/test_connector_registry.py
+from datacloud_data_sdk.sql_executor.connector_registry import ConnectorRegistry
+from datacloud_data_sdk.sql_executor.connectors.sqlite_connector import SQLiteConnector
 
 
 def test_sqlite_connector_registered_by_default() -> None:
@@ -1408,7 +1408,7 @@ def test_register_custom_connector() -> None:
 
 
 def test_unknown_type_raises() -> None:
-    from datacloud_data.exceptions import DataSourceUnavailableError
+    from datacloud_data_sdk.exceptions import DataSourceUnavailableError
     import pytest
     with pytest.raises(DataSourceUnavailableError):
         ConnectorRegistry.get("NONEXISTENT_DB")
@@ -1453,12 +1453,12 @@ Expected: PASS
 **Step 1: 写失败测试（使用 SQLite 内存 DB 替代真实 DB）**
 
 ```python
-# tests/datacloud_data/test_sql_executor.py
+# tests/datacloud_data_sdk/test_sql_executor.py
 import pytest
 from pathlib import Path
-from datacloud_data.sql_executor.models import DataSourceConfig, SqlExecTask
-from datacloud_data.sql_executor.sql_executor import SqlExecutor
-from datacloud_data.sql_executor.data_source_manager import DataSourceManager
+from datacloud_data_sdk.sql_executor.models import DataSourceConfig, SqlExecTask
+from datacloud_data_sdk.sql_executor.sql_executor import SqlExecutor
+from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 
 SQLITE_CONFIG = DataSourceConfig(
     alias="test_db",
@@ -1543,13 +1543,13 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_api_executor.py
+# tests/datacloud_data_sdk/test_api_executor.py
 import pytest
 from unittest.mock import AsyncMock, patch
 from pathlib import Path
-from datacloud_data.executor.models import ApiExecTask
-from datacloud_data.executor.api_executor import ApiExecutor
-from datacloud_data.context import InvocationContext
+from datacloud_data_sdk.executor.models import ApiExecTask
+from datacloud_data_sdk.executor.api_executor import ApiExecutor
+from datacloud_data_sdk.context import InvocationContext
 
 API_SCHEMA = {
     "servers": [{"url": "http://mock-service:8080"}],
@@ -1588,7 +1588,7 @@ async def test_api_executor_writes_csv(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_api_executor_raises_on_http_error(tmp_path: Path) -> None:
-    from datacloud_data.exceptions import ApiExecutionError
+    from datacloud_data_sdk.exceptions import ApiExecutionError
     task = ApiExecTask(function_code="fn_get_emp", params={}, output_ref="x")
     with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
         mock_post.return_value.status_code = 500
@@ -1638,12 +1638,12 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_aggregator.py
+# tests/datacloud_data_sdk/test_aggregator.py
 import csv, pytest
 from pathlib import Path
-from datacloud_data.plan.models import PlanAggregation
-from datacloud_data.aggregator.direct_aggregator import DirectAggregator
-from datacloud_data.aggregator.sqlite_aggregator import SqliteAggregator
+from datacloud_data_sdk.plan.models import PlanAggregation
+from datacloud_data_sdk.aggregator.direct_aggregator import DirectAggregator
+from datacloud_data_sdk.aggregator.sqlite_aggregator import SqliteAggregator
 
 
 def make_csv(tmp_path: Path, filename: str, rows: list[dict]) -> str:
@@ -1717,11 +1717,11 @@ Expected: PASS
 **Step 1: 写失败集成测试**
 
 ```python
-# tests/datacloud_data/integration/test_query_pipeline_integration.py
+# tests/datacloud_data_sdk/integration/test_query_pipeline_integration.py
 import pytest
-from datacloud_data.ontology.loader import OntologyLoader
-from datacloud_data.plan.query_plan_generator import MockPlanGenerator
-from datacloud_data.context import InvocationContext
+from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.plan.query_plan_generator import MockPlanGenerator
+from datacloud_data_sdk.context import InvocationContext
 
 REGISTRY = { ... }  # 使用 Task 7 的 REGISTRY，增加 DB source 和 table
 
@@ -1800,10 +1800,10 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_event_bus.py
+# tests/datacloud_data_sdk/test_event_bus.py
 import pytest
-from datacloud_data.events.bus import EventBus
-from datacloud_data.events.events import QueryRequestReceived, ObjectViewBuilt
+from datacloud_data_sdk.events.bus import EventBus
+from datacloud_data_sdk.events.events import QueryRequestReceived, ObjectViewBuilt
 
 
 @pytest.mark.asyncio
@@ -1934,7 +1934,7 @@ from __future__ import annotations
 import asyncio
 from collections import defaultdict
 from typing import Any, Callable, Awaitable, Type
-from datacloud_data.events.events import BaseEvent
+from datacloud_data_sdk.events.events import BaseEvent
 
 HandlerType = Callable[[Any], Awaitable[None]]
 
@@ -1968,11 +1968,11 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_tracing.py
+# tests/datacloud_data_sdk/test_tracing.py
 import pytest
-from datacloud_data.events.tracing import TracingMiddleware, EventSpan
-from datacloud_data.events.bus import EventBus
-from datacloud_data.events.events import ObjectViewBuilt, QueryPlanGenerated
+from datacloud_data_sdk.events.tracing import TracingMiddleware, EventSpan
+from datacloud_data_sdk.events.bus import EventBus
+from datacloud_data_sdk.events.events import ObjectViewBuilt, QueryPlanGenerated
 
 
 @pytest.mark.asyncio
@@ -2019,8 +2019,8 @@ from __future__ import annotations
 import uuid, time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Awaitable, Optional
-from datacloud_data.events.bus import EventBus
-from datacloud_data.events.events import BaseEvent
+from datacloud_data_sdk.events.bus import EventBus
+from datacloud_data_sdk.events.events import BaseEvent
 
 
 @dataclass
@@ -2112,11 +2112,11 @@ Expected: PASS
 **Step 1: 写失败测试**
 
 ```python
-# tests/datacloud_data/test_event_driven_query.py
+# tests/datacloud_data_sdk/test_event_driven_query.py
 import pytest
-from datacloud_data.ontology.loader import OntologyLoader
-from datacloud_data.plan.query_plan_generator import MockPlanGenerator
-from datacloud_data.context import InvocationContext
+from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.plan.query_plan_generator import MockPlanGenerator
+from datacloud_data_sdk.context import InvocationContext
 
 REGISTRY = {
     "functions": [],
@@ -2171,7 +2171,7 @@ async def test_event_driven_query_returns_records(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_event_driven_query_retries_on_validation_failure(tmp_path) -> None:
     """第一次计划校验失败，第二次返回正确计划，触发重试逻辑。"""
-    from datacloud_data.plan.query_plan_generator import SequentialMockPlanGenerator
+    from datacloud_data_sdk.plan.query_plan_generator import SequentialMockPlanGenerator
 
     bad_plan = {"question": "?", "can_answer": True,
                 "steps": [{"step_id": "s1", "type": "SQL", "source_id": "NONEXISTENT",
@@ -2445,7 +2445,7 @@ MOCK_RESULT = {
 
 def test_rest_query_returns_records() -> None:
     with patch(
-        "datacloud_data.view.View.query",
+        "datacloud_data_sdk.view.View.query",
         new_callable=AsyncMock,
         return_value=MOCK_RESULT,
     ):

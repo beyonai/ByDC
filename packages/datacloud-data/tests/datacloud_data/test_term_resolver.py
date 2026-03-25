@@ -1,9 +1,9 @@
 """TermResolver 测试。"""
 
-from datacloud_data.ontology.models import OntologyField
-from datacloud_data.ontology.term_loader import TermLoader
-from datacloud_data.plan.models import ObjectViewField, ObjectViewFunctionParam
-from datacloud_data.plan.term_resolver import TermResolver
+from datacloud_data_sdk.ontology.models import OntologyField
+from datacloud_data_sdk.ontology.term_loader import TermLoader
+from datacloud_data_sdk.plan.models import ObjectViewField, ObjectViewFunctionParam
+from datacloud_data_sdk.plan.term_resolver import TermResolver
 
 
 def test_resolve_params_enum() -> None:

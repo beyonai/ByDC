@@ -2,8 +2,8 @@
 
 import pytest
 
-from datacloud_data.executor.dynamic_query_executor import DynamicQueryExecutor
-from datacloud_data.ontology.loader import OntologyLoader
+from datacloud_data_sdk.executor.dynamic_query_executor import DynamicQueryExecutor
+from datacloud_data_sdk.ontology.loader import OntologyLoader
 
 
 def test_load_scenario_db_linked(load_scenario_db_linked: OntologyLoader) -> None:

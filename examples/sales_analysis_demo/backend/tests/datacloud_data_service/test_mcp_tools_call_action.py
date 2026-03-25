@@ -3,7 +3,7 @@
 from fastapi.testclient import TestClient
 
 from tests.datacloud_data_service.mcp_test_utils import parse_sse_response
-from datacloud_data.ontology.loader import OntologyLoader
+from datacloud_data_sdk.ontology.loader import OntologyLoader
 
 # MCP Streamable HTTP 要求 Accept: application/json, text/event-stream
 HEADERS = {

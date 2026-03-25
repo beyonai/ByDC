@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from datacloud_data.executor.linked_resolver import (
+from datacloud_data_sdk.executor.linked_resolver import (
     resolve_api_linked_batch,
     resolve_db_linked_batch,
 )
-from datacloud_data.ontology.loader import OntologyLoader
-from datacloud_data.ontology.models import OntologyField, OntologyRelation
+from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.ontology.models import OntologyField, OntologyRelation
 
 
 def _load_scenario_api_linked() -> OntologyLoader:
@@ -80,7 +80,7 @@ async def test_resolve_api_linked_single() -> None:
 @pytest.mark.asyncio
 async def test_resolve_db_linked_batch() -> None:
     """DB linked 批量：scenario_db_linked 数据，parents 两个 customer，断言返回对应 opportunities。"""
-    from datacloud_data.sql_executor.data_source_manager import DataSourceManager
+    from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 
     loader = _load_scenario_db_linked()
     ds_manager = DataSourceManager(loader._config.datasource_configs)

@@ -1,8 +1,8 @@
 import pytest
 
-from datacloud_data.events.bus import EventBus
-from datacloud_data.events.events import ObjectViewBuilt, QueryPlanGenerated
-from datacloud_data.events.tracing import EventSpan, TracingMiddleware
+from datacloud_data_sdk.events.bus import EventBus
+from datacloud_data_sdk.events.events import ObjectViewBuilt, QueryPlanGenerated
+from datacloud_data_sdk.events.tracing import EventSpan, TracingMiddleware
 
 
 @pytest.mark.asyncio
@@ -41,7 +41,7 @@ async def test_tracing_middleware_records_span() -> None:
 @pytest.mark.asyncio
 async def test_tracing_middleware_populates_input_summary() -> None:
     """验证各事件类型的 input_summary 正确填充。"""
-    from datacloud_data.events.events import QueryRequestReceived
+    from datacloud_data_sdk.events.events import QueryRequestReceived
 
     bus = EventBus()
     tracing = TracingMiddleware(bus)

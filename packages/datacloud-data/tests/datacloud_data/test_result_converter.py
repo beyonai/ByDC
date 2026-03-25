@@ -1,7 +1,7 @@
 """Tests for ResultConverter."""
 from pathlib import Path
 
-from datacloud_data.sql_executor.result_converter import ResultConverter
+from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
 
 
 def test_to_csv_empty_with_columns_writes_header(tmp_path: Path) -> None:

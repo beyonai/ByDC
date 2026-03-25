@@ -1,6 +1,6 @@
-"""tests/datacloud_data/test_sql_alias_quoter.py"""
+"""tests/datacloud_data_sdk/test_sql_alias_quoter.py"""
 import pytest
-from datacloud_data.sql_executor.sql_alias_quoter import quote_aliases
+from datacloud_data_sdk.sql_executor.sql_alias_quoter import quote_aliases
 
 
 def test_quote_aliases_postgresql_double_quote() -> None:
