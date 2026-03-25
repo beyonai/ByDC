@@ -4,6 +4,7 @@ Responsibilities
 ----------------
 - Call the knowledge tool to classify intent and attach 1-hop knowledge snippets.
 - Determine if the intent is clear or ambiguous.
+- Emit a REASONING_LOG_DELTA thinking event with knowledge + rewrite result.
 """
 
 from __future__ import annotations
@@ -13,6 +14,8 @@ import logging
 import os
 from typing import cast
 
+from gateway_sdk import EventType, StreamChunkEvent
+from gateway_sdk.core.protocol.content_type import SseReasonMessageType
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -86,7 +89,33 @@ async def intent_node(state: AgentState) -> dict:
         rewritten_intent = str(last_user_msg)
         clarify_needed = False
 
+    # 截断知识预览（避免 Redis/前端爆量）
+    knowledge_preview = knowledge_text[:500] if knowledge_text else "无"
+
+    # 向前端推送思考消息
+    context = state.get("gateway_context")
+    if context is not None:
+        thinking = (
+            ""
+            f"■ 检索到的业务知识（节选）：\n{knowledge_preview}\n\n"
+            f"■ 改写结果：{rewritten_intent}\n"
+            f"■ 是否需要追问：{clarify_needed}"
+        )
+        # 推送思考标题
+        await context.emit_chunk(
+            StreamChunkEvent(content="问题理解"),
+            event_type=EventType.REASONING_LOG_DELTA.value,
+            content_type=SseReasonMessageType.think_title.value,
+        )
+        # 推送思考文本
+        await context.emit_chunk(
+            StreamChunkEvent(content=thinking),
+            event_type=EventType.REASONING_LOG_DELTA.value,
+            content_type=SseReasonMessageType.think_text.value,
+        )
+
     return {
         "intent": rewritten_intent,
         "clarify_needed": clarify_needed,
+        "knowledge_preview": knowledge_preview,
     }

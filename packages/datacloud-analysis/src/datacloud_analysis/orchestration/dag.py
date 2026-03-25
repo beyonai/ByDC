@@ -4,17 +4,20 @@ Responsibilities
 ----------------
 - Parse the clear intent and decompose it into a sequence of sub-tasks.
 - Store the plan in the graph state.
+- Emit a REASONING_LOG_DELTA thinking event with the task breakdown.
 """
 
 from __future__ import annotations
 
-import logging
 import json
+import logging
+import os
 from typing import cast
 
-from langchain_core.messages import SystemMessage, HumanMessage
+from gateway_sdk import EventType, StreamChunkEvent
+from gateway_sdk.core.protocol.content_type import SseReasonMessageType
 from langchain.chat_models import init_chat_model
-import os
+from langchain_core.messages import SystemMessage
 
 from datacloud_analysis.orchestration.state import AgentState
 
@@ -90,5 +93,27 @@ async def dag_node(state: AgentState) -> dict:
             "status": "pending",
             "deps": []
         }]
+
+    # 向前端推送思考消息
+    context = state.get("gateway_context")
+    if context is not None:
+        task_lines = "\n".join(
+            f"■ {t['id']}（{t.get('type', 'unknown')}）：{t.get('description', '')}"
+            for t in plan
+        )
+        thinking = f"已将问题拆解为 {len(plan)} 个子任务：\n{task_lines}"
+
+        # 推送思考标题
+        await context.emit_chunk(
+            StreamChunkEvent(content="任务规划"),
+            event_type=EventType.REASONING_LOG_DELTA.value,
+            content_type=SseReasonMessageType.think_title.value,
+        )
+        # 推送思考文本
+        await context.emit_chunk(
+            StreamChunkEvent(content=thinking),
+            event_type=EventType.REASONING_LOG_DELTA.value,
+            content_type=SseReasonMessageType.think_text.value,
+        )
 
     return {"plan": plan}
