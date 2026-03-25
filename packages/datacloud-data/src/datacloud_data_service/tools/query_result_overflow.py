@@ -27,25 +27,15 @@ def apply_query_result_overflow(
     if not columns and records:
         columns = list(records[0].keys())
 
+    preview = records[:preview_rows]
+
     file_id, _ = csv_manager.save_export(
         records,
         columns=columns if columns else None,
-        meta={
-            **meta,
-            "total": total,
-            "overflow": True,
-            "preview_rows": len(preview),
-            "download_url": download_url,
-            "file_id": file_id,
-            "trace": result.get("trace", {}),
-            "plan": result.get("plan"),
-        },
     )
 
     base = (api_base_url or "").rstrip("/")
     download_url = f"{base}/api/v1/download/csv/{file_id}" if base else f"/api/v1/download/csv/{file_id}"
-
-    preview = records[:preview_rows]
 
     return {
         "records": preview,

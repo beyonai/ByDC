@@ -21,11 +21,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_service.tools.query_result_overflow import apply_query_result_overflow
+
+logger = logging.getLogger(__name__)
 
 
 def _apply_overflow_if_needed(result: dict[str, Any]) -> dict[str, Any]:
@@ -55,7 +58,8 @@ def _apply_overflow_if_needed(result: dict[str, Any]) -> dict[str, Any]:
             csv_manager=csv_manager,
             api_base_url=settings.api_base_url,
         )
-    except Exception:
+    except Exception as e:
+        logger.exception("查询结果溢出处理失败: %s", e)
         return result
 
 
