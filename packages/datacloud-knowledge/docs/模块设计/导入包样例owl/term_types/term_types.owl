@@ -1,0 +1,121 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/termtype/ontology#">
+         
+    <!-- 类定义 -->
+    <owl:Class rdf:about="#TermTypeDefinition">
+        <rdfs:label>术语类型定义</rdfs:label>
+    </owl:Class>
+    
+    <!-- 术语类型实例1：是否 -->
+    <owl:NamedIndividual rdf:about="#termtype_yes_or_no">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SALE#YES_OR_NO</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">YES_OR_NO</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">是否</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">是否，1：是，2：否</trem_type_desc>
+        <trem_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</trem_data_type>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    
+    <!-- 术语类型实例2：客户类型 -->
+    <owl:NamedIndividual rdf:about="#termtype_customer_type">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SALE#CUSTOMER_TYPE</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">CUSTOMER_TYPE</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户类型</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户行业分类字典，如金融、制造、零售等</trem_type_desc>
+        <trem_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</trem_data_type>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    
+    <!-- 术语类型实例3：视图 -->
+    <owl:NamedIndividual rdf:about="#termtype_view">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SALE#VIEW</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">VIEW</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">视图</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">视图</trem_type_desc>
+        <trem_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</trem_data_type>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    
+    <!-- 术语类型实例4：对象 -->
+    <owl:NamedIndividual rdf:about="#termtype_object">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SALE#OBJECT</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">对象</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">对象</trem_type_desc>
+        <trem_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</trem_data_type>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    
+    <!-- 术语类型实例5：动作 -->
+    <owl:NamedIndividual rdf:about="#termtype_action">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SALE#ACTIOIN</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTIOIN</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">动作</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">动作</trem_type_desc>
+        <trem_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</trem_data_type>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    
+    <!-- 术语类型实例6：函数 -->
+    <owl:NamedIndividual rdf:about="#termtype_function">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SALE#FUNCTION</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">FUNCTION</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">函数</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">函数</trem_type_desc>
+        <trem_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</trem_data_type>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    
+    <!-- 术语类型实例7：属性 -->
+    <owl:NamedIndividual rdf:about="#termtype_property">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SALE#PROPERTY</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROPERTY</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性</trem_type_desc>
+        <trem_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</trem_data_type>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    
+    <!-- 属性定义 -->
+    <owl:DatatypeProperty rdf:about="#trem_type_code_path">
+        <rdfs:domain rdf:resource="#TermTypeDefinition"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    </owl:DatatypeProperty>
+    
+    <owl:DatatypeProperty rdf:about="#trem_type_code">
+        <rdfs:domain rdf:resource="#TermTypeDefinition"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    </owl:DatatypeProperty>
+    
+    <owl:DatatypeProperty rdf:about="#trem_type_name">
+        <rdfs:domain rdf:resource="#TermTypeDefinition"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    </owl:DatatypeProperty>
+    
+    <owl:DatatypeProperty rdf:about="#trem_type_desc">
+        <rdfs:domain rdf:resource="#TermTypeDefinition"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    </owl:DatatypeProperty>
+    
+    <owl:DatatypeProperty rdf:about="#trem_data_type">
+        <rdfs:domain rdf:resource="#TermTypeDefinition"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    </owl:DatatypeProperty>
+    
+    <owl:DatatypeProperty rdf:about="#version">
+        <rdfs:domain rdf:resource="#TermTypeDefinition"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    </owl:DatatypeProperty>
+    
+</rdf:RDF>

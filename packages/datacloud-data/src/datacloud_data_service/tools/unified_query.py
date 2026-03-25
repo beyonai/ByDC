@@ -1,4 +1,22 @@
-"""UnifiedQuery: unified_data_query 工具封装。"""
+"""
+统一数据查询工具模块
+
+本模块提供统一的数据查询接口，封装了 View 和 Object 的查询能力。
+支持自然语言查询，自动处理查询结果溢出。
+
+核心功能：
+- 视图查询：基于预定义视图执行查询
+- 对象查询：基于单个对象执行查询
+- 自动视图：多对象自动构建视图查询
+- 结果溢出处理：大数据量自动转 CSV
+
+使用示例：
+    query = UnifiedQuery(loader)
+    result = await query.execute(
+        question="查询所有活跃用户",
+        view_id="user_view"
+    )
+"""
 
 from __future__ import annotations
 
@@ -11,7 +29,18 @@ from datacloud_data_service.tools.query_result_overflow import apply_query_resul
 
 
 def _apply_overflow_if_needed(result: dict[str, Any]) -> dict[str, Any]:
-    """若 records 超阈值，则存 CSV 并返回元数据+下载地址+预览。"""
+    """
+    应用查询结果溢出处理
+    
+    当结果记录数超过阈值时，将数据存储为 CSV 文件，
+    返回元数据、下载地址和预览数据。
+    
+    Args:
+        result: 原始查询结果
+    
+    Returns:
+        dict: 处理后的结果
+    """
     if "records" not in result:
         return result
     try:
@@ -31,9 +60,26 @@ def _apply_overflow_if_needed(result: dict[str, Any]) -> dict[str, Any]:
 
 
 class UnifiedQuery:
-    """统一数据查询工具，封装 View.query() 或 Object.query()。"""
+    """
+    统一数据查询工具
+    
+    封装 View.query() 和 Object.query()，提供统一的查询入口。
+    
+    Attributes:
+        _loader: 本体加载器实例
+    
+    Example:
+        query = UnifiedQuery(loader)
+        result = await query.execute("查询销售额", view_id="sales_view")
+    """
 
     def __init__(self, loader: OntologyLoader) -> None:
+        """
+        初始化统一查询工具
+        
+        Args:
+            loader: 本体加载器实例
+        """
         self._loader = loader
 
     async def execute(
@@ -45,7 +91,25 @@ class UnifiedQuery:
         page: int = 1,
         page_size: int = 100,
     ) -> dict[str, Any]:
-        """执行自然语言查询"""
+        """
+        执行自然语言查询
+        
+        根据参数选择查询方式：
+        1. 指定 view_id：使用预定义视图查询
+        2. 指定单个 object_id：使用对象查询
+        3. 多个或全部对象：自动构建视图查询
+        
+        Args:
+            question: 自然语言问题
+            view_id: 视图 ID（可选）
+            object_ids: 对象 ID 列表（可选）
+            include_plan: 是否在结果中包含执行计划
+            page: 页码
+            page_size: 每页大小
+        
+        Returns:
+            dict: MCP 格式的查询结果
+        """
         try:
             if view_id:
                 view = self._loader.get_view(view_id)
