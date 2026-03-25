@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from typing import Iterator
+from typing import Generator
 from urllib.parse import quote_plus
 
 from sqlalchemy import create_engine, Engine
@@ -36,7 +36,7 @@ def _get_engine() -> Engine:
     if _engine is None:
         db_type = os.getenv("KNOWLEDGE_DB_TYPE") or os.getenv("DC_KNOWLEDGE_DB_TYPE", "")
         if db_type.lower() == "opengauss":
-            PGDialect._get_server_version_info = lambda self, conn: (15, 0)
+            PGDialect._get_server_version_info = lambda self, connection: (15, 0)
 
         database_url = _build_database_url()
         _engine = create_engine(
@@ -60,7 +60,7 @@ def _get_session_local() -> sessionmaker:
 
 
 @contextmanager
-def get_session() -> Iterator[Session]:
+def get_session() -> Generator[Session, None, None]:
     session = _get_session_local()()
     try:
         yield session

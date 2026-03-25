@@ -16,11 +16,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from datacloud_data_sdk.ontology.models import OntologyAction, OntologyField
 from datacloud_data_sdk.ontology.term_loader import TermLoader
 from datacloud_data_sdk.plan.models import ObjectViewField, ObjectViewFunctionParam
+
+logger = logging.getLogger(__name__)
 
 
 class TermResolver:
@@ -71,17 +74,23 @@ class TermResolver:
         
         Returns:
             dict: 解析后的参数字典
+        
+        Raises:
+            TermNotFoundError: 术语不存在
+            TermAmbiguousError: 术语匹配到多个结果
         """
         if not self._term_loader:
             return params
+
+        from datacloud_data_sdk.exceptions import TermAmbiguousError, TermNotFoundError
 
         resolved = dict(params)
         for p in action.params:
             if not p.term_set or p.param_code not in resolved:
                 continue
             raw = resolved[p.param_code]
+            param_name = p.param_name or p.param_code
             try:
-                # 列表参数：逐项解析为 code 列表
                 if isinstance(raw, (list, tuple)):
                     out_list: list[str] = []
                     for v in raw:
@@ -95,6 +104,7 @@ class TermResolver:
                             if "." in (p.term_set or "")
                             else None,
                             keyword=kw,
+                            param_name=param_name,
                         )
                         out_list.append(code)
                     resolved[p.param_code] = out_list
@@ -109,9 +119,13 @@ class TermResolver:
                         if "." in (p.term_set or "")
                         else None,
                         keyword=kw,
+                        param_name=param_name,
                     )
-            except ValueError:
-                pass
+            except (TermNotFoundError, TermAmbiguousError):
+                raise
+            except ValueError as e:
+                logger.warning("Term resolution failed for param %s: %s", p.param_code, e)
+                raise
         return resolved
 
     def resolve_params(
@@ -119,15 +133,23 @@ class TermResolver:
         params: dict[str, Any],
         param_specs: list[ObjectViewFunctionParam],
     ) -> dict[str, Any]:
-        """对含 term_set 的参数做名称/标签→code 解析（供 ObjectViewFunctionParam 使用）。"""
+        """对含 term_set 的参数做名称/标签→code 解析（供 ObjectViewFunctionParam 使用）。
+        
+        Raises:
+            TermNotFoundError: 术语不存在
+            TermAmbiguousError: 术语匹配到多个结果
+        """
         if not self._term_loader:
             return params
+
+        from datacloud_data_sdk.exceptions import TermAmbiguousError, TermNotFoundError
 
         resolved = dict(params)
         for p in param_specs:
             if not p.term_set or p.param_code not in resolved:
                 continue
             raw = resolved[p.param_code]
+            param_name = p.param_name or p.param_code
             try:
                 if isinstance(raw, (list, tuple)):
                     out_list: list[str] = []
@@ -142,6 +164,7 @@ class TermResolver:
                             if "." in (p.term_set or "")
                             else None,
                             keyword=kw,
+                            param_name=param_name,
                         )
                         out_list.append(code)
                     resolved[p.param_code] = out_list
@@ -156,9 +179,13 @@ class TermResolver:
                         if "." in (p.term_set or "")
                         else None,
                         keyword=kw,
+                        param_name=param_name,
                     )
-            except ValueError:
-                pass
+            except (TermNotFoundError, TermAmbiguousError):
+                raise
+            except ValueError as e:
+                logger.warning("Term resolution failed for param %s: %s", p.param_code, e)
+                raise
         return resolved
 
     def resolve_fields(
@@ -189,11 +216,18 @@ class TermResolver:
         filters: dict[str, dict[str, Any]],
         fields: list[OntologyField],
     ) -> dict[str, dict[str, Any]]:
-        """对 filters 中绑定术语的字段 value 做 label/别名→code 解析。"""
+        """对 filters 中绑定术语的字段 value 做 label/别名→code 解析。
+        
+        Raises:
+            TermNotFoundError: 术语不存在
+            TermAmbiguousError: 术语匹配到多个结果
+        """
         if not self._term_loader:
             return filters
         if not isinstance(filters, dict):
             return filters
+
+        from datacloud_data_sdk.exceptions import TermAmbiguousError, TermNotFoundError
 
         field_map = {f.field_code: f for f in fields}
         resolved: dict[str, dict[str, Any]] = {}
@@ -208,6 +242,7 @@ class TermResolver:
             value = filter_obj.get("value")
             if value is None:
                 continue
+            param_name = field.field_name or field.field_code
             try:
                 if isinstance(value, list):
                     resolved[field_code]["value"] = [
@@ -216,6 +251,7 @@ class TermResolver:
                             str(v),
                             dataset_id=field.dataset_id,
                             term_type_code=field.term_set.split(".")[0] if "." in (field.term_set or "") else None,
+                            param_name=param_name,
                         )
                         for v in value
                     ]
@@ -225,7 +261,11 @@ class TermResolver:
                         str(value),
                         dataset_id=field.dataset_id,
                         term_type_code=field.term_set.split(".")[0] if "." in (field.term_set or "") else None,
+                        param_name=param_name,
                     )
-            except ValueError:
+            except (TermNotFoundError, TermAmbiguousError):
+                raise
+            except ValueError as e:
+                logger.warning("Term resolution failed for field %s: %s", field_code, e)
                 raise
         return resolved
