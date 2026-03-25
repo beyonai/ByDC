@@ -8,6 +8,13 @@
 
 from __future__ import annotations
 
+import asyncio
+import sys
+
+# 专门针对 Windows 系统切换事件循环策略以兼容 psycopg
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from typing import Any, Optional
 
 from gateway_sdk import (
