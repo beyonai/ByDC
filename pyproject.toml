@@ -69,6 +69,7 @@ members = [
     "packages/datacloud-data",
     "packages/datacloud-knowledge",
     "packages/datacloud-memory",
+    "examples/e_commerce_demo/backend",
 ]
 
 [tool.uv.sources]
@@ -77,6 +78,9 @@ datacloud-analysis = { workspace = true }
 datacloud-data = { workspace = true }
 datacloud-knowledge = { workspace = true }
 datacloud-memory = { workspace = true }
+datacloud-service = { workspace = true }
+# gateway-sdk 来自 byai_be_python_next 仓库（可编辑安装）
+gateway-sdk = { path = "../byai_be_python_next/gateway_sdk", editable = true }
 
 [tool.uv]
 default-groups = ["dev"]

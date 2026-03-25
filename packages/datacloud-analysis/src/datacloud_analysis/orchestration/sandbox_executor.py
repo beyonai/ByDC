@@ -29,31 +29,44 @@ _TASK_DISPATCHERS: dict[str, Any] = {}
 async def execute_next_task(
     task: dict[str, Any],
     state: dict[str, Any],
-) -> dict[str, Any]:
-    """Execute one sub-task and return the updated task dict.
+) -> tuple[dict[str, Any], Any]:
+    """Execute one sub-task and return the updated task dict and output.
 
     Args:
         task:  Sub-task dict from the DAG (must have ``id`` and ``type``).
         state: Current graph state (for context / message history).
 
     Returns:
-        The task dict with ``status`` set to ``"done"`` or ``"failed"``
-        and an ``output`` key containing the tool result.
+        (updated_task, output)
     """
     task_type: str = task.get("type", "unknown")
     dispatcher = _get_dispatcher(task_type)
 
     if dispatcher is None:
         logger.warning("No dispatcher for task type '%s'; marking as failed.", task_type)
-        return {**task, "status": "failed", "output": f"Unknown task type: {task_type}"}
+        output = f"Unknown task type: {task_type}"
+        return {**task, "status": "failed", "error": output}, output
 
     try:
         logger.debug("Executing task %s (type=%s) …", task["id"], task_type)
-        output = await dispatcher(task.get("params", {}), state)
-        return {**task, "status": "done", "output": output}
+        
+        # Tools are BaseTool instances, so we call ainvoke.
+        # But wait, some might be functions. Let's handle tool properly.
+        if hasattr(dispatcher, "ainvoke"):
+            # Prepare params. Usually the LLM outputs 'description' which we might map to 'query' or 'question'.
+            params = {}
+            if task_type == "data_query":
+                params["question"] = task.get("description", "")
+            else:
+                params = task.get("params", {})
+            output = await dispatcher.ainvoke(params)
+        else:
+            output = await dispatcher(task.get("params", {}), state)
+            
+        return {**task, "status": "done"}, output
     except Exception as exc:  # noqa: BLE001
         logger.error("Task %s failed: %s", task["id"], exc)
-        return {**task, "status": "failed", "output": str(exc)}
+        return {**task, "status": "failed", "error": str(exc)}, str(exc)
 
 
 def _get_dispatcher(task_type: str) -> Any | None:

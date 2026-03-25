@@ -1,8 +1,17 @@
-"""search_knowledge 工具单元测试"""
+"""search_knowledge 工具单元测试
+
+注意：测试目录已改为 ``tests/dca``，并在 ``pyproject.toml`` 中配置 ``pythonpath = ["src"]``，
+避免与 ``datacloud_analysis`` 包名冲突。
+"""
 
 from unittest.mock import patch
 
 import pytest
+
+pytest.importorskip("datacloud_analysis.tools.knowledge")
+
+import datacloud_analysis.tools.knowledge as knowledge_module
+from datacloud_analysis.tools.knowledge import search_knowledge
 
 
 async def _fake_to_thread(f, *a, **k):
@@ -13,9 +22,6 @@ async def _fake_to_thread(f, *a, **k):
 @pytest.mark.asyncio
 async def test_search_knowledge_unconfigured():
     """未配置 GRAPH_FILES 时返回空列表"""
-    from datacloud_analysis.tools import knowledge as knowledge_module
-    from datacloud_analysis.tools.knowledge import search_knowledge
-
     with patch.object(knowledge_module, "_get_knowledge_service", return_value=None):
         result = await search_knowledge.ainvoke({"query": "test", "top_k": 5})
         assert result == []
@@ -24,9 +30,6 @@ async def test_search_knowledge_unconfigured():
 @pytest.mark.asyncio
 async def test_search_knowledge_returns_snippets_format():
     """有结果时返回正确的 {title, content, source} 格式"""
-    from datacloud_analysis.tools import knowledge as knowledge_module
-    from datacloud_analysis.tools.knowledge import search_knowledge
-
     mock_result = {
         "entities_found": [{"name": "王小明"}],
         "results": [

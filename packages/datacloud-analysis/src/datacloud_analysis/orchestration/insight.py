@@ -2,59 +2,84 @@
 
 Responsibilities
 ----------------
-- Collect outputs from all completed sub-tasks.
+- Collect outputs from all completed sub-tasks (from state results or workspace).
 - Call the *reasoning* LLM to synthesise a coherent answer.
-- Assemble the ``render_report`` data protocol (charts, tables, text).
-- Bind Trace / evidence chain references to the final reply.
-- Emit the ``Memory_Collection_Event`` so the Memory Worker can distil
-  long-term memories asynchronously (design §4.3.2.1).
 """
 
 from __future__ import annotations
 
 import logging
+import json
+from pathlib import Path
+import os
 from typing import Any
+
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain.chat_models import init_chat_model
+
+from datacloud_analysis.orchestration.state import AgentState
 
 logger = logging.getLogger(__name__)
 
 
-async def insight_node(state: dict[str, Any]) -> dict[str, Any]:
+async def insight_node(state: AgentState) -> dict:
     """Generate the final answer and report from completed sub-task outputs.
 
-    Input state keys
-    ----------------
-    ``dag``:       Completed sub-task tree with ``output`` on each task.
-    ``messages``:  Conversation history.
+    Input state keys:
+        results: List of execution results (or file paths).
+        messages: Conversation history.
+        clarify_needed: bool
 
-    Output state additions
-    ----------------------
-    ``answer``:    Natural-language answer string.
-    ``report``:    Serialised report protocol (charts, tables, etc.).
-
-    TODO: implement with a reasoning LLM call + render_report tool.
+    Output state updates:
+        messages: Append the final LLM response.
     """
     logger.debug("insight_node: synthesising final answer …")
 
-    completed_outputs = [
-        t.get("output")
-        for t in state.get("dag", [])
-        if t.get("status") == "done"
-    ]
+    messages = state.get("messages", [])
+    if state.get("clarify_needed"):
+        # 如果前面判定需要追问，此时直接让 LLM 构造追问语句
+        # 或者直接取 intent 里的内容作为追问
+        intent = state.get("intent", "能具体说明一下吗？")
+        return {"messages": [AIMessage(content=intent)]}
 
-    # Placeholder — replace with reasoning LLM summarisation.
-    state["answer"] = f"Analysis complete. {len(completed_outputs)} sub-tasks executed."
-    state["report"] = {}
+    results = state.get("results", [])
+    
+    # 读取所有结果（如果是文件路径，则读出内容）
+    aggregated_data = []
+    for res in results:
+        if isinstance(res, dict) and "file_path" in res:
+            try:
+                with open(res["file_path"], "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    aggregated_data.append({
+                        "task_id": res["task_id"],
+                        "data": data
+                    })
+            except Exception as e:
+                logger.error("Failed to read intermediate result: %s", e)
+        else:
+            aggregated_data.append(res)
+            
+    data_context = json.dumps(aggregated_data, ensure_ascii=False)
+    
+    model = os.getenv("DATACLOUD_LLM_REASONING_MODEL", "openai:Qwen/Qwen3-235B-A22B")
+    if not model.startswith("openai:"):
+        model = f"openai:{model}"
+        
+    llm = init_chat_model(
+        model=model,
+        api_key=os.getenv("OPENAI_API_KEY") or os.getenv("DATACLOUD_LLM_REASONING_API_KEY"),
+        base_url=os.getenv("OPENAI_BASE_URL") or os.getenv("DATACLOUD_LLM_REASONING_API_BASE"),
+    )
 
-    # Signal memory distillation (fire-and-forget via event emitter).
-    _emit_memory_collection_event(state)
+    sys_prompt = f"""你是一个高级数据分析师。
+以下是执行查询任务后获得的数据结果：
+{data_context}
 
-    return state
-
-
-def _emit_memory_collection_event(state: dict[str, Any]) -> None:
-    """Asynchronously signal that memory distillation should start.
-
-    The actual MQ push happens in the message handler layer; here we just set a
-    flag in the state so the message handler can pick it up after streaming ends.
-    """
-    state["_emit_memory_event"] = True
+请结合原始问题，直接给出专业的自然语言分析总结，不要使用任何占位符。回答尽量详实清晰。
+"""
+    
+    # 调用大模型生成总结
+    response = await llm.ainvoke(messages + [SystemMessage(content=sys_prompt)])
+    
+    return {"messages": [response]}
