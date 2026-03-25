@@ -6,18 +6,22 @@ Responsibilities
 - For each task, call sandbox_executor.
 - If it's a multi-task plan, intermediate results should be saved to Workspace.
 - If it's a single task, results can be stored in state directly.
+- Emit a REASONING_LOG_DELTA thinking event after each task completes.
 """
 
 from __future__ import annotations
 
-import logging
-from typing import Any
-import os
 import json
+import logging
+import os
 from pathlib import Path
+from typing import Any
 
-from datacloud_analysis.orchestration.state import AgentState
+from gateway_sdk import EventType, StreamChunkEvent
+from gateway_sdk.core.protocol.content_type import SseReasonMessageType
+
 from datacloud_analysis.orchestration.sandbox_executor import execute_next_task
+from datacloud_analysis.orchestration.state import AgentState
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +65,32 @@ async def loop_node(state: AgentState) -> dict:
 
     # Update plan
     updated_plan = [updated_task if t["id"] == updated_task["id"] else t for t in plan]
-    
+
+    # 向前端推送本轮执行思考消息
+    context = state.get("gateway_context")
+    if context is not None:
+        total = len(updated_plan)
+        done_count = sum(1 for t in updated_plan if t.get("status") == "done")
+        output_preview = str(output)[:300] if output else "（无结果）"
+        thinking = (
+            f"[执行任务 {done_count}/{total}] {updated_task['id']}："
+            f"{updated_task.get('description', '')}\n"
+            f"结果摘要：{output_preview}"
+        )
+
+        # 推送思考标题
+        await context.emit_chunk(
+            StreamChunkEvent(content="执行任务"),
+            event_type=EventType.REASONING_LOG_DELTA.value,
+            content_type=SseReasonMessageType.think_title.value,
+        )
+        # 推送思考文本
+        await context.emit_chunk(
+            StreamChunkEvent(content=thinking),
+            event_type=EventType.REASONING_LOG_DELTA.value,
+            content_type=SseReasonMessageType.think_text.value,
+        )
+
     return {"plan": updated_plan, "results": results}
 
 
