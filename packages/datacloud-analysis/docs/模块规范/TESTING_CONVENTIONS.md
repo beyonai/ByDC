@@ -166,4 +166,4 @@ uv run pytest tests/unit/unit \
 
 ## 6. 本模块禁止事项（补充根规范）
 
-- **不得修改 `tests/datacloud_analysis/` 下的文件**（旧代码备份目录，只读）
+- 活跃测试位于 `tests/dca/`（`pyproject.toml` 中 `testpaths` + `pythonpath = ["src"]`）
