@@ -10,5 +10,5 @@ Workflow nodes (executed in order by the LangGraph graph):
    sandbox_executor.py Trigger atomic tools inside the sandbox.
 ④ insight.py          Summarise results, generate reply, bind Trace evidence.
 
-Entry point: ``run_agent()`` in ``intent.py``.
+Optional streaming entry: ``run_agent()`` in ``runner.py`` (TaskPaths + run_config).
 """
