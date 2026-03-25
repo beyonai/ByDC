@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 
 # 专门针对 Windows 系统切换事件循环策略以兼容 psycopg
@@ -21,12 +22,12 @@ from gateway_sdk import (
     AgentContext,
     EventType,
     GatewayWorker,
-    StateChangeEvent,
     StreamChunkEvent,
 )
 from gateway_sdk.common.logger import logger
 from gateway_sdk.core.extensions import PluginRegistry
 from gateway_sdk.core.protocol.commands import AskAgentCommand
+from gateway_sdk.core.protocol.content_type import SseMessageType, SseReasonMessageType
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from datacloud_analysis.agent import create_agent
@@ -100,7 +101,15 @@ class DataCloudWorker(GatewayWorker):
             type(command.content).__name__,
         )
         logger.info("DataCloudWorker received content: %s", command.content)
-        # command.extra_payload.GE
+
+        # ① 同步 Worker 构造参数 → os.environ，确保图内节点 os.getenv 拿到正确值
+        if self.api_key:
+            os.environ["OPENAI_API_KEY"] = self.api_key
+        if self.base_url:
+            os.environ["OPENAI_BASE_URL"] = self.base_url
+        if self.model_name:
+            os.environ["DATACLOUD_LLM_REASONING_MODEL"] = self.model_name
+
         # 提取 extra_payload 信息
         extra_payload = getattr(command, "extra_payload", {})
         by_agent_id = extra_payload.get("byAgentId")
@@ -112,22 +121,24 @@ class DataCloudWorker(GatewayWorker):
         workspace_dir = active_workspace.get()
         logger.info("Active workspace for task: %s", workspace_dir)
 
-        # ① 归一化输入：将 command.content 转换成 LangChain messages
+        # ② 归一化输入；gateway_context 传入供各节点 emit 思考事件
         input_messages = _normalize_messages(command.content)
         state = {
             "messages": input_messages,
             "agent_id": by_agent_id,
             "agent_name": by_agent_name,
             "workspace_dir": workspace_dir,
+            "gateway_context": context,
             "plan": [],
             "intent": "",
-            "clarify_needed": False
+            "clarify_needed": False,
         }
 
-        # ② 发送"开始推理"通知
-        await context.emit_state(
-            StateChangeEvent(state="正在思考..."),
+        # ③ 发送"开始推理"通知
+        await context.emit_chunk(
+            StreamChunkEvent(content="正在思考..."),
             event_type=EventType.REASONING_LOG_START.value,
+            content_type=SseReasonMessageType.think_title.value,
         )
 
         # 设置执行配置，传入线程 ID 用于 checkpoint
@@ -137,58 +148,58 @@ class DataCloudWorker(GatewayWorker):
             }
         }
 
-        # ③ 流式驱动 graph，将事件映射到 gateway EventType
+        # ④ 流式驱动 graph：
+        #    - insight 节点的 LLM token → ANSWER_DELTA（打字机效果）
+        #    - 工具起止 → TASK_CREATE / STEP_COMPLETE
+        #    - 各节点思考事件已由节点内部直接 emit，worker 不再重复处理
         async for event in self.graph.astream_events(state, config=config, version="v2"):
             await context.check_cancelled()
             kind: str = event["event"]
 
             if kind == "on_chat_model_stream":
-                # LLM 增量 token → ANSWER_DELTA（打字机效果）
-                chunk = event["data"]["chunk"]
-                if chunk.content:
-                    await context.emit_chunk(
-                        StreamChunkEvent(content=chunk.content),
-                        event_type=EventType.ANSWER_DELTA.value,
-                    )
-
-            elif kind == "on_chat_model_start":
-                # 新一轮模型调用开始 → REASONING_LOG_DELTA（可选：展示正在推理）
-                await context.emit_state(
-                    StateChangeEvent(state="模型推理中..."),
-                    event_type=EventType.REASONING_LOG_DELTA.value,
-                )
+                # 只对 insight 节点的 token 做打字机输出，避免改写/规划阶段的 token 干扰
+                node = event.get("metadata", {}).get("langgraph_node", "")
+                if node == "insight":
+                    chunk = event["data"]["chunk"]
+                    if chunk.content:
+                        await context.emit_chunk(
+                            StreamChunkEvent(content=chunk.content),
+                            event_type=EventType.ANSWER_DELTA.value,
+                            content_type=SseMessageType.text.value,
+                        )
 
             elif kind == "on_tool_start":
-                # 工具开始调用 → TASK_CREATE（展示正在执行哪个工具）
                 tool_name: str = event.get("name", "unknown_tool")
-                await context.emit_state(
-                    StateChangeEvent(state=f"调用工具: {tool_name}"),
+                await context.emit_chunk(
+                    StreamChunkEvent(content=f"调用工具: {tool_name}"),
                     event_type=EventType.TASK_CREATE.value,
+                    content_type=SseReasonMessageType.task_title.value,
                 )
 
             elif kind == "on_tool_end":
-                # 工具结束 → STEP_COMPLETE
                 tool_name = event.get("name", "unknown_tool")
-                await context.emit_state(
-                    StateChangeEvent(state=f"工具完成: {tool_name}"),
+                await context.emit_chunk(
+                    StreamChunkEvent(content=f"工具完成: {tool_name}"),
                     event_type=EventType.STEP_COMPLETE.value,
+                    content_type=SseReasonMessageType.task_finished.value,
                 )
 
-        # ④ 推理结束通知
-        await context.emit_state(
-            StateChangeEvent(state="回答完成"),
+        # ⑤ 推理结束通知
+        await context.emit_chunk(
+            StreamChunkEvent(content="思考完成"),
             event_type=EventType.REASONING_LOG_END.value,
+            content_type=SseReasonMessageType.think_title.value,
         )
 
-         # ④ 回答结束通知
-        await context.emit_state(
-            StateChangeEvent(state="回答完成"),
+        # ⑥ 回答结束通知
+        await context.emit_chunk(
+            StreamChunkEvent(content="回答完成"),
             event_type=EventType.APP_STREAM_RESPONSE.value,
+            content_type=SseMessageType.text.value,
         )
 
-        # ⑤ 将流式内容整合写入历史
+        # ⑦ 将流式内容整合写入历史
         await context.flush_to_history()
-        
 
         return {"status": "done"}
 
