@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from datacloud_data_sdk.exceptions import TermNotFoundError
 from datacloud_data_sdk.ontology.term_loader import (
     ApiTermLoader,
     KbTermLoader,
@@ -32,7 +33,7 @@ def test_resolve_by_exact_code() -> None:
 
 def test_resolve_unknown_raises() -> None:
     loader = TermLoader.from_mapping({"bo_stage": []})
-    with pytest.raises(ValueError, match="available"):
+    with pytest.raises(TermNotFoundError, match="不存在"):
         loader.resolve_code("bo_stage", "不存在的值")
 
 
@@ -60,7 +61,7 @@ def test_kb_term_loader_from_config() -> None:
 def test_kb_term_loader_resolve_by_label() -> None:
     mock_result = MagicMock()
     mock_result.items = [
-        MagicMock(term_id="SIGNED", term_name="已签约", term_tags={"synonyms": "签了合同"}),
+        MagicMock(term_code="SIGNED", term_name="已签约", term_tags={"synonyms": "签了合同"}),
     ]
     with patch(
         "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
@@ -77,7 +78,7 @@ def test_kb_term_loader_resolve_by_label() -> None:
 def test_kb_term_loader_resolve_by_alias() -> None:
     mock_result = MagicMock()
     mock_result.items = [
-        MagicMock(term_id="SIGNED", term_name="已签约", term_tags={"synonyms": "签了合同"}),
+        MagicMock(term_code="SIGNED", term_name="已签约", term_tags={"synonyms": "签了合同"}),
     ]
     with patch(
         "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
@@ -96,15 +97,15 @@ def test_kb_term_loader_resolve_unknown_raises() -> None:
         return_value=mock_result,
     ):
         loader = KbTermLoader()
-        with pytest.raises(ValueError, match="available"):
+        with pytest.raises(TermNotFoundError, match="不存在"):
             loader.resolve_code("bo_stage", "不存在")
 
 
 def test_kb_term_loader_get_available_values() -> None:
     mock_result = MagicMock()
     mock_result.items = [
-        MagicMock(term_id="SIGNED", term_name="已签约", term_tags={}),
-        MagicMock(term_id="PENDING", term_name="待签约", term_tags={}),
+        MagicMock(term_code="SIGNED", term_name="已签约", term_tags={}),
+        MagicMock(term_code="PENDING", term_name="待签约", term_tags={}),
     ]
     with patch(
         "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
@@ -119,7 +120,7 @@ def test_kb_term_loader_get_available_values() -> None:
 def test_kb_term_loader_get_codes() -> None:
     mock_result = MagicMock()
     mock_result.items = [
-        MagicMock(term_id="SIGNED", term_name="已签约", term_tags={}),
+        MagicMock(term_code="SIGNED", term_name="已签约", term_tags={}),
     ]
     with patch(
         "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
@@ -133,7 +134,7 @@ def test_kb_term_loader_get_codes() -> None:
 def test_kb_term_loader_resolve_code_explicit_type() -> None:
     mock_result = MagicMock()
     mock_result.items = [
-        MagicMock(term_id="REGION_CODE", term_name="华北", term_tags={}),
+        MagicMock(term_code="REGION_CODE", term_name="华北", term_tags={}),
     ]
     with patch(
         "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
@@ -145,3 +146,63 @@ def test_kb_term_loader_resolve_code_explicit_type() -> None:
         mock_search.assert_called_once_with(
             term_type_code="region", keyword="华北", limit=100,
         )
+
+
+def test_resolve_value_to_code() -> None:
+    loader = TermLoader.from_mapping(
+        {"staffName": [{"code": "EMP001", "label": "张三", "aliases": ["小张"]}]}
+    )
+    result = loader.resolve_value("staffName", "张三", term_field="code")
+    assert result == "EMP001"
+
+
+def test_resolve_value_to_name() -> None:
+    loader = TermLoader.from_mapping(
+        {"staffName": [{"code": "EMP001", "label": "张三", "aliases": ["小张"]}]}
+    )
+    result = loader.resolve_value("staffName", "EMP001", term_field="name")
+    assert result == "张三"
+
+
+def test_resolve_value_default_to_code() -> None:
+    loader = TermLoader.from_mapping(
+        {"staffName": [{"code": "EMP001", "label": "张三", "aliases": ["小张"]}]}
+    )
+    result = loader.resolve_value("staffName", "张三", term_field=None)
+    assert result == "EMP001"
+
+
+def test_resolve_value_by_alias_to_name() -> None:
+    loader = TermLoader.from_mapping(
+        {"staffName": [{"code": "EMP001", "label": "张三", "aliases": ["小张"]}]}
+    )
+    result = loader.resolve_value("staffName", "小张", term_field="name")
+    assert result == "张三"
+
+
+def test_kb_resolve_value_to_code() -> None:
+    mock_result = MagicMock()
+    mock_result.items = [
+        MagicMock(term_code="EMP001", term_name="张三", term_tags={"synonyms": "小张"}),
+    ]
+    with patch(
+        "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
+        return_value=mock_result,
+    ):
+        loader = KbTermLoader()
+        result = loader.resolve_value("staffName", "张三", term_field="code")
+        assert result == "EMP001"
+
+
+def test_kb_resolve_value_to_name() -> None:
+    mock_result = MagicMock()
+    mock_result.items = [
+        MagicMock(term_code="EMP001", term_name="张三", term_tags={"synonyms": "小张"}),
+    ]
+    with patch(
+        "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
+        return_value=mock_result,
+    ):
+        loader = KbTermLoader()
+        result = loader.resolve_value("staffName", "EMP001", term_field="name")
+        assert result == "张三"

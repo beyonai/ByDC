@@ -225,14 +225,15 @@ def _replace_comparison(
     if raw is None:
         return False
     try:
-        code = term_loader.resolve_code(
+        resolved = term_loader.resolve_value(
             field.term_set,
             raw,
+            term_field=field.term_field,
             dataset_id=field.dataset_id,
             term_type_code=field.term_set.split(".")[0] if field.term_set and "." in field.term_set else None,
         )
         quote = "'" if str(right).startswith("'") else '"'
-        right.value = f"{quote}{code}{quote}"  # type: ignore[union-attr]
+        right.value = f"{quote}{resolved}{quote}"  # type: ignore[union-attr]
         return True
     except ValueError:
         return False
@@ -257,14 +258,15 @@ def _replace_in_list(
         if raw is None:
             continue
         try:
-            code = term_loader.resolve_code(
+            resolved = term_loader.resolve_value(
                 field.term_set,
                 raw,
+                term_field=field.term_field,
                 dataset_id=field.dataset_id,
                 term_type_code=field.term_set.split(".")[0] if field.term_set and "." in field.term_set else None,
             )
             quote = "'" if str(t).startswith("'") else '"'
-            t.value = f"{quote}{code}{quote}"  # type: ignore[union-attr]
+            t.value = f"{quote}{resolved}{quote}"  # type: ignore[union-attr]
             changed = True
         except ValueError:
             pass
