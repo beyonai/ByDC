@@ -3,19 +3,22 @@
 Responsibilities
 ----------------
 - Collect outputs from all completed sub-tasks (from state results or workspace).
+- Emit a REASONING_LOG_DELTA thinking event with the merged query results.
 - Call the *reasoning* LLM to synthesise a coherent answer.
 """
 
 from __future__ import annotations
 
-import logging
 import json
-from pathlib import Path
+import logging
 import os
+from pathlib import Path
 from typing import Any
 
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from gateway_sdk import EventType, StreamChunkEvent
+from gateway_sdk.core.protocol.content_type import SseReasonMessageType
 from langchain.chat_models import init_chat_model
+from langchain_core.messages import AIMessage, SystemMessage
 
 from datacloud_analysis.orchestration.state import AgentState
 
@@ -61,7 +64,37 @@ async def insight_node(state: AgentState) -> dict:
             aggregated_data.append(res)
             
     data_context = json.dumps(aggregated_data, ensure_ascii=False)
-    
+
+    # 向前端推送合并数据查询思考消息
+    context = state.get("gateway_context")
+    if context is not None and aggregated_data:
+        plan = state.get("plan", [])
+        task_map = {t["id"]: t.get("description", "") for t in plan}
+        lines = []
+        for item in aggregated_data:
+            task_id = item.get("task_id", "?")
+            desc = task_map.get(task_id, "")
+            data_preview = str(item.get("data", ""))[:200]
+            lines.append(f"■ {task_id}：{desc}\n  → {data_preview}")
+        thinking = (
+            f"共 {len(aggregated_data)} 个任务已完成：\n"
+            + "\n".join(lines)
+        )
+
+        # 推送思考标题
+        await context.emit_chunk(
+            StreamChunkEvent(content="数据分析"),
+            event_type=EventType.REASONING_LOG_DELTA.value,
+            content_type=SseReasonMessageType.think_title.value,
+        )
+        # 推送思考文本
+        await context.emit_chunk(
+            StreamChunkEvent(content=thinking),
+            event_type=EventType.REASONING_LOG_DELTA.value,
+            content_type=SseReasonMessageType.think_text.value,
+        )
+
+
     model = os.getenv("DATACLOUD_LLM_REASONING_MODEL", "openai:Qwen/Qwen3-235B-A22B")
     if not model.startswith("openai:"):
         model = f"openai:{model}"
