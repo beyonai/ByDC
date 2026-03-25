@@ -10,12 +10,14 @@
 - 知识库导入包（术语库 + 本体定义）
 - 测试套件（DDL → 数据加载 → 知识入库 → NL 查询）
 
-**无 backend/frontend** — 运行时依赖 `packages/datacloud-knowledge`。
+**Agent 前后端**：`backend/`（`langgraph dev`）、`frontend/`（Deep Agents UI）；数据与知识管线仍依赖 `mock_env/` 与 `packages/datacloud-knowledge`。
 
 ## Structure
 
 ```
 e_commerce_demo/
+├── backend/                      # LangGraph Agent + datacloud_data_service 内嵌
+├── frontend/                     # Deep Agents UI（Next.js）
 └── mock_env/                     # 数据仿真环境
     ├── .env.example              # DB 连接配置模板
     ├── db/ddl/tables/            # DDL 建表语句（3 文件）
@@ -32,6 +34,8 @@ e_commerce_demo/
 
 | 任务 | 位置 |
 |------|------|
+| LangGraph Agent / `langgraph dev` | `backend/` — `langgraph.json`、`agent.py` |
+| 对话 UI（yarn dev） | `frontend/` |
 | 理解数据模型 | `mock_env/db/ddl/tables/*.sql` — 3 张宽表定义 |
 | 知识图谱结构 | `mock_env/resource/knowledge/import_package/ontology/` |
 | 术语定义 | `mock_env/resource/knowledge/import_package/terms/` |
@@ -179,6 +183,6 @@ cd data_tools && python convert_yizhuang_terms.py
 ## Notes
 
 - **项目名有误导性**：`e_commerce_demo` 实际是工业园区经济监测平台，非电商业务
-- **无独立入口**：仅提供 mock_env，运行时需配合 `packages/datacloud-knowledge`
+- **入口**：`backend/` + `frontend/` 为可交互 Agent；`mock_env` 仍为数据/知识仿真，NL 查询等需配合 `packages/datacloud-knowledge`
 - **db_ready 不初始化**：fixture 只验证前置条件，DB 初始化需手动执行 DDL
 - **知识入库前置**：type5 测试前必须完成 type4 知识导入

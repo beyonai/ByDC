@@ -87,9 +87,8 @@ ignore_missing_imports = true
 # Pytest 配置
 # ============================================
 [tool.pytest.ini_options]
-# tests/datacloud-agent/ — 活跃测试（对应 src/datacloud_analysis/）
-# tests/datacloud_analysis/ — 旧测试备份（只读，不再新增）
-testpaths = ["tests/datacloud-agent", "tests/datacloud_analysis"]
+pythonpath = ["src"]
+testpaths = ["tests/dca"]
 asyncio_mode = "auto"
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
