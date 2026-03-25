@@ -1,4 +1,19 @@
-"""TermResolver: 术语标签/名称 → 标准 code 转换。"""
+"""
+术语解析器模块
+
+本模块提供术语解析能力，将业务术语（标签、名称）转换为标准代码。
+支持在查询参数中自动解析术语值。
+
+核心功能：
+- 解析参数中的术语标签/别名为标准代码
+- 支持列表参数的批量解析
+- 支持 lookup 类型的关键词搜索
+
+使用示例：
+    resolver = TermResolver(term_loader)
+    resolved_params = resolver.resolve(action, {"status": "活跃"})
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -9,20 +24,54 @@ from datacloud_data_sdk.plan.models import ObjectViewField, ObjectViewFunctionPa
 
 
 class TermResolver:
-    """对含 term_set 的参数值进行术语解析。"""
+    """
+    术语解析器
+    
+    对包含 term_set 的参数值进行术语解析，将标签/别名转换为标准代码。
+    
+    Attributes:
+        _term_loader: 术语加载器实例
+    
+    Example:
+        resolver = TermResolver(term_loader)
+        params = resolver.resolve(action, {"org_type": "总部"})
+    """
 
     def __init__(self, term_loader: TermLoader | None = None) -> None:
+        """
+        初始化术语解析器
+        
+        Args:
+            term_loader: 术语加载器实例，用于查询术语映射
+        """
         self._term_loader = term_loader
 
     @property
     def term_loader(self) -> TermLoader | None:
-        """术语加载器，供 sql_term_resolver 等使用。"""
+        """
+        获取术语加载器
+        
+        Returns:
+            TermLoader | None: 术语加载器实例
+        """
         return self._term_loader
 
     def resolve(
         self, action: OntologyAction, params: dict[str, Any]
     ) -> dict[str, Any]:
-        """将参数中的标签/别名值解析为标准 code（供 OntologyAction 使用）。"""
+        """
+        解析动作参数中的术语
+        
+        将参数中的标签/别名值解析为标准 code。
+        支持单值和列表值的解析。
+        
+        Args:
+            action: 本体动作定义
+            params: 原始参数字典
+        
+        Returns:
+            dict: 解析后的参数字典
+        """
         if not self._term_loader:
             return params
 

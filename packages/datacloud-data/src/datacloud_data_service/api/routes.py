@@ -1,4 +1,17 @@
-"""FastAPI 应用工厂。"""
+"""
+FastAPI 应用工厂模块
+
+本模块提供 FastAPI 应用的创建和配置功能，包括：
+- 应用生命周期管理
+- 路由注册
+- 性能日志记录
+- MCP 服务集成
+
+使用示例：
+    app = create_app()
+    # 或带自定义配置
+    app = create_app(datasource_configs={...})
+"""
 
 from __future__ import annotations
 
@@ -24,10 +37,25 @@ HEALTH_CHECK_TIMEOUT = 3.0
 
 
 def _make_performance_log_handler() -> tuple[Any, dict[str, list]]:
-    """创建性能日志 on_span_complete 回调，返回 (callback, spans_by_request) 供测试。"""
+    """
+    创建性能日志处理器
+    
+    生成 on_span_complete 回调函数，用于记录查询性能指标。
+    
+    Returns:
+        tuple: (回调函数, 按请求 ID 分组的 span 字典)
+    """
     spans_by_request: dict[str, list] = defaultdict(list)
 
     def on_span(span: Any) -> None:
+        """
+        Span 完成回调
+        
+        当查询流程完成时，汇总并记录性能日志。
+        
+        Args:
+            span: 性能 span 对象
+        """
         rid = getattr(span, "request_id", "") or ""
         if not rid:
             return
@@ -68,7 +96,18 @@ def create_app(
     datasource_configs: dict | None = None,
     loader_override: Any | None = None,
 ) -> FastAPI:
-    """创建 FastAPI 应用。测试时可传入 datasource_configs 覆盖配置。"""
+    """
+    创建 FastAPI 应用实例
+    
+    工厂函数，创建并配置完整的 FastAPI 应用。
+    
+    Args:
+        datasource_configs: 数据源配置（可选，用于测试覆盖）
+        loader_override: 本体加载器实例（可选，用于测试）
+    
+    Returns:
+        FastAPI: 配置完成的 FastAPI 应用实例
+    """
     from datacloud_data_service.api.mcp_sdk_handler import (
         create_mcp_asgi_app,
         create_mcp_session_manager,

@@ -1,4 +1,21 @@
-"""OntologyLoader: 解析 JSON/YAML 本体 -> 内部模型 + 核心实体。"""
+"""
+本体加载器模块
+
+本模块提供本体定义的加载和管理能力，从 JSON/YAML 文件解析本体模型，
+并提供核心实体（Object、View、Action）的访问接口。
+
+核心功能：
+- 从文件或内容加载本体定义
+- 管理对象、关系、函数、场景等本体元素
+- 提供配置管理（数据源、计划生成器等）
+- 创建核心实体实例
+
+使用示例：
+    loader = OntologyLoader()
+    loader.load_from_path("resources/ontology/crm_demo/objects_registry.json")
+    loader.configure(csv_base_dir="/tmp/csv")
+    obj = loader.get_object("sales_bo")
+"""
 
 from __future__ import annotations
 
@@ -20,22 +37,45 @@ from datacloud_data_sdk.ontology.models import (
 
 @dataclass
 class LoaderConfig:
-    """OntologyLoader 运行时配置。"""
+    """
+    本体加载器运行时配置
+    
+    存储加载器运行所需的各种配置信息。
+    
+    Attributes:
+        plan_generator: 计划生成器实例
+        event_bus: 事件总线实例
+        datasource_configs: 数据源配置字典
+        kb_source_configs: 知识库配置字典
+        csv_base_dir: CSV 文件存储目录
+        sql_execution_mode: SQL 执行模式
+        term_loader: 术语加载器实例
+    """
 
     plan_generator: Any = None
     event_bus: Any = None
     datasource_configs: dict[str, Any] = field(default_factory=dict)
-    kb_source_configs: dict[str, dict] | None = None  # {alias: {endpoint: url}}
+    kb_source_configs: dict[str, dict] | None = None
     csv_base_dir: str = "/tmp/datacloud_csv"
     sql_execution_mode: str = "internal"
-    term_loader: Any = None  # TermLoader，用于术语解析；None 时跳过
+    term_loader: Any = None
 
 
 class OntologyLoader:
-    """本体加载器：解析标准格式 JSON，产出 Ontology* 模型与核心实体。
-
-    Example::
-
+    """
+    本体加载器
+    
+    解析标准格式 JSON，产出 Ontology* 模型与核心实体。
+    是数据服务 SDK 的核心入口类。
+    
+    Attributes:
+        _classes: 本体类字典
+        _relations: 关联关系列表
+        _functions: 函数配置字典
+        _scenes: 场景配置字典
+        _config: 运行时配置
+    
+    Example:
         loader = OntologyLoader()
         loader.load_from_path("resources/ontology/crm_demo/objects_registry.json")
         loader.configure(csv_base_dir="/tmp/csv")
@@ -43,6 +83,7 @@ class OntologyLoader:
     """
 
     def __init__(self) -> None:
+        """初始化本体加载器"""
         self._classes: dict[str, OntologyClass] = {}
         self._relations: list[OntologyRelation] = []
         self._functions: dict[str, dict[str, Any]] = {}
@@ -50,12 +91,25 @@ class OntologyLoader:
         self._config = LoaderConfig()
 
     def load_from_path(self, path: str | Path) -> None:
-        """从本地文件加载本体定义。"""
+        """
+        从本地文件加载本体定义
+        
+        Args:
+            path: 本体文件路径
+        """
         content = json.loads(Path(path).read_text(encoding="utf-8"))
         self.load_from_content(content)
 
     def load_from_content(self, content: dict[str, Any], format: str = "json") -> None:
-        """从内存 dict 加载本体定义。"""
+        """
+        从内存字典加载本体定义
+        
+        解析本体内容，构建内部模型。
+        
+        Args:
+            content: 本体内容字典
+            format: 格式类型（json/yaml）
+        """
         for fn in content.get("functions", []):
             self._functions[fn["function_code"]] = fn.get("api_schema", {})
 
