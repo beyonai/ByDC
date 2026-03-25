@@ -50,12 +50,46 @@ async def insight_node(state: AgentState) -> dict:
     # 读取所有结果（如果是文件路径，则读出内容）
     aggregated_data = []
     for res in results:
-        if isinstance(res, dict) and "file_path" in res:
+        if isinstance(res, dict) and "file_path" in res and "preview" in res:
+            # intercept the modified data_query payload
+            task_id_info = res.get("task_id", "?")
+            file_path = res["file_path"]
+            preview = res.get("preview", [])
+            total = res.get("total", len(preview))
+            columns = res.get("columns", [])
+            
+            md_lines = []
+            if columns:
+                headers = [col.get("label", col.get("name", "")) for col in columns]
+                md_lines.append("| " + " | ".join(headers) + " |")
+                md_lines.append("|" + "|".join(["---"] * len(headers)) + "|")
+                keys = [col.get("name") for col in columns]
+                
+                for row in preview:
+                    cells = [str(row.get(k, "")) for k in keys]
+                    md_lines.append("| " + " | ".join(cells) + " |")
+            
+            md_table = "\n".join(md_lines)
+            notice = res.get("overflow_notice")
+            if not notice:
+                if total > len(preview):
+                    notice = f"*【重要】数据量较大（共 {total} 条），此处仅展示前 {len(preview)} 条。详细数据路径: {file_path}*"
+                else:
+                    notice = f"*共 {total} 条，已全量展示。*"
+            
+            final_md = f"【数据查询结果】\n{md_table}\n{notice}"
+            
+            aggregated_data.append({
+                "task_id": task_id_info,
+                "data": final_md
+            })
+            
+        elif isinstance(res, dict) and "file_path" in res:
             try:
                 with open(res["file_path"], "r", encoding="utf-8") as f:
                     data = json.load(f)
                     aggregated_data.append({
-                        "task_id": res["task_id"],
+                        "task_id": res.get("task_id", "?"),
                         "data": data
                     })
             except Exception as e:
@@ -106,10 +140,13 @@ async def insight_node(state: AgentState) -> dict:
     )
 
     sys_prompt = f"""你是一个高级数据分析师。
-以下是执行查询任务后获得的数据结果：
+以下是各个子任务执行后的数据结果集合（部分数据已为您转化为格式化的 Markdown 表格）：
 {data_context}
 
-请结合原始问题，直接给出专业的自然语言分析总结，不要使用任何占位符。回答尽量详实清晰。
+分析注意事项：
+1. 请结合原始问题，直接给出专业的自然语言分析总结。
+2. 尽量详实清晰，不能使用占位符。
+3. 当需要在回复中直接呈现数据列表/明细时，请**务必原样保留或直接使用我们提供的 Markdown 表格格式**进行展示。
 """
     
     # 调用大模型生成总结
