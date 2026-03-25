@@ -60,6 +60,7 @@ class ObjectViewField:
         aliases: 字段别名列表，支持多种名称引用
         term_set: 术语集名称，用于术语解析
         term_type: 术语类型
+        term_field: 术语字段（code/name）
         dataset_id: 数据集 ID
         source_column: 物理列名，SQL 中必须使用此名称
     """
@@ -70,6 +71,7 @@ class ObjectViewField:
     aliases: list[str] = field(default_factory=list)
     term_set: str | None = None
     term_type: str | None = None
+    term_field: str | None = None
     dataset_id: int | None = None
     source_column: str | None = None
 
@@ -91,6 +93,7 @@ class ObjectViewFunctionParam:
         default_value: 默认值
         term_set: 术语集名称
         term_type: 术语类型
+        term_field: 术语字段（code/name）
         dataset_id: 数据集 ID
     """
     
@@ -103,6 +106,7 @@ class ObjectViewFunctionParam:
     default_value: Any = None
     term_set: str | None = None
     term_type: str | None = None
+    term_field: str | None = None
     dataset_id: int | None = None
 
 
