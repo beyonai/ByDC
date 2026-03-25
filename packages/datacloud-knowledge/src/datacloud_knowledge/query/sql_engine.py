@@ -11,20 +11,25 @@ from __future__ import annotations
 import os
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from hashlib import md5
+from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple
+
+from .vocab_cache import VocabularyCache
 
 try:
     import psycopg
     from psycopg import Connection as PgConnection
+    from psycopg_pool import ConnectionPool
 
     PSYCOPG_VERSION = 3
 except ImportError:
     # Fallback to psycopg2 for backward compatibility
     import psycopg2  # type: ignore
     from psycopg2.extensions import connection as PgConnection  # type: ignore
+    ConnectionPool = None  # type: ignore
 
     PSYCOPG_VERSION = 2
-
 
 # ============================================================================
 # Data Classes
@@ -87,6 +92,11 @@ class SQLKnowledgeGraphQuery:
         db_config: Optional[Dict[str, Any]] = None,
         schema: str = "whale_datacloud",
         default_hops: int = 4,
+        pool_min: int = 2,
+        pool_max: int = 10,
+        cache_dir: Optional[Path] = None,
+        enable_query_cache: bool = True,
+        query_cache_maxsize: int = 1000,
     ):
         """Initialize with DB config or auto-read from env vars.
 
@@ -95,14 +105,32 @@ class SQLKnowledgeGraphQuery:
                       If None, reads from DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME
             schema: Database schema name (default: whale_datacloud)
             default_hops: Default number of hops for queries
+            pool_min: Minimum connection pool size
+            pool_max: Maximum connection pool size
+            cache_dir: Directory for mmap cache (default: ~/.cache/datacloud_knowledge
+                      or DATACLOUD_KNOWLEDGE_CACHE_DIR env var)
+            enable_query_cache: Enable LRU cache for query results (default: True)
+            query_cache_maxsize: Max entries in LRU cache (default: 1000)
         """
         self.schema = schema
         self.default_hops = default_hops
         self.db_config = db_config or self._load_db_config_from_env()
         self._name_index: Optional[Dict[str, List[Tuple[str, str, str]]]] = None
         self._vocabulary_set: Optional[Set[str]] = None
-
+        self._pool: Optional["ConnectionPool"] = None
+        self._pool_min = pool_min
+        self._pool_max = pool_max
+        
+        # mmap-based cache for vocabulary and name index
+        self._cache = VocabularyCache(schema=schema, cache_dir=cache_dir)
+        
+        # Query result cache settings
+        self._enable_query_cache = enable_query_cache
+        self._query_cache_maxsize = query_cache_maxsize
+        self._query_cache: Dict[str, Tuple[Dict[str, Any], int]] = {}  # key -> (result, access_count)
+        self._cache_order: List[str] = []  # for LRU eviction
     def _load_db_config_from_env(self) -> Dict[str, Any]:
+        """Load DB config from environment variables."""
         """Load DB config from environment variables."""
         required = ["DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME"]
         missing = [v for v in required if not os.getenv(v)]
@@ -117,26 +145,134 @@ class SQLKnowledgeGraphQuery:
             "database": os.environ["DB_NAME"],
         }
 
+    def _get_pool(self) -> "ConnectionPool":
+        """Get or create connection pool."""
+        if self._pool is None:
+            if ConnectionPool is None:
+                raise RuntimeError("psycopg_pool not available, install psycopg[pool]")
+            config = self.db_config.copy()
+            if "database" in config:
+                config["dbname"] = config.pop("database")
+            self._pool = ConnectionPool(
+                kwargs=config,
+                min_size=self._pool_min,
+                max_size=self._pool_max,
+                open=True,
+                max_idle=10,  # Close idle connections after 10 seconds
+            )
+        return self._pool
+
     @contextmanager
     def _connect(self) -> Generator[PgConnection, None, None]:
-        """Create database connection (psycopg3/psycopg2 compatible)."""
-        conn = None
-        try:
-            if PSYCOPG_VERSION == 3:
-                # psycopg3: use dbname instead of database
-                config = self.db_config.copy()
-                if "database" in config:
-                    config["dbname"] = config.pop("database")
-                conn = psycopg.connect(**config)
-            else:
-                # psycopg2
+        """Get connection from pool."""
+        if PSYCOPG_VERSION == 3:
+            # Use connection pool for psycopg3
+            with self._get_pool().connection() as conn:
+                yield conn
+        else:
+            # Fallback: create new connection each time (psycopg2)
+            conn = None
+            try:
                 conn = psycopg2.connect(**self.db_config)
-            yield conn
-        finally:
-            if conn is not None:
-                conn.close()
+                yield conn
+            finally:
+                if conn is not None:
+                    conn.close()
+
+    def close(self, timeout: float = 0.5) -> None:
+        """Close connection pool.
+        
+        Args:
+            timeout: Max seconds to wait for pool to close (default: 0.5s)
+        """
+        if self._pool is not None:
+            try:
+                # Try graceful close with short timeout
+                self._pool.close(timeout=timeout)
+            except Exception:
+                # If graceful close fails, try hard close
+                try:
+                    self._pool.hard_close()
+                except Exception:
+                    pass
+            self._pool = None
+
+    def prewarm(self, force_rebuild: bool = False, fast: bool = True, warm_pool: bool = True) -> bool:
+        """Pre-warm indexes and connection pool for faster subsequent queries.
+        
+        Uses mmap cache to avoid reloading from DB on restart.
+        
+        Args:
+            force_rebuild: If True, ignore cache and rebuild from DB
+            fast: If True, skip DB validation for faster startup (default: True)
+                  Use fast=False when data might have changed externally
+            warm_pool: If True, pre-warm connection pool (default: True)
+            
+        Returns:
+            True if cache was used, False if rebuilt from DB
+        """
+        # 1. Try to load from mmap cache (fast mode: skip DB validation)
+        if not force_rebuild:
+            if fast:
+                # Fast mode: load directly from mmap without DB validation
+                vocab, index = self._cache.load_fast()
+                if vocab is not None and index is not None:
+                    self._vocabulary_set = vocab
+                    self._name_index = index
+                    
+                    # Warm connection pool if requested
+                    if warm_pool:
+                        self._warm_connection_pool()
+                    
+                    return True  # Cache hit (fast)
+            else:
+                # Safe mode: validate with DB
+                with self._connect() as conn:
+                    vocab, index = self._cache.load(conn)
+                    if vocab is not None and index is not None:
+                        self._vocabulary_set = vocab
+                        self._name_index = index
+                        return True  # Cache hit
+        
+        # 2. Cache miss or force rebuild - load from DB
+        self._build_name_index()
+        self._build_vocabulary_set()
+        
+        # 3. Save to mmap cache
+        with self._connect() as conn:
+            self._cache.save(conn, self._vocabulary_set, self._name_index)
+        
+        return False  # Cache miss, rebuilt from DB
+    
+    def _warm_connection_pool(self) -> None:
+        """Warm up connection pool by executing a simple query.
+        
+        This establishes connections in the pool upfront,
+        so subsequent queries don't pay the connection setup cost.
+        """
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(f"SELECT 1 FROM {self.schema}.term LIMIT 1")
+                    cur.fetchall()
+        except Exception:
+            pass  # Ignore errors during warmup
 
     def _build_name_index(self) -> Dict[str, List[Tuple[str, str, str]]]:
+        """Build name -> term_id index from DB (cached).
+
+        TODO: 存在 OOM（内存溢出）风险。如果 term 表数据量过大（如海量企业/网格实例），
+        全量拉取会导致内存耗尽。后续需要结合 jieba 分词服务和外部索引进行重构。
+
+        Uses term_name table to get all names (standard names + aliases)
+        based on the term-term_name-term_vocabulary relationship:
+        - term: stores term metadata (term_id, term_name as standard name, term_type_code)
+        - term_name: stores all name_text values for each term (standard + aliases)
+        - term_vocabulary: stores unique vocabulary words for jieba dictionary
+
+        Returns:
+            Dict mapping name -> [(term_id, node_type, match_type), ...]
+        """
         """Build name -> term_id index from DB (cached).
 
         TODO: 存在 OOM（内存溢出）风险。如果 term 表数据量过大（如海量企业/网格实例），
@@ -317,17 +453,23 @@ class SQLKnowledgeGraphQuery:
     def extract_entities(self, query: str) -> List[QueryEntity]:
         """Extract matching entities from natural language query.
 
-        Uses Bidirectional Maximum Matching algorithm for word segmentation,
+        Uses Bidirectional Maximum Matching (BIMM) algorithm for word segmentation,
         then maps matched words to term entities via name_index.
 
-        Algorithm:
-        1. Build vocabulary from term_name table
-        2. Apply bidirectional max matching to segment query
-        3. Map matched words to term entities (dedupe by term_id)
-        """
-        name_index = self._build_name_index()
-        vocab = self._build_vocabulary_set()
+        Requires prewarm() to be called first to load vocabulary and name_index.
 
+        Algorithm:
+        1. Apply bidirectional max matching to segment query
+        2. Map matched words to term entities (dedupe by term_id)
+        """
+        # Ensure vocabulary and name_index are loaded
+        if self._vocabulary_set is None or self._name_index is None:
+            # Auto-prewarm if not done yet
+            self.prewarm()
+        
+        vocab = self._vocabulary_set
+        name_index = self._name_index
+        
         # Apply bidirectional maximum matching
         matched_words = self._bidirectional_max_match(query, vocab)
 
@@ -358,7 +500,6 @@ class SQLKnowledgeGraphQuery:
         ]
 
         return entities
-
     def query_n_hop_subgraph(
         self,
         entity: QueryEntity,
@@ -627,9 +768,29 @@ class SQLKnowledgeGraphQuery:
         self,
         natural_language: str,
         n_hops: Optional[int] = None,
+        include_knowledge: bool = True,
     ) -> Dict[str, Any]:
-        """Main query interface - matches original API."""
+        """Main query interface - matches original API.
+
+        Optimized: uses batch SQL query for multiple entities with caching.
+        
+        Args:
+            natural_language: Natural language query text
+            n_hops: Number of hops to traverse (default: self.default_hops)
+            include_knowledge: Whether to include knowledge descriptions (default: True)
+            
+        Returns:
+            Dict with query, entities_found, n_hops, and results
+        """
         hops = n_hops if n_hops is not None else self.default_hops
+        
+        # Check cache first
+        if self._enable_query_cache:
+            cache_key = self._make_cache_key(natural_language, hops, include_knowledge)
+            cached = self._get_from_cache(cache_key)
+            if cached is not None:
+                return cached
+        
         # 1. Extract entities
         entities = self.extract_entities(natural_language)
 
@@ -641,16 +802,10 @@ class SQLKnowledgeGraphQuery:
                 "message": "未找到匹配的实体",
             }
 
-        # 2. Query subgraph for each entity
-        results = []
-        for entity in entities:
-            subgraph = self.query_n_hop_subgraph(
-                entity,
-                n_hops=hops,
-            )
-            results.append(self._format_subgraph_result(subgraph))
+        # 2. Batch query subgraphs (optimized)
+        results = self._batch_query_subgraphs(entities, hops, include_knowledge=include_knowledge)
 
-        return {
+        result = {
             "query": natural_language,
             "entities_found": [
                 {
@@ -665,6 +820,222 @@ class SQLKnowledgeGraphQuery:
             "n_hops": hops,
             "results": results,
         }
+        
+        # Store in cache
+        if self._enable_query_cache:
+            self._put_in_cache(cache_key, result)
+        
+        return result
+    
+    def _make_cache_key(self, query: str, n_hops: int, include_knowledge: bool) -> str:
+        """Generate cache key from query parameters."""
+        # Normalize query (strip whitespace, lowercase)
+        normalized = query.strip().lower()
+        # Create hash for long queries
+        if len(normalized) > 100:
+            key_str = f"{md5(normalized.encode()).hexdigest()}:{n_hops}:{include_knowledge}"
+        else:
+            key_str = f"{normalized}:{n_hops}:{include_knowledge}"
+        return key_str
+    
+    def _get_from_cache(self, key: str) -> Optional[Dict[str, Any]]:
+        """Get result from LRU cache."""
+        if key not in self._query_cache:
+            return None
+        result, _ = self._query_cache[key]
+        # Move to end (most recently used)
+        if key in self._cache_order:
+            self._cache_order.remove(key)
+            self._cache_order.append(key)
+        return result
+    
+    def _put_in_cache(self, key: str, result: Dict[str, Any]) -> None:
+        """Put result in LRU cache with eviction."""
+        # Evict if at capacity
+        while len(self._query_cache) >= self._query_cache_maxsize and self._cache_order:
+            oldest = self._cache_order.pop(0)
+            self._query_cache.pop(oldest, None)
+        
+        # Add new entry
+        self._query_cache[key] = (result, 1)
+        self._cache_order.append(key)
+    
+    def clear_cache(self) -> None:
+        """Clear query result cache."""
+        self._query_cache.clear()
+        self._cache_order.clear()
+
+    def _batch_query_subgraphs(
+        self,
+        entities: List[QueryEntity],
+        n_hops: int,
+        include_knowledge: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """Batch query multiple entity subgraphs using single SQL.
+
+        Performance optimizations:
+        1. Single recursive CTE with multi-source seeds (instead of N CTEs)
+        2. O(E) edge deduplication using set (instead of O(E²) with any())
+        3. Optional knowledge loading (lazy mode)
+        """
+        if not entities:
+            return []
+
+        # Filter entities with valid node_id
+        valid_entities = [e for e in entities if e.node_id]
+        if not valid_entities:
+            return [self._format_subgraph_result(SubgraphResult(center_entity=e, hops=n_hops)) for e in entities]
+
+        # Build single CTE with all seeds in VALUES clause
+        # This is more efficient than N separate CTEs
+        seed_values = ", ".join(f"('{e.node_id}')" for e in valid_entities)
+        
+        # Build knowledge JOIN conditionally
+        knowledge_join = f"LEFT JOIN {self.schema}.term_knowledge k ON t.term_id = k.term_id" if include_knowledge else ""
+        knowledge_cols = "k.desc_summary AS knowledge_summary, k.\"desc\" AS knowledge_desc" if include_knowledge else "NULL AS knowledge_summary, NULL AS knowledge_desc"
+        
+        sql = f"""
+        WITH RECURSIVE seeds(source_id) AS (
+            VALUES {seed_values}
+        ),
+        traversal AS (
+            -- Anchor: start from all seeds
+            SELECT 
+                s.source_id,
+                t.term_id,
+                t.term_name,
+                t.term_type_code,
+                       0 AS depth, ARRAY[t.term_id]::varchar(64)[] AS path,
+                       NULL::varchar AS parent_id, NULL::varchar AS relation,
+                {knowledge_cols}
+            FROM seeds s
+            JOIN {self.schema}.term t ON t.term_id = s.source_id
+            {knowledge_join}
+            
+            UNION ALL
+            
+            -- Recursive: expand neighbors
+            SELECT 
+                tr.source_id,
+                e.target_term_id,
+                t2.term_name,
+                t2.term_type_code,
+                       tr.depth + 1, (tr.path || e.target_term_id)::varchar(64)[],
+                       tr.term_id, e.relation_name,
+                       NULL, NULL
+            FROM traversal tr
+            JOIN {self.schema}.term_relation e ON tr.term_id = e.source_term_id
+            JOIN {self.schema}.term t2 ON t2.term_id = e.target_term_id
+                WHERE tr.depth < {n_hops} AND NOT e.target_term_id = ANY(tr.path)
+        )
+        SELECT * FROM traversal
+        """
+
+        # Execute batch query (single round trip)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql)
+                rows = cur.fetchall()
+
+        # Group results by source_id and build knowledge_map
+        from collections import defaultdict
+        results_by_source: Dict[str, List] = defaultdict(list)
+        knowledge_map: Dict[str, List[str]] = {}
+        
+        for row in rows:
+            source_id, term_id, term_name, term_type, depth, path, parent_id, relation, k_summary, k_desc = row
+            results_by_source[source_id].append(row)
+            
+            # Build knowledge from embedded columns (only if include_knowledge)
+            if include_knowledge and (k_summary or k_desc):
+                if term_id not in knowledge_map:
+                    knowledge_map[term_id] = []
+                parts = []
+                if k_summary:
+                    parts.append(f"【{k_summary}】")
+                if k_desc:
+                    parts.append(k_desc)
+                knowledge_map[term_id].append("\n".join(parts) if parts else "")
+        
+        # Build subgraph results for each entity
+        results = []
+        for entity in entities:
+            if not entity.node_id:
+                results.append(self._format_subgraph_result(SubgraphResult(center_entity=entity, hops=n_hops)))
+                continue
+
+            entity_rows = results_by_source.get(entity.node_id, [])
+            if not entity_rows:
+                results.append(self._format_subgraph_result(SubgraphResult(center_entity=entity, hops=n_hops)))
+                continue
+
+            # Build nodes and edges from rows
+            nodes: Dict[str, Dict[str, Any]] = {}
+            edges: List[Dict[str, Any]] = []
+            # O(E) edge deduplication using set
+            seen_edges: Set[Tuple[str, str, str]] = set()
+            path_edges: Dict[Tuple[str, ...], List[Tuple[Tuple[str, ...], str]]] = {}
+            path_to_node: Dict[Tuple[str, ...], Dict[str, Any]] = {}
+
+            for row in entity_rows:
+                # Row format: (source_id, term_id, term_name, term_type, depth, path, parent_id, relation, k_summary, k_desc)
+                term_id, term_name, term_type, depth, path, parent_id, relation = row[1:8]
+
+                if term_id not in nodes:
+                    nodes[term_id] = {
+                        "_id": term_id,
+                        "id": term_id,
+                        "name": term_name,
+                        "node_type": term_type,
+                        "depth": depth,
+                    }
+                    # Only add knowledge if present and enabled
+                    if include_knowledge and term_id in knowledge_map:
+                        nodes[term_id]["knowledge"] = "\n\n".join(knowledge_map[term_id])
+
+                path_tuple = tuple(path) if path else (term_id,)
+                if path_tuple not in path_to_node:
+                    path_to_node[path_tuple] = {
+                        "term_id": term_id,
+                        "name": term_name,
+                        "node_type": term_type,
+                        "depth": depth,
+                    }
+
+                if parent_id and relation:
+                    parent_path = path_tuple[:-1] if len(path_tuple) > 1 else (parent_id,)
+                    if parent_path not in path_edges:
+                        path_edges[parent_path] = []
+                    child_entry = (path_tuple, relation)
+                    if child_entry not in path_edges[parent_path]:
+                        path_edges[parent_path].append(child_entry)
+
+                    # O(1) edge deduplication using set
+                    edge_key = (parent_id, term_id, relation)
+                    if edge_key not in seen_edges:
+                        seen_edges.add(edge_key)
+                        edges.append({
+                            "source": parent_id,
+                            "target": term_id,
+                            "relation": relation,
+                            "data": {"relation": relation},
+                        })
+            
+            # Build tree
+            tree = self._build_tree_from_path_edges(
+                entity.node_id, nodes, path_edges, path_to_node, n_hops
+            )
+
+            subgraph = SubgraphResult(
+                center_entity=entity,
+                hops=n_hops,
+                nodes=list(nodes.values()),
+                edges=edges,
+                tree=tree,
+            )
+            results.append(self._format_subgraph_result(subgraph))
+
+        return results
 
     def _format_subgraph_result(self, subgraph: SubgraphResult) -> Dict[str, Any]:
         """Format subgraph to JSON-serializable dict."""
@@ -697,17 +1068,19 @@ class SQLKnowledgeGraphQuery:
         self,
         natural_language: str,
         n_hops: Optional[int] = None,
+        include_knowledge: bool = True,
     ) -> str:
         """将自然语言查询转换为富含语义的树形文本描述.
 
         Args:
             natural_language: 自然语言查询文本
             n_hops: 查询跳数，默认使用 self.default_hops
+            include_knowledge: 是否包含知识描述，默认 True
 
         Returns:
             树形结构的语义文本描述
         """
-        result = self.query(natural_language, n_hops=n_hops)
+        result = self.query(natural_language, n_hops=n_hops, include_knowledge=include_knowledge)
         return self._format_result_as_tree_text(result)
 
     def _format_result_as_tree_text(self, result: Dict[str, Any]) -> str:
@@ -869,19 +1242,82 @@ def create_sql_graph_query(
     return SQLKnowledgeGraphQuery(db_config=config, schema=schema)
 
 
+# ============================================================================
+# Singleton Service Instance (for performance optimization)
+# ============================================================================
+# Singleton Service Instance (for performance optimization)
+# ============================================================================
+
+# Global singleton service instance
+_singleton_service: Optional[SQLKnowledgeGraphQuery] = None
+_singleton_n_hops: int = 4
+
+
+def get_singleton_service(n_hops: int = 4, fast: bool = True) -> SQLKnowledgeGraphQuery:
+    """Get or create singleton service instance with prewarm.
+    
+    This is the recommended way to get a service instance for
+    production use - it caches the instance and prewarms it
+    on first access for optimal performance.
+    
+    Args:
+        n_hops: Default number of hops for queries
+        fast: If True, skip DB validation for faster startup (default: True)
+              Use fast=False when data might have changed externally
+        
+    Returns:
+        Pre-warmed SQLKnowledgeGraphQuery instance
+    """
+    global _singleton_service, _singleton_n_hops
+    
+    if _singleton_service is None or _singleton_n_hops != n_hops:
+        _singleton_service = SQLKnowledgeGraphQuery(default_hops=n_hops)
+        _singleton_n_hops = n_hops
+        # Prewarm: load vocabulary and name_index into memory
+        _singleton_service.prewarm(fast=fast)
+    
+    return _singleton_service
+
+
+def reset_singleton_service(timeout: float = 0.5) -> None:
+    """Reset singleton service instance (for testing).
+    
+    Args:
+        timeout: Max seconds to wait for pool close (default: 0.5s)
+    """
+    global _singleton_service
+    if _singleton_service is not None:
+        try:
+            _singleton_service.close(timeout=timeout)
+        except Exception:
+            pass  # Ignore close errors during reset
+        _singleton_service = None
+
+
 def nl_to_semantic_tree(
     natural_language: str,
     service: Optional["SQLKnowledgeGraphQuery"] = None,
     n_hops: int = 4,
+    include_knowledge: bool = True,
+    use_singleton: bool = True,
+    fast: bool = True,
 ) -> str:
     """将自然语言查询转换为富含语义的树形文本描述.
 
     这是 SDK 提供的便捷函数，直接输入自然语言，输出语义化的树形文本。
+    
+    性能优化：
+    - 默认使用单例模式 (use_singleton=True)，首次调用时预热缓存
+    - 后续调用复用同一实例，避免重复初始化开销
+    - 支持查询结果缓存，重复查询极速响应
 
     Args:
         natural_language: 自然语言查询文本
-        service: SQLKnowledgeGraphQuery 实例（可选，不传则自动创建）
+        service: SQLKnowledgeGraphQuery 实例（可选，不传则使用单例）
         n_hops: 查询跳数，默认 4
+        include_knowledge: 是否包含知识描述，默认 True（设为 False 可加速）
+        use_singleton: 是否使用单例实例，默认 True（推荐）
+        fast: 是否跳过DB验证加速启动，默认 True（仅首次创建单例时生效）
 
     Returns:
         树形结构的语义文本描述
@@ -902,8 +1338,12 @@ def nl_to_semantic_tree(
                 └── area_code: 110105
     """
     if service is None:
-        service = SQLKnowledgeGraphQuery(default_hops=n_hops)
-    return service.to_semantic_string(natural_language, n_hops=n_hops)
+        if use_singleton:
+            service = get_singleton_service(n_hops, fast=fast)
+        else:
+            service = SQLKnowledgeGraphQuery(default_hops=n_hops)
+            service.prewarm(fast=fast)
+    return service.to_semantic_string(natural_language, n_hops=n_hops, include_knowledge=include_knowledge)
 
 
 # Backward compatibility alias
@@ -925,4 +1365,6 @@ __all__ = [
     "SubgraphResult",
     "create_sql_graph_query",
     "nl_to_semantic_tree",
+    "get_singleton_service",
+    "reset_singleton_service",
 ]
