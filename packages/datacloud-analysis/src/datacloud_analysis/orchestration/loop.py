@@ -1,93 +1,78 @@
-"""③ ReAct execution loop + state router + HITL (design §3.1 LOOP_REGION).
+"""③ ReAct execution loop + state router (design §3.1).
 
-This node implements the ``CHECKER → DO_TASK / HITL_NODE`` cycle:
-
-- Inspect the current state to decide:
-  * All sub-tasks done   → exit loop (fall-through to insight_node)
-  * Sub-task pending     → call ``sandbox_executor`` (DO_TASK path)
-  * High-risk / ambiguous → call LangGraph ``interrupt()`` (HITL path)
-
-HITL mechanism
---------------
-When the Agent encounters ambiguity it calls LangGraph's native
-``interrupt(value)`` function.  LangGraph freezes the current state into
-a checkpoint and raises ``GraphInterrupt``.  The message handler catches this,
-records the checkpoint_id, and emits a callback event to the task
-scheduler so the frontend can show a user-facing confirmation card.
-
-Resume path
------------
-The message handler re-enters the compiled graph via ``Command(resume=user_answer)``
-using the same ``thread_id``.  LangGraph restores the checkpoint and
-continues execution from the interrupted node.
+Responsibilities
+----------------
+- Iterate over the DAG plan.
+- For each task, call sandbox_executor.
+- If it's a multi-task plan, intermediate results should be saved to Workspace.
+- If it's a single task, results can be stored in state directly.
 """
 
 from __future__ import annotations
 
 import logging
 from typing import Any
+import os
+import json
+from pathlib import Path
 
-from langgraph.types import interrupt
-
+from datacloud_analysis.orchestration.state import AgentState
 from datacloud_analysis.orchestration.sandbox_executor import execute_next_task
 
 logger = logging.getLogger(__name__)
 
-# Tasks that require explicit user confirmation before execution.
-_HIGH_RISK_TASK_TYPES = {"delete_data", "bulk_write", "schema_change"}
 
-
-async def loop_node(state: dict[str, Any]) -> dict[str, Any]:
+async def loop_node(state: AgentState) -> dict:
     """Single iteration of the ReAct loop.
 
-    LangGraph will call this node repeatedly (via a self-edge) until it
-    signals completion by *not* adding a self-transition.
-
-    Current simplified logic:
-    - If the DAG has pending tasks, execute the next one.
-    - If a pending task is high-risk, interrupt and ask the user.
-    - If no pending tasks remain, return state unchanged (falls through to insight).
-
-    TODO: replace with full ReAct reasoning using the reasoning LLM.
+    Executes the next pending task in the plan.
     """
-    dag: list[dict[str, Any]] = state.get("dag", [])
-    pending = [t for t in dag if t.get("status") != "done"]
+    plan = state.get("plan", [])
+    results = state.get("results", [])
+    workspace_dir = state.get("workspace_dir")
+    
+    pending = [t for t in plan if t.get("status") == "pending"]
 
     if not pending:
         logger.debug("loop_node: all tasks done, exiting loop.")
-        return state
+        return {}
 
-    next_task = _pick_next_task(pending, dag)
+    next_task = _pick_next_task(pending, plan)
+    
+    # Execute the task
+    updated_task, output = await execute_next_task(next_task, state)
+    
+    # Save output
+    is_multi_task = len(plan) > 1
+    
+    if is_multi_task and workspace_dir:
+        # Write to workspace
+        temp_dir = Path(workspace_dir) / "temp"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        file_path = temp_dir / f"{updated_task['id']}.json"
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(output, f, ensure_ascii=False)
+        logger.info("Saved intermediate result to %s", file_path)
+        output_ref = {"task_id": updated_task['id'], "file_path": str(file_path)}
+        results.append(output_ref)
+    else:
+        # Single task, keep in memory
+        results.append({"task_id": updated_task['id'], "data": output})
 
-    # HITL path — pause and ask the user.
-    if next_task.get("type") in _HIGH_RISK_TASK_TYPES:
-        logger.info("loop_node: high-risk task detected, triggering HITL interrupt.")
-        user_answer = interrupt(
-            {
-                "question": f"Task '{next_task['id']}' ({next_task['type']}) may be destructive. Proceed?",
-                "options": ["yes", "no"],
-                "task_id": next_task["id"],
-            }
-        )
-        if user_answer != "yes":
-            next_task["status"] = "skipped"
-            return state
-
-    # Normal execution path.
-    updated_task = await execute_next_task(next_task, state)
-    # Merge updated task back into the DAG.
-    state["dag"] = [updated_task if t["id"] == updated_task["id"] else t for t in dag]
-    return state
+    # Update plan
+    updated_plan = [updated_task if t["id"] == updated_task["id"] else t for t in plan]
+    
+    return {"plan": updated_plan, "results": results}
 
 
 def _pick_next_task(
     pending: list[dict[str, Any]],
     all_tasks: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Select the next executable task (all deps satisfied)."""
+    """Select the next executable task."""
     done_ids = {t["id"] for t in all_tasks if t.get("status") == "done"}
     for task in pending:
         deps = task.get("deps", [])
         if all(d in done_ids for d in deps):
             return task
-    return pending[0]  # fallback: pick first pending
+    return pending[0]
