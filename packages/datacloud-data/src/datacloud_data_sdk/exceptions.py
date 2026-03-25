@@ -10,6 +10,9 @@
     - ObjectNotFoundError: 对象不存在
     - ActionNotFoundError: 动作不存在
     - InvalidOntologyFormatError: 本体格式无效
+    - TermResolutionError: 术语解析错误
+      - TermNotFoundError: 术语不存在
+      - TermAmbiguousError: 术语匹配到多个结果
   - PlanError: 计划层错误
     - PlanGenerationError: 计划生成失败
     - PlanValidationError: 计划验证失败
@@ -31,6 +34,10 @@
         print(f"动作 {e.action_code} 未配置")
     except ApiExecutionError as e:
         print(f"API 调用失败: {e.status_code}")
+    except TermNotFoundError as e:
+        print(f"术语不存在: {e.value}, 可用值: {e.available_values}")
+    except TermAmbiguousError as e:
+        print(f"术语歧义，请选择: {e.matches}")
 """
 
 from __future__ import annotations
@@ -51,6 +58,97 @@ class OntologyError(DatacloudError):
     
     当本体加载、验证或查询过程中发生错误时抛出。
     """
+
+
+class TermResolutionError(OntologyError):
+    """
+    术语解析错误基类
+    
+    当术语解析过程中发生错误时抛出。
+    
+    Attributes:
+        term_set: 术语集
+        value: 待解析的值
+        param_name: 参数名称（可选）
+    """
+    
+    def __init__(self, term_set: str, value: str, message: str, param_name: str | None = None) -> None:
+        super().__init__(message)
+        self.term_set = term_set
+        self.value = value
+        self.param_name = param_name
+
+
+class TermNotFoundError(TermResolutionError):
+    """
+    术语未找到异常
+    
+    当指定的术语值在术语集中不存在时抛出。
+    
+    Attributes:
+        term_set: 术语集
+        value: 未找到的值
+        available_values: 可用的术语值列表
+        available_entries: 可用的术语条目列表，每项包含 code 和 label
+        param_name: 参数名称
+    """
+    
+    def __init__(
+        self,
+        term_set: str,
+        value: str,
+        available_values: list[str] | None = None,
+        param_name: str | None = None,
+        available_entries: list[dict[str, str]] | None = None,
+    ) -> None:
+        self.available_values = available_values
+        self.available_entries = available_entries
+        lines = [f"值「{value}」不存在。"]
+        if available_entries:
+            if len(available_entries) <= 10:
+                entries_str = ", ".join(f"[{e['code']}] {e['label']}" for e in available_entries)
+                lines.append(f"可选值: {entries_str}")
+            else:
+                entries_str = ", ".join(f"[{e['code']}] {e['label']}" for e in available_entries[:10])
+                lines.append(f"可选值: {entries_str}... 等共 {len(available_entries)} 个")
+        elif available_values:
+            if len(available_values) <= 10:
+                lines.append(f"可选值: {', '.join(available_values)}")
+            else:
+                lines.append(f"可选值: {', '.join(available_values[:10])}... 等共 {len(available_values)} 个")
+        else:
+            lines.append(f"术语集: {term_set}")
+        message = "\n".join(lines)
+        super().__init__(term_set, value, message, param_name)
+
+
+class TermAmbiguousError(TermResolutionError):
+    """
+    术语歧义异常
+    
+    当术语值匹配到多个结果时抛出，需要用户选择。
+    
+    Attributes:
+        term_set: 术语集
+        value: 有歧义的值
+        matches: 匹配到的术语列表，每项包含 code, label, aliases
+        param_name: 参数名称
+    """
+    
+    def __init__(
+        self,
+        term_set: str,
+        value: str,
+        matches: list[dict[str, str]],
+        param_name: str | None = None,
+    ) -> None:
+        self.matches = matches
+        lines = [f"值「{value}」匹配到多个结果，请选择其中一个:"]
+        for i, m in enumerate(matches, 1):
+            aliases_str = f" (别名: {', '.join(m.get('aliases', []))})" if m.get('aliases') else ""
+            lines.append(f"  {i}. [{m['code']}] {m['label']}{aliases_str}")
+        message = "\n".join(lines)
+        super().__init__(term_set, value, message, param_name)
 
 
 class ObjectNotFoundError(OntologyError):

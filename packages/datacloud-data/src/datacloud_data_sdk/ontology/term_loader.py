@@ -7,6 +7,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from datacloud_data_sdk.exceptions import TermAmbiguousError, TermNotFoundError
+
 try:
     from datacloud_knowledge.knowledge_search.term_search import search_terms_by_type
 except ImportError:
@@ -33,6 +35,7 @@ class TermLoader(ABC):
         dataset_id: int | None = None,
         term_type_code: str | None = None,
         keyword: str | None = None,
+        param_name: str | None = None,
     ) -> str:
         """将标签/别名/code 解析为标准 code。"""
 
@@ -54,6 +57,16 @@ class TermLoader(ABC):
         term_type_code: str | None = None,
     ) -> list[str]:
         """返回术语集的所有 code 值。"""
+
+    @abstractmethod
+    def get_entries(
+        self,
+        term_set: str,
+        dataset_id: int | None = None,
+        term_type_code: str | None = None,
+        keyword: str = "",
+    ) -> list[dict[str, str]]:
+        """返回术语集的所有条目，每项包含 code 和 label。"""
 
     @classmethod
     def from_config(cls, config: dict) -> TermLoader:
@@ -173,23 +186,45 @@ class ApiTermLoader(TermLoader):
         dataset_id: int | None = None,
         term_type_code: str | None = None,
         keyword: str | None = None,
+        param_name: str | None = None,
     ) -> str:
-        """将标签/别名/code 解析为标准 code。lookup 时可用 keyword=value 搜索。"""
+        """将标签/别名/code 解析为标准 code。lookup 时可用 keyword=value 搜索。
+        
+        Raises:
+            TermAmbiguousError: 匹配到多个术语，需要用户选择
+            TermNotFoundError: 术语不存在
+        """
+        matches: list[dict[str, str]] = []
         for entry in self._sets.get(term_set, []):
             if value in (entry.code, entry.label, *entry.aliases):
-                return entry.code
+                matches.append({
+                    "code": entry.code,
+                    "label": entry.label,
+                    "aliases": entry.aliases,
+                })
+        if len(matches) == 1:
+            return matches[0]["code"]
+        if len(matches) > 1:
+            raise TermAmbiguousError(term_set, value, matches, param_name)
         if self._api_base_url and dataset_id and (term_type_code or "." in term_set):
             tc = term_type_code or term_set.split(".")[0]
             entries = self._fetch_from_api(dataset_id, tc, keyword=keyword or value)
+            api_matches: list[dict[str, str]] = []
             for entry in entries:
                 if value in (entry.code, entry.label, *entry.aliases):
-                    return entry.code
-            if entries:
-                return entries[0].code
-        available = self.get_available_values(
+                    api_matches.append({
+                        "code": entry.code,
+                        "label": entry.label,
+                        "aliases": entry.aliases,
+                    })
+            if len(api_matches) == 1:
+                return api_matches[0]["code"]
+            if len(api_matches) > 1:
+                raise TermAmbiguousError(term_set, value, api_matches, param_name)
+        available_entries = self.get_entries(
             term_set, dataset_id=dataset_id, term_type_code=term_type_code
         )
-        raise ValueError(f"Unknown term {value!r} in {term_set!r}. available: {available}")
+        raise TermNotFoundError(term_set, value, None, param_name, available_entries)
 
     def get_available_values(
         self,
@@ -222,6 +257,23 @@ class ApiTermLoader(TermLoader):
             tc = term_type_code or term_set.split(".")[0]
             entries = self._fetch_from_api(dataset_id, tc, keyword="")
             return [e.code for e in entries]
+        return []
+
+    def get_entries(
+        self,
+        term_set: str,
+        dataset_id: int | None = None,
+        term_type_code: str | None = None,
+        keyword: str = "",
+    ) -> list[dict[str, str]]:
+        """返回术语集的所有条目，每项包含 code 和 label。"""
+        mem = self._sets.get(term_set, [])
+        if mem:
+            return [{"code": e.code, "label": e.label} for e in mem]
+        if self._api_base_url and dataset_id and (term_type_code or "." in term_set):
+            tc = term_type_code or term_set.split(".")[0]
+            entries = self._fetch_from_api(dataset_id, tc, keyword=keyword)
+            return [{"code": e.code, "label": e.label} for e in entries]
         return []
 
 
@@ -273,20 +325,33 @@ class KbTermLoader(TermLoader):
         dataset_id: int | None = None,
         term_type_code: str | None = None,
         keyword: str | None = None,
+        param_name: str | None = None,
     ) -> str:
-        """将标签/别名/code 解析为标准 code。lookup 时可用 keyword=value 搜索。"""
+        """将标签/别名/code 解析为标准 code。lookup 时可用 keyword=value 搜索。
+        
+        Raises:
+            TermAmbiguousError: 匹配到多个术语，需要用户选择
+            TermNotFoundError: 术语不存在
+        """
         tc = self._resolve_term_type_code(term_set, term_type_code)
         cached = self._cache.get(tc)
         if cached is None:
             cached = self._search(tc, keyword=value)
             self._cache[tc] = cached
+        matches: list[dict[str, str]] = []
         for entry in cached:
             if value in (entry.code, entry.label, *entry.aliases):
-                return entry.code
-        if cached:
-            return cached[0].code
-        available = self.get_available_values(term_set, dataset_id, term_type_code, keyword)
-        raise ValueError(f"Unknown term {value!r} in {term_set!r}. available: {available}")
+                matches.append({
+                    "code": entry.code,
+                    "label": entry.label,
+                    "aliases": entry.aliases,
+                })
+        if len(matches) == 1:
+            return matches[0]["code"]
+        if len(matches) > 1:
+            raise TermAmbiguousError(term_set, value, matches, param_name)
+        available_entries = self.get_entries(term_set, dataset_id, term_type_code, keyword)
+        raise TermNotFoundError(term_set, value, None, param_name, available_entries)
 
     def get_available_values(
         self,
@@ -310,3 +375,15 @@ class KbTermLoader(TermLoader):
         tc = self._resolve_term_type_code(term_set, term_type_code)
         entries = self._search(tc, keyword="")
         return [e.code for e in entries]
+
+    def get_entries(
+        self,
+        term_set: str,
+        dataset_id: int | None = None,
+        term_type_code: str | None = None,
+        keyword: str = "",
+    ) -> list[dict[str, str]]:
+        """返回术语集的所有条目，每项包含 code 和 label。"""
+        tc = self._resolve_term_type_code(term_set, term_type_code)
+        entries = self._search(tc, keyword=keyword)
+        return [{"code": e.code, "label": e.label} for e in entries]
