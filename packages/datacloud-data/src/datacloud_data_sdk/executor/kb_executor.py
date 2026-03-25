@@ -1,4 +1,19 @@
-"""KbExecutor: 知识库检索执行，写入 CSV 并返回 csv_path。"""
+"""
+知识库执行器模块
+
+本模块提供知识库检索的执行能力，通过 HTTP 调用 RAG 服务执行检索。
+支持将检索结果写入 CSV 文件供后续步骤使用。
+
+核心功能：
+- 调用 RAG 服务的 /retrieve 接口执行检索
+- 支持标签过滤和 top_k 参数
+- 将检索结果转换为 CSV 格式存储
+
+使用示例：
+    kb_configs = {"kb_main": {"endpoint": "http://rag-service:8000"}}
+    executor = KbExecutor(kb_configs)
+    csv_path = await executor.execute(task, request_id, step_results)
+"""
 
 from __future__ import annotations
 
@@ -15,7 +30,20 @@ from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
 
 
 class KbExecutor:
-    """知识库 RAG 检索执行器，通过 HTTP POST 调用 RAG 服务 /retrieve 接口。"""
+    """
+    知识库 RAG 检索执行器
+    
+    通过 HTTP POST 调用 RAG 服务的 /retrieve 接口执行知识库检索。
+    
+    Attributes:
+        _configs: 知识库配置字典，key 为数据源别名，value 包含 endpoint
+        _csv: CSV 存储管理器
+    
+    Example:
+        kb_configs = {"kb_main": {"endpoint": "http://localhost:8000"}}
+        executor = KbExecutor(kb_configs)
+        csv_path = await executor.execute(task, "req_001", step_results)
+    """
 
     def __init__(
         self,
@@ -23,8 +51,12 @@ class KbExecutor:
         csv_base_dir: str = "/tmp/datacloud_csv",
     ) -> None:
         """
+        初始化知识库执行器
+        
         Args:
-            kb_configs: key 为 datasource alias，value 为 {"endpoint": str}（RAG 服务 base URL）
+            kb_configs: 知识库配置字典
+                key: 数据源别名
+                value: {"endpoint": str} RAG 服务 base URL
             csv_base_dir: CSV 临时文件根目录
         """
         self._configs = kb_configs
@@ -37,15 +69,25 @@ class KbExecutor:
         step_results: StepResults,
     ) -> str:
         """
-        执行知识库检索，将 records 写入 CSV 并返回 csv_path。
-
+        执行知识库检索
+        
+        执行流程：
+        1. 验证数据源配置
+        2. 构建 RAG 请求体
+        3. 调用 RAG 服务 /retrieve 接口
+        4. 将检索结果写入 CSV 文件
+        
         Args:
             task: 知识库执行任务
             request_id: 请求 ID
-            step_results: 前置步骤结果（预留）
-
+            step_results: 前置步骤结果（预留用于参数绑定）
+        
         Returns:
             str: 写入的 CSV 文件路径
+        
+        Raises:
+            DataSourceUnavailableError: 数据源未配置时抛出
+            KbExecutionError: RAG 调用失败时抛出
         """
         if task.datasource_alias not in self._configs:
             raise DataSourceUnavailableError(task.datasource_alias)

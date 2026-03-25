@@ -1,4 +1,26 @@
-"""Action 实体：封装 OntologyAction，提供 schema 与执行能力。"""
+"""
+动作(Action)实体模块
+
+本模块定义了 Action 类，用于封装本体动作(OntologyAction)，提供 schema 生成与执行能力。
+Action 是数据服务中执行操作的核心抽象，支持多种执行方式：脚本执行、API调用、虚拟查询等。
+
+核心功能：
+- 动作 schema 生成：生成符合 JSON Schema 规范的输入输出定义
+- 参数映射：支持参数名/别名的自动映射
+- 多执行模式：script(脚本) -> function_refs(API) -> 虚拟查询
+- 术语解析：自动解析业务术语到实际值
+
+执行优先级：
+1. is_virtual=True: 执行虚拟查询（动态构建 SQL）
+2. script 存在: 执行脚本代码
+3. function_refs 存在: 调用外部 API
+4. 否则抛出 ActionNotConfiguredError
+
+使用示例：
+    action = Action(ontology_action, loader=ontology_loader)
+    schema = action.get_schema()  # 获取 JSON Schema
+    result = await action.execute({"param1": "value1"})  # 执行动作
+"""
 
 from __future__ import annotations
 
@@ -7,7 +29,14 @@ from typing import Any
 from datacloud_data_sdk.ontology.models import OntologyAction, OntologyActionParam
 
 def _default_query_output_schema() -> dict[str, object]:
-    """虚拟动作默认 output schema。"""
+    """
+    生成虚拟动作的默认输出 schema
+    
+    虚拟动作通常返回记录列表和总数，此函数提供标准化的输出格式定义。
+    
+    Returns:
+        dict: 包含 records 数组和 total 整数的 JSON Schema
+    """
     return {
         "type": "object",
         "properties": {
@@ -30,28 +59,66 @@ PARAM_TYPE_MAP: dict[str, str] = {
     "LIST": "array",
     "OBJECT": "object",
 }
+"""本体参数类型到 JSON Schema 类型的映射表
+
+将本体定义中的参数类型（如 STRING, INTEGER）映射到 JSON Schema 标准类型。
+"""
 
 
 class Action:
-    """动作实体，提供 schema 生成与执行能力。
-
-    执行优先级：script > function_refs(API) > ActionNotConfiguredError
+    """
+    动作实体类，提供 schema 生成与执行能力
+    
+    Action 是数据服务中执行操作的核心抽象。每个动作对应一个本体中定义的操作，
+    可以是数据库查询、API调用或脚本执行。
+    
+    执行优先级：
+        1. is_virtual=True: 执行虚拟查询（动态构建 SQL）
+        2. script 存在: 执行脚本代码
+        3. function_refs 存在: 调用外部 API
+        4. 否则抛出 ActionNotConfiguredError
+    
+    Attributes:
+        _action: 本体动作定义对象
+        _loader: 本体加载器，用于获取相关配置和资源
+    
+    Example:
+        action = Action(ontology_action, loader=ontology_loader)
+        schema = action.get_schema()
+        result = await action.execute({"status": "active"})
     """
 
     def __init__(self, ontology_action: OntologyAction, loader: Any = None) -> None:
+        """
+        初始化动作实体
+        
+        Args:
+            ontology_action: 本体动作定义
+            loader: 本体加载器实例，用于获取数据源配置等
+        """
         self._action = ontology_action
         self._loader = loader
 
     @property
     def action_code(self) -> str:
+        """动作代码，唯一标识此动作"""
         return self._action.action_code
 
     @property
     def has_script(self) -> bool:
+        """是否配置了执行脚本"""
         return bool(self._action.script)
 
     def get_schema(self) -> dict[str, object]:
-        """生成 {name, title, description, inputSchema, outputSchema}，结果缓存。"""
+        """
+        生成动作的 JSON Schema
+        
+        生成包含 name, title, description, inputSchema, outputSchema 的完整 schema。
+        结果会被缓存，避免重复计算。
+        
+        Returns:
+            dict: 包含动作元数据和输入输出 schema 的字典
+        """
         if self._action._schema_cache is not None:
             return self._action._schema_cache
         if self._action.input_schema is not None:
@@ -73,6 +140,15 @@ class Action:
         return result
 
     def _build_schema(self, params: list[OntologyActionParam]) -> dict[str, object]:
+        """
+        从参数列表构建 JSON Schema
+        
+        Args:
+            params: 动作参数列表
+        
+        Returns:
+            dict: JSON Schema 对象
+        """
         properties: dict[str, dict[str, object]] = {}
         required: list[str] = []
         for p in params:
@@ -91,7 +167,17 @@ class Action:
         return schema
 
     def _map_names(self, arguments: dict[str, Any]) -> dict[str, Any]:
-        """将 param_name/alias 映射为标准 param_code。"""
+        """
+        将参数名/别名映射为标准的参数代码
+        
+        支持使用 param_name 或 alias 作为参数名，自动转换为 param_code。
+        
+        Args:
+            arguments: 原始参数字典，可能使用别名作为键
+        
+        Returns:
+            dict: 键为 param_code 的参数字典
+        """
         alias_map: dict[str, str] = {}
         for p in self._action.params:
             alias_map[p.param_code] = p.param_code
@@ -103,7 +189,24 @@ class Action:
         return mapped
 
     async def execute(self, params: dict[str, object]) -> dict[str, object]:
-        """执行动作：参数映射、术语解析、map_to_physical 自闭环，is_virtual 优先 → script → API。"""
+        """
+        执行动作
+        
+        完整的执行流程：
+        1. 参数映射：将参数名/别名转换为标准 param_code
+        2. 术语解析：解析业务术语到实际值
+        3. 执行操作：按优先级选择执行方式（虚拟查询/脚本/API）
+        4. 结果标准化：统一返回格式
+        
+        Args:
+            params: 执行参数字典
+        
+        Returns:
+            dict: 标准化的执行结果，包含 records, total, meta 等字段
+        
+        Raises:
+            ActionNotConfiguredError: 动作未配置执行方式
+        """
         from datacloud_data_sdk.exceptions import ActionNotConfiguredError
 
         params = dict(params)
@@ -154,7 +257,21 @@ class Action:
         raise ActionNotConfiguredError(self._action.action_code)
 
     async def _execute_virtual(self, params: dict[str, Any]) -> dict[str, Any]:
-        """执行虚拟查询动作，返回原始数据 {"records": [], "total": 0}。"""
+        """
+        执行虚拟查询动作
+        
+        虚拟动作不预定义 SQL，而是根据参数动态构建查询。
+        通常用于对象的基础查询操作。
+        
+        Args:
+            params: 查询参数，包含 filters, page, page_size 等
+        
+        Returns:
+            dict: 包含 records 和 total 的原始结果
+        
+        Raises:
+            ActionNotConfiguredError: 未配置 loader 时抛出
+        """
         from datacloud_data_sdk.executor.dynamic_query_executor import DynamicQueryExecutor
 
         if not self._loader:
@@ -167,6 +284,18 @@ class Action:
         return await executor.execute(object_code, params)
 
     async def _execute_script(self, params: dict[str, Any]) -> dict[str, Any]:
+        """
+        执行脚本动作
+        
+        通过 ScriptExecutor 执行预定义的脚本代码，
+        支持从返回结果中提取记录数据。
+        
+        Args:
+            params: 脚本执行参数
+        
+        Returns:
+            dict: 标准化的结果格式
+        """
         from datacloud_data_sdk.executor.script_executor import ScriptExecutor
 
         executor = ScriptExecutor(ontology_loader=self._loader)
@@ -197,7 +326,24 @@ class Action:
         }
 
     async def _execute_api(self, params: dict[str, Any]) -> dict[str, Any]:
-        """通过 HTTP API 执行动作。"""
+        """
+        通过 HTTP API 执行动作
+        
+        调用外部 API 服务执行动作，支持：
+        - 自动构建请求 URL 和 headers
+        - 请求日志记录（curl 格式）
+        - 响应数据提取和标准化
+        
+        Args:
+            params: API 请求参数
+        
+        Returns:
+            dict: 标准化的结果格式
+        
+        Raises:
+            ActionNotConfiguredError: 未配置 function 或 loader
+            ApiExecutionError: API 调用失败时抛出
+        """
         import httpx
 
         from datacloud_data_sdk.exceptions import ActionNotConfiguredError, ApiExecutionError
