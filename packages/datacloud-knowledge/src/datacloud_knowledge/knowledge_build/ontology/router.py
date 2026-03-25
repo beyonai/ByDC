@@ -43,7 +43,7 @@ async def create_ontology_term(
                 {
                     "stream": io.BytesIO(content),
                     "filename": owl_file.filename or "ontology.owl",
-                    "content_type": owl_file.content_type,
+                    "content_type": owl_file.content_type or "",
                     "directory": "ontology",
                 }
             ],

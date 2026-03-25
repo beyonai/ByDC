@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, BinaryIO, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 class UploadItemDict(TypedDict, total=False):
     # one of:
@@ -25,7 +24,7 @@ class FileMeta(BaseModel):
     filename: str
     content_type: str | None = None
     size: int
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     directory: str
 
 
