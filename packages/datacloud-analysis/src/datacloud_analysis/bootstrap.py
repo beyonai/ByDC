@@ -83,10 +83,10 @@ async def setup() -> None:
         logger.info("datacloud-analysis: PG connection pool opened.")
 
         # 3. Create LangGraph checkpoint tables (idempotent – IF NOT EXISTS).
-        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver  # noqa: PLC0415
+        from datacloud_analysis.session.pg_opengauss import get_checkpointer  # noqa: PLC0415
 
-        async with AsyncPostgresSaver.from_conn_string(settings.pg.checkpoint_uri) as saver:
-            await saver.setup()
+        async with get_checkpointer():
+            pass
         logger.info("datacloud-analysis: LangGraph checkpoint tables ready.")
 
         # 4. Initialize datacloud-memory Store (also idempotent).

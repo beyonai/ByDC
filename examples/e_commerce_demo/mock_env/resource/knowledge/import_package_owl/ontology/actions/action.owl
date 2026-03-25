@@ -1,0 +1,111 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/action/ontology#">
+
+    <owl:Class rdf:about="#ActionDefinition"><rdfs:label>动作定义</rdfs:label></owl:Class>
+    <owl:NamedIndividual rdf:about="#action_query_enterprise_by_name_or_id">
+        <rdf:type rdf:resource="#ActionDefinition"/>
+        <action_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">query_enterprise_by_name_or_id</action_code>
+        <action_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">按名称或ID查询企业</action_name>
+        <action_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">按企业ID列表或企业名称列表批量查询企业详情</action_desc>
+        <action_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">QUERY(UPDATE:操作, QUERY:查询)</action_type>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+        <function_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</function_refs>
+        <belong_entity rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["dws_enterprise_wide"]</belong_entity>
+        <request_url rdf:datatype="http://www.w3.org/2001/XMLSchema#string">http://127.0.0.1/query_enterprise_by_name_or_id</request_url>
+        <request_method rdf:datatype="http://www.w3.org/2001/XMLSchema#string">POST</request_method>
+        <request_header rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"Content-Type": "application/json"}]</request_header>
+        <request_params rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"paramCode": "enterpriseId", "type": "string", "description": "企业ID", "isRequired": true, "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "rel_term_codeorname": ""}, {"paramCode": "enterpriseName", "type": "string", "description": "企业名称", "isRequired": true, "term_type_code_path": "LIB_002#ENTERPRISE_NAME", "library_code": "LIB_002", "rel_term_codeorname": ""}, {"paramCode": "dataYear", "type": "int", "description": "数据年份", "isRequired": false, "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "rel_term_codeorname": ""}]</request_params>
+        <response_params rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"fieldCode": "enterpriseId", "fieldType": "string", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "enterprise_id", "json_path": "data.enterpriseId"}, {"fieldCode": "enterpriseName", "fieldType": "string", "term_type_code_path": "LIB_002#ENTERPRISE_NAME", "library_code": "LIB_002", "object_property": "enterprise_name", "json_path": "data.enterpriseName"}, {"fieldCode": "riskLevel", "fieldType": "string", "term_type_code_path": "LIB_002#RISK_LEVEL", "library_code": "LIB_002", "object_property": "risk_level", "json_path": "data.riskLevel"}, {"fieldCode": "chainName", "fieldType": "string", "term_type_code_path": "LIB_002#CHAIN_NAME", "library_code": "LIB_002", "object_property": "chain_name", "json_path": "data.chainName"}, {"fieldCode": "gridName", "fieldType": "string", "term_type_code_path": "LIB_002#GRID_NAME", "library_code": "LIB_002", "object_property": "grid_name", "json_path": "data.gridName"}]</response_params>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#action_query_enterprise_risk_profile">
+        <rdf:type rdf:resource="#ActionDefinition"/>
+        <action_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">query_enterprise_risk_profile</action_code>
+        <action_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">查询企业风险画像</action_name>
+        <action_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">读取企业风险等级、风险类型、风险研判摘要等信息</action_desc>
+        <action_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">QUERY(UPDATE:操作, QUERY:查询)</action_type>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+        <function_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</function_refs>
+        <belong_entity rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["dws_enterprise_wide"]</belong_entity>
+        <request_url rdf:datatype="http://www.w3.org/2001/XMLSchema#string">http://127.0.0.1/query_enterprise_risk_profile</request_url>
+        <request_method rdf:datatype="http://www.w3.org/2001/XMLSchema#string">POST</request_method>
+        <request_header rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"Content-Type": "application/json"}]</request_header>
+        <request_params rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"paramCode": "enterpriseId", "type": "string", "description": "企业ID", "isRequired": true, "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "rel_term_codeorname": ""}, {"paramCode": "enterpriseName", "type": "string", "description": "企业名称", "isRequired": true, "term_type_code_path": "LIB_002#ENTERPRISE_NAME", "library_code": "LIB_002", "rel_term_codeorname": ""}, {"paramCode": "dataYear", "type": "int", "description": "数据年份", "isRequired": false, "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "rel_term_codeorname": ""}]</request_params>
+        <response_params rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"fieldCode": "riskScore", "fieldType": "double", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "risk_score", "json_path": "data.riskScore"}, {"fieldCode": "riskLevel", "fieldType": "string", "term_type_code_path": "LIB_002#RISK_LEVEL", "library_code": "LIB_002", "object_property": "risk_level", "json_path": "data.riskLevel"}, {"fieldCode": "latestRiskTypeName", "fieldType": "string", "term_type_code_path": "LIB_002#LATEST_RISK_TYPE_NAME", "library_code": "LIB_002", "object_property": "latest_risk_type_name", "json_path": "data.latestRiskTypeName"}, {"fieldCode": "latestPatternName", "fieldType": "string", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "latest_pattern_name", "json_path": "data.latestPatternName"}, {"fieldCode": "latestJudgmentSummary", "fieldType": "string", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "latest_judgment_summary", "json_path": "data.latestJudgmentSummary"}]</response_params>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#action_query_grid_by_name_or_id">
+        <rdf:type rdf:resource="#ActionDefinition"/>
+        <action_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">query_grid_by_name_or_id</action_code>
+        <action_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">按名称或ID查询网格</action_name>
+        <action_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">按网格ID列表或网格名称列表批量查询网格详情</action_desc>
+        <action_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">QUERY(UPDATE:操作, QUERY:查询)</action_type>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+        <function_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</function_refs>
+        <belong_entity rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["dws_grid_wide"]</belong_entity>
+        <request_url rdf:datatype="http://www.w3.org/2001/XMLSchema#string">http://127.0.0.1/query_grid_by_name_or_id</request_url>
+        <request_method rdf:datatype="http://www.w3.org/2001/XMLSchema#string">POST</request_method>
+        <request_header rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"Content-Type": "application/json"}]</request_header>
+        <request_params rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"paramCode": "gridId", "type": "string", "description": "网格ID", "isRequired": true, "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "rel_term_codeorname": ""}, {"paramCode": "gridName", "type": "string", "description": "网格名称", "isRequired": true, "term_type_code_path": "LIB_002#GRID_NAME", "library_code": "LIB_002", "rel_term_codeorname": ""}, {"paramCode": "dataYear", "type": "int", "description": "数据年份", "isRequired": false, "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "rel_term_codeorname": ""}]</request_params>
+        <response_params rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"fieldCode": "gridId", "fieldType": "string", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "grid_id", "json_path": "data.gridId"}, {"fieldCode": "gridName", "fieldType": "string", "term_type_code_path": "LIB_002#GRID_NAME", "library_code": "LIB_002", "object_property": "grid_name", "json_path": "data.gridName"}, {"fieldCode": "regionName", "fieldType": "string", "term_type_code_path": "LIB_002#REGION_NAME", "library_code": "LIB_002", "object_property": "region_name", "json_path": "data.regionName"}, {"fieldCode": "enterpriseCnt", "fieldType": "int", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "enterprise_cnt", "json_path": "data.enterpriseCnt"}, {"fieldCode": "vitalityIdx", "fieldType": "double", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "vitality_idx", "json_path": "data.vitalityIdx"}]</response_params>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#action_query_grid_vitality_profile">
+        <rdf:type rdf:resource="#ActionDefinition"/>
+        <action_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">query_grid_vitality_profile</action_code>
+        <action_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">查询网格活力画像</action_name>
+        <action_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">读取网格人流、车流、夜光、物流热力和活力指数等指标</action_desc>
+        <action_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">QUERY(UPDATE:操作, QUERY:查询)</action_type>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+        <function_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</function_refs>
+        <belong_entity rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["dws_grid_wide"]</belong_entity>
+        <request_url rdf:datatype="http://www.w3.org/2001/XMLSchema#string">http://127.0.0.1/query_grid_vitality_profile</request_url>
+        <request_method rdf:datatype="http://www.w3.org/2001/XMLSchema#string">POST</request_method>
+        <request_header rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"Content-Type": "application/json"}]</request_header>
+        <request_params rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"paramCode": "gridId", "type": "string", "description": "网格ID", "isRequired": true, "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "rel_term_codeorname": ""}, {"paramCode": "gridName", "type": "string", "description": "网格名称", "isRequired": true, "term_type_code_path": "LIB_002#GRID_NAME", "library_code": "LIB_002", "rel_term_codeorname": ""}, {"paramCode": "dataYear", "type": "int", "description": "数据年份", "isRequired": false, "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "rel_term_codeorname": ""}]</request_params>
+        <response_params rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"fieldCode": "vitalityIdx", "fieldType": "double", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "vitality_idx", "json_path": "data.vitalityIdx"}, {"fieldCode": "humanFlowIdx", "fieldType": "double", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "human_flow_idx", "json_path": "data.humanFlowIdx"}, {"fieldCode": "trafficFlowIdxDay", "fieldType": "double", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "traffic_flow_idx_day", "json_path": "data.trafficFlowIdxDay"}, {"fieldCode": "nightLightIdxDay", "fieldType": "double", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "night_light_idx_day", "json_path": "data.nightLightIdxDay"}, {"fieldCode": "logisticsHeatIdxDay", "fieldType": "double", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "logistics_heat_idx_day", "json_path": "data.logisticsHeatIdxDay"}]</response_params>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#action_query_industry_by_name_or_id">
+        <rdf:type rdf:resource="#ActionDefinition"/>
+        <action_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">query_industry_by_name_or_id</action_code>
+        <action_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">按名称或ID查询产业链</action_name>
+        <action_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">按产业链ID列表或产业链名称列表批量查询产业链详情</action_desc>
+        <action_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">QUERY(UPDATE:操作, QUERY:查询)</action_type>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+        <function_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</function_refs>
+        <belong_entity rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["dws_industry_wide"]</belong_entity>
+        <request_url rdf:datatype="http://www.w3.org/2001/XMLSchema#string">http://127.0.0.1/query_industry_by_name_or_id</request_url>
+        <request_method rdf:datatype="http://www.w3.org/2001/XMLSchema#string">POST</request_method>
+        <request_header rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"Content-Type": "application/json"}]</request_header>
+        <request_params rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"paramCode": "chainId", "type": "string", "description": "产业链ID", "isRequired": true, "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "rel_term_codeorname": ""}, {"paramCode": "chainName", "type": "string", "description": "产业链名称", "isRequired": true, "term_type_code_path": "LIB_002#CHAIN_NAME", "library_code": "LIB_002", "rel_term_codeorname": ""}, {"paramCode": "dataYear", "type": "int", "description": "数据年份", "isRequired": false, "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "rel_term_codeorname": ""}]</request_params>
+        <response_params rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"fieldCode": "chainId", "fieldType": "string", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "chain_id", "json_path": "data.chainId"}, {"fieldCode": "chainName", "fieldType": "string", "term_type_code_path": "LIB_002#CHAIN_NAME", "library_code": "LIB_002", "object_property": "chain_name", "json_path": "data.chainName"}, {"fieldCode": "chainLevel", "fieldType": "int", "term_type_code_path": "LIB_002#CHAIN_LEVEL", "library_code": "LIB_002", "object_property": "chain_level", "json_path": "data.chainLevel"}, {"fieldCode": "enterpriseCnt", "fieldType": "int", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "enterprise_cnt", "json_path": "data.enterpriseCnt"}, {"fieldCode": "relationStrengthSum", "fieldType": "double", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "relation_strength_sum", "json_path": "data.relationStrengthSum"}]</response_params>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#action_query_industry_relation_profile">
+        <rdf:type rdf:resource="#ActionDefinition"/>
+        <action_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">query_industry_relation_profile</action_code>
+        <action_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">查询产业链关系画像</action_name>
+        <action_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">读取产业链上下游供需关系、链内关系数和关系强度等信息</action_desc>
+        <action_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">QUERY(UPDATE:操作, QUERY:查询)</action_type>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+        <function_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</function_refs>
+        <belong_entity rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["dws_industry_wide"]</belong_entity>
+        <request_url rdf:datatype="http://www.w3.org/2001/XMLSchema#string">http://127.0.0.1/query_industry_relation_profile</request_url>
+        <request_method rdf:datatype="http://www.w3.org/2001/XMLSchema#string">POST</request_method>
+        <request_header rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"Content-Type": "application/json"}]</request_header>
+        <request_params rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"paramCode": "chainId", "type": "string", "description": "产业链ID", "isRequired": true, "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "rel_term_codeorname": ""}, {"paramCode": "chainName", "type": "string", "description": "产业链名称", "isRequired": true, "term_type_code_path": "LIB_002#CHAIN_NAME", "library_code": "LIB_002", "rel_term_codeorname": ""}, {"paramCode": "dataYear", "type": "int", "description": "数据年份", "isRequired": false, "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "rel_term_codeorname": ""}]</request_params>
+        <response_params rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"fieldCode": "intraChainRelCnt", "fieldType": "int", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "intra_chain_rel_cnt", "json_path": "data.intraChainRelCnt"}, {"fieldCode": "supplierRelOutCnt", "fieldType": "int", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "supplier_rel_out_cnt", "json_path": "data.supplierRelOutCnt"}, {"fieldCode": "buyerRelOutCnt", "fieldType": "int", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "buyer_rel_out_cnt", "json_path": "data.buyerRelOutCnt"}, {"fieldCode": "relationStrengthSum", "fieldType": "double", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "object_property": "relation_strength_sum", "json_path": "data.relationStrengthSum"}, {"fieldCode": "chainLevel", "fieldType": "int", "term_type_code_path": "LIB_002#CHAIN_LEVEL", "library_code": "LIB_002", "object_property": "chain_level", "json_path": "data.chainLevel"}]</response_params>
+    </owl:NamedIndividual>
+    <owl:DatatypeProperty rdf:about="#action_code"><rdfs:domain rdf:resource="#ActionDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#action_name"><rdfs:domain rdf:resource="#ActionDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#action_desc"><rdfs:domain rdf:resource="#ActionDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#action_type"><rdfs:domain rdf:resource="#ActionDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#version"><rdfs:domain rdf:resource="#ActionDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#function_refs"><rdfs:domain rdf:resource="#ActionDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#belong_entity"><rdfs:domain rdf:resource="#ActionDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#request_url"><rdfs:domain rdf:resource="#ActionDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#request_method"><rdfs:domain rdf:resource="#ActionDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#request_header"><rdfs:domain rdf:resource="#ActionDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#request_params"><rdfs:domain rdf:resource="#ActionDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#response_params"><rdfs:domain rdf:resource="#ActionDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+</rdf:RDF>
