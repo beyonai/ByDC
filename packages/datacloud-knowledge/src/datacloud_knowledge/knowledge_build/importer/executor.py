@@ -23,15 +23,35 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 import threading
 import time
 from pathlib import Path
 
-import psycopg2
-import psycopg2.extensions
-from psycopg2.extras import execute_values
+import psycopg
+from psycopg import Connection, Cursor
+# execute_values 在 psycopg3 中不可用，使用自定义实现
+def _execute_values(
+    cur: Cursor,
+    sql: str,
+    argslist: list[tuple],
+    page_size: int = 1000,
+    template: str | None = None,
+) -> None:
+    """批量执行 INSERT/UPDATE，模拟 psycopg2 的 execute_values。
 
+    psycopg3 不内置 execute_values，此实现使用 executemany 或分批执行。
+    template 参数用于兼容性（在 psycopg3 中不使用，因为通过 executemany 实现）。
+    """
+    if not argslist:
+        return
+    # 将 VALUES %s 格式转换为 (%s,%s,...) 元组格式
+    # 使用 executemany 进行批量执行
+    placeholders = '(' + ','.join(['%s'] * len(argslist[0])) + ')'
+    sql_with_placeholders = sql.replace('VALUES %s', f'VALUES {placeholders}')
+    # 忽略 template 参数 - 在 psycopg3 中不需要，executemany 会自动处理类型转换
+    for i in range(0, len(argslist), page_size):
+        batch = argslist[i:i + page_size]
+        cur.executemany(sql_with_placeholders, batch)  # type: ignore
 logger = logging.getLogger(__name__)
 
 # JSONL 每批解析后入库的行数（环境变量可覆盖，过大可能增加单次事务内存）
@@ -156,7 +176,7 @@ def _term_name_row_tuples(term_id: str, term_name: str, aliases: list[str]) -> l
 
 
 def _lookup_term_ids_by_norm_codes(
-    cur: psycopg2.extensions.cursor, norm_codes: list[str]
+    cur: Cursor, norm_codes: list[str]
 ) -> dict[str, str]:
     """规范化 term_code → term.term_id（用于 relation / knowledge 等仅含 term_code 的引用）。"""
     uniq = list(dict.fromkeys(norm_codes))
@@ -214,8 +234,8 @@ def _optional_term_id_from_obj(
 
 # ── DB 连接 ───────────────────────────────────────────────────────────────────
 
-def _connect() -> psycopg2.extensions.connection:
-    """从环境变量建立 psycopg2 连接。
+def _connect() -> Connection:
+    """从环境变量建立 psycopg3 连接。
 
     可选环境变量：
     - DATACLOUD_DB_CONNECT_TIMEOUT：连接超时（秒），默认 30；仅影响建连阶段。
@@ -249,10 +269,10 @@ def _connect() -> psycopg2.extensions.connection:
         connect_timeout=connect_timeout,
     )
     try:
-        conn = psycopg2.connect(**_kw, application_name=app_name)
+        conn = psycopg.connect(**_kw, application_name=app_name)
     except TypeError:
         # 极旧 psycopg2 / 部分驱动不支持 application_name
-        conn = psycopg2.connect(**_kw)
+        conn = psycopg.connect(**_kw)
 
     lock_raw = os.getenv("DATACLOUD_DB_LOCK_TIMEOUT_MS", "").strip()
     if lock_raw.isdigit() and int(lock_raw) > 0:
@@ -280,7 +300,7 @@ def _resolve_type_category(obj: dict) -> int:
     return type_category
 
 
-def _batch_process_domain(cur: psycopg2.extensions.cursor, objs: list[dict], stats: dict) -> None:
+def _batch_process_domain(cur: Cursor, objs: list[dict], stats: dict) -> None:
     """批量写入 whale_datacloud.domain。"""
     if not objs:
         return
@@ -340,7 +360,7 @@ def _batch_process_domain(cur: psycopg2.extensions.cursor, objs: list[dict], sta
         for o in to_insert
     ]
     try:
-        execute_values(
+        _execute_values(
             cur,
             """INSERT INTO whale_datacloud.domain
                    (domain_id, domain_name, parent_id, domain_desc)
@@ -367,7 +387,7 @@ def _batch_process_domain(cur: psycopg2.extensions.cursor, objs: list[dict], sta
             raise
 
 
-def _batch_process_library(cur: psycopg2.extensions.cursor, objs: list[dict], stats: dict) -> None:
+def _batch_process_library(cur: Cursor, objs: list[dict], stats: dict) -> None:
     """批量写入 whale_datacloud.term_library。"""
     if not objs:
         return
@@ -422,7 +442,7 @@ def _batch_process_library(cur: psycopg2.extensions.cursor, objs: list[dict], st
         stats["libraries"]["updated"] += 1
     if to_insert:
         rows = [(o["library_code"], o["library_code"], o["library_name"]) for o in to_insert]
-        execute_values(
+        _execute_values(
             cur,
             """INSERT INTO whale_datacloud.term_library (library_id, library_code, library_name)
                VALUES %s""",
@@ -432,7 +452,7 @@ def _batch_process_library(cur: psycopg2.extensions.cursor, objs: list[dict], st
         stats["libraries"]["inserted"] += len(to_insert)
 
 
-def _batch_process_term_type(cur: psycopg2.extensions.cursor, objs: list[dict], stats: dict) -> None:
+def _batch_process_term_type(cur: Cursor, objs: list[dict], stats: dict) -> None:
     """批量写入 whale_datacloud.term_type（内置类型不允许删除）。"""
     if not objs:
         return
@@ -490,7 +510,7 @@ def _batch_process_term_type(cur: psycopg2.extensions.cursor, objs: list[dict], 
             (o["type_code"], o["type_name"], o.get("type_desc"), _resolve_type_category(o), False)
             for o in to_insert
         ]
-        execute_values(
+        _execute_values(
             cur,
             """INSERT INTO whale_datacloud.term_type
                    (type_code, type_name, type_desc, type_category, is_builtin)
@@ -512,7 +532,7 @@ def _dedupe_term_name_sync_items(
 
 
 def _batch_sync_term_names(
-    cur: psycopg2.extensions.cursor,
+    cur: Cursor,
     items: list[tuple[str, str, list[str]]],
 ) -> int:
     """批量同步 term_name，并一次性补全 term_vocabulary（仍用 NOT EXISTS，兼容无 ON CONFLICT 的库）。"""
@@ -548,7 +568,7 @@ def _batch_sync_term_names(
     
     if not all_rows:
         return 0
-    execute_values(
+    _execute_values(
         cur,
         """INSERT INTO whale_datacloud.term_name (name_id, term_id, name_text)
            VALUES %s""",
@@ -568,7 +588,7 @@ def _batch_sync_term_names(
     return len(all_rows)
 
 
-def _batch_process_term(cur: psycopg2.extensions.cursor, objs: list[dict], stats: dict) -> None:
+def _batch_process_term(cur: Cursor, objs: list[dict], stats: dict) -> None:
     """批量写入 whale_datacloud.term 并批量同步 term_name / term_vocabulary。
 
     新建 term 使用雪花 term_id；按唯一 term_code 更新已有行时不改 term_id。
@@ -666,7 +686,7 @@ def _batch_process_term(cur: psycopg2.extensions.cursor, objs: list[dict], stats
             # 使用临时表 + UPDATE JOIN，避免逐行 SQL
             # OpenGauss 不支持 ON COMMIT DROP，使用 PRESERVE ROWS + 手动删除
             cur.execute("CREATE TEMP TABLE _tmp_term_upd (term_id VARCHAR, term_code VARCHAR, term_name VARCHAR, desc_summary VARCHAR, domain_id VARCHAR, term_type_code VARCHAR, library_id VARCHAR, owl_doc_id VARCHAR, term_tags JSONB) ON COMMIT PRESERVE ROWS")
-            execute_values(
+            _execute_values(
                 cur,
                 "INSERT INTO _tmp_term_upd VALUES %s",
                 update_rows,
@@ -709,7 +729,7 @@ def _batch_process_term(cur: psycopg2.extensions.cursor, objs: list[dict], stats
                     term_tags,
                 )
             )
-        execute_values(
+        _execute_values(
             cur,
             """INSERT INTO whale_datacloud.term
                    (term_id, term_code, term_name, desc_summary, domain_id,
@@ -733,7 +753,7 @@ def _batch_process_term(cur: psycopg2.extensions.cursor, objs: list[dict], stats
     _batch_sync_term_names(cur, sync_upsert)
 
 
-def _batch_process_relation(cur: psycopg2.extensions.cursor, objs: list[dict], stats: dict) -> None:
+def _batch_process_relation(cur: Cursor, objs: list[dict], stats: dict) -> None:
     """批量写入 whale_datacloud.term_relation。"""
     if not objs:
         return
@@ -849,7 +869,7 @@ def _batch_process_relation(cur: psycopg2.extensions.cursor, objs: list[dict], s
             )
             for o in to_insert
         ]
-        execute_values(
+        _execute_values(
             cur,
             """INSERT INTO whale_datacloud.term_relation
                    (relation_id, source_term_id, target_term_id,
@@ -861,7 +881,7 @@ def _batch_process_relation(cur: psycopg2.extensions.cursor, objs: list[dict], s
         stats["relations"]["inserted"] += len(to_insert)
 
 
-def _batch_process_knowledge(cur: psycopg2.extensions.cursor, objs: list[dict], stats: dict) -> None:
+def _batch_process_knowledge(cur: Cursor, objs: list[dict], stats: dict) -> None:
     """批量写入 whale_datacloud.term_knowledge（term_id 外键；可显式传 term_id 或仅 term_code）。"""
     if not objs:
         return
@@ -966,7 +986,7 @@ def _batch_process_knowledge(cur: psycopg2.extensions.cursor, objs: list[dict], 
                     o.get("sort_order", 0),
                 )
             )
-        execute_values(
+        _execute_values(
             cur,
             """INSERT INTO whale_datacloud.term_knowledge
                    (knowledge_id, term_id, desc_summary, "desc",
