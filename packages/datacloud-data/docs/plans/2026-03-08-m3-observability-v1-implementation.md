@@ -15,7 +15,7 @@
 **Files:**
 - Modify: `src/datacloud_data/ontology/loader.py`
 
-**Step 1:** 在 `LoaderConfig` 中新增 `event_bus: EventBus | None = None`（需 `from typing import TYPE_CHECKING` 和 `if TYPE_CHECKING: from datacloud_data.events.bus import EventBus` 避免循环导入，或直接 `Any`）
+**Step 1:** 在 `LoaderConfig` 中新增 `event_bus: EventBus | None = None`（需 `from typing import TYPE_CHECKING` 和 `if TYPE_CHECKING: from datacloud_data_sdk.events.bus import EventBus` 避免循环导入，或直接 `Any`）
 
 **Step 2:** 运行 `pytest tests/datacloud_data/test_ontology_loader.py -v`，确认通过
 

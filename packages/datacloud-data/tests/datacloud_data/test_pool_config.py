@@ -6,13 +6,13 @@ from unittest.mock import patch
 
 import pytest
 
-from datacloud_data.sql_executor.models import DataSourceConfig
+from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 
 
 def test_mysql_connector_passes_pool_params() -> None:
     """config 含 pool_min=2, pool_max=10, pool_timeout=15，验证 create_async_engine 被调用时 pool_size=2, max_overflow=8, pool_timeout=15。"""
     with patch("sqlalchemy.ext.asyncio.create_async_engine") as mock_create:
-        from datacloud_data.sql_executor.connectors.mysql_connector import (
+        from datacloud_data_sdk.sql_executor.connectors.mysql_connector import (
             MySQLConnector,
         )
 
@@ -38,7 +38,7 @@ def test_mysql_connector_passes_pool_params() -> None:
 def test_mysql_connector_pool_max_less_than_min() -> None:
     """pool_min=5, pool_max=2，验证 pool_size=5, max_overflow=0。"""
     with patch("sqlalchemy.ext.asyncio.create_async_engine") as mock_create:
-        from datacloud_data.sql_executor.connectors.mysql_connector import (
+        from datacloud_data_sdk.sql_executor.connectors.mysql_connector import (
             MySQLConnector,
         )
 
@@ -62,7 +62,7 @@ def test_mysql_connector_pool_max_less_than_min() -> None:
 def test_postgresql_connector_passes_pool_params() -> None:
     """pool_min=1, pool_max=5, pool_timeout=30，验证 pool_size=1, max_overflow=4, pool_timeout=30。"""
     with patch("sqlalchemy.ext.asyncio.create_async_engine") as mock_create:
-        from datacloud_data.sql_executor.connectors.postgresql_connector import (
+        from datacloud_data_sdk.sql_executor.connectors.postgresql_connector import (
             PostgreSQLConnector,
         )
 

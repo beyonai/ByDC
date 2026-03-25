@@ -58,13 +58,13 @@
     {
       "field_code": "areaMu",
       "field_name": "网格面积(亩)",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "area_mu"
     },
     {
       "field_code": "areaKilometer",
       "field_name": "网格面积(平方公里)",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "area_kilometer"
     },
     {
@@ -94,19 +94,19 @@
     {
       "field_code": "totalAnnualRevenue",
       "field_name": "企业申报营收汇总",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "total_annual_revenue"
     },
     {
       "field_code": "totalTaxDeclared",
       "field_name": "企业申报税额汇总",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "total_tax_declared"
     },
     {
       "field_code": "avgRiskScore",
       "field_name": "企业平均风险分",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "avg_risk_score"
     },
     {
@@ -136,13 +136,13 @@
     {
       "field_code": "totalLandAreaMu",
       "field_name": "资产占地汇总(亩)",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "total_land_area_mu"
     },
     {
       "field_code": "totalFloorAreaSqm",
       "field_name": "资产建面汇总(平米)",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "total_floor_area_sqm"
     },
     {
@@ -154,13 +154,13 @@
     {
       "field_code": "outputPerMu",
       "field_name": "亩产效益",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "output_per_mu"
     },
     {
       "field_code": "vitalityIdx",
       "field_name": "综合活力指数",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "vitality_idx"
     },
     {
@@ -178,25 +178,25 @@
     {
       "field_code": "humanFlowIdx",
       "field_name": "人流指数(日)",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "human_flow_idx"
     },
     {
       "field_code": "trafficFlowIdxDay",
       "field_name": "车流指数(日)",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "traffic_flow_idx_day"
     },
     {
       "field_code": "nightLightIdxDay",
       "field_name": "夜间灯光指数(日)",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "night_light_idx_day"
     },
     {
       "field_code": "logisticsHeatIdxDay",
       "field_name": "物流热力指数(日)",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "logistics_heat_idx_day"
     },
     {
@@ -208,31 +208,31 @@
     {
       "field_code": "peopleFlowIdxMonth",
       "field_name": "人流指数(月)",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "people_flow_idx_month"
     },
     {
       "field_code": "trafficFlowIdxMonth",
       "field_name": "车流指数(月)",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "traffic_flow_idx_month"
     },
     {
       "field_code": "logisticsIdxMonth",
       "field_name": "物流指数(月)",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "logistics_idx_month"
     },
     {
       "field_code": "nightLightIdxMonth",
       "field_name": "夜间灯光指数(月)",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "night_light_idx_month"
     },
     {
       "field_code": "riskWeightMonth",
       "field_name": "风险权重(月)",
-      "field_type": "STRING",
+      "field_type": "NUMBER",
       "source_column": "risk_weight_month"
     },
     {

@@ -39,10 +39,20 @@
       "count": 4
     },
     {
+      "type": "terms",
+      "file": "terms/alias.jsonl"
+    },
+    {
       "type": "relations",
       "file": "relations/term_relations.jsonl",
       "description": "术语关系（本体结构 + 业务度量归属）",
       "count": 44
+    },
+    {
+      "type": "knowledge",
+      "file": "knowledge/term_knowledge.jsonl",
+      "description": "知识事实（亩产效益计算公式）",
+      "count": 1
     }
   ]
 }

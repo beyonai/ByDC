@@ -5,10 +5,10 @@ from pathlib import Path
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from datacloud_data.executor.kb_executor import KbExecutor
-from datacloud_data.executor.models import KbExecTask
-from datacloud_data.executor.step_results import StepResults
-from datacloud_data.exceptions import DataSourceUnavailableError, KbExecutionError
+from datacloud_data_sdk.executor.kb_executor import KbExecutor
+from datacloud_data_sdk.executor.models import KbExecTask
+from datacloud_data_sdk.executor.step_results import StepResults
+from datacloud_data_sdk.exceptions import DataSourceUnavailableError, KbExecutionError
 
 
 def _read_csv_records(path: str) -> list[dict]:

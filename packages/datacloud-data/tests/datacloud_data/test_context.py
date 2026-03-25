@@ -1,6 +1,6 @@
 import pytest
-from datacloud_data.context import InvocationContext, get_current_context
-from datacloud_data.exceptions import DatacloudError
+from datacloud_data_sdk.context import InvocationContext, get_current_context
+from datacloud_data_sdk.exceptions import DatacloudError
 
 
 def test_context_stores_values() -> None:
