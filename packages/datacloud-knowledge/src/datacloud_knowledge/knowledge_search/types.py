@@ -30,6 +30,7 @@ class TermItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     term_id: str
+    term_code: str
     term_name: str
     term_type_code: str
     desc_summary: str | None = None

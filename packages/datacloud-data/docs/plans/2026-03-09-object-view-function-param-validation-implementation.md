@@ -25,7 +25,7 @@
 **Step 2: 运行测试确认失败**
 
 ```bash
-cd datacloud-data && pytest tests/datacloud_data/test_object_view_builder.py -v -k "function"
+cd datacloud-data && pytest tests/datacloud_data_sdk/test_object_view_builder.py -v -k "function"
 ```
 
 **Step 3: 实现**
@@ -39,7 +39,7 @@ cd datacloud-data && pytest tests/datacloud_data/test_object_view_builder.py -v 
 **Step 5: Commit**
 
 ```bash
-git add src/datacloud_data/plan/models.py src/datacloud_data/plan/object_view_builder.py tests/datacloud_data/test_object_view_builder.py
+git add src/datacloud_data_sdk/plan/models.py src/datacloud_data_sdk/plan/object_view_builder.py tests/datacloud_data_sdk/test_object_view_builder.py
 git commit -m "feat(plan): ObjectViewFunction add params and description from action"
 ```
 
@@ -69,7 +69,7 @@ git commit -m "feat(plan): ObjectViewFunction add params and description from ac
 **Step 5: Commit**
 
 ```bash
-git add src/datacloud_data/plan/plan_validator.py tests/datacloud_data/test_plan_validator.py
+git add src/datacloud_data_sdk/plan/plan_validator.py tests/datacloud_data_sdk/test_plan_validator.py
 git commit -m "feat(plan): PlanValidator validate API step params"
 ```
 
@@ -94,7 +94,7 @@ git commit -m "feat(plan): PlanValidator validate API step params"
 **Step 4: Commit**
 
 ```bash
-git add src/datacloud_data/plan/param_converter.py tests/datacloud_data/test_param_converter.py
+git add src/datacloud_data_sdk/plan/param_converter.py tests/datacloud_data_sdk/test_param_converter.py
 git commit -m "feat(plan): add param_converter map_to_physical by mapping_path"
 ```
 
@@ -123,7 +123,7 @@ git commit -m "feat(plan): add param_converter map_to_physical by mapping_path"
 **Step 4: Commit**
 
 ```bash
-git add src/datacloud_data/plan/execution_object_converter.py src/datacloud_data/view.py src/datacloud_data/object.py tests/datacloud_data/test_execution_object_converter.py
+git add src/datacloud_data_sdk/plan/execution_object_converter.py src/datacloud_data_sdk/view.py src/datacloud_data_sdk/object.py tests/datacloud_data_sdk/test_execution_object_converter.py
 git commit -m "feat(plan): ExecutionObjectConverter convert API params via mapping_path"
 ```
 

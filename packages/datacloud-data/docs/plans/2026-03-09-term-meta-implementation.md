@@ -22,7 +22,7 @@
 
 ```python
 def test_ontology_field_has_term_type_and_dataset_id():
-    from datacloud_data.ontology.models import OntologyField
+    from datacloud_data_sdk.ontology.models import OntologyField
     f = OntologyField(
         field_code="x",
         field_name="X",

@@ -1,6 +1,6 @@
 import pytest
-from datacloud_data.events.bus import EventBus
-from datacloud_data.events.handlers import register_query_handlers
+from datacloud_data_sdk.events.bus import EventBus
+from datacloud_data_sdk.events.handlers import register_query_handlers
 
 
 async def test_register_handlers_subscribes_to_events():
@@ -8,7 +8,7 @@ async def test_register_handlers_subscribes_to_events():
     received = []
     register_query_handlers(bus, on_event=lambda e: received.append(e))
 
-    from datacloud_data.events.events import QueryRequestReceived
+    from datacloud_data_sdk.events.events import QueryRequestReceived
 
     await bus.publish(QueryRequestReceived(request_id="r1", trace_id="t1"))
     assert len(received) == 1
@@ -20,7 +20,7 @@ async def test_register_handlers_multiple_events():
     received = []
     register_query_handlers(bus, on_event=lambda e: received.append(type(e).__name__))
 
-    from datacloud_data.events.events import QueryRequestReceived, ObjectViewBuilt
+    from datacloud_data_sdk.events.events import QueryRequestReceived, ObjectViewBuilt
 
     await bus.publish(QueryRequestReceived(request_id="r1", trace_id="t1"))
     await bus.publish(ObjectViewBuilt(request_id="r1", trace_id="t1"))
@@ -31,7 +31,7 @@ async def test_register_handlers_multiple_events():
 async def test_register_handlers_no_callback_does_not_crash():
     bus = EventBus()
     register_query_handlers(bus)
-    from datacloud_data.events.events import QueryRequestReceived
+    from datacloud_data_sdk.events.events import QueryRequestReceived
 
     await bus.publish(QueryRequestReceived(request_id="r1", trace_id="t1"))
 
@@ -39,7 +39,7 @@ async def test_register_handlers_no_callback_does_not_crash():
 async def test_register_handlers_with_tracing_subscribes_via_tracing():
     """验证 tracing 传入时使用 tracing.subscribe 而非 bus.subscribe。"""
     bus = EventBus()
-    from datacloud_data.events.tracing import TracingMiddleware
+    from datacloud_data_sdk.events.tracing import TracingMiddleware
 
     tracing = TracingMiddleware(bus)
 
@@ -55,7 +55,7 @@ async def test_register_handlers_with_tracing_subscribes_via_tracing():
 
     register_query_handlers(bus, tracing=tracing)
 
-    from datacloud_data.events.events import (
+    from datacloud_data_sdk.events.events import (
         AggregationCompleted,
         ExecutionTasksReady,
         ObjectViewBuilt,

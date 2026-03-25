@@ -1,4 +1,4 @@
-from datacloud_data.ontology.models import (
+from datacloud_data_sdk.ontology.models import (
     FieldPhysicalMapping,
     OntologyField,
     OntologyActionParam,
@@ -88,7 +88,7 @@ def test_ontology_relation_has_join_keys() -> None:
 
 
 def test_ontology_field_has_property_kind_and_derived_config() -> None:
-    from datacloud_data.ontology.models import OntologyField
+    from datacloud_data_sdk.ontology.models import OntologyField
     f = OntologyField(
         field_code="discount_amount",
         field_name="折后金额",
@@ -101,7 +101,7 @@ def test_ontology_field_has_property_kind_and_derived_config() -> None:
 
 
 def test_ontology_relation_has_resolve_action() -> None:
-    from datacloud_data.ontology.models import OntologyRelation
+    from datacloud_data_sdk.ontology.models import OntologyRelation
     r = OntologyRelation(
         relation_code="cust_opp",
         source_class="customer",
