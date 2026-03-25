@@ -1,6 +1,6 @@
 """SQL-native graph query engine using PostgreSQL recursive CTEs.
 
-Replaces NetworkX in-memory graph with native SQL graph traversal.
+Native SQL graph traversal.
 Uses recursive CTEs for BFS/DFS and tree reconstruction.
 
 Requires: psycopg[binary,pool]>=3.1
@@ -13,28 +13,17 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from hashlib import md5
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Set, Tuple
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple, cast
+
+from psycopg import Connection as PgConnection
+from psycopg.sql import SQL, Identifier
+from psycopg_pool import ConnectionPool
 
 from .vocab_cache import VocabularyCache
-
-try:
-    import psycopg
-    from psycopg import Connection as PgConnection
-    from psycopg_pool import ConnectionPool
-
-    PSYCOPG_VERSION = 3
-except ImportError:
-    # Fallback to psycopg2 for backward compatibility
-    import psycopg2  # type: ignore
-    from psycopg2.extensions import connection as PgConnection  # type: ignore
-    ConnectionPool = None  # type: ignore
-
-    PSYCOPG_VERSION = 2
 
 # ============================================================================
 # Data Classes
 # ============================================================================
-
 
 @dataclass
 class QueryEntity:
@@ -80,7 +69,7 @@ class SubgraphResult:
 class SQLKnowledgeGraphQuery:
     """PostgreSQL-native graph query engine using recursive CTEs.
 
-    Replaces NetworkX with SQL-based graph traversal:
+    SQL-based graph traversal:
     - BFS: Recursive CTE with level tracking
     - N-hop neighbors: Recursive CTE with depth limit
     - Tree building: parent-child tracking in CTE
@@ -165,19 +154,9 @@ class SQLKnowledgeGraphQuery:
     @contextmanager
     def _connect(self) -> Generator[PgConnection, None, None]:
         """Get connection from pool."""
-        if PSYCOPG_VERSION == 3:
-            # Use connection pool for psycopg3
-            with self._get_pool().connection() as conn:
-                yield conn
-        else:
-            # Fallback: create new connection each time (psycopg2)
-            conn = None
-            try:
-                conn = psycopg2.connect(**self.db_config)
-                yield conn
-            finally:
-                if conn is not None:
-                    conn.close()
+        pool = self._get_pool()
+        with pool.connection() as conn:
+            yield conn
 
     def close(self, timeout: float = 0.5) -> None:
         """Close connection pool.
@@ -190,13 +169,8 @@ class SQLKnowledgeGraphQuery:
                 # Try graceful close with short timeout
                 self._pool.close(timeout=timeout)
             except Exception:
-                # If graceful close fails, try hard close
-                try:
-                    self._pool.hard_close()
-                except Exception:
-                    pass
+                pass
             self._pool = None
-
     def prewarm(self, force_rebuild: bool = False, fast: bool = True, warm_pool: bool = True) -> bool:
         """Pre-warm indexes and connection pool for faster subsequent queries.
         
@@ -240,7 +214,7 @@ class SQLKnowledgeGraphQuery:
         
         # 3. Save to mmap cache
         with self._connect() as conn:
-            self._cache.save(conn, self._vocabulary_set, self._name_index)
+            self._cache.save(conn, self._vocabulary_set or set(), self._name_index or {})
         
         return False  # Cache miss, rebuilt from DB
     
@@ -253,26 +227,11 @@ class SQLKnowledgeGraphQuery:
         try:
             with self._connect() as conn:
                 with conn.cursor() as cur:
-                    cur.execute(f"SELECT 1 FROM {self.schema}.term LIMIT 1")
+                    cur.execute(f"SELECT 1 FROM {self.schema}.term LIMIT 1")  # type: ignore[arg-type]
                     cur.fetchall()
         except Exception:
             pass  # Ignore errors during warmup
-
     def _build_name_index(self) -> Dict[str, List[Tuple[str, str, str]]]:
-        """Build name -> term_id index from DB (cached).
-
-        TODO: 存在 OOM（内存溢出）风险。如果 term 表数据量过大（如海量企业/网格实例），
-        全量拉取会导致内存耗尽。后续需要结合 jieba 分词服务和外部索引进行重构。
-
-        Uses term_name table to get all names (standard names + aliases)
-        based on the term-term_name-term_vocabulary relationship:
-        - term: stores term metadata (term_id, term_name as standard name, term_type_code)
-        - term_name: stores all name_text values for each term (standard + aliases)
-        - term_vocabulary: stores unique vocabulary words for jieba dictionary
-
-        Returns:
-            Dict mapping name -> [(term_id, node_type, match_type), ...]
-        """
         """Build name -> term_id index from DB (cached).
 
         TODO: 存在 OOM（内存溢出）风险。如果 term 表数据量过大（如海量企业/网格实例），
@@ -296,7 +255,7 @@ class SQLKnowledgeGraphQuery:
             with conn.cursor() as cur:
                 # Query all names from term_name table joined with term table
                 # to get term_type_code and determine if it's a standard name or alias
-                cur.execute(f"""
+                query = f"""
                     SELECT
                         t.term_id,
                         t.term_name AS standard_name,
@@ -308,7 +267,8 @@ class SQLKnowledgeGraphQuery:
                         END AS match_type
                     FROM {self.schema}.term_name tn
                     JOIN {self.schema}.term t ON tn.term_id = t.term_id
-                """)
+                """
+                cur.execute(SQL(query))  # type: ignore
                 for term_id, standard_name, term_type, name_text, match_type in cur.fetchall():
                     if name_text not in index:
                         index[name_text] = []
@@ -333,7 +293,7 @@ class SQLKnowledgeGraphQuery:
 
         with self._connect() as conn:
             with conn.cursor() as cur:
-                cur.execute(f"SELECT word FROM {self.schema}.term_vocabulary")
+                cur.execute(f"SELECT word FROM {self.schema}.term_vocabulary")  # type: ignore[arg-type]
                 for row in cur.fetchall():
                     if row[0]:
                         vocab.add(row[0])
@@ -471,14 +431,14 @@ class SQLKnowledgeGraphQuery:
         name_index = self._name_index
         
         # Apply bidirectional maximum matching
-        matched_words = self._bidirectional_max_match(query, vocab)
+        matched_words = self._bidirectional_max_match(query, vocab or set())
 
         # Dedupe by term_id while iterating, O(1) lookup
         # term_id -> (word, term_type, match_type)
         seen: Dict[str, Tuple[str, str, str]] = {}
 
         for word, start, end in matched_words:
-            if word not in name_index:
+            if name_index is None or word not in name_index:
                 continue
 
             for term_id, term_type, match_type in name_index[word]:
@@ -520,9 +480,8 @@ class SQLKnowledgeGraphQuery:
                 # Single SQL query for BFS N-hop traversal
                 # Returns: term_id, term_name, term_type_code, depth, path, parent_id, relation
                 cur.execute(
-                    self._bfs_cte_sql(), (entity.node_id, n_hops)
+                    SQL(self._bfs_cte_sql()), (entity.node_id, n_hops)  # type: ignore
                 )
-
                 rows = cur.fetchall()
 
                 if not rows:
@@ -599,11 +558,28 @@ class SQLKnowledgeGraphQuery:
                 # This is more efficient than JOIN in recursive CTE
                 if nodes:
                     cur.execute(
-                        f"""
+                        SQL("""
                         SELECT term_id, knowledge_id, desc_summary, "desc"
-                        FROM {self.schema}.term_knowledge
+                        FROM {}.term_knowledge
                         WHERE term_id = ANY(%s)
-                        """,
+                        """).format(Identifier(self.schema)),
+                        (list(nodes.keys()),),
+                    )
+                # This is more efficient than JOIN in recursive CTE
+                    cur.execute(
+                        SQL("""
+                        SELECT term_id, knowledge_id, desc_summary, "desc"
+                        FROM {}.term_knowledge
+                        WHERE term_id = ANY(%s)
+                        """).format(Identifier(self.schema)),
+                        (list(nodes.keys()),),
+                    )
+                    cur.execute(
+                        SQL("""
+                        SELECT term_id, knowledge_id, desc_summary, "desc"
+                        FROM {}.term_knowledge
+                        WHERE term_id = ANY(%s)
+                        """).format(Identifier(self.schema)),
                         (list(nodes.keys()),),
                     )
                     knowledge_rows = cur.fetchall()
@@ -752,7 +728,7 @@ class SQLKnowledgeGraphQuery:
 
                 child = TreeNode(
                     id=child_term_id,
-                    name=child_data.get("name", child_term_id),
+                    name=child_data.get("name") or child_term_id,
                     node_type=child_data.get("node_type", "Unknown"),
                     properties={"knowledge": child_node_data.get("knowledge", [])} if child_node_data.get("knowledge") else {},
                     relation=relation,  # 直接使用原始关系名（双边存储后无需处理_REVERSE）
@@ -823,6 +799,7 @@ class SQLKnowledgeGraphQuery:
         
         # Store in cache
         if self._enable_query_cache:
+            cache_key = self._make_cache_key(natural_language, hops, include_knowledge)
             self._put_in_cache(cache_key, result)
         
         return result
@@ -934,9 +911,8 @@ class SQLKnowledgeGraphQuery:
         # Execute batch query (single round trip)
         with self._connect() as conn:
             with conn.cursor() as cur:
-                cur.execute(sql)
+                cur.execute(sql)  # type: ignore[arg-type]
                 rows = cur.fetchall()
-
         # Group results by source_id and build knowledge_map
         from collections import defaultdict
         results_by_source: Dict[str, List] = defaultdict(list)
@@ -1162,60 +1138,6 @@ class SQLKnowledgeGraphQuery:
 
 
 # ============================================================================
-# Backward Compatibility Wrapper
-# ============================================================================
-
-
-class KnowledgeGraphQuery:
-    """Backward-compatible wrapper that replaces NetworkX with SQL.
-
-    Maintains same interface as original KnowledgeGraphQuery but uses
-    SQLKnowledgeGraphQuery internally for all graph operations.
-    """
-
-    def __init__(
-        self,
-        graph_files: Optional[List[str]] = None,  # Ignored - kept for compatibility
-        db_config: Optional[Dict[str, Any]] = None,
-        default_hops: int = 4,
-    ):
-        """Initialize SQL-native graph query.
-
-        Args:
-            graph_files: DEPRECATED - kept for API compatibility, ignored
-            db_config: Database config dict (or auto-read from env)
-            default_hops: Default number of hops for queries
-        """
-        self.sql_engine = SQLKnowledgeGraphQuery(db_config=db_config)
-        self.default_hops = default_hops
-
-        if graph_files:
-            import warnings
-
-            warnings.warn(
-                "graph_files parameter is deprecated - data is loaded from PostgreSQL",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-
-    def query(
-        self,
-        question: str,
-        n_hops: Optional[int] = None,
-    ) -> Dict[str, Any]:
-        """Execute natural language query."""
-        hops = n_hops or self.default_hops
-        return self.sql_engine.query(
-            question,
-            n_hops=hops,
-        )
-
-    def query_entities(self, question: str, n_hops: Optional[int] = None) -> List[QueryEntity]:
-        """Query and return matching entity list."""
-        return self.sql_engine.extract_entities(question)
-
-
-# ============================================================================
 # Convenience Functions
 # ============================================================================
 
@@ -1242,8 +1164,6 @@ def create_sql_graph_query(
     return SQLKnowledgeGraphQuery(db_config=config, schema=schema)
 
 
-# ============================================================================
-# Singleton Service Instance (for performance optimization)
 # ============================================================================
 # Singleton Service Instance (for performance optimization)
 # ============================================================================
@@ -1345,21 +1265,12 @@ def nl_to_semantic_tree(
             service.prewarm(fast=fast)
     return service.to_semantic_string(natural_language, n_hops=n_hops, include_knowledge=include_knowledge)
 
-
-# Backward compatibility alias
-
-# Backward compatibility alias
-SQLGraphQuery = SQLKnowledgeGraphQuery
-
-
 # ============================================================================
 # Exports
 # ============================================================================
 
 __all__ = [
     "SQLKnowledgeGraphQuery",
-    "SQLGraphQuery",  # Backward compatibility alias
-    "KnowledgeGraphQuery",
     "QueryEntity",
     "TreeNode",
     "SubgraphResult",

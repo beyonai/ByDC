@@ -1,15 +1,19 @@
 """Query module for natural language graph querying."""
 
-from .engine import (
-    NaturalLanguageGraphQuery,
-    QueryEntity,
+from .sql_engine import (
+    SQLKnowledgeGraphQuery,
     TreeNode,
-    SubgraphResult,
+    create_sql_graph_query,
+    nl_to_semantic_tree,
+    get_singleton_service,
+    reset_singleton_service,
 )
 
 __all__ = [
-    "NaturalLanguageGraphQuery",
-    "QueryEntity",
+    "SQLKnowledgeGraphQuery",
     "TreeNode",
-    "SubgraphResult",
+    "create_sql_graph_query",
+    "nl_to_semantic_tree",
+    "get_singleton_service",
+    "reset_singleton_service",
 ]
