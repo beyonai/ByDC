@@ -1,4 +1,19 @@
-"""请求级上下文，基于 contextvars 实现线程/协程安全。"""
+"""
+请求级上下文模块
+
+本模块基于 Python 的 contextvars 实现线程/协程安全的请求上下文管理。
+主要用于在请求处理过程中传递租户ID、用户ID、会话ID、认证令牌等上下文信息。
+
+核心组件：
+- RequestContext: 请求上下文数据类，存储请求级别的元数据
+- InvocationContext: 上下文管理器，用于设置和清理请求上下文
+- get_current_context(): 获取当前请求上下文的工具函数
+
+使用示例：
+    with InvocationContext(tenant_id="t1", user_id="u1", token="xxx"):
+        ctx = get_current_context()
+        print(ctx.tenant_id)  # 输出: "t1"
+"""
 
 from __future__ import annotations
 
@@ -11,14 +26,29 @@ from datacloud_data_sdk.exceptions import DatacloudError
 
 @dataclass
 class RequestContext:
-    """请求上下文数据。"""
+    """
+    请求上下文数据类
+    
+    存储单个请求的所有上下文信息，包括租户、用户、会话等标识。
+    所有字段都有默认值，支持部分设置。
+    
+    Attributes:
+        tenant_id: 租户ID，用于多租户隔离
+        user_id: 用户ID，标识当前操作用户
+        session_id: 会话ID，用于追踪用户会话
+        token: 认证令牌，用于API调用时的身份验证
+        system_code: 系统代码，标识调用来源系统
+        tool_list_mode: 工具列表模式，控制 MCP/Skills 返回的工具列表格式
+            - "unified": 统一模式，返回所有工具的合并列表
+            - "per_object": 按对象模式，按对象分组返回工具列表
+    """
 
     tenant_id: str = ""
     user_id: str = ""
     session_id: str = ""
     token: str = ""
     system_code: str = ""
-    tool_list_mode: str = "unified"  # unified | per_object，控制 MCP/Skills 返回的工具列表
+    tool_list_mode: str = "unified"
 
 
 _ctx_var: contextvars.ContextVar[RequestContext | None] = contextvars.ContextVar(
@@ -27,13 +57,31 @@ _ctx_var: contextvars.ContextVar[RequestContext | None] = contextvars.ContextVar
 
 
 class InvocationContext:
-    """上下文管理器，在 with 块内设置请求上下文。
-
-    Example::
-
-        with InvocationContext(tenant_id="t1", token="xxx"):
-            ctx = get_current_context()
-            print(ctx.tenant_id)  # "t1"
+    """
+    请求上下文管理器
+    
+    实现 Python 上下文管理器协议，在 with 块内自动设置请求上下文，
+    退出 with 块时自动清理，确保上下文不会泄漏到其他请求。
+    
+    使用 contextvars 实现线程和协程安全，支持异步环境。
+    
+    Args:
+        **kwargs: 上下文字段，支持 tenant_id, user_id, session_id, token, system_code, tool_list_mode
+    
+    Example:
+        基本用法::
+        
+            with InvocationContext(tenant_id="t1", token="xxx"):
+                ctx = get_current_context()
+                print(ctx.tenant_id)  # 输出: "t1"
+        
+        异步环境使用::
+        
+            async def handle_request():
+                with InvocationContext(tenant_id="t1", user_id="u1"):
+                    # 在异步函数中也能正确获取上下文
+                    ctx = get_current_context()
+                    await process_with_context(ctx)
     """
 
     def __init__(self, **kwargs: str) -> None:
@@ -51,6 +99,7 @@ class InvocationContext:
         self._token: contextvars.Token[RequestContext | None] | None = None
 
     def __enter__(self) -> InvocationContext:
+        """进入上下文，设置请求上下文变量"""
         self._token = _ctx_var.set(self._ctx)
         return self
 
@@ -60,12 +109,30 @@ class InvocationContext:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
+        """退出上下文，恢复之前的上下文状态"""
         if self._token is not None:
             _ctx_var.reset(self._token)
 
 
 def get_current_context() -> RequestContext:
-    """获取当前请求上下文，未设置时抛出异常。"""
+    """
+    获取当前请求上下文
+    
+    从 contextvars 中获取当前请求的上下文信息。
+    必须在 InvocationContext 上下文管理器内部调用，
+    否则抛出 DatacloudError 异常。
+    
+    Returns:
+        RequestContext: 当前请求的上下文对象
+    
+    Raises:
+        DatacloudError: 未设置上下文时抛出
+    
+    Example:
+        with InvocationContext(tenant_id="t1"):
+            ctx = get_current_context()
+            print(ctx.tenant_id)  # 输出: "t1"
+    """
     ctx = _ctx_var.get()
     if ctx is None:
         raise DatacloudError("InvocationContext not set. Use `with InvocationContext(...):`")
@@ -73,7 +140,15 @@ def get_current_context() -> RequestContext:
 
 
 def get_tool_list_mode() -> str:
-    """获取当前 tool_list_mode，未设置上下文时返回 unified。"""
+    """
+    获取当前工具列表模式
+    
+    安全地获取当前的 tool_list_mode 设置。
+    如果未设置上下文或模式值无效，返回默认值 "unified"。
+    
+    Returns:
+        str: 工具列表模式，"unified" 或 "per_object"
+    """
     ctx = _ctx_var.get()
     if ctx is None:
         return "unified"

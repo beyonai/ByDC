@@ -1,4 +1,24 @@
-"""DynamicQueryExecutor: 执行 query_{object_code} 虚拟动作。"""
+"""
+动态查询执行器模块
+
+本模块提供虚拟动作的查询执行能力，根据对象定义动态构建 SQL 查询。
+支持字段过滤、分页、聚合、关联查询等功能。
+
+核心功能：
+- 动态构建 SELECT SQL 语句
+- 支持 WHERE 条件过滤
+- 支持分页查询（page, page_size）
+- 支持聚合查询（group_by, aggregates）
+- 支持关联对象查询（linked_joins）
+
+使用示例：
+    executor = DynamicQueryExecutor(loader)
+    result = await executor.execute("po_users", {
+        "filters": {"status": "active"},
+        "page": 1,
+        "page_size": 20
+    })
+"""
 
 from __future__ import annotations
 
@@ -11,7 +31,19 @@ from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManage
 
 
 def _resolve_source_column(field: Any, datasource_alias: str) -> str:
-    """解析字段物理列名，无则用 field_code。"""
+    """
+    解析字段的物理列名
+    
+    优先使用 source_column，其次查找 physical_mappings 中的映射，
+    最后使用 field_code 作为默认值。
+    
+    Args:
+        field: 字段定义对象
+        datasource_alias: 数据源别名
+    
+    Returns:
+        str: 物理列名
+    """
     if field.source_column:
         return field.source_column
     for m in getattr(field, "physical_mappings", []):
@@ -27,7 +59,22 @@ def _group_linked_records(
     linked_joins: list[dict[str, Any]],
     cls: Any,
 ) -> list[dict[str, Any]]:
-    """将 LEFT JOIN 产生的扁平行按主表 key 分组，target 列聚合成 list[dict]。"""
+    """
+    将 LEFT JOIN 产生的扁平行按主表键分组
+    
+    当查询包含关联对象时，SQL 使用 LEFT JOIN 产生扁平化的行，
+    此函数将同一主表记录的关联数据聚合成列表。
+    
+    Args:
+        flat_records: 扁平化的记录列表
+        col_keys: 列名列表
+        physical_fields: 物理字段列表
+        linked_joins: 关联连接配置
+        cls: 本体类定义
+    
+    Returns:
+        list[dict]: 分组后的记录列表，关联字段为嵌套列表
+    """
     main_cols = {f.field_code for f in physical_fields}
     pk_field = next((f.field_code for f in cls.fields if getattr(f, "is_primary_key", False)), None)
     group_key_field = pk_field or (linked_joins[0].get("join_from", "") if linked_joins else None)

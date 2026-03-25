@@ -1,4 +1,14 @@
-"""REST 查询接口。"""
+"""
+REST 查询接口模块
+
+本模块提供数据查询的 REST API 端点，包括：
+- 自然语言查询接口
+- 分页查询支持
+- 文件查询支持
+
+API 端点：
+- POST /query: 自然语言查询
+"""
 
 from __future__ import annotations
 
@@ -15,11 +25,31 @@ router = APIRouter()
 
 
 def _parse_include_plan() -> bool:
+    """
+    解析是否在响应中包含执行计划
+    
+    从环境变量 DC_INCLUDE_PLAN_IN_RESPONSE 读取配置。
+    
+    Returns:
+        bool: 是否包含计划
+    """
     v = os.environ.get("DC_INCLUDE_PLAN_IN_RESPONSE", "true").lower()
     return v not in ("false", "0")
 
 
 class QueryRequest(BaseModel):
+    """
+    查询请求模型
+    
+    Attributes:
+        question: 自然语言问题
+        view_id: 视图 ID
+        object_ids: 对象 ID 列表
+        page: 页码
+        page_size: 每页大小
+        file_id: 文件 ID（用于文件查询）
+    """
+    
     question: str
     view_id: str = ""
     object_ids: list[str] = []
@@ -29,6 +59,15 @@ class QueryRequest(BaseModel):
 
 
 class QueryResponse(BaseModel):
+    """
+    查询响应模型
+    
+    Attributes:
+        code: 状态码
+        message: 消息
+        data: 响应数据
+    """
+    
     code: int = 0
     message: str = "success"
     data: dict[str, Any] = {}
@@ -36,6 +75,21 @@ class QueryResponse(BaseModel):
 
 @router.post("/query", response_model=QueryResponse)
 async def query_endpoint(body: QueryRequest, request: Request) -> QueryResponse:
+    """
+    自然语言查询端点
+    
+    接收自然语言问题，执行查询并返回结果。
+    
+    Args:
+        body: 查询请求体
+        request: FastAPI 请求对象
+    
+    Returns:
+        QueryResponse: 查询结果
+    
+    Raises:
+        HTTPException: 缺少必要参数时抛出
+    """
     tenant_id = request.headers.get("X-Tenant-Id", "")
     if not tenant_id:
         raise HTTPException(status_code=400, detail="X-Tenant-Id required")

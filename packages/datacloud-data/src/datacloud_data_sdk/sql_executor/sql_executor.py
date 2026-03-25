@@ -1,4 +1,19 @@
-"""SqlExecutor: SQL 执行 + CSV 输出。"""
+"""
+SQL 执行器模块
+
+本模块提供 SQL 查询的执行能力，支持多种数据库类型。
+执行结果自动转换为 CSV 文件格式存储。
+
+核心功能：
+- 执行 SQL 查询任务
+- 支持步骤间的参数绑定
+- 自动处理 SQL 别名引用
+- 将结果转换为 CSV 格式
+
+使用示例：
+    executor = SqlExecutor(ds_manager, csv_base_dir="/tmp/csv")
+    result = await executor.execute(task, request_id, step_results)
+"""
 
 from __future__ import annotations
 import csv
@@ -15,9 +30,30 @@ from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
 
 
 class SqlExecutor:
+    """
+    SQL 执行器
+    
+    执行 SQL 查询任务，支持参数绑定和结果 CSV 输出。
+    
+    Attributes:
+        _ds: 数据源管理器
+        _csv: CSV 存储管理器
+    
+    Example:
+        executor = SqlExecutor(ds_manager)
+        result = await executor.execute(sql_task, "req_001", step_results)
+    """
+    
     def __init__(
         self, ds_manager: DataSourceManager, csv_base_dir: str = "/tmp/datacloud_csv"
     ) -> None:
+        """
+        初始化 SQL 执行器
+        
+        Args:
+            ds_manager: 数据源管理器实例
+            csv_base_dir: CSV 文件存储目录
+        """
         self._ds = ds_manager
         self._csv = CsvStorageManager(csv_base_dir)
 
@@ -27,6 +63,23 @@ class SqlExecutor:
         request_id: str,
         step_results: StepResults,
     ) -> SqlExecResult:
+        """
+        执行 SQL 任务
+        
+        执行流程：
+        1. 处理步骤绑定，替换 SQL 中的占位符
+        2. 获取对应数据源的连接器
+        3. 执行 SQL 查询
+        4. 将结果写入 CSV 文件
+        
+        Args:
+            task: SQL 执行任务
+            request_id: 请求 ID
+            step_results: 步骤结果集合，用于获取绑定值
+        
+        Returns:
+            SqlExecResult: 执行结果，包含 CSV 路径和行数
+        """
         sql = task.sql_template
 
         if task.bind_from_step and task.bind_key:
