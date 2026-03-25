@@ -40,6 +40,19 @@ class TermLoader(ABC):
         """将标签/别名/code 解析为标准 code。"""
 
     @abstractmethod
+    def resolve_value(
+        self,
+        term_set: str,
+        value: str,
+        term_field: str | None = None,
+        dataset_id: int | None = None,
+        term_type_code: str | None = None,
+        keyword: str | None = None,
+        param_name: str | None = None,
+    ) -> str:
+        """根据 term_field 解析为 code 或 label。term_field 为 'code' 时返回 code，为 'name' 时返回 label。"""
+
+    @abstractmethod
     def get_available_values(
         self,
         term_set: str,
@@ -226,6 +239,53 @@ class ApiTermLoader(TermLoader):
         )
         raise TermNotFoundError(term_set, value, None, param_name, available_entries)
 
+    def resolve_value(
+        self,
+        term_set: str,
+        value: str,
+        term_field: str | None = None,
+        dataset_id: int | None = None,
+        term_type_code: str | None = None,
+        keyword: str | None = None,
+        param_name: str | None = None,
+    ) -> str:
+        """根据 term_field 解析为 code 或 label。term_field 为 'code' 时返回 code，为 'name' 时返回 label。"""
+        if term_field == "name":
+            matches: list[dict[str, str]] = []
+            for entry in self._sets.get(term_set, []):
+                if value in (entry.code, entry.label, *entry.aliases):
+                    matches.append({
+                        "code": entry.code,
+                        "label": entry.label,
+                        "aliases": entry.aliases,
+                    })
+            if len(matches) == 1:
+                return matches[0]["label"]
+            if len(matches) > 1:
+                raise TermAmbiguousError(term_set, value, matches, param_name)
+            if self._api_base_url and dataset_id and (term_type_code or "." in term_set):
+                tc = term_type_code or term_set.split(".")[0]
+                entries = self._fetch_from_api(dataset_id, tc, keyword=keyword or value)
+                api_matches: list[dict[str, str]] = []
+                for entry in entries:
+                    if value in (entry.code, entry.label, *entry.aliases):
+                        api_matches.append({
+                            "code": entry.code,
+                            "label": entry.label,
+                            "aliases": entry.aliases,
+                        })
+                if len(api_matches) == 1:
+                    return api_matches[0]["label"]
+                if len(api_matches) > 1:
+                    raise TermAmbiguousError(term_set, value, api_matches, param_name)
+            available_entries = self.get_entries(
+                term_set, dataset_id=dataset_id, term_type_code=term_type_code
+            )
+            raise TermNotFoundError(term_set, value, None, param_name, available_entries)
+        return self.resolve_code(
+            term_set, value, dataset_id, term_type_code, keyword, param_name
+        )
+
     def get_available_values(
         self,
         term_set: str,
@@ -352,6 +412,41 @@ class KbTermLoader(TermLoader):
             raise TermAmbiguousError(term_set, value, matches, param_name)
         available_entries = self.get_entries(term_set, dataset_id, term_type_code, keyword)
         raise TermNotFoundError(term_set, value, None, param_name, available_entries)
+
+    def resolve_value(
+        self,
+        term_set: str,
+        value: str,
+        term_field: str | None = None,
+        dataset_id: int | None = None,
+        term_type_code: str | None = None,
+        keyword: str | None = None,
+        param_name: str | None = None,
+    ) -> str:
+        """根据 term_field 解析为 code 或 label。term_field 为 'code' 时返回 code，为 'name' 时返回 label。"""
+        if term_field == "name":
+            tc = self._resolve_term_type_code(term_set, term_type_code)
+            cached = self._cache.get(tc)
+            if cached is None:
+                cached = self._search(tc, keyword=value)
+                self._cache[tc] = cached
+            matches: list[dict[str, str]] = []
+            for entry in cached:
+                if value in (entry.code, entry.label, *entry.aliases):
+                    matches.append({
+                        "code": entry.code,
+                        "label": entry.label,
+                        "aliases": entry.aliases,
+                    })
+            if len(matches) == 1:
+                return matches[0]["label"]
+            if len(matches) > 1:
+                raise TermAmbiguousError(term_set, value, matches, param_name)
+            available_entries = self.get_entries(term_set, dataset_id, term_type_code, keyword)
+            raise TermNotFoundError(term_set, value, None, param_name, available_entries)
+        return self.resolve_code(
+            term_set, value, dataset_id, term_type_code, keyword, param_name
+        )
 
     def get_available_values(
         self,

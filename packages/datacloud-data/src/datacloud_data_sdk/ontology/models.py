@@ -53,6 +53,7 @@ class OntologyField:
         source_column: 源列名
         term_set: 术语集名称
         term_type: 术语类型（enum/lookup）
+        term_field: 术语字段（code/name）
         dataset_id: 数据集 ID
         physical_mappings: 物理映射列表
         property_kind: 属性分类（physical/derived/linked）
@@ -72,6 +73,7 @@ class OntologyField:
     source_column: str | None = None
     term_set: str | None = None
     term_type: str | None = None
+    term_field: str | None = None
     dataset_id: int | None = None
     physical_mappings: list[FieldPhysicalMapping] = field(default_factory=list)
     property_kind: str = "physical"
@@ -98,6 +100,7 @@ class OntologyActionParam:
         mapping_path: 响应映射路径
         term_set: 术语集名称
         term_type: 术语类型（enum/lookup）
+        term_field: 术语字段（code/name）
         dataset_id: 数据集 ID
     """
     
@@ -110,6 +113,7 @@ class OntologyActionParam:
     mapping_path: str = ""
     term_set: str | None = None
     term_type: str | None = None
+    term_field: str | None = None
     dataset_id: int | None = None
 
 
