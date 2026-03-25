@@ -1,0 +1,78 @@
+{
+  "version": "1.0",
+  "package_id": "e_commerce_demo_owl_v4_init_20260325",
+  "description": "基于 DDL 和真实 CSV 数据生成的亦庄产业大脑 OWL v4 导入包",
+  "created_at": "2026-03-25",
+  "import_steps": [
+    {
+      "type": "meta",
+      "file": "meta/domains.owl",
+      "description": "业务领域定义"
+    },
+    {
+      "type": "meta",
+      "file": "meta/library.owl",
+      "description": "知识库定义"
+    },
+    {
+      "type": "term_types",
+      "file": "term_types/term_types.owl",
+      "description": "用户自定义术语类型"
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms.owl",
+      "description": "本体术语"
+    },
+    {
+      "type": "objects",
+      "file": "ontology/objects/dws_enterprise_wide/dws_enterprise_wide_object.owl",
+      "description": "企业对象"
+    },
+    {
+      "type": "objects",
+      "file": "ontology/objects/dws_enterprise_wide/dws_enterprise_wide_mapping.owl",
+      "description": "企业映射"
+    },
+    {
+      "type": "objects",
+      "file": "ontology/objects/dws_grid_wide/dws_grid_wide_object.owl",
+      "description": "网格对象"
+    },
+    {
+      "type": "objects",
+      "file": "ontology/objects/dws_grid_wide/dws_grid_wide_mapping.owl",
+      "description": "网格映射"
+    },
+    {
+      "type": "objects",
+      "file": "ontology/objects/dws_industry_wide/dws_industry_wide_object.owl",
+      "description": "产业链对象"
+    },
+    {
+      "type": "objects",
+      "file": "ontology/objects/dws_industry_wide/dws_industry_wide_mapping.owl",
+      "description": "产业链映射"
+    },
+    {
+      "type": "objects",
+      "file": "ontology/actions/action.owl",
+      "description": "本体动作"
+    },
+    {
+      "type": "dbsources",
+      "file": "ontology/dbsources/dbsource.owl",
+      "description": "数据源定义"
+    },
+    {
+      "type": "objects",
+      "file": "ontology/views/views.owl",
+      "description": "本体视图"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation.owl",
+      "description": "本体关系"
+    }
+  ]
+}
