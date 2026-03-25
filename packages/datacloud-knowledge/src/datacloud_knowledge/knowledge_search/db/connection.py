@@ -23,11 +23,11 @@ def _build_database_url() -> str:
 
         safe_password = quote_plus(password) if password else ""
         auth = f"{user}:{safe_password}" if safe_password else user
-        return f"postgresql+psycopg2://{auth}@{host}:{port}/{database}"
+        return f"postgresql+psycopg://{auth}@{host}:{port}/{database}"
 
-    url = os.getenv("DATABASE_URL", "postgresql+psycopg2://localhost:5432/postgres")
+    url = os.getenv("DATABASE_URL", "postgresql+psycopg://localhost:5432/postgres")
     if url.startswith("postgresql://"):
-        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
     return url
 
 

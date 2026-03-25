@@ -96,9 +96,10 @@ class TermResolver:
                     for v in raw:
                         value = str(v)
                         kw = value if p.term_type == "lookup" else None
-                        code = self._term_loader.resolve_code(
+                        resolved_val = self._term_loader.resolve_value(
                             p.term_set,
                             value,
+                            term_field=p.term_field,
                             dataset_id=p.dataset_id,
                             term_type_code=p.term_set.split(".")[0]
                             if "." in (p.term_set or "")
@@ -106,14 +107,15 @@ class TermResolver:
                             keyword=kw,
                             param_name=param_name,
                         )
-                        out_list.append(code)
+                        out_list.append(resolved_val)
                     resolved[p.param_code] = out_list
                 else:
                     value = str(raw)
                     kw = value if p.term_type == "lookup" else None
-                    resolved[p.param_code] = self._term_loader.resolve_code(
+                    resolved[p.param_code] = self._term_loader.resolve_value(
                         p.term_set,
                         value,
+                        term_field=p.term_field,
                         dataset_id=p.dataset_id,
                         term_type_code=p.term_set.split(".")[0]
                         if "." in (p.term_set or "")
@@ -133,7 +135,7 @@ class TermResolver:
         params: dict[str, Any],
         param_specs: list[ObjectViewFunctionParam],
     ) -> dict[str, Any]:
-        """对含 term_set 的参数做名称/标签→code 解析（供 ObjectViewFunctionParam 使用）。
+        """对含 term_set 的参数做名称/标签→code/name 解析（供 ObjectViewFunctionParam 使用）。
         
         Raises:
             TermNotFoundError: 术语不存在
@@ -156,9 +158,10 @@ class TermResolver:
                     for v in raw:
                         value = str(v)
                         kw = value if p.term_type == "lookup" else None
-                        code = self._term_loader.resolve_code(
+                        resolved_val = self._term_loader.resolve_value(
                             p.term_set,
                             value,
+                            term_field=p.term_field,
                             dataset_id=p.dataset_id,
                             term_type_code=p.term_set.split(".")[0]
                             if "." in (p.term_set or "")
@@ -166,14 +169,15 @@ class TermResolver:
                             keyword=kw,
                             param_name=param_name,
                         )
-                        out_list.append(code)
+                        out_list.append(resolved_val)
                     resolved[p.param_code] = out_list
                 else:
                     value = str(raw)
                     kw = value if p.term_type == "lookup" else None
-                    resolved[p.param_code] = self._term_loader.resolve_code(
+                    resolved[p.param_code] = self._term_loader.resolve_value(
                         p.term_set,
                         value,
+                        term_field=p.term_field,
                         dataset_id=p.dataset_id,
                         term_type_code=p.term_set.split(".")[0]
                         if "." in (p.term_set or "")
@@ -193,7 +197,7 @@ class TermResolver:
         values: dict[str, Any],
         field_specs: list[ObjectViewField],
     ) -> dict[str, Any]:
-        """对含 term_set 的 field 做名称/标签→code 解析（供 KB tags 等使用）。"""
+        """对含 term_set 的 field 做名称/标签→code/name 解析（供 KB tags 等使用）。"""
         if not self._term_loader:
             return values
 
@@ -205,6 +209,7 @@ class TermResolver:
                 direction="IN",
                 term_set=f.term_set,
                 term_type=f.term_type,
+                term_field=f.term_field,
                 dataset_id=f.dataset_id,
             )
             for f in field_specs
@@ -246,9 +251,10 @@ class TermResolver:
             try:
                 if isinstance(value, list):
                     resolved[field_code]["value"] = [
-                        self._term_loader.resolve_code(
+                        self._term_loader.resolve_value(
                             field.term_set,
                             str(v),
+                            term_field=field.term_field,
                             dataset_id=field.dataset_id,
                             term_type_code=field.term_set.split(".")[0] if "." in (field.term_set or "") else None,
                             param_name=param_name,
@@ -256,9 +262,10 @@ class TermResolver:
                         for v in value
                     ]
                 else:
-                    resolved[field_code]["value"] = self._term_loader.resolve_code(
+                    resolved[field_code]["value"] = self._term_loader.resolve_value(
                         field.term_set,
                         str(value),
+                        term_field=field.term_field,
                         dataset_id=field.dataset_id,
                         term_type_code=field.term_set.split(".")[0] if "." in (field.term_set or "") else None,
                         param_name=param_name,
