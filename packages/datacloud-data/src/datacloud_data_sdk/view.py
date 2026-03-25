@@ -1,4 +1,19 @@
-"""View 实体：跨对象的视图聚合，提供自然语言查询与自生说明。"""
+"""
+视图(View)实体模块
+
+本模块定义了 View 类，用于跨对象的视图聚合。
+View 聚合多个对象，提供跨对象的查询能力和自生说明。
+
+核心功能：
+- 跨对象查询：支持涉及多个对象的复杂查询
+- 自生说明：生成 Markdown 格式的视图文档
+- 查询管线：完整的计划 -> 执行 -> 聚合流程
+
+使用示例：
+    view = loader.get_view("scene_01_data_analysis")
+    description = view.get_description()
+    result = await view.query("查询各部门的销售业绩")
+"""
 
 from __future__ import annotations
 
@@ -11,9 +26,22 @@ if TYPE_CHECKING:
 
 
 class View:
-    """视图实体，聚合多个对象，提供跨对象查询能力。
-
+    """
+    视图实体类
+    
+    聚合多个对象，提供跨对象查询能力。
     通过 OntologyLoader.get_view() 获取实例。
+    
+    Attributes:
+        view_id: 视图唯一标识
+        view_name: 视图名称
+        description: 视图描述
+        objects: 包含的对象列表
+        relations: 对象间的关联关系
+    
+    Example:
+        view = loader.get_view("scene_01_data_analysis")
+        result = await view.query("分析各产品的销售趋势")
     """
 
     def __init__(
@@ -24,6 +52,16 @@ class View:
         objects: list[Object],
         relations: list[Relation],
     ) -> None:
+        """
+        初始化视图实体
+        
+        Args:
+            view_id: 视图唯一标识
+            view_name: 视图名称
+            description: 视图描述
+            objects: 包含的对象列表
+            relations: 对象间的关联关系
+        """
         self.view_id = view_id
         self.view_name = view_name
         self.description = description
@@ -31,7 +69,18 @@ class View:
         self.relations = relations
 
     def get_description(self) -> str:
-        """生成 Markdown 格式的视图自生说明。"""
+        """
+        生成 Markdown 格式的视图自生说明
+        
+        包含以下信息：
+        - 视图名称和 ID
+        - 视图描述
+        - 包含的对象列表及其动作
+        - 对象间的关联关系
+        
+        Returns:
+            str: Markdown 格式的视图说明文档
+        """
         lines = [
             f"## 视图：{self.view_name}（{self.view_id}）",
             "",
@@ -55,7 +104,29 @@ class View:
         return "\n".join(lines)
 
     async def query(self, question: str, include_plan: bool = True) -> dict[str, object]:
-        """跨对象自然语言查询：计划 -> 执行 -> 聚合完整管线。"""
+        """
+        跨对象自然语言查询
+        
+        完整的查询管线：
+        1. 构建视图载荷
+        2. 生成查询计划（通过 LLM）
+        3. 验证计划
+        4. 应用数据权限重写
+        5. 转换为执行任务
+        6. 执行查询（SQL/API/脚本/知识库）
+        7. 聚合结果
+        
+        Args:
+            question: 自然语言查询问题
+            include_plan: 是否在结果中包含执行计划
+        
+        Returns:
+            dict: 查询结果，包含 records, total, meta 等字段
+        
+        Raises:
+            CannotAnswerError: 无法回答问题时抛出
+            PlanValidationError: 计划验证失败时抛出
+        """
         import json
         import logging
         import uuid
