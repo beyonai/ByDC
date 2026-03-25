@@ -1001,14 +1001,26 @@
               "param_name": "网格名称列表",
               "param_type": "ARRAY",
               "direction": "IN",
-              "mapping_path": "$.requestBody.gridNames"
+              "mapping_path": "$.requestBody.gridNames",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "grid_name",
+                "termField": "name"
+              }
             },
             {
               "param_code": "regionNames",
               "param_name": "区域名称列表",
               "param_type": "ARRAY",
               "direction": "IN",
-              "mapping_path": "$.requestBody.regionNames"
+              "mapping_path": "$.requestBody.regionNames",
+              "termMeta": {
+                "datasetId": 760436323052421,
+                "termMasterType": "list",
+                "termTypeCode": "region_name",
+                "termField": "name"
+              }
             },
             {
               "param_code": "category",

@@ -30,6 +30,7 @@ def _to_function_param(p: "OntologyActionParam") -> ObjectViewFunctionParam:
         default_value=p.default_value,
         term_set=p.term_set,
         term_type=p.term_type,
+        term_field=p.term_field,
         dataset_id=p.dataset_id,
     )
 

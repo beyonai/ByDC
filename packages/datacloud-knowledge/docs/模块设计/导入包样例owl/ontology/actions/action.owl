@@ -10,18 +10,65 @@
         <rdfs:label>动作定义</rdfs:label>
     </owl:Class>
     
+    <owl:Class rdf:about="#RequestParameter">
+        <rdfs:label>请求参数</rdfs:label>
+    </owl:Class>
+    
+    <owl:Class rdf:about="#ResponseParameter">
+        <rdfs:label>响应参数</rdfs:label>
+    </owl:Class>
+    
+    <owl:Class rdf:about="#HeaderParameter">
+        <rdfs:label>请求头参数</rdfs:label>
+    </owl:Class>
+    
     <!-- 具体的动作实例 -->
     <owl:NamedIndividual rdf:about="#action_query_org_by_name_or_id">
         <rdf:type rdf:resource="#ActionDefinition"/>
         <action_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">query_org_by_name_or_id</action_code>
         <action_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">按名称或ID查询组织</action_name>
         <action_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">按组织ID列表或名称列表批量查询组织详情</action_desc>
-        <action_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">操作或查询</action_type>
+        <action_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">QUERY(UPDATE:操作, QUERY:查询)</action_type>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
         <function_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["fn_po_org_query_by_ids"]</function_refs>
         <belong_entity rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["po_organization"]</belong_entity>
-        <requestParams rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"paramCode": "applicantEmpNo", "type":"string", "description": "申请人工号或名称", "isRequired": true, "term_code_path":"OBJECT#po_users","rel_term_codeorname":""}]</requestParams>
-        <responseParams rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"fieldCode":"id", "fieldType": "string","term_code_path":"OBJECT#po_users","object_property":"org_id","json_path":"data.id"}]</responseParams>
+        <request_url rdf:datatype="http://www.w3.org/2001/XMLSchema#string">http://127.0.1.1/query_org_by_name_or_id</request_url>
+        <request_method rdf:datatype="http://www.w3.org/2001/XMLSchema#string">POST</request_method>
+        <request_header rdf:resource="#http_header"/>
+        <request_params rdf:resource="#param_applicantEmpNo"/>
+        <response_params rdf:resource="#ResponseParameter"/>
+    </owl:NamedIndividual>
+    
+    <!-- 请求参数实例 -->
+    <owl:NamedIndividual rdf:about="#param_applicantEmpNo">
+        <rdf:type rdf:resource="#RequestParameter"/>
+        <paramCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">applicantEmpNo</paramCode>
+        <type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</type>
+        <description rdf:datatype="http://www.w3.org/2001/XMLSchema#string">申请人工号或名称</description>
+        <isRequired rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</isRequired>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#po_users</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HR</library_code>
+        <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
+        <trem_data_type>ONTOLOGY_TERM</trem_data_type>
+    </owl:NamedIndividual>
+    
+    <!-- 响应参数实例 -->
+    <owl:NamedIndividual rdf:about="#param_response_id">
+        <rdf:type rdf:resource="#ResponseParameter"/>
+        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">id</fieldCode>
+        <fieldType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</fieldType>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#po_users</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HR</library_code>
+        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_id</object_property>
+        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.id</json_path>
+        <trem_data_type>ONTOLOGY_TERM</trem_data_type>
+    </owl:NamedIndividual>
+    
+    <!-- 请求头参数实例 -->
+    <owl:NamedIndividual rdf:about="#http_header">
+        <rdf:type rdf:resource="#HeaderParameter"/>
+        <name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Content-Type</name>
+        <value rdf:datatype="http://www.w3.org/2001/XMLSchema#string">application/json</value>
     </owl:NamedIndividual>
     
     <!-- 属性定义 -->
@@ -60,12 +107,27 @@
         <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
     </owl:DatatypeProperty>
     
-    <owl:DatatypeProperty rdf:about="#requestParams">
+    <owl:DatatypeProperty rdf:about="#request_url">
         <rdfs:domain rdf:resource="#ActionDefinition"/>
         <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
     </owl:DatatypeProperty>
     
-    <owl:DatatypeProperty rdf:about="#responseParams">
+    <owl:DatatypeProperty rdf:about="#request_method">
+        <rdfs:domain rdf:resource="#ActionDefinition"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    </owl:DatatypeProperty>
+    
+    <owl:DatatypeProperty rdf:about="#request_header">
+        <rdfs:domain rdf:resource="#ActionDefinition"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    </owl:DatatypeProperty>
+    
+    <owl:DatatypeProperty rdf:about="#request_params">
+        <rdfs:domain rdf:resource="#ActionDefinition"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    </owl:DatatypeProperty>
+    
+    <owl:DatatypeProperty rdf:about="#response_params">
         <rdfs:domain rdf:resource="#ActionDefinition"/>
         <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
     </owl:DatatypeProperty>
