@@ -1,4 +1,23 @@
-"""Executor: 统一调度执行任务。"""
+"""
+执行器模块
+
+本模块提供统一的任务执行调度能力，支持多种执行类型的任务：
+- SQL 执行：数据库查询
+- API 执行：外部 API 调用
+- 脚本执行：Python 脚本执行
+- 知识库执行：知识库检索
+
+执行器按顺序执行任务列表，支持步骤间的数据绑定，
+并将结果统一输出为 CSV 文件格式。
+
+使用示例：
+    executor = Executor(
+        sql_executor=sql_exec,
+        api_executor=api_exec,
+        script_executor=script_exec
+    )
+    results = await executor.run(tasks, request_id="req_123")
+"""
 
 from __future__ import annotations
 from typing import Any
@@ -14,6 +33,25 @@ from datacloud_data_sdk.sql_executor.sql_executor import SqlExecutor
 
 
 class Executor:
+    """
+    统一任务执行器
+    
+    协调多种类型的执行器，按顺序执行任务列表。
+    支持步骤间的数据绑定，将结果统一输出为 CSV 格式。
+    
+    Attributes:
+        _sql: SQL 执行器
+        _api: API 执行器
+        _script: 脚本执行器
+        _kb: 知识库执行器
+        _csv_base_dir: CSV 文件存储目录
+    
+    Example:
+        executor = Executor(sql_executor=sql_exec)
+        results = await executor.run([sql_task], "req_001")
+        csv_path = results.get_path("step_0")
+    """
+    
     def __init__(
         self,
         sql_executor: SqlExecutor | None = None,
@@ -22,6 +60,16 @@ class Executor:
         kb_executor: KbExecutor | None = None,
         csv_base_dir: str = "/tmp/datacloud_csv",
     ) -> None:
+        """
+        初始化执行器
+        
+        Args:
+            sql_executor: SQL 执行器实例
+            api_executor: API 执行器实例
+            script_executor: 脚本执行器实例
+            kb_executor: 知识库执行器实例
+            csv_base_dir: CSV 文件存储的基础目录
+        """
         self._sql = sql_executor
         self._api = api_executor
         self._script = script_executor
@@ -34,7 +82,23 @@ class Executor:
         request_id: str,
         step_ids: list[str] | None = None,
     ) -> StepResults:
-        """Execute tasks sequentially, return StepResults."""
+        """
+        执行任务列表
+        
+        按顺序执行所有任务，支持步骤间的数据绑定。
+        每个任务的执行结果会保存为 CSV 文件。
+        
+        Args:
+            tasks: 任务列表，支持 SQL、API、脚本、知识库任务
+            request_id: 请求 ID，用于组织输出文件
+            step_ids: 可选的步骤 ID 列表，用于标识每个任务
+        
+        Returns:
+            StepResults: 包含所有步骤执行结果的对象
+        
+        Raises:
+            RuntimeError: 当任务类型对应的执行器未配置时抛出
+        """
         step_results = StepResults()
         for i, task in enumerate(tasks):
             exec_key = f"step_{i}"

@@ -1,4 +1,18 @@
-"""CSV 临时存储管理。"""
+"""
+CSV 临时存储管理模块
+
+本模块提供 CSV 文件的存储和管理功能，用于处理大数据量查询结果的导出。
+
+核心功能：
+- CSV 文件存储和读取
+- 导出文件管理
+- 请求目录清理
+- 路径穿越防护
+
+使用示例：
+    manager = CsvStorageManager("/tmp/datacloud_csv")
+    file_id, path = manager.save_export(records, columns, meta)
+"""
 
 from __future__ import annotations
 
@@ -13,10 +27,42 @@ from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
 
 
 class CsvStorageManager:
+    """
+    CSV 存储管理器
+    
+    管理 CSV 文件的存储、读取和清理。
+    
+    Attributes:
+        _base: 基础存储目录
+    
+    Example:
+        manager = CsvStorageManager("/tmp/datacloud_csv")
+        path = manager.get_path("req_123", "step_1")
+        manager.save_export(records, columns, meta)
+    """
+    
     def __init__(self, base_dir: str = "/tmp/datacloud_csv") -> None:
+        """
+        初始化 CSV 存储管理器
+        
+        Args:
+            base_dir: 基础存储目录
+        """
         self._base = Path(base_dir)
 
     def get_path(self, request_id: str, output_ref: str) -> Path:
+        """
+        获取 CSV 文件路径
+        
+        为指定请求和输出引用创建 CSV 文件路径。
+        
+        Args:
+            request_id: 请求 ID
+            output_ref: 输出引用名称
+        
+        Returns:
+            Path: CSV 文件路径
+        """
         dir_path = self._base / request_id
         dir_path.mkdir(parents=True, exist_ok=True)
         return dir_path / f"{output_ref}.csv"
@@ -27,7 +73,19 @@ class CsvStorageManager:
         columns: list[str] | None = None,
         meta: dict[str, Any] | None = None,
     ) -> tuple[str, Path]:
-        """保存 records 到导出目录，返回 (file_id, path)。file_id 用于下载路由。"""
+        """
+        保存导出文件
+        
+        将记录保存到导出目录，返回文件 ID 和路径。
+        
+        Args:
+            records: 记录列表
+            columns: 列名列表（可选）
+            meta: 元数据（可选）
+        
+        Returns:
+            tuple: (file_id, 文件路径)
+        """
         exports_dir = self._base / "exports"
         exports_dir.mkdir(parents=True, exist_ok=True)
         file_id = str(uuid.uuid4())
@@ -42,7 +100,17 @@ class CsvStorageManager:
         return file_id, path
 
     def get_export_path(self, file_id: str) -> Path | None:
-        """根据 file_id 获取导出文件路径，校验防止路径穿越。"""
+        """
+        获取导出文件路径
+        
+        根据 file_id 获取导出文件路径，包含路径穿越防护校验。
+        
+        Args:
+            file_id: 文件 ID（UUID 格式）
+        
+        Returns:
+            Path | None: 文件路径，校验失败返回 None
+        """
         if not re.match(r"^[a-f0-9\-]{36}$", file_id):
             return None
         path = (self._base / "exports" / f"{file_id}.csv").resolve()
@@ -56,7 +124,17 @@ class CsvStorageManager:
         return path
 
     def get_export_meta(self, file_id: str) -> dict[str, Any] | None:
-        """根据 file_id 获取导出的元数据。"""
+        """
+        获取导出文件元数据
+        
+        根据 file_id 获取导出文件的元数据信息。
+        
+        Args:
+            file_id: 文件 ID（UUID 格式）
+        
+        Returns:
+            dict | None: 元数据字典，不存在则返回 None
+        """
         if not re.match(r"^[a-f0-9\-]{36}$", file_id):
             return None
         meta_path = self._base / "exports" / f"{file_id}_meta.json"
@@ -69,6 +147,14 @@ class CsvStorageManager:
             return None
 
     def cleanup(self, request_id: str) -> None:
+        """
+        清理请求目录
+        
+        删除指定请求的所有 CSV 文件。
+        
+        Args:
+            request_id: 请求 ID
+        """
         dir_path = self._base / request_id
         if dir_path.exists():
             shutil.rmtree(dir_path, ignore_errors=True)

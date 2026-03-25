@@ -1,4 +1,18 @@
-"""ApiExecutor: 委托 Action 执行 API，封装 step 绑定与 CSV 输出。"""
+"""
+API 执行器模块
+
+本模块提供 API 调用的执行能力，委托 Action 执行 API 请求。
+支持步骤间的数据绑定，将执行结果输出为 CSV 文件。
+
+核心功能：
+- 执行对象上的动作 API 调用
+- 支持从前置步骤绑定参数值
+- 将结果转换为 CSV 格式存储
+
+使用示例：
+    executor = ApiExecutor(loader, csv_base_dir="/tmp/csv")
+    result = await executor.execute(task, "req_001", step_results)
+"""
 
 from __future__ import annotations
 
@@ -14,16 +28,45 @@ from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
 
 @dataclass
 class ApiExecResult:
+    """
+    API 执行结果
+    
+    Attributes:
+        csv_path: 结果 CSV 文件路径
+        row_count: 返回的记录行数
+    """
+    
     csv_path: str
     row_count: int = 0
 
 
 class ApiExecutor:
+    """
+    API 执行器
+    
+    委托 Action 执行 API 调用，封装步骤绑定与 CSV 输出。
+    
+    Attributes:
+        _loader: 本体加载器引用
+        _csv: CSV 存储管理器
+    
+    Example:
+        executor = ApiExecutor(loader)
+        result = await executor.execute(task, request_id, step_results)
+    """
+    
     def __init__(
         self,
         loader: Any,
         csv_base_dir: str = "/tmp/datacloud_csv",
     ) -> None:
+        """
+        初始化 API 执行器
+        
+        Args:
+            loader: 本体加载器实例
+            csv_base_dir: CSV 文件存储目录
+        """
         self._loader = loader
         self._csv = CsvStorageManager(csv_base_dir)
 
@@ -33,6 +76,22 @@ class ApiExecutor:
         request_id: str,
         step_results: StepResults | None = None,
     ) -> ApiExecResult:
+        """
+        执行 API 任务
+        
+        执行流程：
+        1. 处理步骤绑定，从前置步骤获取参数值
+        2. 调用对象动作执行 API
+        3. 将结果保存为 CSV 文件
+        
+        Args:
+            task: API 执行任务
+            request_id: 请求 ID
+            step_results: 步骤结果集合，用于获取绑定值
+        
+        Returns:
+            ApiExecResult: 执行结果，包含 CSV 路径和行数
+        """
         params = dict(task.params)
         if task.bind_from_step and task.bind_key and step_results:
             bind_path = step_results.get_path(task.bind_from_step)
