@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pathlib import Path
 
-from datacloud_data.ontology.loader import OntologyLoader
+from datacloud_data_sdk.ontology.loader import OntologyLoader
 
 REGISTRY_PATH = Path(__file__).parents[3] / "resources/ontology/crm_demo/objects_registry.json"
 SCENE_PATH = Path(__file__).parents[3] / "resources/ontology/crm_demo/scene_01_data_analysis.json"

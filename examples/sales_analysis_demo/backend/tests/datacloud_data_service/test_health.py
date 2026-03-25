@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from datacloud_data.sql_executor.models import DataSourceConfig
+from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 
 
 def test_health_check() -> None:

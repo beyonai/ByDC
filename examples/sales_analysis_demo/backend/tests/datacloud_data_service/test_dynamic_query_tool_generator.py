@@ -1,7 +1,7 @@
 """DynamicQueryToolGenerator 单元测试。"""
 
-from datacloud_data.ontology.loader import OntologyLoader
-from datacloud_data.ontology.term_loader import TermLoader
+from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.ontology.term_loader import TermLoader
 
 from datacloud_data_service.tools.dynamic_query_tool_generator import (
     DynamicQueryToolGenerator,

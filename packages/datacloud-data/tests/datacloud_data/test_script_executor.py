@@ -1,7 +1,7 @@
 import pytest
-from datacloud_data.executor.script_executor import ScriptExecutor
-from datacloud_data.context import InvocationContext
-from datacloud_data.exceptions import ScriptExecutionError
+from datacloud_data_sdk.executor.script_executor import ScriptExecutor
+from datacloud_data_sdk.context import InvocationContext
+from datacloud_data_sdk.exceptions import ScriptExecutionError
 
 
 @pytest.mark.asyncio

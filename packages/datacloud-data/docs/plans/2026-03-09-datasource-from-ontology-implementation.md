@@ -70,7 +70,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add src/datacloud_data/ontology/models.py src/datacloud_data/ontology/loader.py tests/datacloud_data/test_ontology_loader.py
+git add src/datacloud_data_sdk/ontology/models.py src/datacloud_data_sdk/ontology/loader.py tests/datacloud_data_sdk/test_ontology_loader.py
 git commit -m "feat(ontology): add source_config to OntologyClass and parse from objects"
 ```
 
@@ -146,7 +146,7 @@ Expected: FAIL
 ```python
 def _extract_datasource_configs_from_objects(self) -> dict[str, Any]:
     """从 source_type=DB 且含 source_config 的对象提取 DataSourceConfig，按 alias 去重。"""
-    from datacloud_data.sql_executor.config_loader import (
+    from datacloud_data_sdk.sql_executor.config_loader import (
         _dict_to_config,
         _substitute_dict,
     )
@@ -171,7 +171,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add src/datacloud_data/ontology/loader.py tests/datacloud_data/test_ontology_loader.py
+git add src/datacloud_data_sdk/ontology/loader.py tests/datacloud_data_sdk/test_ontology_loader.py
 git commit -m "feat(ontology): add _extract_datasource_configs_from_objects"
 ```
 
@@ -238,7 +238,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add src/datacloud_data/ontology/loader.py tests/datacloud_data/test_ontology_loader.py
+git add src/datacloud_data_sdk/ontology/loader.py tests/datacloud_data_sdk/test_ontology_loader.py
 git commit -m "feat(ontology): auto-inject datasource_configs after load_from_content"
 ```
 

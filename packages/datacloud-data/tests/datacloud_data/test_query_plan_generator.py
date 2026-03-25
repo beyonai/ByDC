@@ -1,6 +1,6 @@
 import pytest
-from datacloud_data.ontology.term_loader import TermLoader
-from datacloud_data.plan.models import (
+from datacloud_data_sdk.ontology.term_loader import TermLoader
+from datacloud_data_sdk.plan.models import (
     ObjectViewAction,
     ObjectViewField,
     ObjectViewFunction,
@@ -10,12 +10,12 @@ from datacloud_data.plan.models import (
     ObjectViewSource,
     QueryExecutionPlan,
 )
-from datacloud_data.plan.query_plan_generator import (
+from datacloud_data_sdk.plan.query_plan_generator import (
     BasePlanGenerator,
     MockPlanGenerator,
     _serialize_payload,
 )
-from datacloud_data.utils.case_utils import camel_to_snake, camel_to_snake_keys
+from datacloud_data_sdk.utils.case_utils import camel_to_snake, camel_to_snake_keys
 
 PAYLOAD = ObjectViewPayload(view_id="v1", sources=[], objects=[], relations=[])
 

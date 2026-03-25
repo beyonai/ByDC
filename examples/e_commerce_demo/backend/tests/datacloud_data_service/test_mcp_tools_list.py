@@ -100,7 +100,7 @@ def test_tools_list_missing_tenant_id_returns_200() -> None:
 
 def test_tool_list_mode_unified_returns_only_operation_and_unified() -> None:
     """tool_list_mode=unified 时仅返回 unified_query + operation 类动作。"""
-    from datacloud_data.ontology.loader import OntologyLoader
+    from datacloud_data_sdk.ontology.loader import OntologyLoader
     from datacloud_data_service.tools.registry import ToolRegistry
 
     loader = OntologyLoader()
@@ -118,7 +118,7 @@ def test_tool_list_mode_unified_returns_only_operation_and_unified() -> None:
 
 def test_tool_list_mode_per_object_returns_all_ontology_actions() -> None:
     """tool_list_mode=per_object 时返回本体动作（含 query + operation）+ DB/KB 虚拟动作。"""
-    from datacloud_data.ontology.loader import OntologyLoader
+    from datacloud_data_sdk.ontology.loader import OntologyLoader
     from datacloud_data_service.tools.registry import ToolRegistry
     from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
 
@@ -139,7 +139,7 @@ def test_tool_list_mode_per_object_returns_all_ontology_actions() -> None:
 
 def test_action_tool_includes_action_type() -> None:
     """生成的工具 _meta 含 action_type。"""
-    from datacloud_data.ontology.loader import OntologyLoader
+    from datacloud_data_sdk.ontology.loader import OntologyLoader
     from datacloud_data_service.tools.registry import ToolRegistry
 
     loader = OntologyLoader()
@@ -156,7 +156,7 @@ def test_action_tool_includes_action_type() -> None:
 
 def test_mcp_tools_list_respects_x_tool_list_mode_header() -> None:
     """X-Tool-List-Mode: unified 仅返回 operation；per_object 返回全部+虚拟动作。"""
-    from datacloud_data.ontology.loader import OntologyLoader
+    from datacloud_data_sdk.ontology.loader import OntologyLoader
     from datacloud_data_service.api.routes import create_app
 
     loader = OntologyLoader()
@@ -188,9 +188,9 @@ def test_tools_call_query_object_returns_records(tmp_path) -> None:
     import asyncio
     import json
 
-    from datacloud_data.ontology.loader import OntologyLoader
-    from datacloud_data.sql_executor.data_source_manager import DataSourceManager
-    from datacloud_data.sql_executor.models import DataSourceConfig
+    from datacloud_data_sdk.ontology.loader import OntologyLoader
+    from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
+    from datacloud_data_sdk.sql_executor.models import DataSourceConfig
     from datacloud_data_service.api.routes import create_app
 
     db_path = str(tmp_path / "test.db")

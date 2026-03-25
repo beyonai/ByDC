@@ -1,5 +1,5 @@
 """Tests for select_column_parser."""
-from datacloud_data.sql_executor.select_column_parser import extract_select_columns
+from datacloud_data_sdk.sql_executor.select_column_parser import extract_select_columns
 
 
 def test_extract_columns_with_as() -> None:

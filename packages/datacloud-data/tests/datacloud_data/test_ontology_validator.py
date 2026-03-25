@@ -2,8 +2,8 @@
 
 import pytest
 
-from datacloud_data.ontology.loader import OntologyLoader
-from datacloud_data.ontology.validator import OntologyValidator
+from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.ontology.validator import OntologyValidator
 
 
 def test_derived_without_derived_config_fails() -> None:

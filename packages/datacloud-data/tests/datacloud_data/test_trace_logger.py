@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from datacloud_data.events.trace_logger import log_exception_stack
+from datacloud_data_sdk.events.trace_logger import log_exception_stack
 
 
 def test_log_exception_stack_outputs_to_stderr_and_file(tmp_path, capfd) -> None:
@@ -43,9 +43,9 @@ def test_log_exception_stack_outputs_to_stderr_and_file(tmp_path, capfd) -> None
 
 def test_event_trace_logger_outputs_event_to_stderr_and_file(tmp_path) -> None:
     """EventTraceLogger 将事件输出到 stderr 和文件。"""
-    from datacloud_data.events.bus import EventBus
-    from datacloud_data.events.events import QueryRequestReceived
-    from datacloud_data.events.trace_logger import EventTraceLogger
+    from datacloud_data_sdk.events.bus import EventBus
+    from datacloud_data_sdk.events.events import QueryRequestReceived
+    from datacloud_data_sdk.events.trace_logger import EventTraceLogger
 
     log_path = str(tmp_path / "trace.log")
     logger = EventTraceLogger(trace_log_path=log_path, enabled=True)
