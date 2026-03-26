@@ -622,11 +622,11 @@ def render_term_types() -> str:
         items.append(
             f"""    <owl:NamedIndividual rdf:about="#termtype_{type_code.lower()}">
         <rdf:type rdf:resource="#TermTypeDefinition"/>
-        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{term_type_path(type_code)}</trem_type_code_path>
-        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{type_code}</trem_type_code>
-        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{xml(name)}</trem_type_name>
-        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{xml(desc)}</trem_type_desc>
-        <trem_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{term_data_type}</trem_data_type>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{term_type_path(type_code)}</term_type_code_path>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{type_code}</term_type_code>
+        <term_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{xml(name)}</term_type_name>
+        <term_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{xml(desc)}</term_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{term_data_type}</term_data_type>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
     </owl:NamedIndividual>"""
         )
@@ -644,11 +644,11 @@ def render_term_types() -> str:
 
 {chr(10).join(items)}
 
-    <owl:DatatypeProperty rdf:about="#trem_type_code_path"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#trem_type_code"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#trem_type_name"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#trem_type_desc"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#trem_data_type"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#term_type_code_path"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#term_type_code"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#term_type_name"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#term_type_desc"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#term_data_type"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
     <owl:DatatypeProperty rdf:about="#version"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
 </rdf:RDF>
 """
@@ -1052,7 +1052,7 @@ def render_actions() -> str:
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{path}</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{LIBRARY_CODE}</library_code>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{rel_field}</rel_term_codeorname>
-        <trem_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{term_data_type}</trem_data_type>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{term_data_type}</term_data_type>
     </owl:NamedIndividual>"""
             )
         for name, field_type, obj_property in spec["response"]:
@@ -1065,7 +1065,7 @@ def render_actions() -> str:
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{LIBRARY_CODE}</library_code>
         <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{obj_property}</object_property>
         <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.{name}</json_path>
-        <trem_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</trem_data_type>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>"""
             )
     return f"""<?xml version="1.0"?>
@@ -1112,7 +1112,7 @@ def render_actions() -> str:
     <owl:DatatypeProperty rdf:about="#term_type_code_path"><rdfs:domain rdf:resource="#RequestParameter"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
     <owl:DatatypeProperty rdf:about="#library_code"><rdfs:domain rdf:resource="#RequestParameter"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
     <owl:DatatypeProperty rdf:about="#rel_term_codeorname"><rdfs:domain rdf:resource="#RequestParameter"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#trem_data_type"><rdfs:domain rdf:resource="#RequestParameter"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#term_data_type"><rdfs:domain rdf:resource="#RequestParameter"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
     <owl:DatatypeProperty rdf:about="#fieldCode"><rdfs:domain rdf:resource="#ResponseParameter"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
     <owl:DatatypeProperty rdf:about="#fieldType"><rdfs:domain rdf:resource="#ResponseParameter"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
     <owl:DatatypeProperty rdf:about="#object_property"><rdfs:domain rdf:resource="#ResponseParameter"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
