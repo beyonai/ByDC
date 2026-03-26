@@ -1,4 +1,0 @@
-{"op":"add","domain_code":"hr","domain_name":"人力资源","domain_desc":"员工、组织、KPI 等人事相关"}
-{"op":"add","domain_code":"sales","domain_name":"销售领域","domain_desc":"覆盖CRM、商机、客户等销售业务"}
-{"op":"add","domain_code":"sales_crm","domain_name":"CRM子领域","parent_code":"sales","domain_desc":"客户关系管理"}
-{"op":"add","domain_code":"sales_oa","domain_name":"OA子领域","parent_code":"sales","domain_desc":"待办、审批等OA流程"}
