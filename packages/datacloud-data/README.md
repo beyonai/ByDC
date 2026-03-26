@@ -201,37 +201,283 @@ app = create_app()
 PYTHONPATH=src python examples/all_interfaces_example.py
 ```
 
+### SDK 用例所需环境变量
+
+下面这些环境变量是上面 SDK 直调用例最常见会用到的。
+
+最小必需配置是 LLM 相关变量，因为 `LangGraphPlanGenerator` 会真实调用 Agent 生成执行计划：
+
+```bash
+# 1. LLM / Agent 规划
+export DC_LLM_API_KEY="your-api-key"
+export DC_LLM_BASE_URL="https://api.openai.com/v1"
+export DC_LLM_MODEL="gpt-4o"
+export DC_LLM_TEMPERATURE="0.0"
+export DC_MAX_PLAN_RETRIES="2"
+
+# 2. 术语加载
+# 推荐先用 api，避免默认走 kb 后还需要额外配置知识库数据库
+export DC_TERM_LOADER_TYPE="api"
+
+# 如果使用 api 术语模式，需要配置术语服务地址
+export DC_ZNT_SERVER="https://byai.iwhalecloud.com/developer/knowledgeService"
+
+# 如果使用 kb 术语模式，需要配置知识库连接
+# export DB_HOST="127.0.0.1"
+# export DB_PORT="5432"
+# export DB_USER="postgres"
+# export DB_PASSWORD="password"
+# export DB_NAME="postgres"
+# export KNOWLEDGE_DB_TYPE="opengauss"
+# export KNOWLEDGE_SCHEMA="whale_datacloud"
+
+# 3. 查询运行目录
+export DC_CSV_BASE_DIR="./tmp"
+export DC_SQL_EXECUTION_MODE="internal"
+```
+
+说明：
+
+- 如果不配置 `DC_LLM_API_KEY`，`LangGraphPlanGenerator(...)` 这类自然语言查询能力无法正常工作
+- `TermLoader.from_config({})` 会从环境变量读取 `DC_TERM_LOADER_TYPE`；默认值是 `kb`
+- `DC_TERM_LOADER_TYPE=kb` 时，需要同时配置知识库数据库连接；`DC_TERM_LOADER_TYPE=api` 时，需要配置 `DC_ZNT_SERVER`
+- 如果你在代码里像下面示例一样手动 `load_from_path(...)` / `load_scene_from_path(...)`，那么 `DC_ONTOLOGY_PATH`、`DC_SCENE_PATH` 不是必需的
+- 如果你把路径也想交给环境变量管理，可以在代码里读取 `DC_ONTOLOGY_PATH`、`DC_SCENE_PATH`
+- `sales_business_opportunity` 这类 DB 对象查询依赖本体内配置的数据源可连通
+- `todo_items`、`po_users` 这类 API 动作调用依赖对应 HTTP 服务可访问
+
 ### SDK 基本用法
 
 ```python
 import sys
 sys.path.insert(0, "src")
 
-from datacloud_data_sdk import OntologyLoader, InvocationContext
-from datacloud_data_sdk.plan.query_plan_generator import MockPlanGenerator
-from datacloud_data_sdk.sql_executor.models import DataSourceConfig
+from pathlib import Path
+
+from datacloud_data_sdk import InvocationContext, OntologyLoader
+from datacloud_data_sdk.ontology.term_loader import TermLoader
+from datacloud_data_sdk.plan.query_plan_generator import LangGraphPlanGenerator
 
 loader = OntologyLoader()
-loader.load_from_content(REGISTRY)  # 或 loader.load_from_file("objects_registry.json")
+loader.load_from_path("resources/ontology/crm_demo/objects_registry.json")
+loader.load_scene_from_path("resources/ontology/crm_demo/views/scene_01_data_analysis.json")
+
 loader.configure(
-    plan_generator=MockPlanGenerator(fixed_plan=MOCK_PLAN),
-    datasource_configs={
-        "test_db": DataSourceConfig(
-            alias="test_db", db_type="SQLITE", jdbc_url="jdbc:sqlite::memory:"
-        )
-    },
-    csv_base_dir="/tmp/datacloud_csv",
+    plan_generator=LangGraphPlanGenerator(
+        model="gpt-4o",
+        base_url="https://api.openai.com/v1",
+        api_key="your-api-key",
+        temperature=0.0,
+        max_retries=2,
+    ),
+    term_loader=TermLoader.from_config({}),
+    csv_base_dir=str(Path("./tmp").resolve()),
+    sql_execution_mode="internal",
 )
 
-obj = loader.get_object("sales_bo")
+view = loader.get_view("scene_01_data_analysis")
 with InvocationContext(tenant_id="t1", user_id="u1"):
-    result = await obj.query("查商机", include_plan=True)
+    result = await view.query("查询销售额前10的产品", include_plan=True)
+
+print(result["records"])
+print(result.get("plan"))
 ```
+
+补充说明：
+
+- 这里使用的是真实 `LangGraphPlanGenerator`，底层会调用 `PlanAgent.run(...)` 生成计划，而不是 Mock
+- 如果只 `load_from_path(...)` 没有 `load_scene_from_path(...)`，则 `loader.get_view(...)` 不可用
+- 对象里的 `source_config` 会自动提取为数据源配置，通常不需要手工再传 `datasource_configs`
+
+### SDK 按对象查询（真实 Agent 规划）
+
+如果你的问题只针对一个对象，可以直接用 `loader.get_object(...).query(...)`：
+
+```python
+import sys
+sys.path.insert(0, "src")
+
+import asyncio
+from pathlib import Path
+
+from datacloud_data_sdk import InvocationContext, OntologyLoader
+from datacloud_data_sdk.ontology.term_loader import TermLoader
+from datacloud_data_sdk.plan.query_plan_generator import LangGraphPlanGenerator
+
+
+async def main() -> None:
+    loader = OntologyLoader()
+    loader.load_from_path("resources/ontology/crm_demo/objects_registry.json")
+    loader.configure(
+        plan_generator=LangGraphPlanGenerator(
+            model="gpt-4o",
+            base_url="https://api.openai.com/v1",
+            api_key="your-api-key",
+            temperature=0.0,
+            max_retries=2,
+        ),
+        term_loader=TermLoader.from_config({}),
+        csv_base_dir=str(Path("./tmp").resolve()),
+        sql_execution_mode="internal",
+    )
+
+    obj = loader.get_object("sales_business_opportunity")
+    with InvocationContext(tenant_id="t1", user_id="u1"):
+        result = await obj.query("查询最近30天我的商机列表", include_plan=True)
+
+    print(result)
+
+
+asyncio.run(main())
+```
+
+`sales_business_opportunity` 是 `crm_demo` 中的 DB 对象，适合验证自然语言查询是否真正走了 Agent 规划和 SQL 执行链路。
+
+### SDK 按视图查询（真实 Agent 规划）
+
+如果你不想经过 FastAPI service，可以直接用 `loader.get_view(...).query(...)`：
+
+```python
+import sys
+sys.path.insert(0, "src")
+
+import asyncio
+from pathlib import Path
+
+from datacloud_data_sdk import InvocationContext, OntologyLoader
+from datacloud_data_sdk.ontology.term_loader import TermLoader
+from datacloud_data_sdk.plan.query_plan_generator import LangGraphPlanGenerator
+
+
+async def main() -> None:
+    loader = OntologyLoader()
+    loader.load_from_path("resources/ontology/crm_demo/objects_registry.json")
+    loader.load_scene_from_path("resources/ontology/crm_demo/views/scene_01_data_analysis.json")
+    loader.configure(
+        plan_generator=LangGraphPlanGenerator(
+            model="gpt-4o",
+            base_url="https://api.openai.com/v1",
+            api_key="your-api-key",
+            temperature=0.0,
+            max_retries=2,
+        ),
+        term_loader=TermLoader.from_config({}),
+        csv_base_dir=str(Path("./tmp").resolve()),
+        sql_execution_mode="internal",
+    )
+
+    view = loader.get_view("scene_01_data_analysis")
+    with InvocationContext(tenant_id="t1", user_id="u1"):
+        result = await view.query("按部门统计本月销售商机金额", include_plan=True)
+
+    print(result)
+
+
+asyncio.run(main())
+```
+
+这个用例适合验证跨对象查询，因为 `scene_01_data_analysis` 视图会聚合多个对象和它们之间的关系。
+
+### SDK 查询对象动作并执行
+
+```python
+import sys
+sys.path.insert(0, "src")
+
+import asyncio
+
+from datacloud_data_sdk import OntologyLoader
+
+
+async def main() -> None:
+    loader = OntologyLoader()
+    loader.load_from_path("resources/ontology/crm_demo/objects_registry.json")
+
+    obj = loader.get_object("todo_items")
+
+    print("actions:", obj.list_action_codes())
+    print("schema:", obj.get_action_schema("query_todo_list"))
+
+    result = await obj.invoke_action(
+        "query_todo_list",
+        {
+            "status": "PENDING",
+            "page": "1",
+            "pageSize": "10",
+            "keyword": "审批",
+        },
+    )
+    print(result)
+
+
+asyncio.run(main())
+```
+
+说明：
+
+- 这个用例不走 Agent 规划，而是直接走动作执行链路
+- `todo_items.query_todo_list` 是本体里定义的 `query` 动作，会根据 `function_refs` 调对应 API
+- 执行前需要确保动作对应的 HTTP 服务可访问
+
+### SDK 通过视图调用对象动作
+
+```python
+import sys
+sys.path.insert(0, "src")
+
+import asyncio
+
+from datacloud_data_sdk import OntologyLoader
+
+
+async def main() -> None:
+    loader = OntologyLoader()
+    loader.load_from_path("resources/ontology/crm_demo/objects_registry.json")
+    loader.load_scene_from_path("resources/ontology/crm_demo/views/scene_01_data_analysis.json")
+
+    view = loader.get_view("scene_01_data_analysis")
+    result = await view.invoke_object_action(
+        "todo_items",
+        "query_todo_list",
+        {
+            "status": "PENDING",
+            "page": "1",
+            "pageSize": "10",
+        },
+    )
+    print(result)
+
+
+asyncio.run(main())
+```
+
+可用函数：
+
+- `loader.get_object(object_code)`：获取单个对象
+- `loader.get_view(view_id)`：获取预定义视图
+- `await obj.query(question, include_plan=True)`：直接按对象查询
+- `await view.query(question, include_plan=True)`：直接按视图查询
+- `obj.list_action_codes()`：列出对象可执行动作
+- `obj.get_action_schema(action_code)`：查看动作参数 schema
+- `await obj.invoke_action(action_code, params)`：直接执行对象动作
+- `await view.invoke_object_action(object_code, action_code, params)`：通过视图调用对象动作
+
+补充说明：
+
+- `LangGraphPlanGenerator(...)` 对齐 service 的 NL2SQL 计划生成方式
+- `TermLoader.from_config({})` 对齐 service 的术语加载方式，会从环境变量读取 `DC_TERM_LOADER_TYPE`、`DC_ZNT_SERVER`
+- Service 启动时还会自动为 DB / KB 对象注入 `query_{object_code}` 这类虚拟查询动作
+
+查询结果为普通 Python `dict`，通常包含：
+
+- `records`
+- `meta`
+- `plan`（当 `include_plan=True` 时）
 
 ### REST API 用法
 
 ```bash
-# 执行查询
+# 1. 视图查询：真实走 Agent 规划
 curl --location --request POST 'http://localhost:8080/api/v1/query' \
 --header 'Content-Type: application/json' \
 --header 'X-Tenant-Id: tenant-001' \
@@ -240,14 +486,51 @@ curl --location --request POST 'http://localhost:8080/api/v1/query' \
 --header 'Authorization: Bearer your-token' \
 --header 'X-System-Code: crm' \
 --data-raw '{
-    "question": "2026年北京亦庄经济技术开发区区域内单位亩产效益最低的10家企业",
-    "view_id": "",
-    "object_ids": []
+  "question": "按部门统计本月销售商机金额",
+  "view_id": "scene_01_data_analysis"
 }'
 
-# 获取数据
-curl -H "Authorization: Bearer {token}" \
-  http://localhost:8080/api/v1/data/{query_id}
+# 2. 对象查询：真实走 Agent 规划
+curl --location --request POST 'http://localhost:8080/api/v1/query' \
+--header 'Content-Type: application/json' \
+--header 'X-Tenant-Id: tenant-001' \
+--header 'X-User-Id: user-001' \
+--data-raw '{
+  "question": "查询最近30天商机列表",
+  "object_ids": ["sales_business_opportunity"]
+}'
+
+# 3. 查看某个对象范围内可用的工具 / 动作
+curl -X POST http://localhost:8080/api/v1/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "X-Tenant-Id: t1" \
+  -H "X-Tool-List-Mode: per_object" \
+  -H "X-Object-Ids: todo_items" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/list","params":{}}'
+
+# 4. 调用对象动作
+curl -X POST http://localhost:8080/api/v1/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "X-Tenant-Id: t1" \
+  -d '{
+    "jsonrpc":"2.0",
+    "id":"2",
+    "method":"tools/call",
+    "params":{
+      "name":"query_todo_list",
+      "arguments":{
+        "status":"PENDING",
+        "page":"1",
+        "pageSize":"10"
+      }
+    }
+  }'
+
+# 5. 获取指定视图或对象集合的技能包 / 工具定义
+curl -X GET "http://localhost:8080/api/v1/skills/package?view_id=scene_01_data_analysis" \
+  -H "X-Tenant-Id: t1"
 ```
 
 ## 项目结构
