@@ -1,391 +1,1434 @@
 <?xml version="1.0"?>
 <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
          xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
          xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
          xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
          xml:base="http://example.org/entity/ontology#">
 
     <owl:Class rdf:about="#EntityDefinition"><rdfs:label>实体定义</rdfs:label></owl:Class>
-    <owl:NamedIndividual rdf:about="#dws_enterprise_wide_v4">
+    <owl:Class rdf:about="#EntityField"><rdfs:label>实体字段</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#dws_enterprise_wide_v1">
         <rdf:type rdf:resource="#EntityDefinition"/>
         <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">dws_enterprise_wide</entity_code>
-        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业大宽表</entity_name>
-        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">基于真实 CSV 数据和 DDL 生成的 企业大宽表</entity_desc>
+        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业年度画像</entity_name>
+        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业粒度年度画像对象，覆盖企业身份归属、经营申报、风险研判、资产占用和产业链关系等核心指标。</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-        <fields rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"property_code": "enterpriseId", "property_name": "企业ID", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": true, "default_value": "", "source_column": "enterprise_id", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "-", "non_null_count": 15125, "unique_count": 15125}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "dataYear", "property_name": "数据年份", "data_type": "INT(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": true, "default_value": "", "source_column": "data_year", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "2025", "non_null_count": 15125, "unique_count": 2}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "enterpriseName", "property_name": "企业名称", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "enterprise_name", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#ENTERPRISE_NAME", "library_code": "LIB_002", "ext_field": {"sample_value": "北京同仁堂和记医药投资有限公司", "non_null_count": 15125, "unique_count": 15098}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "industryCode", "property_name": "行业编码", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "industry_code", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "27", "non_null_count": 15125, "unique_count": 16}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "industryName", "property_name": "行业名称", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "industry_name", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#INDUSTRY_NAME", "library_code": "LIB_002", "ext_field": {"sample_value": "医药制造业", "non_null_count": 15125, "unique_count": 18}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "gridId", "property_name": "经营网格ID", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "grid_id", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "YZ_G100_8", "non_null_count": 15125, "unique_count": 10}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "gridName", "property_name": "经营网格名称", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "grid_name", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#GRID_NAME", "library_code": "LIB_002", "ext_field": {"sample_value": "旧宫地区", "non_null_count": 15125, "unique_count": 10}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "regionId", "property_name": "区域ID", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "region_id", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "3", "non_null_count": 3517, "unique_count": 1}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "regionName", "property_name": "区域名称", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "region_name", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "北京亦庄经济技术开发区", "non_null_count": 3517, "unique_count": 1}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "registerGridId", "property_name": "注册网格ID", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "register_grid_id", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "YZ_G100_8", "non_null_count": 15125, "unique_count": 10}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "busAdress", "property_name": "经营地址", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "bus_adress", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#BUS_ADDRESS", "library_code": "LIB_002", "ext_field": {"sample_value": "YZ_G100_8区域标准地址", "non_null_count": 15125, "unique_count": 10}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "regAddress", "property_name": "注册地址", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "reg_address", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#REG_ADDRESS", "library_code": "LIB_002", "ext_field": {"sample_value": "北京市亦庄经济开发区宏达北路10号", "non_null_count": 15125, "unique_count": 11483}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "poiLatitude", "property_name": "企业POI纬度", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "poi_latitude", "synonyms": "", "data_format": "0.000000", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "39.792281", "non_null_count": 15125, "unique_count": 13151}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "poiLongitude", "property_name": "企业POI经度", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "poi_longitude", "synonyms": "", "data_format": "0.000000", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "116.421737", "non_null_count": 15125, "unique_count": 13442}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "poiAdress", "property_name": "企业POI地址", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "poi_adress", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "YZ_G100_8区域标准地址", "non_null_count": 15125, "unique_count": 10}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "annualRevenueReport", "property_name": "企业申报营收", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "annual_revenue_report", "synonyms": "", "data_format": "0.00", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "10573.02", "non_null_count": 15125, "unique_count": 14619}, "property_category": "指标", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "taxDeclared", "property_name": "企业申报税额", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "tax_declared", "synonyms": "", "data_format": "0.00", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "840.58", "non_null_count": 15125, "unique_count": 7362}, "property_category": "指标", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "landAreaMu", "property_name": "占地面积（亩）", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "land_area_mu", "synonyms": "", "data_format": "0.0000", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "121.9600", "non_null_count": 15125, "unique_count": 14784}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "powerConsumption", "property_name": "年度用电量（千瓦时）", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "power_consumption", "synonyms": "", "data_format": "0.00", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "994608.70", "non_null_count": 15125, "unique_count": 9819}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "waterConsumption", "property_name": "年度用水量（吨）", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "water_consumption", "synonyms": "", "data_format": "0.00", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "20079.94", "non_null_count": 15125, "unique_count": 9623}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "logisticsHeatIndex", "property_name": "所在网格的年度平均物流热力指数", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "logistics_heat_index", "synonyms": "", "data_format": "0.0000", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "0.4600", "non_null_count": 15125, "unique_count": 5837}, "property_category": "指标", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "revenueAiInferred", "property_name": "AI推演营收", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "revenue_ai_inferred", "synonyms": "", "data_format": "0.00", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "10662.30", "non_null_count": 15125, "unique_count": 9478}, "property_category": "指标", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "taxAiInferred", "property_name": "AI推演税额", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "tax_ai_inferred", "synonyms": "", "data_format": "0.00", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "926.04", "non_null_count": 15125, "unique_count": 7420}, "property_category": "指标", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "taxGapRatio", "property_name": "税负差异率", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "tax_gap_ratio", "synonyms": "", "data_format": "0.0000", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "0.0500", "non_null_count": 15125, "unique_count": 4315}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "riskScore", "property_name": "企业风险分", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "risk_score", "synonyms": "", "data_format": "0.0000", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "2.7100", "non_null_count": 15125, "unique_count": 3353}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "riskLevel", "property_name": "企业风险等级", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "risk_level", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#RISK_LEVEL", "library_code": "LIB_002", "ext_field": {"sample_value": "Nothing", "non_null_count": 15125, "unique_count": 4}, "property_category": "标签", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "isScaleEnterprise", "property_name": "规上企业标识", "data_type": "INT(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "is_scale_enterprise", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#IS_SCALE_ENTERPRISE", "library_code": "LIB_002", "ext_field": {"sample_value": "0", "non_null_count": 15125, "unique_count": 2}, "property_category": "标签", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "isHighTech", "property_name": "高新企业标识", "data_type": "INT(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "is_high_tech", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#IS_HIGH_TECH", "library_code": "LIB_002", "ext_field": {"sample_value": "0", "non_null_count": 15125, "unique_count": 2}, "property_category": "标签", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "highLevelTalents", "property_name": "高层次人才数量", "data_type": "INT(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "high_level_talents", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "0", "non_null_count": 15125, "unique_count": 1}, "property_category": "度量", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "patentsNum", "property_name": "专利数量", "data_type": "INT(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "patents_num", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "2", "non_null_count": 15125, "unique_count": 3}, "property_category": "度量", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "rdIntensity", "property_name": "研发强度", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "rd_intensity", "synonyms": "", "data_format": "0.0000", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "0.0200", "non_null_count": 15125, "unique_count": 2}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "isListed", "property_name": "是否上市", "data_type": "INT(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "is_listed", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#IS_LISTED", "library_code": "LIB_002", "ext_field": {"sample_value": "0", "non_null_count": 15125, "unique_count": 2}, "property_category": "标签", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "enterpriseLevel", "property_name": "企业级别", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "enterprise_level", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#ENTERPRISE_LEVEL", "library_code": "LIB_002", "ext_field": {"sample_value": "D", "non_null_count": 15125, "unique_count": 6}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "dataSource", "property_name": "数据来源", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "data_source", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#DATA_SOURCE", "library_code": "LIB_002", "ext_field": {"sample_value": "企查查", "non_null_count": 15125, "unique_count": 6}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "locationReality", "property_name": "位置真实性", "data_type": "INT(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "location_reality", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "0", "non_null_count": 15125, "unique_count": 2}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "chooseWho", "property_name": "数据选择来源", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "choose_who", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "高德-&gt;企查查", "non_null_count": 224, "unique_count": 1}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "isRisk", "property_name": "是否风险企业 0-否 1-是", "data_type": "INT(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "is_risk", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#IS_RISK", "library_code": "LIB_002", "ext_field": {"sample_value": "0", "non_null_count": 15125, "unique_count": 2}, "property_category": "标签", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "invoiceIssuedAmount", "property_name": "期内开票总额（万元）", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "invoice_issued_amount", "synonyms": "", "data_format": "0.00", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "11237.35", "non_null_count": 15125, "unique_count": 9447}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "invoiceReceivedAmount", "property_name": "期内收票总额（万元）", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "invoice_received_amount", "synonyms": "", "data_format": "0.00", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "7406.33", "non_null_count": 15125, "unique_count": 9411}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "invoiceIssuedCount", "property_name": "开票份数", "data_type": "INT(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "invoice_issued_count", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "107", "non_null_count": 15125, "unique_count": 500}, "property_category": "度量", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "invoiceItemVarianceScore", "property_name": "进销项品目背离度评分", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "invoice_item_variance_score", "synonyms": "", "data_format": "0.00", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "66.02", "non_null_count": 15125, "unique_count": 5532}, "property_category": "指标", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "peakInvoicingRatio", "property_name": "顶额开票占比", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "peak_invoicing_ratio", "synonyms": "", "data_format": "0.0000", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "0.1300", "non_null_count": 15125, "unique_count": 2768}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "chainId", "property_name": "产业链环节ID(企业表)", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "chain_id", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "15327.42", "non_null_count": 15125, "unique_count": 41}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "chainName", "property_name": "产业链环节名称(企业表)", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "chain_name", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#CHAIN_NAME", "library_code": "LIB_002", "ext_field": {"sample_value": "生物医药产业链", "non_null_count": 15125, "unique_count": 35}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "upstreamChainName", "property_name": "上游环节名称", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "upstream_chain_name", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#UPSTREAM_CHAIN_NAME", "library_code": "LIB_002", "ext_field": {"sample_value": "医药原料与辅料产业链", "non_null_count": 14683, "unique_count": 24}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "downstreamChainName", "property_name": "下游环节名称", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "downstream_chain_name", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#DOWNSTREAM_CHAIN_NAME", "library_code": "LIB_002", "ext_field": {"sample_value": "医疗服务与流通产业链", "non_null_count": 15125, "unique_count": 40}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "isLeading", "property_name": "是否龙头(链路表聚合)", "data_type": "INT(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "is_leading", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#IS_LEADING", "library_code": "LIB_002", "ext_field": {"sample_value": "", "non_null_count": 0, "unique_count": 0}, "property_category": "标签", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "leadingLevels", "property_name": "龙头等级聚合", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "leading_levels", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#LEADING_LEVELS", "library_code": "LIB_002", "ext_field": {"sample_value": "", "non_null_count": 0, "unique_count": 0}, "property_category": "标签", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "maxInfluenceRadiusKm", "property_name": "最大影响半径", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "max_influence_radius_km", "synonyms": "", "data_format": "0.00", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "", "non_null_count": 0, "unique_count": 0}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "primaryAssetId", "property_name": "主经营资产ID", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "primary_asset_id", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "ASSET--", "non_null_count": 15125, "unique_count": 15117}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "primaryAssetName", "property_name": "主经营资产名称", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "primary_asset_name", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "", "non_null_count": 0, "unique_count": 0}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "primaryAssetType", "property_name": "主经营资产类型", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "primary_asset_type", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "", "non_null_count": 0, "unique_count": 0}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "primaryAssetStatus", "property_name": "主经营资产状态", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "primary_asset_status", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "", "non_null_count": 0, "unique_count": 0}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "primaryAssetLandMu", "property_name": "主经营资产占地(亩)", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "primary_asset_land_mu", "synonyms": "", "data_format": "0.0000", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "", "non_null_count": 0, "unique_count": 0}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "primaryAssetFloorSqm", "property_name": "主经营资产建面(平米)", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "primary_asset_floor_sqm", "synonyms": "", "data_format": "0.00", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "", "non_null_count": 0, "unique_count": 0}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "occupancyAssetCnt", "property_name": "企业占用资产数", "data_type": "INT(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "occupancy_asset_cnt", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "1", "non_null_count": 2912, "unique_count": 3}, "property_category": "度量", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "occupancyTotalAreaSqm", "property_name": "企业占用面积汇总", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "occupancy_total_area_sqm", "synonyms": "", "data_format": "0.00", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "207.00", "non_null_count": 2912, "unique_count": 74}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "occupancyActiveCnt", "property_name": "当前有效合同数", "data_type": "INT(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "occupancy_active_cnt", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "1", "non_null_count": 2912, "unique_count": 2}, "property_category": "度量", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "invoiceIssuedAmtYear", "property_name": "当年开票额", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "invoice_issued_amt_year", "synonyms": "", "data_format": "0.00", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "4003.12", "non_null_count": 11608, "unique_count": 8111}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "invoiceReceivedAmtYear", "property_name": "当年收票额", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "invoice_received_amt_year", "synonyms": "", "data_format": "0.00", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "1089.59", "non_null_count": 11608, "unique_count": 7291}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "invoiceIssuedCntYear", "property_name": "当年开票数", "data_type": "INT(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "invoice_issued_cnt_year", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "12", "non_null_count": 11608, "unique_count": 19}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "invoiceReceivedCntYear", "property_name": "当年收票数", "data_type": "INT(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "invoice_received_cnt_year", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "3", "non_null_count": 11608, "unique_count": 14}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "supplierRelCnt", "property_name": "作为供应方关系数", "data_type": "INT(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "supplier_rel_cnt", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "", "non_null_count": 0, "unique_count": 0}, "property_category": "度量", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "buyerRelCnt", "property_name": "作为采购方关系数", "data_type": "INT(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "buyer_rel_cnt", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "", "non_null_count": 0, "unique_count": 0}, "property_category": "度量", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "supplierStrengthSum", "property_name": "供应方关系强度和", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "supplier_strength_sum", "synonyms": "", "data_format": "0.0000", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "", "non_null_count": 0, "unique_count": 0}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "buyerStrengthSum", "property_name": "采购方关系强度和", "data_type": "DOUBLE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "buyer_strength_sum", "synonyms": "", "data_format": "0.0000", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "", "non_null_count": 0, "unique_count": 0}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "latestJudgmentTime", "property_name": "最新风险研判时间", "data_type": "DATE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "latest_judgment_time", "synonyms": "", "data_format": "yyyy-MM-dd HH:mm:ss", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "2026-03-18 16:46:27", "non_null_count": 1854, "unique_count": 1}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "latestPatternId", "property_name": "最新风险模式ID", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "latest_pattern_id", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "PATTERN_04", "non_null_count": 1854, "unique_count": 5}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "latestPatternName", "property_name": "最新风险模式名", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "latest_pattern_name", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "进销项背离/虚列成本", "non_null_count": 1854, "unique_count": 5}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "latestRiskTypeName", "property_name": "最新风险类型", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "latest_risk_type_name", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#LATEST_RISK_TYPE_NAME", "library_code": "LIB_002", "ext_field": {"sample_value": "偷税漏税", "non_null_count": 1854, "unique_count": 1}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "latestComprehensiveScore", "property_name": "最新综合评分", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "NULL", "source_column": "latest_comprehensive_score", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "31.18", "non_null_count": 1854, "unique_count": 1553}, "property_category": "指标", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "latestJudgmentSummary", "property_name": "最新研判摘要", "data_type": "STRING(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": false, "default_value": "", "source_column": "latest_judgment_summary", "synonyms": "", "data_format": "", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "该企业（北京亦庄三羊供热有限公司工会委员会）存在进销项背离/虚列成本嫌疑。进销项品目背离度79.03分，收票额777.46万、申报营收1882.2万，存在虚增成本可能。综合评分31.18，建议核查进项发票真实性与业务相关性。", "non_null_count": 1854, "unique_count": 1854}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}, {"property_code": "etlTime", "property_name": "装载时间", "data_type": "DATE(BIGINT:长整形，INT:整形, DOUBLE: 浮点形，STRING:字符，BOOLEAN:布尔，DATE:时间)", "is_required": true, "default_value": "CURRENT_TIMESTAMP", "source_column": "etl_time", "synonyms": "", "data_format": "yyyy-MM-dd HH:mm:ss", "term_type_code_path": "LIB_002#PROPERTY", "library_code": "LIB_002", "ext_field": {"sample_value": "2026-03-19 21:38:44", "non_null_count": 15125, "unique_count": 1}, "property_category": "属性", "property_group": "STORAGE(STORAGE:存储属性,COMPUTE:计算属性)"}]</fields>
-        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["query_enterprise_by_name_or_id", "query_enterprise_risk_profile"]</action_refs>
-        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["rel_dws_enterprise_wide__dws_grid_wide_0", "rel_dws_enterprise_wide__dws_industry_wide_1"]</relations>
+        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DB(DB:数据库，API:接口)</entity_source>
+        <fields rdf:resource="#enterpriseId_field"/>
+        <fields rdf:resource="#dataYear_field"/>
+        <fields rdf:resource="#enterpriseName_field"/>
+        <fields rdf:resource="#industryCode_field"/>
+        <fields rdf:resource="#industryName_field"/>
+        <fields rdf:resource="#gridId_field"/>
+        <fields rdf:resource="#gridName_field"/>
+        <fields rdf:resource="#regionId_field"/>
+        <fields rdf:resource="#regionName_field"/>
+        <fields rdf:resource="#registerGridId_field"/>
+        <fields rdf:resource="#busAdress_field"/>
+        <fields rdf:resource="#regAddress_field"/>
+        <fields rdf:resource="#poiLatitude_field"/>
+        <fields rdf:resource="#poiLongitude_field"/>
+        <fields rdf:resource="#poiAdress_field"/>
+        <fields rdf:resource="#annualRevenueReport_field"/>
+        <fields rdf:resource="#taxDeclared_field"/>
+        <fields rdf:resource="#landAreaMu_field"/>
+        <fields rdf:resource="#powerConsumption_field"/>
+        <fields rdf:resource="#waterConsumption_field"/>
+        <fields rdf:resource="#logisticsHeatIndex_field"/>
+        <fields rdf:resource="#revenueAiInferred_field"/>
+        <fields rdf:resource="#taxAiInferred_field"/>
+        <fields rdf:resource="#taxGapRatio_field"/>
+        <fields rdf:resource="#riskScore_field"/>
+        <fields rdf:resource="#riskLevel_field"/>
+        <fields rdf:resource="#isScaleEnterprise_field"/>
+        <fields rdf:resource="#isHighTech_field"/>
+        <fields rdf:resource="#highLevelTalents_field"/>
+        <fields rdf:resource="#patentsNum_field"/>
+        <fields rdf:resource="#rdIntensity_field"/>
+        <fields rdf:resource="#isListed_field"/>
+        <fields rdf:resource="#enterpriseLevel_field"/>
+        <fields rdf:resource="#dataSource_field"/>
+        <fields rdf:resource="#locationReality_field"/>
+        <fields rdf:resource="#chooseWho_field"/>
+        <fields rdf:resource="#isRisk_field"/>
+        <fields rdf:resource="#invoiceIssuedAmount_field"/>
+        <fields rdf:resource="#invoiceReceivedAmount_field"/>
+        <fields rdf:resource="#invoiceIssuedCount_field"/>
+        <fields rdf:resource="#invoiceItemVarianceScore_field"/>
+        <fields rdf:resource="#peakInvoicingRatio_field"/>
+        <fields rdf:resource="#chainId_field"/>
+        <fields rdf:resource="#chainName_field"/>
+        <fields rdf:resource="#upstreamChainName_field"/>
+        <fields rdf:resource="#downstreamChainName_field"/>
+        <fields rdf:resource="#isLeading_field"/>
+        <fields rdf:resource="#leadingLevels_field"/>
+        <fields rdf:resource="#maxInfluenceRadiusKm_field"/>
+        <fields rdf:resource="#primaryAssetId_field"/>
+        <fields rdf:resource="#primaryAssetName_field"/>
+        <fields rdf:resource="#primaryAssetType_field"/>
+        <fields rdf:resource="#primaryAssetStatus_field"/>
+        <fields rdf:resource="#primaryAssetLandMu_field"/>
+        <fields rdf:resource="#primaryAssetFloorSqm_field"/>
+        <fields rdf:resource="#occupancyAssetCnt_field"/>
+        <fields rdf:resource="#occupancyTotalAreaSqm_field"/>
+        <fields rdf:resource="#occupancyActiveCnt_field"/>
+        <fields rdf:resource="#invoiceIssuedAmtYear_field"/>
+        <fields rdf:resource="#invoiceReceivedAmtYear_field"/>
+        <fields rdf:resource="#invoiceIssuedCntYear_field"/>
+        <fields rdf:resource="#invoiceReceivedCntYear_field"/>
+        <fields rdf:resource="#supplierRelCnt_field"/>
+        <fields rdf:resource="#buyerRelCnt_field"/>
+        <fields rdf:resource="#supplierStrengthSum_field"/>
+        <fields rdf:resource="#buyerStrengthSum_field"/>
+        <fields rdf:resource="#latestJudgmentTime_field"/>
+        <fields rdf:resource="#latestPatternId_field"/>
+        <fields rdf:resource="#latestPatternName_field"/>
+        <fields rdf:resource="#latestRiskTypeName_field"/>
+        <fields rdf:resource="#latestComprehensiveScore_field"/>
+        <fields rdf:resource="#latestJudgmentSummary_field"/>
+        <fields rdf:resource="#etlTime_field"/>
+        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;query_enterprise_profile&quot;]</action_refs>
+        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;rel_enterprise_grid&quot;, &quot;rel_enterprise_industry&quot;]</relations>
     </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#enterpriseId_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterpriseId</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业ID</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">INT</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_id</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">身份归属</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#dataYear_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">dataYear</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">数据年份</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">INT</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data_year</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">身份归属</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#enterpriseName_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterpriseName</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业名称</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_name</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">身份归属</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#ENTERPRISE_NAME</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#industryCode_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industryCode</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业编码</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_code</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">身份归属</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#industryName_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industryName</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业名称</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">身份归属</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#INDUSTRY_NAME</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#gridId_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">gridId</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">经营网格ID</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">身份归属</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#gridName_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">gridName</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">经营网格名称</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_name</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">身份归属</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#GRID_NAME</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#regionId_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">regionId</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">区域ID</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">region_id</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">身份归属</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#regionName_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">regionName</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">区域名称</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">region_name</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">身份归属</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#REGION_NAME</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#registerGridId_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">registerGridId</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">注册网格ID</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">register_grid_id</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">身份归属</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#busAdress_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">busAdress</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">经营地址</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">bus_adress</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">空间定位</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#BUS_ADRESS</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#regAddress_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">regAddress</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">注册地址</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">reg_address</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">空间定位</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#REG_ADDRESS</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#poiLatitude_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">poiLatitude</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业POI纬度</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">poi_latitude</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.000000</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">空间定位</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#poiLongitude_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">poiLongitude</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业POI经度</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">poi_longitude</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.000000</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">空间定位</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#poiAdress_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">poiAdress</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业POI地址</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">poi_adress</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">空间定位</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#annualRevenueReport_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">annualRevenueReport</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业申报营收</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">annual_revenue_report</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">经营申报</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#taxDeclared_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">taxDeclared</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业申报税额</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">tax_declared</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">经营申报</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#landAreaMu_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">landAreaMu</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">占地面积（亩）</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">land_area_mu</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.0000</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string">亩</measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">资产占用</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#powerConsumption_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">powerConsumption</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">年度用电量（千瓦时）</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">power_consumption</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string">千瓦时</measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">资产占用</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#waterConsumption_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">waterConsumption</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">年度用水量（吨）</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">water_consumption</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string">吨</measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">资产占用</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#logisticsHeatIndex_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">logisticsHeatIndex</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所在网格的年度平均物流热力指数</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">logistics_heat_index</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.0000</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string">指数</measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">资产占用</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#revenueAiInferred_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">revenueAiInferred</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">AI推演营收</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">revenue_ai_inferred</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">经营申报</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#taxAiInferred_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">taxAiInferred</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">AI推演税额</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">tax_ai_inferred</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">经营申报</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#taxGapRatio_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">taxGapRatio</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">税负差异率</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">tax_gap_ratio</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.0000</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">经营申报</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#riskScore_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">riskScore</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业风险分</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">risk_score</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.0000</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">风险研判</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#riskLevel_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">riskLevel</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业风险等级</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">risk_level</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">风险研判</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#RISK_LEVEL</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#isScaleEnterprise_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">isScaleEnterprise</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">规上企业标识</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">BOOLEAN</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">is_scale_enterprise</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">创新资质</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#IS_SCALE_ENTERPRISE</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#isHighTech_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">isHighTech</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">高新企业标识</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">BOOLEAN</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">is_high_tech</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">创新资质</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#IS_HIGH_TECH</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#highLevelTalents_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">highLevelTalents</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">高层次人才数量</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">INT</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">high_level_talents</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">创新资质</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#patentsNum_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">patentsNum</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">专利数量</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">INT</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">patents_num</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">创新资质</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rdIntensity_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">rdIntensity</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">研发强度</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">rd_intensity</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.0000</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">创新资质</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#isListed_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">isListed</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">是否上市</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">BOOLEAN</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">is_listed</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">创新资质</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#IS_LISTED</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#enterpriseLevel_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterpriseLevel</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业级别</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_level</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">创新资质</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#ENTERPRISE_LEVEL</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#dataSource_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">dataSource</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">数据来源</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data_source</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">经营申报</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#DATA_SOURCE</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#locationReality_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">locationReality</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">位置真实性</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">INT</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">location_reality</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">空间定位</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#LOCATION_REALITY</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#chooseWho_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chooseWho</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">数据选择来源</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">choose_who</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">经营申报</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#isRisk_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">isRisk</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">是否风险企业 0-否 1-是</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">BOOLEAN</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">is_risk</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">风险研判</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#IS_RISK</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#invoiceIssuedAmount_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">invoiceIssuedAmount</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">期内开票总额（万元）</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">invoice_issued_amount</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">发票交易</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#invoiceReceivedAmount_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">invoiceReceivedAmount</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">期内收票总额（万元）</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">invoice_received_amount</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">发票交易</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#invoiceIssuedCount_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">invoiceIssuedCount</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">开票份数</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">INT</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">invoice_issued_count</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">发票交易</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#invoiceItemVarianceScore_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">invoiceItemVarianceScore</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">进销项品目背离度评分</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">invoice_item_variance_score</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">发票交易</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#peakInvoicingRatio_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">peakInvoicingRatio</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">顶额开票占比</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">peak_invoicing_ratio</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.0000</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">发票交易</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#chainId_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chainId</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链环节ID(企业表)</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_id</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">身份归属</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#chainName_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chainName</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链环节名称(企业表)</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">身份归属</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#CHAIN_NAME</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#upstreamChainName_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">upstreamChainName</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">上游环节名称</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">upstream_chain_name</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">身份归属</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#UPSTREAM_CHAIN_NAME</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#downstreamChainName_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">downstreamChainName</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">下游环节名称</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">downstream_chain_name</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">身份归属</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#DOWNSTREAM_CHAIN_NAME</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#isLeading_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">isLeading</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">是否龙头(链路表聚合)</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">BOOLEAN</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">is_leading</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链关系</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#IS_LEADING</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#leadingLevels_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">leadingLevels</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">龙头等级聚合</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">leading_levels</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链关系</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#LEADING_LEVELS</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#maxInfluenceRadiusKm_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">maxInfluenceRadiusKm</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">最大影响半径</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">max_influence_radius_km</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链关系</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#primaryAssetId_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">primaryAssetId</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">主经营资产ID</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">primary_asset_id</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">资产占用</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#primaryAssetName_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">primaryAssetName</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">主经营资产名称</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">primary_asset_name</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">资产占用</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#primaryAssetType_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">primaryAssetType</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">主经营资产类型</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">primary_asset_type</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">资产占用</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#ASSET_TYPE</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#primaryAssetStatus_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">primaryAssetStatus</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">主经营资产状态</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">primary_asset_status</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">资产占用</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#ASSET_STATUS</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#primaryAssetLandMu_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">primaryAssetLandMu</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">主经营资产占地(亩)</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">primary_asset_land_mu</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.0000</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string">亩</measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">资产占用</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#primaryAssetFloorSqm_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">primaryAssetFloorSqm</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">主经营资产建面(平米)</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">primary_asset_floor_sqm</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string">平方米</measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">资产占用</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#occupancyAssetCnt_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">occupancyAssetCnt</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业占用资产数</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">INT</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">occupancy_asset_cnt</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">资产占用</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#occupancyTotalAreaSqm_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">occupancyTotalAreaSqm</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业占用面积汇总</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">occupancy_total_area_sqm</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">资产占用</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#occupancyActiveCnt_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">occupancyActiveCnt</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">当前有效合同数</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">INT</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">occupancy_active_cnt</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">资产占用</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#invoiceIssuedAmtYear_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">invoiceIssuedAmtYear</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">当年开票额</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">invoice_issued_amt_year</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">发票交易</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#invoiceReceivedAmtYear_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">invoiceReceivedAmtYear</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">当年收票额</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">invoice_received_amt_year</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">发票交易</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#invoiceIssuedCntYear_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">invoiceIssuedCntYear</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">当年开票数</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">INT</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">invoice_issued_cnt_year</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">发票交易</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#invoiceReceivedCntYear_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">invoiceReceivedCntYear</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">当年收票数</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">INT</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">invoice_received_cnt_year</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">发票交易</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#supplierRelCnt_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">supplierRelCnt</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">作为供应方关系数</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">INT</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">supplier_rel_cnt</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链关系</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#buyerRelCnt_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">buyerRelCnt</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">作为采购方关系数</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">INT</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">buyer_rel_cnt</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链关系</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#supplierStrengthSum_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">supplierStrengthSum</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">供应方关系强度和</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">supplier_strength_sum</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.0000</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链关系</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#buyerStrengthSum_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">buyerStrengthSum</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">采购方关系强度和</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">buyer_strength_sum</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.0000</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链关系</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#latestJudgmentTime_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">latestJudgmentTime</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">最新风险研判时间</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DATE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">latest_judgment_time</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yyyy-MM-dd HH:mm:ss</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">风险研判</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#latestPatternId_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">latestPatternId</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">最新风险模式ID</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">latest_pattern_id</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">风险研判</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#latestPatternName_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">latestPatternName</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">最新风险模式名</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">latest_pattern_name</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">风险研判</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#RISK_PATTERN</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#latestRiskTypeName_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">latestRiskTypeName</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">最新风险类型</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">latest_risk_type_name</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">风险研判</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#RISK_TYPE</term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#latestComprehensiveScore_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">latestComprehensiveScore</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">最新综合评分</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">latest_comprehensive_score</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">风险研判</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#latestJudgmentSummary_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">latestJudgmentSummary</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">最新研判摘要</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">latest_judgment_summary</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">风险研判</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#etlTime_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">etlTime</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">装载时间</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DATE</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">etl_time</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yyyy-MM-dd HH:mm:ss</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">经营申报</property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+    </owl:NamedIndividual>
+
     <owl:DatatypeProperty rdf:about="#entity_code"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
     <owl:DatatypeProperty rdf:about="#entity_name"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
     <owl:DatatypeProperty rdf:about="#entity_desc"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
     <owl:DatatypeProperty rdf:about="#version"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#entity_source"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
     <owl:DatatypeProperty rdf:about="#fields"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
     <owl:DatatypeProperty rdf:about="#action_refs"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
     <owl:DatatypeProperty rdf:about="#relations"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#enterpriseId">
-        <rdfs:label>企业ID</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#dataYear">
-        <rdfs:label>数据年份</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#enterpriseName">
-        <rdfs:label>企业名称</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#industryCode">
-        <rdfs:label>行业编码</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#industryName">
-        <rdfs:label>行业名称</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#gridId">
-        <rdfs:label>经营网格ID</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#gridName">
-        <rdfs:label>经营网格名称</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#regionId">
-        <rdfs:label>区域ID</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#regionName">
-        <rdfs:label>区域名称</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#registerGridId">
-        <rdfs:label>注册网格ID</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#busAdress">
-        <rdfs:label>经营地址</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#regAddress">
-        <rdfs:label>注册地址</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#poiLatitude">
-        <rdfs:label>企业POI纬度</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#poiLongitude">
-        <rdfs:label>企业POI经度</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#poiAdress">
-        <rdfs:label>企业POI地址</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#annualRevenueReport">
-        <rdfs:label>企业申报营收</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#taxDeclared">
-        <rdfs:label>企业申报税额</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#landAreaMu">
-        <rdfs:label>占地面积（亩）</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#powerConsumption">
-        <rdfs:label>年度用电量（千瓦时）</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#waterConsumption">
-        <rdfs:label>年度用水量（吨）</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#logisticsHeatIndex">
-        <rdfs:label>所在网格的年度平均物流热力指数</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#revenueAiInferred">
-        <rdfs:label>AI推演营收</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#taxAiInferred">
-        <rdfs:label>AI推演税额</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#taxGapRatio">
-        <rdfs:label>税负差异率</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#riskScore">
-        <rdfs:label>企业风险分</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#riskLevel">
-        <rdfs:label>企业风险等级</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#isScaleEnterprise">
-        <rdfs:label>规上企业标识</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#isHighTech">
-        <rdfs:label>高新企业标识</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#highLevelTalents">
-        <rdfs:label>高层次人才数量</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#patentsNum">
-        <rdfs:label>专利数量</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#rdIntensity">
-        <rdfs:label>研发强度</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#isListed">
-        <rdfs:label>是否上市</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#enterpriseLevel">
-        <rdfs:label>企业级别</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#dataSource">
-        <rdfs:label>数据来源</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#locationReality">
-        <rdfs:label>位置真实性</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#chooseWho">
-        <rdfs:label>数据选择来源</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#isRisk">
-        <rdfs:label>是否风险企业 0-否 1-是</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#invoiceIssuedAmount">
-        <rdfs:label>期内开票总额（万元）</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#invoiceReceivedAmount">
-        <rdfs:label>期内收票总额（万元）</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#invoiceIssuedCount">
-        <rdfs:label>开票份数</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#invoiceItemVarianceScore">
-        <rdfs:label>进销项品目背离度评分</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#peakInvoicingRatio">
-        <rdfs:label>顶额开票占比</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#chainId">
-        <rdfs:label>产业链环节ID(企业表)</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#chainName">
-        <rdfs:label>产业链环节名称(企业表)</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#upstreamChainName">
-        <rdfs:label>上游环节名称</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#downstreamChainName">
-        <rdfs:label>下游环节名称</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#isLeading">
-        <rdfs:label>是否龙头(链路表聚合)</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#leadingLevels">
-        <rdfs:label>龙头等级聚合</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#maxInfluenceRadiusKm">
-        <rdfs:label>最大影响半径</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#primaryAssetId">
-        <rdfs:label>主经营资产ID</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#primaryAssetName">
-        <rdfs:label>主经营资产名称</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#primaryAssetType">
-        <rdfs:label>主经营资产类型</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#primaryAssetStatus">
-        <rdfs:label>主经营资产状态</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#primaryAssetLandMu">
-        <rdfs:label>主经营资产占地(亩)</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#primaryAssetFloorSqm">
-        <rdfs:label>主经营资产建面(平米)</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#occupancyAssetCnt">
-        <rdfs:label>企业占用资产数</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#occupancyTotalAreaSqm">
-        <rdfs:label>企业占用面积汇总</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#occupancyActiveCnt">
-        <rdfs:label>当前有效合同数</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#invoiceIssuedAmtYear">
-        <rdfs:label>当年开票额</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#invoiceReceivedAmtYear">
-        <rdfs:label>当年收票额</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#invoiceIssuedCntYear">
-        <rdfs:label>当年开票数</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#invoiceReceivedCntYear">
-        <rdfs:label>当年收票数</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#supplierRelCnt">
-        <rdfs:label>作为供应方关系数</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#buyerRelCnt">
-        <rdfs:label>作为采购方关系数</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#supplierStrengthSum">
-        <rdfs:label>供应方关系强度和</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#buyerStrengthSum">
-        <rdfs:label>采购方关系强度和</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#latestJudgmentTime">
-        <rdfs:label>最新风险研判时间</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#dateTime"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#latestPatternId">
-        <rdfs:label>最新风险模式ID</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#latestPatternName">
-        <rdfs:label>最新风险模式名</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#latestRiskTypeName">
-        <rdfs:label>最新风险类型</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#latestComprehensiveScore">
-        <rdfs:label>最新综合评分</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#latestJudgmentSummary">
-        <rdfs:label>最新研判摘要</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
-    </owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#etlTime">
-        <rdfs:label>装载时间</rdfs:label>
-        <rdfs:domain rdf:resource="#EntityDefinition"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#dateTime"/>
-    </owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#property_code"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#property_name"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#data_type"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#is_required"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#boolean"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#default_value"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#source_column"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#synonyms"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#data_format"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#measurement_unit"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#property_category"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#property_group"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#ext_property"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#term_type_code_path"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#library_code"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#rel_action"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
 </rdf:RDF>
