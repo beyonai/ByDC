@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from datacloud_data_sdk.exceptions import ActionNotFoundError, ObjectNotFoundError
 from datacloud_data_sdk.ontology.models import (
@@ -34,14 +34,19 @@ from datacloud_data_sdk.ontology.models import (
     OntologyRelation,
 )
 
+if TYPE_CHECKING:
+    from datacloud_data_sdk.action import Action
+    from datacloud_data_sdk.object import Object
+    from datacloud_data_sdk.view import View
+
 
 @dataclass
 class LoaderConfig:
     """
     本体加载器运行时配置
-    
+
     存储加载器运行所需的各种配置信息。
-    
+
     Attributes:
         plan_generator: 计划生成器实例
         event_bus: 事件总线实例
@@ -64,17 +69,17 @@ class LoaderConfig:
 class OntologyLoader:
     """
     本体加载器
-    
+
     解析标准格式 JSON，产出 Ontology* 模型与核心实体。
     是数据服务 SDK 的核心入口类。
-    
+
     Attributes:
         _classes: 本体类字典
         _relations: 关联关系列表
         _functions: 函数配置字典
         _scenes: 场景配置字典
         _config: 运行时配置
-    
+
     Example:
         loader = OntologyLoader()
         loader.load_from_path("resources/ontology/crm_demo/objects_registry.json")
@@ -93,19 +98,95 @@ class OntologyLoader:
     def load_from_path(self, path: str | Path) -> None:
         """
         从本地文件加载本体定义
-        
+
         Args:
             path: 本体文件路径
         """
         content = json.loads(Path(path).read_text(encoding="utf-8"))
         self.load_from_content(content)
 
+    def load_from_owl_directory(self, base_dir: str | Path) -> None:
+        """
+        从 OWL 目录加载本体定义
+
+        自动查找 base_dir 下的 ontology/ 和 relations/ 子目录，
+        解析所有 .owl 文件并构建内部本体模型。
+
+        Args:
+            base_dir: 基础目录路径，应包含 ontology/ 和 relations/ 子目录
+
+        Example:
+            loader.load_from_owl_directory("mock_env/resource/knowledge/import_package_owl")
+        """
+        from datacloud_data_sdk.ontology.owl_parser import OwlParser
+
+        base_path = Path(base_dir)
+        ontology_dir = base_path / "ontology"
+        relations_dir = base_path / "relations"
+
+        parser = OwlParser()
+        content = parser.parse_directory(ontology_dir, relations_dir)
+        self._load_from_owl_content(content)
+
+    def _load_from_owl_content(self, content: dict[str, Any]) -> None:
+        """
+        从 OWL 解析后的内容加载本体定义
+
+        Args:
+            content: OwlParser.parse_directory() 返回的内容字典
+        """
+        self._classes.clear()
+        self._relations.clear()
+        self._scenes.clear()
+
+        for obj in content.get("objects", []):
+            fields = self._parse_fields(obj.get("fields", []))
+            actions = self._parse_actions(obj.get("actions", []), obj["object_code"])
+            datasource_alias = obj.get("datasource_alias")
+            source_config = obj.get("source_config")
+            ontology_class = OntologyClass(
+                object_code=obj["object_code"],
+                object_name=obj.get("object_name", obj["object_code"]),
+                description=obj.get("description", ""),
+                source_type=obj.get("source_type", "DB"),
+                datasource_alias=datasource_alias,
+                table_name=obj.get("table_name"),
+                source_config=source_config,
+                tags=obj.get("tags", []),
+                fields=fields,
+                actions=actions,
+            )
+            self._classes[obj["object_code"]] = ontology_class
+
+        for rel in content.get("relations", []):
+            self._relations.append(
+                OntologyRelation(
+                    relation_code=rel.get("relation_code", ""),
+                    relation_name=rel.get("relation_name", ""),
+                    source_class=rel.get("source_class", ""),
+                    target_class=rel.get("target_class", ""),
+                    relation_type=rel.get("relation_type", "ONE_TO_MANY"),
+                    join_keys=rel.get("join_keys", []),
+                    description=rel.get("description", ""),
+                    resolve_action_code=rel.get("resolve_action_code"),
+                    resolve_param_binding=rel.get("resolve_param_binding"),
+                )
+            )
+
+        for ds_alias, ds_config in content.get("datasource_configs", {}).items():
+            if ds_alias not in self._config.datasource_configs:
+                from datacloud_data_sdk.sql_executor.config_loader import _dict_to_config
+                self._config.datasource_configs[ds_alias] = _dict_to_config(ds_alias, ds_config)
+
+        for view in content.get("views", []):
+            self._scenes[view["view_id"]] = view
+
     def load_from_content(self, content: dict[str, Any], format: str = "json") -> None:
         """
         从内存字典加载本体定义
-        
+
         解析本体内容，构建内部模型。
-        
+
         Args:
             content: 本体内容字典
             format: 格式类型（json/yaml）
@@ -203,7 +284,7 @@ class OntologyLoader:
 
     # --- 核心层 API ---
 
-    def get_action(self, object_code: str, action_code: str) -> "Action":
+    def get_action(self, object_code: str, action_code: str) -> Action:
         """获取 Action 实体。"""
         from datacloud_data_sdk.action import Action
 
@@ -213,7 +294,7 @@ class OntologyLoader:
                 return Action(a, loader=self)
         raise ActionNotFoundError(object_code, action_code)
 
-    def get_object(self, object_code: str) -> "Object":
+    def get_object(self, object_code: str) -> Object:
         """获取 Object 实体。"""
         from datacloud_data_sdk.object import Object
         from datacloud_data_sdk.relation import Relation
@@ -241,7 +322,7 @@ class OntologyLoader:
         content = json.loads(Path(path).read_text(encoding="utf-8"))
         self.load_scene(content)
 
-    def get_view(self, view_id: str) -> "View":
+    def get_view(self, view_id: str) -> View:
         """获取 View 实体。"""
         from datacloud_data_sdk.relation import Relation
         from datacloud_data_sdk.view import View

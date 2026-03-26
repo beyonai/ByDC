@@ -12,10 +12,10 @@
     <owl:NamedIndividual rdf:about="#dws_enterprise_wide_v1">
         <rdf:type rdf:resource="#EntityDefinition"/>
         <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">dws_enterprise_wide</entity_code>
-        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业年度画像</entity_name>
-        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业粒度年度画像对象，覆盖企业身份归属、经营申报、风险研判、资产占用和产业链关系等核心指标。</entity_desc>
+        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业数据对象</entity_name>
+        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">含申报/开票/风险/产业链/资产等汇总指标，指标：单位亩产效益=企业申报营收/占地面积（亩）</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DB(DB:数据库，API:接口)</entity_source>
+        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DB</entity_source>
         <fields rdf:resource="#enterpriseId_field"/>
         <fields rdf:resource="#dataYear_field"/>
         <fields rdf:resource="#enterpriseName_field"/>
