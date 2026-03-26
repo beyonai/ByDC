@@ -6,6 +6,8 @@ with node modules.
 
 from __future__ import annotations
 
+from typing import Any
+
 from langgraph.graph import END, START, StateGraph
 
 from datacloud_analysis.orchestration.dag import dag_node
@@ -31,14 +33,45 @@ def route_loop(state: AgentState) -> str:
     return "loop"
 
 
-def build_analysis_graph() -> StateGraph:
+def build_analysis_graph(
+    prompts_overwrite: dict[str, Any] | None = None,
+    tools: dict[str, Any] | None = None,
+) -> StateGraph:
     """Return an uncompiled ``StateGraph`` for the DataCloud pipeline."""
     builder = StateGraph(AgentState)
 
-    builder.add_node("intent", intent_node)
-    builder.add_node("dag", dag_node)
-    builder.add_node("loop", loop_node)
-    builder.add_node("insight", insight_node)
+    async def _intent(state: AgentState) -> dict[str, Any]:
+        return await intent_node(state, default_prompts=prompts_overwrite)
+
+    async def _dag(state: AgentState) -> dict[str, Any]:
+        return await dag_node(
+            state,
+            default_prompts=prompts_overwrite,
+            default_tools=tools,
+        )
+
+    async def _loop(state: AgentState) -> dict[str, Any]:
+        return await loop_node(state, default_tools=tools)
+
+    async def _insight(state: AgentState) -> dict[str, Any]:
+        return await insight_node(state, default_prompts=prompts_overwrite)
+
+    builder.add_node(
+        "intent",
+        _intent,
+    )
+    builder.add_node(
+        "dag",
+        _dag,
+    )
+    builder.add_node(
+        "loop",
+        _loop,
+    )
+    builder.add_node(
+        "insight",
+        _insight,
+    )
 
     builder.add_edge(START, "intent")
     builder.add_conditional_edges(

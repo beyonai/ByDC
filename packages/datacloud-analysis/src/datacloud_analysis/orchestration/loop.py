@@ -26,7 +26,10 @@ from datacloud_analysis.orchestration.state import AgentState
 logger = logging.getLogger(__name__)
 
 
-async def loop_node(state: AgentState) -> dict:
+async def loop_node(
+    state: AgentState,
+    default_tools: dict | None = None,
+) -> dict:
     """One round of the ReAct loop.
 
     Executes ALL currently-ready tasks (deps satisfied) concurrently,
@@ -36,6 +39,7 @@ async def loop_node(state: AgentState) -> dict:
     plan = state.get("plan", [])
     results = list(state.get("results", []))  # copy — LangGraph merges via reducer
     workspace_dir = state.get("workspace_dir")
+    dynamic_tools = state.get("dynamic_tools") or default_tools or {}
 
     pending = [t for t in plan if t.get("status") == "pending"]
     if not pending:
@@ -54,7 +58,7 @@ async def loop_node(state: AgentState) -> dict:
 
     # Concurrent execution
     task_outputs: list[tuple[dict, Any]] = await asyncio.gather(
-        *[execute_next_task(t, state) for t in ready_tasks]
+        *[execute_next_task(t, state, custom_tools=dynamic_tools) for t in ready_tasks]
     )
 
     updated_plan = list(plan)

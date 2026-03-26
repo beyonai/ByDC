@@ -5,7 +5,7 @@ runs it inside the current sandbox context.
 
 Sub-task types → tools
 ----------------------
-data_query      → tools.data.data_query
+dynamic query   → injected by worker/custom_tools
 code_exec       → tools.sandbox.sbx_run_code
 file_read       → tools.sandbox.sbx_read_file
 file_write      → tools.sandbox.sbx_write_file
@@ -31,6 +31,7 @@ _TASK_DISPATCHERS: dict[str, Any] = {}
 async def execute_next_task(
     task: dict[str, Any],
     state: dict[str, Any],
+    custom_tools: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], Any]:
     """Execute one sub-task and return the updated task dict and output.
 
@@ -43,8 +44,9 @@ async def execute_next_task(
     """
     task_type: str = task.get("type", "unknown")
     dispatcher = _get_dispatcher(task_type)
+    dynamic_dispatcher = (custom_tools or {}).get(task_type)
 
-    if dispatcher is None:
+    if dispatcher is None and dynamic_dispatcher is None:
         logger.warning("No dispatcher for task type '%s'; marking as failed.", task_type)
         output = f"Unknown task type: {task_type}"
         return {**task, "status": "failed", "error": output}, output
@@ -54,12 +56,46 @@ async def execute_next_task(
         
         # Tools are BaseTool instances, so we call ainvoke.
         # But wait, some might be functions. Let's handle tool properly.
-        if hasattr(dispatcher, "ainvoke"):
+        if dynamic_dispatcher is not None:
+            planned_params = task.get("params", {})
+            params = (
+                planned_params.copy()
+                if isinstance(planned_params, dict)
+                else {}
+            )
+            if (
+                "question" not in params
+                and "query" not in params
+                and task.get("description")
+            ):
+                params["question"] = str(task.get("description"))
+            is_consistent = params == planned_params
+            logger.info(
+                "Task %s planned params: %s",
+                task["id"],
+                planned_params,
+            )
+            logger.info(
+                "Task %s execution params: %s",
+                task["id"],
+                params,
+            )
+            logger.info(
+                "Task %s params consistent: %s",
+                task["id"],
+                is_consistent,
+            )
+            if hasattr(dynamic_dispatcher, "ainvoke"):
+                output = await dynamic_dispatcher.ainvoke(params)
+            elif callable(dynamic_dispatcher):
+                maybe = dynamic_dispatcher(**params) if isinstance(params, dict) else dynamic_dispatcher(params)
+                output = await maybe if hasattr(maybe, "__await__") else maybe
+            else:
+                output = dynamic_dispatcher
+        elif hasattr(dispatcher, "ainvoke"):
             # Prepare params. Usually the LLM outputs 'description' which we might map to 'query' or 'question'.
             params = {}
-            if task_type == "data_query":
-                params["question"] = task.get("description", "")
-            elif task_type == "code_exec":
+            if task_type == "code_exec":
                 params = task.get("params", {}).copy()
                 dep_ids = task.get("deps", [])
                 if dep_ids:
@@ -92,7 +128,6 @@ def _get_dispatcher(task_type: str) -> Any | None:
 def _register_dispatchers() -> None:
     """Populate the dispatcher registry (called once on first use)."""
     try:
-        from datacloud_analysis.tools.data import data_query  # noqa: PLC0415
         from datacloud_analysis.tools.knowledge import search_knowledge  # noqa: PLC0415
         from datacloud_analysis.tools.report import render_report  # noqa: PLC0415
         from datacloud_analysis.tools.sandbox import sbx_read_file, sbx_run_code, sbx_write_file  # noqa: PLC0415
@@ -101,7 +136,6 @@ def _register_dispatchers() -> None:
 
         _TASK_DISPATCHERS.update(
             {
-                "data_query": data_query,
                 "code_exec": sbx_run_code,
                 "file_read": sbx_read_file,
                 "file_write": sbx_write_file,
@@ -119,7 +153,7 @@ def _resolve_input_files(dep_ids: list[str], state: dict[str, Any]) -> dict[str,
     """Build a mapping of dep task_id → JSONL file path for code_exec tasks.
 
     For each dep task, reads the intermediate temp JSON (written by loop_node),
-    then extracts the actual JSONL file path stored inside the data_query output.
+    then extracts the actual JSONL file path stored inside the query output.
     Falls back to the temp JSON path itself if no inner file_path is found.
 
     Args:
@@ -143,7 +177,7 @@ def _resolve_input_files(dep_ids: list[str], state: dict[str, Any]) -> dict[str,
             try:
                 with open(temp_path, encoding="utf-8") as f:
                     task_output = json.load(f)
-                # data_query output contains a nested "file_path" pointing to the JSONL
+                # query output contains a nested "file_path" pointing to the JSONL
                 jsonl_path = task_output.get("file_path")
                 if jsonl_path and Path(jsonl_path).exists():
                     input_files[task_id] = jsonl_path
