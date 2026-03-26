@@ -136,9 +136,14 @@ class DataCloudWorker(GatewayWorker):
 
         # ③ 发送"开始推理"通知
         await context.emit_chunk(
-            StreamChunkEvent(content="正在思考..."),
+            StreamChunkEvent(content="思考中..."),
             event_type=EventType.REASONING_LOG_START.value,
             content_type=SseReasonMessageType.think_title.value,
+        )
+        await context.emit_chunk(
+            StreamChunkEvent(content="已接收到用户消息，开始处理"),
+            event_type=EventType.REASONING_LOG_START.value,
+            content_type=SseReasonMessageType.think_text.value,
         )
 
         # 设置执行配置，传入线程 ID 用于 checkpoint
@@ -157,16 +162,9 @@ class DataCloudWorker(GatewayWorker):
             kind: str = event["event"]
 
             if kind == "on_chat_model_stream":
-                # 只对 insight 节点的 token 做打字机输出，避免改写/规划阶段的 token 干扰
-                node = event.get("metadata", {}).get("langgraph_node", "")
-                if node == "insight":
-                    chunk = event["data"]["chunk"]
-                    if chunk.content:
-                        await context.emit_chunk(
-                            StreamChunkEvent(content=chunk.content),
-                            event_type=EventType.ANSWER_DELTA.value,
-                            content_type=SseMessageType.text.value,
-                        )
+                # insight_node 自己通过 context.emit_chunk 推送三段式回复（Part1/2/3），
+                # worker 不再转发，避免 Part1 重复发送。
+                pass
 
             elif kind == "on_tool_start":
                 tool_name: str = event.get("name", "unknown_tool")

@@ -17,7 +17,9 @@ render_report   → tools.report.render_report
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -57,12 +59,23 @@ async def execute_next_task(
             params = {}
             if task_type == "data_query":
                 params["question"] = task.get("description", "")
+            elif task_type == "code_exec":
+                params = task.get("params", {}).copy()
+                dep_ids = task.get("deps", [])
+                if dep_ids:
+                    params["input_files"] = _resolve_input_files(dep_ids, state)
             else:
                 params = task.get("params", {})
             output = await dispatcher.ainvoke(params)
         else:
             output = await dispatcher(task.get("params", {}), state)
-            
+
+        # code_exec: treat non-zero exit_code as task failure
+        if task_type == "code_exec" and isinstance(output, dict) and output.get("exit_code", 0) != 0:
+            error_msg = output.get("output", "代码执行失败（未知错误）")
+            logger.warning("Task %s (code_exec) failed: %s", task["id"], error_msg[:200])
+            return {**task, "status": "failed", "error": error_msg}, output
+
         return {**task, "status": "done"}, output
     except Exception as exc:  # noqa: BLE001
         logger.error("Task %s failed: %s", task["id"], exc)
@@ -100,3 +113,56 @@ def _register_dispatchers() -> None:
         )
     except ImportError as exc:
         logger.warning("Could not register all dispatchers: %s", exc)
+
+
+def _resolve_input_files(dep_ids: list[str], state: dict[str, Any]) -> dict[str, str]:
+    """Build a mapping of dep task_id → JSONL file path for code_exec tasks.
+
+    For each dep task, reads the intermediate temp JSON (written by loop_node),
+    then extracts the actual JSONL file path stored inside the data_query output.
+    Falls back to the temp JSON path itself if no inner file_path is found.
+
+    Args:
+        dep_ids: List of dependency task IDs (e.g. ["t1", "t2"]).
+        state:   Current graph state containing the "results" list.
+
+    Returns:
+        dict mapping task_id → absolute file path readable by the code.
+    """
+    dep_set = set(dep_ids)
+    input_files: dict[str, str] = {}
+
+    for res in state.get("results", []):
+        task_id = res.get("task_id")
+        if task_id not in dep_set:
+            continue
+
+        # Multi-task path: loop_node saved output to temp/{task_id}.json
+        temp_path = res.get("file_path")
+        if temp_path and Path(temp_path).exists():
+            try:
+                with open(temp_path, encoding="utf-8") as f:
+                    task_output = json.load(f)
+                # data_query output contains a nested "file_path" pointing to the JSONL
+                jsonl_path = task_output.get("file_path")
+                if jsonl_path and Path(jsonl_path).exists():
+                    input_files[task_id] = jsonl_path
+                    continue
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("_resolve_input_files: failed to read %s: %s", temp_path, exc)
+            # Fallback: use the temp JSON itself
+            input_files[task_id] = temp_path
+            continue
+
+        # Single-task path: output kept in memory under "data" key
+        data = res.get("data")
+        if isinstance(data, dict):
+            jsonl_path = data.get("file_path")
+            if jsonl_path and Path(jsonl_path).exists():
+                input_files[task_id] = jsonl_path
+
+    missing = dep_set - set(input_files)
+    if missing:
+        logger.warning("_resolve_input_files: could not resolve file paths for deps: %s", missing)
+
+    return input_files
