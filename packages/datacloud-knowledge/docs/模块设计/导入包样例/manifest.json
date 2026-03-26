@@ -6,36 +6,28 @@
   "import_steps": [
     {
       "type": "meta",
-      "file": "meta/domains.jsonl",
+      "file": "meta/domains.owl",
       "description": "业务领域定义"
     },
     {
       "type": "meta",
-      "file": "meta/libraries.jsonl",
+      "file": "meta/library.owl",
       "description": "知识库定义"
     },
     {
       "type": "term_types",
-      "file": "term_types/custom.jsonl",
-      "description": "用户自定义术语类型（字典/列表/本体扩展）"
+      "file": "term_types/term_types.owl",
+      "description": "用户自定义术语类型"
     },
     {
       "type": "terms",
-      "file": "terms/hr_ontology.jsonl",
-      "description": "HR 领域本体术语（人员、组织）",
-      "count": 2
-    },
-    {
-      "type": "terms",
-      "file": "terms/sales_ontology.jsonl",
-      "description": "销售领域本体术语（客户、商机、费用报销等）",
-      "count": 13
+      "file": "terms/terms.owl",
+      "description": "本体术语"
     },
     {
       "type": "relations",
-      "file": "relations/sales.jsonl",
-      "description": "销售领域术语间关系",
-      "count": 5
+      "file": "relations/relation.owl",
+      "description": "本体关系"
     }
   ]
 }

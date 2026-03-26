@@ -71,7 +71,7 @@ def notify_client():
 @pytest.fixture(scope="session")
 def import_package_path(mock_env_root: Path) -> Path:
     """返回 e_commerce_demo import_package 目录路径。"""
-    return mock_env_root / "resource" / "knowledge" / "import_package"
+    return mock_env_root / "resource" / "knowledge" / "import_package_owl"
 
 
 @pytest.fixture(scope="session")

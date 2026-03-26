@@ -23,8 +23,12 @@ class ToolRegistry:
     ) -> list[dict[str, Any]]:
         tools: list[dict[str, Any]] = [self._unified_query_tool()]
 
-        target_ids = object_ids
-        if not target_ids:
+        if view_id:
+            view = self._loader.get_view(view_id)
+            target_ids = [obj.object_code for obj in view.objects]
+        elif object_ids:
+            target_ids = object_ids
+        else:
             target_ids = [c.object_code for c in self._loader.get_ontology_classes()]
 
         for oid in target_ids:
