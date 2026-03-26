@@ -11,7 +11,7 @@
     },
     {
       "type": "meta",
-      "file": "meta/libraries.owl",
+      "file": "meta/library.owl",
       "description": "知识库定义"
     },
     {
@@ -21,37 +21,12 @@
     },
     {
       "type": "terms",
-      "file": "terms/term.owl",
+      "file": "terms/terms.owl",
       "description": "本体术语"
     },
     {
-      "type": "objects",
-      "file": "ontology/objects/*/objects.owl",
-      "description": "本体对象"
-    },
-    {
-      "type": "objects",
-      "file": "ontology/objects/*/mapping.owl",
-      "description": "本体字段映射"
-    },
-    {
-      "type": "objects",
-      "file": "ontology/actions/actions.owl",
-      "description": "本体动作"
-    },
-    {
-      "type": "dbsources",
-      "file": "ontology/dbsources/dbsource.owl",
-      "description": "数据源定义"
-    },
-    {
-      "type": "objects",
-      "file": "ontology/views/views.owl",
-      "description": "本体视图"
-    },
-    {
       "type": "relations",
-      "file": "relations/relations.owl",
+      "file": "relations/relation.owl",
       "description": "本体关系"
     }
   ]

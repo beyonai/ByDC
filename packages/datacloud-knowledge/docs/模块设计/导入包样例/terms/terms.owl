@@ -11,7 +11,7 @@
     </owl:Class>
     
     <!-- 具体的术语实例 -->
-    <owl:NamedIndividual rdf:about="#po_users_term_dataproperty">
+    <owl:NamedIndividual rdf:about="#po_organization_term_dataproperty">
         <rdf:type rdf:resource="#TermDefinition"/>
         <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#po_organization</term_code_path>
         <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_organization</term_code>
@@ -22,8 +22,24 @@
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["部门"]</synonyms>
         <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"name":"部门管理手册","content":"部门管理手册"}]</terms_knowledge>
         <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sales_crm</domain_code>
-        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ontology/objects/po_organization/po_organization_object.owl</owl_doc_file>
-        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">扩展字段</ext_field>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ontology/objects/po_organization</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#po_users_term_dataproperty">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#po_users</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">人员</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">hr_kb</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">人员基础信息，记录员工工号、姓名、所属组织等</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["员工","用户","人员信息"]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"name":"员工手册","content":"员工手册信息"}]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sales_crm</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ontology/objects/po_users</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{}</ext_field>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
     </owl:NamedIndividual>
     
