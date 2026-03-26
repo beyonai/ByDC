@@ -250,7 +250,7 @@ class OntologyLoader:
         if scene is None:
             raise ObjectNotFoundError(view_id)
 
-        object_ids = scene.get("object_ids", [])
+        object_ids = [object_item["object_code"] for object_item in scene.get("objects", [])]
         objects = [self.get_object(oid) for oid in object_ids]
 
         object_set = set(object_ids)
@@ -272,6 +272,7 @@ class OntologyLoader:
             description=scene.get("description", ""),
             objects=objects,
             relations=rels,
+            loader=self
         )
 
     # --- 内部解析 ---
