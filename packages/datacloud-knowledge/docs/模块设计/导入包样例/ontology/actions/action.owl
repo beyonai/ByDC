@@ -49,7 +49,7 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#po_users</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HR</library_code>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
-        <trem_data_type>ONTOLOGY_TERM</trem_data_type>
+        <term_data_type>ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
     
     <!-- 响应参数实例 -->
@@ -61,7 +61,7 @@
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HR</library_code>
         <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_id</object_property>
         <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.id</json_path>
-        <trem_data_type>ONTOLOGY_TERM</trem_data_type>
+        <term_data_type>ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
     
     <!-- 请求头参数实例 -->
