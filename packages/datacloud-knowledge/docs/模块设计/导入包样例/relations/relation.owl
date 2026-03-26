@@ -14,15 +14,15 @@
     <owl:NamedIndividual rdf:about="#term_relation_1">
         <rdf:type rdf:resource="#TermRelation"/>
         <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HR</source_libeary>
-        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">术语类型</source_type>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT</source_type>
         <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_code>
         <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HR</target_libeary>
-        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">术语类型</target_type>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT</target_type>
         <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_organization</target_code>
         <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">人员_归属_组织</relation_name>
         <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">MANY_TO_ONE</relation_type>
         <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"sourceField":"org_id", "targetField":"org_id"}]</joinkeys>
-        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">扩展字段</ext_field>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{}</ext_field>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
     </owl:NamedIndividual>
     
