@@ -18,6 +18,7 @@ from typing import Any
 from dotenv import load_dotenv
 from gateway_sdk import run_worker
 
+from datacloud_service.plugins.init_agent_conf import InitDataCloudDigitalEmployeePlugin
 from datacloud_service.worker import DataCloudWorker
 
 
@@ -89,12 +90,16 @@ def main() -> None:
         print("⚠️  警告: OPENAI_API_KEY 未设置，LLM 调用将失败，请检查 .env 文件。")
 
     print(
-        "▶  正在启动 DataCloudWorker ...\n"
-        f"   model={cfg.model_name}  base_url={cfg.base_url or '(OpenAI 默认)'}\n"
-        f"   redis={cfg.redis_host}:{cfg.redis_port}/{cfg.redis_db}  worker_id={cfg.worker_id}"
+        "Starting DataCloudWorker ...\n"
+        f"  model={cfg.model_name}  base_url={cfg.base_url or '(OpenAI default)'}\n"
+        f"  redis={cfg.redis_host}:{cfg.redis_port}/{cfg.redis_db}  worker_id={cfg.worker_id}"
     )
 
-    run_worker(worker_class=DataCloudWorker, **cfg.run_worker_kwargs())
+    run_worker(
+        worker_class=DataCloudWorker,
+        plugin_list=[InitDataCloudDigitalEmployeePlugin()],
+        **cfg.run_worker_kwargs(),
+    )
 
 
 if __name__ == "__main__":

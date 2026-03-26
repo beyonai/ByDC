@@ -3,12 +3,12 @@
 Responsibilities
 ----------------
 - Collect outputs from all completed sub-tasks (from state results or workspace).
-- Format data_query results as Markdown tables; format code_exec results from _result.
+- Format structured query results as Markdown tables; format code_exec results from _result.
 - Emit results in THREE separate ANSWER_DELTA messages:
     Part1 — Analysis report  (LLM-generated text, streamed token by token)
     Part2 — Data tables      (Markdown tables, emitted as one block)
     Part3 — File information (file paths + download URLs, emitted as one block)
-- Fix4: single data_query task → skip LLM, emit Part2/Part3 directly.
+- For single structured-result tasks, skip LLM and emit Part2/Part3 directly.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _format_data_query_result(task_id: str, output: dict) -> str:
-    """Convert a data_query tool output dict into a Markdown table string."""
+    """Convert a structured query output dict into a Markdown table string."""
     preview = output.get("preview", [])
     total = output.get("total", len(preview))
     columns = output.get("columns", [])
@@ -63,6 +63,46 @@ def _format_data_query_result(task_id: str, output: dict) -> str:
             overflow_notice = f"*共 {total} 条，已全量展示。*"
 
     return f"【数据查询结果】\n{md_table}\n{overflow_notice}"
+
+
+def _format_records_meta_result(task_id: str, output: dict) -> str:
+    """Format query output shaped as {records, meta} into Markdown."""
+    records = output.get("records", [])
+    meta = output.get("meta", {}) if isinstance(output.get("meta"), dict) else {}
+    total = int(meta.get("total", len(records))) if isinstance(meta, dict) else len(records)
+
+    columns_meta = meta.get("columns", []) if isinstance(meta, dict) else []
+    keys: list[str] = []
+    if columns_meta and isinstance(columns_meta, list):
+        for col in columns_meta:
+            if isinstance(col, dict):
+                name = str(col.get("name", "")).strip()
+                if name:
+                    keys.append(name)
+            elif isinstance(col, str):
+                keys.append(col)
+
+    if not keys and isinstance(records, list) and records and isinstance(records[0], dict):
+        keys = list(records[0].keys())
+
+    preview = records if isinstance(records, list) else []
+    preview_count = min(len(preview), 10)
+    preview_rows = preview[:preview_count]
+
+    md_lines: list[str] = []
+    if keys:
+        md_lines.append("| " + " | ".join(keys) + " |")
+        md_lines.append("|" + "|".join(["---"] * len(keys)) + "|")
+        for row in preview_rows:
+            cells = [str(row.get(k, "")) if isinstance(row, dict) else "" for k in keys]
+            md_lines.append("| " + " | ".join(cells) + " |")
+
+    md_table = "\n".join(md_lines)
+    if total > preview_count:
+        notice = f"*【重要】数据量较大（共 {total} 条），此处仅展示前 {preview_count} 条。*"
+    else:
+        notice = f"*共 {total} 条，已全量展示。*"
+    return f"【数据查询结果】\n{md_table}\n{notice}"
 
 
 def _format_code_exec_result(output: dict) -> str:
@@ -106,7 +146,7 @@ def _aggregate_result(res: dict) -> dict[str, Any] | None:
     """Normalise one entry from state['results'] into {task_id, data}.
 
     Handles three layouts produced by loop_node:
-      1. {"task_id": ..., "data": <data_query or code_exec output dict>}
+      1. {"task_id": ..., "data": <query or code_exec output dict>}
          — single-task in-memory path
       2. {"task_id": ..., "file_path": "/workspace/temp/t1.json"}
          — multi-task workspace path (JSON contains the tool output)
@@ -117,6 +157,8 @@ def _aggregate_result(res: dict) -> dict[str, Any] | None:
     if "data" in res:
         output = res["data"]
         if isinstance(output, dict):
+            if "records" in output and "meta" in output:
+                return {"task_id": task_id, "data": _format_records_meta_result(task_id, output)}
             if "preview" in output and "columns" in output:
                 return {"task_id": task_id, "data": _format_data_query_result(task_id, output)}
             if "exit_code" in output:
@@ -128,6 +170,8 @@ def _aggregate_result(res: dict) -> dict[str, Any] | None:
             with open(res["file_path"], "r", encoding="utf-8") as f:
                 output = json.load(f)
             if isinstance(output, dict):
+                if "records" in output and "meta" in output:
+                    return {"task_id": task_id, "data": _format_records_meta_result(task_id, output)}
                 if "preview" in output and "columns" in output:
                     return {"task_id": task_id, "data": _format_data_query_result(task_id, output)}
                 if "exit_code" in output:
@@ -201,7 +245,10 @@ def _extract_file_info_md(results: list[dict]) -> str:
 # Node
 # ---------------------------------------------------------------------------
 
-async def insight_node(state: AgentState) -> dict:
+async def insight_node(
+    state: AgentState,
+    default_prompts: dict | None = None,
+) -> dict:
     """Generate the final answer and emit THREE separate ANSWER_DELTA messages:
        Part1 — Analysis text (LLM stream)
        Part2 — Data tables  (one block)
@@ -211,6 +258,7 @@ async def insight_node(state: AgentState) -> dict:
 
     messages = state.get("messages", [])
     context = state.get("gateway_context")
+    prompts_overwrite = state.get("prompts_overwrite") or default_prompts or {}
 
     model = os.getenv("DATACLOUD_LLM_REASONING_MODEL", "openai:Qwen/Qwen3-235B-A22B")
     if not model.startswith("openai:"):
@@ -236,13 +284,16 @@ async def insight_node(state: AgentState) -> dict:
                 event_type=EventType.REASONING_LOG_DELTA.value,
                 content_type=SseReasonMessageType.think_text.value,
             )
-        sys_prompt = (
+        sys_prompt = prompts_overwrite.get(
+            "clarify_prompt",
+            (
             f"你是一个高级数据分析管家。\n"
             f"检测到用户的问题可能不在我们的业务查询范围内，或者意图不清晰"
             f"（系统内部识别意图：{intent}）。\n"
             f"请以高情商、友好的助手口吻回复用户，婉拒无关闲聊，"
             f"告知你仅负责企业风险查证、账单流水分发、销售数据查询等专业业务查询，"
             f"并引导用户在授权范围内重新提问。"
+            )
         )
         # Stream clarify response (single part, no tables/files)
         analysis_text = ""
@@ -290,15 +341,14 @@ async def insight_node(state: AgentState) -> dict:
     tables_md = _extract_tables_md(aggregated_data)
     file_info_md = _extract_file_info_md(raw_results)
 
-    # ── Fix4: single data_query → skip LLM, emit Part2 + Part3 only ────────
+    # ── 单任务且已拿到结构化结果时，跳过 LLM，直接返回数据块 ────────
     if (
         len(aggregated_data) == 1
         and len(plan) == 1
-        and plan[0].get("type") == "data_query"
         and plan[0].get("status") == "done"
         and tables_md
     ):
-        logger.debug("insight_node: single data_query — skipping LLM.")
+        logger.debug("insight_node: single structured-result task — skipping LLM.")
         history_parts: list[str] = []
 
         if tables_md and context is not None:
@@ -327,7 +377,7 @@ async def insight_node(state: AgentState) -> dict:
          for item in aggregated_data],
         ensure_ascii=False,
     )
-    sys_prompt = (
+    default_analysis_prompt = (
         "你是一个高级数据分析师。\n"
         "以下是各子任务的数据摘要（完整数据表格将单独展示，无需在回复中重复）：\n"
         f"{data_summary}\n\n"
@@ -337,6 +387,7 @@ async def insight_node(state: AgentState) -> dict:
         "2. 可以引用数据中的关键数字和结论。\n"
         "3. 尽量简明扼要，聚焦核心洞察。"
     )
+    sys_prompt = prompts_overwrite.get("insight_prompt", default_analysis_prompt)
 
     # Part1: stream analysis text token by token
     analysis_text = ""

@@ -34,3 +34,5 @@ class AgentState(MessagesState):
 
     # --- Execution / Results (Node 3) ---
     results: list[Any]
+    prompts_overwrite: dict[str, Any] | None
+    dynamic_tools: dict[str, Any] | None
