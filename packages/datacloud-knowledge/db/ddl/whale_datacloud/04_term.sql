@@ -1,9 +1,9 @@
 CREATE TABLE IF NOT EXISTS whale_datacloud.term (
-    term_id        VARCHAR(64)  NOT NULL PRIMARY KEY,
-    term_code      VARCHAR(64)  NOT NULL,
+    term_id        VARCHAR(255) NOT NULL PRIMARY KEY,
+    term_code      VARCHAR(255) NOT NULL,
     term_name      VARCHAR(255) NOT NULL,
     desc_summary   TEXT,
-    parent_term_id VARCHAR(64),
+    parent_term_id VARCHAR(255),
     owl_doc_id     VARCHAR(128),
     domain_id      VARCHAR(64)  NOT NULL,
     term_type_code VARCHAR(32)  NOT NULL,

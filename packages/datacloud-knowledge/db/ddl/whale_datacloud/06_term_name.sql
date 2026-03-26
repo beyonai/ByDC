@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS whale_datacloud.term_name (
-    name_id      VARCHAR(64)  NOT NULL PRIMARY KEY,
-    term_id      VARCHAR(64)  NOT NULL,
+    name_id      VARCHAR(255) NOT NULL PRIMARY KEY,
+    term_id      VARCHAR(255) NOT NULL,
     name_text    VARCHAR(255) NOT NULL,
     created_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
