@@ -137,6 +137,27 @@ def test_tool_list_mode_per_object_returns_all_ontology_actions() -> None:
     assert "query_sales_business_opportunity" in names
 
 
+def test_registry_list_tools_supports_view_id() -> None:
+    """view_id 会先解析为该视图下的对象集合。"""
+    from datacloud_data_sdk.ontology.loader import OntologyLoader
+    from datacloud_data_service.tools.registry import ToolRegistry
+
+    loader = OntologyLoader()
+    loader.load_from_path("resources/ontology/crm_demo/objects_registry.json")
+    registry = ToolRegistry(loader)
+
+    tools_by_view = registry.list_tools(
+        view_id="scene_01_data_analysis",
+        tool_list_mode="per_object",
+    )
+    tools_by_objects = registry.list_tools(
+        object_ids=[obj.object_code for obj in loader.get_view("scene_01_data_analysis").objects],
+        tool_list_mode="per_object",
+    )
+
+    assert [t["name"] for t in tools_by_view] == [t["name"] for t in tools_by_objects]
+
+
 def test_action_tool_includes_action_type() -> None:
     """生成的工具 _meta 含 action_type。"""
     from datacloud_data_sdk.ontology.loader import OntologyLoader
@@ -181,6 +202,33 @@ def test_mcp_tools_list_respects_x_tool_list_mode_header() -> None:
         assert "unified_data_query" in names_unified
         assert "query_sales_business_opportunity" not in names_unified
         assert "query_sales_business_opportunity" in names_per
+
+
+def test_mcp_tools_list_respects_object_scope_headers() -> None:
+    """X-Object-Ids 会限制 tools/list 返回的对象范围。"""
+    from datacloud_data_sdk.ontology.loader import OntologyLoader
+    from datacloud_data_service.api.routes import create_app
+
+    loader = OntologyLoader()
+    loader.load_from_path("resources/ontology/crm_demo/objects_registry.json")
+    app = create_app(loader_override=loader)
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/v1/mcp",
+            json={"jsonrpc": "2.0", "id": "1", "method": "tools/list", "params": {}},
+            headers={
+                **MCP_HEADERS,
+                "X-Tenant-Id": "t1",
+                "X-Tool-List-Mode": "per_object",
+                "X-Object-Ids": "todo_items",
+            },
+        )
+        tools = parse_sse_response(resp)["result"]["tools"]
+        names = [t["name"] for t in tools]
+        assert "unified_data_query" in names
+        assert "create_todo" in names
+        assert "query_todo_list" in names
+        assert "query_sales_business_opportunity" not in names
 
 
 def test_tools_call_query_object_returns_records(tmp_path) -> None:
