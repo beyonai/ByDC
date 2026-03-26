@@ -254,7 +254,10 @@ def _serialize_payload(
         for i, f in enumerate(obj.get("fields", [])):
             if not f.get("source_column"):
                 f.pop("source_column", None)
-            f.pop("description", None)
+            if f.get("description"):
+                f["label"] = f.pop("description")
+            else:
+                f.pop("description", None)
             if f.get("aliases") == []:
                 f.pop("aliases", None)
             base = {k: v for k, v in f.items() if v is not None}
