@@ -106,5 +106,5 @@ if __name__ == '__main__':
     clear_term_tables()
 
 
-    result = run('/home/luoyanzhuo/project/whale_datacloud/packages/datacloud-knowledge/docs/模块设计/导入包样例')
+    result = run('/home/luoyanzhuo/project/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package_owl')
     print(result)
