@@ -1,20 +1,25 @@
 <?xml version="1.0"?>
 <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
          xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
          xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
          xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
          xml:base="http://example.org/library/ontology#">
 
-    <owl:Class rdf:about="#LibraryDefinition"><rdfs:label>本体库定义</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#LibraryDefinition">
+        <rdfs:label>本体库定义</rdfs:label>
+    </owl:Class>
+
+    <owl:NamedIndividual rdf:about="#industry_brain_library">
+        <rdf:type rdf:resource="#LibraryDefinition"/>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <library_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业大脑</library_name>
+        <library_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">亦庄产业大脑企业、网格、产业链分析本体库</library_desc>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
     <owl:DatatypeProperty rdf:about="#library_code"><rdfs:domain rdf:resource="#LibraryDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
     <owl:DatatypeProperty rdf:about="#library_name"><rdfs:domain rdf:resource="#LibraryDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
     <owl:DatatypeProperty rdf:about="#library_desc"><rdfs:domain rdf:resource="#LibraryDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
     <owl:DatatypeProperty rdf:about="#version"><rdfs:domain rdf:resource="#LibraryDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:NamedIndividual rdf:about="#lib_002">
-        <rdf:type rdf:resource="#LibraryDefinition"/>
-        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
-        <library_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业大脑</library_name>
-        <library_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">基于 DDL 与真实 CSV 数据生成的亦庄产业大脑 OWL v4 导入包</library_desc>
-        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-    </owl:NamedIndividual>
 </rdf:RDF>
