@@ -76,43 +76,50 @@ async def data_query(
             
             if result.get("code") == 0:
                 data = result.get("data", {})
-                if data.get("resultType") == "normal" and "records" in data:
+                # Fix A: 兼容 camelCase (resultType) 和 snake_case (result_type)
+                result_type = data.get("resultType") or data.get("result_type")
+                if result_type == "normal" and "records" in data:
                     records = data["records"]
                     meta = data.get("meta", {})
                     total = data.get("total", len(records))
-                    
+
+                    # Fix B: meta.columns 为空时从第一条记录的 key 自动推导列信息
+                    columns = meta.get("columns", [])
+                    if not columns and records:
+                        columns = [{"name": k, "label": k} for k in records[0].keys()]
+
                     try:
                         from gateway_sdk.worker.sandbox.hook_sandbox import active_workspace
                         workspace_dir = active_workspace.get()
                     except ImportError:
                         workspace_dir = None
-                        
+
                     if not workspace_dir:
                         workspace_dir = os.path.join(os.getenv("DATACLOUD_GATEWAY_WORKSPACE_DIR", "/tmp/datacloud"), session_id)
-                        
+
                     import uuid
                     import json
-                    
+
                     file_name = f"data_query_{uuid.uuid4().hex[:8]}.jsonl"
                     file_path = os.path.join(workspace_dir, file_name)
                     os.makedirs(workspace_dir, exist_ok=True)
-                    
+
                     with open(file_path, "w", encoding="utf-8") as f:
                         meta_row = {
-                            "_type": "meta", 
-                            "columns": meta.get("columns", []), 
-                            "total": total, 
+                            "_type": "meta",
+                            "columns": columns,
+                            "total": total,
                             "download_url": meta.get("download_url")
                         }
                         f.write(json.dumps(meta_row, ensure_ascii=False) + "\n")
                         for row in records:
                             f.write(json.dumps(row, ensure_ascii=False) + "\n")
-                    
+
                     return {
                         "status": "success",
                         "file_path": file_path,
                         "total": total,
-                        "columns": meta.get("columns", []),
+                        "columns": columns,
                         "preview": records[:5],
                         "original_download_url": meta.get("download_url"),
                         "overflow_notice": data.get("overflow_notice", "")
