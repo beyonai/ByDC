@@ -99,6 +99,23 @@ def run(folder_path: str) -> dict:
             "errors": [{"file": "manifest.json", "line": None, "error": "import_steps 为空"}],
         }
 
+    # ── Step 1.5：校验 ontology 文件不允许入库 ────────────────────────────────
+    ontology_errors = _validate_no_ontology_steps(manifest)
+    if ontology_errors:
+        return {
+            "status": "failed",
+            "total_rows": 0,
+            "files": [],
+            "errors": ontology_errors,
+        }
+    if not import_steps:
+        return {
+            "status": "failed",
+            "total_rows": 0,
+            "files": [],
+            "errors": [{"file": "manifest.json", "line": None, "error": "import_steps 为空"}],
+        }
+
     # ── 收集包内已定义的 code，用于交叉引用校验 ───────────────────────────────
     defined_domain_codes:  set[str] = set()
     defined_library_codes: set[str] = set()
@@ -126,6 +143,15 @@ def run(folder_path: str) -> dict:
             continue
 
         entity_type = _step_entity_type(step_type, rel_file)
+
+        # ── Step 2.5：按扩展名路由 ──────────────────────────────────────────
+        # OWL 文件跳过 JSONL 解析，只做文件存在性检查
+        if rel_file.endswith(".owl"):
+            file_results.append({"file": rel_file, "rows": 0, "errors": []})
+            parsed_steps.append((step, []))
+            continue
+
+        # ── Step 3 & 4：JSONL 格式 + 必填字段 ──────────────────────────────
 
         # ── Step 3 & 4：JSONL 格式 + 必填字段 ──────────────────────────────
         required_fields = _REQUIRED.get(entity_type, [])
@@ -249,6 +275,33 @@ def run(folder_path: str) -> dict:
         "files": file_results,
         "errors": all_errors,
     }
+
+def _validate_no_ontology_steps(manifest: dict) -> list[dict]:
+    """校验 manifest.import_steps 中不允许出现 ontology/ 目录下的文件。
+
+    Args:
+        manifest: 已解析的 manifest.json 字典。
+
+    Returns:
+        错误列表，每个错误格式: {"code": "INVALID_ONTOLOGY_STEP", "message": "...", "file": "..."}
+    """
+    errors: list[dict] = []
+    import_steps: list[dict] = manifest.get("import_steps", [])
+
+    for step in import_steps:
+        file_path: str = step.get("file", "")
+        if file_path.startswith("ontology/"):
+            errors.append(
+                {
+                    "code": "INVALID_ONTOLOGY_STEP",
+                    "message": f"ontology 文件不允许入库: {file_path}",
+                    "file": file_path,
+                }
+            )
+
+    return errors
+
+
 
 
 def _append_file_error(file_results: list[dict], rel_file: str, err: dict) -> None:
