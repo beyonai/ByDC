@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS whale_datacloud.term_knowledge (
-    knowledge_id VARCHAR(64)  NOT NULL PRIMARY KEY,
-    term_id      VARCHAR(64)  NOT NULL,
+    knowledge_id VARCHAR(255) NOT NULL PRIMARY KEY,
+    term_id      VARCHAR(255) NOT NULL,
     desc_summary TEXT,
     "desc"       TEXT,
     ext_system   VARCHAR(32),
