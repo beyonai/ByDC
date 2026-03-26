@@ -12,10 +12,10 @@
     <owl:NamedIndividual rdf:about="#dws_grid_wide_v1">
         <rdf:type rdf:resource="#EntityDefinition"/>
         <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">dws_grid_wide</entity_code>
-        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">网格年度治理画像</entity_name>
+        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">网格数据对象</entity_name>
         <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">网格粒度年度治理对象，覆盖企业汇总、资产利用、IoT 活力和空间治理类指标。</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DB(DB:数据库，API:接口)</entity_source>
+        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DB</entity_source>
         <fields rdf:resource="#gridId_field"/>
         <fields rdf:resource="#dataYear_field"/>
         <fields rdf:resource="#gridCode_field"/>
