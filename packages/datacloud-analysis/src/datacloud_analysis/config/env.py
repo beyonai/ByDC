@@ -97,9 +97,9 @@ class LLMGroupSettings(BaseSettings):
 class DataServiceSettings(BaseSettings):
     """HTTP client settings for the external data-query microservice.
 
-    The data service is called by ``tools.data.data_query``.
-    Headers ``X-User-Id`` and ``X-Session-Id`` are injected at *call time*
-    from the current ``TaskContext``; only the static values live here.
+    The data service is used by dynamic query tools mounted into each agent.
+    Static header defaults are configured here; per-request runtime context
+    (if any) should be injected by the caller.
     """
 
     model_config = SettingsConfigDict(env_prefix="DATACLOUD_DATA_SERVICE_", extra="ignore")

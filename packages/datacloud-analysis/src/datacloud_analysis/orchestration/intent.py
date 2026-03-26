@@ -25,7 +25,10 @@ from datacloud_analysis.tools.knowledge import search_knowledge
 logger = logging.getLogger(__name__)
 
 
-async def intent_node(state: AgentState) -> dict:
+async def intent_node(
+    state: AgentState,
+    default_prompts: dict | None = None,
+) -> dict:
     """Classify intent and attach knowledge context, then rewrite the query.
 
     Args:
@@ -42,6 +45,8 @@ async def intent_node(state: AgentState) -> dict:
 
     last_user_msg = messages[-1].content if hasattr(messages[-1], "content") else str(messages[-1])
 
+    prompts_overwrite = state.get("prompts_overwrite") or default_prompts or {}
+
     # 1. Search knowledge
     knowledge_snippets = await search_knowledge.ainvoke({"query": str(last_user_msg)})
     knowledge_text = json.dumps(knowledge_snippets, ensure_ascii=False) if knowledge_snippets else "无"
@@ -57,7 +62,9 @@ async def intent_node(state: AgentState) -> dict:
         base_url=os.getenv("OPENAI_BASE_URL") or os.getenv("DATACLOUD_LLM_REASONING_API_BASE"),
     )
 
-    sys_prompt = f"""你是一个意图识别与改写专家。
+    sys_prompt = prompts_overwrite.get(
+        "intent_prompt",
+        f"""你是一个意图识别与改写专家。
 用户原始问题：{last_user_msg}
 
 相关业务知识：
@@ -69,7 +76,8 @@ async def intent_node(state: AgentState) -> dict:
 返回格式必须为严格的 JSON，包含两个字段：
 - "rewritten_intent": "改写后的清晰问题，或者如果需要追问，填入追问内容"
 - "clarify_needed": true/false
-"""
+""",
+    )
 
     response = await llm.ainvoke([SystemMessage(content=sys_prompt)])
 

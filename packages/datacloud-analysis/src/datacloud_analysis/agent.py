@@ -31,6 +31,8 @@ def create_agent(
     temperature: float = 0.7,
     locale: str | None = None,
     system_prompt: str | None = None,
+    prompts_overwrite: dict[str, Any] | None = None,
+    tools: dict[str, Any] | None = None,
 ) -> Any:
     """Create a deep agent for DataCloud, usable with langgraph dev and deep-agents-ui."""
     
@@ -47,7 +49,10 @@ def create_agent(
 
     logger.info("create_agent: locale=%s (Custom StateGraph)", resolved_locale)
 
-    compiled = build_analysis_graph().compile()
+    compiled = build_analysis_graph(
+        prompts_overwrite=prompts_overwrite,
+        tools=tools,
+    ).compile()
 
     try:
         nodes = list(compiled.get_graph().nodes.keys())
