@@ -1,11 +1,10 @@
-CREATE TABLE IF NOT EXISTS whale_datacloud.term_relation (
-    relation_id       VARCHAR(64)  NOT NULL PRIMARY KEY,
-    source_term_id    VARCHAR(64)  NOT NULL,
-    target_term_id    VARCHAR(64)  NOT NULL,
+    relation_id       VARCHAR(255) NOT NULL PRIMARY KEY,
+    source_term_id    VARCHAR(255) NOT NULL,
+    target_term_id    VARCHAR(255) NOT NULL,
     relation_name     VARCHAR(255) NOT NULL,
     relation_category VARCHAR(16)  NOT NULL DEFAULT 'BUSINESS',
     cardinality       VARCHAR(8),
-    action_term_id    VARCHAR(64),
+    action_term_id    VARCHAR(255),
     ext_attrs         JSONB        NOT NULL DEFAULT '{}'::jsonb,
     created_time      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_time      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
