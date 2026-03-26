@@ -282,7 +282,7 @@ class Object:
 
             try:
                 ctx = get_current_context()
-                plan = DataPermissionRewriter().rewrite(plan, ctx)
+                # plan = DataPermissionRewriter().rewrite(plan, ctx)
             except Exception:
                 pass
             if observer:

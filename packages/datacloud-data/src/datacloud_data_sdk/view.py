@@ -51,6 +51,7 @@ class View:
         description: str,
         objects: list[Object],
         relations: list[Relation],
+        loader: Any = None,
     ) -> None:
         """
         初始化视图实体
@@ -61,12 +62,14 @@ class View:
             description: 视图描述
             objects: 包含的对象列表
             relations: 对象间的关联关系
+            loader: 本体加载器实例
         """
         self.view_id = view_id
         self.view_name = view_name
         self.description = description
         self.objects = objects
         self.relations = relations
+        self._loader = loader
 
     def get_description(self) -> str:
         """
@@ -354,6 +357,8 @@ class View:
 
     def _get_loader(self) -> Any:
         """从 objects 中获取 OntologyLoader 引用。"""
+        if self._loader is not None:
+            return self._loader
         for obj in self.objects:
             if hasattr(obj, "_loader") and obj._loader is not None:
                 return obj._loader

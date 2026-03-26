@@ -49,6 +49,8 @@ class RequestContext:
     token: str = ""
     system_code: str = ""
     tool_list_mode: str = "unified"
+    view_id: str = ""
+    object_ids: list[str] | None = None
 
 
 _ctx_var: contextvars.ContextVar[RequestContext | None] = contextvars.ContextVar(
@@ -66,7 +68,8 @@ class InvocationContext:
     使用 contextvars 实现线程和协程安全，支持异步环境。
     
     Args:
-        **kwargs: 上下文字段，支持 tenant_id, user_id, session_id, token, system_code, tool_list_mode
+        **kwargs: 上下文字段，支持 tenant_id, user_id, session_id, token, system_code,
+            tool_list_mode, view_id, object_ids
     
     Example:
         基本用法::
@@ -95,6 +98,8 @@ class InvocationContext:
             token=kwargs.get("token", ""),
             system_code=kwargs.get("system_code", ""),
             tool_list_mode=tool_mode,
+            view_id=kwargs.get("view_id", ""),
+            object_ids=kwargs.get("object_ids"),
         )
         self._token: contextvars.Token[RequestContext | None] | None = None
 
