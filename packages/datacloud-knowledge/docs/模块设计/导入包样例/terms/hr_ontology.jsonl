@@ -1,2 +1,0 @@
-{"op":"add","term_code":"po_users","term_name":"人员","term_type_code":"OBJ","domain_code":"hr","library_code":"hr_kb","owl_doc_file":"objects/po_users.json","desc_summary":"人员基础信息，记录员工工号、姓名、所属组织等","aliases":["员工","用户","人员信息"]}
-{"op":"add","term_code":"po_organization","term_name":"组织","term_type_code":"OBJ","domain_code":"hr","library_code":"hr_kb","owl_doc_file":"objects/po_organization.json","desc_summary":"组织架构，支持树形层级，记录组织编码、名称、父组织等","aliases":["部门","机构","组织架构"]}

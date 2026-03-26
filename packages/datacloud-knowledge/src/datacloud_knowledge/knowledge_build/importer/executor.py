@@ -1,20 +1,19 @@
 """知识包入库执行器：按 manifest 顺序在单个事务内写入数据库。
 
-环境变量 DATACLOUD_KNOWLEDGE_IMPORT_BATCH_SIZE（默认 500，上限 10000）控制每个 JSONL
-文件按批解析并入库的行数，减少与数据库的往返次数。
+环境变量 DATACLOUD_KNOWLEDGE_IMPORT_BATCH_SIZE（默认 500，上限 10000）控制每个文件按批解析并入库的行数，减少与数据库的往返次数。
 
 前提：调用方已通过 precheck.run() 校验，此处不再做格式校验。
 字段映射（JSONL → DB）：
   domain_code   → domain.domain_id
   library_code  → term_library.library_id 与 term_library.library_code（同值）
   type_code     → term_type.type_code  （用 type_code 做 upsert key）
-  term_code     → term.term_code（规范化）；新建 term 时 term_id 为雪花 ID；更新已有术语时不改 term_id
-  term_name.name_id → 雪花 ID（与 term_id 同一套生成器）
+  term_code     → term.term_code
+  term_name.name_id → 雪花 ID
   relation_code → term_relation.relation_id
   relation / term_name / term_knowledge 等外键列均存 term_id；JSONL 可同时提供
-  term_id（或 source_term_id / target_term_id），若提供则优先用作外键，否则由 term_code 查 term 表解析。
+  term_id, 由 library_code+type_code+term_code 唯一决定
 
-  雪花 ID（term_id / name_id 共用）：可选环境变量 DATACLOUD_KNOWLEDGE_SNOWFLAKE_DATACENTER_ID、
+  雪花 ID：可选环境变量 DATACLOUD_KNOWLEDGE_SNOWFLAKE_DATACENTER_ID、
   DATACLOUD_KNOWLEDGE_SNOWFLAKE_WORKER_ID（各 0–31，默认 1）。
 """
 
@@ -23,12 +22,16 @@ from __future__ import annotations
 import json
 import logging
 import os
-import threading
-import time
+from importlib import import_module
 from pathlib import Path
 
 import psycopg
 from psycopg import Connection, Cursor
+
+from . import owl_converter, owl_parser
+from .snowflake import _next_snowflake_id, _next_snowflake_ids
+
+
 # execute_values 在 psycopg3 中不可用，使用自定义实现
 def _execute_values(
     cur: Cursor,
@@ -46,13 +49,16 @@ def _execute_values(
         return
     # 将 VALUES %s 格式转换为 (%s,%s,...) 元组格式
     # 使用 executemany 进行批量执行
-    placeholders = '(' + ','.join(['%s'] * len(argslist[0])) + ')'
-    sql_with_placeholders = sql.replace('VALUES %s', f'VALUES {placeholders}')
+    placeholders = "(" + ",".join(["%s"] * len(argslist[0])) + ")"
+    sql_with_placeholders = sql.replace("VALUES %s", f"VALUES {placeholders}")
     # 忽略 template 参数 - 在 psycopg3 中不需要，executemany 会自动处理类型转换
     for i in range(0, len(argslist), page_size):
-        batch = argslist[i:i + page_size]
+        batch = argslist[i : i + page_size]
         cur.executemany(sql_with_placeholders, batch)  # type: ignore
+
+
 logger = logging.getLogger(__name__)
+
 
 # JSONL 每批解析后入库的行数（环境变量可覆盖，过大可能增加单次事务内存）
 # 性能优化：默认 2000，提速 4x（原 500）
@@ -61,7 +67,6 @@ def _import_batch_size() -> int:
     if not raw.isdigit() or int(raw) < 1:
         return 2000
     return min(int(raw), 10_000)
-
 
 def _iter_jsonl_obj_batches(file_path: Path, batch_size: int):
     """流式按批产出 JSON 对象，按行读文件，避免整文件载入内存。"""
@@ -78,6 +83,7 @@ def _iter_jsonl_obj_batches(file_path: Path, batch_size: int):
     if batch:
         yield batch
 
+
 def _normalize_term_code(s: str) -> str:
     """Normalize term_code to satisfy DB constraint ^[A-Z][A-Z0-9_]{1,63}$.
 
@@ -92,81 +98,12 @@ def _normalize_term_code(s: str) -> str:
     # return normalized[:64]
 
 
-_SNOWFLAKE_EPOCH_MS = 1288834974657
-_snowflake_lock = threading.Lock()
-_snowflake_last_ts = 0
-_snowflake_sequence = 0
 
 
-def _snowflake_datacenter_worker_ids() -> tuple[int, int]:
-    d_raw = os.getenv("DATACLOUD_KNOWLEDGE_SNOWFLAKE_DATACENTER_ID", "1").strip() or "1"
-    w_raw = os.getenv("DATACLOUD_KNOWLEDGE_SNOWFLAKE_WORKER_ID", "1").strip() or "1"
-    try:
-        d = int(d_raw)
-    except ValueError:
-        d = 1
-    try:
-        w = int(w_raw)
-    except ValueError:
-        w = 1
-    return d & 0x1F, w & 0x1F
 
-
-def _next_snowflake_id() -> str:
-    """雪花算法 64bit 整数，字符串形式写入 term.term_id、term_name.name_id 等（VARCHAR）。"""
-    global _snowflake_last_ts, _snowflake_sequence
-    datacenter_id, worker_id = _snowflake_datacenter_worker_ids()
-    with _snowflake_lock:
-        ts = int(time.time() * 1000)
-        if ts < _snowflake_last_ts:
-            raise ValueError("系统时钟回拨，无法生成雪花ID")
-        if ts == _snowflake_last_ts:
-            _snowflake_sequence = (_snowflake_sequence + 1) & 0xFFF
-            if _snowflake_sequence == 0:
-                while ts <= _snowflake_last_ts:
-                    ts = int(time.time() * 1000)
-        else:
-            _snowflake_sequence = 0
-        _snowflake_last_ts = ts
-        nid = (
-            ((ts - _SNOWFLAKE_EPOCH_MS) << 22)
-            | (datacenter_id << 17)
-            | (worker_id << 12)
-            | _snowflake_sequence
-        )
-        return str(nid)
-
-
-def _next_snowflake_ids(count: int) -> list[str]:
-    """批量生成雪花 ID，减少锁竞争。"""
-    if count <= 0:
-        return []
-    global _snowflake_last_ts, _snowflake_sequence
-    datacenter_id, worker_id = _snowflake_datacenter_worker_ids()
-    ids: list[str] = []
-    with _snowflake_lock:
-        for _ in range(count):
-            ts = int(time.time() * 1000)
-            if ts < _snowflake_last_ts:
-                raise ValueError("系统时钟回拨，无法生成雪花ID")
-            if ts == _snowflake_last_ts:
-                _snowflake_sequence = (_snowflake_sequence + 1) & 0xFFF
-                if _snowflake_sequence == 0:
-                    while ts <= _snowflake_last_ts:
-                        ts = int(time.time() * 1000)
-            else:
-                _snowflake_sequence = 0
-            _snowflake_last_ts = ts
-            nid = (
-                ((ts - _SNOWFLAKE_EPOCH_MS) << 22)
-                | (datacenter_id << 17)
-                | (worker_id << 12)
-                | _snowflake_sequence
-            )
-            ids.append(str(nid))
-    return ids
-
-def _term_name_row_tuples(term_id: str, term_name: str, aliases: list[str]) -> list[tuple[str, str, str]]:
+def _term_name_row_tuples(
+    term_id: str, term_name: str, aliases: list[str]
+) -> list[tuple[str, str, str]]:
     """name 行构造（name_id, term_id, name_text）；name_id 每条均为雪花 ID。"""
     rows: list[tuple[str, str, str]] = [(_next_snowflake_id(), term_id, term_name)]
     for alias in aliases:
@@ -175,9 +112,7 @@ def _term_name_row_tuples(term_id: str, term_name: str, aliases: list[str]) -> l
     return rows
 
 
-def _lookup_term_ids_by_norm_codes(
-    cur: Cursor, norm_codes: list[str]
-) -> dict[str, str]:
+def _lookup_term_ids_by_norm_codes(cur: Cursor, norm_codes: list[str]) -> dict[str, str]:
     """规范化 term_code → term.term_id（用于 relation / knowledge 等仅含 term_code 的引用）。"""
     uniq = list(dict.fromkeys(norm_codes))
     if not uniq:
@@ -232,7 +167,25 @@ def _optional_term_id_from_obj(
     return code_to_tid.get(nc)
 
 
+def _term_id_from_obj_or_code_direct(
+    obj: dict,
+    *,
+    id_key: str,
+    code_key: str,
+) -> str:
+    """优先 JSON 中的 *term_id，否则直接使用 code_key 的值作为 term_id。
+
+    适用于新版 convert_relation 返回的 source_term_code/target_term_code，
+    它们的格式已经是 {library}#{type}#{code}，即 term_id 格式。
+    """
+    tid = _str_id_if_set(obj, id_key)
+    if tid is not None:
+        return tid
+    # 新版 code 字段值即为 term_id，直接返回
+    return str(obj[code_key])
+
 # ── DB 连接 ───────────────────────────────────────────────────────────────────
+
 
 def _connect() -> Connection:
     """从环境变量建立 psycopg3 连接。
@@ -247,6 +200,7 @@ def _connect() -> Connection:
     若入库卡在 domain 首条 INSERT，多为其他会话持有 whale_datacloud.* 上的锁且未提交，
     请在库上查阻塞会话或设置 DATACLOUD_DB_LOCK_TIMEOUT_MS=30000 快速得到 lock timeout 报错。
     """
+
     def _req(name: str) -> str:
         v = os.getenv(name, "").strip()
         if not v:
@@ -544,16 +498,17 @@ def _batch_sync_term_names(
         "DELETE FROM whale_datacloud.term_name WHERE term_id = ANY(%s)",
         (term_ids,),
     )
-    
+
     # 预计算需要多少个 ID（每个 term_name + aliases）
-    total_names = sum(1 + len([a for a in aliases if a and a != term_name]) 
-                     for _, term_name, aliases in items)
+    total_names = sum(
+        1 + len([a for a in aliases if a and a != term_name]) for _, term_name, aliases in items
+    )
     if total_names == 0:
         return 0
-    
+
     # 批量生成雪花 ID
     name_ids = _next_snowflake_ids(total_names)
-    
+
     all_rows: list[tuple[str, str, str]] = []
     id_idx = 0
     for term_id, term_name, aliases in items:
@@ -565,7 +520,7 @@ def _batch_sync_term_names(
             if alias and alias != term_name:
                 all_rows.append((name_ids[id_idx], term_id, alias))
                 id_idx += 1
-    
+
     if not all_rows:
         return 0
     _execute_values(
@@ -591,7 +546,7 @@ def _batch_sync_term_names(
 def _batch_process_term(cur: Cursor, objs: list[dict], stats: dict) -> None:
     """批量写入 whale_datacloud.term 并批量同步 term_name / term_vocabulary。
 
-    新建 term 使用雪花 term_id；按唯一 term_code 更新已有行时不改 term_id。
+    按唯一 term_code 更新已有行时不改 term_id。
     """
     if not objs:
         return
@@ -637,9 +592,7 @@ def _batch_process_term(cur: Cursor, objs: list[dict], stats: dict) -> None:
                 (new_name, obj.get("desc_summary"), term_id),
             )
             stats["terms"]["updated"] += cur.rowcount
-    need_sync_upd = [
-        o for o in updates if o.get("term_name") or o.get("aliases") is not None
-    ]
+    need_sync_upd = [o for o in updates if o.get("term_name") or o.get("aliases") is not None]
     if need_sync_upd:
         tids_nc = [_normalize_term_code(o["term_code"]) for o in need_sync_upd]
         tid_by_code = _lookup_term_ids_by_norm_codes(cur, tids_nc)
@@ -671,21 +624,25 @@ def _batch_process_term(cur: Cursor, objs: list[dict], stats: dict) -> None:
             term_code = _normalize_term_code(obj["term_code"])
             aliases = obj.get("aliases") or []
             term_tags = json.dumps({"aliases": aliases}, ensure_ascii=False) if aliases else "{}"
-            update_rows.append((
-                term_id,
-                term_code,
-                obj["term_name"],
-                obj.get("desc_summary"),
-                obj["domain_code"],
-                obj["term_type_code"],
-                obj.get("library_code"),
-                obj.get("owl_doc_file"),
-                term_tags,
-            ))
+            update_rows.append(
+                (
+                    term_id,
+                    term_code,
+                    obj["term_name"],
+                    obj.get("desc_summary"),
+                    obj["domain_code"],
+                    obj["term_type_code"],
+                    obj.get("library_code"),
+                    obj.get("owl_doc_file"),
+                    term_tags,
+                )
+            )
         if update_rows:
             # 使用临时表 + UPDATE JOIN，避免逐行 SQL
             # OpenGauss 不支持 ON COMMIT DROP，使用 PRESERVE ROWS + 手动删除
-            cur.execute("CREATE TEMP TABLE _tmp_term_upd (term_id VARCHAR, term_code VARCHAR, term_name VARCHAR, desc_summary VARCHAR, domain_id VARCHAR, term_type_code VARCHAR, library_id VARCHAR, owl_doc_id VARCHAR, term_tags JSONB) ON COMMIT PRESERVE ROWS")
+            cur.execute(
+                "CREATE TEMP TABLE _tmp_term_upd (term_id VARCHAR, term_code VARCHAR, term_name VARCHAR, desc_summary VARCHAR, domain_id VARCHAR, term_type_code VARCHAR, library_id VARCHAR, owl_doc_id VARCHAR, term_tags JSONB) ON COMMIT PRESERVE ROWS"
+            )
             _execute_values(
                 cur,
                 "INSERT INTO _tmp_term_upd VALUES %s",
@@ -708,41 +665,38 @@ def _batch_process_term(cur: Cursor, objs: list[dict], stats: dict) -> None:
             cur.execute("DROP TABLE _tmp_term_upd")
             stats["terms"]["updated"] += len(update_rows)
     if to_insert:
-        # 批量生成雪花 ID，减少锁竞争
-        term_ids = _next_snowflake_ids(len(to_insert))
         insert_rows: list[tuple] = []
         for i, obj in enumerate(to_insert):
-            term_id = term_ids[i]
             term_code = _normalize_term_code(obj["term_code"])
-            aliases = obj.get("aliases") or []
-            term_tags = json.dumps({"aliases": aliases}, ensure_ascii=False) if aliases else "{}"
+            term_tags = "{}"
             insert_rows.append(
                 (
-                    term_id,
+                    obj["term_id"],
                     term_code,
                     obj["term_name"],
-                    obj.get("desc_summary"),
+                    obj.get("term_desc"),
                     obj["domain_code"],
                     obj["term_type_code"],
                     obj.get("library_code"),
                     obj.get("owl_doc_file"),
                     term_tags,
+                    obj.get("ext_field"),
                 )
             )
         _execute_values(
             cur,
             """INSERT INTO whale_datacloud.term
                    (term_id, term_code, term_name, desc_summary, domain_id,
-                    term_type_code, library_id, owl_doc_id, term_tags)
+                    term_type_code, library_id, owl_doc_id, term_tags, ext_attrs)
                VALUES %s""",
             insert_rows,
-            template="(%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)",
+            template="(%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb)",
             page_size=1000,  # 增大 page_size
         )
         stats["terms"]["inserted"] += len(to_insert)
         # 复用 existing_map，避免重复查询
-        for i, obj in enumerate(to_insert):
-            existing_map[_normalize_term_code(obj["term_code"])] = term_ids[i]
+        for obj in to_insert:
+            existing_map[_normalize_term_code(obj["term_code"])] = obj["term_id"]
     # 使用 existing_map 代替 after_map，避免重复查询
     sync_upsert: list[tuple[str, str, list[str]]] = []
     for o in upserts:
@@ -754,7 +708,13 @@ def _batch_process_term(cur: Cursor, objs: list[dict], stats: dict) -> None:
 
 
 def _batch_process_relation(cur: Cursor, objs: list[dict], stats: dict) -> None:
-    """批量写入 whale_datacloud.term_relation。"""
+    """批量写入 whale_datacloud.term_relation。
+
+    新版 convert_relation 返回:
+    - source_term_code: 格式为 {library}_{type}_{code}，即 term_id 格式
+    - target_term_code: 格式为 {library}_{type}_{code}，即 term_id 格式
+    - ext_field: 包含 joinkeys 的 JSON，存入 ext_attrs
+    """
     if not objs:
         return
     deletes: list[str] = []
@@ -779,9 +739,10 @@ def _batch_process_relation(cur: Cursor, objs: list[dict], stats: dict) -> None:
         cur.execute(
             """UPDATE whale_datacloud.term_relation
                   SET relation_name = COALESCE(%s, relation_name),
+                      ext_attrs     = COALESCE(%s::jsonb, ext_attrs),
                       updated_time  = CURRENT_TIMESTAMP
                 WHERE relation_id = %s""",
-            (obj.get("relation_name"), relation_id),
+            (obj.get("relation_name"), obj.get("ext_field"), relation_id),
         )
         stats["relations"]["updated"] += cur.rowcount
     if not upserts:
@@ -794,15 +755,16 @@ def _batch_process_relation(cur: Cursor, objs: list[dict], stats: dict) -> None:
     existing = {r[0] for r in cur.fetchall()}
     to_insert = [o for o in upserts if o["relation_code"] not in existing]
     to_update = [o for o in upserts if o["relation_code"] in existing]
+
+    # 收集需要查找 term_id 的 code（仅用于 action_term_code）
     ref_codes: list[str] = []
     for o in to_insert + to_update:
-        if _str_id_if_set(o, "source_term_id") is None:
-            ref_codes.append(_normalize_term_code(o["source_term_code"]))
-        if _str_id_if_set(o, "target_term_id") is None:
-            ref_codes.append(_normalize_term_code(o["target_term_code"]))
+        # source_term_code 和 target_term_code 现在已经是 term_id 格式，无需查找
+        # 仅 action_term_code 需要查找（如果提供且不是 term_id 格式）
         if _str_id_if_set(o, "action_term_id") is None and o.get("action_term_code"):
             ref_codes.append(_normalize_term_code(o["action_term_code"]))
-    code_to_tid = _lookup_term_ids_by_norm_codes(cur, ref_codes)
+    code_to_tid = _lookup_term_ids_by_norm_codes(cur, ref_codes) if ref_codes else {}
+
     for obj in to_update:
         relation_id = obj["relation_code"]
         cur.execute(
@@ -813,21 +775,12 @@ def _batch_process_relation(cur: Cursor, objs: list[dict], stats: dict) -> None:
                       relation_category = %s,
                       cardinality       = %s,
                       action_term_id    = COALESCE(%s, action_term_id),
+                      ext_attrs         = COALESCE(%s::jsonb, ext_attrs),
                       updated_time      = CURRENT_TIMESTAMP
                 WHERE relation_id = %s""",
             (
-                _term_id_from_obj_or_code(
-                    obj,
-                    id_key="source_term_id",
-                    code_key="source_term_code",
-                    code_to_tid=code_to_tid,
-                ),
-                _term_id_from_obj_or_code(
-                    obj,
-                    id_key="target_term_id",
-                    code_key="target_term_code",
-                    code_to_tid=code_to_tid,
-                ),
+                _term_id_from_obj_or_code_direct(obj, id_key="source_term_id", code_key="source_term_code"),
+                _term_id_from_obj_or_code_direct(obj, id_key="target_term_id", code_key="target_term_code"),
                 obj["relation_name"],
                 obj.get("relation_category", "BUSINESS"),
                 obj.get("cardinality"),
@@ -837,6 +790,7 @@ def _batch_process_relation(cur: Cursor, objs: list[dict], stats: dict) -> None:
                     code_key="action_term_code",
                     code_to_tid=code_to_tid,
                 ),
+                obj.get("ext_field"),
                 relation_id,
             ),
         )
@@ -845,18 +799,8 @@ def _batch_process_relation(cur: Cursor, objs: list[dict], stats: dict) -> None:
         rows = [
             (
                 o["relation_code"],
-                _term_id_from_obj_or_code(
-                    o,
-                    id_key="source_term_id",
-                    code_key="source_term_code",
-                    code_to_tid=code_to_tid,
-                ),
-                _term_id_from_obj_or_code(
-                    o,
-                    id_key="target_term_id",
-                    code_key="target_term_code",
-                    code_to_tid=code_to_tid,
-                ),
+                _term_id_from_obj_or_code_direct(o, id_key="source_term_id", code_key="source_term_code"),
+                _term_id_from_obj_or_code_direct(o, id_key="target_term_id", code_key="target_term_code"),
                 o["relation_name"],
                 o.get("relation_category", "BUSINESS"),
                 o.get("cardinality"),
@@ -866,6 +810,7 @@ def _batch_process_relation(cur: Cursor, objs: list[dict], stats: dict) -> None:
                     code_key="action_term_code",
                     code_to_tid=code_to_tid,
                 ),
+                o.get("ext_field"),
             )
             for o in to_insert
         ]
@@ -873,9 +818,10 @@ def _batch_process_relation(cur: Cursor, objs: list[dict], stats: dict) -> None:
             cur,
             """INSERT INTO whale_datacloud.term_relation
                    (relation_id, source_term_id, target_term_id,
-                    relation_name, relation_category, cardinality, action_term_id)
+                    relation_name, relation_category, cardinality, action_term_id, ext_attrs)
                VALUES %s""",
             rows,
+            template="(%s, %s, %s, %s, %s, %s, %s, %s::jsonb)",
             page_size=min(500, len(rows)),
         )
         stats["relations"]["inserted"] += len(to_insert)
@@ -1001,12 +947,12 @@ def _batch_process_knowledge(cur: Cursor, objs: list[dict], stats: dict) -> None
 # ── 路由分发 ──────────────────────────────────────────────────────────────────
 
 _STEP_BATCH_HANDLERS = {
-    "meta_domain":  _batch_process_domain,
+    "meta_domain": _batch_process_domain,
     "meta_library": _batch_process_library,
-    "term_type":    _batch_process_term_type,
-    "term":         _batch_process_term,
-    "relation":     _batch_process_relation,
-    "knowledge":    _batch_process_knowledge,
+    "term_type": _batch_process_term_type,
+    "term": _batch_process_term,
+    "relation": _batch_process_relation,
+    "knowledge": _batch_process_knowledge,
 }
 
 
@@ -1023,7 +969,89 @@ def _step_entity_type(step_type: str, filename: str) -> str:
     return step_type
 
 
+def _convert_owl_entities(
+    step_type: str, rel_file: str, owl_entities: list[dict]
+) -> dict[str, list[dict]]:
+    """将 OWL 解析结果转换为各批处理器可消费的数据结构。"""
+    del step_type, rel_file
+
+    converter = owl_converter
+    if converter is None:
+        converter = import_module("datacloud_knowledge.knowledge_build.importer.owl_converter")
+
+    converted: dict[str, list[dict]] = {
+        "meta_domain": [],
+        "meta_library": [],
+        "term_type": [],
+        "term": [],
+        "relation": [],
+        "knowledge": [],
+    }
+    term_type_map: dict[str, dict] = {}
+    type_category_map = {
+        "LIST_TERM": "列表术语",
+        "DICT_TERM": "字典术语",
+        "ONTOLOGY_TERM": "本体术语",
+        "DOC_NAME_TERM": "文档名称术语",
+    }
+
+    for entity in owl_entities:
+        entity_type = str(entity.get("entity_type", "")).strip()
+        if not entity_type:
+            continue
+
+        if entity_type == "domain":
+            converted["meta_domain"].append(converter.convert_domain(entity))
+            continue
+
+        if entity_type == "library":
+            library_code = converter._pick_str(entity, "library_code")
+            library_name = converter._pick_str(entity, "library_name")
+            if library_code:
+                converted["meta_library"].append(
+                    {
+                        "library_code": library_code,
+                        "library_name": library_name,
+                    }
+                )
+            continue
+
+        if entity_type == "term_type":
+            term_type_obj = converter.convert_term_type(entity)
+            raw_category = term_type_obj.get("type_category")
+            if isinstance(raw_category, str):
+                term_type_obj["type_category"] = type_category_map.get(
+                    raw_category.strip().upper(), raw_category
+                )
+            type_code = term_type_obj.get("type_code")
+            if isinstance(type_code, str) and type_code.strip():
+                term_type_map[type_code] = term_type_obj
+            converted["term_type"].append(term_type_obj)
+            continue
+
+        if entity_type == "term":
+            term_obj = converter.convert_term(entity)
+            converted["term"].append(term_obj)
+            # terms_knowledge 需要拆成独立 knowledge 记录，沿用原有 term_code 外键解析。
+            for knowledge_obj in converter.extract_knowledge_records(entity, ""):
+                knowledge_obj["term_id"] = term_obj.get("term_id")
+                knowledge_obj["term_code"] = term_obj.get("term_code")
+                converted["knowledge"].append(knowledge_obj)
+            continue
+
+        if entity_type == "relation":
+            relation_obj = converter.convert_relation(entity)
+            relation_obj["relation_code"] = (
+                converter._pick_str(entity, "relation_code")
+                or f"{relation_obj.get('source_term_code', '')}/{relation_obj.get('target_term_code', '')}/{relation_obj.get('relation_name', '')}"
+            )
+            converted["relation"].append(relation_obj)
+
+    return converted
+
+
 # ── 公开入口 ──────────────────────────────────────────────────────────────────
+
 
 def run(folder_path: str) -> dict:
     """按 manifest 顺序在单个事务内导入所有数据。
@@ -1039,12 +1067,12 @@ def run(folder_path: str) -> dict:
     """
     root = Path(folder_path)
     stats: dict[str, dict] = {
-        "domains":    {"inserted": 0, "updated": 0, "deleted": 0},
-        "libraries":  {"inserted": 0, "updated": 0, "deleted": 0},
+        "domains": {"inserted": 0, "updated": 0, "deleted": 0},
+        "libraries": {"inserted": 0, "updated": 0, "deleted": 0},
         "term_types": {"inserted": 0, "updated": 0, "deleted": 0},
-        "terms":      {"inserted": 0, "updated": 0, "deleted": 0},
-        "relations":  {"inserted": 0, "updated": 0, "deleted": 0},
-        "knowledge":  {"inserted": 0, "updated": 0, "deleted": 0},
+        "terms": {"inserted": 0, "updated": 0, "deleted": 0},
+        "relations": {"inserted": 0, "updated": 0, "deleted": 0},
+        "knowledge": {"inserted": 0, "updated": 0, "deleted": 0},
     }
 
     manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
@@ -1071,8 +1099,21 @@ def run(folder_path: str) -> dict:
                     entity_type,
                     batch_size,
                 )
-                for obj_batch in _iter_jsonl_obj_batches(file_path, batch_size):
-                    batch_handler(cur, obj_batch, stats)
+                if rel_file.endswith(".owl"):
+                    owl_entities = owl_parser.parse_owl_file(file_path)
+                    converted = _convert_owl_entities(step_type, rel_file, owl_entities)
+                    for entity_type_key, objs in converted.items():
+                        if not objs:
+                            continue
+                        handler = _STEP_BATCH_HANDLERS.get(entity_type_key)
+                        if handler is None:
+                            logger.warning(
+                                "OWL 实体类型 '%s' 无处理器，跳过 %s", entity_type_key, rel_file
+                            )
+                            continue
+                        handler(cur, objs, stats)
+                else:
+                    logger.warning("不支持的文件扩展名，跳过 %s", rel_file)
 
         conn.commit()
         logger.info("import committed: %s", stats)

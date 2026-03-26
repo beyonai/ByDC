@@ -31,6 +31,10 @@ def _get_loader():
     return loader
 
 
+def _parse_csv_header(raw: str) -> list[str]:
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
     """创建 MCP Server 和 StreamableHTTPSessionManager。"""
     server = Server("datacloud-data")
@@ -42,12 +46,16 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
             loader = _get_loader()
             if loader is None:
                 return [_unified_query_tool_fallback()]
-            from datacloud_data_sdk.context import get_tool_list_mode
+            from datacloud_data_sdk.context import get_current_context
             from datacloud_data_service.tools.registry import ToolRegistry
 
             registry = ToolRegistry(loader)
-            tool_list_mode = get_tool_list_mode()
-            tools_raw = registry.list_tools(tool_list_mode=tool_list_mode)
+            ctx = get_current_context()
+            tools_raw = registry.list_tools(
+                view_id=ctx.view_id or None,
+                object_ids=ctx.object_ids,
+                tool_list_mode=ctx.tool_list_mode,
+            )
             result: list[Tool] = []
             for t in tools_raw:
                 t.pop("_meta", None)
@@ -160,6 +168,12 @@ def create_mcp_asgi_app(session_manager: StreamableHTTPSessionManager):
         tool_mode = headers.get("x-tool-list-mode", "unified")
         if tool_mode not in ("unified", "per_object"):
             tool_mode = "unified"
+        view_ids = _parse_csv_header(headers.get("x-view-ids", ""))
+        view_id = headers.get("x-view-id", "").strip() or (view_ids[0] if view_ids else "")
+        object_ids = _parse_csv_header(headers.get("x-object-ids", ""))
+        object_id = headers.get("x-object-id", "").strip()
+        if object_id:
+            object_ids = [object_id]
         ctx_kwargs = {
             "tenant_id": headers.get("x-tenant-id", ""),
             "user_id": headers.get("x-user-id", ""),
@@ -167,6 +181,8 @@ def create_mcp_asgi_app(session_manager: StreamableHTTPSessionManager):
             "token": token,
             "system_code": headers.get("x-system-code", ""),
             "tool_list_mode": tool_mode,
+            "view_id": view_id,
+            "object_ids": object_ids or None,
         }
         try:
             with InvocationContext(**ctx_kwargs):
