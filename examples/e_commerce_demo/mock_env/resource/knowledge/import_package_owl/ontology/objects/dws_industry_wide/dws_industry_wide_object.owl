@@ -12,10 +12,10 @@
     <owl:NamedIndividual rdf:about="#dws_industry_wide_v1">
         <rdf:type rdf:resource="#EntityDefinition"/>
         <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">dws_industry_wide</entity_code>
-        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链年度画像</entity_name>
+        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链数据对象</entity_name>
         <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链粒度年度分析对象，覆盖产业链规模、龙头结构、开票能力、关系强度和链内风险等指标。</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DB(DB:数据库，API:接口)</entity_source>
+        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DB</entity_source>
         <fields rdf:resource="#chainId_field"/>
         <fields rdf:resource="#dataYear_field"/>
         <fields rdf:resource="#chainName_field"/>
