@@ -12,11 +12,21 @@ from datacloud_data_sdk.context import InvocationContext
 router = APIRouter()
 
 
+def _parse_object_ids_header(raw: str) -> list[str]:
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 def _extract_context(request: Request) -> dict[str, str]:
     tenant_id = request.headers.get("X-Tenant-Id", "")
     tool_mode = request.headers.get("X-Tool-List-Mode", "unified")
-    if tool_mode not in ("unified", "   "):
+    if tool_mode not in ("unified", "per_object"):
         tool_mode = "unified"
+    view_ids = _parse_object_ids_header(request.headers.get("X-View-Ids", ""))
+    view_id = request.headers.get("X-View-Id", "").strip() or (view_ids[0] if view_ids else "")
+    object_ids = _parse_object_ids_header(request.headers.get("X-Object-Ids", ""))
+    object_id = request.headers.get("X-Object-Id", "").strip()
+    if object_id:
+        object_ids = [object_id]
     return {
         "tenant_id": tenant_id,
         "user_id": request.headers.get("X-User-Id", ""),
@@ -24,6 +34,8 @@ def _extract_context(request: Request) -> dict[str, str]:
         "token": request.headers.get("Authorization", "").removeprefix("Bearer ").strip(),
         "system_code": request.headers.get("X-System-Code", ""),
         "tool_list_mode": tool_mode,
+        "view_id": view_id,
+        "object_ids": object_ids or None,
     }
 
 
@@ -97,12 +109,16 @@ def _get_tools_list(request: Request) -> list[dict]:
     if loader is None:
         return [_fallback_unified_query_tool()]
 
-    from datacloud_data_sdk.context import get_tool_list_mode
+    from datacloud_data_sdk.context import get_current_context
     from datacloud_data_service.tools.registry import ToolRegistry
 
     registry = ToolRegistry(loader)
-    tool_list_mode = get_tool_list_mode()
-    tools = registry.list_tools(tool_list_mode=tool_list_mode)
+    ctx = get_current_context()
+    tools = registry.list_tools(
+        view_id=ctx.view_id or None,
+        object_ids=ctx.object_ids,
+        tool_list_mode=ctx.tool_list_mode,
+    )
     for t in tools:
         t.pop("_meta", None)
     return tools
