@@ -360,6 +360,28 @@ def _records_shaped_output(output: dict[str, Any]) -> dict[str, Any] | None:
             "original_download_url": output.get("original_download_url", ""),
             "overflow_notice": output.get("overflow_notice", ""),
         }
+    # code_exec: 当 result 是 list[dict] 时，转换为 records+meta 格式以生成 6001 信封
+    if "exit_code" in output:
+        if output.get("exit_code", 0) != 0:
+            return None  # 执行失败，无结构化数据
+        result = output.get("result")
+        if isinstance(result, list) and result and isinstance(result[0], dict):
+            columns = [
+                {"name": str(k), "label": str(k), "type": "string"}
+                for k in result[0].keys()
+            ]
+            return {
+                "records": result,
+                "meta": {
+                    "objectId": "",
+                    "objectName": "代码执行结果",
+                    "columns": columns,
+                    "total": len(result),
+                },
+                "file_path": "",
+                "original_download_url": "",
+                "overflow_notice": "",
+            }
     return None
 
 
