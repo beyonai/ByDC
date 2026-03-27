@@ -28,17 +28,17 @@ if TYPE_CHECKING:
 class View:
     """
     视图实体类
-    
+
     聚合多个对象，提供跨对象查询能力。
     通过 OntologyLoader.get_view() 获取实例。
-    
+
     Attributes:
         view_id: 视图唯一标识
         view_name: 视图名称
         description: 视图描述
         objects: 包含的对象列表
         relations: 对象间的关联关系
-    
+
     Example:
         view = loader.get_view("scene_01_data_analysis")
         result = await view.query("分析各产品的销售趋势")
@@ -55,7 +55,7 @@ class View:
     ) -> None:
         """
         初始化视图实体
-        
+
         Args:
             view_id: 视图唯一标识
             view_name: 视图名称
@@ -74,13 +74,13 @@ class View:
     def get_description(self) -> str:
         """
         生成 Markdown 格式的视图自生说明
-        
+
         包含以下信息：
         - 视图名称和 ID
         - 视图描述
         - 包含的对象列表及其动作
         - 对象间的关联关系
-        
+
         Returns:
             str: Markdown 格式的视图说明文档
         """
@@ -109,7 +109,7 @@ class View:
     async def query(self, question: str, include_plan: bool = True) -> dict[str, object]:
         """
         跨对象自然语言查询
-        
+
         完整的查询管线：
         1. 构建视图载荷
         2. 生成查询计划（通过 LLM）
@@ -118,14 +118,14 @@ class View:
         5. 转换为执行任务
         6. 执行查询（SQL/API/脚本/知识库）
         7. 聚合结果
-        
+
         Args:
             question: 自然语言查询问题
             include_plan: 是否在结果中包含执行计划
-        
+
         Returns:
             dict: 查询结果，包含 records, total, meta 等字段
-        
+
         Raises:
             CannotAnswerError: 无法回答问题时抛出
             PlanValidationError: 计划验证失败时抛出
@@ -139,7 +139,12 @@ class View:
         from datacloud_data_sdk.aggregator.sqlite_aggregator import SqliteAggregator
         from datacloud_data_sdk.context import get_current_context
         from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
-        from datacloud_data_sdk.exceptions import CannotAnswerError, PlanValidationError
+        from datacloud_data_sdk.exceptions import (
+            CannotAnswerError,
+            PlanValidationError,
+            TermAmbiguousError,
+            TermNotFoundError,
+        )
         from datacloud_data_sdk.executor.api_executor import ApiExecutor
         from datacloud_data_sdk.executor.executor import Executor
         from datacloud_data_sdk.executor.kb_executor import KbExecutor
@@ -306,7 +311,9 @@ class View:
                 except Exception:
                     pass
 
-            result = {
+            from datacloud_data_sdk.result_formatter import build_query_response
+
+            raw_result: dict[str, object] = {
                 "records": records,
                 "meta": {
                     "viewId": self.view_id,
@@ -320,14 +327,31 @@ class View:
                 },
             }
             if include_plan:
-                result["plan"] = {
+                raw_result["plan"] = {
                     "question": plan.question,
                     "can_answer": plan.can_answer,
                     "clarification": plan.clarification,
                     "steps": [asdict(s) for s in plan.steps],
                     "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
                 }
-            return result
+            return build_query_response(
+                raw_result,
+                csv_manager=csv_manager,
+                threshold=config.query_result_csv_threshold,
+                preview_rows=config.query_result_preview_rows,
+            )
+        except CannotAnswerError as exc:
+            from datacloud_data_sdk.result_formatter import build_error_data
+            return build_error_data(
+                str(exc), result_type="rejected",
+                trace={"request_id": request_id, "question": question, "view_id": self.view_id},
+            )
+        except (TermNotFoundError, TermAmbiguousError) as exc:
+            from datacloud_data_sdk.result_formatter import build_error_data
+            return build_error_data(
+                str(exc), result_type="ask_user",
+                trace={"request_id": request_id, "question": question, "view_id": self.view_id},
+            )
         except PlanValidationError as exc:
             if observer:
                 try:
@@ -367,7 +391,7 @@ class View:
     async def invoke_object_action(
         self, object_code: str, action_code: str, params: dict[str, object]
     ) -> dict[str, object]:
-        """通过视图调用对象动作。"""
+        """通过视图调用对象动作，异常向上抛出。"""
         for obj in self.objects:
             if obj.object_code == object_code:
                 return await obj.invoke_action(action_code, params)
