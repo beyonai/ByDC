@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,7 +22,7 @@ class FuzzyMatch:
     """
 
     term: str
-    term_id: Optional[str]
+    term_id: str | None
     term_type: str
     match_type: str
     similarity: float

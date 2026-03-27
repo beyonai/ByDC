@@ -10,18 +10,18 @@
 
 from __future__ import annotations
 
-from typing import Mapping, Tuple
+from collections.abc import Mapping
 
-from rapidfuzz import process, fuzz
+from rapidfuzz import fuzz, process
 
 from .types import FuzzyConfig
 
 
 def rapidfuzz_lookup(
     query: str,
-    term_metadata: Mapping[str, Tuple[Tuple[str, str, str], ...]],
+    term_metadata: Mapping[str, tuple[tuple[str, str, str], ...]],
     config: FuzzyConfig,
-) -> Tuple[Tuple[str, float, int], ...]:
+) -> tuple[tuple[str, float, int], ...]:
     """使用 rapidfuzz 进行模糊匹配查询。
 
     Args:
@@ -68,9 +68,9 @@ def rapidfuzz_lookup(
 
 
 def create_rapidfuzz_matcher(
-    term_metadata: Mapping[str, Tuple[Tuple[str, str, str], ...]],
+    term_metadata: Mapping[str, tuple[tuple[str, str, str], ...]],
     config: FuzzyConfig | None = None,
-) -> Tuple[Mapping[str, Tuple[Tuple[str, str, str], ...]], FuzzyConfig]:
+) -> tuple[Mapping[str, tuple[tuple[str, str, str], ...]], FuzzyConfig]:
     """创建 rapidfuzz 匹配器所需的组件。
 
     注意：rapidfuzz 不需要预构建索引，此函数仅为保持接口兼容性。
