@@ -230,6 +230,17 @@ class Object:
 
             observer = QueryObserver(config.event_bus, trace_id=trace_id)
 
+        # 初始化 Gateway 进度推送器（从 InvocationContext 中取 gateway_context）
+        gw_reporter = None
+        try:
+            from datacloud_data_sdk.context import get_gateway_context
+            from datacloud_data_sdk.events.gateway_reporter import GatewayProgressReporter
+            _gw_ctx = get_gateway_context()
+            if _gw_ctx is not None:
+                gw_reporter = GatewayProgressReporter(_gw_ctx)
+        except Exception:
+            pass
+
         try:
             object_ids = [self._cls.object_code]
             if observer:
@@ -259,6 +270,15 @@ class Object:
                 "steps": [asdict(s) for s in plan.steps],
                 "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
             }
+            if gw_reporter:
+                try:
+                    _step_types = " → ".join(
+                        f"{s.step_id}({getattr(s, 'step_type', 'SQL')})"
+                        for s in plan.steps
+                    )
+                    await gw_reporter.on_plan_generated(f"共 {len(plan.steps)} 步：{_step_types}")
+                except Exception:
+                    pass
             if observer:
                 try:
                     await observer.on_plan_generated(request_id, plan_dict)
@@ -345,9 +365,25 @@ class Object:
                 csv_base_dir=config.csv_base_dir,
             )
 
+            if gw_reporter:
+                try:
+                    for _s in plan.steps:
+                        _stype = getattr(_s, "step_type", type(_s).__name__)
+                        _sdesc = getattr(_s, "sql_template", None) or getattr(_s, "function_id", "")
+                        await gw_reporter.on_step_executing(_s.step_id, _stype, str(_sdesc)[:60])
+                except Exception:
+                    pass
+
             step_results = await executor.run(
                 tasks, request_id, step_ids=[s.step_id for s in plan.steps]
             )
+
+            if gw_reporter:
+                try:
+                    for _s in plan.steps:
+                        await gw_reporter.on_step_completed(_s.step_id)
+                except Exception:
+                    pass
             if observer:
                 try:
                     await observer.on_steps_executed(request_id, step_results.to_legacy_dict())
@@ -355,6 +391,11 @@ class Object:
                     pass
 
             if plan.aggregation:
+                if gw_reporter:
+                    try:
+                        await gw_reporter.on_aggregating(plan.aggregation.strategy)
+                    except Exception:
+                        pass
                 if plan.aggregation.strategy == "SQLITE_MEM":
                     records = await SqliteAggregator().aggregate(plan.aggregation, step_results)
                 else:
@@ -362,6 +403,11 @@ class Object:
             else:
                 records = []
             columns = plan.aggregation.columns if plan.aggregation else []
+            if gw_reporter:
+                try:
+                    await gw_reporter.on_aggregation_completed(len(records))
+                except Exception:
+                    pass
             if observer:
                 try:
                     await observer.on_aggregation_completed(
