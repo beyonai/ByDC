@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from textwrap import dedent, indent
+from typing import Any
 
 import pytest
 
@@ -16,12 +17,12 @@ from datacloud_knowledge.knowledge_build.importer import executor, precheck
 class _MockDatabase:
     """用内存结构模拟导入后的数据库状态。"""
 
-    domains: dict[str, dict] = field(default_factory=dict)
-    libraries: dict[str, dict] = field(default_factory=dict)
-    term_types: dict[str, dict] = field(default_factory=dict)
-    terms: dict[str, dict] = field(default_factory=dict)
-    relations: dict[str, dict] = field(default_factory=dict)
-    knowledge: dict[str, dict] = field(default_factory=dict)
+    domains: dict[str, Any] = field(default_factory=dict)
+    libraries: dict[str, Any] = field(default_factory=dict)
+    term_types: dict[str, Any] = field(default_factory=dict)
+    terms: dict[str, Any] = field(default_factory=dict)
+    relations: dict[str, Any] = field(default_factory=dict)
+    knowledge: dict[str, Any] = field(default_factory=dict)
     events: list[str] = field(default_factory=list)
     next_term_id: int = 1
 
@@ -42,14 +43,15 @@ class _FakeCursor:
     def __enter__(self) -> _FakeCursor:
         return self
 
-    def __exit__(self, _exc_type, _exc, _tb) -> bool:
+    def __exit__(self, _exc_type: Any, _exc: Any, _tb: Any) -> None:
+        return None
         return False
 
 
 class _FakeConnection:
     """最小连接对象，隔离外部数据库依赖。"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.autocommit = True
         self.db = _MockDatabase()
         self.committed = False
@@ -289,7 +291,7 @@ def _write_file(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def _build_manifest(include_ontology_step: bool = False) -> dict:
+def _build_manifest(include_ontology_step: bool = False) -> dict[str, Any]:
     """构造测试所需的 manifest。"""
 
     steps = [
@@ -340,7 +342,9 @@ def _create_owl_package(
     return package_root
 
 
-def _run_precheck_for_owl_package(package_root: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
+def _run_precheck_for_owl_package(
+    package_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> dict[str, Any]:
     """在不修改生产代码的前提下执行 manifest 级 OWL 预检。
 
     当前 precheck 仍按 JSONL 逐行读取内容；这里仅把测试包内的 OWL 文件视为空，
@@ -350,33 +354,39 @@ def _run_precheck_for_owl_package(package_root: Path, monkeypatch: pytest.Monkey
     package_root = package_root.resolve()
     original_read_text = Path.read_text
 
-    def _patched_read_text(path: Path, *args, **kwargs) -> str:
+    def _patched_read_text(path: Path, *args: Any, **kwargs: Any) -> str:
         resolved_path = path.resolve()
         if resolved_path.suffix == ".owl" and resolved_path.is_relative_to(package_root):
             return ""
         return original_read_text(path, *args, **kwargs)
 
     with monkeypatch.context() as patch_ctx:
-        patch_ctx.setattr(precheck.Path, "read_text", _patched_read_text)
+        patch_ctx.setattr(Path, "read_text", _patched_read_text)
         return precheck.run(str(package_root))
 
 
-def _build_mock_handlers(connection: _FakeConnection) -> dict[str, object]:
+def _build_mock_handlers(connection: _FakeConnection) -> dict[str, Any]:
     """构造写入内存数据库的 batch handlers。"""
 
-    def handle_domains(_cur: _FakeCursor, objs: list[dict], stats: dict) -> None:
+    def handle_domains(
+        _cur: _FakeCursor, objs: list[dict[str, Any]], stats: dict[str, Any]
+    ) -> None:
         connection.db.events.append("meta_domain")
         for obj in objs:
             connection.db.domains[obj["domain_code"]] = obj.copy()
         stats["domains"]["inserted"] += len(objs)
 
-    def handle_libraries(_cur: _FakeCursor, objs: list[dict], stats: dict) -> None:
+    def handle_libraries(
+        _cur: _FakeCursor, objs: list[dict[str, Any]], stats: dict[str, Any]
+    ) -> None:
         connection.db.events.append("meta_library")
         for obj in objs:
             connection.db.libraries[obj["library_code"]] = obj.copy()
         stats["libraries"]["inserted"] += len(objs)
 
-    def handle_term_types(_cur: _FakeCursor, objs: list[dict], stats: dict) -> None:
+    def handle_term_types(
+        _cur: _FakeCursor, objs: list[dict[str, Any]], stats: dict[str, Any]
+    ) -> None:
         connection.db.events.append("term_type")
         for obj in objs:
             if obj["domain_code"] not in connection.db.domains:
@@ -384,7 +394,7 @@ def _build_mock_handlers(connection: _FakeConnection) -> dict[str, object]:
             connection.db.term_types[obj["type_code"]] = obj.copy()
         stats["term_types"]["inserted"] += len(objs)
 
-    def handle_terms(_cur: _FakeCursor, objs: list[dict], stats: dict) -> None:
+    def handle_terms(_cur: _FakeCursor, objs: list[dict[str, Any]], stats: dict[str, Any]) -> None:
         connection.db.events.append("term")
         for obj in objs:
             domain_code = obj.get("domain_code")
@@ -404,7 +414,9 @@ def _build_mock_handlers(connection: _FakeConnection) -> dict[str, object]:
             connection.db.terms[obj["term_code"]] = stored
         stats["terms"]["inserted"] += len(objs)
 
-    def handle_relations(_cur: _FakeCursor, objs: list[dict], stats: dict) -> None:
+    def handle_relations(
+        _cur: _FakeCursor, objs: list[dict[str, Any]], stats: dict[str, Any]
+    ) -> None:
         connection.db.events.append("relation")
         for obj in objs:
             source_term = connection.db.terms.get(obj["source_term_code"])
@@ -418,7 +430,9 @@ def _build_mock_handlers(connection: _FakeConnection) -> dict[str, object]:
             connection.db.relations[stored["relation_code"]] = stored
         stats["relations"]["inserted"] += len(objs)
 
-    def handle_knowledge(_cur: _FakeCursor, objs: list[dict], stats: dict) -> None:
+    def handle_knowledge(
+        _cur: _FakeCursor, objs: list[dict[str, Any]], stats: dict[str, Any]
+    ) -> None:
         connection.db.events.append("knowledge")
         for obj in objs:
             term = connection.db.terms.get(obj["term_code"])
@@ -467,7 +481,12 @@ class TestOwlIntegration:
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
-    ):
+    ) -> None:
+        """测试完整流程：precheck 通过后执行导入并验证 mock DB。"""
+
+        package_root = _create_owl_package(tmp_path)
+
+        precheck_result = _run_precheck_for_owl_package(package_root, monkeypatch)
         """测试完整流程：precheck 通过后执行导入并验证 mock DB。"""
 
         package_root = _create_owl_package(tmp_path)
@@ -513,7 +532,7 @@ class TestOwlIntegration:
         assert knowledge["desc_summary"] == "员工手册"
         assert knowledge["desc"] == "员工手册信息"
 
-    def test_precheck_rejects_manifest_with_ontology_step(self, tmp_path: Path):
+    def test_precheck_rejects_manifest_with_ontology_step(self, tmp_path: Path) -> None:
         """测试 manifest 中包含 ontology 文件时会被 precheck 拒绝。"""
 
         package_root = _create_owl_package(tmp_path, include_ontology_step=True)
@@ -535,7 +554,20 @@ class TestOwlIntegration:
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
-    ):
+    ) -> None:
+        """测试 executor 在关系引用缺失术语时返回 failed 并回滚。"""
+
+        package_root = _create_owl_package(tmp_path, relation_target_code="missing_term")
+        connection = _FakeConnection()
+        _install_executor_mocks(monkeypatch, connection)
+
+        result = executor.run(str(package_root))
+
+        assert result["status"] == "failed"
+        assert result["stats"]["domains"]["inserted"] == 1
+        assert result["stats"]["terms"]["inserted"] == 2
+        assert "关系引用了不存在的术语" in str(result["error"])
+        assert connection.committed is False
         """测试 executor 在关系引用缺失术语时返回 failed 并回滚。"""
 
         package_root = _create_owl_package(tmp_path, relation_target_code="missing_term")
