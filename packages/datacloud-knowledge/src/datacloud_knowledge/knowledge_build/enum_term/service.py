@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ async def create_enum_term(
     domain_id: str,
     library_id: str | None,
     desc_summary: str | None,
-) -> dict:
+) -> dict[str, Any]:
     """创建枚举/字典类术语。
 
     Args:
@@ -32,7 +33,7 @@ async def create_enum_term(
     raise NotImplementedError
 
 
-async def update_enum_term(term_id: str, **kwargs: object) -> dict:
+async def update_enum_term(term_id: str, **kwargs: object) -> dict[str, Any]:
     """更新枚举术语属性。
 
     Args:
