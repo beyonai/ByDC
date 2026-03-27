@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import BinaryIO
+from typing import TYPE_CHECKING, BinaryIO
 
-from .backends.base import FileStorageBackend
-from .backends.local import LocalFileBackend, _safe_directory
-from .errors import BackendMisconfigured, InvalidUploadItem
-from .hashing import md5_of_stream
-from .settings import FileStoreSettings
-from .types import DownloadResult, UploadItemDict, UploadResult
+from datacloud_knowledge.file_store.backends.local import LocalFileBackend, _safe_directory
+from datacloud_knowledge.file_store.errors import BackendMisconfiguredError, InvalidUploadItemError
+from datacloud_knowledge.file_store.hashing import md5_of_stream
+from datacloud_knowledge.file_store.types import DownloadResult, UploadItemDict, UploadResult
+
+if TYPE_CHECKING:
+    from datacloud_knowledge.file_store.backends.base import FileStorageBackend
+    from datacloud_knowledge.file_store.settings import FileStoreSettings
 
 
 class FileManager:
@@ -26,7 +28,7 @@ class FileManager:
         self.default_directory = _safe_directory(default_directory)
 
     @classmethod
-    def from_settings(cls, settings: FileStoreSettings) -> "FileManager":
+    def from_settings(cls, settings: FileStoreSettings) -> FileManager:
         driver = (settings.storage_driver or "").lower().strip() or None
 
         should_s3 = False
@@ -35,14 +37,20 @@ class FileManager:
         elif driver == "local":
             should_s3 = False
         else:
-            should_s3 = bool(settings.s3_bucket and settings.s3_access_key_id and settings.s3_secret_access_key)
+            should_s3 = bool(
+                settings.s3_bucket and settings.s3_access_key_id and settings.s3_secret_access_key
+            )
 
         if should_s3:
-            if not (settings.s3_bucket and settings.s3_access_key_id and settings.s3_secret_access_key):
-                raise BackendMisconfigured("S3 driver selected but missing required S3 settings")
-            from .backends.s3 import S3Backend  # lazy import
+            if not (
+                settings.s3_bucket and settings.s3_access_key_id and settings.s3_secret_access_key
+            ):
+                raise BackendMisconfiguredError(
+                    "S3 driver selected but missing required S3 settings"
+                )
+            from datacloud_knowledge.file_store.backends.s3 import S3Backend  # noqa: PLC0415
 
-            backend = S3Backend.from_settings(settings)
+            backend: FileStorageBackend = S3Backend.from_settings(settings)
         else:
             backend = LocalFileBackend(root_dir=settings.local_root)
 
@@ -66,7 +74,7 @@ class FileManager:
     def _upload_one(self, item: UploadItemDict) -> UploadResult:
         directory = _safe_directory(item.get("directory") or self.default_directory)
 
-        if "path" in item and item["path"]:
+        if item.get("path"):
             path = Path(item["path"])
             filename = item.get("filename") or path.name
             content_type = item.get("content_type")
@@ -82,9 +90,9 @@ class FileManager:
                 )
         elif "stream" in item and item["stream"] is not None:
             stream = item["stream"]
-            filename = item.get("filename")
-            if not filename:
-                raise InvalidUploadItem("stream upload requires filename")
+            stream_filename: str | None = item.get("filename")
+            if not stream_filename:
+                raise InvalidUploadItemError("stream upload requires filename")
             content_type = item.get("content_type")
 
             md5 = md5_of_stream(stream)
@@ -93,10 +101,10 @@ class FileManager:
                 directory=directory,
                 md5=md5,
                 stream=stream,
-                meta={"filename": filename, "content_type": content_type, "size": size},
+                meta={"filename": stream_filename, "content_type": content_type, "size": size},
             )
         else:
-            raise InvalidUploadItem("upload item must include path or stream")
+            raise InvalidUploadItemError("upload item must include path or stream")
 
         meta = self.backend.get_meta(md5)
         canonical_directory = str(meta.get("directory") or outcome.canonical_directory)
@@ -142,4 +150,3 @@ def _try_get_stream_size(stream: BinaryIO) -> int:
         return int(end)
     except Exception:
         return -1
-
