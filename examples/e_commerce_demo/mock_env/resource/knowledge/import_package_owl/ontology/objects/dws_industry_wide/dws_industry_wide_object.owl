@@ -100,6 +100,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#CHAIN_NAME</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#parentChainId_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -136,6 +138,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#PARENT_CHAIN_NAME</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#chainLevel_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -154,6 +158,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#CHAIN_LEVEL</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">code</rel_term_codeorname>
+		<trem_data_type>DICT_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#chainDescription_field">
         <rdf:type rdf:resource="#EntityField"/>
