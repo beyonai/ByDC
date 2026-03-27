@@ -1224,6 +1224,16 @@ class SQLKnowledgeGraphQuery:
             center_entity = subgraph.get("center_entity", {})
             lines.append("")
             lines.append(f"【中心实体 {i}】{center_entity.get('name')}")
+
+            # 解析 node_id，展示术语库编码、术语类型编码、术语编码
+            node_id = center_entity.get('node_id', '')
+            if node_id and '#' in node_id:
+                parts = node_id.split('#')
+                if len(parts) >= 3:
+                    lines.append(f"  术语库编码: {parts[0]}")
+                    lines.append(f"  术语类型编码: {parts[1]}")
+                    lines.append(f"  术语编码: {parts[2]}\n")
+
             lines.append(f"节点数: {subgraph.get('node_count')}, 边数: {subgraph.get('edge_count')}")
 
             tree_dict = subgraph.get("tree")
