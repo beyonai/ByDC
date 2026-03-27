@@ -96,7 +96,7 @@ class DataCloudWorker(GatewayWorker):
 
     def get_capabilities(self) -> list[str]:
         """向 gateway 注册本 worker 的能力标签。"""
-        return ["datacloud"]
+        return [os.environ.get("DATACLOUD_GATEWAY_WORKER_ID","datacloud")]
 
     # ------------------------------------------------------------------
     # 核心消息处理
