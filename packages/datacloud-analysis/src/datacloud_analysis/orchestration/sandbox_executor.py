@@ -22,10 +22,55 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from datacloud_analysis.orchestration.query_shape_utils import count_rows_like_envelope_build
+
 logger = logging.getLogger(__name__)
 
 # Registry: task type → callable (populated lazily to avoid circular imports)
 _TASK_DISPATCHERS: dict[str, Any] = {}
+
+
+def _log_tool_output_summary(task_id: str, task_type: str, output: Any) -> None:
+    """Log a compact summary of tool return (counts/ids only, not full rows or polygon)."""
+    if isinstance(output, dict):
+        recs = output.get("records")
+        n_records = len(recs) if isinstance(recs, list) else None
+        prev = output.get("preview")
+        n_preview = len(prev) if isinstance(prev, list) else None
+        shaped_rows = count_rows_like_envelope_build(output)
+        meta = output.get("meta") if isinstance(output.get("meta"), dict) else {}
+        meta_total = meta.get("total")
+        object_id = str(meta.get("objectId", "") or "")
+        has_plan = "plan" in output
+        logger.info(
+            "[tool return] task_id=%s type=%s records=%s preview=%s shaped_rows=%s "
+            "meta.total=%s objectId=%s has_plan=%s",
+            task_id,
+            task_type,
+            n_records,
+            n_preview,
+            shaped_rows,
+            meta_total,
+            object_id,
+            has_plan,
+        )
+        return
+    if isinstance(output, str):
+        logger.info(
+            "[tool return] task_id=%s type=%s output=str len=%d preview=%s",
+            task_id,
+            task_type,
+            len(output),
+            output[:240].replace("\n", " "),
+        )
+        return
+    logger.info(
+        "[tool return] task_id=%s type=%s output_type=%s repr_preview=%s",
+        task_id,
+        task_type,
+        type(output).__name__,
+        repr(output)[:240],
+    )
 
 
 async def execute_next_task(
@@ -112,6 +157,7 @@ async def execute_next_task(
             logger.warning("Task %s (code_exec) failed: %s", task["id"], error_msg[:200])
             return {**task, "status": "failed", "error": error_msg}, output
 
+        _log_tool_output_summary(str(task.get("id", "?")), task_type, output)
         return {**task, "status": "done"}, output
     except Exception as exc:  # noqa: BLE001
         logger.error("Task %s failed: %s", task["id"], exc)
