@@ -17,7 +17,10 @@ Object 封装了 OntologyClass 及其关联关系，提供自生说明、动作�
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from datacloud_data_sdk.action import Action
 from datacloud_data_sdk.exceptions import ActionNotFoundError
@@ -258,7 +261,6 @@ class Object:
                     pass
             try:
                 import json
-                import logging
 
                 logging.getLogger("datacloud_data_sdk").info(
                     json.dumps(plan_dict, ensure_ascii=False)
@@ -377,6 +379,13 @@ class Object:
                     "object_id": self._cls.object_code,
                 },
             }
+            logger.info(
+                "object.query done: object_code=%s record_count=%s aggregation=%s final_step=%s",
+                self._cls.object_code,
+                len(records),
+                getattr(plan.aggregation, "strategy", None) if plan.aggregation else None,
+                getattr(plan.aggregation, "final_step_id", None) if plan.aggregation else None,
+            )
             if include_plan:
                 result["plan"] = {
                     "question": plan.question,
