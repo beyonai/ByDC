@@ -92,26 +92,48 @@ explicit = false
 
 # ============================================
 # Ruff 配置 - 代码格式化和 lint
+# 企业级配置 (2026)
 # ============================================
 [tool.ruff]
 target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]
-select = [
-    "E",   # pycodestyle errors
-    "F",   # Pyflakes
-    "I",   # isort
-    "N",   # pep8-naming
-    "W",   # pycodestyle warnings
-    "UP",  # pyupgrade
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "SIM", # flake8-simplify
+extend-select = [
+    "A",     # flake8-builtins - 禁止覆盖内置名
+    "ARG",   # flake8-unused-arguments
     "ASYNC", # flake8-async
+    "B",     # flake8-bugbear
+    "C4",    # flake8-comprehensions
+    "DTZ",   # flake8-datetimez - 时区安全
+    "E",     # pycodestyle errors
+    "F",     # Pyflakes
+    "G",     # flake8-logging-format
+    "I",     # isort
+    "LOG",   # flake8-logging
+    "N",     # pep8-naming
+    "PERF",  # perflint - 性能优化
+    "PGH",   # pygrep-hooks - type:ignore 必须带代码
+    "PIE",   # flake8-pie
+    "PL",    # pylint
+    "PTH",   # flake8-use-pathlib
+    "RET",   # flake8-return
+    "RUF",   # ruff-specific rules
+    "S",     # flake8-bandit - 安全检查
+    "SIM",   # flake8-simplify
+    "T10",   # flake8-debugger
+    "T20",   # flake8-print
+    "TC",    # flake8-type-checking
+    "TID",   # flake8-tidy-imports
+    "TRY",   # tryceratops - 异常处理最佳实践
+    "UP",    # pyupgrade - 现代语法
+    "W",     # pycodestyle warnings
 ]
 ignore = [
-    "E501",  # line too long (handled by formatter)
+    "E501",    # line too long (handled by formatter)
+    "PLR0913", # too many arguments — 有时不可避免
+    "PLR2004", # magic value comparison — 误报太多
+    "TRY003",  # long exception messages — 有时更清晰
 ]
 
 [tool.ruff.lint.pydocstyle]
@@ -125,6 +147,7 @@ line-ending = "auto"
 
 # ============================================
 # MyPy 配置 - 类型检查
+# 企业级配置 (2026)
 # ============================================
 [tool.mypy]
 python_version = "3.12"
@@ -135,6 +158,9 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 check_untyped_defs = true
 ignore_missing_imports = true
+namespace_packages = true
+show_error_codes = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
 
 # ============================================
 # Pytest 配置 - 测试
