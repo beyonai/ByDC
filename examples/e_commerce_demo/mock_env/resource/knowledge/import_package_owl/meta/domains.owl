@@ -12,7 +12,7 @@
 
     <owl:NamedIndividual rdf:about="#industry_management_domain">
         <rdf:type rdf:resource="#DomainDefinition"/>
-        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN</domain_code>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
         <domain_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业管理</domain_name>
         <parent_domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_domain_code>
         <remark rdf:datatype="http://www.w3.org/2001/XMLSchema#string">亦庄产业大脑企业、网格、产业链联合分析领域</remark>
