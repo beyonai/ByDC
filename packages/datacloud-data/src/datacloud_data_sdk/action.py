@@ -31,9 +31,9 @@ from datacloud_data_sdk.ontology.models import OntologyAction, OntologyActionPar
 def _default_query_output_schema() -> dict[str, object]:
     """
     生成虚拟动作的默认输出 schema
-    
+
     虚拟动作通常返回记录列表和总数，此函数提供标准化的输出格式定义。
-    
+
     Returns:
         dict: 包含 records 数组和 total 整数的 JSON Schema
     """
@@ -68,20 +68,20 @@ PARAM_TYPE_MAP: dict[str, str] = {
 class Action:
     """
     动作实体类，提供 schema 生成与执行能力
-    
+
     Action 是数据服务中执行操作的核心抽象。每个动作对应一个本体中定义的操作，
     可以是数据库查询、API调用或脚本执行。
-    
+
     执行优先级：
         1. is_virtual=True: 执行虚拟查询（动态构建 SQL）
         2. script 存在: 执行脚本代码
         3. function_refs 存在: 调用外部 API
         4. 否则抛出 ActionNotConfiguredError
-    
+
     Attributes:
         _action: 本体动作定义对象
         _loader: 本体加载器，用于获取相关配置和资源
-    
+
     Example:
         action = Action(ontology_action, loader=ontology_loader)
         schema = action.get_schema()
@@ -91,7 +91,7 @@ class Action:
     def __init__(self, ontology_action: OntologyAction, loader: Any = None) -> None:
         """
         初始化动作实体
-        
+
         Args:
             ontology_action: 本体动作定义
             loader: 本体加载器实例，用于获取数据源配置等
@@ -112,10 +112,10 @@ class Action:
     def get_schema(self) -> dict[str, object]:
         """
         生成动作的 JSON Schema
-        
+
         生成包含 name, title, description, inputSchema, outputSchema 的完整 schema。
         结果会被缓存，避免重复计算。
-        
+
         Returns:
             dict: 包含动作元数据和输入输出 schema 的字典
         """
@@ -142,10 +142,10 @@ class Action:
     def _build_schema(self, params: list[OntologyActionParam]) -> dict[str, object]:
         """
         从参数列表构建 JSON Schema
-        
+
         Args:
             params: 动作参数列表
-        
+
         Returns:
             dict: JSON Schema 对象
         """
@@ -169,12 +169,12 @@ class Action:
     def _map_names(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """
         将参数名/别名映射为标准的参数代码
-        
+
         支持使用 param_name 或 alias 作为参数名，自动转换为 param_code。
-        
+
         Args:
             arguments: 原始参数字典，可能使用别名作为键
-        
+
         Returns:
             dict: 键为 param_code 的参数字典
         """
@@ -191,19 +191,19 @@ class Action:
     async def execute(self, params: dict[str, object]) -> dict[str, object]:
         """
         执行动作
-        
+
         完整的执行流程：
         1. 参数映射：将参数名/别名转换为标准 param_code
         2. 术语解析：解析业务术语到实际值
         3. 执行操作：按优先级选择执行方式（虚拟查询/脚本/API）
         4. 结果标准化：统一返回格式
-        
+
         Args:
             params: 执行参数字典
-        
+
         Returns:
             dict: 标准化的执行结果，包含 records, total, meta 等字段
-        
+
         Raises:
             ActionNotConfiguredError: 动作未配置执行方式
         """
@@ -215,6 +215,14 @@ class Action:
             if self._loader
             else None
         )
+
+        from datacloud_data_sdk.result_formatter import build_query_response
+        from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
+
+        cfg = self._loader._config if self._loader else None
+        threshold = cfg.query_result_csv_threshold if cfg else 0
+        preview_rows = cfg.query_result_preview_rows if cfg else 5
+        csv_manager = CsvStorageManager(cfg.csv_base_dir if cfg else "/tmp/datacloud_csv")
 
         if getattr(self._action, "is_virtual", False):
             if term_loader and "filters" in params and isinstance(params.get("filters"), dict):
@@ -229,7 +237,13 @@ class Action:
                         params["filters"], cls.fields
                     )
             result = await self._execute_virtual(params)
-            return self._normalize_to_unified_format(result)
+            normalized = self._normalize_to_unified_format(result)
+            return build_query_response(
+                normalized,
+                csv_manager=csv_manager,
+                threshold=threshold,
+                preview_rows=preview_rows,
+            )
 
         params = self._map_names(params)
         if term_loader:
@@ -239,7 +253,13 @@ class Action:
 
         if self._action.script:
             result = await self._execute_script(params)
-            return self._normalize_to_unified_format(result)
+            normalized = self._normalize_to_unified_format(result)
+            return build_query_response(
+                normalized,
+                csv_manager=csv_manager,
+                threshold=threshold,
+                preview_rows=preview_rows,
+            )
         if self._action.function_refs:
             from datacloud_data_sdk.plan.param_converter import (
                 _to_function_param,
@@ -253,22 +273,28 @@ class Action:
             ]
             physical_params = map_to_physical(params, in_params)
             result = await self._execute_api(physical_params)
-            return self._normalize_to_unified_format(result)
+            normalized = self._normalize_to_unified_format(result)
+            return build_query_response(
+                normalized,
+                csv_manager=csv_manager,
+                threshold=threshold,
+                preview_rows=preview_rows,
+            )
         raise ActionNotConfiguredError(self._action.action_code)
 
     async def _execute_virtual(self, params: dict[str, Any]) -> dict[str, Any]:
         """
         执行虚拟查询动作
-        
+
         虚拟动作不预定义 SQL，而是根据参数动态构建查询。
         通常用于对象的基础查询操作。
-        
+
         Args:
             params: 查询参数，包含 filters, page, page_size 等
-        
+
         Returns:
             dict: 包含 records 和 total 的原始结果
-        
+
         Raises:
             ActionNotConfiguredError: 未配置 loader 时抛出
         """
@@ -286,13 +312,13 @@ class Action:
     async def _execute_script(self, params: dict[str, Any]) -> dict[str, Any]:
         """
         执行脚本动作
-        
+
         通过 ScriptExecutor 执行预定义的脚本代码，
         支持从返回结果中提取记录数据。
-        
+
         Args:
             params: 脚本执行参数
-        
+
         Returns:
             dict: 标准化的结果格式
         """
@@ -328,18 +354,18 @@ class Action:
     async def _execute_api(self, params: dict[str, Any]) -> dict[str, Any]:
         """
         通过 HTTP API 执行动作
-        
+
         调用外部 API 服务执行动作，支持：
         - 自动构建请求 URL 和 headers
         - 请求日志记录（curl 格式）
         - 响应数据提取和标准化
-        
+
         Args:
             params: API 请求参数
-        
+
         Returns:
             dict: 标准化的结果格式
-        
+
         Raises:
             ActionNotConfiguredError: 未配置 function 或 loader
             ApiExecutionError: API 调用失败时抛出
