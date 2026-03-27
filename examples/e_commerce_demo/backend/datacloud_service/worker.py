@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import sys
+from collections import OrderedDict
 
 # 专门针对 Windows 系统切换事件循环策略以兼容 psycopg
 if sys.platform == "win32":
@@ -44,6 +45,9 @@ class DataCloudWorker(GatewayWorker):
         base_url    — OpenAI-compatible base URL（读自 .env OPENAI_BASE_URL）
     """
 
+    # 图实例缓存的最大条目数；超过时淘汰最久未使用的条目
+    _GRAPH_CACHE_MAX: int = 32
+
     def __init__(
         self,
         model_name: str | None = None,
@@ -57,8 +61,8 @@ class DataCloudWorker(GatewayWorker):
         self.model_name = model_name
         self.api_key = api_key
         self.base_url = base_url
-        # 移除了早期的全局单例构图，改为按照 AgentID 动态构图的实例池
-        self.graphs = {}
+        # 使用 OrderedDict 实现 LRU 缓存，防止长期运行内存无限增长
+        self.graphs: OrderedDict = OrderedDict()
 
     def _build_graph(self, prompts_dict: dict | None = None, tools_dict: dict | None = None) -> Any:
         """Instantiate the datacloud-analysis compiled graph with dynamic context."""
@@ -148,8 +152,12 @@ class DataCloudWorker(GatewayWorker):
             "workspace_dir": workspace_dir,
             "gateway_context": context,
             "plan": [],
+            "results": [],
             "intent": "",
             "clarify_needed": False,
+            "query_mode": "analysis",
+            "target_tool": "",
+            "tool_params": {},
         }
 
         # ③ 发送"开始推理"通知
@@ -213,6 +221,17 @@ class DataCloudWorker(GatewayWorker):
                 logger.warning("AgentConfig for %s not found, fallback to defaults.", by_agent_id)
                 target_graph = self._build_graph()  # 兜底创建
             self.graphs[cache_key] = target_graph
+            # LRU 淘汰：超出上限时移除最旧条目
+            while len(self.graphs) > self._GRAPH_CACHE_MAX:
+                evicted_key, _ = self.graphs.popitem(last=False)
+                logger.info(
+                    "Graph cache evicted oldest entry: key=%s (cache_size=%d)",
+                    evicted_key,
+                    len(self.graphs),
+                )
+        else:
+            # 命中缓存：将该条目移到末尾（标记为最近使用）
+            self.graphs.move_to_end(cache_key)
 
         # 确保运行态 state 能拿到当前配置（构图注入 + 运行态兜底）
         state["prompts_overwrite"] = prompts_dict
