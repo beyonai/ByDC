@@ -13,12 +13,22 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from hashlib import md5
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Set, Tuple, cast
+from typing import Any, Dict, FrozenSet, Generator, List, Mapping, Optional, Set, Tuple
+from collections import defaultdict
+
+
 
 from psycopg import Connection as PgConnection
 from psycopg.sql import SQL, Identifier
 from psycopg_pool import ConnectionPool
 
+from .fuzzy import (
+    FuzzySuggestion,
+    FuzzyConfig,
+    UnmatchedSpan,
+    create_matcher,
+    match_all_unmatched,
+)
 from .vocab_cache import VocabularyCache
 
 # ============================================================================
@@ -113,13 +123,18 @@ class SQLKnowledgeGraphQuery:
         # mmap-based cache for vocabulary and name index
         self._cache = VocabularyCache(schema=schema, cache_dir=cache_dir)
         
+        # Fuzzy matching config (using rapidfuzz, no pre-built index needed)
+        self._fuzzy_config: FuzzyConfig = FuzzyConfig()
+        self._fuzzy_stopwords: FrozenSet[str] = frozenset()
+        self._fuzzy_term_metadata: Optional[Mapping[str, Tuple[Tuple[str, str, str], ...]]] = None
+        
         # Query result cache settings
         self._enable_query_cache = enable_query_cache
         self._query_cache_maxsize = query_cache_maxsize
         self._query_cache: Dict[str, Tuple[Dict[str, Any], int]] = {}  # key -> (result, access_count)
         self._cache_order: List[str] = []  # for LRU eviction
+
     def _load_db_config_from_env(self) -> Dict[str, Any]:
-        """Load DB config from environment variables."""
         """Load DB config from environment variables."""
         required = ["DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME"]
         missing = [v for v in required if not os.getenv(v)]
@@ -181,7 +196,7 @@ class SQLKnowledgeGraphQuery:
             fast: If True, skip DB validation for faster startup (default: True)
                   Use fast=False when data might have changed externally
             warm_pool: If True, pre-warm connection pool (default: True)
-            
+        
         Returns:
             True if cache was used, False if rebuilt from DB
         """
@@ -206,6 +221,7 @@ class SQLKnowledgeGraphQuery:
                     if vocab is not None and index is not None:
                         self._vocabulary_set = vocab
                         self._name_index = index
+                        
                         return True  # Cache hit
         
         # 2. Cache miss or force rebuild - load from DB
@@ -231,12 +247,51 @@ class SQLKnowledgeGraphQuery:
                     cur.fetchall()
         except Exception:
             pass  # Ignore errors during warmup
+
+    def _format_knowledge_content(self, summary: Optional[str], desc: Optional[str]) -> str:
+        """Format knowledge summary and description into a single string.
+        
+        Args:
+            summary: Knowledge summary (will be bracketed)
+            desc: Full description
+            
+        Returns:
+            Formatted knowledge string
+        """
+        parts = []
+        if summary:
+            parts.append(f"【{summary}】")
+        if desc:
+            parts.append(desc)
+        return "\n".join(parts) if parts else ""
+    
+    def _ensure_fuzzy_matcher(self) -> None:
+        """Ensure fuzzy matcher is ready for use.
+        
+        rapidfuzz does not require pre-built index, so this just ensures
+        term_metadata is available from name_index.
+        """
+        if self._fuzzy_term_metadata is not None:
+            return  # Already ready
+        
+        if self._name_index is None:
+            return  # No name_index available
+        
+        # Convert name_index to the format expected by create_matcher
+        term_metadata: Dict[str, Tuple[Tuple[str, str, str], ...]] = {
+            name: tuple(postings)
+            for name, postings in self._name_index.items()
+        }
+        
+        (
+            self._fuzzy_term_metadata,
+            self._fuzzy_config,
+            self._fuzzy_stopwords,
+        ) = create_matcher(term_metadata)
+
     def _build_name_index(self) -> Dict[str, List[Tuple[str, str, str]]]:
         """Build name -> term_id index from DB (cached).
-
-        TODO: 存在 OOM（内存溢出）风险。如果 term 表数据量过大（如海量企业/网格实例），
-        全量拉取会导致内存耗尽。后续需要结合 jieba 分词服务和外部索引进行重构。
-
+        
         Uses term_name table to get all names (standard names + aliases)
         based on the term-term_name-term_vocabulary relationship:
         - term: stores term metadata (term_id, term_name as standard name, term_type_code)
@@ -410,8 +465,10 @@ class SQLKnowledgeGraphQuery:
             else:
                 return bmm_result
 
-    def extract_entities(self, query: str) -> List[QueryEntity]:
-        """Extract matching entities from natural language query.
+    def extract_entities(
+        self, query: str
+    ) -> Tuple[List[QueryEntity], List[FuzzySuggestion]]:
+        """Extract matching entities and fuzzy suggestions from query.
 
         Uses Bidirectional Maximum Matching (BIMM) algorithm for word segmentation,
         then maps matched words to term entities via name_index.
@@ -421,17 +478,26 @@ class SQLKnowledgeGraphQuery:
         Algorithm:
         1. Apply bidirectional max matching to segment query
         2. Map matched words to term entities (dedupe by term_id)
+        3. Collect unmatched spans and perform fuzzy matching
+
+        Returns:
+            (entities, fuzzy_suggestions) tuple where:
+            - entities: List of exactly matched QueryEntity (for graph queries)
+            - fuzzy_suggestions: List of FuzzySuggestion for display only
         """
         # Ensure vocabulary and name_index are loaded
         if self._vocabulary_set is None or self._name_index is None:
             # Auto-prewarm if not done yet
             self.prewarm()
-        
+
         vocab = self._vocabulary_set
         name_index = self._name_index
-        
+
         # Apply bidirectional maximum matching
         matched_words = self._bidirectional_max_match(query, vocab or set())
+
+        # Initialize fuzzy_suggestions as empty list
+        fuzzy_suggestions: List[FuzzySuggestion] = []
 
         # Dedupe by term_id while iterating, O(1) lookup
         # term_id -> (word, term_type, match_type)
@@ -446,8 +512,8 @@ class SQLKnowledgeGraphQuery:
                 if term_id not in seen:
                     seen[term_id] = (word, term_type, match_type)
 
-        # Create entity objects once
-        entities = [
+        # Create entity objects
+        entities: List[QueryEntity] = [
             QueryEntity(
                 name=data[0],
                 node_id=term_id,
@@ -459,7 +525,76 @@ class SQLKnowledgeGraphQuery:
             for term_id, data in seen.items()
         ]
 
-        return entities
+        # Perform fuzzy matching on unmatched spans
+        fuzzy_suggestions = self._fuzzy_match_unmatched(query, matched_words, name_index)
+
+        return entities, fuzzy_suggestions
+
+    def _fuzzy_match_unmatched(
+        self,
+        query: str,
+        matched_words: List[Tuple[str, int, int]],
+        name_index: Optional[Dict[str, List[Tuple[str, str, str]]]]
+    ) -> List[FuzzySuggestion]:
+        """Perform fuzzy matching on unmatched text spans.
+
+        Finds contiguous regions of the query that were NOT covered by exact matches,
+        then performs fuzzy matching using rapidfuzz.
+
+        Args:
+            query: The original query string
+            matched_words: List of (word, start, end) tuples from bidirectional max matching
+            name_index: Name index for checking if words are valid matches
+
+        Returns:
+            List of FuzzySuggestion for display (not used in graph queries)
+        """
+        # Build a set of covered character positions
+        covered_positions: Set[int] = set()
+        for word, start, end in matched_words:
+            if name_index is not None and word in name_index:
+                covered_positions.update(range(start, end))
+
+        # Find uncovered contiguous regions
+        unmatched_spans: List[UnmatchedSpan] = []
+        if len(covered_positions) < len(query):
+            i = 0
+            while i < len(query):
+                if i not in covered_positions:
+                    start = i
+                    while i < len(query) and i not in covered_positions:
+                        i += 1
+                    end = i
+                    if end - start >= 2:
+                        unmatched_text = query[start:end].strip()
+                        # Strip various quote characters
+                        quotes = '"\'\'“”\'\''
+                        unmatched_text = unmatched_text.strip(quotes)
+                        if len(unmatched_text) >= 2:
+                            unmatched_spans.append(UnmatchedSpan(
+                                text=unmatched_text,
+                                start=start,
+                                end=end
+                            )),
+                else:
+                    i += 1
+
+        # Perform fuzzy matching
+        if not unmatched_spans:
+            return []
+
+        self._ensure_fuzzy_matcher()
+        if self._fuzzy_term_metadata is None:
+            return []
+
+        return list(match_all_unmatched(
+            spans=tuple(unmatched_spans),
+            term_metadata=self._fuzzy_term_metadata,
+            config=self._fuzzy_config,
+            stopwords=self._fuzzy_stopwords,
+        ))
+
+
     def query_n_hop_subgraph(
         self,
         entity: QueryEntity,
@@ -565,23 +700,6 @@ class SQLKnowledgeGraphQuery:
                         """).format(Identifier(self.schema)),
                         (list(nodes.keys()),),
                     )
-                # This is more efficient than JOIN in recursive CTE
-                    cur.execute(
-                        SQL("""
-                        SELECT term_id, knowledge_id, desc_summary, "desc"
-                        FROM {}.term_knowledge
-                        WHERE term_id = ANY(%s)
-                        """).format(Identifier(self.schema)),
-                        (list(nodes.keys()),),
-                    )
-                    cur.execute(
-                        SQL("""
-                        SELECT term_id, knowledge_id, desc_summary, "desc"
-                        FROM {}.term_knowledge
-                        WHERE term_id = ANY(%s)
-                        """).format(Identifier(self.schema)),
-                        (list(nodes.keys()),),
-                    )
                     knowledge_rows = cur.fetchall()
                     
                     # Group knowledge by term_id (one term can have multiple knowledge)
@@ -591,13 +709,9 @@ class SQLKnowledgeGraphQuery:
                         k_term_id, k_id, k_summary, k_desc = k_row
                         if k_term_id not in knowledge_map:
                             knowledge_map[k_term_id] = []
-                        # Combine summary and full desc into one formatted string
-                        parts = []
-                        if k_summary:
-                            parts.append(f"【{k_summary}】")
-                        if k_desc:
-                            parts.append(k_desc)
-                        knowledge_map[k_term_id].append("\n".join(parts) if parts else "")
+                        knowledge_map[k_term_id].append(
+                            self._format_knowledge_content(k_summary, k_desc)
+                        )
                     
                     # Attach knowledge to nodes
                     for term_id, node in nodes.items():
@@ -767,13 +881,14 @@ class SQLKnowledgeGraphQuery:
             if cached is not None:
                 return cached
         
-        # 1. Extract entities
-        entities = self.extract_entities(natural_language)
+        # 1. Extract entities and fuzzy suggestions
+        entities, fuzzy_suggestions = self.extract_entities(natural_language)
 
-        if not entities:
+        if not entities and not fuzzy_suggestions:
             return {
                 "query": natural_language,
                 "entities_found": [],
+                "fuzzy_suggestions": [],
                 "results": [],
                 "message": "未找到匹配的实体",
             }
@@ -792,6 +907,22 @@ class SQLKnowledgeGraphQuery:
                     "match_score": e.match_score,
                 }
                 for e in entities
+            ],
+            "fuzzy_suggestions": [
+                {
+                    "original": fs.span.text,
+                    "matches": [
+                        {
+                            "term": m.term,
+                            "term_id": m.term_id,
+                            "term_type": m.term_type,
+                            "similarity": m.similarity,
+                            "edit_distance": m.edit_distance,
+                        }
+                        for m in fs.matches
+                    ],
+                }
+                for fs in fuzzy_suggestions
             ],
             "n_hops": hops,
             "results": results,
@@ -914,7 +1045,6 @@ class SQLKnowledgeGraphQuery:
                 cur.execute(sql)  # type: ignore[arg-type]
                 rows = cur.fetchall()
         # Group results by source_id and build knowledge_map
-        from collections import defaultdict
         results_by_source: Dict[str, List] = defaultdict(list)
         knowledge_map: Dict[str, List[str]] = {}
         
@@ -926,12 +1056,9 @@ class SQLKnowledgeGraphQuery:
             if include_knowledge and (k_summary or k_desc):
                 if term_id not in knowledge_map:
                     knowledge_map[term_id] = []
-                parts = []
-                if k_summary:
-                    parts.append(f"【{k_summary}】")
-                if k_desc:
-                    parts.append(k_desc)
-                knowledge_map[term_id].append("\n".join(parts) if parts else "")
+                knowledge_map[term_id].append(
+                    self._format_knowledge_content(k_summary, k_desc)
+                )
         
         # Build subgraph results for each entity
         results = []
@@ -1065,19 +1192,33 @@ class SQLKnowledgeGraphQuery:
         lines.append(f"查询: {result.get('query', '')}")
 
         entities = result.get("entities_found", [])
-        if not entities:
+        fuzzy_suggestions = result.get("fuzzy_suggestions", [])
+
+        # 只有两个都为空才算真正没找到
+        if not entities and not fuzzy_suggestions:
             lines.append("未找到匹配的实体")
             return "\n".join(lines)
 
-        lines.append(f"识别到 {len(entities)} 个实体:")
-        for i, entity in enumerate(entities, 1):
-            match_type_str = "精确匹配" if entity.get("match_type") == "standard_name" else "别名匹配"
-            lines.append(f"  {i}. {entity['name']} ({entity['node_type']}) - {match_type_str}")
+        # 显示精确匹配（entities 只包含标准名称和别名匹配）
+        if entities:
+            lines.append(f"精确匹配 ({len(entities)} 个):")
+            for i, entity in enumerate(entities, 1):
+                match_type_str = "精确匹配" if entity.get("match_type") == "standard_name" else "别名匹配"
+                lines.append(f"  {i}. {entity['name']} ({entity['node_type']}) - {match_type_str}")
+
+        # 显示模糊推荐（独立的数据结构，不在 entities 中）
+        if fuzzy_suggestions:
+            lines.append(f"\n模糊推荐 ({len(fuzzy_suggestions)} 个):")
+            for sugg in fuzzy_suggestions:
+                original = sugg.get("original", "")
+                matches = sugg.get("matches", [])
+                if matches:
+                    lines.append(f'  "{original}" 可能匹配:')
+                    for m in matches:
+                        sim_pct = int(m.get("similarity", 0) * 100)
+                        lines.append(f'    → {m["term"]} ({m["term_type"]}) 相似度 {sim_pct}%')
 
         results = result.get("results", [])
-        if not results:
-            lines.append("\n未返回子图结果")
-            return "\n".join(lines)
 
         for i, subgraph in enumerate(results, 1):
             center_entity = subgraph.get("center_entity", {})
@@ -1173,7 +1314,7 @@ _singleton_service: Optional[SQLKnowledgeGraphQuery] = None
 _singleton_n_hops: int = 4
 
 
-def get_singleton_service(n_hops: int = 4, fast: bool = True) -> SQLKnowledgeGraphQuery:
+def get_singleton_service(n_hops: int = 4, fast: bool = True, warm_pool: bool = False) -> SQLKnowledgeGraphQuery:
     """Get or create singleton service instance with prewarm.
     
     This is the recommended way to get a service instance for
@@ -1184,7 +1325,10 @@ def get_singleton_service(n_hops: int = 4, fast: bool = True) -> SQLKnowledgeGra
         n_hops: Default number of hops for queries
         fast: If True, skip DB validation for faster startup (default: True)
               Use fast=False when data might have changed externally
-        
+        warm_pool: If True, pre-warm connection pool (default: False).
+                   Connection pool warmup takes ~0.5s. Set to True only if
+                   you expect many queries in quick succession.
+    
     Returns:
         Pre-warmed SQLKnowledgeGraphQuery instance
     """
@@ -1194,7 +1338,8 @@ def get_singleton_service(n_hops: int = 4, fast: bool = True) -> SQLKnowledgeGra
         _singleton_service = SQLKnowledgeGraphQuery(default_hops=n_hops)
         _singleton_n_hops = n_hops
         # Prewarm: load vocabulary and name_index into memory
-        _singleton_service.prewarm(fast=fast)
+        # By default, skip pool warmup for faster first query
+        _singleton_service.prewarm(fast=fast, warm_pool=warm_pool)
     
     return _singleton_service
 
