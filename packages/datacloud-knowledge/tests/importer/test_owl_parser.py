@@ -28,19 +28,19 @@ RELATION_OWL = SAMPLE_DIR / "relations/relation.owl"
 class TestParseDomainOwl:
     """测试 domain OWL 文件解析。"""
 
-    def test_parse_domain_returns_single_entity(self):
+    def test_parse_domain_returns_single_entity(self) -> None:
         """测试解析 domains.owl 返回一个 domain 实体。"""
         entities = parse_owl_file(DOMAINS_OWL)
 
         assert len(entities) == 1
 
-    def test_parse_domain_entity_type(self):
+    def test_parse_domain_entity_type(self) -> None:
         """测试实体类型为 domain。"""
         entities = parse_owl_file(DOMAINS_OWL)
 
         assert entities[0]["entity_type"] == "domain"
 
-    def test_parse_domain_properties(self):
+    def test_parse_domain_properties(self) -> None:
         """测试 domain 实体的属性。"""
         entity = parse_owl_file(DOMAINS_OWL)[0]
 
@@ -54,19 +54,19 @@ class TestParseDomainOwl:
 class TestParseLibraryOwl:
     """测试 library OWL 文件解析。"""
 
-    def test_parse_library_returns_single_entity(self):
+    def test_parse_library_returns_single_entity(self) -> None:
         """测试解析 library.owl 返回一个 library 实体。"""
         entities = parse_owl_file(LIBRARY_OWL)
 
         assert len(entities) == 1
 
-    def test_parse_library_entity_type(self):
+    def test_parse_library_entity_type(self) -> None:
         """测试实体类型为 library。"""
         entities = parse_owl_file(LIBRARY_OWL)
 
         assert entities[0]["entity_type"] == "library"
 
-    def test_parse_library_properties(self):
+    def test_parse_library_properties(self) -> None:
         """测试 library 实体的属性。"""
         entity = parse_owl_file(LIBRARY_OWL)[0]
 
@@ -79,20 +79,20 @@ class TestParseLibraryOwl:
 class TestParseTermTypeOwl:
     """测试 term_type OWL 文件解析，包含 typo 兼容测试。"""
 
-    def test_parse_term_type_returns_multiple_entities(self):
+    def test_parse_term_type_returns_multiple_entities(self) -> None:
         """测试解析 term_types.owl 返回多个 term_type 实体。"""
         entities = parse_owl_file(TERM_TYPES_OWL)
 
         assert len(entities) == 7
 
-    def test_parse_term_type_entity_type(self):
+    def test_parse_term_type_entity_type(self) -> None:
         """测试实体类型为 term_type。"""
         entities = parse_owl_file(TERM_TYPES_OWL)
 
         for entity in entities:
             assert entity["entity_type"] == "term_type"
 
-    def test_parse_term_type_typo_aliases(self):
+    def test_parse_term_type_typo_aliases(self) -> None:
         """测试已知 typo 别名被正确映射。"""
         entity = parse_owl_file(TERM_TYPES_OWL)[0]
 
@@ -103,7 +103,7 @@ class TestParseTermTypeOwl:
         assert "term_type_desc" in entity
         assert "term_data_type" in entity
 
-    def test_parse_term_type_first_entity_properties(self):
+    def test_parse_term_type_first_entity_properties(self) -> None:
         """测试第一个 term_type 实体的属性。"""
         entity = parse_owl_file(TERM_TYPES_OWL)[0]
 
@@ -118,19 +118,19 @@ class TestParseTermTypeOwl:
 class TestParseTermOwl:
     """测试 term OWL 文件解析。"""
 
-    def test_parse_term_returns_single_entity(self):
+    def test_parse_term_returns_single_entity(self) -> None:
         """测试解析 terms.owl 返回一个 term 实体。"""
         entities = parse_owl_file(TERMS_OWL)
 
         assert len(entities) == 1
 
-    def test_parse_term_entity_type(self):
+    def test_parse_term_entity_type(self) -> None:
         """测试实体类型为 term。"""
         entities = parse_owl_file(TERMS_OWL)
 
         assert entities[0]["entity_type"] == "term"
 
-    def test_parse_term_properties(self):
+    def test_parse_term_properties(self) -> None:
         """测试 term 实体的属性。"""
         entity = parse_owl_file(TERMS_OWL)[0]
 
@@ -149,19 +149,19 @@ class TestParseTermOwl:
 class TestParseRelationOwl:
     """测试 relation OWL 文件解析，包含 typo 兼容测试。"""
 
-    def test_parse_relation_returns_single_entity(self):
+    def test_parse_relation_returns_single_entity(self) -> None:
         """测试解析 relation.owl 返回一个 relation 实体。"""
         entities = parse_owl_file(RELATION_OWL)
 
         assert len(entities) == 1
 
-    def test_parse_relation_entity_type(self):
+    def test_parse_relation_entity_type(self) -> None:
         """测试实体类型为 relation。"""
         entities = parse_owl_file(RELATION_OWL)
 
         assert entities[0]["entity_type"] == "relation"
 
-    def test_parse_relation_typo_aliases(self):
+    def test_parse_relation_typo_aliases(self) -> None:
         """测试 relation 中的 typo 别名被正确映射。"""
         entity = parse_owl_file(RELATION_OWL)[0]
 
@@ -169,7 +169,7 @@ class TestParseRelationOwl:
         assert "source_library" in entity
         assert "target_library" in entity
 
-    def test_parse_relation_properties(self):
+    def test_parse_relation_properties(self) -> None:
         """测试 relation 实体的属性。"""
         entity = parse_owl_file(RELATION_OWL)[0]
 
@@ -189,7 +189,7 @@ class TestParseRelationOwl:
 class TestParseEmptyAndMalformed:
     """测试空文件和格式错误文件的处理。"""
 
-    def test_parse_empty_file_returns_empty_list(self):
+    def test_parse_empty_file_returns_empty_list(self) -> None:
         """测试解析空文件返回空列表。"""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".owl", delete=False) as f:
             f.write("")
@@ -201,7 +201,7 @@ class TestParseEmptyAndMalformed:
         finally:
             temp_path.unlink()
 
-    def test_parse_whitespace_only_file_returns_empty_list(self):
+    def test_parse_whitespace_only_file_returns_empty_list(self) -> None:
         """测试解析仅包含空白的文件返回空列表。"""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".owl", delete=False) as f:
             f.write("   \n\t\n   ")
@@ -213,7 +213,7 @@ class TestParseEmptyAndMalformed:
         finally:
             temp_path.unlink()
 
-    def test_parse_malformed_xml_raises_owl_parse_error(self):
+    def test_parse_malformed_xml_raises_owl_parse_error(self) -> None:
         """测试解析格式错误的 XML 抛出 OWLParseError。"""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".owl", delete=False) as f:
             f.write('<?xml version="1.0"?><invalid>')
@@ -229,7 +229,7 @@ class TestParseEmptyAndMalformed:
 class TestParseErrorHandling:
     """测试解析错误处理。"""
 
-    def test_parse_file_without_entity_type_raises_error(self):
+    def test_parse_file_without_entity_type_raises_error(self) -> None:
         """测试解析没有实体类型的 NamedIndividual 抛出 OWLParseError。"""
         content = """<?xml version="1.0"?>
 <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
