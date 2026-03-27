@@ -57,4 +57,3 @@ class TermType(Base):
     type_desc: Mapped[str | None] = mapped_column(Text, nullable=True)
     type_category: Mapped[int] = mapped_column(nullable=False)
     is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-
