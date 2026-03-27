@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import contextlib
 import json
-import os
 import tempfile
 from pathlib import Path
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
-from ..errors import FileNotFoundInStore
-from ..types import JsonDict, PutOutcome
+from datacloud_knowledge.file_store.errors import FileNotFoundInStoreError
+from datacloud_knowledge.file_store.types import JsonDict, PutOutcome
 
 
 def _shard(md5: str) -> tuple[str, str]:
@@ -43,7 +43,7 @@ class LocalFileBackend:
         content_path = self._content_path(directory=directory, md5=md5)
         content_path.parent.mkdir(parents=True, exist_ok=True)
 
-        tmp_file = None
+        tmp_file: str | None = None
         try:
             with tempfile.NamedTemporaryFile(delete=False, dir=str(content_path.parent)) as f:
                 tmp_file = f.name
@@ -53,21 +53,19 @@ class LocalFileBackend:
                         break
                     f.write(chunk)
 
-            os.replace(tmp_file, content_path)
+            Path(tmp_file).replace(content_path)
             tmp_file = None
         finally:
             if tmp_file:
-                try:
-                    os.unlink(tmp_file)
-                except OSError:
-                    pass
+                with contextlib.suppress(OSError):
+                    Path(tmp_file).unlink()
 
         index_path.parent.mkdir(parents=True, exist_ok=True)
-        index: JsonDict = {
+        idx: JsonDict = {
             "canonical_directory": directory,
             "meta": {**meta, "directory": directory},
         }
-        self._write_json_atomic(index_path, index)
+        self._write_json_atomic(index_path, idx)
         return PutOutcome(wrote_content=True, canonical_directory=directory)
 
     def get(self, md5: str) -> tuple[BinaryIO, JsonDict]:
@@ -76,7 +74,7 @@ class LocalFileBackend:
         meta = dict(index["meta"])
         content_path = self._content_path(directory=directory, md5=md5)
         if not content_path.exists():
-            raise FileNotFoundInStore(md5)
+            raise FileNotFoundInStoreError(md5)
         return content_path.open("rb"), meta
 
     def get_meta(self, md5: str) -> JsonDict:
@@ -105,26 +103,25 @@ class LocalFileBackend:
     def _read_index(self, md5: str) -> JsonDict:
         index_path = self._index_path(md5)
         if not index_path.exists():
-            raise FileNotFoundInStore(md5)
+            raise FileNotFoundInStoreError(md5)
         return self._read_json(index_path)
 
-    def _read_json(self, path: Path) -> JsonDict:
+    def _read_json(self, path: Path) -> dict[str, Any]:
         with path.open("r", encoding="utf-8") as f:
-            return json.load(f)
+            return json.load(f)  # type: ignore[no-any-return]
 
     def _write_json_atomic(self, path: Path, obj: JsonDict) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = None
+        tmp: str | None = None
         try:
-            with tempfile.NamedTemporaryFile("w", delete=False, dir=str(path.parent), encoding="utf-8") as f:
+            with tempfile.NamedTemporaryFile(
+                "w", delete=False, dir=str(path.parent), encoding="utf-8"
+            ) as f:
                 tmp = f.name
                 json.dump(obj, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, path)
+            Path(tmp).replace(path)
             tmp = None
         finally:
             if tmp:
-                try:
-                    os.unlink(tmp)
-                except OSError:
-                    pass
-
+                with contextlib.suppress(OSError):
+                    Path(tmp).unlink()
