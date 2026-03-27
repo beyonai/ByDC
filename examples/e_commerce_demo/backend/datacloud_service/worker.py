@@ -247,12 +247,7 @@ class DataCloudWorker(GatewayWorker):
                     content_type=SseReasonMessageType.task_finished.value,
                 )
 
-        # ⑤ 推理结束通知
-        await context.emit_chunk(
-            StreamChunkEvent(content="思考完成"),
-            event_type=EventType.REASONING_LOG_END.value,
-            content_type=SseReasonMessageType.think_title.value,
-        )
+        # ⑤ 推理结束由 insight_node 在首次 answerDelta 之前发出（见 insight._emit_reasoning_log_end_before_answer）
 
         # ⑥ 回答结束通知
         await context.emit_chunk(
