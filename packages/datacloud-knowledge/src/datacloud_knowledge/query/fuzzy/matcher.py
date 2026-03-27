@@ -10,15 +10,15 @@
 
 from __future__ import annotations
 
-from typing import FrozenSet, Mapping, Tuple
+from collections.abc import Mapping
 
 from .rapidfuzz_matcher import create_rapidfuzz_matcher, rapidfuzz_lookup
-from .types import FuzzyMatch, FuzzySuggestion, FuzzyConfig, UnmatchedSpan
+from .types import FuzzyConfig, FuzzyMatch, FuzzySuggestion, UnmatchedSpan
 
 
 def filter_stopwords(
-    spans: Tuple[UnmatchedSpan, ...], stopwords: FrozenSet[str]
-) -> Tuple[UnmatchedSpan, ...]:
+    spans: tuple[UnmatchedSpan, ...], stopwords: frozenset[str]
+) -> tuple[UnmatchedSpan, ...]:
     """过滤停用词片段。
 
     Args:
@@ -33,7 +33,7 @@ def filter_stopwords(
 
 def match_unmatched_span(
     span: UnmatchedSpan,
-    term_metadata: Mapping[str, Tuple[Tuple[str, str, str], ...]],
+    term_metadata: Mapping[str, tuple[tuple[str, str, str], ...]],
     config: FuzzyConfig,
 ) -> FuzzySuggestion:
     """对单个未匹配片段进行模糊匹配。
@@ -81,11 +81,11 @@ def match_unmatched_span(
 
 
 def match_all_unmatched(
-    spans: Tuple[UnmatchedSpan, ...],
-    term_metadata: Mapping[str, Tuple[Tuple[str, str, str], ...]],
+    spans: tuple[UnmatchedSpan, ...],
+    term_metadata: Mapping[str, tuple[tuple[str, str, str], ...]],
     config: FuzzyConfig,
-    stopwords: FrozenSet[str] = frozenset(),
-) -> Tuple[FuzzySuggestion, ...]:
+    stopwords: frozenset[str] = frozenset(),
+) -> tuple[FuzzySuggestion, ...]:
     """对所有未匹配片段进行模糊匹配。
 
     Args:
@@ -114,7 +114,7 @@ def match_all_unmatched(
 # 默认停用词
 # ============================================================================
 
-DEFAULT_STOPWORDS: FrozenSet[str] = frozenset(
+DEFAULT_STOPWORDS: frozenset[str] = frozenset(
     {
         "的",
         "了",
@@ -177,13 +177,13 @@ DEFAULT_STOPWORDS: FrozenSet[str] = frozenset(
 
 
 def create_matcher(
-    term_metadata: Mapping[str, Tuple[Tuple[str, str, str], ...]],
+    term_metadata: Mapping[str, tuple[tuple[str, str, str], ...]],
     config: FuzzyConfig | None = None,
-    stopwords: FrozenSet[str] | None = None,
-) -> Tuple[
-    Mapping[str, Tuple[Tuple[str, str, str], ...]],  # term_metadata
+    stopwords: frozenset[str] | None = None,
+) -> tuple[
+    Mapping[str, tuple[tuple[str, str, str], ...]],  # term_metadata
     FuzzyConfig,  # config
-    FrozenSet[str],  # stopwords
+    frozenset[str],  # stopwords
 ]:
     """创建模糊匹配器所需的全部组件。
 
@@ -204,4 +204,3 @@ def create_matcher(
 
     _, config = create_rapidfuzz_matcher(term_metadata, config)
     return (term_metadata, config, stopwords)
-
