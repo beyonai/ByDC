@@ -60,10 +60,16 @@ async def run_agent(
             "agent_id": None,
             "agent_name": None,
             "workspace_dir": workspace_dir,
+            "gateway_context": None,
             "plan": [],
             "intent": None,
             "clarify_needed": False,
             "results": [],
+            "query_mode": "analysis",
+            "target_tool": "",
+            "tool_params": {},
+            "dynamic_tools": {},
+            "prompts_overwrite": {},
         }
 
     async for event in compiled.astream(
