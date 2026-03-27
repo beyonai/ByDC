@@ -9,22 +9,21 @@ Requires: psycopg[binary,pool]>=3.1
 from __future__ import annotations
 
 import os
+from collections import defaultdict
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from hashlib import md5
 from pathlib import Path
-from typing import Any, Dict, FrozenSet, Generator, List, Mapping, Optional, Set, Tuple
-from collections import defaultdict
-
-
+from typing import Any
 
 from psycopg import Connection as PgConnection
 from psycopg.sql import SQL, Identifier
 from psycopg_pool import ConnectionPool
 
 from .fuzzy import (
-    FuzzySuggestion,
     FuzzyConfig,
+    FuzzySuggestion,
     UnmatchedSpan,
     create_matcher,
     match_all_unmatched,
@@ -35,13 +34,14 @@ from .vocab_cache import VocabularyCache
 # Data Classes
 # ============================================================================
 
+
 @dataclass
 class QueryEntity:
     """查询识别的实体"""
 
     name: str  # 实体名称
-    node_id: Optional[str] = None  # 图中节点ID
-    node_type: Optional[str] = None  # 节点类型
+    node_id: str | None = None  # 图中节点ID
+    node_type: str | None = None  # 节点类型
     match_score: float = 0.0  # 匹配分数
     match_type: str = ""  # 匹配类型: exact, alias, pinyin, index_match
     matched_text: str = ""  # 在查询中匹配到的文本
@@ -54,8 +54,8 @@ class TreeNode:
     id: str
     name: str
     node_type: str
-    properties: Dict[str, Any] = field(default_factory=dict)
-    children: List["TreeNode"] = field(default_factory=list)
+    properties: dict[str, Any] = field(default_factory=dict)
+    children: list[TreeNode] = field(default_factory=list)
     relation: str = ""  # 与父节点的关系
     level: int = 0
 
@@ -65,10 +65,10 @@ class SubgraphResult:
     """子图查询结果"""
 
     center_entity: QueryEntity
-    nodes: List[Dict[str, Any]] = field(default_factory=list)
-    edges: List[Dict[str, Any]] = field(default_factory=list)
+    nodes: list[dict[str, Any]] = field(default_factory=list)
+    edges: list[dict[str, Any]] = field(default_factory=list)
     hops: int = 0
-    tree: Optional[TreeNode] = None
+    tree: TreeNode | None = None
 
 
 # ============================================================================
@@ -88,12 +88,12 @@ class SQLKnowledgeGraphQuery:
 
     def __init__(
         self,
-        db_config: Optional[Dict[str, Any]] = None,
+        db_config: dict[str, Any] | None = None,
         schema: str = "whale_datacloud",
         default_hops: int = 4,
         pool_min: int = 2,
         pool_max: int = 10,
-        cache_dir: Optional[Path] = None,
+        cache_dir: Path | None = None,
         enable_query_cache: bool = True,
         query_cache_maxsize: int = 1000,
     ):
@@ -114,27 +114,29 @@ class SQLKnowledgeGraphQuery:
         self.schema = schema
         self.default_hops = default_hops
         self.db_config = db_config or self._load_db_config_from_env()
-        self._name_index: Optional[Dict[str, List[Tuple[str, str, str]]]] = None
-        self._vocabulary_set: Optional[Set[str]] = None
-        self._pool: Optional["ConnectionPool"] = None
+        self._name_index: dict[str, list[tuple[str, str, str]]] | None = None
+        self._vocabulary_set: set[str] | None = None
+        self._pool: ConnectionPool | None = None
         self._pool_min = pool_min
         self._pool_max = pool_max
-        
+
         # mmap-based cache for vocabulary and name index
         self._cache = VocabularyCache(schema=schema, cache_dir=cache_dir)
-        
+
         # Fuzzy matching config (using rapidfuzz, no pre-built index needed)
         self._fuzzy_config: FuzzyConfig = FuzzyConfig()
-        self._fuzzy_stopwords: FrozenSet[str] = frozenset()
-        self._fuzzy_term_metadata: Optional[Mapping[str, Tuple[Tuple[str, str, str], ...]]] = None
-        
+        self._fuzzy_stopwords: frozenset[str] = frozenset()
+        self._fuzzy_term_metadata: Mapping[str, tuple[tuple[str, str, str], ...]] | None = None
+
         # Query result cache settings
         self._enable_query_cache = enable_query_cache
         self._query_cache_maxsize = query_cache_maxsize
-        self._query_cache: Dict[str, Tuple[Dict[str, Any], int]] = {}  # key -> (result, access_count)
-        self._cache_order: List[str] = []  # for LRU eviction
+        self._query_cache: dict[
+            str, tuple[dict[str, Any], int]
+        ] = {}  # key -> (result, access_count)
+        self._cache_order: list[str] = []  # for LRU eviction
 
-    def _load_db_config_from_env(self) -> Dict[str, Any]:
+    def _load_db_config_from_env(self) -> dict[str, Any]:
         """Load DB config from environment variables."""
         required = ["DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME"]
         missing = [v for v in required if not os.getenv(v)]
@@ -149,7 +151,7 @@ class SQLKnowledgeGraphQuery:
             "database": os.environ["DB_NAME"],
         }
 
-    def _get_pool(self) -> "ConnectionPool":
+    def _get_pool(self) -> ConnectionPool:
         """Get or create connection pool."""
         if self._pool is None:
             if ConnectionPool is None:
@@ -175,7 +177,7 @@ class SQLKnowledgeGraphQuery:
 
     def close(self, timeout: float = 0.5) -> None:
         """Close connection pool.
-        
+
         Args:
             timeout: Max seconds to wait for pool to close (default: 0.5s)
         """
@@ -186,17 +188,20 @@ class SQLKnowledgeGraphQuery:
             except Exception:
                 pass
             self._pool = None
-    def prewarm(self, force_rebuild: bool = False, fast: bool = True, warm_pool: bool = True) -> bool:
+
+    def prewarm(
+        self, force_rebuild: bool = False, fast: bool = True, warm_pool: bool = True
+    ) -> bool:
         """Pre-warm indexes and connection pool for faster subsequent queries.
-        
+
         Uses mmap cache to avoid reloading from DB on restart.
-        
+
         Args:
             force_rebuild: If True, ignore cache and rebuild from DB
             fast: If True, skip DB validation for faster startup (default: True)
                   Use fast=False when data might have changed externally
             warm_pool: If True, pre-warm connection pool (default: True)
-        
+
         Returns:
             True if cache was used, False if rebuilt from DB
         """
@@ -208,11 +213,11 @@ class SQLKnowledgeGraphQuery:
                 if vocab is not None and index is not None:
                     self._vocabulary_set = vocab
                     self._name_index = index
-                    
+
                     # Warm connection pool if requested
                     if warm_pool:
                         self._warm_connection_pool()
-                    
+
                     return True  # Cache hit (fast)
             else:
                 # Safe mode: validate with DB
@@ -221,40 +226,39 @@ class SQLKnowledgeGraphQuery:
                     if vocab is not None and index is not None:
                         self._vocabulary_set = vocab
                         self._name_index = index
-                        
+
                         return True  # Cache hit
-        
+
         # 2. Cache miss or force rebuild - load from DB
         self._build_name_index()
         self._build_vocabulary_set()
-        
+
         # 3. Save to mmap cache
         with self._connect() as conn:
             self._cache.save(conn, self._vocabulary_set or set(), self._name_index or {})
-        
+
         return False  # Cache miss, rebuilt from DB
-    
+
     def _warm_connection_pool(self) -> None:
         """Warm up connection pool by executing a simple query.
-        
+
         This establishes connections in the pool upfront,
         so subsequent queries don't pay the connection setup cost.
         """
         try:
-            with self._connect() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(f"SELECT 1 FROM {self.schema}.term LIMIT 1")  # type: ignore[arg-type]
-                    cur.fetchall()
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(f"SELECT 1 FROM {self.schema}.term LIMIT 1")
+                cur.fetchall()
         except Exception:
             pass  # Ignore errors during warmup
 
-    def _format_knowledge_content(self, summary: Optional[str], desc: Optional[str]) -> str:
+    def _format_knowledge_content(self, summary: str | None, desc: str | None) -> str:
         """Format knowledge summary and description into a single string.
-        
+
         Args:
             summary: Knowledge summary (will be bracketed)
             desc: Full description
-            
+
         Returns:
             Formatted knowledge string
         """
@@ -264,34 +268,33 @@ class SQLKnowledgeGraphQuery:
         if desc:
             parts.append(desc)
         return "\n".join(parts) if parts else ""
-    
+
     def _ensure_fuzzy_matcher(self) -> None:
         """Ensure fuzzy matcher is ready for use.
-        
+
         rapidfuzz does not require pre-built index, so this just ensures
         term_metadata is available from name_index.
         """
         if self._fuzzy_term_metadata is not None:
             return  # Already ready
-        
+
         if self._name_index is None:
             return  # No name_index available
-        
+
         # Convert name_index to the format expected by create_matcher
-        term_metadata: Dict[str, Tuple[Tuple[str, str, str], ...]] = {
-            name: tuple(postings)
-            for name, postings in self._name_index.items()
+        term_metadata: dict[str, tuple[tuple[str, str, str], ...]] = {
+            name: tuple(postings) for name, postings in self._name_index.items()
         }
-        
+
         (
             self._fuzzy_term_metadata,
             self._fuzzy_config,
             self._fuzzy_stopwords,
         ) = create_matcher(term_metadata)
 
-    def _build_name_index(self) -> Dict[str, List[Tuple[str, str, str]]]:
+    def _build_name_index(self) -> dict[str, list[tuple[str, str, str]]]:
         """Build name -> term_id index from DB (cached).
-        
+
         Uses term_name table to get all names (standard names + aliases)
         based on the term-term_name-term_vocabulary relationship:
         - term: stores term metadata (term_id, term_name as standard name, term_type_code)
@@ -304,13 +307,12 @@ class SQLKnowledgeGraphQuery:
         if self._name_index is not None:
             return self._name_index
 
-        index: Dict[str, List[Tuple[str, str, str]]] = {}
+        index: dict[str, list[tuple[str, str, str]]] = {}
 
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                # Query all names from term_name table joined with term table
-                # to get term_type_code and determine if it's a standard name or alias
-                query = f"""
+        with self._connect() as conn, conn.cursor() as cur:
+            # Query all names from term_name table joined with term table
+            # to get term_type_code and determine if it's a standard name or alias
+            query = f"""
                     SELECT
                         t.term_id,
                         t.term_name AS standard_name,
@@ -323,16 +325,16 @@ class SQLKnowledgeGraphQuery:
                     FROM {self.schema}.term_name tn
                     JOIN {self.schema}.term t ON tn.term_id = t.term_id
                 """
-                cur.execute(SQL(query))  # type: ignore
-                for term_id, standard_name, term_type, name_text, match_type in cur.fetchall():
-                    if name_text not in index:
-                        index[name_text] = []
-                    index[name_text].append((term_id, term_type, match_type))
+            cur.execute(SQL(query))
+            for term_id, standard_name, term_type, name_text, match_type in cur.fetchall():
+                if name_text not in index:
+                    index[name_text] = []
+                index[name_text].append((term_id, term_type, match_type))
 
         self._name_index = index
         return index
 
-    def _build_vocabulary_set(self) -> Set[str]:
+    def _build_vocabulary_set(self) -> set[str]:
         """Build vocabulary set from term_vocabulary table for word segmentation.
 
         Queries term_vocabulary table which stores unique vocabulary words
@@ -344,19 +346,18 @@ class SQLKnowledgeGraphQuery:
         if self._vocabulary_set is not None:
             return self._vocabulary_set
 
-        vocab: Set[str] = set()
+        vocab: set[str] = set()
 
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"SELECT word FROM {self.schema}.term_vocabulary")  # type: ignore[arg-type]
-                for row in cur.fetchall():
-                    if row[0]:
-                        vocab.add(row[0])
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(f"SELECT word FROM {self.schema}.term_vocabulary")
+            for row in cur.fetchall():
+                if row[0]:
+                    vocab.add(row[0])
 
         self._vocabulary_set = vocab
         return vocab
 
-    def _forward_max_match(self, text: str, vocab: Set[str]) -> List[Tuple[str, int, int]]:
+    def _forward_max_match(self, text: str, vocab: set[str]) -> list[tuple[str, int, int]]:
         """Forward Maximum Matching (FMM) algorithm.
 
         Args:
@@ -370,7 +371,7 @@ class SQLKnowledgeGraphQuery:
             return []
 
         max_word_len = max((len(w) for w in vocab), default=1)
-        result: List[Tuple[str, int, int]] = []
+        result: list[tuple[str, int, int]] = []
         pos = 0
         text_len = len(text)
 
@@ -391,7 +392,7 @@ class SQLKnowledgeGraphQuery:
 
         return result
 
-    def _backward_max_match(self, text: str, vocab: Set[str]) -> List[Tuple[str, int, int]]:
+    def _backward_max_match(self, text: str, vocab: set[str]) -> list[tuple[str, int, int]]:
         """Backward Maximum Matching (BMM) algorithm.
 
         Args:
@@ -405,7 +406,7 @@ class SQLKnowledgeGraphQuery:
             return []
 
         max_word_len = max((len(w) for w in vocab), default=1)
-        result: List[Tuple[str, int, int]] = []
+        result: list[tuple[str, int, int]] = []
         pos = len(text)
 
         while pos > 0:
@@ -428,7 +429,7 @@ class SQLKnowledgeGraphQuery:
         result.reverse()
         return result
 
-    def _bidirectional_max_match(self, text: str, vocab: Set[str]) -> List[Tuple[str, int, int]]:
+    def _bidirectional_max_match(self, text: str, vocab: set[str]) -> list[tuple[str, int, int]]:
         """Bidirectional Maximum Matching algorithm.
 
         Combines FMM and BMM, selects the better result based on:
@@ -456,18 +457,11 @@ class SQLKnowledgeGraphQuery:
         # Selection strategy
         if len(fmm_words) > len(bmm_words):
             return bmm_result
-        elif len(fmm_words) < len(bmm_words):
+        if len(fmm_words) < len(bmm_words) or fmm_single <= bmm_single:
             return fmm_result
-        else:
-            # Same word count, choose one with fewer single-char words
-            if fmm_single <= bmm_single:
-                return fmm_result
-            else:
-                return bmm_result
+        return bmm_result
 
-    def extract_entities(
-        self, query: str
-    ) -> Tuple[List[QueryEntity], List[FuzzySuggestion]]:
+    def extract_entities(self, query: str) -> tuple[list[QueryEntity], list[FuzzySuggestion]]:
         """Extract matching entities and fuzzy suggestions from query.
 
         Uses Bidirectional Maximum Matching (BIMM) algorithm for word segmentation,
@@ -497,11 +491,11 @@ class SQLKnowledgeGraphQuery:
         matched_words = self._bidirectional_max_match(query, vocab or set())
 
         # Initialize fuzzy_suggestions as empty list
-        fuzzy_suggestions: List[FuzzySuggestion] = []
+        fuzzy_suggestions: list[FuzzySuggestion] = []
 
         # Dedupe by term_id while iterating, O(1) lookup
         # term_id -> (word, term_type, match_type)
-        seen: Dict[str, Tuple[str, str, str]] = {}
+        seen: dict[str, tuple[str, str, str]] = {}
 
         for word, start, end in matched_words:
             if name_index is None or word not in name_index:
@@ -513,7 +507,7 @@ class SQLKnowledgeGraphQuery:
                     seen[term_id] = (word, term_type, match_type)
 
         # Create entity objects
-        entities: List[QueryEntity] = [
+        entities: list[QueryEntity] = [
             QueryEntity(
                 name=data[0],
                 node_id=term_id,
@@ -533,9 +527,9 @@ class SQLKnowledgeGraphQuery:
     def _fuzzy_match_unmatched(
         self,
         query: str,
-        matched_words: List[Tuple[str, int, int]],
-        name_index: Optional[Dict[str, List[Tuple[str, str, str]]]]
-    ) -> List[FuzzySuggestion]:
+        matched_words: list[tuple[str, int, int]],
+        name_index: dict[str, list[tuple[str, str, str]]] | None,
+    ) -> list[FuzzySuggestion]:
         """Perform fuzzy matching on unmatched text spans.
 
         Finds contiguous regions of the query that were NOT covered by exact matches,
@@ -550,13 +544,13 @@ class SQLKnowledgeGraphQuery:
             List of FuzzySuggestion for display (not used in graph queries)
         """
         # Build a set of covered character positions
-        covered_positions: Set[int] = set()
+        covered_positions: set[int] = set()
         for word, start, end in matched_words:
             if name_index is not None and word in name_index:
                 covered_positions.update(range(start, end))
 
         # Find uncovered contiguous regions
-        unmatched_spans: List[UnmatchedSpan] = []
+        unmatched_spans: list[UnmatchedSpan] = []
         if len(covered_positions) < len(query):
             i = 0
             while i < len(query):
@@ -568,14 +562,12 @@ class SQLKnowledgeGraphQuery:
                     if end - start >= 2:
                         unmatched_text = query[start:end].strip()
                         # Strip various quote characters
-                        quotes = '"\'\'“”\'\''
+                        quotes = "\"''“”''"
                         unmatched_text = unmatched_text.strip(quotes)
                         if len(unmatched_text) >= 2:
-                            unmatched_spans.append(UnmatchedSpan(
-                                text=unmatched_text,
-                                start=start,
-                                end=end
-                            )),
+                            unmatched_spans.append(
+                                UnmatchedSpan(text=unmatched_text, start=start, end=end)
+                            )
                 else:
                     i += 1
 
@@ -587,13 +579,14 @@ class SQLKnowledgeGraphQuery:
         if self._fuzzy_term_metadata is None:
             return []
 
-        return list(match_all_unmatched(
-            spans=tuple(unmatched_spans),
-            term_metadata=self._fuzzy_term_metadata,
-            config=self._fuzzy_config,
-            stopwords=self._fuzzy_stopwords,
-        ))
-
+        return list(
+            match_all_unmatched(
+                spans=tuple(unmatched_spans),
+                term_metadata=self._fuzzy_term_metadata,
+                config=self._fuzzy_config,
+                stopwords=self._fuzzy_stopwords,
+            )
+        )
 
     def query_n_hop_subgraph(
         self,
@@ -610,134 +603,131 @@ class SQLKnowledgeGraphQuery:
         if not entity.node_id:
             return SubgraphResult(center_entity=entity, hops=n_hops)
 
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                # Single SQL query for BFS N-hop traversal
-                # Returns: term_id, term_name, term_type_code, depth, path, parent_id, relation
+        with self._connect() as conn, conn.cursor() as cur:
+            # Single SQL query for BFS N-hop traversal
+            # Returns: term_id, term_name, term_type_code, depth, path, parent_id, relation
+            cur.execute(SQL(self._bfs_cte_sql()), (entity.node_id, n_hops))
+            rows = cur.fetchall()
+
+            if not rows:
+                return SubgraphResult(center_entity=entity, hops=n_hops)
+
+            # Build nodes, edges, and path-based tree from results
+            # Key insight: use path (not term_id) as unique identifier to allow
+            # same physical node to appear in different branches of the tree
+            nodes: dict[str, dict[str, Any]] = {}
+            edges: list[dict[str, Any]] = []
+
+            # path_edges: maps path_tuple -> list of (child_path_tuple, relation)
+            # This allows building a tree where same node can appear multiple times
+            # if reached via different paths
+            path_edges: dict[tuple[str, ...], list[tuple[tuple[str, ...], str]]] = {}
+            path_to_node: dict[tuple[str, ...], dict[str, Any]] = {}
+
+            for row in rows:
+                term_id, term_name, term_type, depth, path, parent_id, relation = row
+
+                # Store node (first occurrence)
+                if term_id not in nodes:
+                    nodes[term_id] = {
+                        "_id": term_id,
+                        "id": term_id,
+                        "name": term_name,
+                        "node_type": term_type,
+                        "depth": depth,
+                    }
+
+                # Convert path array to tuple for dict key
+                path_tuple = tuple(path) if path else (term_id,)
+
+                # Store path -> node mapping
+                if path_tuple not in path_to_node:
+                    path_to_node[path_tuple] = {
+                        "term_id": term_id,
+                        "name": term_name,
+                        "node_type": term_type,
+                        "depth": depth,
+                    }
+
+                # Store edge based on path (not just term_id)
+                # This allows multiple edges to same target via different paths
+                if parent_id and relation:
+                    # Find parent's path (current path without last element)
+                    parent_path = path_tuple[:-1] if len(path_tuple) > 1 else (parent_id,)
+
+                    if parent_path not in path_edges:
+                        path_edges[parent_path] = []
+
+                    # Add child path with relation
+                    child_entry = (path_tuple, relation)
+                    if child_entry not in path_edges[parent_path]:
+                        path_edges[parent_path].append(child_entry)
+
+                    # Also store flat edge for API response (deduplicate)
+                    if not any(
+                        e["source"] == parent_id
+                        and e["target"] == term_id
+                        and e["relation"] == relation
+                        for e in edges
+                    ):
+                        edges.append(
+                            {
+                                "source": parent_id,
+                                "target": term_id,
+                                "relation": relation,
+                                "data": {"relation": relation},
+                            }
+                        )
+
+            # Batch fetch knowledge facts for all nodes (post-processing)
+            # This is more efficient than JOIN in recursive CTE
+            if nodes:
                 cur.execute(
-                    SQL(self._bfs_cte_sql()), (entity.node_id, n_hops)  # type: ignore
-                )
-                rows = cur.fetchall()
-
-                if not rows:
-                    return SubgraphResult(center_entity=entity, hops=n_hops)
-
-                # Build nodes, edges, and path-based tree from results
-                # Key insight: use path (not term_id) as unique identifier to allow
-                # same physical node to appear in different branches of the tree
-                nodes: Dict[str, Dict[str, Any]] = {}
-                edges: List[Dict[str, Any]] = []
-
-                # path_edges: maps path_tuple -> list of (child_path_tuple, relation)
-                # This allows building a tree where same node can appear multiple times
-                # if reached via different paths
-                path_edges: Dict[Tuple[str, ...], List[Tuple[Tuple[str, ...], str]]] = {}
-                path_to_node: Dict[Tuple[str, ...], Dict[str, Any]] = {}
-
-                for row in rows:
-                    term_id, term_name, term_type, depth, path, parent_id, relation = row
-
-                    # Store node (first occurrence)
-                    if term_id not in nodes:
-                        nodes[term_id] = {
-                            "_id": term_id,
-                            "id": term_id,
-                            "name": term_name,
-                            "node_type": term_type,
-                            "depth": depth,
-                        }
-
-                    # Convert path array to tuple for dict key
-                    path_tuple = tuple(path) if path else (term_id,)
-
-                    # Store path -> node mapping
-                    if path_tuple not in path_to_node:
-                        path_to_node[path_tuple] = {
-                            "term_id": term_id,
-                            "name": term_name,
-                            "node_type": term_type,
-                            "depth": depth,
-                        }
-
-                    # Store edge based on path (not just term_id)
-                    # This allows multiple edges to same target via different paths
-                    if parent_id and relation:
-                        # Find parent's path (current path without last element)
-                        parent_path = path_tuple[:-1] if len(path_tuple) > 1 else (parent_id,)
-
-                        if parent_path not in path_edges:
-                            path_edges[parent_path] = []
-
-                        # Add child path with relation
-                        child_entry = (path_tuple, relation)
-                        if child_entry not in path_edges[parent_path]:
-                            path_edges[parent_path].append(child_entry)
-
-                        # Also store flat edge for API response (deduplicate)
-                        if not any(
-                            e["source"] == parent_id
-                            and e["target"] == term_id
-                            and e["relation"] == relation
-                            for e in edges
-                        ):
-                            edges.append(
-                                {
-                                    "source": parent_id,
-                                    "target": term_id,
-                                    "relation": relation,
-                                    "data": {"relation": relation},
-                                }
-                            )
-
-                # Batch fetch knowledge facts for all nodes (post-processing)
-                # This is more efficient than JOIN in recursive CTE
-                if nodes:
-                    cur.execute(
-                        SQL("""
+                    SQL("""
                         SELECT term_id, knowledge_id, desc_summary, "desc"
                         FROM {}.term_knowledge
                         WHERE term_id = ANY(%s)
                         """).format(Identifier(self.schema)),
-                        (list(nodes.keys()),),
+                    (list(nodes.keys()),),
+                )
+                knowledge_rows = cur.fetchall()
+
+                # Group knowledge by term_id (one term can have multiple knowledge)
+                # Combine desc_summary and desc into a single content field for better display
+                knowledge_map: dict[str, list[str]] = {}
+                for k_row in knowledge_rows:
+                    k_term_id, k_id, k_summary, k_desc = k_row
+                    if k_term_id not in knowledge_map:
+                        knowledge_map[k_term_id] = []
+                    knowledge_map[k_term_id].append(
+                        self._format_knowledge_content(k_summary, k_desc)
                     )
-                    knowledge_rows = cur.fetchall()
-                    
-                    # Group knowledge by term_id (one term can have multiple knowledge)
-                    # Combine desc_summary and desc into a single content field for better display
-                    knowledge_map: Dict[str, List[str]] = {}
-                    for k_row in knowledge_rows:
-                        k_term_id, k_id, k_summary, k_desc = k_row
-                        if k_term_id not in knowledge_map:
-                            knowledge_map[k_term_id] = []
-                        knowledge_map[k_term_id].append(
-                            self._format_knowledge_content(k_summary, k_desc)
-                        )
-                    
-                    # Attach knowledge to nodes
-                    for term_id, node in nodes.items():
-                        if term_id in knowledge_map:
-                            node["knowledge"] = "\n\n".join(knowledge_map[term_id])
 
-                # Build tree structure using path-based edges
-                tree = self._build_tree_from_path_edges(
-                    entity.node_id, nodes, path_edges, path_to_node, n_hops
-                )
+                # Attach knowledge to nodes
+                for term_id, node in nodes.items():
+                    if term_id in knowledge_map:
+                        node["knowledge"] = "\n\n".join(knowledge_map[term_id])
 
-                result = SubgraphResult(
-                    center_entity=entity,
-                    hops=n_hops,
-                    nodes=list(nodes.values()),
-                    edges=edges,
-                    tree=tree,
-                )
+            # Build tree structure using path-based edges
+            tree = self._build_tree_from_path_edges(
+                entity.node_id, nodes, path_edges, path_to_node, n_hops
+            )
 
-                return result
+            result = SubgraphResult(
+                center_entity=entity,
+                hops=n_hops,
+                nodes=list(nodes.values()),
+                edges=edges,
+                tree=tree,
+            )
+
+            return result
 
     def _bfs_cte_sql(self) -> str:
         """Generate BFS recursive CTE SQL.
 
         Simplified: only forward traversal (双向边已在数据层存储).
-        
+
         The CTE traverses the graph from a starting node:
         - Anchor: starting term_id
         - Recursive: expand via term_relation (forward edges only)
@@ -790,9 +780,9 @@ class SQLKnowledgeGraphQuery:
     def _build_tree_from_path_edges(
         self,
         root_id: str,
-        nodes: Dict[str, Dict[str, Any]],
-        path_edges: Dict[Tuple[str, ...], List[Tuple[Tuple[str, ...], str]]],
-        path_to_node: Dict[Tuple[str, ...], Dict[str, Any]],
+        nodes: dict[str, dict[str, Any]],
+        path_edges: dict[tuple[str, ...], list[tuple[tuple[str, ...], str]]],
+        path_to_node: dict[tuple[str, ...], dict[str, Any]],
         max_depth: int,
     ) -> TreeNode:
         """Build TreeNode hierarchy from path-based edges.
@@ -814,14 +804,16 @@ class SQLKnowledgeGraphQuery:
             id=root_id,
             name=root_data.get("name", root_id),
             node_type=root_data.get("node_type", "Unknown"),
-            properties={"knowledge": root_data.get("knowledge", [])} if root_data.get("knowledge") else {},
+            properties={"knowledge": root_data.get("knowledge", [])}
+            if root_data.get("knowledge")
+            else {},
             level=0,
         )
 
         # DFS to build tree, tracking by path (not term_id)
         # This allows same node to appear multiple times in different branches
-        visited_paths: Set[Tuple[str, ...]] = {root_path}
-        stack: List[Tuple[Tuple[str, ...], TreeNode, int]] = [(root_path, root, 0)]
+        visited_paths: set[tuple[str, ...]] = {root_path}
+        stack: list[tuple[tuple[str, ...], TreeNode, int]] = [(root_path, root, 0)]
 
         while stack:
             current_path, current_node, current_level = stack.pop()
@@ -844,7 +836,9 @@ class SQLKnowledgeGraphQuery:
                     id=child_term_id,
                     name=child_data.get("name") or child_term_id,
                     node_type=child_data.get("node_type", "Unknown"),
-                    properties={"knowledge": child_node_data.get("knowledge", [])} if child_node_data.get("knowledge") else {},
+                    properties={"knowledge": child_node_data.get("knowledge", [])}
+                    if child_node_data.get("knowledge")
+                    else {},
                     relation=relation,  # 直接使用原始关系名（双边存储后无需处理_REVERSE）
                     level=current_level + 1,
                 )
@@ -857,30 +851,30 @@ class SQLKnowledgeGraphQuery:
     def query(
         self,
         natural_language: str,
-        n_hops: Optional[int] = None,
+        n_hops: int | None = None,
         include_knowledge: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Main query interface - matches original API.
 
         Optimized: uses batch SQL query for multiple entities with caching.
-        
+
         Args:
             natural_language: Natural language query text
             n_hops: Number of hops to traverse (default: self.default_hops)
             include_knowledge: Whether to include knowledge descriptions (default: True)
-            
+
         Returns:
             Dict with query, entities_found, n_hops, and results
         """
         hops = n_hops if n_hops is not None else self.default_hops
-        
+
         # Check cache first
         if self._enable_query_cache:
             cache_key = self._make_cache_key(natural_language, hops, include_knowledge)
             cached = self._get_from_cache(cache_key)
             if cached is not None:
                 return cached
-        
+
         # 1. Extract entities and fuzzy suggestions
         entities, fuzzy_suggestions = self.extract_entities(natural_language)
 
@@ -927,14 +921,14 @@ class SQLKnowledgeGraphQuery:
             "n_hops": hops,
             "results": results,
         }
-        
+
         # Store in cache
         if self._enable_query_cache:
             cache_key = self._make_cache_key(natural_language, hops, include_knowledge)
             self._put_in_cache(cache_key, result)
-        
+
         return result
-    
+
     def _make_cache_key(self, query: str, n_hops: int, include_knowledge: bool) -> str:
         """Generate cache key from query parameters."""
         # Normalize query (strip whitespace, lowercase)
@@ -945,8 +939,8 @@ class SQLKnowledgeGraphQuery:
         else:
             key_str = f"{normalized}:{n_hops}:{include_knowledge}"
         return key_str
-    
-    def _get_from_cache(self, key: str) -> Optional[Dict[str, Any]]:
+
+    def _get_from_cache(self, key: str) -> dict[str, Any] | None:
         """Get result from LRU cache."""
         if key not in self._query_cache:
             return None
@@ -956,18 +950,18 @@ class SQLKnowledgeGraphQuery:
             self._cache_order.remove(key)
             self._cache_order.append(key)
         return result
-    
-    def _put_in_cache(self, key: str, result: Dict[str, Any]) -> None:
+
+    def _put_in_cache(self, key: str, result: dict[str, Any]) -> None:
         """Put result in LRU cache with eviction."""
         # Evict if at capacity
         while len(self._query_cache) >= self._query_cache_maxsize and self._cache_order:
             oldest = self._cache_order.pop(0)
             self._query_cache.pop(oldest, None)
-        
+
         # Add new entry
         self._query_cache[key] = (result, 1)
         self._cache_order.append(key)
-    
+
     def clear_cache(self) -> None:
         """Clear query result cache."""
         self._query_cache.clear()
@@ -975,10 +969,10 @@ class SQLKnowledgeGraphQuery:
 
     def _batch_query_subgraphs(
         self,
-        entities: List[QueryEntity],
+        entities: list[QueryEntity],
         n_hops: int,
         include_knowledge: bool = True,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Batch query multiple entity subgraphs using single SQL.
 
         Performance optimizations:
@@ -992,16 +986,27 @@ class SQLKnowledgeGraphQuery:
         # Filter entities with valid node_id
         valid_entities = [e for e in entities if e.node_id]
         if not valid_entities:
-            return [self._format_subgraph_result(SubgraphResult(center_entity=e, hops=n_hops)) for e in entities]
+            return [
+                self._format_subgraph_result(SubgraphResult(center_entity=e, hops=n_hops))
+                for e in entities
+            ]
 
         # Build single CTE with all seeds in VALUES clause
         # This is more efficient than N separate CTEs
         seed_values = ", ".join(f"('{e.node_id}')" for e in valid_entities)
-        
+
         # Build knowledge JOIN conditionally
-        knowledge_join = f"LEFT JOIN {self.schema}.term_knowledge k ON t.term_id = k.term_id" if include_knowledge else ""
-        knowledge_cols = "k.desc_summary AS knowledge_summary, k.\"desc\" AS knowledge_desc" if include_knowledge else "NULL AS knowledge_summary, NULL AS knowledge_desc"
-        
+        knowledge_join = (
+            f"LEFT JOIN {self.schema}.term_knowledge k ON t.term_id = k.term_id"
+            if include_knowledge
+            else ""
+        )
+        knowledge_cols = (
+            'k.desc_summary AS knowledge_summary, k."desc" AS knowledge_desc'
+            if include_knowledge
+            else "NULL AS knowledge_summary, NULL AS knowledge_desc"
+        )
+
         sql = f"""
         WITH RECURSIVE seeds(source_id) AS (
             VALUES {seed_values}
@@ -1040,45 +1045,57 @@ class SQLKnowledgeGraphQuery:
         """
 
         # Execute batch query (single round trip)
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql)  # type: ignore[arg-type]
-                rows = cur.fetchall()
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(sql)
+            rows = cur.fetchall()
         # Group results by source_id and build knowledge_map
-        results_by_source: Dict[str, List] = defaultdict(list)
-        knowledge_map: Dict[str, List[str]] = {}
-        
+        results_by_source: dict[str, list[Any]] = defaultdict(list)
+        knowledge_map: dict[str, list[str]] = {}
+
         for row in rows:
-            source_id, term_id, term_name, term_type, depth, path, parent_id, relation, k_summary, k_desc = row
+            (
+                source_id,
+                term_id,
+                term_name,
+                term_type,
+                depth,
+                path,
+                parent_id,
+                relation,
+                k_summary,
+                k_desc,
+            ) = row
             results_by_source[source_id].append(row)
-            
+
             # Build knowledge from embedded columns (only if include_knowledge)
             if include_knowledge and (k_summary or k_desc):
                 if term_id not in knowledge_map:
                     knowledge_map[term_id] = []
-                knowledge_map[term_id].append(
-                    self._format_knowledge_content(k_summary, k_desc)
-                )
-        
+                knowledge_map[term_id].append(self._format_knowledge_content(k_summary, k_desc))
+
         # Build subgraph results for each entity
         results = []
         for entity in entities:
             if not entity.node_id:
-                results.append(self._format_subgraph_result(SubgraphResult(center_entity=entity, hops=n_hops)))
+                results.append(
+                    self._format_subgraph_result(SubgraphResult(center_entity=entity, hops=n_hops))
+                )
                 continue
 
             entity_rows = results_by_source.get(entity.node_id, [])
             if not entity_rows:
-                results.append(self._format_subgraph_result(SubgraphResult(center_entity=entity, hops=n_hops)))
+                results.append(
+                    self._format_subgraph_result(SubgraphResult(center_entity=entity, hops=n_hops))
+                )
                 continue
 
             # Build nodes and edges from rows
-            nodes: Dict[str, Dict[str, Any]] = {}
-            edges: List[Dict[str, Any]] = []
+            nodes: dict[str, dict[str, Any]] = {}
+            edges: list[dict[str, Any]] = []
             # O(E) edge deduplication using set
-            seen_edges: Set[Tuple[str, str, str]] = set()
-            path_edges: Dict[Tuple[str, ...], List[Tuple[Tuple[str, ...], str]]] = {}
-            path_to_node: Dict[Tuple[str, ...], Dict[str, Any]] = {}
+            seen_edges: set[tuple[str, str, str]] = set()
+            path_edges: dict[tuple[str, ...], list[tuple[tuple[str, ...], str]]] = {}
+            path_to_node: dict[tuple[str, ...], dict[str, Any]] = {}
 
             for row in entity_rows:
                 # Row format: (source_id, term_id, term_name, term_type, depth, path, parent_id, relation, k_summary, k_desc)
@@ -1117,13 +1134,15 @@ class SQLKnowledgeGraphQuery:
                     edge_key = (parent_id, term_id, relation)
                     if edge_key not in seen_edges:
                         seen_edges.add(edge_key)
-                        edges.append({
-                            "source": parent_id,
-                            "target": term_id,
-                            "relation": relation,
-                            "data": {"relation": relation},
-                        })
-            
+                        edges.append(
+                            {
+                                "source": parent_id,
+                                "target": term_id,
+                                "relation": relation,
+                                "data": {"relation": relation},
+                            }
+                        )
+
             # Build tree
             tree = self._build_tree_from_path_edges(
                 entity.node_id, nodes, path_edges, path_to_node, n_hops
@@ -1140,7 +1159,7 @@ class SQLKnowledgeGraphQuery:
 
         return results
 
-    def _format_subgraph_result(self, subgraph: SubgraphResult) -> Dict[str, Any]:
+    def _format_subgraph_result(self, subgraph: SubgraphResult) -> dict[str, Any]:
         """Format subgraph to JSON-serializable dict."""
         return {
             "center_entity": {
@@ -1155,7 +1174,7 @@ class SQLKnowledgeGraphQuery:
             "tree": self._tree_to_dict(subgraph.tree) if subgraph.tree else None,
         }
 
-    def _tree_to_dict(self, tree: TreeNode) -> Dict[str, Any]:
+    def _tree_to_dict(self, tree: TreeNode) -> dict[str, Any]:
         """Convert TreeNode to dict."""
         return {
             "id": tree.id,
@@ -1170,7 +1189,7 @@ class SQLKnowledgeGraphQuery:
     def to_semantic_string(
         self,
         natural_language: str,
-        n_hops: Optional[int] = None,
+        n_hops: int | None = None,
         include_knowledge: bool = True,
     ) -> str:
         """将自然语言查询转换为富含语义的树形文本描述.
@@ -1186,7 +1205,7 @@ class SQLKnowledgeGraphQuery:
         result = self.query(natural_language, n_hops=n_hops, include_knowledge=include_knowledge)
         return self._format_result_as_tree_text(result)
 
-    def _format_result_as_tree_text(self, result: Dict[str, Any]) -> str:
+    def _format_result_as_tree_text(self, result: dict[str, Any]) -> str:
         """将查询结果格式化为树形文本."""
         lines = []
         lines.append(f"查询: {result.get('query', '')}")
@@ -1203,7 +1222,9 @@ class SQLKnowledgeGraphQuery:
         if entities:
             lines.append(f"精确匹配 ({len(entities)} 个):")
             for i, entity in enumerate(entities, 1):
-                match_type_str = "精确匹配" if entity.get("match_type") == "standard_name" else "别名匹配"
+                match_type_str = (
+                    "精确匹配" if entity.get("match_type") == "standard_name" else "别名匹配"
+                )
                 lines.append(f"  {i}. {entity['name']} ({entity['node_type']}) - {match_type_str}")
 
         # 显示模糊推荐（独立的数据结构，不在 entities 中）
@@ -1216,7 +1237,7 @@ class SQLKnowledgeGraphQuery:
                     lines.append(f'  "{original}" 可能匹配:')
                     for m in matches:
                         sim_pct = int(m.get("similarity", 0) * 100)
-                        lines.append(f'    → {m["term"]} ({m["term_type"]}) 相似度 {sim_pct}%')
+                        lines.append(f"    → {m['term']} ({m['term_type']}) 相似度 {sim_pct}%")
 
         results = result.get("results", [])
 
@@ -1226,15 +1247,17 @@ class SQLKnowledgeGraphQuery:
             lines.append(f"【中心实体 {i}】{center_entity.get('name')}")
 
             # 解析 node_id，展示术语库编码、术语类型编码、术语编码
-            node_id = center_entity.get('node_id', '')
-            if node_id and '#' in node_id:
-                parts = node_id.split('#')
+            node_id = center_entity.get("node_id", "")
+            if node_id and "#" in node_id:
+                parts = node_id.split("#")
                 if len(parts) >= 3:
                     lines.append(f"  术语库编码: {parts[0]}")
                     lines.append(f"  术语类型编码: {parts[1]}")
                     lines.append(f"  术语编码: {parts[2]}\n")
 
-            lines.append(f"节点数: {subgraph.get('node_count')}, 边数: {subgraph.get('edge_count')}")
+            lines.append(
+                f"节点数: {subgraph.get('node_count')}, 边数: {subgraph.get('edge_count')}"
+            )
 
             tree_dict = subgraph.get("tree")
             if tree_dict:
@@ -1244,13 +1267,13 @@ class SQLKnowledgeGraphQuery:
         return "\n".join(lines)
 
     def _tree_dict_to_text(
-        self, node_dict: Dict[str, Any], prefix: str = "", is_last: bool = True
+        self, node_dict: dict[str, Any], prefix: str = "", is_last: bool = True
     ) -> str:
         """将树形字典转换为树形文本."""
         lines = []
 
         connector = "└── " if is_last else "├── "
-        relation_str = f"[{node_dict.get('relation', '')}] -> " if node_dict.get('relation') else ""
+        relation_str = f"[{node_dict.get('relation', '')}] -> " if node_dict.get("relation") else ""
         lines.append(
             f"{prefix}{connector}{relation_str}{node_dict.get('name', '')} [{node_dict.get('node_type', '')}]"
         )
@@ -1267,7 +1290,7 @@ class SQLKnowledgeGraphQuery:
             for j, (key, value) in enumerate(props):
                 is_last_prop = (j == len(props) - 1) and not children
                 prop_connector = "└── " if is_last_prop else "├── "
-                
+
                 # Special handling for knowledge - display full content with line breaks
                 if key == "knowledge":
                     lines.append(f"{prop_prefix}{prop_connector}{key}:")
@@ -1294,11 +1317,11 @@ class SQLKnowledgeGraphQuery:
 
 
 def create_sql_graph_query(
-    host: Optional[str] = None,
-    port: Optional[int] = None,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    database: Optional[str] = None,
+    host: str | None = None,
+    port: int | None = None,
+    user: str | None = None,
+    password: str | None = None,
+    database: str | None = None,
     schema: str = "whale_datacloud",
 ) -> SQLKnowledgeGraphQuery:
     """Factory function to create SQLKnowledgeGraphQuery with explicit config.
@@ -1320,17 +1343,19 @@ def create_sql_graph_query(
 # ============================================================================
 
 # Global singleton service instance
-_singleton_service: Optional[SQLKnowledgeGraphQuery] = None
+_singleton_service: SQLKnowledgeGraphQuery | None = None
 _singleton_n_hops: int = 4
 
 
-def get_singleton_service(n_hops: int = 4, fast: bool = True, warm_pool: bool = False) -> SQLKnowledgeGraphQuery:
+def get_singleton_service(
+    n_hops: int = 4, fast: bool = True, warm_pool: bool = False
+) -> SQLKnowledgeGraphQuery:
     """Get or create singleton service instance with prewarm.
-    
+
     This is the recommended way to get a service instance for
     production use - it caches the instance and prewarms it
     on first access for optimal performance.
-    
+
     Args:
         n_hops: Default number of hops for queries
         fast: If True, skip DB validation for faster startup (default: True)
@@ -1338,25 +1363,25 @@ def get_singleton_service(n_hops: int = 4, fast: bool = True, warm_pool: bool = 
         warm_pool: If True, pre-warm connection pool (default: False).
                    Connection pool warmup takes ~0.5s. Set to True only if
                    you expect many queries in quick succession.
-    
+
     Returns:
         Pre-warmed SQLKnowledgeGraphQuery instance
     """
     global _singleton_service, _singleton_n_hops
-    
+
     if _singleton_service is None or _singleton_n_hops != n_hops:
         _singleton_service = SQLKnowledgeGraphQuery(default_hops=n_hops)
         _singleton_n_hops = n_hops
         # Prewarm: load vocabulary and name_index into memory
         # By default, skip pool warmup for faster first query
         _singleton_service.prewarm(fast=fast, warm_pool=warm_pool)
-    
+
     return _singleton_service
 
 
 def reset_singleton_service(timeout: float = 0.5) -> None:
     """Reset singleton service instance (for testing).
-    
+
     Args:
         timeout: Max seconds to wait for pool close (default: 0.5s)
     """
@@ -1371,7 +1396,7 @@ def reset_singleton_service(timeout: float = 0.5) -> None:
 
 def nl_to_semantic_tree(
     natural_language: str,
-    service: Optional["SQLKnowledgeGraphQuery"] = None,
+    service: SQLKnowledgeGraphQuery | None = None,
     n_hops: int = 4,
     include_knowledge: bool = True,
     use_singleton: bool = True,
@@ -1380,7 +1405,7 @@ def nl_to_semantic_tree(
     """将自然语言查询转换为富含语义的树形文本描述.
 
     这是 SDK 提供的便捷函数，直接输入自然语言，输出语义化的树形文本。
-    
+
     性能优化：
     - 默认使用单例模式 (use_singleton=True)，首次调用时预热缓存
     - 后续调用复用同一实例，避免重复初始化开销
@@ -1418,19 +1443,22 @@ def nl_to_semantic_tree(
         else:
             service = SQLKnowledgeGraphQuery(default_hops=n_hops)
             service.prewarm(fast=fast)
-    return service.to_semantic_string(natural_language, n_hops=n_hops, include_knowledge=include_knowledge)
+    return service.to_semantic_string(
+        natural_language, n_hops=n_hops, include_knowledge=include_knowledge
+    )
+
 
 # ============================================================================
 # Exports
 # ============================================================================
 
 __all__ = [
-    "SQLKnowledgeGraphQuery",
     "QueryEntity",
-    "TreeNode",
+    "SQLKnowledgeGraphQuery",
     "SubgraphResult",
+    "TreeNode",
     "create_sql_graph_query",
-    "nl_to_semantic_tree",
     "get_singleton_service",
+    "nl_to_semantic_tree",
     "reset_singleton_service",
 ]
