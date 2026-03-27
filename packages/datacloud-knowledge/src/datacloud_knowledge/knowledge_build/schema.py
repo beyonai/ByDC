@@ -32,12 +32,13 @@ class ImportResult(BaseModel):
 
 # ── 知识包导入 ────────────────────────────────────────────────────────────────
 
+
 class CallbackConfig(BaseModel):
     """回调通知配置：导入完成（成功或失败）后通知源系统。"""
 
     url: str
-    method: str = "POST"                    # GET | POST
-    headers: dict[str, str] = {}            # 自定义请求头，如 Authorization
+    method: str = "POST"  # GET | POST
+    headers: dict[str, str] = {}  # 自定义请求头，如 Authorization
 
 
 class ImportPackageRequest(BaseModel):
@@ -75,7 +76,7 @@ class PrecheckResult(BaseModel):
     status='ok' 时 errors 为空；status='failed' 时包含所有错误详情。
     """
 
-    status: str           # "ok" | "failed"
+    status: str  # "ok" | "failed"
     total_rows: int = 0
     files: list[FileCheckResult] = []
     errors: list[PrecheckError] = []
