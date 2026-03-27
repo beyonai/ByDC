@@ -41,11 +41,20 @@ async def intent_node(
 
     messages = state.get("messages", [])
     if not messages:
-        return {"intent": "", "clarify_needed": False}
+        return {
+            "intent": "",
+            "clarify_needed": False,
+            "query_mode": "analysis",
+            "target_tool": "",
+            "tool_params": {},
+        }
 
     last_user_msg = messages[-1].content if hasattr(messages[-1], "content") else str(messages[-1])
 
     prompts_overwrite = state.get("prompts_overwrite") or default_prompts or {}
+    dynamic_tools = state.get("dynamic_tools") or {}
+    tool_names = sorted(dynamic_tools.keys()) if isinstance(dynamic_tools, dict) else []
+    tools_line = ", ".join(tool_names) if tool_names else "（当前无动态工具，请使用 analysis）"
 
     # 1. Search knowledge
     knowledge_snippets = await search_knowledge.ainvoke({"query": str(last_user_msg)})
@@ -70,12 +79,26 @@ async def intent_node(
 相关业务知识：
 {knowledge_text}
 
+## 当前 Agent 可用的动态工具名（用于在线查数）
+{tools_line}
+
 请判断用户意图是否清晰，并结合业务知识改写问题。
 如果问题缺乏关键维度（如时间、明确指标），请判定为“不清晰”。
 
-返回格式必须为严格的 JSON，包含两个字段：
+## query_mode 判定规则
+- "online_query"：单次向已绑定工具取数即可（单表/单对象查询、列表、明细），不需要多步规划、代码沙箱、多表关联分析或复杂报表叙事。
+- "analysis"：需要任务拆解、多步执行、统计对比、关联、趋势、归因等，或不确定用哪个工具。
+
+当 query_mode 为 "online_query" 时：
+- "target_tool" 必须从上方【动态工具名】列表中选且仅选一个；若列表为空则必须使用 "analysis"。
+- "tool_params" 为对象：传给该工具的参数，键名须与工具实际接受的参数一致（如 question、include_plan 等），不要臆造不存在的键。可与用户原问题语义对齐填写。
+
+返回格式必须为严格的 JSON，包含字段：
 - "rewritten_intent": "改写后的清晰问题，或者如果需要追问，填入追问内容"
 - "clarify_needed": true/false
+- "query_mode": "online_query" 或 "analysis"
+- "target_tool": 字符串；非 online_query 时填空字符串 ""
+- "tool_params": 对象；非 online_query 时填空对象 {{}}
 """,
     )
 
@@ -92,10 +115,21 @@ async def intent_node(
         result = json.loads(content)
         rewritten_intent = result.get("rewritten_intent", str(last_user_msg))
         clarify_needed = result.get("clarify_needed", False)
+        query_mode = result.get("query_mode", "analysis")
+        if query_mode not in ("online_query", "analysis"):
+            query_mode = "analysis"
+        target_tool = result.get("target_tool", "")
+        if not isinstance(target_tool, str):
+            target_tool = str(target_tool) if target_tool is not None else ""
+        raw_tp = result.get("tool_params", {})
+        tool_params = raw_tp if isinstance(raw_tp, dict) else {}
     except Exception as e:
         logger.warning("Failed to parse intent JSON, fallback to default. Error: %s", e)
         rewritten_intent = str(last_user_msg)
         clarify_needed = False
+        query_mode = "analysis"
+        target_tool = ""
+        tool_params = {}
 
     # 截断知识预览（避免 Redis/前端爆量）
     knowledge_preview = knowledge_text[:500] if knowledge_text else "无"
@@ -107,7 +141,9 @@ async def intent_node(
             ""
             f"■ 检索到的业务知识（节选）：\n{knowledge_preview}\n\n"
             f"■ 改写结果：{rewritten_intent}\n"
-            f"■ 是否需要追问：{clarify_needed}"
+            f"■ 是否需要追问：{clarify_needed}\n"
+            f"■ 路由：{query_mode}"
+            + (f" / 工具：{target_tool}" if query_mode == "online_query" else "")
         )
         # 推送思考标题
         await context.emit_chunk(
@@ -126,4 +162,7 @@ async def intent_node(
         "intent": rewritten_intent,
         "clarify_needed": clarify_needed,
         "knowledge_preview": knowledge_preview,
+        "query_mode": query_mode,
+        "target_tool": target_tool,
+        "tool_params": tool_params,
     }
