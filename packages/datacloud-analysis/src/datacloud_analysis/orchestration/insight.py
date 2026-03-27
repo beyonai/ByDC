@@ -54,6 +54,35 @@ async def _emit_reasoning_log_end_before_answer(context: Any) -> None:
     )
 
 
+def _append_task_prompt_to_system(
+    prompts_overwrite: dict[str, Any],
+    base_system_prompt: str,
+) -> str:
+    """Append Agent ``task_prompt`` (e.g. processingFlow from Init plugin) to insight LLM system text.
+
+    When ``insight_prompt`` / ``clarify_prompt`` are set, this still appends at the end so
+    task-level constraints (处理流程等) are not dropped.
+
+    Args:
+        prompts_overwrite: ``state["prompts_overwrite"]`` from gateway AgentConfig.
+        base_system_prompt: The system prompt built for this path (clarify or Part1).
+
+    Returns:
+        ``base_system_prompt`` with a non-empty ``task_prompt`` section appended, or unchanged.
+    """
+    task_extra = prompts_overwrite.get("task_prompt")
+    if task_extra is None:
+        return base_system_prompt
+    extra = str(task_extra).strip()
+    if not extra:
+        return base_system_prompt
+    return (
+        base_system_prompt.rstrip()
+        + "\n\n## 数字员工任务约束（来自 Agent 配置）\n"
+        + extra
+    )
+
+
 def _safe_int(value: Any, default: int) -> int:
     """Coerce meta numeric fields to int; avoid crashing on bad upstream types."""
     if value is None:
@@ -690,6 +719,7 @@ async def insight_node(
             f"并引导用户在授权范围内重新提问。"
             )
         )
+        sys_prompt = _append_task_prompt_to_system(prompts_overwrite, sys_prompt)
         # Stream clarify response (single part, no tables/files)
         analysis_text = ""
         async for chunk in llm.astream(messages + [SystemMessage(content=sys_prompt)]):
@@ -784,6 +814,7 @@ async def insight_node(
         "3. 尽量简明扼要，聚焦核心洞察。"
     )
     sys_prompt = prompts_overwrite.get("insight_prompt", default_analysis_prompt)
+    sys_prompt = _append_task_prompt_to_system(prompts_overwrite, sys_prompt)
 
     # Part1: stream analysis text token by token
     analysis_text = ""
