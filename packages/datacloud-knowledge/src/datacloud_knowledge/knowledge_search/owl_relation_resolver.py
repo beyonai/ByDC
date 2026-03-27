@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
@@ -8,10 +8,13 @@ from .db import get_session
 from .db.models import Term, TermRelation
 from .types import TermBrief
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
 
 def resolve_related_owl_terms(
     *,
-    roots: list[dict],
+    roots: list[dict[str, Any]],
 ) -> list[TermBrief]:
     collected: set[str] = set()
 
@@ -19,13 +22,13 @@ def resolve_related_owl_terms(
         for root in roots or []:
             root_type = _normalize_type_code(str(root.get("term_type_code", "")).strip())
             if root_type not in ("ONTOLOGY_VIEW", "ONTOLOGY_OBJ"):
-                raise ValueError(
-                    "roots[].term_type_code 仅支持 视图/对象（VIEW/OBJ 或 ONTOLOGY_VIEW/ONTOLOGY_OBJ）"
+                raise TypeError(
+                    "roots[].term_type_code 仅支持 视图/对象(VIEW/OBJ 或 ONTOLOGY_VIEW/ONTOLOGY_OBJ)"
                 )
 
             term_codes = root.get("term_codes") or []
             if not isinstance(term_codes, list):
-                raise ValueError("roots[].term_codes 必须是数组")
+                raise TypeError("roots[].term_codes 必须是数组")
 
             for term_id in term_codes:
                 if not term_id:
@@ -48,7 +51,9 @@ def resolve_related_owl_terms(
         if not collected:
             return []
         rows = session.execute(
-            select(Term.term_id, Term.term_name, Term.owl_doc_id).where(Term.term_id.in_(sorted(collected)))
+            select(Term.term_id, Term.term_name, Term.owl_doc_id).where(
+                Term.term_id.in_(sorted(collected))
+            )
         ).all()
 
     out: list[TermBrief] = []
@@ -62,7 +67,7 @@ def resolve_related_owl_terms(
     return out
 
 
-def _collect_from_view_root(session, view_id: str, collected: set[str]) -> None:
+def _collect_from_view_root(session: Any, view_id: str, collected: set[str]) -> None:
     # hop1: VIEW(out) -> OBJ
     hop1_targets = _fetch_targets(session, [view_id])
     obj_terms = _filter_by_type(_fetch_terms(session, hop1_targets), "ONTOLOGY_OBJ")
@@ -82,7 +87,7 @@ def _collect_from_view_root(session, view_id: str, collected: set[str]) -> None:
     collected.update(func_ids)
 
 
-def _collect_from_obj_root(session, obj_id: str, collected: set[str]) -> None:
+def _collect_from_obj_root(session: Any, obj_id: str, collected: set[str]) -> None:
     # hop1: OBJ(out) -> ACTION
     hop1_targets = _fetch_targets(session, [obj_id])
     action_terms = _filter_by_type(_fetch_terms(session, hop1_targets), "ONTOLOGY_ACTION")
@@ -96,7 +101,7 @@ def _collect_from_obj_root(session, obj_id: str, collected: set[str]) -> None:
     collected.update(func_ids)
 
 
-def _fetch_targets(session, source_ids: list[str]) -> list[str]:
+def _fetch_targets(session: Any, source_ids: list[str]) -> list[str]:
     if not source_ids:
         return []
     rows = session.execute(
@@ -107,7 +112,7 @@ def _fetch_targets(session, source_ids: list[str]) -> list[str]:
     return [str(r[0]) for r in rows if r and r[0]]
 
 
-def _fetch_terms(session, term_ids: list[str]) -> list[dict[str, Any]]:
+def _fetch_terms(session: Any, term_ids: list[str]) -> list[dict[str, Any]]:
     if not term_ids:
         return []
     rows = session.execute(
@@ -128,11 +133,7 @@ def _fetch_terms(session, term_ids: list[str]) -> list[dict[str, Any]]:
 
 def _filter_by_type(terms: Iterable[dict[str, Any]], expected: str) -> list[dict[str, Any]]:
     exp = _normalize_type_code(expected)
-    out: list[dict[str, Any]] = []
-    for t in terms:
-        if _normalize_type_code(t.get("term_type_code") or "") == exp:
-            out.append(t)
-    return out
+    return [t for t in terms if _normalize_type_code(t.get("term_type_code") or "") == exp]
 
 
 def _normalize_type_code(type_code: str) -> str:
@@ -150,4 +151,3 @@ def _normalize_type_code(type_code: str) -> str:
         "PROP": "ONTOLOGY_PROP",
     }
     return mapping.get(raw, raw)
-

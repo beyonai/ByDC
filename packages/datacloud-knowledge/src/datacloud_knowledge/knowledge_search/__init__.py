@@ -7,4 +7,3 @@ __all__ = [
     "resolve_related_owl_terms",
     "search_terms_by_type",
 ]
-
