@@ -24,10 +24,10 @@ import json
 import mmap
 import os
 import pickle
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 # Default cache directory
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "datacloud_knowledge"
@@ -63,8 +63,8 @@ class CacheMetadata:
     count_term: int = 0
     count_name: int = 0
     count_vocab: int = 0
-    max_updated_term: Optional[str] = None
-    max_updated_name: Optional[str] = None
+    max_updated_term: str | None = None
+    max_updated_name: str | None = None
 
     # Cache creation time
     created_at: str = ""
@@ -79,7 +79,7 @@ class CacheMetadata:
 class VocabularyCache:
     """mmap-based persistent cache for vocabulary and name index."""
 
-    def __init__(self, schema: str = "whale_datacloud", cache_dir: Optional[Path] = None):
+    def __init__(self, schema: str = "whale_datacloud", cache_dir: Path | None = None):
         """Initialize cache manager.
 
         Args:
@@ -105,15 +105,15 @@ class VocabularyCache:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         # In-memory cache (loaded from mmap or DB)
-        self._vocabulary_set: Optional[Set[str]] = None
-        self._name_index: Optional[Dict[str, List[Tuple[str, str, str]]]] = None
-        self._metadata: Optional[CacheMetadata] = None
+        self._vocabulary_set: set[str] | None = None
+        self._name_index: dict[str, list[tuple[str, str, str]]] | None = None
+        self._metadata: CacheMetadata | None = None
 
     def get_cache_path(self) -> Path:
         """Get cache file path."""
         return self.cache_file
 
-    def _fetch_db_state(self, conn) -> CacheMetadata:
+    def _fetch_db_state(self, conn: Any) -> CacheMetadata:
         """Fetch current database state for cache validation.
 
         Single query to get all needed metadata (~5ms).
@@ -121,7 +121,7 @@ class VocabularyCache:
         with conn.cursor() as cur:
             # Get relfilenode and reltuples from pg_class
             cur.execute(
-                f"""
+                """
                 SELECT 
                     c.relname,
                     c.relfilenode,
@@ -204,8 +204,8 @@ class VocabularyCache:
         return True
 
     def load(
-        self, conn
-    ) -> Tuple[Optional[Set[str]], Optional[Dict[str, List[Tuple[str, str, str]]]]]:
+        self, conn: Any
+    ) -> tuple[set[str] | None, dict[str, list[tuple[str, str, str]]] | None]:
         """Load vocabulary and name index from cache if valid.
 
         Returns:
@@ -248,27 +248,27 @@ class VocabularyCache:
 
                     return vocabulary_set, name_index
 
-        except Exception as e:
+        except Exception:
             # Cache corrupted or unreadable, rebuild
             return None, None
-    
+
     def load_fast(
         self,
-    ) -> Tuple[Optional[Set[str]], Optional[Dict[str, List[Tuple[str, str, str]]]]]:
+    ) -> tuple[set[str] | None, dict[str, list[tuple[str, str, str]]] | None]:
         """Load vocabulary and name index from cache WITHOUT DB validation.
-        
+
         Fast startup mode - assumes cache is valid.
         Use this when:
         - You're sure data hasn't changed
         - You want fastest possible startup
         - You're willing to risk stale data
-        
+
         Returns:
             Tuple of (vocabulary_set, name_index) if cache exists, else (None, None)
         """
         if not self.cache_file.exists():
             return None, None
-        
+
         try:
             with open(self.cache_file, "rb") as f:
                 with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
@@ -276,34 +276,34 @@ class VocabularyCache:
                     header_bytes = mm[:HEADER_SIZE]
                     header_json = header_bytes.split(b"\x00")[0].decode("utf-8")
                     cached_meta = CacheMetadata(**json.loads(header_json))
-                    
+
                     # Read vocabulary_set (skip validation)
                     vocab_offset = cached_meta.vocab_offset
                     vocab_size = cached_meta.vocab_size
                     vocab_bytes = mm[vocab_offset : vocab_offset + vocab_size]
                     vocabulary_set = pickle.loads(vocab_bytes)
-                    
+
                     # Read name_index
                     index_offset = cached_meta.index_offset
                     index_size = cached_meta.index_size
                     index_bytes = mm[index_offset : index_offset + index_size]
                     name_index = pickle.loads(index_bytes)
-                    
+
                     self._metadata = cached_meta
                     self._vocabulary_set = vocabulary_set
                     self._name_index = name_index
-                    
+
                     return vocabulary_set, name_index
-        
-        except Exception as e:
+
+        except Exception:
             # Cache corrupted or unreadable, rebuild
             return None, None
 
     def save(
         self,
-        conn,
-        vocabulary_set: Set[str],
-        name_index: Dict[str, List[Tuple[str, str, str]]],
+        conn: Any,
+        vocabulary_set: set[str],
+        name_index: dict[str, list[tuple[str, str, str]]],
     ) -> None:
         """Save vocabulary and name index to cache file."""
         # Get current DB state
@@ -366,9 +366,9 @@ class VocabularyCache:
         self._name_index = None
         self._metadata = None
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get cache statistics."""
-        stats: Dict[str, Any] = {
+        stats: dict[str, Any] = {
             "cache_file": str(self.cache_file),
             "exists": self.cache_file.exists(),
         }

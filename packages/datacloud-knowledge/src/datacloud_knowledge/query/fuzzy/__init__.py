@@ -28,9 +28,9 @@ from .matcher import (
     match_all_unmatched,
 )
 from .types import (
+    FuzzyConfig,
     FuzzyMatch,
     FuzzySuggestion,
-    FuzzyConfig,
     UnmatchedSpan,
 )
 
