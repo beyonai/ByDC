@@ -1,6 +1,6 @@
+import os
 import threading
 import time
-import os
 
 _SNOWFLAKE_EPOCH_MS = 1288834974657
 _snowflake_lock = threading.Lock()

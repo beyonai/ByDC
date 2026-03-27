@@ -6,13 +6,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Any, Final
 from urllib.parse import urlparse
 
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import OWL, RDF
-from rdflib.term import Node
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from rdflib.term import Node
 
 
 class OWLParseError(Exception):
@@ -39,7 +42,7 @@ _PROPERTY_ALIASES: Final[dict[str, str]] = {
 }
 
 
-def parse_owl_file(file_path: Path) -> list[dict]:
+def parse_owl_file(file_path: Path) -> list[dict[str, Any]]:
     """解析 OWL 文件中的 NamedIndividual 实体。
 
     Args:
@@ -64,16 +67,16 @@ def parse_owl_file(file_path: Path) -> list[dict]:
             format="xml",
             publicID=file_path.resolve().as_uri(),
         )
-    except Exception as exc:  # noqa: BLE001 - rdflib 底层会抛出多种解析异常类型
+    except Exception as exc:
         raise OWLParseError(f"OWL 文件解析失败: {file_path}: {exc}") from exc
 
     datatype_properties = _collect_datatype_properties(graph)
     datatype_property_names = {_extract_local_name(uri) for uri in datatype_properties}
-    entities: list[dict] = []
+    entities: list[dict[str, Any]] = []
     for individual in graph.subjects(RDF.type, OWL.NamedIndividual):
         if not isinstance(individual, URIRef):
             continue
-        entity: dict[str, str | list[str]] = {
+        entity: dict[str, Any] = {
             "entity_type": _resolve_entity_type(graph, individual),
         }
         for predicate, value in graph.predicate_objects(individual):
