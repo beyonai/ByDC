@@ -56,13 +56,33 @@ async def loop_node(
         [t["id"] for t in ready_tasks],
     )
 
-    # Concurrent execution
+    updated_plan = list(plan)
+    context = state.get("gateway_context")
+
+    # ── 执行前：逐任务推送"开始执行"日志（含工具名和入参）──────────────
+    if context is not None:
+        for t in ready_tasks:
+            params_text = _format_params(t.get("params", {}))
+            pre_thinking = (
+                f"▶ 开始执行 [{t['id']}]：{t.get('description', '')}\n"
+                f"■ 工具：{t.get('type', '未知')}\n"
+                f"■ 入参：{params_text}"
+            )
+            await context.emit_chunk(
+                StreamChunkEvent(content="执行任务"),
+                event_type=EventType.REASONING_LOG_DELTA.value,
+                content_type=SseReasonMessageType.think_title.value,
+            )
+            await context.emit_chunk(
+                StreamChunkEvent(content=pre_thinking),
+                event_type=EventType.REASONING_LOG_DELTA.value,
+                content_type=SseReasonMessageType.think_text.value,
+            )
+
+    # ── Concurrent execution ────────────────────────────────────────────
     task_outputs: list[tuple[dict, Any]] = await asyncio.gather(
         *[execute_next_task(t, state, custom_tools=dynamic_tools) for t in ready_tasks]
     )
-
-    updated_plan = list(plan)
-    context = state.get("gateway_context")
 
     for updated_task, output in task_outputs:
         # ── Persist output ──────────────────────────────────────────────
@@ -83,18 +103,21 @@ async def loop_node(
             for t in updated_plan
         ]
 
-        # ── Push thinking event ─────────────────────────────────────────
+        # ── 执行后：推送"完成/失败"日志（含工具名、入参、出参）──────────
         if context is not None:
             total = len(updated_plan)
             done_count = sum(
                 1 for t in updated_plan if t.get("status") in ("done", "failed")
             )
             status_icon = "✓" if updated_task.get("status") == "done" else "✗"
-            output_preview = str(output)[:300] if output else "（无结果）"
+            params_text = _format_params(updated_task.get("params", {}))
+            output_text = _format_output(output)
             thinking = (
-                f"[{status_icon} {done_count}/{total}] {updated_task['id']}："
+                f"[{status_icon} {done_count}/{total}] [{updated_task['id']}]："
                 f"{updated_task.get('description', '')}\n"
-                f"结果摘要：{output_preview}"
+                f"■ 工具：{updated_task.get('type', '未知')}\n"
+                f"■ 入参：{params_text}\n"
+                f"■ 出参：{output_text}"
             )
             await context.emit_chunk(
                 StreamChunkEvent(content="执行任务"),
@@ -129,3 +152,76 @@ def _pick_ready_tasks(
         if all(d in done_ids for d in t.get("deps", []))
     ]
     return ready if ready else [pending[0]]
+
+
+def _format_params(params: Any, max_len: int = 500) -> str:
+    """将工具入参格式化为可读字符串，超长时截断。"""
+    if not params:
+        return "（无）"
+    try:
+        text = json.dumps(params, ensure_ascii=False, indent=None)
+    except Exception:
+        text = str(params)
+    if len(text) > max_len:
+        text = text[:max_len] + "…（已截断）"
+    return text
+
+
+def _format_output(output: Any, max_len: int = 500) -> str:
+    """将工具出参格式化为可读摘要，区分常见结构类型。"""
+    if output is None:
+        return "（无结果）"
+    if isinstance(output, dict):
+        # records + meta 格式（在线查数标准返回）
+        if "records" in output and "meta" in output:
+            records = output.get("records", [])
+            meta = output.get("meta", {}) if isinstance(output.get("meta"), dict) else {}
+            total = meta.get("total", len(records))
+            cols = [c.get("name", "") if isinstance(c, dict) else str(c)
+                    for c in (meta.get("columns") or [])]
+            cols_str = ", ".join(cols[:8]) + ("…" if len(cols) > 8 else "")
+            return (
+                f"records: {len(records)} 条（total={total}）"
+                + (f"，columns: [{cols_str}]" if cols_str else "")
+            )
+        # preview + columns 格式
+        if "preview" in output and "columns" in output:
+            preview = output.get("preview", [])
+            total = output.get("total", len(preview))
+            cols = [c.get("name", "") if isinstance(c, dict) else str(c)
+                    for c in (output.get("columns") or [])]
+            cols_str = ", ".join(cols[:8]) + ("…" if len(cols) > 8 else "")
+            return (
+                f"preview: {len(preview)} 条（total={total}）"
+                + (f"，columns: [{cols_str}]" if cols_str else "")
+            )
+        # code_exec 格式
+        if "exit_code" in output:
+            exit_code = output.get("exit_code", 0)
+            stdout = str(output.get("output", "")).strip()[:200]
+            result = output.get("result")
+            result_info = (
+                f"，result: {len(result)} 行" if isinstance(result, list) else ""
+            )
+            status_str = "成功" if exit_code == 0 else f"失败(exit_code={exit_code})"
+            return f"{status_str}{result_info}" + (f"，stdout: {stdout!r}" if stdout else "")
+        # 通用 dict
+        try:
+            text = json.dumps(output, ensure_ascii=False)
+        except Exception:
+            text = str(output)
+        if len(text) > max_len:
+            text = text[:max_len] + "…（已截断）"
+        return text
+    if isinstance(output, str):
+        text = output.strip()
+        if len(text) > max_len:
+            text = text[:max_len] + "…（已截断）"
+        return text if text else "（空字符串）"
+    try:
+        text = json.dumps(output, ensure_ascii=False)
+    except Exception:
+        text = repr(output)
+    if len(text) > max_len:
+        text = text[:max_len] + "…（已截断）"
+    return text

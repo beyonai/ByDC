@@ -28,6 +28,10 @@ class AgentState(MessagesState):
     clarify_needed: bool
     # intent_node 检索到的知识原文（截断），供后续节点引用
     knowledge_preview: str | None
+    # 在线查数快捷路径：online_query 走 direct_tool；否则 analysis 走 dag
+    query_mode: str | None
+    target_tool: str | None
+    tool_params: dict[str, Any] | None
 
     # --- Planning (Node 2) ---
     plan: list[dict[str, Any]]
