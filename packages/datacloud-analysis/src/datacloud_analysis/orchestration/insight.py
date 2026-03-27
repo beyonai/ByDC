@@ -532,7 +532,7 @@ def build_structured_data_envelope(
     if fb:
         data_inner["file"] = fb
 
-    return {"code": 0, "message": "success", "data": data_inner}
+    return data_inner
 
 
 def _log_reconcile_raw_results_vs_sse(
