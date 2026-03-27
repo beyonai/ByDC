@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-psycopg2 = pytest.importorskip("psycopg2")  # type: ignore
+psycopg2 = pytest.importorskip("psycopg2")
 
 EXPECTED_TABLES = {
     "domain",
@@ -97,7 +98,7 @@ def _split_sql_statements(sql_content: str) -> list[str]:
     return statements
 
 
-def _execute_sql_file(conn: psycopg2.extensions.connection, sql_path: Path) -> None:
+def _execute_sql_file(conn: Any, sql_path: Path) -> None:
     """Execute all statements in a single SQL file."""
     sql_content = sql_path.read_text(encoding="utf-8")
     for statement in _split_sql_statements(sql_content):
@@ -105,7 +106,7 @@ def _execute_sql_file(conn: psycopg2.extensions.connection, sql_path: Path) -> N
             cur.execute(statement)
 
 
-def _connect(db_config: dict[str, str | int]) -> psycopg2.extensions.connection:
+def _connect(db_config: dict[str, str | int]) -> Any:
     return psycopg2.connect(
         host=db_config["host"],
         port=db_config["port"],
@@ -128,9 +129,7 @@ def test_database_connectivity(db_config: dict[str, str | int]) -> None:
 
 
 @pytest.mark.db_integration
-def test_apply_ddl_and_verify_tables(
-    db_config: dict[str, str | int], ddl_dir: Path
-) -> None:
+def test_apply_ddl_and_verify_tables(db_config: dict[str, str | int], ddl_dir: Path) -> None:
     """Drop existing schema objects then create all tables, verify expected set.
 
     Two-phase approach:
