@@ -63,7 +63,7 @@ def map_cardinality(relation_type: str | None) -> str | None:
     return cardinality
 
 
-def convert_domain(owl_entity: dict) -> dict:
+def convert_domain(owl_entity: dict[str, Any]) -> dict[str, Any]:
     """转换领域实体字段。"""
 
     return {
@@ -74,7 +74,7 @@ def convert_domain(owl_entity: dict) -> dict:
     }
 
 
-def convert_term_type(owl_entity: dict) -> dict:
+def convert_term_type(owl_entity: dict[str, Any]) -> dict[str, Any]:
     """转换术语类型实体字段，并提取 domain_code。"""
 
     type_code_path = _pick_str(owl_entity, "term_type_code_path", "trem_type_code_path")
@@ -88,7 +88,7 @@ def convert_term_type(owl_entity: dict) -> dict:
     }
 
 
-def convert_term(owl_entity: dict) -> dict:
+def convert_term(owl_entity: dict[str, Any]) -> dict[str, Any]:
     """转换术语实体字段。"""
 
     term_code = _pick_str(owl_entity, "term_code")
@@ -108,15 +108,17 @@ def convert_term(owl_entity: dict) -> dict:
     aliases = [alias for alias in normalized_synonyms if alias != term_name]
 
     ext_field_json = parse_json_field(_pick_str(owl_entity, "ext_field"), {})
-    ext_field_json['aliases'] = aliases
+    ext_field_json["aliases"] = aliases
     ext_field = json.dumps(ext_field_json, ensure_ascii=False)
 
     return {
-        "term_id": "#".join([
-            str(library_code),
-            str(term_type_code),
-            str(term_code),
-        ]),
+        "term_id": "#".join(
+            [
+                str(library_code),
+                str(term_type_code),
+                str(term_code),
+            ]
+        ),
         "term_code": term_code,
         "term_name": term_name,
         "term_desc": _pick_str(owl_entity, "term_desc"),
@@ -130,7 +132,7 @@ def convert_term(owl_entity: dict) -> dict:
     }
 
 
-def extract_knowledge_records(owl_term: dict, term_id: str) -> list[dict]:
+def extract_knowledge_records(owl_term: dict[str, Any], term_id: str) -> list[dict[str, Any]]:
     """从术语实体中提取可写入 term_knowledge 的记录列表。"""
 
     # terms_knowledge 既可能是 JSON 字符串，也可能已经是解析后的列表。
@@ -139,7 +141,7 @@ def extract_knowledge_records(owl_term: dict, term_id: str) -> list[dict]:
         logger.warning("terms_knowledge 不是列表，已降级为空列表: %s", knowledges)
         return []
 
-    records: list[dict] = []
+    records: list[dict[str, Any]] = []
     for knowledge in knowledges:
         # 非对象项无法映射到 term_knowledge 字段，直接跳过避免脏数据落库。
         if not isinstance(knowledge, dict):
@@ -157,7 +159,7 @@ def extract_knowledge_records(owl_term: dict, term_id: str) -> list[dict]:
     return records
 
 
-def convert_relation(owl_entity: dict) -> dict:
+def convert_relation(owl_entity: dict[str, Any]) -> dict[str, Any]:
     """转换关系实体字段，包含 cardinality 与 joinkeys 处理。"""
 
     # 解析 joinkeys
@@ -190,6 +192,7 @@ def convert_relation(owl_entity: dict) -> dict:
         "ext_field": ext_field,
     }
 
+
 def _extract_domain_code(term_type_code_path: str | None) -> str | None:
     """从 term_type_code_path（如 SALE#OBJECT）中提取 domain_code。"""
 
@@ -200,7 +203,7 @@ def _extract_domain_code(term_type_code_path: str | None) -> str | None:
     return domain_code or None
 
 
-def _pick_str(data: dict, *keys: str) -> str | None:
+def _pick_str(data: dict[str, Any], *keys: str) -> str | None:
     """从候选 key 中取第一个非空字符串值。"""
 
     for key in keys:
@@ -223,10 +226,10 @@ def _pick_str(data: dict, *keys: str) -> str | None:
 __all__ = [
     "RELATION_TYPE_TO_CARDINALITY",
     "convert_domain",
-    "extract_knowledge_records",
     "convert_relation",
     "convert_term",
     "convert_term_type",
+    "extract_knowledge_records",
     "map_cardinality",
     "parse_json_field",
 ]
