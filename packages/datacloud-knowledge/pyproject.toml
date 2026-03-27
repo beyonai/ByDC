@@ -87,11 +87,13 @@ extend-select = [
     "W",     # pycodestyle warnings
 ]
 ignore = [
-    "E501",    # line too long (handled by formatter)
-    "B008",    # function-call in default args — FastAPI's File/Form/Depends pattern
-    "PLR0913", # too many arguments — 有时不可避免
-    "PLR2004", # magic value comparison — 误报太多
+"E501",    # line too long (handled by formatter)
+"B008",    # function-call in default args — FastAPI's File/Form/Depends pattern
+"PLR0913", # too many arguments — 有时不可避免
+"PLR2004", # magic value comparison — 误报太多
     "TRY003",  # long exception messages — 有时更清晰
+    "RUF002",  # 中文 docstring 全角字符
+    "RUF003",  # 中文 comment 全角字符
 ]
 
 [tool.ruff.format]
