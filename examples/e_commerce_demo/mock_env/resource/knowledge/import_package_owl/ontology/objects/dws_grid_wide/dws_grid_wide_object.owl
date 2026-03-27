@@ -129,6 +129,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#GRID_NAME</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#regionId_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -165,6 +167,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#REGION_NAME</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#polygon_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -525,6 +529,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#WEAKNESS_TAG</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#iotLatestDate_field">
         <rdf:type rdf:resource="#EntityField"/>
