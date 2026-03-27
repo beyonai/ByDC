@@ -146,6 +146,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#ENTERPRISE_NAME</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#industryCode_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -182,6 +184,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#INDUSTRY_NAME</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#gridId_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -218,6 +222,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#GRID_NAME</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#regionId_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -254,6 +260,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#REGION_NAME</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#registerGridId_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -290,6 +298,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#BUS_ADRESS</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#regAddress_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -308,6 +318,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#REG_ADDRESS</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#poiLatitude_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -560,6 +572,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#RISK_LEVEL</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">code</rel_term_codeorname>
+		<trem_data_type>DICT_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#isScaleEnterprise_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -578,6 +592,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#IS_SCALE_ENTERPRISE</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">code</rel_term_codeorname>
+		<trem_data_type>DICT_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#isHighTech_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -596,6 +612,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#IS_HIGH_TECH</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">code</rel_term_codeorname>
+		<trem_data_type>DICT_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#highLevelTalents_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -668,6 +686,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#IS_LISTED</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">code</rel_term_codeorname>
+		<trem_data_type>DICT_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#enterpriseLevel_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -704,6 +724,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#DATA_SOURCE</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">code</rel_term_codeorname>
+		<trem_data_type>DICT_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#locationReality_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -758,6 +780,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#IS_RISK</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">code</rel_term_codeorname>
+		<trem_data_type>DICT_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#invoiceIssuedAmount_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -852,7 +876,7 @@
     <owl:NamedIndividual rdf:about="#chainId_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chainId</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链环节ID(企业表)</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链环节ID</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
@@ -870,7 +894,7 @@
     <owl:NamedIndividual rdf:about="#chainName_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chainName</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链环节名称(企业表)</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链环节名称</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
@@ -884,6 +908,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#CHAIN_NAME</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#upstreamChainName_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -902,6 +928,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#UPSTREAM_CHAIN_NAME</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#downstreamChainName_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -920,11 +948,13 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#DOWNSTREAM_CHAIN_NAME</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#isLeading_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">isLeading</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">是否龙头(链路表聚合)</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">是否龙头</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">BOOLEAN</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
@@ -938,11 +968,13 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#IS_LEADING</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">code</rel_term_codeorname>
+		<trem_data_type>DICT_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#leadingLevels_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">leadingLevels</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">龙头等级聚合</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">龙头等级</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
@@ -956,6 +988,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#LEADING_LEVELS</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#maxInfluenceRadiusKm_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -1334,6 +1368,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#RISK_PATTERN</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#latestRiskTypeName_field">
         <rdf:type rdf:resource="#EntityField"/>
@@ -1352,6 +1388,8 @@
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#RISK_TYPE</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+		<rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
+		<trem_data_type>LIST_TERM</trem_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#latestComprehensiveScore_field">
         <rdf:type rdf:resource="#EntityField"/>
