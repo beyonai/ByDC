@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 from typing import BinaryIO
 
@@ -10,7 +11,7 @@ def md5_of_stream(stream: BinaryIO, chunk_size: int = 1024 * 1024) -> str:
     If the stream is seekable, its position will be restored to where it was before hashing.
     """
 
-    hasher = hashlib.md5()
+    hasher = hashlib.md5()  # noqa: S324
     try:
         pos = stream.tell()
         seekable = True
@@ -25,10 +26,7 @@ def md5_of_stream(stream: BinaryIO, chunk_size: int = 1024 * 1024) -> str:
         hasher.update(chunk)
 
     if seekable:
-        try:
+        with contextlib.suppress(Exception):
             stream.seek(pos)
-        except Exception:
-            pass
 
     return hasher.hexdigest()
-

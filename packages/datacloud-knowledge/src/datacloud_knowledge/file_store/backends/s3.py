@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import json
-from typing import BinaryIO
+from typing import TYPE_CHECKING, Any, BinaryIO
 
-from ..errors import BackendMisconfigured, FileNotFoundInStore
-from ..settings import FileStoreSettings
-from ..types import JsonDict, PutOutcome
+from datacloud_knowledge.file_store.errors import (
+    BackendMisconfiguredError,
+    FileNotFoundInStoreError,
+)
+from datacloud_knowledge.file_store.types import JsonDict, PutOutcome
+
 from .local import _safe_directory, _shard
+
+if TYPE_CHECKING:
+    from datacloud_knowledge.file_store.settings import FileStoreSettings
 
 
 class S3Backend:
@@ -20,7 +26,7 @@ class S3Backend:
         secret_access_key: str,
     ):
         if not bucket:
-            raise BackendMisconfigured("Missing s3 bucket")
+            raise BackendMisconfiguredError("Missing s3 bucket")
 
         self.bucket = bucket
         self.client = _create_s3_client(
@@ -31,9 +37,9 @@ class S3Backend:
         )
 
     @classmethod
-    def from_settings(cls, settings: FileStoreSettings) -> "S3Backend":
+    def from_settings(cls, settings: FileStoreSettings) -> S3Backend:
         if not (settings.s3_bucket and settings.s3_access_key_id and settings.s3_secret_access_key):
-            raise BackendMisconfigured("Missing required S3 settings")
+            raise BackendMisconfiguredError("Missing required S3 settings")
         return cls(
             bucket=settings.s3_bucket,
             endpoint_url=settings.s3_endpoint_url,
@@ -45,17 +51,17 @@ class S3Backend:
     def exists(self, md5: str) -> bool:
         try:
             self.client.head_object(Bucket=self.bucket, Key=self._index_key(md5))
-            return True
         except Exception as e:
-            ClientError = _client_error_type()
-            if ClientError is not None and isinstance(e, ClientError):
-                if e.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404:
+            client_error = _client_error_type()
+            if client_error is not None and isinstance(e, client_error):
+                # type ignore needed because boto3 exceptions have response attr
+                if e.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404:  # type: ignore[attr-defined]
                     return False
-                code = e.response.get("Error", {}).get("Code")
+                code = e.response.get("Error", {}).get("Code")  # type: ignore[attr-defined]
                 if code in {"404", "NoSuchKey", "NotFound"}:
                     return False
-                raise
             raise
+        return False
 
     def put(self, directory: str, md5: str, stream: BinaryIO, meta: JsonDict) -> PutOutcome:
         directory = _safe_directory(directory)
@@ -68,7 +74,7 @@ class S3Backend:
             if directory != canonical:
                 self._put_ref(directory=directory, md5=md5, canonical_directory=canonical)
             return PutOutcome(wrote_content=False, canonical_directory=canonical)
-        except FileNotFoundInStore:
+        except FileNotFoundInStoreError:
             pass
 
         # First write: put content under this directory, then index
@@ -98,11 +104,11 @@ class S3Backend:
         try:
             resp = self.client.get_object(Bucket=self.bucket, Key=content_key)
         except Exception as e:
-            ClientError = _client_error_type()
-            if ClientError is not None and isinstance(e, ClientError):
-                code = e.response.get("Error", {}).get("Code")
+            client_error = _client_error_type()
+            if client_error is not None and isinstance(e, client_error):
+                code = e.response.get("Error", {}).get("Code")  # type: ignore[attr-defined]
                 if code in {"NoSuchKey", "NotFound", "404"}:
-                    raise FileNotFoundInStore(md5) from e
+                    raise FileNotFoundInStoreError(md5) from e
             raise
 
         body = resp["Body"]
@@ -130,24 +136,24 @@ class S3Backend:
         self.client.put_object(
             Bucket=self.bucket,
             Key=self._ref_key(directory, md5),
-            Body=json.dumps({"canonical_directory": canonical_directory}, ensure_ascii=False, indent=2).encode(
-                "utf-8"
-            ),
+            Body=json.dumps(
+                {"canonical_directory": canonical_directory}, ensure_ascii=False, indent=2
+            ).encode("utf-8"),
             ContentType="application/json",
         )
 
-    def _read_index(self, md5: str) -> JsonDict:
+    def _read_index(self, md5: str) -> dict[str, Any]:
         try:
             resp = self.client.get_object(Bucket=self.bucket, Key=self._index_key(md5))
         except Exception as e:
-            ClientError = _client_error_type()
-            if ClientError is not None and isinstance(e, ClientError):
-                code = e.response.get("Error", {}).get("Code")
+            client_error = _client_error_type()
+            if client_error is not None and isinstance(e, client_error):
+                code = e.response.get("Error", {}).get("Code")  # type: ignore[attr-defined]
                 if code in {"NoSuchKey", "NotFound", "404"}:
-                    raise FileNotFoundInStore(md5) from e
+                    raise FileNotFoundInStoreError(md5) from e
             raise
         body = resp["Body"].read()
-        return json.loads(body.decode("utf-8"))
+        return json.loads(body.decode("utf-8"))  # type: ignore[no-any-return]
 
 
 def _create_s3_client(
@@ -156,11 +162,11 @@ def _create_s3_client(
     region: str | None,
     access_key_id: str,
     secret_access_key: str,
-):
+) -> Any:
     try:
-        import boto3  # type: ignore
+        import boto3  # noqa: PLC0415
     except Exception as e:  # pragma: no cover
-        raise BackendMisconfigured("boto3 is required for S3 backend") from e
+        raise BackendMisconfiguredError("boto3 is required for S3 backend") from e
 
     return boto3.client(
         "s3",
@@ -171,11 +177,10 @@ def _create_s3_client(
     )
 
 
-def _client_error_type():
+def _client_error_type() -> type | None:
     try:
-        from botocore.exceptions import ClientError  # type: ignore
+        from botocore.exceptions import ClientError  # noqa: PLC0415
 
-        return ClientError
+        return ClientError  # type: ignore[no-any-return]
     except Exception:  # pragma: no cover
         return None
-
