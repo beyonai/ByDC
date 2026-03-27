@@ -366,8 +366,20 @@ class PlanAgent:
             )
         return self._llm
 
+    def _get_reporter(self) -> Any | None:
+        """从当前 InvocationContext 获取 GatewayProgressReporter，不可用时返回 None。"""
+        try:
+            from datacloud_data_sdk.context import get_gateway_context  # noqa: PLC0415
+            gw_ctx = get_gateway_context()
+            if gw_ctx is not None:
+                from datacloud_data_sdk.events.gateway_reporter import GatewayProgressReporter  # noqa: PLC0415
+                return GatewayProgressReporter(gw_ctx)
+        except Exception:
+            pass
+        return None
+
     async def _generate_node(self, state: PlanAgentState) -> dict[str, Any]:
-        """generate 节点：调用 LLM 生成 QueryExecutionPlan。"""
+        """generate 节点：流式调用 LLM 生成 QueryExecutionPlan，同步推送 token 进度。"""
         question = state["question"]
         validation_errors = state.get("validation_errors")
 
@@ -388,13 +400,38 @@ class PlanAgent:
             {"role": "user", "content": user_message},
         ]
 
-        response = await llm.ainvoke(messages)
-        content = response.content if hasattr(response, "content") else str(response)
-        plan_dict = parse_json_response(str(content))
+        reporter = self._get_reporter()
+
+        # 重试时先推送重试通知
+        if validation_errors and reporter:
+            retry_count = state.get("retry_count", 0)
+            await reporter.on_plan_validation_retry(retry_count, validation_errors)
+
+        if reporter:
+            await reporter.on_plan_generating(question)
+
+        # 流式调用 LLM，逐 token 推送进度
+        chunks: list[str] = []
+        async for chunk in llm.astream(messages):
+            token = chunk.content if hasattr(chunk, "content") else str(chunk)
+            if token:
+                chunks.append(token)
+                if reporter:
+                    await reporter.on_plan_generating_token(token)
+
+        content = "".join(chunks)
+        plan_dict = parse_json_response(content)
         data = camel_to_snake_keys(
             plan_dict, preserve_children={"params", "tags"}
         )
         plan = parse_plan(data, question)
+
+        if reporter:
+            step_count = len(plan.steps) if plan.steps else 0
+            await reporter.on_plan_generated(
+                f"canAnswer={plan.can_answer}，steps={step_count}"
+            )
+
         return {"plan": plan, "object_view_json": cached_json}
 
     def _validate_node(self, state: PlanAgentState) -> dict[str, Any]:
