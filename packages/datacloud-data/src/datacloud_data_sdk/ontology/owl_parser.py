@@ -44,7 +44,10 @@ class ParsedField:
     source_column: str | None = None
     is_primary_key: bool = False
     required: bool = False
-    term_set: str | None = None
+    term_type_code_path: str | None = None
+    library_code: str | None = None
+    rel_term_codeorname: str | None = None
+    term_data_type: str | None = None
 
 
 @dataclass
@@ -56,6 +59,8 @@ class ParsedAction:
     belong_class: str | None = None
     function_refs: list[str] = field(default_factory=list)
     params: list[dict[str, Any]] = field(default_factory=list)
+    request_param_refs: list[str] = field(default_factory=list)
+    response_param_refs: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -198,6 +203,9 @@ class OwlParser:
         source_column = self._get_predicate_value(g, subject, "source_column")
         is_required = self._get_predicate_value(g, subject, "is_required")
         term_type_code_path = self._get_predicate_value(g, subject, "term_type_code_path")
+        library_code = self._get_predicate_value(g, subject, "library_code")
+        rel_term_codeorname = self._get_predicate_value(g, subject, "rel_term_codeorname")
+        term_data_type = self._get_predicate_value(g, subject, "term_data_type")
 
         fld = ParsedField(
             field_code=property_code,
@@ -205,7 +213,10 @@ class OwlParser:
             field_type=data_type,
             source_column=source_column,
             required=is_required.lower() == "true" if is_required else False,
-            term_set=term_type_code_path if term_type_code_path else None,
+            term_type_code_path=term_type_code_path if term_type_code_path else None,
+            library_code=library_code if library_code else None,
+            rel_term_codeorname=rel_term_codeorname if rel_term_codeorname else None,
+            term_data_type=term_data_type if term_data_type else None,
         )
         self._fields[property_code] = fld
 
@@ -237,20 +248,7 @@ class OwlParser:
             belong_entities = []
 
         request_params = self._get_predicate_values(g, subject, "request_params")
-
-        params = []
-        for param_ref in request_params:
-            param_ref_name = param_ref.split("#")[-1] if "#" in param_ref else param_ref
-            if param_ref_name in self._fields:
-                f = self._fields[param_ref_name]
-                params.append({
-                    "param_code": f.field_code,
-                    "param_name": f.field_name,
-                    "param_type": f.field_type,
-                    "required": f.required,
-                    "direction": "IN",
-                    "term_set": f.term_set,
-                })
+        response_params = self._get_predicate_values(g, subject, "response_params")
 
         action = ParsedAction(
             action_code=action_code,
@@ -258,7 +256,8 @@ class OwlParser:
             description=action_desc,
             action_type=action_type,
             function_refs=function_refs,
-            params=params,
+            request_param_refs=request_params,
+            response_param_refs=response_params,
         )
         self._actions[action_code] = action
 
@@ -275,13 +274,19 @@ class OwlParser:
         description = self._get_predicate_value(g, subject, "description") or ""
         is_required = self._get_predicate_value(g, subject, "isRequired")
         term_type_code_path = self._get_predicate_value(g, subject, "term_type_code_path")
+        library_code = self._get_predicate_value(g, subject, "library_code")
+        rel_term_codeorname = self._get_predicate_value(g, subject, "rel_term_codeorname")
+        term_data_type = self._get_predicate_value(g, subject, "term_data_type")
 
         fld = ParsedField(
             field_code=param_code,
             field_name=description or param_code,
             field_type=param_type.upper(),
             required=is_required.lower() == "true" if is_required else False,
-            term_set=term_type_code_path if term_type_code_path else None,
+            term_type_code_path=term_type_code_path if term_type_code_path else None,
+            library_code=library_code if library_code else None,
+            rel_term_codeorname=rel_term_codeorname if rel_term_codeorname else None,
+            term_data_type=term_data_type if term_data_type else None,
         )
         self._fields[param_code] = fld
 
@@ -292,12 +297,18 @@ class OwlParser:
 
         field_type = self._get_predicate_value(g, subject, "fieldType") or "string"
         term_type_code_path = self._get_predicate_value(g, subject, "term_type_code_path")
+        library_code = self._get_predicate_value(g, subject, "library_code")
+        rel_term_codeorname = self._get_predicate_value(g, subject, "rel_term_codeorname")
+        term_data_type = self._get_predicate_value(g, subject, "term_data_type")
 
         fld = ParsedField(
             field_code=field_code,
             field_name=field_code,
             field_type=field_type.upper(),
-            term_set=term_type_code_path if term_type_code_path else None,
+            term_type_code_path=term_type_code_path if term_type_code_path else None,
+            library_code=library_code if library_code else None,
+            rel_term_codeorname=rel_term_codeorname if rel_term_codeorname else None,
+            term_data_type=term_data_type if term_data_type else None,
         )
         if field_code not in self._fields:
             self._fields[field_code] = fld
@@ -418,6 +429,41 @@ class OwlParser:
             if entity_code in self._objects:
                 self._objects[entity_code].table_name = table_name
 
+    def _build_term_meta(self, fld: ParsedField) -> dict[str, Any] | None:
+        if not fld.term_type_code_path:
+            return None
+
+        term_meta: dict[str, Any] = {}
+
+        if fld.term_data_type == "ONTOLOGY_TERM":
+            parts = fld.term_type_code_path.split("#")
+            if len(parts) == 2:
+                term_meta["termMasterType"] = "ontology"
+                term_meta["objectCode"] = parts[1]
+                if fld.rel_term_codeorname:
+                    term_meta["termField"] = fld.rel_term_codeorname
+        elif fld.term_data_type == "LIST_TERM":
+            parts = fld.term_type_code_path.split("#")
+            if len(parts) == 2:
+                term_meta["termMasterType"] = "list"
+                term_meta["termTypeCode"] = parts[1]
+                if fld.library_code:
+                    term_meta["libraryCode"] = fld.library_code
+        elif fld.term_data_type == "DICT_TERM":
+            parts = fld.term_type_code_path.split("#")
+            if len(parts) == 2:
+                term_meta["termMasterType"] = "dict"
+                term_meta["termTypeCode"] = parts[1]
+                if fld.rel_term_codeorname:
+                    term_meta["termField"] = fld.rel_term_codeorname
+        else:
+            parts = fld.term_type_code_path.split("#")
+            if len(parts) == 2:
+                term_meta["termMasterType"] = "dict"
+                term_meta["termTypeCode"] = parts[1]
+
+        return term_meta if term_meta else None
+
     def parse_directory(self, ontology_dir: Path, relations_dir: Path | None = None) -> dict[str, Any]:
         if ontology_dir.is_dir():
             for owl_file in ontology_dir.rglob("*.owl"):
@@ -433,29 +479,70 @@ class OwlParser:
         for _obj_code, obj in self._objects.items():
             fields = []
             for _field_code, fld in self._fields.items():
-                if fld.source_column or fld.term_set:
-                    fields.append({
+                if fld.source_column or fld.term_type_code_path:
+                    field_dict = {
                         "field_code": fld.field_code,
                         "field_name": fld.field_name,
                         "field_type": fld.field_type,
-                        "description": fld.description,
                         "source_column": fld.source_column,
                         "is_primary_key": fld.is_primary_key,
                         "required": fld.required,
-                        "term_set": fld.term_set,
-                    })
+                    }
+
+                    if fld.term_type_code_path:
+                        term_meta = self._build_term_meta(fld)
+                        if term_meta:
+                            field_dict["termMeta"] = term_meta
+
+                    fields.append(field_dict)
 
             actions = []
             for action_code in obj.actions:
                 if action_code in self._actions:
                     action = self._actions[action_code]
+                    params = []
+
+                    for param_ref in action.request_param_refs:
+                        for f in self._fields.values():
+                            if param_ref.endswith(f.field_code) or f.field_code in param_ref:
+                                param_dict = {
+                                    "param_code": f.field_code,
+                                    "param_name": f.field_name,
+                                    "param_type": f.field_type,
+                                    "required": f.required,
+                                    "direction": "IN",
+                                }
+                                if f.term_type_code_path:
+                                    term_meta = self._build_term_meta(f)
+                                    if term_meta:
+                                        param_dict["termMeta"] = term_meta
+                                params.append(param_dict)
+                                break
+
+                    for param_ref in action.response_param_refs:
+                        for f in self._fields.values():
+                            if param_ref.endswith(f.field_code) or f.field_code in param_ref:
+                                param_dict = {
+                                    "param_code": f.field_code,
+                                    "param_name": f.field_name,
+                                    "param_type": f.field_type,
+                                    "required": f.required,
+                                    "direction": "OUT",
+                                }
+                                if f.term_type_code_path:
+                                    term_meta = self._build_term_meta(f)
+                                    if term_meta:
+                                        param_dict["termMeta"] = term_meta
+                                params.append(param_dict)
+                                break
+
                     actions.append({
                         "action_code": action.action_code,
                         "action_name": action.action_name,
                         "description": action.description,
                         "action_type": action.action_type,
                         "function_refs": action.function_refs,
-                        "params": action.params,
+                        "params": params,
                     })
 
             source_config = None
