@@ -9,7 +9,7 @@ from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
-from gateway_sdk import AgentConfig, Plugin, PluginManifest
+from by_framework import AgentConfig, Plugin, PluginManifest
 
 # 尝试导入本体加载相关模块，处理关联实体工具的动态生成
 try:
