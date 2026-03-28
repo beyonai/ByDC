@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 _ROOT = Path(__file__).resolve().parents[2]
 _REPO_ROOT = _ROOT.parents[1]
-_DDL_DIR  = _ROOT / "db" / "ddl"  / "whale_datacloud"
+_DDL_DIR = _ROOT / "db" / "ddl" / "whale_datacloud"
 _SEED_DIR = _ROOT / "db" / "seed" / "whale_datacloud"
 
 
@@ -28,8 +28,8 @@ def _load_env_if_needed() -> None:
     for candidate in (_REPO_ROOT / ".vscode" / ".env.test", _REPO_ROOT / ".env.test"):
         if not candidate.exists():
             continue
-        for line in candidate.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
+            for raw_line in candidate.read_text(encoding="utf-8").splitlines():
+                line = raw_line.strip()
             if not line or line.startswith("#"):
                 continue
             if "=" in line:
@@ -62,8 +62,7 @@ def _sql_files(directory: Path) -> list[Path]:
     """Return sorted .sql files in directory; empty list if dir does not exist."""
     if not directory.exists():
         return []
-    files = sorted(directory.glob("*.sql"))
-    return files
+    return sorted(directory.glob("*.sql"))
 
 
 def apply_ddl() -> None:
@@ -132,7 +131,7 @@ def main() -> None:
 
     环境变量 DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME 可从 .vscode/.env.test 自动加载。
     """
-    import sys
+    import sys  # noqa: PLC0415
 
     _load_env_if_needed()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")

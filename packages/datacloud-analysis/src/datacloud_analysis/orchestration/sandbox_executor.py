@@ -44,6 +44,16 @@ def normalize_workspace_task_output(output: Any) -> Any:
 _TASK_DISPATCHERS: dict[str, Any] = {}
 
 
+class _NullContext:
+    """当 datacloud_data_sdk 不可用时的空上下文管理器兜底。"""
+
+    def __enter__(self) -> "_NullContext":
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        pass
+
+
 def _log_tool_output_summary(task_id: str, task_type: str, output: Any) -> None:
     """Log a compact summary of tool return (counts/ids only, not full rows or polygon)."""
     if isinstance(output, dict):
@@ -127,7 +137,7 @@ async def execute_next_task(
 
     try:
         logger.debug("Executing task %s (type=%s) …", task["id"], task_type)
-        
+
         # Tools are BaseTool instances, so we call ainvoke.
         # But wait, some might be functions. Let's handle tool properly.
         if dynamic_dispatcher is not None:
@@ -159,13 +169,27 @@ async def execute_next_task(
                 task["id"],
                 is_consistent,
             )
-            if hasattr(dynamic_dispatcher, "ainvoke"):
-                output = await dynamic_dispatcher.ainvoke(params)
-            elif callable(dynamic_dispatcher):
-                maybe = dynamic_dispatcher(**params) if isinstance(params, dict) else dynamic_dispatcher(params)
-                output = await maybe if hasattr(maybe, "__await__") else maybe
-            else:
-                output = dynamic_dispatcher
+            # 建立 InvocationContext，将 gateway_context 传入 SDK 层，
+            # 使 get_current_context() 和 get_gateway_context() 在 SDK 内部可用
+            try:
+                from datacloud_data_sdk.context import InvocationContext  # noqa: PLC0415
+                gateway_context = state.get("gateway_context")
+                _ctx_kwargs: dict = {}
+                if gateway_context is not None:
+                    _ctx_kwargs["gateway_context"] = gateway_context
+                    _ctx_kwargs["session_id"] = getattr(gateway_context, "session_id", "")
+                _invocation_ctx: Any = InvocationContext(**_ctx_kwargs)
+            except ImportError:
+                _invocation_ctx = _NullContext()
+
+            with _invocation_ctx:
+                if hasattr(dynamic_dispatcher, "ainvoke"):
+                    output = await dynamic_dispatcher.ainvoke(params)
+                elif callable(dynamic_dispatcher):
+                    maybe = dynamic_dispatcher(**params) if isinstance(params, dict) else dynamic_dispatcher(params)
+                    output = await maybe if hasattr(maybe, "__await__") else maybe
+                else:
+                    output = dynamic_dispatcher
         elif hasattr(dispatcher, "ainvoke"):
             # Prepare params. Usually the LLM outputs 'description' which we might map to 'query' or 'question'.
             params = {}

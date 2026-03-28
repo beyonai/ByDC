@@ -542,6 +542,7 @@ def build_structured_data_envelope(
     file_path = ""
     download_url = ""
     notice_overflow = ""
+    file_id = ""
     found = False
 
     for res in raw_results:
@@ -556,7 +557,9 @@ def build_structured_data_envelope(
         if meta_base is None:
             meta_base = shaped.get("meta") if isinstance(shaped.get("meta"), dict) else {}
         if not file_path:
-            file_path = str(out.get("file_path", "") or "")
+            file_path = str(out.get("file", {}).get("file_url", ) or "")
+        if not file_id:
+            file_id = out.get("file_id", "")
         if not download_url:
             download_url = str(out.get("original_download_url", "") or "")
         if not notice_overflow:

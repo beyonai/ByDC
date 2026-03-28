@@ -24,6 +24,7 @@ import logging
 import os
 from importlib import import_module
 from pathlib import Path
+from typing import Any
 
 import psycopg
 from psycopg import Connection, Cursor
@@ -36,9 +37,9 @@ from .snowflake import _next_snowflake_id, _next_snowflake_ids
 def _execute_values(
     cur: Cursor,
     sql: str,
-    argslist: list[tuple],
+    argslist: list[tuple[Any, ...]],
     page_size: int = 1000,
-    template: str | None = None,
+    _template: str | None = None,
 ) -> None:
     """批量执行 INSERT/UPDATE，模拟 psycopg2 的 execute_values。
 
@@ -54,7 +55,7 @@ def _execute_values(
     # 忽略 template 参数 - 在 psycopg3 中不需要，executemany 会自动处理类型转换
     for i in range(0, len(argslist), page_size):
         batch = argslist[i : i + page_size]
-        cur.executemany(sql_with_placeholders, batch)  # type: ignore
+        cur.executemany(sql_with_placeholders, batch)
 
 
 logger = logging.getLogger(__name__)
@@ -68,9 +69,10 @@ def _import_batch_size() -> int:
         return 2000
     return min(int(raw), 10_000)
 
-def _iter_jsonl_obj_batches(file_path: Path, batch_size: int):
+
+def _iter_jsonl_obj_batches(file_path: Path, batch_size: int) -> Any:
     """流式按批产出 JSON 对象，按行读文件，避免整文件载入内存。"""
-    batch: list[dict] = []
+    batch: list[dict[str, Any]] = []
     with file_path.open(encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -98,17 +100,14 @@ def _normalize_term_code(s: str) -> str:
     # return normalized[:64]
 
 
-
-
-
 def _term_name_row_tuples(
     term_id: str, term_name: str, aliases: list[str]
 ) -> list[tuple[str, str, str]]:
     """name 行构造（name_id, term_id, name_text）；name_id 每条均为雪花 ID。"""
     rows: list[tuple[str, str, str]] = [(_next_snowflake_id(), term_id, term_name)]
-    for alias in aliases:
-        if alias and alias != term_name:
-            rows.append((_next_snowflake_id(), term_id, alias))
+    rows.extend(
+        (_next_snowflake_id(), term_id, alias) for alias in aliases if alias and alias != term_name
+    )
     return rows
 
 
@@ -125,7 +124,7 @@ def _lookup_term_ids_by_norm_codes(cur: Cursor, norm_codes: list[str]) -> dict[s
     return {r[0]: r[1] for r in cur.fetchall()}
 
 
-def _str_id_if_set(obj: dict, key: str) -> str | None:
+def _str_id_if_set(obj: dict[str, Any], key: str) -> str | None:
     """JSON 中若显式提供 id（非空字符串），返回该值，用于写入外键 term_id 列。"""
     v = obj.get(key)
     if v is None:
@@ -135,7 +134,7 @@ def _str_id_if_set(obj: dict, key: str) -> str | None:
 
 
 def _term_id_from_obj_or_code(
-    obj: dict,
+    obj: dict[str, Any],
     *,
     id_key: str,
     code_key: str,
@@ -150,7 +149,7 @@ def _term_id_from_obj_or_code(
 
 
 def _optional_term_id_from_obj(
-    obj: dict,
+    obj: dict[str, Any],
     *,
     id_key: str,
     code_key: str,
@@ -168,7 +167,7 @@ def _optional_term_id_from_obj(
 
 
 def _term_id_from_obj_or_code_direct(
-    obj: dict,
+    obj: dict[str, Any],
     *,
     id_key: str,
     code_key: str,
@@ -183,6 +182,7 @@ def _term_id_from_obj_or_code_direct(
         return tid
     # 新版 code 字段值即为 term_id，直接返回
     return str(obj[code_key])
+
 
 # ── DB 连接 ───────────────────────────────────────────────────────────────────
 
@@ -214,14 +214,14 @@ def _connect() -> Connection:
     if not app_name:
         app_name = "datacloud_knowledge_import"
 
-    _kw: dict = dict(
-        host=_req("DB_HOST"),
-        port=int(_req("DB_PORT")),
-        user=_req("DB_USER"),
-        password=_req("DB_PASSWORD"),
-        dbname=_req("DB_NAME"),
-        connect_timeout=connect_timeout,
-    )
+    _kw: dict[str, Any] = {
+        "host": _req("DB_HOST"),
+        "port": int(_req("DB_PORT")),
+        "user": _req("DB_USER"),
+        "password": _req("DB_PASSWORD"),
+        "dbname": _req("DB_NAME"),
+        "connect_timeout": connect_timeout,
+    }
     try:
         conn = psycopg.connect(**_kw, application_name=app_name)
     except TypeError:
@@ -245,7 +245,7 @@ def _connect() -> Connection:
 # ── 各实体入库处理器（批量优先；单行接口委托 _batch_*）──────────────────────────────
 
 
-def _resolve_type_category(obj: dict) -> int:
+def _resolve_type_category(obj: dict[str, Any]) -> int:
     category_map = {"列表术语": 1, "字典术语": 2, "本体术语": 3, "文档名称术语": 4}
     raw_cat = obj["type_category"]
     type_category = category_map.get(str(raw_cat))
@@ -254,13 +254,13 @@ def _resolve_type_category(obj: dict) -> int:
     return type_category
 
 
-def _batch_process_domain(cur: Cursor, objs: list[dict], stats: dict) -> None:
+def _batch_process_domain(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str, Any]) -> None:
     """批量写入 whale_datacloud.domain。"""
     if not objs:
         return
     deletes: list[str] = []
-    updates: list[dict] = []
-    upserts: list[dict] = []
+    updates: list[dict[str, Any]] = []
+    upserts: list[dict[str, Any]] = []
     for obj in objs:
         op = obj.get("op", "add")
         if op == "delete":
@@ -341,13 +341,13 @@ def _batch_process_domain(cur: Cursor, objs: list[dict], stats: dict) -> None:
             raise
 
 
-def _batch_process_library(cur: Cursor, objs: list[dict], stats: dict) -> None:
+def _batch_process_library(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str, Any]) -> None:
     """批量写入 whale_datacloud.term_library。"""
     if not objs:
         return
     deletes: list[str] = []
-    updates: list[dict] = []
-    upserts: list[dict] = []
+    updates: list[dict[str, Any]] = []
+    upserts: list[dict[str, Any]] = []
     for obj in objs:
         op = obj.get("op", "add")
         if op == "delete":
@@ -406,13 +406,15 @@ def _batch_process_library(cur: Cursor, objs: list[dict], stats: dict) -> None:
         stats["libraries"]["inserted"] += len(to_insert)
 
 
-def _batch_process_term_type(cur: Cursor, objs: list[dict], stats: dict) -> None:
-    """批量写入 whale_datacloud.term_type（内置类型不允许删除）。"""
+def _batch_process_term_type(
+    cur: Cursor, objs: list[dict[str, Any]], stats: dict[str, Any]
+) -> None:
+    """批量写入 whale_datacloud.term_type(内置类型不允许删除)。"""
     if not objs:
         return
     deletes: list[str] = []
-    updates: list[dict] = []
-    upserts: list[dict] = []
+    updates: list[dict[str, Any]] = []
+    upserts: list[dict[str, Any]] = []
     for obj in objs:
         op = obj.get("op", "add")
         if op == "delete":
@@ -543,16 +545,16 @@ def _batch_sync_term_names(
     return len(all_rows)
 
 
-def _batch_process_term(cur: Cursor, objs: list[dict], stats: dict) -> None:
+def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str, Any]) -> None:
     """批量写入 whale_datacloud.term 并批量同步 term_name / term_vocabulary。
 
     按唯一 term_code 更新已有行时不改 term_id。
     """
     if not objs:
         return
-    deletes: list[dict] = []
-    updates: list[dict] = []
-    upserts: list[dict] = []
+    deletes: list[dict[str, Any]] = []
+    updates: list[dict[str, Any]] = []
+    upserts: list[dict[str, Any]] = []
     for obj in objs:
         op = obj.get("op", "add")
         if op == "delete":
@@ -665,8 +667,8 @@ def _batch_process_term(cur: Cursor, objs: list[dict], stats: dict) -> None:
             cur.execute("DROP TABLE _tmp_term_upd")
             stats["terms"]["updated"] += len(update_rows)
     if to_insert:
-        insert_rows: list[tuple] = []
-        for i, obj in enumerate(to_insert):
+        insert_rows: list[tuple[Any, ...]] = []
+        for _i, obj in enumerate(to_insert):
             term_code = _normalize_term_code(obj["term_code"])
             term_tags = "{}"
             insert_rows.append(
@@ -690,7 +692,6 @@ def _batch_process_term(cur: Cursor, objs: list[dict], stats: dict) -> None:
                     term_type_code, library_id, owl_doc_id, term_tags, ext_attrs)
                VALUES %s""",
             insert_rows,
-            template="(%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb)",
             page_size=1000,  # 增大 page_size
         )
         stats["terms"]["inserted"] += len(to_insert)
@@ -707,7 +708,7 @@ def _batch_process_term(cur: Cursor, objs: list[dict], stats: dict) -> None:
     _batch_sync_term_names(cur, sync_upsert)
 
 
-def _batch_process_relation(cur: Cursor, objs: list[dict], stats: dict) -> None:
+def _batch_process_relation(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str, Any]) -> None:
     """批量写入 whale_datacloud.term_relation。
 
     新版 convert_relation 返回:
@@ -718,8 +719,8 @@ def _batch_process_relation(cur: Cursor, objs: list[dict], stats: dict) -> None:
     if not objs:
         return
     deletes: list[str] = []
-    updates: list[dict] = []
-    upserts: list[dict] = []
+    updates: list[dict[str, Any]] = []
+    upserts: list[dict[str, Any]] = []
     for obj in objs:
         op = obj.get("op", "add")
         if op == "delete":
@@ -779,8 +780,12 @@ def _batch_process_relation(cur: Cursor, objs: list[dict], stats: dict) -> None:
                       updated_time      = CURRENT_TIMESTAMP
                 WHERE relation_id = %s""",
             (
-                _term_id_from_obj_or_code_direct(obj, id_key="source_term_id", code_key="source_term_code"),
-                _term_id_from_obj_or_code_direct(obj, id_key="target_term_id", code_key="target_term_code"),
+                _term_id_from_obj_or_code_direct(
+                    obj, id_key="source_term_id", code_key="source_term_code"
+                ),
+                _term_id_from_obj_or_code_direct(
+                    obj, id_key="target_term_id", code_key="target_term_code"
+                ),
                 obj["relation_name"],
                 obj.get("relation_category", "BUSINESS"),
                 obj.get("cardinality"),
@@ -799,8 +804,12 @@ def _batch_process_relation(cur: Cursor, objs: list[dict], stats: dict) -> None:
         rows = [
             (
                 o["relation_code"],
-                _term_id_from_obj_or_code_direct(o, id_key="source_term_id", code_key="source_term_code"),
-                _term_id_from_obj_or_code_direct(o, id_key="target_term_id", code_key="target_term_code"),
+                _term_id_from_obj_or_code_direct(
+                    o, id_key="source_term_id", code_key="source_term_code"
+                ),
+                _term_id_from_obj_or_code_direct(
+                    o, id_key="target_term_id", code_key="target_term_code"
+                ),
                 o["relation_name"],
                 o.get("relation_category", "BUSINESS"),
                 o.get("cardinality"),
@@ -821,19 +830,20 @@ def _batch_process_relation(cur: Cursor, objs: list[dict], stats: dict) -> None:
                     relation_name, relation_category, cardinality, action_term_id, ext_attrs)
                VALUES %s""",
             rows,
-            template="(%s, %s, %s, %s, %s, %s, %s, %s::jsonb)",
             page_size=min(500, len(rows)),
         )
         stats["relations"]["inserted"] += len(to_insert)
 
 
-def _batch_process_knowledge(cur: Cursor, objs: list[dict], stats: dict) -> None:
-    """批量写入 whale_datacloud.term_knowledge（term_id 外键；可显式传 term_id 或仅 term_code）。"""
+def _batch_process_knowledge(
+    cur: Cursor, objs: list[dict[str, Any]], stats: dict[str, Any]
+) -> None:
+    """批量写入 whale_datacloud.term_knowledge(term_id 外键；可显式传 term_id 或仅 term_code)。"""
     if not objs:
         return
     deletes: list[str] = []
-    updates: list[dict] = []
-    upserts: list[dict] = []
+    updates: list[dict[str, Any]] = []
+    upserts: list[dict[str, Any]] = []
     for obj in objs:
         op = obj.get("op", "add")
         if op == "delete":
@@ -970,8 +980,8 @@ def _step_entity_type(step_type: str, filename: str) -> str:
 
 
 def _convert_owl_entities(
-    step_type: str, rel_file: str, owl_entities: list[dict]
-) -> dict[str, list[dict]]:
+    step_type: str, rel_file: str, owl_entities: list[dict[str, Any]]
+) -> dict[str, list[dict[str, Any]]]:
     """将 OWL 解析结果转换为各批处理器可消费的数据结构。"""
     del step_type, rel_file
 
@@ -979,7 +989,7 @@ def _convert_owl_entities(
     if converter is None:
         converter = import_module("datacloud_knowledge.knowledge_build.importer.owl_converter")
 
-    converted: dict[str, list[dict]] = {
+    converted: dict[str, list[dict[str, Any]]] = {
         "meta_domain": [],
         "meta_library": [],
         "term_type": [],
@@ -987,7 +997,7 @@ def _convert_owl_entities(
         "relation": [],
         "knowledge": [],
     }
-    term_type_map: dict[str, dict] = {}
+    term_type_map: dict[str, dict[str, Any]] = {}
     type_category_map = {
         "LIST_TERM": "列表术语",
         "DICT_TERM": "字典术语",
@@ -1053,7 +1063,7 @@ def _convert_owl_entities(
 # ── 公开入口 ──────────────────────────────────────────────────────────────────
 
 
-def run(folder_path: str) -> dict:
+def run(folder_path: str) -> dict[str, Any]:
     """按 manifest 顺序在单个事务内导入所有数据。
 
     Args:
@@ -1066,7 +1076,7 @@ def run(folder_path: str) -> dict:
         不抛异常，所有错误封装在返回值 error 字段中。
     """
     root = Path(folder_path)
-    stats: dict[str, dict] = {
+    stats: dict[str, Any] = {
         "domains": {"inserted": 0, "updated": 0, "deleted": 0},
         "libraries": {"inserted": 0, "updated": 0, "deleted": 0},
         "term_types": {"inserted": 0, "updated": 0, "deleted": 0},
@@ -1076,7 +1086,7 @@ def run(folder_path: str) -> dict:
     }
 
     manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-    import_steps: list[dict] = manifest.get("import_steps", [])
+    import_steps: list[dict[str, Any]] = manifest.get("import_steps", [])
     batch_size = _import_batch_size()
 
     conn = _connect()
@@ -1089,7 +1099,7 @@ def run(folder_path: str) -> dict:
                 entity_type = _step_entity_type(step_type, rel_file)
                 batch_handler = _STEP_BATCH_HANDLERS.get(entity_type)
                 if batch_handler is None:
-                    logger.warning("未知 step type '%s'，跳过 %s", step_type, rel_file)
+                    logger.warning("未知 step type '%s', 跳过 %s", step_type, rel_file)
                     continue
 
                 file_path = root / rel_file
@@ -1108,12 +1118,12 @@ def run(folder_path: str) -> dict:
                         handler = _STEP_BATCH_HANDLERS.get(entity_type_key)
                         if handler is None:
                             logger.warning(
-                                "OWL 实体类型 '%s' 无处理器，跳过 %s", entity_type_key, rel_file
+                                "OWL 实体类型 '%s', 无处理器, 跳过 %s", entity_type_key, rel_file
                             )
                             continue
                         handler(cur, objs, stats)
                 else:
-                    logger.warning("不支持的文件扩展名，跳过 %s", rel_file)
+                    logger.warning("不支持的文件扩展名, 跳过 %s", rel_file)
 
         conn.commit()
         logger.info("import committed: %s", stats)
