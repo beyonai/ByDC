@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from langgraph.graph.message import MessagesState
 
 if TYPE_CHECKING:
-    from gateway_sdk import AgentContext
+    from by_framework import AgentContext
 
 
 class AgentState(MessagesState):

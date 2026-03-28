@@ -14,8 +14,8 @@ import logging
 import os
 from typing import cast
 
-from gateway_sdk import EventType, StreamChunkEvent
-from gateway_sdk.core.protocol.content_type import SseReasonMessageType
+from by_framework import EventType, StreamChunkEvent
+from by_framework.core.protocol.content_type import SseReasonMessageType
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -23,6 +23,38 @@ from datacloud_analysis.orchestration.state import AgentState
 from datacloud_analysis.tools.knowledge import search_knowledge
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Static system prompt — contains NO variable interpolation.
+# All dynamic content (knowledge, user question, tools) goes into Layer 3
+# HumanMessage so that this prefix is 100% KV-Cache-friendly.
+# ---------------------------------------------------------------------------
+_INTENT_STATIC_SYSTEM = """你是一个意图识别与改写专家。
+
+## 任务说明
+请判断用户意图是否清晰，结合业务知识改写问题，并选择正确的路由模式。
+如果问题缺乏关键维度（如时间、明确指标），请判定为"不清晰"。
+
+## query_mode 判定规则
+- "online_query"：单次向已绑定工具取数即可（单表/单对象查询、列表、明细），\
+不需要多步规划、代码沙箱、多表关联分析或复杂报表叙事。
+- "analysis"：需要任务拆解、多步执行、统计对比、关联、趋势、归因等，或不确定用哪个工具。
+
+当 query_mode 为 "online_query" 时：
+- "target_tool" 必须从本轮 HumanMessage 提供的【可用工具列表】中选且仅选一个；\
+若列表为空则必须使用 "analysis"。
+- "tool_params" 为对象：传给该工具的参数，键名须与工具实际接受的参数一致\
+（如 question、include_plan 等），不要臆造不存在的键。
+
+## 返回格式（严格 JSON，无多余字段）
+{
+  "rewritten_intent": "改写后的清晰问题，或者如果需要追问，填入追问内容",
+  "clarify_needed": true/false,
+  "query_mode": "online_query" 或 "analysis",
+  "target_tool": "工具名或空字符串",
+  "tool_params": {}
+}
+"""
 
 
 async def intent_node(
@@ -71,38 +103,26 @@ async def intent_node(
         base_url=os.getenv("OPENAI_BASE_URL") or os.getenv("DATACLOUD_LLM_REASONING_API_BASE"),
     )
 
-    sys_prompt = prompts_overwrite.get(
-        "intent_prompt",
-        f"""你是一个意图识别与改写专家。
-用户原始问题：{last_user_msg}
-
-相关业务知识：
-{knowledge_text}
-
-## 当前 Agent 可用的动态工具名（用于在线查数）
-{tools_line}
-
-请判断用户意图是否清晰，并结合业务知识改写问题。
-如果问题缺乏关键维度（如时间、明确指标），请判定为“不清晰”。
-
-## query_mode 判定规则
-- "online_query"：单次向已绑定工具取数即可（单表/单对象查询、列表、明细），不需要多步规划、代码沙箱、多表关联分析或复杂报表叙事。
-- "analysis"：需要任务拆解、多步执行、统计对比、关联、趋势、归因等，或不确定用哪个工具。
-
-当 query_mode 为 "online_query" 时：
-- "target_tool" 必须从上方【动态工具名】列表中选且仅选一个；若列表为空则必须使用 "analysis"。
-- "tool_params" 为对象：传给该工具的参数，键名须与工具实际接受的参数一致（如 question、include_plan 等），不要臆造不存在的键。可与用户原问题语义对齐填写。
-
-返回格式必须为严格的 JSON，包含字段：
-- "rewritten_intent": "改写后的清晰问题，或者如果需要追问，填入追问内容"
-- "clarify_needed": true/false
-- "query_mode": "online_query" 或 "analysis"
-- "target_tool": 字符串；非 online_query 时填空字符串 ""
-- "tool_params": 对象；非 online_query 时填空对象 {{}}
-""",
+    # Layer 0: static system prompt — no variable interpolation, 100% KV-Cache hit.
+    # Support legacy key "intent_prompt" for backward compatibility.
+    static_sys = prompts_overwrite.get(
+        "intent_system_prompt",
+        prompts_overwrite.get("intent_prompt", _INTENT_STATIC_SYSTEM),
     )
 
-    response = await llm.ainvoke([SystemMessage(content=sys_prompt)])
+    # Layer 3: all dynamic content in a single HumanMessage (current-turn only).
+    dynamic_human = HumanMessage(content=(
+        f"【本轮可用工具（用于 online_query 选型）】：{tools_line}\n\n"
+        f"【检索到的相关业务知识】：\n{knowledge_text}\n\n"
+        f"【用户当前提问】：{last_user_msg}\n\n"
+        "请基于以上背景，输出路由 JSON。"
+    ))
+
+    response = await llm.ainvoke(
+        [SystemMessage(content=static_sys)]  # Layer 0: static prefix, 100% cache hit
+        + messages[-4:-1]                     # Layer 2: last 2 turns (pronoun resolution)
+        + [dynamic_human]                     # Layer 3: current-turn dynamic content
+    )
 
     try:
         content = cast(str, response.content)

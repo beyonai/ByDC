@@ -1,1 +1,1 @@
-"""DataCloud Service — gateway-sdk worker package for e_commerce_demo."""
+"""DataCloud Service — by-framework Gateway worker package for e_commerce_demo."""

@@ -34,7 +34,7 @@ uv run python examples/e_commerce_demo/backend/datacloud_service/workspace_api.p
 
 ### A. 进程启动层（`main.py`）
 
-`main.py` 的职责是读取环境变量并启动 `gateway_sdk.run_worker`：
+`main.py` 的职责是读取环境变量并启动 `run_worker`（自 `by_framework` 包导入；PyPI/依赖名为 `by-framework`）：
 
 1. `load_dotenv(...)` 加载 `examples/e_commerce_demo/backend/.env`。
 2. `WorkerConfig.from_environ()` 读取并组装运行参数（Redis、模型、workspace 等）。
