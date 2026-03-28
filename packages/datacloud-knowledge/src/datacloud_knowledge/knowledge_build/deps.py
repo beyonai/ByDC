@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..file_store import FileManager, FileStoreSettings
+from datacloud_knowledge.file_store import FileManager, FileStoreSettings
 
 
 def get_file_manager() -> FileManager:

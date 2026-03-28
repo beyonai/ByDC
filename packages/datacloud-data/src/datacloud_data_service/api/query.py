@@ -27,9 +27,9 @@ router = APIRouter()
 def _parse_include_plan() -> bool:
     """
     解析是否在响应中包含执行计划
-    
+
     从环境变量 DC_INCLUDE_PLAN_IN_RESPONSE 读取配置。
-    
+
     Returns:
         bool: 是否包含计划
     """
@@ -40,7 +40,7 @@ def _parse_include_plan() -> bool:
 class QueryRequest(BaseModel):
     """
     查询请求模型
-    
+
     Attributes:
         question: 自然语言问题
         view_id: 视图 ID
@@ -49,7 +49,7 @@ class QueryRequest(BaseModel):
         page_size: 每页大小
         file_id: 文件 ID（用于文件查询）
     """
-    
+
     question: str
     view_id: str = ""
     object_ids: list[str] = []
@@ -61,13 +61,13 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     """
     查询响应模型
-    
+
     Attributes:
         code: 状态码
         message: 消息
         data: 响应数据
     """
-    
+
     code: int = 0
     message: str = "success"
     data: dict[str, Any] = {}
@@ -77,16 +77,16 @@ class QueryResponse(BaseModel):
 async def query_endpoint(body: QueryRequest, request: Request) -> QueryResponse:
     """
     自然语言查询端点
-    
+
     接收自然语言问题，执行查询并返回结果。
-    
+
     Args:
         body: 查询请求体
         request: FastAPI 请求对象
-    
+
     Returns:
         QueryResponse: 查询结果
-    
+
     Raises:
         HTTPException: 缺少必要参数时抛出
     """
@@ -115,7 +115,7 @@ async def query_endpoint(body: QueryRequest, request: Request) -> QueryResponse:
 
             query = UnifiedQuery(loader)
             include_plan = _parse_include_plan()
-            result = await query.execute(
+            mcp_result = await query.execute(
                 question=body.question,
                 view_id=body.view_id,
                 object_ids=body.object_ids or None,
@@ -124,22 +124,17 @@ async def query_endpoint(body: QueryRequest, request: Request) -> QueryResponse:
                 page_size=body.page_size if body.page_size > 0 else 100,
             )
 
-            if result.get("isError"):
-                content = result.get("content", [{}])
-                error_text = content[0].get("text", "Unknown error") if content else "Unknown error"
-                return QueryResponse(code=500, message=error_text, data={})
-
-            content = result.get("content", [{}])
+            content = mcp_result.get("content", [{}])
             text = content[0].get("text", "{}") if content else "{}"
             try:
-                records_data = json.loads(text)
+                sdk_result = json.loads(text)
             except json.JSONDecodeError:
-                records_data = {"raw": text}
+                sdk_result = {"code": 500, "message": text, "data": {}}
 
             return QueryResponse(
-                code=0,
-                message="success",
-                data=records_data,
+                code=sdk_result.get("code", 0),
+                message=sdk_result.get("message", "success"),
+                data=sdk_result.get("data", {}),
             )
         except Exception as e:
             return QueryResponse(code=500, message=str(e), data={})
@@ -180,8 +175,10 @@ async def _query_by_file_id(body: QueryRequest, request: Request) -> QueryRespon
                 records.append(dict(row))
 
         total_pages = (total + page_size - 1) // page_size if page_size > 0 else 0
-        preview_rows = stored_meta.get("preview_rows", page_size) if stored_meta else page_size
-        download_url = stored_meta.get("download_url", "") if stored_meta else ""
+        file_url = stored_meta.get("file_url", "") if stored_meta else ""
+        # 兼容旧格式（历史数据中可能存的是 download_url）
+        if not file_url:
+            file_url = stored_meta.get("download_url", "") if stored_meta else ""
         view_id = stored_meta.get("viewId", "file_view") if stored_meta else "file_view"
         trace_data = stored_meta.get("trace", {}) if stored_meta else {}
 
@@ -191,20 +188,19 @@ async def _query_by_file_id(body: QueryRequest, request: Request) -> QueryRespon
             "total": total,
             "overflow": stored_meta.get("overflow", False) if stored_meta else False,
             "preview_rows": preview_rows,
-            "download_url": download_url,
             "file_id": body.file_id,
         }
 
         overflow_notice = ""
-        if meta["overflow"] and download_url:
+        if meta["overflow"] and file_url:
             overflow_notice = (
                 f"【重要】数据量较大（共 {total} 条），此处仅返回前 {len(records)} 条预览。"
-                f"完整数据请通过以下地址下载 CSV：{download_url}"
+                f"完整数据请通过以下文件路径获取：{file_url}"
             )
 
-        response_data = {
+        response_data: dict[str, Any] = {
+            "result_type": "normal",
             "records": records,
-            "total": total,
             "pagination": {
                 "page": page,
                 "page_size": page_size,
@@ -216,9 +212,10 @@ async def _query_by_file_id(body: QueryRequest, request: Request) -> QueryRespon
             "meta": meta,
         }
 
+        if file_url:
+            response_data["file"] = {"file_url": file_url, "file_id": body.file_id}
         if overflow_notice:
             response_data["overflow_notice"] = overflow_notice
-
         if trace_data:
             response_data["trace"] = trace_data
 

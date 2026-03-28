@@ -75,9 +75,7 @@ async def test_create_term_with_owl_file_uploads_and_sets_owl_doc_id(
     mock_service: AsyncMock,
 ) -> None:
     """owl_file 存在时：上传文件，以 md5 覆盖 owl_doc_id 后调用 service。"""
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         resp = await ac.post(
             "/ontology/terms",
             data={
@@ -108,9 +106,7 @@ async def test_create_term_without_file_skips_upload(
     mock_service: AsyncMock,
 ) -> None:
     """不传文件时：FileManager 不被调用，owl_doc_id 直接取表单值。"""
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         resp = await ac.post(
             "/ontology/terms",
             data={
@@ -132,9 +128,7 @@ async def test_owl_file_overrides_form_owl_doc_id(
     mock_service: AsyncMock,
 ) -> None:
     """同时传 owl_file 和 owl_doc_id 时：上传结果优先，表单值被忽略。"""
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         resp = await ac.post(
             "/ontology/terms",
             data={

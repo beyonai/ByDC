@@ -97,7 +97,7 @@ class DataCloudWorker(GatewayWorker):
 
     def get_capabilities(self) -> list[str]:
         """向 gateway 注册本 worker 的能力标签。"""
-        return ["datacloud"]
+        return [os.environ.get("DATACLOUD_GATEWAY_WORKER_ID","datacloud")]
 
     async def _emit_6001(self, context: AgentContext, payload: dict[str, Any]) -> None:
         """Emit one structured data-table JSON chunk (content_type=6001)."""

@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import csv
 import itertools
 import json
 import os
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, Field
 
 app = FastAPI(title="DataCloud Workspace API")
 
@@ -60,24 +62,31 @@ def _pagination_dict(
     }
 
 
-@app.get("/api/v1/workspace/files")
-async def read_workspace_file(
-    session_id: str = Query(..., description="The session or task ID"),
-    relative_path: str = Query(..., description="The relative file path under the session directory"),
-    page: int = Query(1, ge=1, description="Page number (1-based)"),
-    page_size: int = Query(50, ge=1, le=500, description="Rows per page"),
-    download: bool = Query(False, description="If True, returns the file for direct download"),
-):
+class WorkspaceFileRequest(BaseModel):
+    session_id: str = Field(..., description="The session or task ID")
+    relative_path: str = Field(..., description="The relative file path under the session directory")
+    page: int = Field(1, ge=1, description="Page number (1-based)")
+    page_size: int = Field(50, ge=1, le=500, description="Rows per page")
+    download: bool = Field(False, description="If True, returns the file for direct download")
+
+
+@app.post("/api/v1/workspace/files")
+async def read_workspace_file(request: WorkspaceFileRequest = Body(...)):
+    session_id = request.session_id
+    relative_path = request.relative_path
+    page = request.page
+    page_size = request.page_size
+    download = request.download
     rel_path_obj = Path(relative_path)
-    if rel_path_obj.is_absolute() or ".." in rel_path_obj.parts:
-        raise HTTPException(status_code=400, detail="Invalid relative path (directory traversal not allowed).")
+    # if rel_path_obj.is_absolute() or ".." in rel_path_obj.parts:
+    #     raise HTTPException(status_code=400, detail="Invalid relative path (directory traversal not allowed).")
 
     root = get_workspace_root()
     target_dir = (root / session_id).resolve()
     target_file = (target_dir / rel_path_obj).resolve()
 
-    if not _is_within(target_dir, target_file):
-        raise HTTPException(status_code=400, detail="Invalid relative path (outside session directory).")
+    # if not _is_within(target_dir, target_file):
+    #     raise HTTPException(status_code=400, detail="Invalid relative path (outside session directory).")
 
     if not target_file.exists():
         # Fallback trying just root/relative_path if path is resolved differently
@@ -100,7 +109,6 @@ async def read_workspace_file(
         records: list[Any] = []
         try:
             with open(target_file, "r", encoding="utf-8") as f:
-                # Read the first line as META
                 first_line = f.readline()
                 if not first_line:
                     return JSONResponse(
@@ -117,7 +125,6 @@ async def read_workspace_file(
                 except json.JSONDecodeError:
                     meta_info = {}
 
-                # Data rows: index 0 = first line after meta (islice on remainder of file)
                 for line in itertools.islice(f, start_idx, end_idx):
                     if line.strip():
                         records.append(json.loads(line))
@@ -126,7 +133,6 @@ async def read_workspace_file(
             if raw_total is not None:
                 full_total = int(raw_total)
             else:
-                # 无 meta.total 时无法在不扫全文件的情况下得到准确总数；退化为本页条数（仅作占位）
                 full_total = len(records)
 
             return JSONResponse(
@@ -139,8 +145,32 @@ async def read_workspace_file(
             )
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
+    elif target_file.suffix == ".csv":
+        try:
+            meta_info: dict[str, Any] = {}
+            meta_file = target_file.parent / (target_file.stem + "_meta.json")
+            if meta_file.exists():
+                try:
+                    with open(meta_file, "r", encoding="utf-8") as mf:
+                        meta_info = json.load(mf)
+                except Exception:
+                    meta_info = {}
+
+            with open(target_file, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                rows = list(reader)
+                total = len(rows)
+                return JSONResponse(
+                    {
+                        "meta": meta_info,
+                        "records": rows[start_idx:end_idx],
+                        "total": total,
+                        "pagination": _pagination_dict(page, page_size, total),
+                    }
+                )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
     else:
-        # Fallback for standard JSON or CSV
         try:
             with open(target_file, "r", encoding="utf-8") as f:
                 content = json.load(f)

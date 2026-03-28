@@ -14,31 +14,36 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
 # ── 必填字段规则 ──────────────────────────────────────────────────────────────
 
 _REQUIRED: dict[str, list[str]] = {
-    "meta_domain":    ["domain_code", "domain_name"],
-    "meta_library":   ["library_code", "library_name"],
-    "term_type":      ["type_code", "type_name", "type_category"],
-    "term":           ["term_code", "term_name", "term_type_code", "domain_code"],
-    "relation":       ["relation_code", "source_term_code", "target_term_code", "relation_name"],
-    "knowledge":      ["knowledge_id", "term_code"],
+    "meta_domain": ["domain_code", "domain_name"],
+    "meta_library": ["library_code", "library_name"],
+    "term_type": ["type_code", "type_name", "type_category"],
+    "term": ["term_code", "term_name", "term_type_code", "domain_code"],
+    "relation": ["relation_code", "source_term_code", "target_term_code", "relation_name"],
+    "knowledge": ["knowledge_id", "term_code"],
 }
 
 # 内置 term_type_code，无需在导入包中定义
-_BUILTIN_TYPE_CODES: frozenset[str] = frozenset({
-    "EMPLOYEE",
-    "GENERAL",
-    "ONTOLOGY_VIEW",
-    "ONTOLOGY_OBJ",
-    "ONTOLOGY_ACTION",
-    "ONTOLOGY_FUNC",
-    "ONTOLOGY_PARAM",
-    "ONTOLOGY_PROP",
-})
+_BUILTIN_TYPE_CODES: frozenset[str] = frozenset(
+    {
+        "EMPLOYEE",
+        "GENERAL",
+        "ONTOLOGY_VIEW",
+        "ONTOLOGY_OBJ",
+        "ONTOLOGY_ACTION",
+        "ONTOLOGY_FUNC",
+        "ONTOLOGY_PARAM",
+        "ONTOLOGY_PROP",
+    }
+)
 
 
 def _step_entity_type(step_type: str, filename: str) -> str:
@@ -56,7 +61,7 @@ def _step_entity_type(step_type: str, filename: str) -> str:
     return step_type
 
 
-def run(folder_path: str) -> dict:
+def run(folder_path: str) -> dict[str, Any]:
     """执行预检，返回结构化结果 dict（与 PrecheckResult 对应）。
 
     Args:
@@ -66,8 +71,8 @@ def run(folder_path: str) -> dict:
         dict，字段：status / total_rows / files / errors。
     """
     root = Path(folder_path)
-    all_errors: list[dict] = []
-    file_results: list[dict] = []
+    all_errors: list[dict[str, Any]] = []
+    file_results: list[dict[str, Any]] = []
     total_rows = 0
 
     # ── Step 1：manifest 检查 ────────────────────────────────────────────────
@@ -90,7 +95,7 @@ def run(folder_path: str) -> dict:
             "errors": [{"file": "manifest.json", "line": None, "error": f"JSON 解析失败: {exc}"}],
         }
 
-    import_steps: list[dict] = manifest.get("import_steps", [])
+    import_steps: list[dict[str, Any]] = manifest.get("import_steps", [])
     if not import_steps:
         return {
             "status": "failed",
@@ -117,28 +122,34 @@ def run(folder_path: str) -> dict:
         }
 
     # ── 收集包内已定义的 code，用于交叉引用校验 ───────────────────────────────
-    defined_domain_codes:  set[str] = set()
+    defined_domain_codes: set[str] = set()
     defined_library_codes: set[str] = set()
-    defined_type_codes:    set[str] = set(_BUILTIN_TYPE_CODES)
-    defined_term_codes:    set[str] = set()
+    defined_type_codes: set[str] = set(_BUILTIN_TYPE_CODES)
+    defined_term_codes: set[str] = set()
 
     # 两轮扫描：第一轮收集所有定义，第二轮做交叉引用校验
     # 为简化，先全量解析 JSONL 存入内存，再统一校验
-    parsed_steps: list[tuple[dict, list[dict]]] = []  # (step, rows)
+    parsed_steps: list[tuple[dict[str, Any], list[dict[str, Any]]]] = []  # (step, rows)
 
     for step in import_steps:
         rel_file: str = step.get("file", "")
         step_type: str = step.get("type", "")
         file_path = root / rel_file
-        file_errors: list[dict] = []
-        rows: list[dict] = []
+        file_errors: list[dict[str, Any]] = []
+        rows: list[dict[str, Any]] = []
 
         # ── Step 2：文件存在性 ──────────────────────────────────────────────
         if not file_path.exists():
             all_errors.append({"file": rel_file, "line": None, "error": "文件不存在"})
-            file_results.append({"file": rel_file, "rows": 0, "errors": [
-                {"file": rel_file, "line": None, "error": "文件不存在"},
-            ]})
+            file_results.append(
+                {
+                    "file": rel_file,
+                    "rows": 0,
+                    "errors": [
+                        {"file": rel_file, "line": None, "error": "文件不存在"},
+                    ],
+                }
+            )
             parsed_steps.append((step, []))
             continue
 
@@ -155,12 +166,14 @@ def run(folder_path: str) -> dict:
 
         # ── Step 3 & 4：JSONL 格式 + 必填字段 ──────────────────────────────
         required_fields = _REQUIRED.get(entity_type, [])
-        for lineno, raw in enumerate(file_path.read_text(encoding="utf-8").splitlines(), start=1):
-            raw = raw.strip()
-            if not raw:
+        for lineno, raw_line in enumerate(
+            file_path.read_text(encoding="utf-8").splitlines(), start=1
+        ):
+            line = raw_line.strip()
+            if not line:
                 continue
             try:
-                obj = json.loads(raw)
+                obj = json.loads(line)
             except json.JSONDecodeError as exc:
                 err = {"file": rel_file, "line": lineno, "error": f"JSON 格式错误: {exc}"}
                 file_errors.append(err)
@@ -200,8 +213,8 @@ def run(folder_path: str) -> dict:
 
     # ── Step 5 & 6：交叉引用校验 ─────────────────────────────────────────────
     for step, rows in parsed_steps:
-        rel_file: str = step.get("file", "")
-        step_type: str = step.get("type", "")
+        rel_file = step.get("file", "")
+        step_type = step.get("type", "")
         entity_type = _step_entity_type(step_type, rel_file)
 
         if entity_type not in ("term", "relation", "knowledge"):
@@ -218,7 +231,7 @@ def run(folder_path: str) -> dict:
                     err = {
                         "file": rel_file,
                         "line": lineno,
-                        "error": f"domain_code '{domain_code}' 未在 meta/domains.jsonl 中定义（也不在数据库中）",
+                        "error": f"domain_code '{domain_code}' 未在 meta/domains.jsonl 中定义(也不在数据库中)",
                     }
                     all_errors.append(err)
                     # 同步更新 file_results
@@ -229,7 +242,7 @@ def run(folder_path: str) -> dict:
                     err = {
                         "file": rel_file,
                         "line": lineno,
-                        "error": f"library_code '{lib_code}' 未在 meta/libraries.jsonl 中定义（也不在数据库中）",
+                        "error": f"library_code '{lib_code}' 未在 meta/libraries.jsonl 中定义(也不在数据库中)",
                     }
                     all_errors.append(err)
                     _append_file_error(file_results, rel_file, err)
@@ -239,7 +252,7 @@ def run(folder_path: str) -> dict:
                     err = {
                         "file": rel_file,
                         "line": lineno,
-                        "error": f"term_type_code '{type_code}' 未定义（非内置类型，也未在 term_types/ 中定义）",
+                        "error": f"term_type_code '{type_code}' 未定义(非内置类型，也未在 term_types/ 中定义)",
                     }
                     all_errors.append(err)
                     _append_file_error(file_results, rel_file, err)
@@ -251,7 +264,7 @@ def run(folder_path: str) -> dict:
                         err = {
                             "file": rel_file,
                             "line": lineno,
-                            "error": f"{field} '{code}' 未在 terms/ 文件中定义（也不在数据库中）",
+                            "error": f"{field} '{code}' 未在 terms/ 文件中定义(也不在数据库中)",
                         }
                         all_errors.append(err)
                         _append_file_error(file_results, rel_file, err)
@@ -262,11 +275,10 @@ def run(folder_path: str) -> dict:
                     err = {
                         "file": rel_file,
                         "line": lineno,
-                        "error": f"term_code '{term_code}' 未在 terms/ 文件中定义（也不在数据库中）",
+                        "error": f"term_code '{term_code}' 未在 terms/ 文件中定义(也不在数据库中)",
                     }
                     all_errors.append(err)
                     _append_file_error(file_results, rel_file, err)
-
     status = "failed" if all_errors else "ok"
     logger.info("precheck %s: %d rows, %d errors", status, total_rows, len(all_errors))
     return {
@@ -276,7 +288,8 @@ def run(folder_path: str) -> dict:
         "errors": all_errors,
     }
 
-def _validate_no_ontology_steps(manifest: dict) -> list[dict]:
+
+def _validate_no_ontology_steps(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     """校验 manifest.import_steps 中不允许出现 ontology/ 目录下的文件。
 
     Args:
@@ -285,8 +298,8 @@ def _validate_no_ontology_steps(manifest: dict) -> list[dict]:
     Returns:
         错误列表，每个错误格式: {"code": "INVALID_ONTOLOGY_STEP", "message": "...", "file": "..."}
     """
-    errors: list[dict] = []
-    import_steps: list[dict] = manifest.get("import_steps", [])
+    errors: list[dict[str, Any]] = []
+    import_steps: list[dict[str, Any]] = manifest.get("import_steps", [])
 
     for step in import_steps:
         file_path: str = step.get("file", "")
@@ -302,9 +315,9 @@ def _validate_no_ontology_steps(manifest: dict) -> list[dict]:
     return errors
 
 
-
-
-def _append_file_error(file_results: list[dict], rel_file: str, err: dict) -> None:
+def _append_file_error(
+    file_results: list[dict[str, Any]], rel_file: str, err: dict[str, Any]
+) -> None:
     """向 file_results 中对应文件追加一条错误（避免重复遍历）。"""
     for fr in file_results:
         if fr["file"] == rel_file:
