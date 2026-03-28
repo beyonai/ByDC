@@ -31,15 +31,15 @@ from datacloud_data_sdk.relation import Relation
 class Object:
     """
     本体对象实体类
-    
+
     提供对象的自生说明、动作调用与查询能力。
     通过 OntologyLoader.get_object() 获取实例。
-    
+
     Attributes:
         _cls: 本体类定义
         _relations: 对象的关联关系列表
         _loader: 本体加载器引用
-    
+
     Example:
         obj = loader.get_object("po_users")
         print(obj.get_description())
@@ -49,7 +49,7 @@ class Object:
     def __init__(self, ontology_class: OntologyClass, relations: list[Relation], loader: Any = None) -> None:
         """
         初始化对象实体
-        
+
         Args:
             ontology_class: 本体类定义
             relations: 对象的关联关系列表
@@ -67,14 +67,14 @@ class Object:
     def get_description(self) -> str:
         """
         生成 Markdown 格式的对象自生说明
-        
+
         包含以下信息：
         - 对象名称和代码
         - 数据来源（数据源、表名）
         - 字段列表（代码、名称、类型、描述）
         - 动作列表（代码、类型、入参）
         - 关联关系
-        
+
         Returns:
             str: Markdown 格式的对象说明文档
         """
@@ -121,13 +121,13 @@ class Object:
     def get_action_schema(self, action_code: str) -> dict[str, object]:
         """
         获取动作的 JSON Schema
-        
+
         Args:
             action_code: 动作代码
-        
+
         Returns:
             dict: 包含 name, title, description, inputSchema, outputSchema 的字典
-        
+
         Raises:
             ActionNotFoundError: 动作不存在时抛出
         """
@@ -137,7 +137,7 @@ class Object:
     def list_action_codes(self) -> list[str]:
         """
         列出对象上所有动作的代码
-        
+
         Returns:
             list[str]: 动作代码列表
         """
@@ -146,7 +146,7 @@ class Object:
     def get_relations(self) -> list[Relation]:
         """
         获取对象的关联关系列表
-        
+
         Returns:
             list[Relation]: 关联关系列表
         """
@@ -155,13 +155,13 @@ class Object:
     def _find_action(self, action_code: str) -> OntologyAction:
         """
         查找指定代码的动作
-        
+
         Args:
             action_code: 动作代码
-        
+
         Returns:
             OntologyAction: 找到的动作定义
-        
+
         Raises:
             ActionNotFoundError: 动作不存在时抛出
         """
@@ -173,7 +173,7 @@ class Object:
     async def query(self, question: str, include_plan: bool = True) -> dict[str, object]:
         """
         自然语言查询
-        
+
         完整的查询管线：
         1. 构建对象视图载荷
         2. 生成查询计划（通过 LLM）
@@ -182,14 +182,14 @@ class Object:
         5. 转换为执行任务
         6. 执行查询
         7. 聚合结果
-        
+
         Args:
             question: 自然语言查询问题
             include_plan: 是否在结果中包含执行计划
-        
+
         Returns:
             dict: 查询结果，包含 records, total, meta 等字段
-        
+
         Raises:
             CannotAnswerError: 无法回答问题时抛出
             PlanValidationError: 计划验证失败时抛出
@@ -206,7 +206,12 @@ class Object:
         from datacloud_data_sdk.aggregator.sqlite_aggregator import SqliteAggregator
         from datacloud_data_sdk.context import get_current_context
         from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
-        from datacloud_data_sdk.exceptions import CannotAnswerError, PlanValidationError
+        from datacloud_data_sdk.exceptions import (
+            CannotAnswerError,
+            PlanValidationError,
+            TermAmbiguousError,
+            TermNotFoundError,
+        )
 
         if not hasattr(self, '_loader') or self._loader is None:
             raise NotImplementedError("Object.query requires OntologyLoader with configured plan_generator")
@@ -224,6 +229,17 @@ class Object:
             from datacloud_data_sdk.events.query_observer import QueryObserver
 
             observer = QueryObserver(config.event_bus, trace_id=trace_id)
+
+        # 初始化 Gateway 进度推送器（从 InvocationContext 中取 gateway_context）
+        gw_reporter = None
+        try:
+            from datacloud_data_sdk.context import get_gateway_context
+            from datacloud_data_sdk.events.gateway_reporter import GatewayProgressReporter
+            _gw_ctx = get_gateway_context()
+            if _gw_ctx is not None:
+                gw_reporter = GatewayProgressReporter(_gw_ctx)
+        except Exception:
+            pass
 
         try:
             object_ids = [self._cls.object_code]
@@ -254,6 +270,15 @@ class Object:
                 "steps": [asdict(s) for s in plan.steps],
                 "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
             }
+            if gw_reporter:
+                try:
+                    _step_types = " → ".join(
+                        f"{s.step_id}({getattr(s, 'step_type', 'SQL')})"
+                        for s in plan.steps
+                    )
+                    await gw_reporter.on_plan_generated(f"共 {len(plan.steps)} 步：{_step_types}")
+                except Exception:
+                    pass
             if observer:
                 try:
                     await observer.on_plan_generated(request_id, plan_dict)
@@ -340,9 +365,25 @@ class Object:
                 csv_base_dir=config.csv_base_dir,
             )
 
+            if gw_reporter:
+                try:
+                    for _s in plan.steps:
+                        _stype = getattr(_s, "step_type", type(_s).__name__)
+                        _sdesc = getattr(_s, "sql_template", None) or getattr(_s, "function_id", "")
+                        await gw_reporter.on_step_executing(_s.step_id, _stype, str(_sdesc)[:60])
+                except Exception:
+                    pass
+
             step_results = await executor.run(
                 tasks, request_id, step_ids=[s.step_id for s in plan.steps]
             )
+
+            if gw_reporter:
+                try:
+                    for _s in plan.steps:
+                        await gw_reporter.on_step_completed(_s.step_id)
+                except Exception:
+                    pass
             if observer:
                 try:
                     await observer.on_steps_executed(request_id, step_results.to_legacy_dict())
@@ -350,6 +391,11 @@ class Object:
                     pass
 
             if plan.aggregation:
+                if gw_reporter:
+                    try:
+                        await gw_reporter.on_aggregating(plan.aggregation.strategy)
+                    except Exception:
+                        pass
                 if plan.aggregation.strategy == "SQLITE_MEM":
                     records = await SqliteAggregator().aggregate(plan.aggregation, step_results)
                 else:
@@ -357,6 +403,11 @@ class Object:
             else:
                 records = []
             columns = plan.aggregation.columns if plan.aggregation else []
+            if gw_reporter:
+                try:
+                    await gw_reporter.on_aggregation_completed(len(records))
+                except Exception:
+                    pass
             if observer:
                 try:
                     await observer.on_aggregation_completed(
@@ -365,7 +416,9 @@ class Object:
                 except Exception:
                     pass
 
-            result = {
+            from datacloud_data_sdk.result_formatter import build_query_response
+
+            raw_result: dict[str, object] = {
                 "records": records,
                 "meta": {
                     "objectId": self._cls.object_code,
@@ -387,15 +440,32 @@ class Object:
                 getattr(plan.aggregation, "final_step_id", None) if plan.aggregation else None,
             )
             if include_plan:
-                result["plan"] = {
+                raw_result["plan"] = {
                     "question": plan.question,
                     "can_answer": plan.can_answer,
                     "clarification": plan.clarification,
                     "steps": [asdict(s) for s in plan.steps],
                     "aggregation": asdict(plan.aggregation) if plan.aggregation else None,
                 }
-            return result
+            return build_query_response(
+                raw_result,
+                csv_manager=csv_manager,
+                threshold=config.query_result_csv_threshold,
+                preview_rows=config.query_result_preview_rows,
+            )
 
+        except CannotAnswerError as exc:
+            from datacloud_data_sdk.result_formatter import build_error_data
+            return build_error_data(
+                str(exc), result_type="rejected",
+                trace={"request_id": request_id, "question": question, "object_id": self._cls.object_code},
+            )
+        except (TermNotFoundError, TermAmbiguousError) as exc:
+            from datacloud_data_sdk.result_formatter import build_error_data
+            return build_error_data(
+                str(exc), result_type="ask_user",
+                trace={"request_id": request_id, "question": question, "object_id": self._cls.object_code},
+            )
         except PlanValidationError as exc:
             if observer:
                 try:
@@ -426,6 +496,6 @@ class Object:
     async def invoke_action(
         self, action_code: str, params: dict[str, object]
     ) -> dict[str, object]:
-        """执行动作（执行层实现后补全）。"""
+        """执行动作，异常向上抛出。"""
         action = self._find_action(action_code)
         return await Action(action, loader=self._loader).execute(params)

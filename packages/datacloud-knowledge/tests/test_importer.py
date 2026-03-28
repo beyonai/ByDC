@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """清空 whale_datacloud schema 下的术语相关表。
 
 按依赖顺序清空以下表：
@@ -99,12 +98,14 @@ def clear_term_tables() -> None:
     finally:
         conn.close()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     from datacloud_knowledge.knowledge_build.importer.executor import run
 
     _load_env_if_needed()
     clear_term_tables()
 
-
-    result = run('/home/luoyanzhuo/project/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package_owl')
+    result = run(
+        "/home/luoyanzhuo/project/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package_owl"
+    )
     print(result)

@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from typing import Generator
+from typing import TYPE_CHECKING
 from urllib.parse import quote_plus
 
-from sqlalchemy import create_engine, Engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.dialects.postgresql.base import PGDialect
 from sqlalchemy.orm import Session, sessionmaker
 
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
+
 _engine: Engine | None = None
-_session_local: sessionmaker | None = None
+_session_local: sessionmaker[Session] | None = None
 
 
 def _build_database_url() -> str:
@@ -31,12 +35,17 @@ def _build_database_url() -> str:
     return url
 
 
+def _patch_pgdialect_opengauss() -> None:
+    """OpenGauss 模拟 PostgreSQL 15 版本"""
+    PGDialect._get_server_version_info = lambda _self, _conn: (15, 0)  # type: ignore[method-assign]
+
+
 def _get_engine() -> Engine:
     global _engine
     if _engine is None:
-        db_type = os.getenv("KNOWLEDGE_DB_TYPE") or os.getenv("DC_KNOWLEDGE_DB_TYPE", "")
+        db_type = os.getenv("KNOWLEDGE_DB_TYPE") or os.getenv("DC_KNOWLEDGE_DB_TYPE") or ""
         if db_type.lower() == "opengauss":
-            PGDialect._get_server_version_info = lambda self, connection: (15, 0)
+            _patch_pgdialect_opengauss()
 
         database_url = _build_database_url()
         _engine = create_engine(
@@ -47,7 +56,7 @@ def _get_engine() -> Engine:
     return _engine
 
 
-def _get_session_local() -> sessionmaker:
+def _get_session_local() -> sessionmaker[Session]:
     global _session_local
     if _session_local is None:
         _session_local = sessionmaker(

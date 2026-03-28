@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from . import precheck, executor, notifier
+from . import executor, notifier, precheck
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,10 @@ def run(
             "callback_notified": False,
         }
         result["callback_notified"] = _maybe_notify(
-            callback_url, callback_method, cb_headers, result,
+            callback_url,
+            callback_method,
+            cb_headers,
+            result,
         )
         return result
 
@@ -82,7 +85,10 @@ def run(
 
     # ── Step 3：回调通知 ──────────────────────────────────────────────────────
     result["callback_notified"] = _maybe_notify(
-        callback_url, callback_method, cb_headers, result,
+        callback_url,
+        callback_method,
+        cb_headers,
+        result,
     )
     return result
 

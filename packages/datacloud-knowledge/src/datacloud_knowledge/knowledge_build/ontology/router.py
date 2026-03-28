@@ -5,14 +5,20 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
-from ...file_store import FileManager
+from datacloud_knowledge.knowledge_build.deps import get_file_manager
+from datacloud_knowledge.knowledge_build.ontology import service
+from datacloud_knowledge.knowledge_build.schema import (
+    ImportResult,
+    TermCreateResponse,
+    TermUpdateResponse,
+)
 
-from ..deps import get_file_manager
-from ..schema import ImportResult, TermCreateResponse, TermUpdateResponse
-from . import service
+if TYPE_CHECKING:
+    from datacloud_knowledge.file_store import FileManager
 
 logger = logging.getLogger(__name__)
 

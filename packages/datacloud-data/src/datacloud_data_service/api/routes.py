@@ -39,9 +39,9 @@ HEALTH_CHECK_TIMEOUT = 3.0
 def _make_performance_log_handler() -> tuple[Any, dict[str, list]]:
     """
     创建性能日志处理器
-    
+
     生成 on_span_complete 回调函数，用于记录查询性能指标。
-    
+
     Returns:
         tuple: (回调函数, 按请求 ID 分组的 span 字典)
     """
@@ -50,9 +50,9 @@ def _make_performance_log_handler() -> tuple[Any, dict[str, list]]:
     def on_span(span: Any) -> None:
         """
         Span 完成回调
-        
+
         当查询流程完成时，汇总并记录性能日志。
-        
+
         Args:
             span: 性能 span 对象
         """
@@ -98,13 +98,13 @@ def create_app(
 ) -> FastAPI:
     """
     创建 FastAPI 应用实例
-    
+
     工厂函数，创建并配置完整的 FastAPI 应用。
-    
+
     Args:
         datasource_configs: 数据源配置（可选，用于测试覆盖）
         loader_override: 本体加载器实例（可选，用于测试）
-    
+
     Returns:
         FastAPI: 配置完成的 FastAPI 应用实例
     """
@@ -201,6 +201,10 @@ def create_app(
 
         loader.configure(csv_base_dir=settings.csv_base_dir)
         loader.configure(sql_execution_mode=settings.sql_execution_mode)
+        loader.configure(
+            query_result_csv_threshold=settings.query_result_csv_threshold,
+            query_result_preview_rows=settings.query_result_preview_rows,
+        )
 
         from datacloud_data_sdk.ontology.term_loader import TermLoader
 

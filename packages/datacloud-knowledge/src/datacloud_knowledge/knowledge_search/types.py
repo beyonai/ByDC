@@ -4,7 +4,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 TagOp = Literal["eq", "like", "gt", "gte", "lt", "lte", "in"]
 TagValueType = Literal["text", "number", "timestamp"]
 
@@ -53,4 +52,3 @@ class OwlResolveRoot(BaseModel):
 
     term_type_code: str
     term_codes: list[str] = Field(default_factory=list)
-

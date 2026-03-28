@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ async def create_ontology_term(
     library_id: str | None,
     owl_doc_id: str | None,
     desc_summary: str | None,
-) -> dict:
+) -> dict[str, Any]:
     """创建本体术语（VIEW / OBJ / ACTION / FUNC / PARAM / PROP）。
 
     Args:
@@ -34,7 +35,7 @@ async def create_ontology_term(
     raise NotImplementedError
 
 
-async def update_ontology_term(term_id: str, **kwargs: object) -> dict:
+async def update_ontology_term(term_id: str, **kwargs: object) -> dict[str, Any]:
     """更新本体术语属性。
 
     Args:
