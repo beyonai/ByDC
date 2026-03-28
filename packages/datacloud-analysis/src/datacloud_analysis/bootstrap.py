@@ -3,9 +3,8 @@
 This module is the **single entry point** for all one-time startup work:
 
 1. Load & validate every environment variable (fail-fast via Pydantic).
-2. Open the shared async PostgreSQL connection pool.
-3. Create LangGraph checkpoint tables (``AsyncPostgresSaver.setup()``).
-4. Initialize the datacloud-memory Store tables.
+2. Create LangGraph checkpoint tables via OpenGauss-compatible checkpointer.
+3. Initialize the datacloud-memory Store tables.
 
 Callers (Worker processes, FastAPI lifespan, etc.) should call::
 
@@ -30,16 +29,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from psycopg_pool import AsyncConnectionPool
+import sys
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 _initialized: bool = False
 _init_lock: asyncio.Lock | None = None
-_pg_pool: "AsyncConnectionPool | None" = None
 # Keeps ``pg_opengauss.get_checkpointer()`` context alive for process lifetime.
 _pg_checkpoint_cm: Any = None
 
@@ -54,7 +50,7 @@ async def setup() -> None:
     psycopg.OperationalError
         If the PostgreSQL server is unreachable.
     """
-    global _initialized, _init_lock, _pg_pool, _pg_checkpoint_cm
+    global _initialized, _init_lock, _pg_checkpoint_cm
 
     # Lazy-create the lock inside the running event loop.
     if _init_lock is None:
@@ -73,30 +69,27 @@ async def setup() -> None:
         settings = Settings()
         logger.info("datacloud-analysis: environment variables validated.")
 
-        # 2. Open shared async PG connection pool.
-        from psycopg_pool import AsyncConnectionPool  # noqa: PLC0415
-
-        _pg_pool = AsyncConnectionPool(
-            settings.pg.checkpoint_uri,
-            open=False,
-            kwargs={"options": f"-c search_path={settings.pg.checkpoint_schema}"},
-        )
-        await _pg_pool.open()
-        logger.info("datacloud-analysis: PG connection pool opened.")
-
-        # 3. OpenGauss-compatible LangGraph checkpointer: create tables and register
+        # 2. OpenGauss-compatible LangGraph checkpointer: create tables and register
         #    a process-wide instance so ``create_agent(..., checkpointer=get_checkpointer())`` works.
         from datacloud_analysis.session.checkpointer import set_checkpointer  # noqa: PLC0415
         from datacloud_analysis.session.pg_opengauss import get_checkpointer as og_get_checkpointer  # noqa: PLC0415
 
-        _pg_checkpoint_cm = og_get_checkpointer()
-        saver = await _pg_checkpoint_cm.__aenter__()
-        set_checkpointer(saver)
+        _pg_checkpoint_cm = og_get_checkpointer(
+            checkpoint_uri=settings.pg.checkpoint_uri,
+            checkpoint_schema=settings.pg.checkpoint_schema,
+        )
+        try:
+            saver = await _pg_checkpoint_cm.__aenter__()
+            set_checkpointer(saver)
+        except BaseException:
+            await _pg_checkpoint_cm.__aexit__(*sys.exc_info())
+            _pg_checkpoint_cm = None
+            raise
         logger.info(
             "datacloud-analysis: LangGraph checkpoint tables ready; checkpointer registered."
         )
 
-        # 4. Initialize datacloud-memory Store (also idempotent).
+        # 3. Initialize datacloud-memory Store (also idempotent).
         try:
             from datacloud_memory.store import init_store  # noqa: PLC0415
 
@@ -111,25 +104,28 @@ async def setup() -> None:
         logger.info("datacloud-analysis: initialization complete.")
 
 
-def get_pg_pool() -> "AsyncConnectionPool":
-    """Return the initialized PG connection pool.
+def get_pg_pool() -> None:
+    """Return an async PG connection pool.
+
+    NOTE: Not currently used internally.  Reserved for future consumers
+    (e.g. datacloud-memory) that need a shared async pool.  The pool is
+    not created by ``setup()`` — callers must create their own pool or
+    wait until this API is wired up.
 
     Raises
     ------
-    RuntimeError
-        If ``setup()`` has not been called yet.
+    NotImplementedError
+        Always, until a pool is wired up.
     """
-    if not _initialized or _pg_pool is None:
-        raise RuntimeError(
-            "datacloud-analysis is not initialized. "
-            "Call `await bootstrap.setup()` at process startup before using the SDK."
-        )
-    return _pg_pool
+    raise NotImplementedError(
+        "get_pg_pool() is not yet wired up. "
+        "Create an AsyncConnectionPool directly or wait for datacloud-memory integration."
+    )
 
 
 async def teardown() -> None:
     """Close the PG pool gracefully (call on process shutdown)."""
-    global _initialized, _pg_pool, _pg_checkpoint_cm
+    global _initialized, _pg_checkpoint_cm
 
     from datacloud_analysis.session.checkpointer import reset_checkpointer  # noqa: PLC0415
 
@@ -138,11 +134,7 @@ async def teardown() -> None:
             await _pg_checkpoint_cm.__aexit__(None, None, None)
         finally:
             _pg_checkpoint_cm = None
-        reset_checkpointer()
+            reset_checkpointer()
         logger.info("datacloud-analysis: checkpointer context exited.")
 
-    if _pg_pool is not None:
-        await _pg_pool.close()
-        logger.info("datacloud-analysis: PG connection pool closed.")
     _initialized = False
-    _pg_pool = None
