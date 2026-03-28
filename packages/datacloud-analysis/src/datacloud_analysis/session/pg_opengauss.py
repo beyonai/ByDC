@@ -21,9 +21,14 @@ that OpenGauss accepts.  It is combined with ``PostgresSaver`` at runtime via
 Windows ProactorEventLoop
 -------------------------
 ``psycopg`` async I/O uses ``add_reader``/``add_writer`` which Windows'
-default ``ProactorEventLoop`` does NOT support.  ``_SyncPGCheckpointer`` wraps
+default ``ProactorEventLoop`` does NOT support.  ``SyncPGCheckpointer`` wraps
 the synchronous ``PostgresSaver`` (i.e. ``_OGSaver``) and delegates every
 async call via ``loop.run_in_executor()``, making it event-loop-agnostic.
+
+Checkpoint I/O uses a **sync** ``psycopg_pool.ConnectionPool``: LangGraph's
+``PostgresSaver._cursor`` checks out a connection per operation via
+``get_connection()``, so idle or dropped server sessions do not strand the whole
+process on one dead ``Connection`` (contrast: a single long-lived connection).
 
 Usage
 -----
@@ -324,6 +329,10 @@ class OpenGaussSaver:
 def make_opengauss_saver(conn: Any) -> Any:
     """Create an OpenGauss-compatible PostgresSaver instance.
 
+    ``conn`` may be a psycopg ``Connection`` or a sync ``ConnectionPool``; the
+    parent ``PostgresSaver`` checks out a connection per operation when given
+    a pool.
+
     The returned object can be wrapped with ``SyncPGCheckpointer`` for use
     in environments where async psycopg is unavailable (e.g. Windows).
     """
@@ -345,8 +354,11 @@ class SyncPGCheckpointer(BaseCheckpointSaver):
     """
 
     def __init__(self, inner: Any) -> None:
+        import inspect  # noqa: PLC0415
+
         super().__init__(serde=getattr(inner, "serde", None))
         self._inner = inner
+        self._has_task_path = "task_path" in inspect.signature(inner.put_writes).parameters
 
     # ── async interface ────────────────────────────────────────────────────
 
@@ -377,11 +389,8 @@ class SyncPGCheckpointer(BaseCheckpointSaver):
         task_id: str,
         task_path: str = "",
     ) -> None:
-        import inspect  # noqa: PLC0415
-
         loop = asyncio.get_running_loop()
-        sig = inspect.signature(self._inner.put_writes)
-        if "task_path" in sig.parameters:
+        if self._has_task_path:
             await loop.run_in_executor(
                 None, self._inner.put_writes, config, writes, task_id, task_path
             )
@@ -420,6 +429,8 @@ class SyncPGCheckpointer(BaseCheckpointSaver):
         return self._inner.put(config, checkpoint, metadata, new_versions)
 
     def put_writes(self, config: Any, writes: Any, task_id: str, task_path: str = "") -> None:
+        if self._has_task_path:
+            return self._inner.put_writes(config, writes, task_id, task_path)
         return self._inner.put_writes(config, writes, task_id)
 
     def list(self, config: Any, *, filter: Any = None, before: Any = None, limit: Any = None):
@@ -499,9 +510,25 @@ def ensure_tables_opengauss(conn: Any, schema: str) -> None:
 # langgraph dev factory (asynccontextmanager)
 # ---------------------------------------------------------------------------
 
+def _ensure_tables_from_pool(pool: Any, schema: str) -> None:
+    """Run OpenGauss DDL fallback using one checkout from the checkpoint pool."""
+
+    with pool.connection() as conn:
+        ensure_tables_opengauss(conn, schema)
+
+
 @asynccontextmanager
-async def get_checkpointer() -> AsyncIterator[SyncPGCheckpointer]:
+async def get_checkpointer(
+    checkpoint_uri: str = "",
+    checkpoint_schema: str | None = None,
+) -> AsyncIterator[SyncPGCheckpointer]:
     """Async context manager yielding an OpenGauss-compatible checkpointer.
+
+    The underlying ``PostgresSaver`` is backed by a **sync**
+    ``psycopg_pool.ConnectionPool``.  Each read/write checks out a connection
+    for the duration of that operation (LangGraph ``_cursor`` / ``get_connection``),
+    which avoids a single long-lived ``Connection`` dying with
+    ``the connection is closed`` / ``AdminShutdown`` with no recovery.
 
     Designed to be referenced from ``langgraph.json``::
 
@@ -515,17 +542,31 @@ async def get_checkpointer() -> AsyncIterator[SyncPGCheckpointer]:
         from datacloud_analysis.session.pg_opengauss import get_checkpointer
         __all__ = ["get_checkpointer"]
 
-    Environment variables
-    ---------------------
-    DATACLOUD_PG_CHECKPOINT_URI
-        psycopg-format connection string (required).
-    DATACLOUD_PG_CHECKPOINT_SCHEMA
-        Schema to use for checkpoint tables (optional, defaults to ``public``).
+    Keep the context manager entered for the process lifetime (as ``bootstrap``
+    does); on ``__aexit__`` the pool is closed.
+
+    Parameters
+    ----------
+    checkpoint_uri:
+        psycopg-format connection string.  Falls back to the
+        ``DATACLOUD_PG_CHECKPOINT_URI`` environment variable when not provided
+        (e.g. when called directly from ``langgraph.json``).
+    checkpoint_schema:
+        Schema to use for checkpoint tables.  Falls back to
+        ``DATACLOUD_PG_CHECKPOINT_SCHEMA`` when ``None`` (not provided).
+        Pass ``""`` to explicitly use the default ``public`` schema without
+        reading the environment variable.
     """
     from psycopg import Connection, errors, sql  # noqa: PLC0415
     from psycopg.rows import dict_row  # noqa: PLC0415
+    from psycopg_pool import ConnectionPool  # noqa: PLC0415
 
-    checkpoint_uri = os.getenv("DATACLOUD_PG_CHECKPOINT_URI", "").strip()
+    # Fall back to env vars only when called without explicit args (e.g. langgraph.json).
+    if not checkpoint_uri:
+        checkpoint_uri = os.getenv("DATACLOUD_PG_CHECKPOINT_URI", "").strip()
+    if checkpoint_schema is None:
+        checkpoint_schema = os.getenv("DATACLOUD_PG_CHECKPOINT_SCHEMA", "").strip()
+
     if not checkpoint_uri:
         raise RuntimeError(
             "DATACLOUD_PG_CHECKPOINT_URI is not set. "
@@ -533,27 +574,36 @@ async def get_checkpointer() -> AsyncIterator[SyncPGCheckpointer]:
             "to fall back to in-memory storage."
         )
 
-    checkpoint_schema = os.getenv("DATACLOUD_PG_CHECKPOINT_SCHEMA", "").strip()
-
     logger.info(
-        "Connecting to OpenGauss checkpoint store (sync, schema=%s)…",
+        "Opening OpenGauss checkpoint pool (sync, schema=%s)…",
         checkpoint_schema or "public",
     )
 
-    conn = Connection.connect(
-        checkpoint_uri,
-        autocommit=True,
-        prepare_threshold=0,
-        row_factory=dict_row,
-    )
-
-    try:
-        if checkpoint_schema:
+    if checkpoint_schema:
+        with Connection.connect(checkpoint_uri, autocommit=True) as admin:
             ident = sql.Identifier(checkpoint_schema)
-            conn.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(ident))
-            conn.execute(sql.SQL("SET search_path TO {}, public").format(ident))
+            admin.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(ident))
 
-        saver = make_opengauss_saver(conn)
+    connect_kwargs: dict[str, Any] = {
+        "autocommit": True,
+        "prepare_threshold": 0,
+        "row_factory": dict_row,
+    }
+    if checkpoint_schema:
+        connect_kwargs["options"] = f"-c search_path={checkpoint_schema},public"
+
+    pool: Any = None
+    try:
+        pool = ConnectionPool(
+            checkpoint_uri,
+            kwargs=connect_kwargs,
+            min_size=1,
+            max_size=20,
+            open=True,
+            name="datacloud-checkpoint",
+        )
+
+        saver = make_opengauss_saver(pool)
 
         try:
             saver.setup()
@@ -567,21 +617,24 @@ async def get_checkpointer() -> AsyncIterator[SyncPGCheckpointer]:
             )
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(
-                None, ensure_tables_opengauss, conn, checkpoint_schema
+                None, _ensure_tables_from_pool, pool, checkpoint_schema
             )
 
         wrapped = SyncPGCheckpointer(saver)
         logger.info(
-            "PG checkpointer ready (OpenGaussSaver + SyncPGCheckpointer) — "
+            "PG checkpointer ready (pool + OpenGaussSaver + SyncPGCheckpointer) — "
             "conversations will persist to OpenGauss."
         )
         yield wrapped
 
     finally:
-        # 不在 context 退出时 close(conn)：LangGraph API 在 startup 后可能退出本 context
-        # 却仍持有 checkpointer 用于后续请求，关闭连接会导致 psycopg.OperationalError:
-        # "the connection is closed"。连接随进程生命周期保持打开。
-        logger.debug("PG checkpointer context exited (connection left open for reuse).")
+        if pool is not None:
+            try:
+                pool.close()
+            except Exception:
+                logger.exception("Failed to close checkpoint ConnectionPool.")
+            else:
+                logger.debug("Checkpoint ConnectionPool closed.")
 
 
 __all__ = [
