@@ -7,8 +7,9 @@ with node modules.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Callable
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 
 logger = logging.getLogger(__name__)
@@ -21,23 +22,31 @@ from datacloud_analysis.orchestration.loop import loop_node
 from datacloud_analysis.orchestration.state import AgentState
 
 
-def route_after_intent(state: AgentState) -> str:
-    """Route after intent: clarify → insight; online_query+valid tool → direct_tool; else dag."""
-    if state.get("clarify_needed"):
-        return "insight"
-    if state.get("query_mode") == "online_query":
-        tools = state.get("dynamic_tools") or {}
-        tt = state.get("target_tool")
-        if isinstance(tt, str) and tt.strip() and tt.strip() in tools:
-            return "direct_tool"
-        # LLM 输出了 online_query 但 target_tool 不在可用工具列表中，降级到 dag
-        logger.warning(
-            "route_after_intent: online_query but target_tool=%r not found in available tools=%s"
-            ", falling back to dag",
-            tt,
-            sorted(tools.keys()),
-        )
-    return "dag"
+def _make_route_after_intent(
+    default_tools: dict[str, Any] | None,
+) -> Callable[[AgentState], str]:
+    """Build router with compile-time tool registry (not persisted in checkpoint state)."""
+
+    dt = default_tools or {}
+
+    def route_after_intent(state: AgentState) -> str:
+        """Route after intent: clarify → insight; online_query+valid tool → direct_tool; else dag."""
+        if state.get("clarify_needed"):
+            return "insight"
+        if state.get("query_mode") == "online_query":
+            tools = state.get("dynamic_tools") or dt
+            tt = state.get("target_tool")
+            if isinstance(tt, str) and tt.strip() and tt.strip() in tools:
+                return "direct_tool"
+            logger.warning(
+                "route_after_intent: online_query but target_tool=%r not found in available tools=%s"
+                ", falling back to dag",
+                tt,
+                sorted(tools.keys()),
+            )
+        return "dag"
+
+    return route_after_intent
 
 
 def route_loop(state: AgentState) -> str:
@@ -56,24 +65,35 @@ def build_analysis_graph(
     """Return an uncompiled ``StateGraph`` for the DataCloud pipeline."""
     builder = StateGraph(AgentState)
 
-    async def _intent(state: AgentState) -> dict[str, Any]:
-        return await intent_node(state, default_prompts=prompts_overwrite)
-
-    async def _dag(state: AgentState) -> dict[str, Any]:
-        return await dag_node(
+    async def _intent(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
+        gw_ctx = (config.get("configurable") or {}).get("gateway_context")
+        return await intent_node(
             state,
+            gateway_context=gw_ctx,
             default_prompts=prompts_overwrite,
             default_tools=tools,
         )
 
-    async def _loop(state: AgentState) -> dict[str, Any]:
-        return await loop_node(state, default_tools=tools)
+    async def _dag(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
+        gw_ctx = (config.get("configurable") or {}).get("gateway_context")
+        return await dag_node(
+            state,
+            gateway_context=gw_ctx,
+            default_prompts=prompts_overwrite,
+            default_tools=tools,
+        )
 
-    async def _direct_tool(state: AgentState) -> dict[str, Any]:
-        return await direct_tool_node(state, default_tools=tools)
+    async def _loop(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
+        gw_ctx = (config.get("configurable") or {}).get("gateway_context")
+        return await loop_node(state, gateway_context=gw_ctx, default_tools=tools)
 
-    async def _insight(state: AgentState) -> dict[str, Any]:
-        return await insight_node(state, default_prompts=prompts_overwrite)
+    async def _direct_tool(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
+        gw_ctx = (config.get("configurable") or {}).get("gateway_context")
+        return await direct_tool_node(state, gateway_context=gw_ctx, default_tools=tools)
+
+    async def _insight(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
+        gw_ctx = (config.get("configurable") or {}).get("gateway_context")
+        return await insight_node(state, gateway_context=gw_ctx, default_prompts=prompts_overwrite)
 
     builder.add_node(
         "intent",
@@ -99,7 +119,7 @@ def build_analysis_graph(
     builder.add_edge(START, "intent")
     builder.add_conditional_edges(
         "intent",
-        route_after_intent,
+        _make_route_after_intent(tools),
         {"insight": "insight", "direct_tool": "direct_tool", "dag": "dag"},
     )
     builder.add_edge("direct_tool", "insight")

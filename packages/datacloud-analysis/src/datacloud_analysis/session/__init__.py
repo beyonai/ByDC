@@ -7,7 +7,7 @@ pg_opengauss   OpenGauss-compatible checkpointer + langgraph dev factory.
 metadata       Map business IDs (session_id, message_id) to LangGraph thread_id.
 """
 
-from .checkpointer import get_checkpointer, set_checkpointer
+from .checkpointer import get_checkpointer, reset_checkpointer, set_checkpointer
 from .metadata import SessionMetadata, build_run_config
 from .pg_opengauss import (
     OpenGaussSaver,
@@ -20,6 +20,7 @@ from .pg_opengauss import (
 __all__ = [
     # bootstrap-path singleton
     "get_checkpointer",
+    "reset_checkpointer",
     "set_checkpointer",
     # session metadata
     "SessionMetadata",

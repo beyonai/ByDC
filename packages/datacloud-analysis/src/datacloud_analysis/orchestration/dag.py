@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import cast
+from typing import Any, cast
 
 from by_framework import EventType, StreamChunkEvent
 from by_framework.core.protocol.content_type import SseReasonMessageType
@@ -220,6 +220,7 @@ _DAG_STATIC_SYSTEM = """你是一个任务规划专家。请将分析目标拆�
 
 async def dag_node(
     state: AgentState,
+    gateway_context: Any = None,
     default_prompts: dict | None = None,
     default_tools: dict | None = None,
 ) -> dict:
@@ -315,7 +316,7 @@ async def dag_node(
     _log_planned_types_vs_registered_tools(plan, planning_tools, dynamic_tools)
 
     # 向前端推送思考消息
-    context = state.get("gateway_context")
+    context = gateway_context
     if context is not None:
         task_lines = "\n".join(
             f"■ {t['id']}（{t.get('type', 'unknown')}）：{t.get('description', '')}"
