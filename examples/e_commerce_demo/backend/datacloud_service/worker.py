@@ -1,6 +1,6 @@
 """DataCloud Gateway Worker.
 
-将 datacloud-analysis LangGraph 接入 gateway_sdk worker 协议：
+将 datacloud-analysis LangGraph 接入 by_framework（Gateway）worker 协议：
 - 收 AskAgentCommand 消息
 - 归一化消息格式，驱动图执行
 - 通过 EventType 将 LLM token/工具调用状态实时回传
@@ -21,23 +21,24 @@ if sys.platform == "win32":
 
 from typing import Any, Optional
 
-from gateway_sdk import (
+from by_framework import (
     AgentContext,
     EventType,
     GatewayWorker,
     StreamChunkEvent,
 )
-from gateway_sdk.common.logger import logger
-from gateway_sdk.core.extensions import PluginRegistry
-from gateway_sdk.core.protocol.commands import AskAgentCommand
-from gateway_sdk.core.protocol.content_type import SseMessageType, SseReasonMessageType
+from by_framework.common.logger import logger
+from by_framework.core.extensions import PluginRegistry
+from by_framework.core.protocol.commands import AskAgentCommand
+from by_framework.core.protocol.content_type import SseMessageType, SseReasonMessageType
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from datacloud_analysis.agent import create_agent
+from datacloud_service.commands import handle_ext_command
 
 
 class DataCloudWorker(GatewayWorker):
-    """Worker that drives the datacloud-analysis graph inside the gateway_sdk protocol.
+    """Worker that drives the datacloud-analysis graph inside the Gateway worker protocol.
 
     启动时通过 run_worker(**worker_kwargs) 将以下参数透传至 __init__：
         model_name  — LLM 模型名（读自 .env DATACLOUD_LLM_REASONING_MODEL）
@@ -98,6 +99,16 @@ class DataCloudWorker(GatewayWorker):
         """向 gateway 注册本 worker 的能力标签。"""
         return ["datacloud"]
 
+    async def _emit_6001(self, context: AgentContext, payload: dict[str, Any]) -> None:
+        """Emit one structured data-table JSON chunk (content_type=6001)."""
+        data_table_type = getattr(SseMessageType, "data_table_json", None)
+        content_type = data_table_type.value if data_table_type is not None else "6001"
+        await context.emit_chunk(
+            StreamChunkEvent(content=json.dumps(payload, ensure_ascii=False)),
+            event_type=EventType.ANSWER_DELTA.value,
+            content_type=content_type,
+        )
+
     # ------------------------------------------------------------------
     # 核心消息处理
     # ------------------------------------------------------------------
@@ -129,8 +140,9 @@ class DataCloudWorker(GatewayWorker):
 
         # 提取 extra_payload 信息
         extra_payload = getattr(command, "extra_payload", {})
-        by_agent_id = extra_payload.get("byAgentId")
-        by_agent_name = extra_payload.get("byAgentName")
+        by_agent_id = extra_payload.get("agent_id")
+        by_agent_name = extra_payload.get("agent_name")
+        ext_params = extra_payload.get("ext_params")
         logger.info(
             "Agent context: ID=%s (type=%s), Name=%s",
             by_agent_id,
@@ -139,9 +151,26 @@ class DataCloudWorker(GatewayWorker):
         )
 
         # 获取当前挂载的 Workspace
-        from gateway_sdk.worker.sandbox.hook_sandbox import active_workspace
+        from by_framework.worker.sandbox.hook_sandbox import active_workspace
         workspace_dir = active_workspace.get()
         logger.info("Active workspace for task: %s", workspace_dir)
+
+        if isinstance(ext_params, dict):
+            handled, payload = handle_ext_command(
+                ext_params=ext_params,
+                session_id=context.session_id,
+                workspace_dir=workspace_dir,
+            )
+            if handled:
+                if payload is not None:
+                    await self._emit_6001(context, payload)
+                await context.emit_chunk(
+                    StreamChunkEvent(content="回答完成"),
+                    event_type=EventType.APP_STREAM_RESPONSE.value,
+                    content_type=SseMessageType.text.value,
+                )
+                await context.flush_to_history()
+                return {"status": "done"}
 
         # ② 归一化输入；gateway_context 传入供各节点 emit 思考事件
         input_messages = _normalize_messages(command.content)
