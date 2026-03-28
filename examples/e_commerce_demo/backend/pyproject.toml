@@ -5,7 +5,7 @@ description = "DataCloud 产业大脑 Gateway Worker Service"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "gateway-sdk",
+    "by-framework",
     "python-dotenv>=1.0.0",
     "datacloud-analysis",
     "langchain-openai>=1.1.11",
