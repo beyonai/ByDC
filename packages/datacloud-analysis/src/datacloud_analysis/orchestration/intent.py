@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import cast
+from typing import Any, cast
 
 from by_framework import EventType, StreamChunkEvent
 from by_framework.core.protocol.content_type import SseReasonMessageType
@@ -59,12 +59,18 @@ _INTENT_STATIC_SYSTEM = """你是一个意图识别与改写专家。
 
 async def intent_node(
     state: AgentState,
+    gateway_context: Any = None,
     default_prompts: dict | None = None,
+    default_tools: dict[str, Any] | None = None,
 ) -> dict:
     """Classify intent and attach knowledge context, then rewrite the query.
 
     Args:
         state: The current AgentState.
+        gateway_context: Optional AgentContext from runnable config (not checkpointed).
+        default_prompts: Prompt overrides from graph compile closure (not checkpointed).
+        default_tools: Tool registry from graph compile closure; must not live in state
+            when using a persistent checkpointer (tools contain non-serializable callables).
 
     Returns:
         State updates containing the rewritten intent and clarify_needed flag.
@@ -84,7 +90,7 @@ async def intent_node(
     last_user_msg = messages[-1].content if hasattr(messages[-1], "content") else str(messages[-1])
 
     prompts_overwrite = state.get("prompts_overwrite") or default_prompts or {}
-    dynamic_tools = state.get("dynamic_tools") or {}
+    dynamic_tools = state.get("dynamic_tools") or default_tools or {}
     tool_names = sorted(dynamic_tools.keys()) if isinstance(dynamic_tools, dict) else []
     tools_line = ", ".join(tool_names) if tool_names else "（当前无动态工具，请使用 analysis）"
 
@@ -154,9 +160,11 @@ async def intent_node(
     # 截断知识预览（避免 Redis/前端爆量）
     knowledge_preview = knowledge_text[:500] if knowledge_text else "无"
 
-    # 向前端推送思考消息
-    context = state.get("gateway_context")
-    if context is not None:
+    async def _emit_intent_reasoning_snapshot() -> None:
+        """Push intent-phase reasoning to the gateway (reads latest locals each call)."""
+
+        if gateway_context is None:
+            return
         thinking = (
             ""
             f"■ 检索到的业务知识（节选）：\n{knowledge_preview}\n\n"
@@ -165,18 +173,33 @@ async def intent_node(
             f"■ 路由：{query_mode}"
             + (f" / 工具：{target_tool}" if query_mode == "online_query" else "")
         )
-        # 推送思考标题
-        await context.emit_chunk(
+        await gateway_context.emit_chunk(
             StreamChunkEvent(content="问题理解"),
             event_type=EventType.REASONING_LOG_DELTA.value,
             content_type=SseReasonMessageType.think_title.value,
         )
-        # 推送思考文本
-        await context.emit_chunk(
+        
+        await gateway_context.emit_chunk(
             StreamChunkEvent(content=thinking),
             event_type=EventType.REASONING_LOG_DELTA.value,
             content_type=SseReasonMessageType.think_text.value,
         )
+
+    # 必须在 interrupt() 之前推送思考：若在 clarify_needed 时先 interrupt，节点在挂起点之前
+    # 不会执行后面的 emit，前端会只有「思考中」而无「问题理解」；且无 checkpointer 时 Worker
+    # 无法 aget_state 检测中断，会误判为正常结束。
+    await _emit_intent_reasoning_snapshot()
+
+    # 当意图不清晰时，通过 interrupt() 挂起图；resume 后返回值写入 rewritten_intent。
+    if clarify_needed:
+        logger.info("intent_node: clarify_needed=True, calling interrupt() for HITL")
+        from langgraph.types import interrupt as lg_interrupt  # noqa: PLC0415
+
+        user_reply = lg_interrupt(rewritten_intent)
+        if user_reply:
+            rewritten_intent = str(user_reply)
+            clarify_needed = False
+        await _emit_intent_reasoning_snapshot()
 
     return {
         "intent": rewritten_intent,

@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 async def loop_node(
     state: AgentState,
+    gateway_context: Any = None,
     default_tools: dict | None = None,
 ) -> dict:
     """One round of the ReAct loop.
@@ -60,7 +61,7 @@ async def loop_node(
     )
 
     updated_plan = list(plan)
-    context = state.get("gateway_context")
+    context = gateway_context
 
     # ── 执行前：逐任务推送"开始执行"日志（含工具名和入参）──────────────
     if context is not None:
@@ -84,7 +85,7 @@ async def loop_node(
 
     # ── Concurrent execution ────────────────────────────────────────────
     task_outputs: list[tuple[dict, Any]] = await asyncio.gather(
-        *[execute_next_task(t, state, custom_tools=dynamic_tools) for t in ready_tasks]
+        *[execute_next_task(t, state, gateway_context=gateway_context, custom_tools=dynamic_tools) for t in ready_tasks]
     )
 
     for updated_task, output in task_outputs:
