@@ -22,21 +22,42 @@ import re
 from pathlib import Path
 from typing import Any
 
-from gateway_sdk import EventType, StreamChunkEvent
-from gateway_sdk.core.protocol.content_type import SseMessageType, SseReasonMessageType
+from by_framework import EventType, StreamChunkEvent
+from by_framework.core.protocol.content_type import SseMessageType, SseReasonMessageType
 from langchain.chat_models import init_chat_model
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from datacloud_analysis.orchestration.query_shape_utils import count_rows_like_envelope_build
+from datacloud_analysis.orchestration.sandbox_executor import WRAPPED_TASK_OUTPUT_KEY
 from datacloud_analysis.orchestration.state import AgentState
 
-# 6001：结构化数据表 JSON；旧版 gateway_sdk 无枚举成员时回退为字面量
+# 6001：结构化数据表 JSON；协议层无对应枚举成员时回退为字面量
 _SSE_DATA_TABLE_JSON = getattr(SseMessageType, "data_table_json", None)
 CONTENT_TYPE_DATA_TABLE_JSON = (
     _SSE_DATA_TABLE_JSON.value if _SSE_DATA_TABLE_JSON is not None else "6001"
 )
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Static system prompts — contain NO variable interpolation.
+# All dynamic content (data_summary, intent) goes into Layer 3 HumanMessage
+# so that these prefixes are 100% KV-Cache-friendly.
+# ---------------------------------------------------------------------------
+_INSIGHT_STATIC_SYSTEM = """你是一个高级数据分析师。
+请基于用户的原始问题和各子任务数据摘要，输出专业的自然语言分析报告。
+
+输出要求：
+1. 只输出文字分析，不要输出 Markdown 表格（完整数据已通过独立 JSON 消息推送）。
+2. 引用数据中的关键数字和结论，简明扼要，聚焦核心洞察。
+3. 不要重复整张表或逐行列举记录。
+"""
+
+_CLARIFY_STATIC_SYSTEM = """你是一个高级数据分析管家。
+请以高情商、友好的助手口吻回复用户，婉拒无关闲聊，
+告知你仅负责企业风险查证、账单流水分发、销售数据查询等专业业务查询，
+并引导用户在授权范围内重新提问。
+"""
 
 
 async def _emit_reasoning_log_end_before_answer(context: Any) -> None:
@@ -229,6 +250,12 @@ def _aggregate_result(res: dict) -> dict[str, Any] | None:
     if "data" in res:
         output = res["data"]
         if isinstance(output, dict):
+            if output.get(WRAPPED_TASK_OUTPUT_KEY):
+                content = output.get("content", "")
+                return {
+                    "task_id": task_id,
+                    "data": f"【知识检索 / 文本结果】\n{content}",
+                }
             if "records" in output and "meta" in output:
                 return {"task_id": task_id, "data": _format_records_meta_result(task_id, output)}
             if "preview" in output and "columns" in output:
@@ -242,12 +269,20 @@ def _aggregate_result(res: dict) -> dict[str, Any] | None:
             with open(res["file_path"], "r", encoding="utf-8") as f:
                 output = json.load(f)
             if isinstance(output, dict):
+                if output.get(WRAPPED_TASK_OUTPUT_KEY):
+                    content = output.get("content", "")
+                    return {
+                        "task_id": task_id,
+                        "data": f"【知识检索 / 文本结果】\n{content}",
+                    }
                 if "records" in output and "meta" in output:
                     return {"task_id": task_id, "data": _format_records_meta_result(task_id, output)}
                 if "preview" in output and "columns" in output:
                     return {"task_id": task_id, "data": _format_data_query_result(task_id, output)}
                 if "exit_code" in output:
                     return {"task_id": task_id, "data": _format_code_exec_result(output)}
+            if isinstance(output, str):
+                return {"task_id": task_id, "data": f"【中间结果】\n{output}"}
             return {"task_id": task_id, "data": output}
         except Exception as exc:
             logger.error("Failed to read intermediate result %s: %s", res["file_path"], exc)
@@ -282,15 +317,19 @@ def _extract_file_info_md(results: list[dict]) -> str:
     """
     lines: list[str] = []
     for res in results:
+        if not isinstance(res, dict):
+            continue
         task_id = res.get("task_id", "?")
-        output: dict = {}
+        output: dict[str, Any] = {}
 
         # Multi-task: read the temp JSON to get the original tool output
         temp_path = res.get("file_path")
         if temp_path and Path(temp_path).exists():
             try:
                 with open(temp_path, encoding="utf-8") as f:
-                    output = json.load(f)
+                    loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    output = loaded
             except Exception:
                 pass
 
@@ -327,11 +366,15 @@ def _load_raw_output_dict(res: dict) -> dict[str, Any]:
             with open(temp_path, encoding="utf-8") as f:
                 loaded = json.load(f)
             if isinstance(loaded, dict):
+                if loaded.get(WRAPPED_TASK_OUTPUT_KEY):
+                    return {}
                 return loaded
         except Exception:
             pass
     data = res.get("data")
     if isinstance(data, dict):
+        if data.get(WRAPPED_TASK_OUTPUT_KEY):
+            return {}
         return data
     return {}
 
@@ -730,21 +773,22 @@ async def insight_node(
                 content_type=SseReasonMessageType.think_text.value,
             )
         await _emit_reasoning_log_end_before_answer(context)
-        sys_prompt = prompts_overwrite.get(
-            "clarify_prompt",
-            (
-            f"你是一个高级数据分析管家。\n"
-            f"检测到用户的问题可能不在我们的业务查询范围内，或者意图不清晰"
-            f"（系统内部识别意图：{intent}）。\n"
-            f"请以高情商、友好的助手口吻回复用户，婉拒无关闲聊，"
-            f"告知你仅负责企业风险查证、账单流水分发、销售数据查询等专业业务查询，"
-            f"并引导用户在授权范围内重新提问。"
-            )
+        # Layer 0: static system prompt — no variable interpolation, 100% KV-Cache hit.
+        # Support legacy key "clarify_prompt" for backward compatibility.
+        static_sys = prompts_overwrite.get(
+            "clarify_system_prompt",
+            prompts_overwrite.get("clarify_prompt", _CLARIFY_STATIC_SYSTEM),
         )
-        sys_prompt = _append_task_prompt_to_system(prompts_overwrite, sys_prompt)
+        static_sys = _append_task_prompt_to_system(prompts_overwrite, static_sys)
+        # Layer 3: dynamic content (recognized intent) in a HumanMessage.
+        dynamic_human = HumanMessage(content=f"【系统识别意图】：{intent}\n请据此回复用户。")
         # Stream clarify response (single part, no tables/files)
         analysis_text = ""
-        async for chunk in llm.astream(messages + [SystemMessage(content=sys_prompt)]):
+        async for chunk in llm.astream(
+            [SystemMessage(content=static_sys)]  # Layer 0: static prefix, 100% cache hit
+            + messages[:-1]                       # Layer 2: conversation history
+            + [dynamic_human]                     # Layer 3: current-turn dynamic content
+        ):
             if chunk.content:
                 analysis_text += chunk.content
                 if context is not None:
@@ -824,23 +868,30 @@ async def insight_node(
          for item in aggregated_data],
         ensure_ascii=False,
     )
-    default_analysis_prompt = (
-        "你是一个高级数据分析师。\n"
-        "以下是各子任务的数据摘要。完整查询结果（records、分页、文件与提示等）会在同一会话中"
-        "以独立消息推送（content_type=6001 的 JSON 数据块），请勿在正文中重复整张表或逐行列出。\n"
-        f"{data_summary}\n\n"
-        "请结合原始问题，输出一段专业的自然语言分析报告。\n"
-        "要求：\n"
-        "1. 只输出文字分析，不要输出 Markdown 表格。\n"
-        "2. 可以引用数据中的关键数字和结论。\n"
-        "3. 尽量简明扼要，聚焦核心洞察。"
+
+    # Layer 0: static system prompt — no variable interpolation, 100% KV-Cache hit.
+    # Support legacy key "insight_prompt" for backward compatibility.
+    static_sys = prompts_overwrite.get(
+        "insight_system_prompt",
+        prompts_overwrite.get("insight_prompt", _INSIGHT_STATIC_SYSTEM),
     )
-    sys_prompt = prompts_overwrite.get("insight_prompt", default_analysis_prompt)
-    sys_prompt = _append_task_prompt_to_system(prompts_overwrite, sys_prompt)
+    static_sys = _append_task_prompt_to_system(prompts_overwrite, static_sys)
+
+    # Layer 3: dynamic data summary in a HumanMessage.
+    last_user_msg = messages[-1].content if messages and hasattr(messages[-1], "content") else ""
+    dynamic_human = HumanMessage(content=(
+        f"【用户问题】：{last_user_msg}\n\n"
+        f"【各子任务数据摘要】：\n{data_summary}\n\n"
+        "请结合以上数据和原始问题，生成分析报告。"
+    ))
 
     # Part1: stream analysis text token by token
     analysis_text = ""
-    async for chunk in llm.astream(messages + [SystemMessage(content=sys_prompt)]):
+    async for chunk in llm.astream(
+        [SystemMessage(content=static_sys)]  # Layer 0: static prefix, 100% cache hit
+        + messages[:-1]                       # Layer 2: conversation history (excl. current turn)
+        + [dynamic_human]                     # Layer 3: current-turn dynamic content
+    ):
         if chunk.content:
             analysis_text += chunk.content
             if context is not None:

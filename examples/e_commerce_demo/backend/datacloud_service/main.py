@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from gateway_sdk import run_worker
+from by_framework import run_worker
 
 from datacloud_service.plugins.init_agent_conf import InitDataCloudDigitalEmployeePlugin
 from datacloud_service.worker import DataCloudWorker
@@ -65,7 +65,7 @@ class WorkerConfig:
         )
 
     def run_worker_kwargs(self) -> dict[str, Any]:
-        """Arguments for gateway_sdk.run_worker (excluding worker_class)."""
+        """Arguments for ``run_worker`` from ``by_framework`` (excluding ``worker_class``)."""
         return {
             "worker_id": self.worker_id,
             "redis_host": self.redis_host,
