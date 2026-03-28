@@ -742,13 +742,14 @@ async def _emit_part2_part3(
 
 async def insight_node(
     state: AgentState,
+    gateway_context: Any = None,
     default_prompts: dict | None = None,
 ) -> dict:
     """Generate the final answer: Part1 LLM stream, then Part2+Part3 as one JSON (6001) or Markdown."""
     logger.debug("insight_node: synthesising final answer …")
 
     messages = state.get("messages", [])
-    context = state.get("gateway_context")
+    context = gateway_context
     prompts_overwrite = state.get("prompts_overwrite") or default_prompts or {}
 
     model = os.getenv("DATACLOUD_LLM_REASONING_MODEL", "openai:Qwen/Qwen3-235B-A22B")

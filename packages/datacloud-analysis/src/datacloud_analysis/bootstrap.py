@@ -40,6 +40,8 @@ logger = logging.getLogger(__name__)
 _initialized: bool = False
 _init_lock: asyncio.Lock | None = None
 _pg_pool: "AsyncConnectionPool | None" = None
+# Keeps ``pg_opengauss.get_checkpointer()`` context alive for process lifetime.
+_pg_checkpoint_cm: Any = None
 
 
 async def setup() -> None:
@@ -52,7 +54,7 @@ async def setup() -> None:
     psycopg.OperationalError
         If the PostgreSQL server is unreachable.
     """
-    global _initialized, _init_lock, _pg_pool
+    global _initialized, _init_lock, _pg_pool, _pg_checkpoint_cm
 
     # Lazy-create the lock inside the running event loop.
     if _init_lock is None:
@@ -82,12 +84,17 @@ async def setup() -> None:
         await _pg_pool.open()
         logger.info("datacloud-analysis: PG connection pool opened.")
 
-        # 3. Create LangGraph checkpoint tables (idempotent – IF NOT EXISTS).
-        from datacloud_analysis.session.pg_opengauss import get_checkpointer  # noqa: PLC0415
+        # 3. OpenGauss-compatible LangGraph checkpointer: create tables and register
+        #    a process-wide instance so ``create_agent(..., checkpointer=get_checkpointer())`` works.
+        from datacloud_analysis.session.checkpointer import set_checkpointer  # noqa: PLC0415
+        from datacloud_analysis.session.pg_opengauss import get_checkpointer as og_get_checkpointer  # noqa: PLC0415
 
-        async with get_checkpointer():
-            pass
-        logger.info("datacloud-analysis: LangGraph checkpoint tables ready.")
+        _pg_checkpoint_cm = og_get_checkpointer()
+        saver = await _pg_checkpoint_cm.__aenter__()
+        set_checkpointer(saver)
+        logger.info(
+            "datacloud-analysis: LangGraph checkpoint tables ready; checkpointer registered."
+        )
 
         # 4. Initialize datacloud-memory Store (also idempotent).
         try:
@@ -122,7 +129,17 @@ def get_pg_pool() -> "AsyncConnectionPool":
 
 async def teardown() -> None:
     """Close the PG pool gracefully (call on process shutdown)."""
-    global _initialized, _pg_pool
+    global _initialized, _pg_pool, _pg_checkpoint_cm
+
+    from datacloud_analysis.session.checkpointer import reset_checkpointer  # noqa: PLC0415
+
+    if _pg_checkpoint_cm is not None:
+        try:
+            await _pg_checkpoint_cm.__aexit__(None, None, None)
+        finally:
+            _pg_checkpoint_cm = None
+        reset_checkpointer()
+        logger.info("datacloud-analysis: checkpointer context exited.")
 
     if _pg_pool is not None:
         await _pg_pool.close()
