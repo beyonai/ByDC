@@ -9,7 +9,6 @@ dynamic query   → injected by worker/custom_tools
 code_exec       → tools.sandbox.sbx_run_code
 file_read       → tools.sandbox.sbx_read_file
 file_write      → tools.sandbox.sbx_write_file
-search_knowledge→ tools.knowledge.search_knowledge
 recall_memory   → memory.tools.recall_memory
 build_skill     → tools.skill.build_skill
 render_report   → tools.report.render_report
@@ -25,6 +24,21 @@ from typing import Any
 from datacloud_analysis.orchestration.query_shape_utils import count_rows_like_envelope_build
 
 logger = logging.getLogger(__name__)
+
+# Workspace temp JSON must be a JSON object/array so downstream can json.load → dict/list.
+# Tools that return plain str would otherwise serialize as a JSON string
+# and break _resolve_input_files / insight readers that call .get on the payload.
+WRAPPED_TASK_OUTPUT_KEY = "_datacloud_wrapped_output"
+
+
+def normalize_workspace_task_output(output: Any) -> Any:
+    """Return a value safe to json.dump into workspace temp/{task_id}.json.
+
+    Dict/list outputs are stored as-is; scalars (e.g. str) are wrapped in a small object.
+    """
+    if isinstance(output, (dict, list)):
+        return output
+    return {WRAPPED_TASK_OUTPUT_KEY: True, "kind": "text", "content": output}
 
 # Registry: task type → callable (populated lazily to avoid circular imports)
 _TASK_DISPATCHERS: dict[str, Any] = {}
@@ -86,6 +100,7 @@ def _log_tool_output_summary(task_id: str, task_type: str, output: Any) -> None:
 async def execute_next_task(
     task: dict[str, Any],
     state: dict[str, Any],
+    gateway_context: Any = None,
     custom_tools: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], Any]:
     """Execute one sub-task and return the updated task dict and output.
@@ -102,7 +117,22 @@ async def execute_next_task(
     dynamic_dispatcher = (custom_tools or {}).get(task_type)
 
     if dispatcher is None and dynamic_dispatcher is None:
-        logger.warning("No dispatcher for task type '%s'; marking as failed.", task_type)
+        if not _TASK_DISPATCHERS:
+            _register_dispatchers()
+        builtin_keys = sorted(_TASK_DISPATCHERS.keys())
+        custom_keys = sorted((custom_tools or {}).keys())
+        logger.warning(
+            "No dispatcher for task type %r (task_id=%s); marking as failed. "
+            "Compare: model/plan used this string as 'type'. "
+            "dynamic_tools keys at execution (count=%d)=%s. "
+            "sandbox built-in types (count=%d)=%s.",
+            task_type,
+            task.get("id"),
+            len(custom_keys),
+            custom_keys,
+            len(builtin_keys),
+            builtin_keys,
+        )
         output = f"Unknown task type: {task_type}"
         return {**task, "status": "failed", "error": output}, output
 
@@ -144,7 +174,6 @@ async def execute_next_task(
             # 使 get_current_context() 和 get_gateway_context() 在 SDK 内部可用
             try:
                 from datacloud_data_sdk.context import InvocationContext  # noqa: PLC0415
-                gateway_context = state.get("gateway_context")
                 _ctx_kwargs: dict = {}
                 if gateway_context is not None:
                     _ctx_kwargs["gateway_context"] = gateway_context
@@ -198,7 +227,6 @@ def _get_dispatcher(task_type: str) -> Any | None:
 def _register_dispatchers() -> None:
     """Populate the dispatcher registry (called once on first use)."""
     try:
-        from datacloud_analysis.tools.knowledge import search_knowledge  # noqa: PLC0415
         from datacloud_analysis.tools.report import render_report  # noqa: PLC0415
         from datacloud_analysis.tools.sandbox import sbx_read_file, sbx_run_code, sbx_write_file  # noqa: PLC0415
         from datacloud_analysis.tools.skill import build_skill  # noqa: PLC0415
@@ -209,7 +237,6 @@ def _register_dispatchers() -> None:
                 "code_exec": sbx_run_code,
                 "file_read": sbx_read_file,
                 "file_write": sbx_write_file,
-                "search_knowledge": search_knowledge,
                 "recall_memory": recall_memory,
                 "build_skill": build_skill,
                 "render_report": render_report,
@@ -247,14 +274,40 @@ def _resolve_input_files(dep_ids: list[str], state: dict[str, Any]) -> dict[str,
             try:
                 with open(temp_path, encoding="utf-8") as f:
                     task_output = json.load(f)
-                # query output contains a nested "file_path" pointing to the JSONL
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("_resolve_input_files: failed to read %s: %s", temp_path, exc)
+                input_files[task_id] = temp_path
+                continue
+
+            if isinstance(task_output, dict):
+                if task_output.get(WRAPPED_TASK_OUTPUT_KEY):
+                    text = str(task_output.get("content", ""))
+                    dep_txt = Path(temp_path).with_name(f"{task_id}_dep_input.txt")
+                    try:
+                        dep_txt.write_text(text, encoding="utf-8")
+                        input_files[task_id] = str(dep_txt.resolve())
+                    except OSError as wexc:
+                        logger.warning(
+                            "_resolve_input_files: could not write %s: %s", dep_txt, wexc
+                        )
+                    continue
                 jsonl_path = task_output.get("file_path")
                 if jsonl_path and Path(jsonl_path).exists():
                     input_files[task_id] = jsonl_path
                     continue
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("_resolve_input_files: failed to read %s: %s", temp_path, exc)
-            # Fallback: use the temp JSON itself
+            elif isinstance(task_output, str):
+                # Legacy files: json.dump(str) produced a JSON string document
+                dep_txt = Path(temp_path).with_name(f"{task_id}_dep_input.txt")
+                try:
+                    dep_txt.write_text(task_output, encoding="utf-8")
+                    input_files[task_id] = str(dep_txt.resolve())
+                except OSError as wexc:
+                    logger.warning(
+                        "_resolve_input_files: could not write %s: %s", dep_txt, wexc
+                    )
+                continue
+
+            # Fallback: temp JSON path (structured dict without file_path, etc.)
             input_files[task_id] = temp_path
             continue
 

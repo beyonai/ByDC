@@ -17,10 +17,13 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from gateway_sdk import EventType, StreamChunkEvent
-from gateway_sdk.core.protocol.content_type import SseReasonMessageType
+from by_framework import EventType, StreamChunkEvent
+from by_framework.core.protocol.content_type import SseReasonMessageType
 
-from datacloud_analysis.orchestration.sandbox_executor import execute_next_task
+from datacloud_analysis.orchestration.sandbox_executor import (
+    execute_next_task,
+    normalize_workspace_task_output,
+)
 from datacloud_analysis.orchestration.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -28,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 async def loop_node(
     state: AgentState,
+    gateway_context: Any = None,
     default_tools: dict | None = None,
 ) -> dict:
     """One round of the ReAct loop.
@@ -57,7 +61,7 @@ async def loop_node(
     )
 
     updated_plan = list(plan)
-    context = state.get("gateway_context")
+    context = gateway_context
 
     # ── 执行前：逐任务推送"开始执行"日志（含工具名和入参）──────────────
     if context is not None:
@@ -81,7 +85,7 @@ async def loop_node(
 
     # ── Concurrent execution ────────────────────────────────────────────
     task_outputs: list[tuple[dict, Any]] = await asyncio.gather(
-        *[execute_next_task(t, state, custom_tools=dynamic_tools) for t in ready_tasks]
+        *[execute_next_task(t, state, gateway_context=gateway_context, custom_tools=dynamic_tools) for t in ready_tasks]
     )
 
     for updated_task, output in task_outputs:
@@ -91,11 +95,13 @@ async def loop_node(
             temp_dir.mkdir(parents=True, exist_ok=True)
             file_path = temp_dir / f"{updated_task['id']}.json"
             with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(output, f, ensure_ascii=False)
+                json.dump(normalize_workspace_task_output(output), f, ensure_ascii=False)
             logger.info("Saved intermediate result to %s", file_path)
             results.append({"task_id": updated_task["id"], "file_path": str(file_path)})
         else:
-            results.append({"task_id": updated_task["id"], "data": output})
+            results.append(
+                {"task_id": updated_task["id"], "data": normalize_workspace_task_output(output)}
+            )
 
         # ── Update plan ─────────────────────────────────────────────────
         updated_plan = [

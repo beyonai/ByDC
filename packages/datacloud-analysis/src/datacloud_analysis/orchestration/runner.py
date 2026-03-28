@@ -60,7 +60,6 @@ async def run_agent(
             "agent_id": None,
             "agent_name": None,
             "workspace_dir": workspace_dir,
-            "gateway_context": None,
             "plan": [],
             "intent": None,
             "clarify_needed": False,
