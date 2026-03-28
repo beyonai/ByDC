@@ -18,8 +18,9 @@
 from __future__ import annotations
 
 import contextvars
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import TracebackType
+from typing import Any
 
 from datacloud_data_sdk.exceptions import DatacloudError
 
@@ -28,10 +29,10 @@ from datacloud_data_sdk.exceptions import DatacloudError
 class RequestContext:
     """
     请求上下文数据类
-    
+
     存储单个请求的所有上下文信息，包括租户、用户、会话等标识。
     所有字段都有默认值，支持部分设置。
-    
+
     Attributes:
         tenant_id: 租户ID，用于多租户隔离
         user_id: 用户ID，标识当前操作用户
@@ -41,6 +42,8 @@ class RequestContext:
         tool_list_mode: 工具列表模式，控制 MCP/Skills 返回的工具列表格式
             - "unified": 统一模式，返回所有工具的合并列表
             - "per_object": 按对象模式，按对象分组返回工具列表
+        gateway_context: Gateway AgentContext 实例，用于向前端推送执行进度事件。
+            类型声明为 Any 以避免 datacloud-data 依赖 gateway_sdk。
     """
 
     tenant_id: str = ""
@@ -51,6 +54,7 @@ class RequestContext:
     tool_list_mode: str = "unified"
     view_id: str = ""
     object_ids: list[str] | None = None
+    gateway_context: Any = field(default=None, repr=False)
 
 
 _ctx_var: contextvars.ContextVar[RequestContext | None] = contextvars.ContextVar(
@@ -87,7 +91,7 @@ class InvocationContext:
                     await process_with_context(ctx)
     """
 
-    def __init__(self, **kwargs: str) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         tool_mode = kwargs.get("tool_list_mode", "unified")
         if tool_mode not in ("unified", "per_object"):
             tool_mode = "unified"
@@ -100,6 +104,7 @@ class InvocationContext:
             tool_list_mode=tool_mode,
             view_id=kwargs.get("view_id", ""),
             object_ids=kwargs.get("object_ids"),
+            gateway_context=kwargs.get("gateway_context"),
         )
         self._token: contextvars.Token[RequestContext | None] | None = None
 
@@ -147,10 +152,10 @@ def get_current_context() -> RequestContext:
 def get_tool_list_mode() -> str:
     """
     获取当前工具列表模式
-    
+
     安全地获取当前的 tool_list_mode 设置。
     如果未设置上下文或模式值无效，返回默认值 "unified"。
-    
+
     Returns:
         str: 工具列表模式，"unified" 或 "per_object"
     """
@@ -158,3 +163,19 @@ def get_tool_list_mode() -> str:
     if ctx is None:
         return "unified"
     return ctx.tool_list_mode if ctx.tool_list_mode in ("unified", "per_object") else "unified"
+
+
+def get_gateway_context() -> Any | None:
+    """
+    获取当前请求中的 Gateway AgentContext
+
+    从 contextvars 中安全地获取 gateway_context。
+    未设置上下文或未传入 gateway_context 时返回 None，不抛异常。
+
+    Returns:
+        AgentContext 实例，或 None
+    """
+    ctx = _ctx_var.get()
+    if ctx is None:
+        return None
+    return ctx.gateway_context

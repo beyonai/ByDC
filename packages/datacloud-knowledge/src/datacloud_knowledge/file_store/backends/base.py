@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import BinaryIO, Protocol
+from typing import TYPE_CHECKING, BinaryIO, Protocol
 
-from ..types import JsonDict, PutOutcome
+if TYPE_CHECKING:
+    from datacloud_knowledge.file_store.types import JsonDict, PutOutcome
 
 
 class FileStorageBackend(Protocol):
@@ -13,4 +14,3 @@ class FileStorageBackend(Protocol):
     def get(self, md5: str) -> tuple[BinaryIO, JsonDict]: ...
 
     def get_meta(self, md5: str) -> JsonDict: ...
-

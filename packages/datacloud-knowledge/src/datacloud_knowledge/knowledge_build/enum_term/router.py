@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, File, UploadFile
 
-from ..schema import TermCreateResponse, TermUpdateResponse, ImportResult
+from datacloud_knowledge.knowledge_build.schema import (
+    ImportResult,
+    TermCreateResponse,
+    TermUpdateResponse,
+)
+
 from . import service
 
 router = APIRouter(prefix="/enum-terms", tags=["知识构建-枚举术语"])

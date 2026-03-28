@@ -2,13 +2,8 @@
 统一数据查询工具模块
 
 本模块提供统一的数据查询接口，封装了 View 和 Object 的查询能力。
-支持自然语言查询，自动处理查询结果溢出。
-
-核心功能：
-- 视图查询：基于预定义视图执行查询
-- 对象查询：基于单个对象执行查询
-- 自动视图：多对象自动构建视图查询
-- 结果溢出处理：大数据量自动转 CSV
+SDK 层已负责结果格式化（{code, message, data}）与溢出处理，
+本模块只负责选择查询入口并将结果封装为 MCP 格式返回。
 
 使用示例：
     query = UnifiedQuery(loader)
@@ -24,72 +19,28 @@ import json
 import logging
 from typing import Any
 
-from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
 from datacloud_data_sdk.ontology.loader import OntologyLoader
-from datacloud_data_service.tools.query_result_overflow import (
-    ResultType,
-    apply_query_result_overflow,
-)
+from datacloud_data_sdk.result_formatter import build_error_data
 
 logger = logging.getLogger(__name__)
-
-
-def _apply_overflow_if_needed(result: dict[str, Any], result_type: ResultType = "normal") -> dict[str, Any]:
-    """
-    应用查询结果溢出处理
-    
-    当结果记录数超过阈值时，将数据存储为 CSV 文件，
-    返回元数据、下载地址和预览数据。
-    
-    Args:
-        result: 原始查询结果
-        result_type: 结果类型（normal/rejected/ask_user）
-    
-    Returns:
-        dict: 处理后的结果
-    """
-    if "records" not in result and result_type == "normal":
-        return result
-    try:
-        from datacloud_data_service.config import get_settings
-
-        settings = get_settings()
-        csv_manager = CsvStorageManager(settings.csv_base_dir)
-        return apply_query_result_overflow(
-            result,
-            threshold=settings.query_result_csv_threshold,
-            preview_rows=settings.query_result_preview_rows,
-            csv_manager=csv_manager,
-            api_base_url=settings.api_base_url,
-            result_type=result_type,
-        )
-    except Exception as e:
-        logger.exception("查询结果溢出处理失败: %s", e)
-        result["result_type"] = result_type
-        return result
 
 
 class UnifiedQuery:
     """
     统一数据查询工具
-    
+
     封装 View.query() 和 Object.query()，提供统一的查询入口。
-    
+    SDK 返回的 {code, message, data} 结果直接透传给调用方。
+
     Attributes:
         _loader: 本体加载器实例
-    
+
     Example:
         query = UnifiedQuery(loader)
         result = await query.execute("查询销售额", view_id="sales_view")
     """
 
     def __init__(self, loader: OntologyLoader) -> None:
-        """
-        初始化统一查询工具
-        
-        Args:
-            loader: 本体加载器实例
-        """
         self._loader = loader
 
     async def execute(
@@ -103,30 +54,43 @@ class UnifiedQuery:
     ) -> dict[str, Any]:
         """
         执行自然语言查询
-        
+
         根据参数选择查询方式：
         1. 指定 view_id：使用预定义视图查询
         2. 指定单个 object_id：使用对象查询
         3. 多个或全部对象：自动构建视图查询
-        
+
+        返回 MCP 格式，content[0].text 内嵌 SDK 的 {code, message, data} JSON。
+
         Args:
             question: 自然语言问题
             view_id: 视图 ID（可选）
             object_ids: 对象 ID 列表（可选）
             include_plan: 是否在结果中包含执行计划
-            page: 页码
-            page_size: 每页大小
-        
+            page: 页码（保留，暂未使用）
+            page_size: 每页大小（保留，暂未使用）
+
         Returns:
             dict: MCP 格式的查询结果
         """
-        from datacloud_data_sdk.exceptions import (
-            CannotAnswerError,
-            PlanGenerationError,
-            PlanValidationError,
-            TermAmbiguousError,
-            TermNotFoundError,
-        )
+        def _wrap(data: dict[str, Any]) -> dict[str, Any]:
+            result_type = data.get("result_type", "normal")
+            if result_type in ("rejected", "ask_user"):
+                code = 500
+                message = data.get("overflow_notice") or result_type
+            else:
+                code = 0
+                message = "success"
+            payload = {"code": code, "message": message, "data": data}
+            return {
+                "content": [
+                    {"type": "text", "text": json.dumps(payload, ensure_ascii=False, default=str)}
+                ],
+                "isError": False,
+            }
+
+        def _wrap_error(msg: str, result_type: str, trace: dict[str, Any]) -> dict[str, Any]:
+            return _wrap(build_error_data(msg, result_type=result_type, trace=trace))
 
         try:
             if view_id:
@@ -148,7 +112,7 @@ class UnifiedQuery:
                         to_object=r.target_class,
                         cardinality=r.relation_type,
                         join_keys=r.join_keys,
-                            description=r.description,
+                        description=r.description,
                     )
                     for r in self._loader.get_ontology_relations()
                     if r.source_class in object_set and r.target_class in object_set
@@ -162,89 +126,10 @@ class UnifiedQuery:
                 )
                 result = await view.query(question, include_plan=include_plan)
 
-            result = _apply_overflow_if_needed(result, "normal")
+            return _wrap(result)
 
-            return {
-                "content": [
-                    {"type": "text", "text": json.dumps(result, ensure_ascii=False, default=str)}
-                ],
-                "isError": False,
-            }
-        except TermNotFoundError as e:
-            result = {
-                "overflow_notice": str(e),
-                "trace": {
-                    "question": question,
-                    "view_id": view_id,
-                },
-            }
-            result = _apply_overflow_if_needed(result, "ask_user")
-            return {
-                "content": [
-                    {"type": "text", "text": json.dumps(result, ensure_ascii=False, default=str)}
-                ],
-                "isError": False,
-            }
-        except TermAmbiguousError as e:
-            result = {
-                "overflow_notice": str(e),
-                "trace": {
-                    "question": question,
-                    "view_id": view_id,
-                },
-            }
-            result = _apply_overflow_if_needed(result, "ask_user")
-            return {
-                "content": [
-                    {"type": "text", "text": json.dumps(result, ensure_ascii=False, default=str)}
-                ],
-                "isError": False,
-            }
-        except CannotAnswerError as e:
-            result = {
-                "overflow_notice": str(e),
-                "trace": {
-                    "question": question,
-                    "view_id": view_id,
-                },
-            }
-            result = _apply_overflow_if_needed(result, "rejected")
-            return {
-                "content": [
-                    {"type": "text", "text": json.dumps(result, ensure_ascii=False, default=str)}
-                ],
-                "isError": False,
-            }
-        except (PlanGenerationError, PlanValidationError) as e:
-            result = {
-                "overflow_notice": str(e),
-                "trace": {
-                    "question": question,
-                    "view_id": view_id,
-                },
-            }
-            result = _apply_overflow_if_needed(result, "rejected")
-            return {
-                "content": [
-                    {"type": "text", "text": json.dumps(result, ensure_ascii=False, default=str)}
-                ],
-                "isError": False,
-            }
         except Exception as e:
             from datacloud_data_sdk.events.trace_logger import log_exception_stack
 
             log_exception_stack(e)
-            result = {
-                "overflow_notice": str(e),
-                "trace": {
-                    "question": question,
-                    "view_id": view_id,
-                },
-            }
-            result = _apply_overflow_if_needed(result, "rejected")
-            return {
-                "content": [
-                    {"type": "text", "text": json.dumps(result, ensure_ascii=False, default=str)}
-                ],
-                "isError": False,
-            }
+            return _wrap_error(str(e), "rejected", {"question": question, "view_id": view_id})

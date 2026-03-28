@@ -3,8 +3,7 @@
 
 import os
 import sys
-
-import pytest
+from typing import Any
 
 # 将项目根目录加入路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -12,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from datacloud_knowledge import SQLKnowledgeGraphQuery, TreeNode
 
 
-def dict_to_tree(tree_dict: dict) -> TreeNode:
+def dict_to_tree(tree_dict: dict[str, Any]) -> TreeNode:
     """将字典转换为TreeNode"""
     node = TreeNode(
         id=tree_dict.get("id", ""),
@@ -57,7 +56,7 @@ def print_tree(node: TreeNode, prefix: str = "", is_last: bool = True) -> str:
     return "\n".join(lines)
 
 
-def test_wang_xiaoming():
+def test_wang_xiaoming() -> None:
     """测试查询王小明他优秀吗（SQL-native 实现）"""
     print("=" * 70)
     print("测试: 王小明他优秀吗")
@@ -99,7 +98,7 @@ def test_wang_xiaoming():
             center_entity = subgraph.get("center_entity", {})
             print(f"\n【中心实体 {i}】{center_entity.get('name')}")
             print(f"节点数: {subgraph.get('node_count')}, 边数: {subgraph.get('edge_count')}")
-            print(f"\n树形结构:")
+            print("\n树形结构:")
 
             tree_dict = subgraph.get("tree")
             if tree_dict:
