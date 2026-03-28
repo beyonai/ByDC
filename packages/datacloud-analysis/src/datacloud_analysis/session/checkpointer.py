@@ -1,9 +1,8 @@
 """LangGraph PostgreSQL checkpointer wrapper (design §4.1.3.2).
 
-The ``AsyncPostgresSaver`` is *not* created here — that happens once in
-``bootstrap.setup()``.  This module only provides a thin accessor so that
-the orchestration layer can retrieve the ready-to-use saver without knowing
-about bootstrapping details.
+``bootstrap.setup()`` opens the PG-backed saver (OpenGauss-compatible
+``SyncPGCheckpointer`` from ``pg_opengauss``) and registers it via
+``set_checkpointer``.  Callers use ``get_checkpointer()`` when compiling graphs.
 
 Usage in orchestration::
 
@@ -15,27 +14,32 @@ Usage in orchestration::
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from langgraph.checkpoint.base import BaseCheckpointSaver
 
-if TYPE_CHECKING:
-    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-
-_checkpointer: "AsyncPostgresSaver | None" = None
+_checkpointer: BaseCheckpointSaver | None = None
 
 
-def set_checkpointer(saver: "AsyncPostgresSaver") -> None:
-    """Register the checkpointer instance (called once by bootstrap)."""
+def set_checkpointer(saver: BaseCheckpointSaver) -> None:
+    """Register the checkpointer instance (called once by ``bootstrap.setup()``)."""
+
     global _checkpointer
     _checkpointer = saver
 
 
-def get_checkpointer() -> "AsyncPostgresSaver":
+def reset_checkpointer() -> None:
+    """Clear the registered checkpointer (e.g. ``bootstrap.teardown()``)."""
+
+    global _checkpointer
+    _checkpointer = None
+
+
+def get_checkpointer() -> BaseCheckpointSaver:
     """Return the initialized checkpointer.
 
     Raises
     ------
     RuntimeError
-        If ``bootstrap.setup()`` has not been called yet.
+        If ``bootstrap.setup()`` has not registered a checkpointer yet.
     """
     if _checkpointer is None:
         raise RuntimeError(

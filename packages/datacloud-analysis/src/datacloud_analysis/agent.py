@@ -49,10 +49,24 @@ def create_agent(
 
     logger.info("create_agent: locale=%s (Custom StateGraph)", resolved_locale)
 
-    compiled = build_analysis_graph(
+    graph = build_analysis_graph(
         prompts_overwrite=prompts_overwrite,
         tools=tools,
-    ).compile()
+    )
+
+    # Inject checkpointer if bootstrap.setup() has already been called;
+    # fall back to compiling without checkpointing in standalone / test mode.
+    try:
+        from datacloud_analysis.session.checkpointer import get_checkpointer  # noqa: PLC0415
+
+        compiled = graph.compile(checkpointer=get_checkpointer())
+        logger.info("create_agent: compiled with PG checkpointer")
+    except RuntimeError:
+        compiled = graph.compile()
+        logger.warning(
+            "create_agent: checkpointer not initialized — compiling without checkpointing. "
+            "Call `await bootstrap.setup()` before create_agent() to enable interrupt/resume."
+        )
 
     try:
         nodes = list(compiled.get_graph().nodes.keys())
