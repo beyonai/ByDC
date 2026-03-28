@@ -17,12 +17,107 @@ from typing import Any, cast
 from by_framework import EventType, StreamChunkEvent
 from by_framework.core.protocol.content_type import SseReasonMessageType
 from langchain.chat_models import init_chat_model
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 from datacloud_analysis.orchestration.state import AgentState
 from datacloud_analysis.tools.knowledge import search_knowledge
 
 logger = logging.getLogger(__name__)
+
+# Gateway 持久化会话历史条数（与 get_history(limit) 语义一致，非「天数」）
+_INTENT_SHORT_TERM_HISTORY_LIMIT = 6
+
+
+def _plain_text(content: Any) -> str:
+    """Normalize message content for deduplication."""
+
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content.strip()
+    return str(content).strip()
+
+
+def _summarize_roles(msgs: list[BaseMessage]) -> str:
+    """Compact role sequence for logs (e.g. ``human,ai,human``)."""
+
+    labels: list[str] = []
+    for m in msgs:
+        if isinstance(m, HumanMessage):
+            labels.append("human")
+        elif isinstance(m, AIMessage):
+            labels.append("ai")
+        elif isinstance(m, SystemMessage):
+            labels.append("system")
+        else:
+            labels.append(type(m).__name__)
+    return ",".join(labels)
+
+
+def _history_records_to_messages(records: list[dict[str, Any]]) -> list[BaseMessage]:
+    """Turn gateway history rows into LangChain messages (chronological)."""
+
+    out: list[BaseMessage] = []
+    for row in records:
+        role = str(row.get("role") or "").lower()
+        raw = row.get("content")
+        text = raw if isinstance(raw, str) else (str(raw) if raw is not None else "")
+        if role in ("assistant", "ai"):
+            out.append(AIMessage(content=text))
+        elif role == "system":
+            out.append(SystemMessage(content=text))
+        else:
+            out.append(HumanMessage(content=text))
+    return out
+
+
+async def _load_short_term_history_messages(
+    gateway_context: Any,
+    *,
+    limit: int,
+    current_user_plain: str,
+) -> list[BaseMessage]:
+    """Load recent session history from the gateway; drop trailing duplicate of current user turn."""
+
+    if gateway_context is None:
+        logger.info("intent_node: short_term_memory skipped (gateway_context is None)")
+        return []
+    if limit <= 0:
+        logger.info("intent_node: short_term_memory skipped (limit=%d)", limit)
+        return []
+    session_id = getattr(gateway_context, "session_id", "")
+    try:
+        history_mgr = gateway_context.agent_runtime_state.session_manager.history
+        records = await history_mgr.get_history(limit)
+    except Exception as exc:
+        logger.warning("intent_node: session history get_history failed: %s", exc)
+        return []
+
+    raw_count = len(records)
+    logger.info(
+        "intent_node: short_term_memory get_history limit=%d session_id=%s raw_rows=%d",
+        limit,
+        session_id,
+        raw_count,
+    )
+
+    msgs = _history_records_to_messages(records)
+    dropped_tail = False
+    if (
+        msgs
+        and isinstance(msgs[-1], HumanMessage)
+        and _plain_text(msgs[-1].content) == current_user_plain
+    ):
+        msgs = msgs[:-1]
+        dropped_tail = True
+
+    logger.info(
+        "intent_node: short_term_memory after_dedup count=%d dropped_tail_duplicate=%s roles=%s",
+        len(msgs),
+        dropped_tail,
+        _summarize_roles(msgs),
+    )
+    return msgs
 
 # ---------------------------------------------------------------------------
 # Static system prompt — contains NO variable interpolation.
@@ -72,6 +167,11 @@ async def intent_node(
         default_tools: Tool registry from graph compile closure; must not live in state
             when using a persistent checkpointer (tools contain non-serializable callables).
 
+    Short-term memory (when ``gateway_context`` is set):
+        Loads up to ``_INTENT_SHORT_TERM_HISTORY_LIMIT`` messages from
+        ``session_manager.history``; removes a trailing user row if it duplicates the
+        current turn. If any history remains, graph ``messages[-4:-1]`` is omitted (2a).
+
     Returns:
         State updates containing the rewritten intent and clarify_needed flag.
     """
@@ -88,6 +188,7 @@ async def intent_node(
         }
 
     last_user_msg = messages[-1].content if hasattr(messages[-1], "content") else str(messages[-1])
+    current_user_plain = _plain_text(last_user_msg)
 
     prompts_overwrite = state.get("prompts_overwrite") or default_prompts or {}
     dynamic_tools = state.get("dynamic_tools") or default_tools or {}
@@ -124,11 +225,46 @@ async def intent_node(
         "请基于以上背景，输出路由 JSON。"
     ))
 
-    response = await llm.ainvoke(
-        [SystemMessage(content=static_sys)]  # Layer 0: static prefix, 100% cache hit
-        + messages[-4:-1]                     # Layer 2: last 2 turns (pronoun resolution)
-        + [dynamic_human]                     # Layer 3: current-turn dynamic content
+    # Layer 1：Gateway 最近 N 条会话历史（与本轮用户句去重，避免与 Layer 3 重复）。
+    # 策略 2a：若历史非空则不再拼接 state.messages[-4:-1]，以免与持久化历史重叠。
+    history_layer = await _load_short_term_history_messages(
+        gateway_context,
+        limit=_INTENT_SHORT_TERM_HISTORY_LIMIT,
+        current_user_plain=current_user_plain,
     )
+    graph_context_layer: list[BaseMessage] = (
+        [] if history_layer else list(messages[-4:-1])
+    )
+    if history_layer:
+        logger.info(
+            "intent_node: llm_context 2a gateway_history=%d graph_slice=0",
+            len(history_layer),
+        )
+    elif messages[-4:-1]:
+        logger.info(
+            "intent_node: llm_context 2a gateway_history=0 graph_slice=%d",
+            len(messages[-4:-1]),
+        )
+    else:
+        logger.info("intent_node: llm_context 2a gateway_history=0 graph_slice=0")
+
+    try:
+        response = await llm.ainvoke(
+            [SystemMessage(content=static_sys)]
+            + history_layer
+            + graph_context_layer
+            + [dynamic_human]
+        )
+    except Exception as exc:
+        logger.warning("intent_node: LLM call failed, falling back to defaults. Error: %s", exc)
+        return {
+            "intent": str(last_user_msg),
+            "clarify_needed": False,
+            "knowledge_preview": knowledge_text[:500] if knowledge_text else "无",
+            "query_mode": "analysis",
+            "target_tool": "",
+            "tool_params": {},
+        }
 
     try:
         content = cast(str, response.content)
