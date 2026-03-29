@@ -1457,6 +1457,35 @@ class SQLKnowledgeGraphQuery:
 
         return "\n".join(lines)
 
+    def _format_subgraphs_as_tree_text(self, results: list[dict[str, Any]]) -> str:
+        """将子图查询结果格式化为树形文本."""
+        lines = []
+
+        for i, subgraph in enumerate(results, 1):
+            center_entity = subgraph.get("center_entity", {})
+            lines.append("")
+            lines.append(f"【中心实体 {i}】{center_entity.get('name')}")
+
+            # 解析 node_id，展示术语库编码、术语类型编码、术语编码
+            node_id = center_entity.get("node_id", "")
+            if node_id and "#" in node_id:
+                parts = node_id.split("#")
+                if len(parts) >= 3:
+                    lines.append(f"  术语库编码: {parts[0]}")
+                    lines.append(f"  术语类型编码: {parts[1]}")
+                    lines.append(f"  术语编码: {parts[2]}\n")
+
+            lines.append(
+                f"节点数: {subgraph.get('node_count')}, 边数: {subgraph.get('edge_count')}"
+            )
+
+            tree_dict = subgraph.get("tree")
+            if tree_dict:
+                lines.append("\n知识图谱:")
+                lines.append(self._tree_dict_to_text(tree_dict, ""))
+
+        return "\n".join(lines)
+
     def _tree_dict_to_text(
         self, node_dict: dict[str, Any], prefix: str = "", is_last: bool = True
     ) -> str:

@@ -2,7 +2,7 @@
 
 from .cache import UserNameCache
 from .disambiguation import disambiguate
-from .matching import match_mentions
+from .matching import match_mentions, match_mentions_with_search
 from .score_update import batch_update_scores, update_score, update_score_async
 from .storage import create_term_knowledge, create_term_with_knowledge, create_user_term_name
 from .types import (
@@ -37,6 +37,8 @@ __all__ = [
     # Disambiguation (Algorithm C)
     "disambiguate",
     # Matching (Algorithm B)
+    "match_mentions",
+    "match_mentions_with_search",
     "match_mentions",
     "update_score",
     "update_score_async",
