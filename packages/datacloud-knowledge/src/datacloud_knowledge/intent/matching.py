@@ -1,15 +1,25 @@
-"""术语匹配召回 — 算法 B。"""
+"""术语匹配召回 — 算法 B。
+
+支持多种模糊匹配模式：
+- rapidfuzz: 字符串相似度匹配（默认）
+- bm25: PostgreSQL 全文搜索
+- vector: 向量语义相似度搜索
+"""
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from rapidfuzz import fuzz, process
 
 from .types import MatchCandidate, MatchResult
 
 if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
+    from datacloud_knowledge.query.embedding import EmbeddingService
+
     from .cache import UserNameCache
     from .types import Mention
 
@@ -17,7 +27,10 @@ log = logging.getLogger(__name__)
 
 # 模糊匹配默认配置
 DEFAULT_FUZZY_SCORE_CUTOFF = 50.0  # 相似度阈值 (0-100)
-DEFAULT_FUZZY_MAX_CANDIDATES = 5   # 最大返回候选数
+DEFAULT_FUZZY_MAX_CANDIDATES = 5  # 最大返回候选数
+
+# 搜索模式类型
+SearchMode = Literal["strict", "rapidfuzz", "bm25", "vector"]
 
 
 def match_mentions(
@@ -71,19 +84,122 @@ def match_mentions(
                     )
                 )
             exact[mention.text] = tuple(exact_candidates)
+        # 未精确匹配，尝试模糊匹配
+        elif enable_fuzzy and global_name_index:
+            fuzzy_candidates = _fuzzy_match(
+                query=mention.text,
+                name_index=global_name_index,
+                score_cutoff=fuzzy_score_cutoff,
+                max_candidates=fuzzy_max_candidates,
+            )
+            fuzzy[mention.text] = tuple(fuzzy_candidates)
         else:
-            # 未精确匹配，尝试模糊匹配
-            if enable_fuzzy and global_name_index:
-                fuzzy_candidates = _fuzzy_match(
-                    query=mention.text,
-                    name_index=global_name_index,
-                    score_cutoff=fuzzy_score_cutoff,
-                    max_candidates=fuzzy_max_candidates,
-                )
-                fuzzy[mention.text] = tuple(fuzzy_candidates)
-            else:
-                fuzzy[mention.text] = ()
+            fuzzy[mention.text] = ()
     return MatchResult(exact=exact, fuzzy=fuzzy)
+
+
+def match_mentions_with_search(
+    mentions: tuple[Mention, ...],
+    session: Session,
+    user_id: str | None = None,
+    global_name_index: dict[str, list[tuple[str, str, str]]] | None = None,
+    user_cache: UserNameCache | None = None,
+    # 搜索模式参数
+    search_mode: SearchMode = "strict",
+    embedding_service: EmbeddingService | None = None,
+    # 通用参数
+    top_k: int = 5,
+    min_score: float = 0.01,
+    # rapidfuzz 特有参数
+    fuzzy_score_cutoff: float = DEFAULT_FUZZY_SCORE_CUTOFF,
+) -> dict[str, tuple[MatchCandidate, ...]]:
+    """Match mentions with multiple search modes.
+
+    支持三种模糊匹配模式：
+    - rapidfuzz: 字符串相似度匹配
+    - bm25: PostgreSQL 全文搜索（基于单字分词）
+    - vector: 向量语义相似度搜索
+
+    Args:
+        mentions: 术语提及列表
+        session: SQLAlchemy Session
+        user_id: 用户 ID
+        global_name_index: 全局名称索引
+        user_cache: 用户缓存
+        search_mode: 匹配模式 ("strict" | "rapidfuzz" | "bm25" | "vector")
+        embedding_service: Embedding 服务（vector 模式必需）
+        top_k: 返回候选数量
+        min_score: 最小分数阈值
+        fuzzy_score_cutoff: rapidfuzz 相似度阈值
+
+    Returns:
+        Result 包含精确匹配和模糊匹配结果
+    """
+
+    result: dict[str, tuple[MatchCandidate, ...]] = {}
+
+    for mention in mentions:
+        if search_mode == 'strict':
+            user_name_index: dict[str, list[tuple[str, str, str, float]]] | None = None
+            if user_id is not None and user_cache is not None:
+                user_name_index = user_cache.get(user_id)
+                if user_name_index is None:
+                    user_name_index = user_cache.load(user_id, session)
+                log.debug("Loaded user name index for user_id=%s", user_id)
+            merged_name_index = _merge_name_indexes(global_name_index, user_name_index)
+            postings = merged_name_index.get(mention.text)
+            if postings:
+                # 精确匹配
+                exact_candidates: list[MatchCandidate] = []
+                for term_id, term_type_code, source_match_type, score in postings:
+                    exact_candidates.append(
+                        MatchCandidate(
+                            term_id=term_id,
+                            term_name=mention.text,
+                            term_type_code=term_type_code,
+                            match_type="exact",
+                            confidence=1.0,
+                            score=score,
+                        )
+                    )
+                result[mention.text] = tuple(exact_candidates)
+
+        elif search_mode == "rapidfuzz" and global_name_index:
+            fuzzy_candidates = _fuzzy_match(
+                query=mention.text,
+                name_index=global_name_index,
+                score_cutoff=fuzzy_score_cutoff,
+                max_candidates=top_k,
+            )
+            result[mention.text] = tuple(fuzzy_candidates)
+
+        elif search_mode == "bm25":
+            fuzzy_candidates = _bm25_match(
+                session=session,
+                query=mention.text,
+                top_k=top_k,
+                min_score=min_score,
+            )
+            result[mention.text] = tuple(fuzzy_candidates)
+
+        elif search_mode == "vector":
+            if embedding_service is None:
+                log.warning("Vector mode requires embedding_service, skipping")
+                result[mention.text] = ()
+            else:
+                fuzzy_candidates = _vector_match(
+                    session=session,
+                    query=mention.text,
+                    embedding_service=embedding_service,
+                    top_k=top_k,
+                    min_similarity=min_score,
+                )
+                result[mention.text] = tuple(fuzzy_candidates)
+        else:
+            result[mention.text] = ()
+
+    return result
+
 
 def _fuzzy_match(
     query: str,
@@ -109,7 +225,7 @@ def _fuzzy_match(
     fuzzy_candidates: list[MatchCandidate] = []
     for matched_name, score, _ in results_raw:
         similarity = score / 100.0  # 转换为 0.0-1.0
-        
+
         # 获取该匹配术语的所有候选项
         postings = name_index.get(matched_name, [])
         for term_id, term_type_code, match_type in postings:
@@ -124,6 +240,70 @@ def _fuzzy_match(
                 )
             )
     return fuzzy_candidates
+
+
+def _bm25_match(
+    session: Session,
+    query: str,
+    top_k: int = 5,
+    min_score: float = 0.01,
+) -> list[MatchCandidate]:
+    """使用 BM25 全文搜索进行匹配。"""
+    from datacloud_knowledge.query.search import bm25_search
+
+    if not query or not query.strip():
+        return []
+
+    try:
+        results = bm25_search(session, query, top_k=top_k, min_score=min_score)
+        return [
+            MatchCandidate(
+                term_id=r.term_id,
+                term_name=r.term_name,
+                term_type_code=r.term_type_code,
+                match_type="bm25",
+                confidence=min(r.score, 1.0),
+                score=0.0,
+            )
+            for r in results
+        ]
+    except Exception as e:
+        log.error("BM25 match failed: %s", e)
+        return []
+
+
+def _vector_match(
+    session: Session,
+    query: str,
+    embedding_service: EmbeddingService,
+    top_k: int = 5,
+    min_similarity: float = 0.5,
+) -> list[MatchCandidate]:
+    """使用向量语义搜索进行匹配。"""
+    from datacloud_knowledge.query.search import vector_search
+
+    if not query or not query.strip():
+        return []
+
+    try:
+        results = vector_search(
+            session, query, embedding_service, top_k=top_k, min_similarity=min_similarity
+        )
+        return [
+            MatchCandidate(
+                term_id=r.term_id,
+                term_name=r.term_name,
+                term_type_code=r.term_type_code,
+                match_type="vector",
+                confidence=r.similarity,
+                score=0.0,
+            )
+            for r in results
+        ]
+    except Exception as e:
+        log.error("Vector match failed: %s", e)
+        return []
+
 
 def _merge_name_indexes(
     global_index: dict[str, list[tuple[str, str, str]]] | None,
