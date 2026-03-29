@@ -88,11 +88,11 @@ class DataCloudWorker(GatewayWorker):
             len(loaded_agent_ids),
             loaded_agent_ids,
         )
-        
+
         # 初始化 SDK 环境 (PG 数据库建表, Checkpoint, Memory 等)
         from datacloud_analysis import bootstrap
         await bootstrap.setup()
-        
+
         logger.info("DataCloudWorker: SDK framework bootstrapped.")
 
     def get_capabilities(self) -> list[str]:
@@ -270,11 +270,15 @@ class DataCloudWorker(GatewayWorker):
         #    - insight 节点的 LLM token → ANSWER_DELTA（打字机效果）
         #    - 工具起止 → TASK_CREATE / STEP_COMPLETE
         #    - 各节点思考事件已由节点内部直接 emit，worker 不再重复处理
+        is_agent_delegate = False
         async for event in target_graph.astream_events(state, config=config, version="v2"):
             await context.check_cancelled()
             kind: str = event["event"]
 
-            if kind == "on_chat_model_stream":
+            if kind == "on_chain_end" and event.get("name") == "agent_delegate":
+                is_agent_delegate = True
+
+            elif kind == "on_chat_model_stream":
                 # insight_node 自己通过 context.emit_chunk 推送三段式回复（Part1/2/3），
                 # worker 不再转发，避免 Part1 重复发送。
                 pass
@@ -297,12 +301,13 @@ class DataCloudWorker(GatewayWorker):
 
         # ⑤ 推理结束由 insight_node 在首次 answerDelta 之前发出（见 insight._emit_reasoning_log_end_before_answer）
 
-        # ⑥ 回答结束通知
-        await context.emit_chunk(
-            StreamChunkEvent(content="回答完成"),
-            event_type=EventType.APP_STREAM_RESPONSE.value,
-            content_type=SseMessageType.text.value,
-        )
+        # ⑥ 回答结束通知（agent_delegate 路径已由子Agent自行结束，无需重复通知）
+        if not is_agent_delegate:
+            await context.emit_chunk(
+                StreamChunkEvent(content="回答完成"),
+                event_type=EventType.APP_STREAM_RESPONSE.value,
+                content_type=SseMessageType.text.value,
+            )
 
         # ⑦ 将流式内容整合写入历史
         await context.flush_to_history()

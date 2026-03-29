@@ -13,6 +13,7 @@ from langgraph.graph import END, START, StateGraph
 
 logger = logging.getLogger(__name__)
 
+from datacloud_analysis.orchestration.agent_delegate import agent_delegate_node
 from datacloud_analysis.orchestration.dag import dag_node
 from datacloud_analysis.orchestration.direct_tool import direct_tool_node
 from datacloud_analysis.orchestration.insight import insight_node
@@ -22,15 +23,21 @@ from datacloud_analysis.orchestration.state import AgentState
 
 
 def route_after_intent(state: AgentState) -> str:
-    """Route after intent: clarify → insight; online_query+valid tool → direct_tool; else dag."""
+    """Route after intent: clarify → insight; agent_delegate → agent_delegate; online_query+valid tool → direct_tool; else dag."""
     if state.get("clarify_needed"):
         return "insight"
+    tools = state.get("dynamic_tools") or {}
+    tt = (state.get("target_tool") or "").strip()
+    if state.get("query_mode") == "agent_delegate":
+        if tt and tt in tools and getattr(tools.get(tt), "_is_agent_delegate", False):
+            return "agent_delegate"
+        logger.warning(
+            "route_after_intent: agent_delegate but target_tool=%r not valid, falling back to dag",
+            tt,
+        )
     if state.get("query_mode") == "online_query":
-        tools = state.get("dynamic_tools") or {}
-        tt = state.get("target_tool")
-        if isinstance(tt, str) and tt.strip() and tt.strip() in tools:
+        if tt and tt in tools:
             return "direct_tool"
-        # LLM 输出了 online_query 但 target_tool 不在可用工具列表中，降级到 dag
         logger.warning(
             "route_after_intent: online_query but target_tool=%r not found in available tools=%s"
             ", falling back to dag",
@@ -69,6 +76,9 @@ def build_analysis_graph(
     async def _loop(state: AgentState) -> dict[str, Any]:
         return await loop_node(state, default_tools=tools)
 
+    async def _agent_delegate(state: AgentState) -> dict[str, Any]:
+        return await agent_delegate_node(state, default_tools=tools)
+
     async def _direct_tool(state: AgentState) -> dict[str, Any]:
         return await direct_tool_node(state, default_tools=tools)
 
@@ -78,6 +88,10 @@ def build_analysis_graph(
     builder.add_node(
         "intent",
         _intent,
+    )
+    builder.add_node(
+        "agent_delegate",
+        _agent_delegate,
     )
     builder.add_node(
         "direct_tool",
@@ -100,8 +114,9 @@ def build_analysis_graph(
     builder.add_conditional_edges(
         "intent",
         route_after_intent,
-        {"insight": "insight", "direct_tool": "direct_tool", "dag": "dag"},
+        {"insight": "insight", "agent_delegate": "agent_delegate", "direct_tool": "direct_tool", "dag": "dag"},
     )
+    builder.add_edge("agent_delegate", END)
     builder.add_edge("direct_tool", "insight")
     builder.add_edge("dag", "loop")
     builder.add_conditional_edges(
