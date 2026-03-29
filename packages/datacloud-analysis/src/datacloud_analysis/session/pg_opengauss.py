@@ -29,6 +29,9 @@ Checkpoint I/O uses a **sync** ``psycopg_pool.ConnectionPool``: LangGraph's
 ``PostgresSaver._cursor`` checks out a connection per operation via
 ``get_connection()``, so idle or dropped server sessions do not strand the whole
 process on one dead ``Connection`` (contrast: a single long-lived connection).
+The pool is created with ``check=ConnectionPool.check_connection`` so each
+checkout validates the connection; broken sessions are discarded and replaced
+per psycopg-pool's getconn loop (mitigates stale connections, not DB-wide outage).
 
 Usage
 -----
@@ -529,6 +532,8 @@ async def get_checkpointer(
     for the duration of that operation (LangGraph ``_cursor`` / ``get_connection``),
     which avoids a single long-lived ``Connection`` dying with
     ``the connection is closed`` / ``AdminShutdown`` with no recovery.
+    Checkout uses ``ConnectionPool.check_connection`` so idle-killed TCP sessions
+    are detected before the real checkpoint SQL runs when possible.
 
     Designed to be referenced from ``langgraph.json``::
 
@@ -601,6 +606,7 @@ async def get_checkpointer(
             max_size=20,
             open=True,
             name="datacloud-checkpoint",
+            check=ConnectionPool.check_connection,
         )
 
         saver = make_opengauss_saver(pool)
