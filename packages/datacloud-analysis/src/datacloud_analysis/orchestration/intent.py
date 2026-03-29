@@ -119,6 +119,7 @@ async def _load_short_term_history_messages(
     )
     return msgs
 
+
 # ---------------------------------------------------------------------------
 # Static system prompt — contains NO variable interpolation.
 # All dynamic content (knowledge, user question, tools) goes into Layer 3
@@ -134,6 +135,11 @@ _INTENT_STATIC_SYSTEM = """你是一个意图识别与改写专家。
 - "online_query"：单次向已绑定工具取数即可（单表/单对象查询、列表、明细），\
 不需要多步规划、代码沙箱、多表关联分析或复杂报表叙事。
 - "analysis"：需要任务拆解、多步执行、统计对比、关联、趋势、归因等，或不确定用哪个工具。
+- "chitchat"：问候、寒暄、感谢、玩笑等与业务数据/分析无关的闲聊；不需要查数、不需要任务规划或生成报告。
+
+当 query_mode 为 "chitchat" 时：
+- "target_tool" 必须为 ""，"tool_params" 必须为 {}。
+- "rewritten_intent" 可保留用户原话或略作润色。
 
 当 query_mode 为 "online_query" 时：
 - "target_tool" 必须从本轮 HumanMessage 提供的【可用工具列表】中选且仅选一个；\
@@ -145,7 +151,7 @@ _INTENT_STATIC_SYSTEM = """你是一个意图识别与改写专家。
 {
   "rewritten_intent": "改写后的清晰问题，或者如果需要追问，填入追问内容",
   "clarify_needed": true/false,
-  "query_mode": "online_query" 或 "analysis",
+  "query_mode": "online_query" 或 "analysis" 或 "chitchat",
   "target_tool": "工具名或空字符串",
   "tool_params": {}
 }
@@ -197,7 +203,9 @@ async def intent_node(
 
     # 1. Search knowledge
     knowledge_snippets = await search_knowledge.ainvoke({"query": str(last_user_msg)})
-    knowledge_text = json.dumps(knowledge_snippets, ensure_ascii=False) if knowledge_snippets else "无"
+    knowledge_text = (
+        json.dumps(knowledge_snippets, ensure_ascii=False) if knowledge_snippets else "无"
+    )
 
     # 2. Call LLM to rewrite and check intent
     model = os.getenv("DATACLOUD_LLM_REASONING_MODEL", "openai:Qwen/Qwen3-235B-A22B")
@@ -218,12 +226,14 @@ async def intent_node(
     )
 
     # Layer 3: all dynamic content in a single HumanMessage (current-turn only).
-    dynamic_human = HumanMessage(content=(
-        f"【本轮可用工具（用于 online_query 选型）】：{tools_line}\n\n"
-        f"【检索到的相关业务知识】：\n{knowledge_text}\n\n"
-        f"【用户当前提问】：{last_user_msg}\n\n"
-        "请基于以上背景，输出路由 JSON。"
-    ))
+    dynamic_human = HumanMessage(
+        content=(
+            f"【本轮可用工具（用于 online_query 选型）】：{tools_line}\n\n"
+            f"【检索到的相关业务知识】：\n{knowledge_text}\n\n"
+            f"【用户当前提问】：{last_user_msg}\n\n"
+            "请基于以上背景，输出路由 JSON。"
+        )
+    )
 
     # Layer 1：Gateway 最近 N 条会话历史（与本轮用户句去重，避免与 Layer 3 重复）。
     # 策略 2a：若历史非空则不再拼接 state.messages[-4:-1]，以免与持久化历史重叠。
@@ -232,9 +242,7 @@ async def intent_node(
         limit=_INTENT_SHORT_TERM_HISTORY_LIMIT,
         current_user_plain=current_user_plain,
     )
-    graph_context_layer: list[BaseMessage] = (
-        [] if history_layer else list(messages[-4:-1])
-    )
+    graph_context_layer: list[BaseMessage] = [] if history_layer else list(messages[-4:-1])
     if history_layer:
         logger.info(
             "intent_node: llm_context 2a gateway_history=%d graph_slice=0",
@@ -278,7 +286,7 @@ async def intent_node(
         rewritten_intent = result.get("rewritten_intent", str(last_user_msg))
         clarify_needed = result.get("clarify_needed", False)
         query_mode = result.get("query_mode", "analysis")
-        if query_mode not in ("online_query", "analysis"):
+        if query_mode not in ("online_query", "analysis", "chitchat"):
             query_mode = "analysis"
         target_tool = result.get("target_tool", "")
         if not isinstance(target_tool, str):
@@ -308,13 +316,14 @@ async def intent_node(
             f"■ 是否需要追问：{clarify_needed}\n"
             f"■ 路由：{query_mode}"
             + (f" / 工具：{target_tool}" if query_mode == "online_query" else "")
+            + (" / 闲聊直出" if query_mode == "chitchat" else "")
         )
         await gateway_context.emit_chunk(
             StreamChunkEvent(content="问题理解"),
             event_type=EventType.REASONING_LOG_DELTA.value,
             content_type=SseReasonMessageType.think_title.value,
         )
-        
+
         await gateway_context.emit_chunk(
             StreamChunkEvent(content=thinking),
             event_type=EventType.REASONING_LOG_DELTA.value,
@@ -336,6 +345,10 @@ async def intent_node(
             rewritten_intent = str(user_reply)
             clarify_needed = False
         await _emit_intent_reasoning_snapshot()
+
+    if query_mode == "chitchat":
+        target_tool = ""
+        tool_params = {}
 
     return {
         "intent": rewritten_intent,
