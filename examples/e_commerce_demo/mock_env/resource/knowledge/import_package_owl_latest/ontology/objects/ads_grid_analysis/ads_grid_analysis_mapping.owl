@@ -15,8 +15,8 @@
         <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格综合分析表</entity_name>
         <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">基于物理网格维度，聚合企业经营、税收、亩产效益、IoT 物联（人流 / 车流 / 物流 / 灯光）、POI 密度等指标，关联管理网格，支撑空间活力分析、经济监测、网格化精细治理。</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-        <mapping rdf:resource="#grid_id_mapping"/>
-        <mapping rdf:resource="#grid_name_mapping"/>
+        <mapping rdf:resource="#phy_grid_id_mapping"/>
+        <mapping rdf:resource="#phy_grid_name_mapping"/>
         <mapping rdf:resource="#grid_lnt_lat_mapping"/>
         <mapping rdf:resource="#stat_date_mapping"/>
         <mapping rdf:resource="#area_sqm_mapping"/>
@@ -39,23 +39,23 @@
         <mapping rdf:resource="#etl_create_time_mapping"/>
         <mapping rdf:resource="#area_code_mapping"/>
         <mapping rdf:resource="#area_name_mapping"/>
-        <mapping rdf:resource="#mgr_grid_id_mapping"/>
-        <mapping rdf:resource="#mgr_grid_name_mapping"/>
+        <mapping rdf:resource="#manage_grid_id_mapping"/>
+        <mapping rdf:resource="#manage_grid_name_mapping"/>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#grid_id_mapping">
+    <owl:NamedIndividual rdf:about="#phy_grid_id_mapping">
         <rdf:type rdf:resource="#Mapping"/>
-        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</property_code>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格编码</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
-        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</source_column_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#grid_name_mapping">
+    <owl:NamedIndividual rdf:about="#phy_grid_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
-        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_name</property_code>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格名称</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
-        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_name</source_column_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#grid_lnt_lat_mapping">
@@ -234,20 +234,20 @@
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">area_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#mgr_grid_id_mapping">
+    <owl:NamedIndividual rdf:about="#manage_grid_id_mapping">
         <rdf:type rdf:resource="#Mapping"/>
-        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">mgr_grid_id</property_code>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_id</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属管理网格编码</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
-        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">mgr_grid_id</source_column_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_id</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#mgr_grid_name_mapping">
+    <owl:NamedIndividual rdf:about="#manage_grid_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
-        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">mgr_grid_name</property_code>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属管理网格名称</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
-        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">mgr_grid_name</source_column_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
     </owl:NamedIndividual>
 
