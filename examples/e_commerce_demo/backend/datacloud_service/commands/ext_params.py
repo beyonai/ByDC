@@ -167,7 +167,9 @@ def _read_file_page(
                 if line.strip():
                     records.append(json.loads(line))
         raw_total = meta_info.get("total")
-        total = int(raw_total) if raw_total is not None else len(records)
+        if raw_total is None:
+            raise ValueError("JSONL 文件首行 meta 缺少 total 字段，无法正确分页")
+        total = int(raw_total)
         return meta_info, records, total, _pagination_dict(page, page_size, total)
 
     with open(file_path, "r", encoding="utf-8") as fh:

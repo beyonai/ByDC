@@ -74,11 +74,11 @@ def _iter_jsonl_obj_batches(file_path: Path, batch_size: int) -> Any:
     """流式按批产出 JSON 对象，按行读文件，避免整文件载入内存。"""
     batch: list[dict[str, Any]] = []
     with file_path.open(encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
+        for raw_line in f:
+            stripped_line = raw_line.strip()
+            if not stripped_line:
                 continue
-            batch.append(json.loads(line))
+            batch.append(json.loads(stripped_line))
             if len(batch) >= batch_size:
                 yield batch
                 batch = []
@@ -246,7 +246,7 @@ def _connect() -> Connection:
 
 
 def _resolve_type_category(obj: dict[str, Any]) -> int:
-    category_map = {"列表术语": 1, "字典术语": 2, "本体术语": 3, "文档名称术语": 4}
+    category_map = {"LIST_TERM": 1, "DICT_TERM": 2, "ONTOLOGY_TERM": 3, "DOCUMENT_TERM": 4}
     raw_cat = obj["type_category"]
     type_category = category_map.get(str(raw_cat))
     if type_category is None:
@@ -758,12 +758,12 @@ def _batch_process_relation(cur: Cursor, objs: list[dict[str, Any]], stats: dict
     to_update = [o for o in upserts if o["relation_code"] in existing]
 
     # 收集需要查找 term_id 的 code（仅用于 action_term_code）
-    ref_codes: list[str] = []
-    for o in to_insert + to_update:
-        # source_term_code 和 target_term_code 现在已经是 term_id 格式，无需查找
-        # 仅 action_term_code 需要查找（如果提供且不是 term_id 格式）
-        if _str_id_if_set(o, "action_term_id") is None and o.get("action_term_code"):
-            ref_codes.append(_normalize_term_code(o["action_term_code"]))
+    # 收集需要查找 term_id 的 code（仅用于 action_term_code）
+    ref_codes: list[str] = [
+        _normalize_term_code(o["action_term_code"])
+        for o in to_insert + to_update
+        if _str_id_if_set(o, "action_term_id") is None and o.get("action_term_code")
+    ]
     code_to_tid = _lookup_term_ids_by_norm_codes(cur, ref_codes) if ref_codes else {}
 
     for obj in to_update:
@@ -885,10 +885,11 @@ def _batch_process_knowledge(
     existing = {r[0] for r in cur.fetchall()}
     to_insert = [o for o in upserts if o["knowledge_id"] not in existing]
     to_update = [o for o in upserts if o["knowledge_id"] in existing]
-    kn_upd_codes: list[str] = []
-    for obj in to_update:
-        if _str_id_if_set(obj, "term_id") is None and obj.get("term_code"):
-            kn_upd_codes.append(_normalize_term_code(obj["term_code"]))
+    kn_upd_codes: list[str] = [
+        _normalize_term_code(obj["term_code"])
+        for obj in to_update
+        if _str_id_if_set(obj, "term_id") is None and obj.get("term_code")
+    ]
     kn_upd_tid_map = _lookup_term_ids_by_norm_codes(cur, kn_upd_codes)
     for obj in to_update:
         knowledge_id = obj["knowledge_id"]

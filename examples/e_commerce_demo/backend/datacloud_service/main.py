@@ -51,8 +51,8 @@ class WorkerConfig:
             return int(raw.strip(), 10) if raw and raw.strip() else default
 
         return cls(
-            api_key=os.environ.get("OPENAI_API_KEY"),
-            base_url=os.environ.get("OPENAI_BASE_URL"),
+            api_key=opt("OPENAI_API_KEY"),
+            base_url=opt("OPENAI_BASE_URL"),
             model_name=os.environ.get("DATACLOUD_LLM_REASONING_MODEL", "Qwen/Qwen3-235B-A22B"),
             worker_id=os.environ.get("DATACLOUD_GATEWAY_WORKER_ID", "datacloud"),
             redis_host=os.environ.get("DATACLOUD_GATEWAY_REDIS_HOST", "localhost"),

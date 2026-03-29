@@ -100,6 +100,7 @@ def _log_tool_output_summary(task_id: str, task_type: str, output: Any) -> None:
 async def execute_next_task(
     task: dict[str, Any],
     state: dict[str, Any],
+    gateway_context: Any = None,
     custom_tools: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], Any]:
     """Execute one sub-task and return the updated task dict and output.
@@ -173,7 +174,6 @@ async def execute_next_task(
             # 使 get_current_context() 和 get_gateway_context() 在 SDK 内部可用
             try:
                 from datacloud_data_sdk.context import InvocationContext  # noqa: PLC0415
-                gateway_context = state.get("gateway_context")
                 _ctx_kwargs: dict = {}
                 if gateway_context is not None:
                     _ctx_kwargs["gateway_context"] = gateway_context

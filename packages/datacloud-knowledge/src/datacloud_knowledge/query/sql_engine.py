@@ -10,15 +10,18 @@ from __future__ import annotations
 
 import os
 from collections import defaultdict
-from collections.abc import Generator, Mapping
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from hashlib import md5
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from psycopg import Connection as PgConnection
-from psycopg.sql import SQL, Identifier
+if TYPE_CHECKING:
+    from collections.abc import Generator, Mapping
+    from pathlib import Path
+
+    from psycopg import Connection as PgConnection
+
+from psycopg.sql import SQL, Composed, Identifier
 from psycopg_pool import ConnectionPool
 
 from .fuzzy import (
@@ -69,6 +72,31 @@ class SubgraphResult:
     edges: list[dict[str, Any]] = field(default_factory=list)
     hops: int = 0
     tree: TreeNode | None = None
+
+
+# ============================================================================
+# Constants
+# ============================================================================
+
+# 本体基础类型（type_category = 3 的核心类型）
+# 这些类型直接挂在本体结构下，起始点 = 原始术语
+ONTOLOGY_BASE_TYPES = frozenset(
+    {
+        "OBJECT",
+        "OBJ",
+        "ONTOLOGY_OBJ",
+        "VIEW",
+        "ONTOLOGY_VIEW",
+        "ACTION",
+        "ONTOLOGY_ACTION",
+        "FUNC",
+        "ONTOLOGY_FUNC",
+        "PARAM",
+        "ONTOLOGY_PARAM",
+        "PROP",
+        "ONTOLOGY_PROP",
+    }
+)
 
 
 # ============================================================================
@@ -182,11 +210,9 @@ class SQLKnowledgeGraphQuery:
             timeout: Max seconds to wait for pool to close (default: 0.5s)
         """
         if self._pool is not None:
-            try:
+            with suppress(Exception):
                 # Try graceful close with short timeout
                 self._pool.close(timeout=timeout)
-            except Exception:
-                pass
             self._pool = None
 
     def prewarm(
@@ -245,12 +271,9 @@ class SQLKnowledgeGraphQuery:
         This establishes connections in the pool upfront,
         so subsequent queries don't pay the connection setup cost.
         """
-        try:
-            with self._connect() as conn, conn.cursor() as cur:
-                cur.execute(f"SELECT 1 FROM {self.schema}.term LIMIT 1")
-                cur.fetchall()
-        except Exception:
-            pass  # Ignore errors during warmup
+        with suppress(Exception), self._connect() as conn, conn.cursor() as cur:
+            cur.execute(SQL("SELECT 1 FROM {}.term LIMIT 1").format(Identifier(self.schema)))
+            cur.fetchall()
 
     def _format_knowledge_content(self, summary: str | None, desc: str | None) -> str:
         """Format knowledge summary and description into a single string.
@@ -268,6 +291,164 @@ class SQLKnowledgeGraphQuery:
         if desc:
             parts.append(desc)
         return "\n".join(parts) if parts else ""
+
+    # ============================================================================
+    # Term Type Adjustment Helpers
+    # ============================================================================
+
+    @staticmethod
+    def _is_ontology_base_type(term_type_code: str | None) -> bool:
+        """判断术语类型是否为本体基础类型。
+
+        本体基础类型（OBJECT/VIEW/ACTION/FUNC/PARAM/PROP）直接挂在本体结构下，
+        这些术语的起始点就是原始术语本身。
+
+        Args:
+            term_type_code: 术语类型代码
+
+        Returns:
+            True 如果是本体基础类型，否则 False
+        """
+        if not term_type_code:
+            return False
+        # 直接匹配常量集合
+        return term_type_code in ONTOLOGY_BASE_TYPES
+
+    @staticmethod
+    def _parse_library_id_from_term_id(term_id: str | None) -> str | None:
+        """从 term_id 解析 library_id。
+
+        term_id 格式: library_code#term_type_code#term_code
+        例如: 'hr_kb#OBJECT#po_users' -> 'hr_kb'
+
+        Args:
+            term_id: 术语ID
+
+        Returns:
+            library_id（第一个#之前的部分），如果格式不符则返回 None
+        """
+        if not term_id:
+            return None
+        parts = term_id.split("#")
+        return parts[0] if len(parts) >= 3 else None
+
+    def _batch_find_type_terms(
+        self,
+        type_codes: list[str],
+        library_ids: list[str],
+    ) -> dict[str, str | None]:
+        """批量查找术语类型对应的术语。
+
+        对于非本体基础类型，查找 term_code = type_code 的术语作为起始点。
+        例如：EMPLOYEE 类型 -> 查找 term_code='EMPLOYEE' 的术语
+
+        Args:
+            type_codes: 目标类型代码列表（如 ['EMPLOYEE', 'GENERAL']）
+            library_ids: 对应的 library_id 列表
+
+        Returns:
+            Dict: {type_code: term_id | None}
+            每个 type_code 对应其在同 library_id 下的代表术语的 term_id
+        """
+        if not type_codes:
+            return {}
+
+        # 一次查询：查找 term_code = type_code 的术语
+        sql = SQL("""
+            SELECT term_code, term_id, library_id
+            FROM {schema}.term
+            WHERE term_code = ANY(%s)
+              AND library_id = ANY(%s)
+        """).format(schema=Identifier(self.schema))
+
+        # 初始化结果字典，默认值为 None
+        result: dict[str, str | None] = dict.fromkeys(type_codes, None)
+
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(sql, [type_codes, library_ids])
+            for term_code, term_id, library_id in cur.fetchall():
+                # 匹配 library_id，确保找到的是同术语库的术语
+                for i, tc in enumerate(type_codes):
+                    if tc == term_code and library_ids[i] == library_id:
+                        result[tc] = term_id
+                        break
+
+        return result
+
+    def _adjust_start_points_by_term_type(
+        self,
+        entities: list[QueryEntity],
+    ) -> list[QueryEntity]:
+        """根据术语类型调整子图查询的起始点。
+
+        规则：
+        - 本体基础类型（OBJECT/VIEW/ACTION/FUNC/PARAM/PROP）-> 起始点 = 原始术语
+        - 非本体基础类型 -> 起始点 = 类型对应的术语（term_code = type_code）
+
+        例如：
+        - '王小明'(EMPLOYEE类型) -> 起始点 = '员工'(term_code='EMPLOYEE')
+        - '员工'(OBJECT类型) -> 起始点 = '员工'(原始术语，OBJECT是本体基础类型)
+
+        Args:
+            entities: 原始实体列表
+
+        Returns:
+            调整后的实体列表（可能修改了 node_id 作为新起始点）
+        """
+        if not entities:
+            return entities
+
+        # 过滤出有效实体（有 node_id 和 node_type）
+        valid_entities = [e for e in entities if e.node_id and e.node_type]
+        if not valid_entities:
+            return entities
+
+        # 1. 收集非本体基础类型的类型代码和对应的 library_id
+        non_base_types: list[str] = []
+        non_base_library_ids: list[str] = []
+
+        for e in valid_entities:
+            if not self._is_ontology_base_type(e.node_type):
+                # valid_entities 已过滤 node_type 不为 None
+                non_base_types.append(e.node_type)  # type: ignore[arg-type]
+                lib_id = self._parse_library_id_from_term_id(e.node_id)
+                non_base_library_ids.append(lib_id or "")
+        # 2. 批量查找非本体基础类型对应的术语（term_code = type_code）
+        type_term_map: dict[str, str | None] = {}
+        if non_base_types:
+            type_term_map = self._batch_find_type_terms(non_base_types, non_base_library_ids)
+
+        # 3. 构建调整后的实体列表
+        adjusted_entities: list[QueryEntity] = []
+        for e in entities:
+            if not e.node_id or not e.node_type:
+                # 无效实体，保持原样
+                adjusted_entities.append(e)
+                continue
+
+            if self._is_ontology_base_type(e.node_type):
+                # 本体基础类型 -> 起始点 = 原始术语
+                adjusted_entities.append(e)
+            else:
+                # 非本体基础类型 -> 起始点 = 类型对应的术语
+                type_term_id = type_term_map.get(e.node_type)
+                if type_term_id:
+                    # 找到类型对应术语，创建新实体作为起始点
+                    adjusted_entities.append(
+                        QueryEntity(
+                            name=e.name,  # 保持原名（用于展示）
+                            node_id=type_term_id,  # 新起始点
+                            node_type=e.node_type,  # 保持原类型
+                            match_score=e.match_score,
+                            match_type=e.match_type,
+                            matched_text=e.matched_text,
+                        )
+                    )
+                else:
+                    # 找不到类型对应术语 -> 降级到原逻辑，起始点 = 原始术语
+                    adjusted_entities.append(e)
+
+        return adjusted_entities
 
     def _ensure_fuzzy_matcher(self) -> None:
         """Ensure fuzzy matcher is ready for use.
@@ -312,21 +493,23 @@ class SQLKnowledgeGraphQuery:
         with self._connect() as conn, conn.cursor() as cur:
             # Query all names from term_name table joined with term table
             # to get term_type_code and determine if it's a standard name or alias
-            query = f"""
-                    SELECT
-                        t.term_id,
-                        t.term_name AS standard_name,
-                        t.term_type_code,
-                        tn.name_text,
-                        CASE
-                            WHEN tn.name_text = t.term_name THEN 'standard_name'
-                            ELSE 'alias'
-                        END AS match_type
-                    FROM {self.schema}.term_name tn
-                    JOIN {self.schema}.term t ON tn.term_id = t.term_id
-                """
-            cur.execute(SQL(query))
-            for term_id, standard_name, term_type, name_text, match_type in cur.fetchall():
+            query = SQL("""
+                SELECT
+                    t.term_id,
+                    t.term_name AS standard_name,
+                    t.term_type_code,
+                    tn.name_text,
+                    CASE
+                        WHEN tn.name_text = t.term_name THEN 'standard_name'
+                        ELSE 'alias'
+                    END AS match_type
+                FROM {schema}.term_name tn
+                JOIN {schema}.term t ON tn.term_id = t.term_id
+                WHERE tn.name_tags = '{{}}'::jsonb
+                   OR tn.name_tags->>'scope_user_id' IS NULL
+            """).format(schema=Identifier(self.schema), schema2=Identifier(self.schema))
+            cur.execute(query)
+            for term_id, _standard_name, term_type, name_text, match_type in cur.fetchall():
                 if name_text not in index:
                     index[name_text] = []
                 index[name_text].append((term_id, term_type, match_type))
@@ -349,7 +532,11 @@ class SQLKnowledgeGraphQuery:
         vocab: set[str] = set()
 
         with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(f"SELECT word FROM {self.schema}.term_vocabulary")
+            cur.execute(
+                SQL("SELECT word FROM {schema}.term_vocabulary").format(
+                    schema=Identifier(self.schema)
+                )
+            )
             for row in cur.fetchall():
                 if row[0]:
                     vocab.add(row[0])
@@ -497,7 +684,7 @@ class SQLKnowledgeGraphQuery:
         # term_id -> (word, term_type, match_type)
         seen: dict[str, tuple[str, str, str]] = {}
 
-        for word, start, end in matched_words:
+        for word, _start, _end in matched_words:
             if name_index is None or word not in name_index:
                 continue
 
@@ -606,7 +793,7 @@ class SQLKnowledgeGraphQuery:
         with self._connect() as conn, conn.cursor() as cur:
             # Single SQL query for BFS N-hop traversal
             # Returns: term_id, term_name, term_type_code, depth, path, parent_id, relation
-            cur.execute(SQL(self._bfs_cte_sql()), (entity.node_id, n_hops))
+            cur.execute(self._bfs_cte_sql(), (entity.node_id, n_hops))
             rows = cur.fetchall()
 
             if not rows:
@@ -696,13 +883,12 @@ class SQLKnowledgeGraphQuery:
                 # Combine desc_summary and desc into a single content field for better display
                 knowledge_map: dict[str, list[str]] = {}
                 for k_row in knowledge_rows:
-                    k_term_id, k_id, k_summary, k_desc = k_row
+                    k_term_id, _k_id, k_summary, k_desc = k_row
                     if k_term_id not in knowledge_map:
                         knowledge_map[k_term_id] = []
                     knowledge_map[k_term_id].append(
                         self._format_knowledge_content(k_summary, k_desc)
                     )
-
                 # Attach knowledge to nodes
                 for term_id, node in nodes.items():
                     if term_id in knowledge_map:
@@ -713,7 +899,7 @@ class SQLKnowledgeGraphQuery:
                 entity.node_id, nodes, path_edges, path_to_node, n_hops
             )
 
-            result = SubgraphResult(
+            return SubgraphResult(
                 center_entity=entity,
                 hops=n_hops,
                 nodes=list(nodes.values()),
@@ -721,9 +907,7 @@ class SQLKnowledgeGraphQuery:
                 tree=tree,
             )
 
-            return result
-
-    def _bfs_cte_sql(self) -> str:
+    def _bfs_cte_sql(self) -> SQL | Composed:
         """Generate BFS recursive CTE SQL.
 
         Simplified: only forward traversal (双向边已在数据层存储).
@@ -734,10 +918,11 @@ class SQLKnowledgeGraphQuery:
         - Cycle detection: path array tracking
         - Depth limit: n_hops parameter
         """
-        return f"""
+        schema = Identifier(self.schema)
+        return SQL("""
             WITH RECURSIVE traversal AS (
                 -- Anchor: starting node (depth 0)
-                SELECT 
+                SELECT
                     t.term_id,
                     t.term_name,
                     t.term_type_code,
@@ -745,13 +930,13 @@ class SQLKnowledgeGraphQuery:
                     ARRAY[t.term_id]::varchar(64)[] AS path,
                     NULL::varchar AS parent_id,
                     NULL::varchar AS relation
-                FROM {self.schema}.term t
+                FROM {schema}.term t
                 WHERE t.term_id = %s
-                
+
                 UNION ALL
-                
+
                 -- Recursive: expand neighbors via forward edges
-                SELECT 
+                SELECT
                     e.target_term_id,
                     t2.term_name,
                     t2.term_type_code,
@@ -760,13 +945,13 @@ class SQLKnowledgeGraphQuery:
                     tr.term_id,  -- current becomes parent
                     e.relation_name
                 FROM traversal tr
-                JOIN {self.schema}.term_relation e ON tr.term_id = e.source_term_id
-                JOIN {self.schema}.term t2 ON t2.term_id = e.target_term_id
+                JOIN {schema}.term_relation e ON tr.term_id = e.source_term_id
+                JOIN {schema}.term t2 ON t2.term_id = e.target_term_id
                 WHERE tr.depth < %s
                   AND NOT e.target_term_id = ANY(tr.path)  -- cycle detection
             )
-            
-            SELECT 
+
+            SELECT
                 term_id,
                 term_name,
                 term_type_code,
@@ -775,7 +960,7 @@ class SQLKnowledgeGraphQuery:
                 parent_id,
                 relation
             FROM traversal
-        """
+        """).format(schema=schema)
 
     def _build_tree_from_path_edges(
         self,
@@ -887,8 +1072,14 @@ class SQLKnowledgeGraphQuery:
                 "message": "未找到匹配的实体",
             }
 
-        # 2. Batch query subgraphs (optimized)
-        results = self._batch_query_subgraphs(entities, hops, include_knowledge=include_knowledge)
+        # 2. Adjust start points by term type
+        # 本体基础类型起始点=原始术语，非本体基础类型起始点=类型对应术语
+        adjusted_entities = self._adjust_start_points_by_term_type(entities)
+
+        # 3. Batch query subgraphs (optimized)
+        results = self._batch_query_subgraphs(
+            adjusted_entities, hops, include_knowledge=include_knowledge
+        )
 
         result = {
             "query": natural_language,
@@ -1013,7 +1204,7 @@ class SQLKnowledgeGraphQuery:
         ),
         traversal AS (
             -- Anchor: start from all seeds
-            SELECT 
+            SELECT
                 s.source_id,
                 t.term_id,
                 t.term_name,
@@ -1024,11 +1215,11 @@ class SQLKnowledgeGraphQuery:
             FROM seeds s
             JOIN {self.schema}.term t ON t.term_id = s.source_id
             {knowledge_join}
-            
+
             UNION ALL
-            
+
             -- Recursive: expand neighbors
-            SELECT 
+            SELECT
                 tr.source_id,
                 e.target_term_id,
                 t2.term_name,
@@ -1295,9 +1486,7 @@ class SQLKnowledgeGraphQuery:
                 if key == "knowledge":
                     lines.append(f"{prop_prefix}{prop_connector}{key}:")
                     # Split knowledge into lines and indent each line
-                    knowledge_lines = str(value).split("\n")
-                    for k_line in knowledge_lines:
-                        lines.append(f"{prop_prefix}    {k_line}")
+                    lines.extend(f"{prop_prefix}    {k_line}" for k_line in str(value).split("\n"))
                 else:
                     value_str = str(value)
                     if len(value_str) > 100:
@@ -1387,10 +1576,8 @@ def reset_singleton_service(timeout: float = 0.5) -> None:
     """
     global _singleton_service
     if _singleton_service is not None:
-        try:
+        with suppress(Exception):
             _singleton_service.close(timeout=timeout)
-        except Exception:
-            pass  # Ignore close errors during reset
         _singleton_service = None
 
 
