@@ -377,7 +377,10 @@ class DataCloudWorker(GatewayWorker):
             ))
             # 补充结束的标志
             await context.emit_chunk(
-                StreamChunkEvent(content="回答完成"),
+                StreamChunkEvent(
+                    content="回答完成",
+                    metadata={"relatedResources": ["推荐问题11"]},
+                ),
                 event_type=EventType.APP_STREAM_RESPONSE.value,
                 content_type=SseMessageType.text.value,
             )
@@ -386,10 +389,14 @@ class DataCloudWorker(GatewayWorker):
 
         # 正常结束：推送完成通知并写入历史
         await context.emit_chunk(
-            StreamChunkEvent(content="回答完成"),
+            StreamChunkEvent(
+                content="回答完成",
+                metadata={"relatedResources": ["推荐问题11"]},
+            ),
             event_type=EventType.APP_STREAM_RESPONSE.value,
             content_type=SseMessageType.text.value,
         )
+
         await context.flush_to_history()
         return {"status": "done"}
 
