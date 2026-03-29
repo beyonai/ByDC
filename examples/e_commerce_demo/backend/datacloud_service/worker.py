@@ -255,10 +255,37 @@ class DataCloudWorker(GatewayWorker):
 
         # ⑥ 根据命令类型构建图输入
         if isinstance(command, ResumeCommand):
+            try:
+                resume_payload_json = json.dumps(
+                    command.to_dict(),
+                    ensure_ascii=False,
+                    default=str,
+                )
+            except Exception:
+                resume_payload_json = repr(command)
+            logger.info(
+                "ResumeCommand received session=%s trace_id=%s payload=%s",
+                context.session_id,
+                getattr(command.header, "trace_id", ""),
+                resume_payload_json,
+            )
             # Resume 路径：用 Command(resume=...) 续跑，禁止重建 state
             # Bug 2 fix: use `or` so empty string/dict falls through to content
             resume_value = command.reply_data or command.content
-            logger.info("ResumeCommand: resume_value type=%s", type(resume_value).__name__)
+            if isinstance(resume_value, str):
+                resume_preview = resume_value[:500]
+            else:
+                try:
+                    resume_preview = json.dumps(
+                        resume_value, ensure_ascii=False, default=str
+                    )[:500]
+                except (TypeError, ValueError):
+                    resume_preview = repr(resume_value)[:500]
+            logger.info(
+                "ResumeCommand: resume_value type=%s preview=%s",
+                type(resume_value).__name__,
+                resume_preview,
+            )
             graph_input: Any = Command(resume=resume_value)
         else:
             # Ask 路径：归一化消息，构建完整初始 state
