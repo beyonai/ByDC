@@ -57,3 +57,31 @@ class TermType(Base):
     type_desc: Mapped[str | None] = mapped_column(Text, nullable=True)
     type_category: Mapped[int] = mapped_column(nullable=False)
     is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class TermName(Base):
+    __tablename__ = "term_name"
+    __table_args__ = {"schema": KNOWLEDGE_SCHEMA}
+
+    name_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    term_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    name_text: Mapped[str] = mapped_column(String(255), nullable=False)
+    name_tags: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    created_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class TermKnowledge(Base):
+    __tablename__ = "term_knowledge"
+    __table_args__ = {"schema": KNOWLEDGE_SCHEMA}
+
+    knowledge_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    term_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    desc_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    desc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ext_system: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    ext_kb_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    ext_doc_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    sort_order: Mapped[int] = mapped_column(nullable=False, default=0)
+    created_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)

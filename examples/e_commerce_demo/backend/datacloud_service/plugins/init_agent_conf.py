@@ -45,6 +45,41 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
         load_dotenv(datacloud_data_env_path)
         logger.info("[InitPlugin] Loaded datacloud-data env: path=%s", datacloud_data_env_path)
 
+    @staticmethod
+    def _agent_resource_ids_from_env() -> list[str]:
+        """Read digital-employee resourceId list from ``DATACLOUD_AI_FACTORY_AGENT_IDS``.
+
+        The variable must be a JSON array (string elements or coercible to str), e.g.
+        ``["10000587","10000582"]``.
+
+        Returns:
+            Non-empty list of resource id strings.
+
+        Raises:
+            ValueError: If unset, invalid JSON, or empty after parsing.
+            TypeError: If JSON value is not an array.
+        """
+
+        raw = os.environ.get("DATACLOUD_AI_FACTORY_AGENT_IDS", "").strip()
+        if not raw:
+            msg = (
+                "DATACLOUD_AI_FACTORY_AGENT_IDS is not set. "
+                'Set a JSON array of resourceId strings, e.g. ["10000587","10000582"].'
+            )
+            raise ValueError(msg)
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"DATACLOUD_AI_FACTORY_AGENT_IDS must be valid JSON: {e}"
+            ) from e
+        if not isinstance(parsed, list):
+            raise TypeError("DATACLOUD_AI_FACTORY_AGENT_IDS must be a JSON array.")
+        ids = [str(x).strip() for x in parsed if str(x).strip()]
+        if not ids:
+            raise ValueError("DATACLOUD_AI_FACTORY_AGENT_IDS parsed to an empty list.")
+        return ids
+
     async def register_agent_configs(self, agent_context):
         """Load digital-employee configs and return merged AgentConfig list."""
         current_map = {cfg.agent_id: cfg for cfg in agent_context.list_agent_configs()}
@@ -59,39 +94,23 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
         )
 
         try:
-            # 1. 请求 /getResourceListByPage 列表
+            # 1. 从环境变量读取待加载的 resourceId 列表（不再请求 getResourceListByPage）
+            agent_ids = self._agent_resource_ids_from_env()
+            logger.info(
+                "[InitPlugin] Agent resource ids from env: count=%d ids=%s",
+                len(agent_ids),
+                agent_ids,
+            )
+
+            if not self.ai_factory_token:
+                raise ValueError("DATACLOUD_AI_FACTORY_TOKEN is not set.")
+            headers = {
+                "Content-Type": "application/json",
+                "Beyond-Token": self.ai_factory_token,
+            }
+
             async with httpx.AsyncClient(verify=False) as client:
-                list_payload = {
-                    "pageNum": 1,
-                    "pageSize": 100,
-                    "statusList": [2],
-                    "resourceName": "亦庄产业大脑数字员工",
-                    "ownershipType": 0,
-                    "resourceTypeList": ["DIG_EMPLOYEE"],
-                    "language": "zh-CN",
-                }
-                # 加入认证和基本请求头
-                if not self.ai_factory_token:
-                    raise ValueError("DATACLOUD_AI_FACTORY_TOKEN is not set.")
-                headers = {
-                    "Content-Type": "application/json",
-                    "Beyond-Token": self.ai_factory_token,
-                }
-                res_list = await client.post(
-                    f"{self.ai_factory_url}/aiFactoryServer/new/resource/getResourceListByPage",
-                    json=list_payload,
-                    headers=headers,
-                )
-                if res_list.status_code != 200 or res_list.json().get("code") != 0:
-                    raise ValueError(f"Failed to fetch resources list: {res_list.text}")
-
-                rows = res_list.json().get("data", {}).get("rows", [])
-                logger.info("[InitPlugin] Resource rows fetched: %d", len(rows))
-
-                # 遍历处理远端每个 Agent 数据
-                for row in rows:
-                    agent_id = str(row.get("resourceId"))
-
+                for agent_id in agent_ids:
                     # 2. 通过 resourceId 请求 /findDetailsById 详情
                     res_detail = await client.post(
                         f"{self.ai_factory_url}/aiFactoryServer/digitalEmployeeController/findDetailsById",
@@ -225,7 +244,9 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
                             temperature=0.0,
                         ),
                         term_loader=TermLoader.from_config({}),
-                        csv_base_dir=os.environ.get("DATACLOUD_GATEWAY_WORKSPACE_DIR", str(Path("/tmp/datacloud").resolve())),
+                        csv_base_dir=os.environ.get(
+                            "DATACLOUD_GATEWAY_WORKSPACE_DIR", str(Path("/tmp/datacloud").resolve())
+                        ),
                         sql_execution_mode="internal",
                     )
 
@@ -240,16 +261,20 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
                             if resource_type in ["api", "DB_TABLE"]:
                                 for act_code in obj.list_action_codes():
                                     dynamic_tools[act_code] = obj.get_action_schema(act_code)
-                                    
+
                             # 当资源类型为 DB_TABLE 时，额外补充自身的 query() 动态工具
                             if resource_type == "DB_TABLE":
-                                dynamic_tools[f"{resource_code}_query"] = self._build_query_tool(obj.query)
+                                dynamic_tools[f"{resource_code}_query"] = self._build_query_tool(
+                                    obj.query
+                                )
 
                     elif resource_biz_type == "VIEW":
                         view = loader.get_view(resource_code)
                         if view:
                             # 3：当作为 VIEW 挂载时，补充 view.query()
-                            dynamic_tools[f"{resource_code}_query"] = self._build_query_tool(view.query)
+                            dynamic_tools[f"{resource_code}_query"] = self._build_query_tool(
+                                view.query
+                            )
                 except Exception as e:
                     logger.warning("本体解析失败 rel=%s err=%s", rel, e)
         return dynamic_tools
@@ -259,10 +284,7 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
 
         async def _tool(**params):
             question = (
-                params.get("question")
-                or params.get("query")
-                or params.get("description")
-                or ""
+                params.get("question") or params.get("query") or params.get("description") or ""
             )
             return await query_func(question=str(question), include_plan=True)
 
