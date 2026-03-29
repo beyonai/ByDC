@@ -11,7 +11,7 @@
 
     <owl:NamedIndividual rdf:about="#ads_grid_analysis_v1">
         <rdf:type rdf:resource="#EntityDefinition"/>
-        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</entity_code>
+        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</entity_code>
         <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格综合分析表</entity_name>
         <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">网格空间活力分析，计算网格综合活力分、各维度活跃等级，关联区域、资产指标，支撑区域经济分析、资产布局，主键：grid_id。</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
@@ -40,8 +40,8 @@
         <fields rdf:resource="#areaCode_field"/>
         <fields rdf:resource="#areaName_field"/>
         <fields rdf:resource="#energyEfficiencyIndex_field"/>
-        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;query_ads_grid_analysis&quot;]</action_refs>
-        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;rel_enterprise_grid&quot;, &quot;rel_investment_grid&quot;]</relations>
+        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[query_ads_grid_analysis]</action_refs>
+        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[rel_enterprise_grid, rel_investment_grid]</relations>
     </owl:NamedIndividual>
 
     <owl:NamedIndividual rdf:about="#gridId_field">
@@ -515,7 +515,7 @@
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
-        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</property_category>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
         <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">亩产排名前10%：超高能效管理网格     亩产排名前10%-30%：高能效管理网格     亩产排名前30%-70%：中等能效管理网格     亩产排名70%-90%：较低能效管理网格     亩产排名90%-100%：低能效管理网格</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
