@@ -92,3 +92,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_word
 -- term_name
 CREATE INDEX IF NOT EXISTS idx_tn_name_tags
     ON whale_datacloud.term_name USING GIN (name_tags);
+
+-- term_name BM25 GIN 索引
+CREATE INDEX IF NOT EXISTS idx_tn_name_text_tsv
+    ON whale_datacloud.term_name USING GIN (name_text_tsv);
+
+-- term_name 向量 HNSW 索引（余弦距离）
+CREATE INDEX IF NOT EXISTS idx_tn_name_vector_hnsw
+    ON whale_datacloud.term_name
+    USING hnsw (name_vector vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
