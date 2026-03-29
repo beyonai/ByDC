@@ -9,7 +9,8 @@ from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
-from by_framework import AgentConfig, Plugin, PluginManifest
+from by_framework import AgentConfig, EventType, Plugin, PluginManifest, StreamChunkEvent
+from by_framework.core.protocol.content_type import SseMessageType
 
 # 尝试导入本体加载相关模块，处理关联实体工具的动态生成
 try:
@@ -111,10 +112,12 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
                             key: str(value)[:200] for key, value in dynamic_prompts.items()
                         }
 
-                        # 4. 通过 OntologyLoader 解析关联实体动作，绑定为 Tools
-                        dynamic_tools = self._build_tools_from_ontology(
-                            detail_data.get("relResourceList", [])
-                        )
+                        # 4. 构建工具：本体工具 + Agent 委托工具
+                        rel_resource_list = detail_data.get("relResourceList", [])
+                        dynamic_tools = {
+                            **self._build_tools_from_ontology(rel_resource_list),
+                            **self._build_agent_delegate_tools(rel_resource_list),
+                        }
                         tool_names = sorted(dynamic_tools.keys())
 
                         logger.info(
@@ -263,6 +266,61 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             )
             return await query_func(question=str(question), include_plan=True)
 
+        return _tool
+
+    def _build_agent_delegate_tools(self, rel_resource_list: list) -> dict:
+        """为 resourceBizType=AGENT 的关联资源构建跨进程委托工具。"""
+        tools = {}
+        for rel in rel_resource_list:
+            if rel.get("resourceBizType") != "AGENT":
+                continue
+            resource_code = rel.get("resourceCode", "")
+            if not resource_code:
+                continue
+            resource_name = rel.get("resourceName", resource_code)
+            resource_desc = rel.get("resourceDesc", "")
+            tools[resource_code] = self._build_agent_delegate_tool(
+                target_agent_type=resource_code,
+                agent_name=resource_name,
+                agent_desc=resource_desc,
+            )
+        return tools
+
+    def _build_agent_delegate_tool(self, target_agent_type: str, agent_name: str, agent_desc: str):
+        """Build a tool that delegates to another agent via context.call_agent."""
+
+        async def _tool(content: str, _context=None, **params):
+            if _context is None:
+                logger.error(
+                    "[AgentDelegate] 运行时 context 未注入，无法调度 Agent: target=%s",
+                    target_agent_type,
+                )
+                return f"错误：无法获取运行时 context，无法调度 Agent【{agent_name}】"
+
+            logger.info(
+                "[AgentDelegate] 正在调度 Agent: target=%s content=%.100s",
+                target_agent_type,
+                content,
+            )
+            await _context.emit_chunk(
+                StreamChunkEvent(content=f"正在将以下请求移交给专项Agent【{agent_name}】处理：\n\n{content}"),
+                event_type=EventType.ANSWER_DELTA.value,
+                content_type=SseMessageType.text.value,
+            )
+            await _context.call_agent(
+                target_agent_type=target_agent_type,
+                content=content,
+                wait_for_reply=False,
+            )
+            # import asyncio
+            # await asyncio.sleep(60)  # 小延迟，确保事件及时发送
+            return f"已将任务移交给【{agent_name}】处理。"
+
+        _tool.__doc__ = (
+            f"【跨进程Agent调用】：调度专项Agent【{agent_name}】处理任务。"
+            f"{agent_desc}\n`content` 为要传递给目标Agent的完整任务内容。"
+        )
+        _tool._is_agent_delegate = True  # 供路由层识别
         return _tool
 
     def _resolve_scene_path(self, rel: dict) -> str:
