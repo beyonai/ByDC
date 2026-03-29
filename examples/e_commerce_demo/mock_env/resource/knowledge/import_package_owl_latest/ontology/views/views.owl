@@ -15,7 +15,7 @@
                 <description rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据 最新owl版本.md 生成</description>
                 <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
                 <object_codes rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["ads_enterprise_analysis", "ads_manage_grid_analysis", "ads_grid_analysis"]</object_codes>
-                <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["rel_view_ads_analysis_to_ads_enterprise_analysis", "rel_view_ads_analysis_to_ads_manage_grid_analysis", "rel_view_ads_analysis_to_ads_grid_analysis", "rel_ads_enterprise_analysis_to_ads_manage_grid_analysis", "rel_ads_enterprise_analysis_to_ads_grid_analysis"]</relations>
+                <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["rel_view_ads_analysis_to_ads_enterprise_analysis", "rel_view_ads_analysis_to_ads_manage_grid_analysis", "rel_view_ads_analysis_to_ads_grid_analysis", "rel_ads_enterprise_analysis_to_ads_manage_grid_analysis", "rel_ads_enterprise_analysis_to_ads_grid_analysis", "rel_ads_grid_analysis_to_ads_manage_grid_analysis"]</relations>
     </owl:NamedIndividual>
 
     <owl:DatatypeProperty rdf:about="#view_code"><rdfs:domain rdf:resource="#SceneDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
