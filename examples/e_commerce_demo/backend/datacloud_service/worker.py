@@ -88,7 +88,7 @@ class DataCloudWorker(GatewayWorker):
     def _build_graph(self, prompts_dict: dict | None = None, tools_dict: dict | None = None) -> Any:
         """Instantiate the datacloud-analysis compiled graph with dynamic context."""
         return create_agent(
-            model=self.model_name,   # create_agent 内部会自动加 openai: 前缀
+            model=self.model_name,  # create_agent 内部会自动加 openai: 前缀
             api_key=self.api_key,
             base_url=self.base_url,
             prompts_overwrite=prompts_dict,
@@ -111,13 +111,14 @@ class DataCloudWorker(GatewayWorker):
 
         # 初始化 SDK 环境 (PG 数据库建表, Checkpoint, Memory 等)
         from datacloud_analysis import bootstrap
+
         await bootstrap.setup()
 
         logger.info("DataCloudWorker: SDK framework bootstrapped.")
 
     def get_capabilities(self) -> list[str]:
         """向 gateway 注册本 worker 的能力标签。"""
-        return [os.environ.get("DATACLOUD_GATEWAY_WORKER_ID","datacloud")]
+        return [os.environ.get("DATACLOUD_GATEWAY_WORKER_ID", "datacloud")]
 
     async def _emit_6001(self, context: AgentContext, payload: dict[str, Any]) -> None:
         """Emit one structured data-table JSON chunk (content_type=6001)."""
@@ -172,6 +173,7 @@ class DataCloudWorker(GatewayWorker):
 
         # 获取当前挂载的 Workspace
         from by_framework.worker.sandbox.hook_sandbox import active_workspace  # noqa: PLC0415
+
         workspace_dir = active_workspace.get()
         logger.info("Active workspace for task: %s", workspace_dir)
 
@@ -237,7 +239,7 @@ class DataCloudWorker(GatewayWorker):
         config = {
             "configurable": {
                 "thread_id": context.session_id,
-                "gateway_context": context,   # Bug 6 fix: AgentContext 放 config 而非 state
+                "gateway_context": context,  # Bug 6 fix: AgentContext 放 config 而非 state
             }
         }
 
@@ -276,9 +278,7 @@ class DataCloudWorker(GatewayWorker):
                 resume_preview = resume_value[:500]
             else:
                 try:
-                    resume_preview = json.dumps(
-                        resume_value, ensure_ascii=False, default=str
-                    )[:500]
+                    resume_preview = json.dumps(resume_value, ensure_ascii=False, default=str)[:500]
                 except (TypeError, ValueError):
                     resume_preview = repr(resume_value)[:500]
             logger.info(
@@ -307,7 +307,27 @@ class DataCloudWorker(GatewayWorker):
                 "tool_params": {},
             }
 
+        # Resume：把网关 header.metadata 里的 checkpoint 写入 LangGraph configurable。
+        # 若不传 checkpoint_id，PG checkpointer 会按 thread 取「最新」快照；该快照往往已越过
+        # interrupt 点，Command(resume=...) 无法接到挂起任务，表现为 astream_events 极少、秒结束。
+        if isinstance(command, ResumeCommand):
+            md = getattr(command.header, "metadata", None) or {}
+            ckpt_id = md.get("checkpoint_id")
+            if ckpt_id:
+                config["configurable"]["checkpoint_id"] = str(ckpt_id)
+                config["configurable"]["checkpoint_ns"] = str(md.get("checkpoint_ns", ""))
+            logger.info(
+                "ResumeCommand: langgraph checkpoint_id=%s checkpoint_ns=%r (from header.metadata)",
+                config["configurable"].get("checkpoint_id", ""),
+                config["configurable"].get("checkpoint_ns", ""),
+            )
+
         # ⑦ 流式驱动图，处理 GraphInterrupt
+        logger.info(
+            "⑦ _stream_graph invoke session=%s input_is_command_resume=%s",
+            context.session_id,
+            isinstance(graph_input, Command),
+        )
         return await self._stream_graph(
             target_graph=target_graph,
             graph_input=graph_input,
@@ -338,7 +358,14 @@ class DataCloudWorker(GatewayWorker):
             {"status": "waiting"} — graph interrupted, ask_user already emitted.
         """
         is_agent_delegate = False
+        stream_event_count = 0
+        logger.info(
+            "_stream_graph: astream_events begin session=%s conf_hash=%s",
+            context.session_id,
+            conf_hash,
+        )
         async for event in target_graph.astream_events(graph_input, config=config, version="v2"):
+            stream_event_count += 1
             await context.check_cancelled()
             kind: str = event["event"]
 
@@ -360,6 +387,12 @@ class DataCloudWorker(GatewayWorker):
                 )
             # on_chat_model_stream: insight_node 自己通过 context.emit_chunk 推送，worker 不重复转发
 
+        logger.info(
+            "_stream_graph: astream_events end session=%s event_count=%d",
+            context.session_id,
+            stream_event_count,
+        )
+
         # GraphInterrupt 被 root 抑制时，流结束后用 aget_state 看 snapshot.interrupts。
         # 若 create_agent 在未 bootstrap 时退化为无 checkpointer 编译，aget_state 会抛
         # ValueError("No checkpointer set") — 必须先判断。
@@ -375,6 +408,20 @@ class DataCloudWorker(GatewayWorker):
                 )
                 _no_checkpointer_logged = True
             snapshot = None
+
+        ckpt_after = (
+            snapshot.config.get("configurable", {}).get("checkpoint_id", "")
+            if snapshot is not None
+            else ""
+        )
+        logger.info(
+            "_stream_graph: after aget_state session=%s snapshot_present=%s "
+            "has_interrupts=%s checkpoint_id=%s",
+            context.session_id,
+            snapshot is not None,
+            bool(snapshot.interrupts) if snapshot is not None else False,
+            ckpt_after,
+        )
 
         if snapshot is not None and snapshot.interrupts:
             # Bug 1 fix: interrupt() 的值在 snapshot.interrupts[0].value，而非 exc.args
@@ -395,16 +442,18 @@ class DataCloudWorker(GatewayWorker):
                 checkpoint_id,
                 prompt,
             )
-            await context.ask_user(AskUserEvent(
-                prompt=prompt,
-                metadata={
-                    "thread_id": config["configurable"]["thread_id"],
-                    "checkpoint_id": checkpoint_id,
-                    "checkpoint_ns": checkpoint_ns,
-                    "agent_id": by_agent_id,
-                    "conf_hash": conf_hash,
-                },
-            ))
+            await context.ask_user(
+                AskUserEvent(
+                    prompt=prompt,
+                    metadata={
+                        "thread_id": config["configurable"]["thread_id"],
+                        "checkpoint_id": checkpoint_id,
+                        "checkpoint_ns": checkpoint_ns,
+                        "agent_id": by_agent_id,
+                        "conf_hash": conf_hash,
+                    },
+                )
+            )
             # 补充结束的标志
             await context.emit_chunk(
                 StreamChunkEvent(
@@ -415,6 +464,10 @@ class DataCloudWorker(GatewayWorker):
                 content_type=SseMessageType.text.value,
             )
             # 不调用 flush_to_history：对话尚未完成
+            logger.info(
+                "_stream_graph: return session=%s status=waiting",
+                context.session_id,
+            )
             return {"status": "waiting"}
 
         # 正常结束：推送完成通知并写入历史
@@ -430,12 +483,17 @@ class DataCloudWorker(GatewayWorker):
             )
 
         await context.flush_to_history()
+        logger.info(
+            "_stream_graph: return session=%s status=done (flush_to_history ok)",
+            context.session_id,
+        )
         return {"status": "done"}
 
 
 # ------------------------------------------------------------------
 # 私有工具函数
 # ------------------------------------------------------------------
+
 
 def _normalize_messages(
     content: Any,
