@@ -18,13 +18,13 @@
       "type": "term_types",
       "file": "term_types/term_types.owl",
       "description": "术语类型定义",
-      "count": 14
+      "count": 13
     },
     {
       "type": "terms",
       "file": "terms/terms.owl",
       "description": "术语定义",
-      "count": 7
+      "count": 17941
     },
     {
       "type": "relations",
@@ -36,13 +36,13 @@
       "type": "relations",
       "file": "relations/relation_object.owl",
       "description": "对象关系定义",
-      "count": 2
+      "count": 3
     },
     {
       "type": "relations",
       "file": "relations/relation_attribute.owl",
       "description": "对象属性关系定义",
-      "count": 80
+      "count": 79
     },
     {
       "type": "relations",
@@ -54,7 +54,7 @@
       "type": "relations",
       "file": "relations/relation_term.owl",
       "description": "术语值关系定义",
-      "count": 615
+      "count": 17934
     },
     {
       "type": "ontology",
@@ -78,13 +78,13 @@
       "type": "ontology",
       "file": "ontology/objects/ads_enterprise_analysis/ads_enterprise_analysis_object.owl",
       "description": "企业综合分析表对象定义",
-      "count": 31
+      "count": 30
     },
     {
       "type": "ontology",
       "file": "ontology/objects/ads_enterprise_analysis/ads_enterprise_analysis_mapping.owl",
       "description": "企业综合分析表对象映射",
-      "count": 31
+      "count": 30
     },
     {
       "type": "ontology",

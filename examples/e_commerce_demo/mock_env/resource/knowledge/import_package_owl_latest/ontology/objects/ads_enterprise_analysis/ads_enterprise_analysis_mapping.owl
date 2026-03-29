@@ -36,15 +36,14 @@
         <mapping rdf:resource="#light_active_level_name_mapping"/>
         <mapping rdf:resource="#chain_code_mapping"/>
         <mapping rdf:resource="#chain_name_mapping"/>
-        <mapping rdf:resource="#manager_grid_id_mapping"/>
-        <mapping rdf:resource="#manager_grid_name_mapping"/>
+        <mapping rdf:resource="#manage_grid_id_mapping"/>
+        <mapping rdf:resource="#manage_grid_name_mapping"/>
         <mapping rdf:resource="#enterprise_level_name_mapping"/>
         <mapping rdf:resource="#risk_level_name_mapping"/>
         <mapping rdf:resource="#update_time_mapping"/>
         <mapping rdf:resource="#etl_create_time_mapping"/>
-        <mapping rdf:resource="#grid_id_mapping"/>
-        <mapping rdf:resource="#grid_name_mapping"/>
-        <mapping rdf:resource="#energy_efficiency_index_mapping"/>
+        <mapping rdf:resource="#phy_grid_id_mapping"/>
+        <mapping rdf:resource="#phy_grid_name_mapping"/>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#enterprise_id_mapping">
         <rdf:type rdf:resource="#Mapping"/>
@@ -214,20 +213,20 @@
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#manager_grid_id_mapping">
+    <owl:NamedIndividual rdf:about="#manage_grid_id_mapping">
         <rdf:type rdf:resource="#Mapping"/>
-        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manager_grid_id</property_code>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_id</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属管理网格编码</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
-        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manager_grid_id</source_column_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_id</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#manager_grid_name_mapping">
+    <owl:NamedIndividual rdf:about="#manage_grid_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
-        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manager_grid_name</property_code>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属管理网格名称</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
-        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manager_grid_name</source_column_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#enterprise_level_name_mapping">
@@ -262,28 +261,20 @@
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">etl_create_time</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#grid_id_mapping">
+    <owl:NamedIndividual rdf:about="#phy_grid_id_mapping">
         <rdf:type rdf:resource="#Mapping"/>
-        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</property_code>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格编码</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
-        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</source_column_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#grid_name_mapping">
+    <owl:NamedIndividual rdf:about="#phy_grid_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
-        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_name</property_code>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格名称</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
-        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_name</source_column_code>
-        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
-    </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#energy_efficiency_index_mapping">
-        <rdf:type rdf:resource="#Mapping"/>
-        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">energy_efficiency_index</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业经济效益等级</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
-        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">energy_efficiency_index</source_column_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
     </owl:NamedIndividual>
 

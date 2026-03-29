@@ -88,10 +88,10 @@
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#termtype_manager_grid_name">
+    <owl:NamedIndividual rdf:about="#termtype_manage_grid_name">
         <rdf:type rdf:resource="#TermTypeDefinition"/>
-        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#manager_grid_name</trem_type_code_path>
-        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manager_grid_name</trem_type_code>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#manage_grid_name</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</trem_type_code>
         <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属管理网格名称</trem_type_name>
         <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属管理网格名称术语类型</trem_type_desc>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
@@ -118,10 +118,10 @@
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#termtype_grid_name">
+    <owl:NamedIndividual rdf:about="#termtype_phy_grid_name">
         <rdf:type rdf:resource="#TermTypeDefinition"/>
-        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#grid_name</trem_type_code_path>
-        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_name</trem_type_code>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#phy_grid_name</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</trem_type_code>
         <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格名称</trem_type_name>
         <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格名称术语类型</trem_type_desc>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
@@ -134,16 +134,6 @@
         <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">area_name</trem_type_code>
         <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属区域名称</trem_type_name>
         <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属区域名称术语类型</trem_type_desc>
-        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
-        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
-        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-    </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#termtype_mgr_grid_name">
-        <rdf:type rdf:resource="#TermTypeDefinition"/>
-        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#mgr_grid_name</trem_type_code_path>
-        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">mgr_grid_name</trem_type_code>
-        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属管理网格名称</trem_type_name>
-        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属管理网格名称术语类型</trem_type_desc>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>

@@ -49,15 +49,14 @@
         <response_params rdf:resource="#resp_query_ads_enterprise_analysis_light_active_level_name"/>
         <response_params rdf:resource="#resp_query_ads_enterprise_analysis_chain_code"/>
         <response_params rdf:resource="#resp_query_ads_enterprise_analysis_chain_name"/>
-        <response_params rdf:resource="#resp_query_ads_enterprise_analysis_manager_grid_id"/>
-        <response_params rdf:resource="#resp_query_ads_enterprise_analysis_manager_grid_name"/>
+        <response_params rdf:resource="#resp_query_ads_enterprise_analysis_manage_grid_id"/>
+        <response_params rdf:resource="#resp_query_ads_enterprise_analysis_manage_grid_name"/>
         <response_params rdf:resource="#resp_query_ads_enterprise_analysis_enterprise_level_name"/>
         <response_params rdf:resource="#resp_query_ads_enterprise_analysis_risk_level_name"/>
         <response_params rdf:resource="#resp_query_ads_enterprise_analysis_update_time"/>
         <response_params rdf:resource="#resp_query_ads_enterprise_analysis_etl_create_time"/>
-        <response_params rdf:resource="#resp_query_ads_enterprise_analysis_grid_id"/>
-        <response_params rdf:resource="#resp_query_ads_enterprise_analysis_grid_name"/>
-        <response_params rdf:resource="#resp_query_ads_enterprise_analysis_energy_efficiency_index"/>
+        <response_params rdf:resource="#resp_query_ads_enterprise_analysis_phy_grid_id"/>
+        <response_params rdf:resource="#resp_query_ads_enterprise_analysis_phy_grid_name"/>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#param_query_ads_enterprise_analysis_enterprise_id">
         <rdf:type rdf:resource="#RequestParameter"/>
@@ -302,24 +301,24 @@
         <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.chain_name</json_path>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#resp_query_ads_enterprise_analysis_manager_grid_id">
+    <owl:NamedIndividual rdf:about="#resp_query_ads_enterprise_analysis_manage_grid_id">
         <rdf:type rdf:resource="#ResponseParameter"/>
-        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manager_grid_id</fieldCode>
+        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_id</fieldCode>
         <fieldType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</fieldType>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_enterprise_analysis</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
-        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manager_grid_id</object_property>
-        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.manager_grid_id</json_path>
+        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_id</object_property>
+        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.manage_grid_id</json_path>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#resp_query_ads_enterprise_analysis_manager_grid_name">
+    <owl:NamedIndividual rdf:about="#resp_query_ads_enterprise_analysis_manage_grid_name">
         <rdf:type rdf:resource="#ResponseParameter"/>
-        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manager_grid_name</fieldCode>
+        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</fieldCode>
         <fieldType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</fieldType>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_enterprise_analysis</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
-        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manager_grid_name</object_property>
-        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.manager_grid_name</json_path>
+        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</object_property>
+        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.manage_grid_name</json_path>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#resp_query_ads_enterprise_analysis_enterprise_level_name">
@@ -362,34 +361,24 @@
         <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.etl_create_time</json_path>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#resp_query_ads_enterprise_analysis_grid_id">
+    <owl:NamedIndividual rdf:about="#resp_query_ads_enterprise_analysis_phy_grid_id">
         <rdf:type rdf:resource="#ResponseParameter"/>
-        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</fieldCode>
+        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</fieldCode>
         <fieldType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</fieldType>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_enterprise_analysis</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
-        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</object_property>
-        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.grid_id</json_path>
+        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</object_property>
+        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.phy_grid_id</json_path>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#resp_query_ads_enterprise_analysis_grid_name">
+    <owl:NamedIndividual rdf:about="#resp_query_ads_enterprise_analysis_phy_grid_name">
         <rdf:type rdf:resource="#ResponseParameter"/>
-        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_name</fieldCode>
+        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</fieldCode>
         <fieldType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</fieldType>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_enterprise_analysis</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
-        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_name</object_property>
-        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.grid_name</json_path>
-        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
-    </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#resp_query_ads_enterprise_analysis_energy_efficiency_index">
-        <rdf:type rdf:resource="#ResponseParameter"/>
-        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">energy_efficiency_index</fieldCode>
-        <fieldType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</fieldType>
-        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_enterprise_analysis</term_type_code_path>
-        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
-        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">energy_efficiency_index</object_property>
-        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.energy_efficiency_index</json_path>
+        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</object_property>
+        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.phy_grid_name</json_path>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#action_query_ads_manage_grid_analysis">
@@ -404,11 +393,11 @@
         <request_url rdf:datatype="http://www.w3.org/2001/XMLSchema#string">/query_ads_manage_grid_analysis</request_url>
         <request_method rdf:datatype="http://www.w3.org/2001/XMLSchema#string">POST</request_method>
         <request_header rdf:resource="#http_header"/>
-        <request_params rdf:resource="#param_query_ads_manage_grid_analysis_grid_id"/>
-        <request_params rdf:resource="#param_query_ads_manage_grid_analysis_grid_name"/>
+        <request_params rdf:resource="#param_query_ads_manage_grid_analysis_manage_grid_id"/>
+        <request_params rdf:resource="#param_query_ads_manage_grid_analysis_manage_grid_name"/>
         <request_params rdf:resource="#param_query_ads_manage_grid_analysis_foot_active_level_name"/>
-        <response_params rdf:resource="#resp_query_ads_manage_grid_analysis_grid_id"/>
-        <response_params rdf:resource="#resp_query_ads_manage_grid_analysis_grid_name"/>
+        <response_params rdf:resource="#resp_query_ads_manage_grid_analysis_manage_grid_id"/>
+        <response_params rdf:resource="#resp_query_ads_manage_grid_analysis_manage_grid_name"/>
         <response_params rdf:resource="#resp_query_ads_manage_grid_analysis_grid_lnt_lat"/>
         <response_params rdf:resource="#resp_query_ads_manage_grid_analysis_stat_date"/>
         <response_params rdf:resource="#resp_query_ads_manage_grid_analysis_area_sqm"/>
@@ -432,24 +421,24 @@
         <response_params rdf:resource="#resp_query_ads_manage_grid_analysis_area_code"/>
         <response_params rdf:resource="#resp_query_ads_manage_grid_analysis_area_name"/>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#param_query_ads_manage_grid_analysis_grid_id">
+    <owl:NamedIndividual rdf:about="#param_query_ads_manage_grid_analysis_manage_grid_id">
         <rdf:type rdf:resource="#RequestParameter"/>
-        <paramCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</paramCode>
+        <paramCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_id</paramCode>
         <type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</type>
         <description rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格编码</description>
         <isRequired rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</isRequired>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_manage_grid_analysis</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
-        <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</rel_term_codeorname>
+        <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_id</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#param_query_ads_manage_grid_analysis_grid_name">
+    <owl:NamedIndividual rdf:about="#param_query_ads_manage_grid_analysis_manage_grid_name">
         <rdf:type rdf:resource="#RequestParameter"/>
-        <paramCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_name</paramCode>
+        <paramCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</paramCode>
         <type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</type>
         <description rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格名称</description>
         <isRequired rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</isRequired>
-        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#grid_name</term_type_code_path>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#manage_grid_name</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
@@ -465,24 +454,24 @@
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#resp_query_ads_manage_grid_analysis_grid_id">
+    <owl:NamedIndividual rdf:about="#resp_query_ads_manage_grid_analysis_manage_grid_id">
         <rdf:type rdf:resource="#ResponseParameter"/>
-        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</fieldCode>
+        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_id</fieldCode>
         <fieldType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</fieldType>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_manage_grid_analysis</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
-        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</object_property>
-        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.grid_id</json_path>
+        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_id</object_property>
+        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.manage_grid_id</json_path>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#resp_query_ads_manage_grid_analysis_grid_name">
+    <owl:NamedIndividual rdf:about="#resp_query_ads_manage_grid_analysis_manage_grid_name">
         <rdf:type rdf:resource="#ResponseParameter"/>
-        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_name</fieldCode>
+        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</fieldCode>
         <fieldType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</fieldType>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_manage_grid_analysis</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
-        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_name</object_property>
-        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.grid_name</json_path>
+        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</object_property>
+        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.manage_grid_name</json_path>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#resp_query_ads_manage_grid_analysis_grid_lnt_lat">
@@ -717,11 +706,11 @@
         <request_url rdf:datatype="http://www.w3.org/2001/XMLSchema#string">/query_ads_grid_analysis</request_url>
         <request_method rdf:datatype="http://www.w3.org/2001/XMLSchema#string">POST</request_method>
         <request_header rdf:resource="#http_header"/>
-        <request_params rdf:resource="#param_query_ads_grid_analysis_grid_id"/>
-        <request_params rdf:resource="#param_query_ads_grid_analysis_grid_name"/>
+        <request_params rdf:resource="#param_query_ads_grid_analysis_phy_grid_id"/>
+        <request_params rdf:resource="#param_query_ads_grid_analysis_phy_grid_name"/>
         <request_params rdf:resource="#param_query_ads_grid_analysis_foot_active_level_name"/>
-        <response_params rdf:resource="#resp_query_ads_grid_analysis_grid_id"/>
-        <response_params rdf:resource="#resp_query_ads_grid_analysis_grid_name"/>
+        <response_params rdf:resource="#resp_query_ads_grid_analysis_phy_grid_id"/>
+        <response_params rdf:resource="#resp_query_ads_grid_analysis_phy_grid_name"/>
         <response_params rdf:resource="#resp_query_ads_grid_analysis_grid_lnt_lat"/>
         <response_params rdf:resource="#resp_query_ads_grid_analysis_stat_date"/>
         <response_params rdf:resource="#resp_query_ads_grid_analysis_area_sqm"/>
@@ -744,27 +733,27 @@
         <response_params rdf:resource="#resp_query_ads_grid_analysis_etl_create_time"/>
         <response_params rdf:resource="#resp_query_ads_grid_analysis_area_code"/>
         <response_params rdf:resource="#resp_query_ads_grid_analysis_area_name"/>
-        <response_params rdf:resource="#resp_query_ads_grid_analysis_mgr_grid_id"/>
-        <response_params rdf:resource="#resp_query_ads_grid_analysis_mgr_grid_name"/>
+        <response_params rdf:resource="#resp_query_ads_grid_analysis_manage_grid_id"/>
+        <response_params rdf:resource="#resp_query_ads_grid_analysis_manage_grid_name"/>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#param_query_ads_grid_analysis_grid_id">
+    <owl:NamedIndividual rdf:about="#param_query_ads_grid_analysis_phy_grid_id">
         <rdf:type rdf:resource="#RequestParameter"/>
-        <paramCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</paramCode>
+        <paramCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</paramCode>
         <type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</type>
         <description rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格编码</description>
         <isRequired rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</isRequired>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_grid_analysis</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
-        <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</rel_term_codeorname>
+        <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#param_query_ads_grid_analysis_grid_name">
+    <owl:NamedIndividual rdf:about="#param_query_ads_grid_analysis_phy_grid_name">
         <rdf:type rdf:resource="#RequestParameter"/>
-        <paramCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_name</paramCode>
+        <paramCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</paramCode>
         <type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</type>
         <description rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格名称</description>
         <isRequired rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</isRequired>
-        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#grid_name</term_type_code_path>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#phy_grid_name</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
@@ -780,24 +769,24 @@
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#resp_query_ads_grid_analysis_grid_id">
+    <owl:NamedIndividual rdf:about="#resp_query_ads_grid_analysis_phy_grid_id">
         <rdf:type rdf:resource="#ResponseParameter"/>
-        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</fieldCode>
+        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</fieldCode>
         <fieldType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</fieldType>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_grid_analysis</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
-        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</object_property>
-        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.grid_id</json_path>
+        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</object_property>
+        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.phy_grid_id</json_path>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#resp_query_ads_grid_analysis_grid_name">
+    <owl:NamedIndividual rdf:about="#resp_query_ads_grid_analysis_phy_grid_name">
         <rdf:type rdf:resource="#ResponseParameter"/>
-        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_name</fieldCode>
+        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</fieldCode>
         <fieldType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</fieldType>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_grid_analysis</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
-        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_name</object_property>
-        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.grid_name</json_path>
+        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</object_property>
+        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.phy_grid_name</json_path>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#resp_query_ads_grid_analysis_grid_lnt_lat">
@@ -1020,24 +1009,24 @@
         <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.area_name</json_path>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#resp_query_ads_grid_analysis_mgr_grid_id">
+    <owl:NamedIndividual rdf:about="#resp_query_ads_grid_analysis_manage_grid_id">
         <rdf:type rdf:resource="#ResponseParameter"/>
-        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">mgr_grid_id</fieldCode>
+        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_id</fieldCode>
         <fieldType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</fieldType>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_grid_analysis</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
-        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">mgr_grid_id</object_property>
-        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.mgr_grid_id</json_path>
+        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_id</object_property>
+        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.manage_grid_id</json_path>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#resp_query_ads_grid_analysis_mgr_grid_name">
+    <owl:NamedIndividual rdf:about="#resp_query_ads_grid_analysis_manage_grid_name">
         <rdf:type rdf:resource="#ResponseParameter"/>
-        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">mgr_grid_name</fieldCode>
+        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</fieldCode>
         <fieldType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</fieldType>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_grid_analysis</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
-        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">mgr_grid_name</object_property>
-        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.mgr_grid_name</json_path>
+        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</object_property>
+        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data.manage_grid_name</json_path>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
     </owl:NamedIndividual>
 
