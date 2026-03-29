@@ -97,8 +97,8 @@ def build_analysis_graph(
         gw_ctx = (config.get("configurable") or {}).get("gateway_context")
         return await loop_node(state, gateway_context=gw_ctx, default_tools=tools)
 
-    async def _agent_delegate(state: AgentState) -> dict[str, Any]:
-        return await agent_delegate_node(state, default_tools=tools)
+    async def _agent_delegate(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
+        return await agent_delegate_node(state, config, default_tools=tools)
 
     async def _direct_tool(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         gw_ctx = (config.get("configurable") or {}).get("gateway_context")

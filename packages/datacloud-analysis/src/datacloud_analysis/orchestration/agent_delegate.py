@@ -7,6 +7,7 @@ from typing import Any
 
 from by_framework import EventType, StreamChunkEvent
 from by_framework.core.protocol.content_type import SseReasonMessageType
+from langchain_core.runnables import RunnableConfig
 
 from datacloud_analysis.orchestration.state import AgentState
 
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 async def agent_delegate_node(
     state: AgentState,
+    config: RunnableConfig,
     default_tools: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Call an AGENT delegate tool, passing the gateway context for cross-process dispatch.
@@ -26,7 +28,7 @@ async def agent_delegate_node(
     target_tool = (state.get("target_tool") or "").strip()
     dynamic_tools = state.get("dynamic_tools") or default_tools or {}
     intent_text = str(state.get("intent") or "")
-    gateway_context = state.get("gateway_context")
+    gateway_context = (config or {}).get("configurable", {}).get("gateway_context")
 
     tool_fn = dynamic_tools.get(target_tool)
     if not tool_fn or not getattr(tool_fn, "_is_agent_delegate", False):
