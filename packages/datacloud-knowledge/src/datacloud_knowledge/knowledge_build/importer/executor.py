@@ -246,7 +246,7 @@ def _connect() -> Connection:
 
 
 def _resolve_type_category(obj: dict[str, Any]) -> int:
-    category_map = {"LIST_TERM": 1, "DICT_TERM": 2, "ONTOLOGY_TERM": 3, "DOCUMENT_TERM": 4}
+    category_map = {"列表术语": 1, "字典术语": 2, "本体术语": 3, "文档术语": 4}
     raw_cat = obj["type_category"]
     type_category = category_map.get(str(raw_cat))
     if type_category is None:
