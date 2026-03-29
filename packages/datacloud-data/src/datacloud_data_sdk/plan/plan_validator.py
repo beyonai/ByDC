@@ -25,6 +25,7 @@ _SQL_KEYWORDS = {
     "in",
     "between",
     "like",
+    "ilike",
     "is",
     "null",
     "as",
