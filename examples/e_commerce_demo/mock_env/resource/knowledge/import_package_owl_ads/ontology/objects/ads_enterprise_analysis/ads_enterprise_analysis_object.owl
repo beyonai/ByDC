@@ -11,7 +11,7 @@
 
     <owl:NamedIndividual rdf:about="#ads_enterprise_analysis_v1">
         <rdf:type rdf:resource="#EntityDefinition"/>
-        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_ENTERPRISE_ANALYSIS</entity_code>
+        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</entity_code>
         <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表</entity_name>
         <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业税收风险判别，整合企业经营、风险明细指标，计算综合风险评估分、风险标签，直接支撑税务风险核查、分级管控，主键：enterprise_id，外键关联所有企业相关枚举维度表。</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
@@ -46,8 +46,8 @@
         <fields rdf:resource="#areaCode_field"/>
         <fields rdf:resource="#areaName_field"/>
         <fields rdf:resource="#energyEfficiencyIndex_field"/>
-        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;query_ads_enterprise_analysis&quot;]</action_refs>
-        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;rel_enterprise_grid&quot;, &quot;rel_enterprise_investment&quot;]</relations>
+        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[query_ads_enterprise_analysis]</action_refs>
+        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[rel_enterprise_grid, rel_enterprise_investment]</relations>
     </owl:NamedIndividual>
 
     <owl:NamedIndividual rdf:about="#enterpriseId_field">
@@ -641,7 +641,7 @@
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
-        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_ENTERPRISE_ANALYSIS</property_category>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
         <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">营收排名前10%：超高能效企业     营收排名前10%-30%：高能效企业     营收排名前30%-70%：中等能效企业     营收排名70%-90%：较低能效企业     亩产排名90%-100%：低能效企业</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
