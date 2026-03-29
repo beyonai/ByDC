@@ -4,18 +4,17 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import asdict
 from datetime import datetime
 from typing import Any, TypedDict
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 
 from datacloud_data_sdk.exceptions import PlanGenerationError
 from datacloud_data_sdk.plan.models import ObjectViewPayload, QueryExecutionPlan, parse_plan
 from datacloud_data_sdk.plan.plan_validator import PlanValidator, ValidationResult
 from datacloud_data_sdk.utils.case_utils import camel_to_snake_keys, snake_to_camel_keys
-
-from dataclasses import asdict
-
 
 SYSTEM_PROMPT = """你是一个严格遵循元数据、**绝对不脑补任何业务关联**的数据查询计划生成器。
 核心铁律：**所有对象间关联必须100%来源于objectView.relations中显式声明的关系，无声明关联则绝对不能进行跨对象/跨表关联查询，直接判定无法回答**。绝对禁止凭空推测、各业务实体间的关联关系，禁止使用元数据中不存在的表、字段、关联、条件。
@@ -268,12 +267,9 @@ def _serialize_payload(
             obj["fields"][i] = _inject_term_info(base, term_loader)
         for act in obj.get("actions", []):
             act.pop("description", None)
-            in_serialized = [
-                _serialize_param(p, term_loader) for p in act.get("input_params", [])
-            ]
+            in_serialized = [_serialize_param(p, term_loader) for p in act.get("input_params", [])]
             out_serialized = [
-                {k: v for k, v in p.items() if v is not None}
-                for p in act.get("output_params", [])
+                {k: v for k, v in p.items() if v is not None} for p in act.get("output_params", [])
             ]
             act["input_params"] = in_serialized
             act["output_params"] = out_serialized
@@ -309,11 +305,14 @@ def _build_user_message(
 
 
 class PlanAgentState(TypedDict, total=False):
-    """PlanAgent 状态。"""
+    """PlanAgent 状态。
+
+    term_loader 不得放入 state：嵌套 ainvoke 会继承父图 checkpointer，msgpack 无法序列化
+    KbTermLoader 等运行时对象。通过 RunnableConfig.configurable[\"term_loader\"] 注入。
+    """
 
     payload: ObjectViewPayload
     question: str
-    term_loader: Any
     validation_errors: list[str] | None
     retry_count: int
     plan: QueryExecutionPlan | None
@@ -374,31 +373,32 @@ class PlanAgent:
         """从当前 InvocationContext 获取 GatewayProgressReporter，不可用时返回 None。"""
         try:
             from datacloud_data_sdk.context import get_gateway_context  # noqa: PLC0415
+
             gw_ctx = get_gateway_context()
             if gw_ctx is not None:
-                from datacloud_data_sdk.events.gateway_reporter import GatewayProgressReporter  # noqa: PLC0415
+                from datacloud_data_sdk.events.gateway_reporter import (
+                    GatewayProgressReporter,  # noqa: PLC0415
+                )
+
                 return GatewayProgressReporter(gw_ctx)
         except Exception:
             pass
         return None
 
-    async def _generate_node(self, state: PlanAgentState) -> dict[str, Any]:
+    async def _generate_node(self, state: PlanAgentState, config: RunnableConfig) -> dict[str, Any]:
         """generate 节点：流式调用 LLM 生成 QueryExecutionPlan，同步推送 token 进度。"""
         question = state["question"]
         validation_errors = state.get("validation_errors")
+        term_loader = (config.get("configurable") or {}).get("term_loader")
 
         llm = self._get_llm()
 
         cached_json = state.get("object_view_json")
         if cached_json is None:
-            serialized = _serialize_payload(
-                state["payload"], term_loader=state.get("term_loader")
-            )
+            serialized = _serialize_payload(state["payload"], term_loader=term_loader)
             cached_json = json.dumps(serialized, ensure_ascii=False, separators=(",", ":"))
 
-        user_message = _build_user_message(
-            cached_json, question, validation_errors
-        )
+        user_message = _build_user_message(cached_json, question, validation_errors)
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_message},
@@ -425,16 +425,12 @@ class PlanAgent:
 
         content = "".join(chunks)
         plan_dict = parse_json_response(content)
-        data = camel_to_snake_keys(
-            plan_dict, preserve_children={"params", "tags"}
-        )
+        data = camel_to_snake_keys(plan_dict, preserve_children={"params", "tags"})
         plan = parse_plan(data, question)
 
         if reporter:
             step_count = len(plan.steps) if plan.steps else 0
-            await reporter.on_plan_generated(
-                f"canAnswer={plan.can_answer}，steps={step_count}"
-            )
+            await reporter.on_plan_generated(f"canAnswer={plan.can_answer}，steps={step_count}")
 
         return {"plan": plan, "object_view_json": cached_json}
 
@@ -476,13 +472,13 @@ class PlanAgent:
         initial: PlanAgentState = {
             "payload": payload,
             "question": question,
-            "term_loader": term_loader,
             "validation_errors": None,
             "retry_count": 0,
             "plan": None,
             "validation_result": None,
         }
-        final = await self._graph.ainvoke(initial)
+        run_config: RunnableConfig = {"configurable": {"term_loader": term_loader}}
+        final = await self._graph.ainvoke(initial, config=run_config)
         plan = final["plan"]
         vr = final.get("validation_result")
         return (plan, vr)
