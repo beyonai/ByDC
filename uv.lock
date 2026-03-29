@@ -312,7 +312,7 @@ wheels = [
 
 [[package]]
 name = "by-framework"
-version = "0.1.2"
+version = "0.1.4"
 source = { editable = "../by-framework-python" }
 dependencies = [
     { name = "httpx" },
