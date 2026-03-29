@@ -214,7 +214,7 @@ def _inject_term_info(item: dict[str, Any], term_loader: Any) -> dict[str, Any]:
             except Exception:
                 pass
         elif term_type == "lookup":
-            base["term_hint"] = "接受名称或ID或编码，系统会解析"
+            base["term_hint"] = "可以根据名称或ID或编码查询，系统会解析"
     elif term_set and term_loader:
         try:
             labels = term_loader.get_available_values(
@@ -225,13 +225,17 @@ def _inject_term_info(item: dict[str, Any], term_loader: Any) -> dict[str, Any]:
                 base["term_labels"] = labels
             else:
                 base["term_type"] = "lookup"
-                base["term_hint"] = "接受名称或ID或编码，系统会解析"
+                base["term_hint"] = "可以根据名称或ID或编码查询，系统会解析"
         except Exception:
             base["term_type"] = "lookup"
-            base["term_hint"] = "接受名称或ID或编码，系统会解析"
+            base["term_hint"] = "可以根据名称或ID或编码查询，系统会解析"
     elif term_set:
         base["term_type"] = "lookup"
-        base["term_hint"] = "接受名称或ID或编码，系统会解析"
+        base["term_hint"] = "可以根据名称或ID或编码查询，系统会解析"
+    if "term_field" in base:
+        base.pop("term_field", None)
+    if "term_set" in base:
+        base.pop("term_set", None)
     return base
 
 

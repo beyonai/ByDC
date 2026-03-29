@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -31,8 +32,10 @@ class ParsedObject:
     table_name: str | None = None
     source_config: dict[str, Any] | None = None
     tags: list[str] = field(default_factory=list)
+    field_refs: list[str] = field(default_factory=list)  # URIs from <fields rdf:resource="..."/>
     fields: list[dict[str, Any]] = field(default_factory=list)
     actions: list[str] = field(default_factory=list)
+    relation_refs: list[str] = field(default_factory=list)  # relation codes from <relations> attr
 
 
 @dataclass
@@ -65,6 +68,7 @@ class ParsedAction:
 
 @dataclass
 class ParsedRelation:
+    relation_code: str
     source_class: str
     target_class: str
     relation_type: str = "ONE_TO_MANY"
@@ -100,13 +104,14 @@ class OwlParser:
         self._objects: dict[str, ParsedObject] = {}
         self._fields: dict[str, ParsedField] = {}
         self._actions: dict[str, ParsedAction] = {}
-        self._relations: list[ParsedRelation] = []
+        self._relations: dict[str, ParsedRelation] = {}
         self._datasources: dict[str, ParsedDatasource] = {}
         self._views: dict[str, ParsedView] = {}
         self._mappings: dict[str, dict[str, Any]] = {}
         self._current_entity_code: str | None = None
         self._mapping_datasource: dict[str, str] = {}
         self._mapping_table: dict[str, str] = {}
+        self._field_uri_to_code: dict[str, str] = {}  # URI -> property_code
 
     def parse_file(self, path: Path) -> None:
         if path.suffix.lower() != ".owl":
@@ -167,6 +172,42 @@ class OwlParser:
                 result.append(str(o))
         return result
 
+    def _parse_loose_json_list(self, s: str) -> list:
+        """Parse non-standard JSON arrays used in OWL files.
+
+        Handles:
+          - Standard JSON:          ["a", "b"]
+          - Unquoted string list:   [a, b, c]
+          - Unquoted object list:   [{key:val, key2:val2}]
+        """
+        s = s.strip()
+        if not s or s == "[]":
+            return []
+        try:
+            return json.loads(s)
+        except json.JSONDecodeError:
+            pass
+        if not (s.startswith("[") and s.endswith("]")):
+            return []
+        inner = s[1:-1].strip()
+        if not inner:
+            return []
+        if "{" in inner:
+            def fix_obj(m: re.Match) -> str:
+                pairs = []
+                for pair in m.group(1).split(","):
+                    if ":" in pair:
+                        k, v = pair.split(":", 1)
+                        pairs.append(f'"{k.strip()}": "{v.strip()}"')
+                return "{" + ", ".join(pairs) + "}"
+            fixed = "[" + re.sub(r'\{([^}]+)\}', fix_obj, inner) + "]"
+            try:
+                return json.loads(fixed)
+            except json.JSONDecodeError:
+                return []
+        else:
+            return [item.strip() for item in inner.split(",") if item.strip()]
+
     def _parse_entity_definition(self, g: Any, subject: Any) -> None:
         entity_code = self._get_predicate_value(g, subject, "entity_code")
         if not entity_code:
@@ -179,17 +220,23 @@ class OwlParser:
         source_type = "DB" if "DB" in entity_source else "API"
 
         action_refs_str = self._get_predicate_value(g, subject, "action_refs") or "[]"
-        try:
-            action_refs = json.loads(action_refs_str)
-        except json.JSONDecodeError:
-            action_refs = []
+        action_refs = self._parse_loose_json_list(action_refs_str)
+
+        # Read <fields rdf:resource="..."/> — returns full URIs of field individuals
+        field_refs = self._get_predicate_values(g, subject, "fields")
+
+        # Read <relations> attribute — list of relation codes referencing relation OWL
+        relations_str = self._get_predicate_value(g, subject, "relations") or "[]"
+        relation_refs = self._parse_loose_json_list(relations_str)
 
         obj = ParsedObject(
             object_code=entity_code,
             object_name=entity_name,
             description=entity_desc,
             source_type=source_type,
+            field_refs=field_refs,
             actions=action_refs,
+            relation_refs=relation_refs,
         )
         self._objects[entity_code] = obj
 
@@ -197,6 +244,9 @@ class OwlParser:
         property_code = self._get_predicate_value(g, subject, "property_code")
         if not property_code:
             return
+
+        # Track URI -> property_code so EntityDefinition field_refs can resolve to fields
+        self._field_uri_to_code[str(subject)] = property_code
 
         property_name = self._get_predicate_value(g, subject, "property_name") or property_code
         data_type = self._get_predicate_value(g, subject, "data_type") or "STRING"
@@ -236,16 +286,10 @@ class OwlParser:
             action_type = "query"
 
         function_refs_str = self._get_predicate_value(g, subject, "function_refs") or "[]"
-        try:
-            function_refs = json.loads(function_refs_str)
-        except json.JSONDecodeError:
-            function_refs = []
+        function_refs = self._parse_loose_json_list(function_refs_str)
 
         belong_entity_str = self._get_predicate_value(g, subject, "belong_entity") or "[]"
-        try:
-            belong_entities = json.loads(belong_entity_str)
-        except json.JSONDecodeError:
-            belong_entities = []
+        belong_entities = self._parse_loose_json_list(belong_entity_str)
 
         request_params = self._get_predicate_values(g, subject, "request_params")
         response_params = self._get_predicate_values(g, subject, "response_params")
@@ -319,23 +363,23 @@ class OwlParser:
         if not source_code or not target_code:
             return
 
+        # Derive relation_code from the individual's URI fragment (e.g. "#rel_enterprise_grid")
+        relation_code = str(subject).split("#")[-1]
+
         relation_name = self._get_predicate_value(g, subject, "relation_name") or ""
         relation_type = self._get_predicate_value(g, subject, "relation_type") or "ONE_TO_MANY"
         joinkeys_str = self._get_predicate_value(g, subject, "joinkeys") or "[]"
-
-        try:
-            join_keys = json.loads(joinkeys_str)
-        except json.JSONDecodeError:
-            join_keys = []
+        join_keys = self._parse_loose_json_list(joinkeys_str)
 
         relation = ParsedRelation(
+            relation_code=relation_code,
             source_class=source_code,
             target_class=target_code,
             relation_type=relation_type,
             relation_name=relation_name,
             join_keys=join_keys,
         )
-        self._relations.append(relation)
+        self._relations[relation_code] = relation
 
     def _parse_database_definition(self, g: Any, subject: Any) -> None:
         db_code = self._get_predicate_value(g, subject, "dbCode")
@@ -367,15 +411,8 @@ class OwlParser:
         object_codes_str = self._get_predicate_value(g, subject, "object_codes") or "[]"
         relations_str = self._get_predicate_value(g, subject, "relations") or "[]"
 
-        try:
-            object_codes = json.loads(object_codes_str)
-        except json.JSONDecodeError:
-            object_codes = []
-
-        try:
-            relations = json.loads(relations_str)
-        except json.JSONDecodeError:
-            relations = []
+        object_codes = self._parse_loose_json_list(object_codes_str)
+        relations = self._parse_loose_json_list(relations_str)
 
         view = ParsedView(
             view_id=view_code,
@@ -440,8 +477,6 @@ class OwlParser:
             if len(parts) == 2:
                 term_meta["termMasterType"] = "ontology"
                 term_meta["objectCode"] = parts[1]
-                if fld.rel_term_codeorname:
-                    term_meta["termField"] = fld.rel_term_codeorname
         elif fld.term_data_type == "LIST_TERM":
             parts = fld.term_type_code_path.split("#")
             if len(parts) == 2:
@@ -454,13 +489,13 @@ class OwlParser:
             if len(parts) == 2:
                 term_meta["termMasterType"] = "dict"
                 term_meta["termTypeCode"] = parts[1]
-                if fld.rel_term_codeorname:
-                    term_meta["termField"] = fld.rel_term_codeorname
         else:
             parts = fld.term_type_code_path.split("#")
             if len(parts) == 2:
                 term_meta["termMasterType"] = "dict"
                 term_meta["termTypeCode"] = parts[1]
+        if fld.rel_term_codeorname:
+                term_meta["termField"] = fld.rel_term_codeorname
 
         return term_meta if term_meta else None
 
@@ -476,25 +511,31 @@ class OwlParser:
         self._apply_mappings_to_objects()
 
         objects = []
-        for _obj_code, obj in self._objects.items():
+        for obj in self._objects.values():
+            # Resolve field URIs (from <fields rdf:resource="..."/>) to ParsedField instances
             fields = []
-            for _field_code, fld in self._fields.items():
-                if fld.source_column or fld.term_type_code_path:
-                    field_dict = {
-                        "field_code": fld.field_code,
-                        "field_name": fld.field_name,
-                        "field_type": fld.field_type,
-                        "source_column": fld.source_column,
-                        "is_primary_key": fld.is_primary_key,
-                        "required": fld.required,
-                    }
+            for field_uri in obj.field_refs:
+                field_code = self._field_uri_to_code.get(field_uri)
+                if not field_code:
+                    continue
+                fld = self._fields.get(field_code)
+                if not fld:
+                    continue
+                field_dict = {
+                    "field_code": fld.field_code,
+                    "field_name": fld.field_name,
+                    "field_type": fld.field_type,
+                    "source_column": fld.source_column,
+                    "is_primary_key": fld.is_primary_key,
+                    "required": fld.required,
+                }
 
-                    if fld.term_type_code_path:
-                        term_meta = self._build_term_meta(fld)
-                        if term_meta:
-                            field_dict["termMeta"] = term_meta
+                if fld.term_type_code_path:
+                    term_meta = self._build_term_meta(fld)
+                    if term_meta:
+                        field_dict["termMeta"] = term_meta
 
-                    fields.append(field_dict)
+                fields.append(field_dict)
 
             actions = []
             for action_code in obj.actions:
@@ -567,9 +608,9 @@ class OwlParser:
             })
 
         relations = []
-        for idx, rel in enumerate(self._relations):
+        for rel_code, rel in self._relations.items():
             relations.append({
-                "relation_code": f"rel_{rel.source_class}__{rel.target_class}_{idx}",
+                "relation_code": rel_code,
                 "relation_name": rel.relation_name,
                 "source_class": rel.source_class,
                 "target_class": rel.target_class,
@@ -587,12 +628,13 @@ class OwlParser:
             }
 
         views = []
-        for _view_code, view in self._views.items():
+        for view in self._views.values():
             views.append({
                 "view_id": view.view_id,
                 "view_name": view.view_name,
                 "description": view.description,
                 "object_ids": view.object_codes,
+                "relation_ids": view.relations,
             })
 
         return {
