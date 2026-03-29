@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 async def direct_tool_node(
     state: AgentState,
+    gateway_context: Any = None,
     default_tools: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Execute a single bound dynamic tool and populate plan/results for insight.

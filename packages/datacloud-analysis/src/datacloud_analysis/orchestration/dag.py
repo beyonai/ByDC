@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import cast
+from typing import Any, cast
 
 from by_framework import EventType, StreamChunkEvent
 from by_framework.core.protocol.content_type import SseReasonMessageType
@@ -60,14 +60,16 @@ def _strip_excluded_tasks_from_plan(
 
 
 # 可在 DAG JSON 中出现、由 sandbox_executor 内置调度的 type（不在 planning_tools 里）
-_SANDBOX_BUILTIN_PLAN_TYPES: frozenset[str] = frozenset({
-    "build_skill",
-    "code_exec",
-    "file_read",
-    "file_write",
-    "recall_memory",
-    "render_report",
-})
+_SANDBOX_BUILTIN_PLAN_TYPES: frozenset[str] = frozenset(
+    {
+        "build_skill",
+        "code_exec",
+        "file_read",
+        "file_write",
+        "recall_memory",
+        "render_report",
+    }
+)
 
 
 def _log_planned_types_vs_registered_tools(
@@ -145,6 +147,8 @@ _DAG_STATIC_SYSTEM = """你是一个任务规划专家。请将分析目标拆�
 
 ## 判断规则（重要）
 
+- 问候、寒暄、感谢等与数据分析无关的闲聊：不应由本节点处理（上游应路由为 chitchat）；若仍进入本节点，禁止单独规划仅有 render_report 的任务
+- render_report 仅用于在已有查询或 code_exec 结果之后组装最终报告，且不得作为全 plan 中唯一任务，除非前置任务已提供可引用的数据摘要
 - 任务需要"从系统查询/获取数据" → 必须从【可用动态工具】列表中挑选动作作为 type，deps 可为空
 - 任务是"基于已查结果进行统计/汇总/计算/关联"且有前置任务 → 必须使用 code_exec，不得使用查询工具
 - deps 为空的任务禁止使用 code_exec
@@ -220,6 +224,7 @@ _DAG_STATIC_SYSTEM = """你是一个任务规划专家。请将分析目标拆�
 
 async def dag_node(
     state: AgentState,
+    gateway_context: Any = None,
     default_prompts: dict | None = None,
     default_tools: dict | None = None,
 ) -> dict:
@@ -227,12 +232,12 @@ async def dag_node(
 
     Input state keys:
         intent: The clear, rewritten intent.
-        
+
     Output state updates:
         plan: List of sub-task dicts.
     """
     logger.debug("dag_node: generating execution DAG …")
-    
+
     intent = state.get("intent", "")
     prompts_overwrite = state.get("prompts_overwrite") or default_prompts or {}
     dynamic_tools = state.get("dynamic_tools") or default_tools or {}
@@ -257,24 +262,26 @@ async def dag_node(
     )
 
     # Layer 3: dynamic content (intent + tool list) in a single HumanMessage.
-    dynamic_human = HumanMessage(content=(
-        f"【可用动态工具列表】：{tools_line}\n\n"
-        f"【需要分析的目标】：{intent}\n\n"
-        "请输出 JSON 任务数组。"
-    ))
+    dynamic_human = HumanMessage(
+        content=(
+            f"【可用动态工具列表】：{tools_line}\n\n"
+            f"【需要分析的目标】：{intent}\n\n"
+            "请输出 JSON 任务数组。"
+        )
+    )
 
     response = await llm.ainvoke(
         [SystemMessage(content=static_sys)]  # Layer 0: static prefix, 100% cache hit
-        + [dynamic_human]                     # Layer 3: dag node needs no conversation history
+        + [dynamic_human]  # Layer 3: dag node needs no conversation history
     )
-    
+
     try:
         content = cast(str, response.content)
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0].strip()
         elif "```" in content:
             content = content.split("```")[1].split("```")[0].strip()
-            
+
         plan = json.loads(content)
         if not isinstance(plan, list):
             plan = []
@@ -282,27 +289,31 @@ async def dag_node(
         plan = _strip_excluded_tasks_from_plan(plan, _DAG_EXCLUDED_PLANNING_TOOLS)
         if not plan and planning_tools:
             fallback_tool = sorted(planning_tools.keys())[0]
-            plan = [{
-                "id": "t1",
-                "type": fallback_tool,
-                "description": intent,
-                "status": "pending",
-                "deps": [],
-                "params": {"query": intent},
-            }]
+            plan = [
+                {
+                    "id": "t1",
+                    "type": fallback_tool,
+                    "description": intent,
+                    "status": "pending",
+                    "deps": [],
+                    "params": {"query": intent},
+                }
+            ]
             plan = _normalize_query_params(plan, intent=intent)
     except Exception as e:
         logger.warning("Failed to parse DAG JSON, fallback to single step. Error: %s", e)
         if planning_tools:
             fallback_tool = sorted(planning_tools.keys())[0]
-            plan = [{
-                "id": "t1",
-                "type": fallback_tool,
-                "description": intent,
-                "status": "pending",
-                "deps": [],
-                "params": {"query": intent},
-            }]
+            plan = [
+                {
+                    "id": "t1",
+                    "type": fallback_tool,
+                    "description": intent,
+                    "status": "pending",
+                    "deps": [],
+                    "params": {"query": intent},
+                }
+            ]
         else:
             # 在未注入任何可规划动态工具时进入澄清分支，避免生成不可执行任务类型。
             return {
@@ -315,11 +326,10 @@ async def dag_node(
     _log_planned_types_vs_registered_tools(plan, planning_tools, dynamic_tools)
 
     # 向前端推送思考消息
-    context = state.get("gateway_context")
+    context = gateway_context
     if context is not None:
         task_lines = "\n".join(
-            f"■ {t['id']}（{t.get('type', 'unknown')}）：{t.get('description', '')}"
-            for t in plan
+            f"■ {t['id']}（{t.get('type', 'unknown')}）：{t.get('description', '')}" for t in plan
         )
         thinking = f"已将问题拆解为 {len(plan)} 个子任务：\n{task_lines}"
 
