@@ -11,7 +11,7 @@
 
     <owl:NamedIndividual rdf:about="#ads_grid_analysis_mapping">
         <rdf:type rdf:resource="#EntityMapping"/>
-        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</entity_code>
+        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</entity_code>
         <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格综合分析表</entity_name>
         <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">网格空间活力分析，计算网格综合活力分、各维度活跃等级，关联区域、资产指标，支撑区域经济分析、资产布局，主键：grid_id。</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
@@ -45,7 +45,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">gridId</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格编码</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -53,7 +53,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">gridName</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格名称</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -61,7 +61,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">gridLntLat</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格经纬度</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_lnt_lat</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -69,7 +69,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">statDate</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">统计日期</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">stat_date</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -77,7 +77,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">areaSqm</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格面积（平方米）</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">area_sqm</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -85,7 +85,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">totalRevenue</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格总营收（万元）</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_revenue</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -93,7 +93,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">totalTax</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格总缴税（万元）</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_tax</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -101,7 +101,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">totalProfit</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格总利润（万元）</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_profit</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -109,7 +109,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">taxRate</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格实际税负率（%）</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">tax_rate</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -117,7 +117,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">outputPerMu</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格亩产效益</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">output_per_mu</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -125,7 +125,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avgFootTraffic</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格日均人流量（人次）</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_foot_traffic</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -133,7 +133,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">footActiveLevelName</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格人流活跃等级</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">foot_active_level_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -141,7 +141,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avgVehicleFlow</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格日均车流量（辆次）</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_vehicle_flow</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -149,7 +149,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">vehicleActiveLevelName</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格车流活跃等级</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">vehicle_active_level_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -157,7 +157,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avgLogisticsActivity</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格日均物流活跃度</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_logistics_activity</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -165,7 +165,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">logisticsActiveLevelName</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格物流活跃等级</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">logistics_active_level_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -173,7 +173,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avgLightIntensity</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格日均灯光强度</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_light_intensity</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -181,7 +181,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">lightActiveLevelName</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格灯光活跃等级</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">light_active_level_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -189,7 +189,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">poiDensity</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格POI  密度（个 / 平方公里）</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">poi_density</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -197,7 +197,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">updateTime</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">分析表更新时间</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_time</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -205,7 +205,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">etlCreateTime</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">分析表创建时间</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">etl_create_time</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -213,7 +213,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">areaCode</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属区域编码</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">area_code</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -221,7 +221,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">areaName</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属区域名称</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">area_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -229,7 +229,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">energyEfficiencyIndex</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">网格经济效益等级</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_GRID_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">energy_efficiency_Index</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>

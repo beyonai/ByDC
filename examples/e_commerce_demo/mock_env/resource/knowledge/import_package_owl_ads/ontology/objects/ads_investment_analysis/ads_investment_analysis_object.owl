@@ -11,7 +11,7 @@
 
     <owl:NamedIndividual rdf:about="#ads_investment_analysis_v1">
         <rdf:type rdf:resource="#EntityDefinition"/>
-        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</entity_code>
+        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</entity_code>
         <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">招商分析核心表</entity_name>
         <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业大脑招商，整合企业、网格、资产指标，筛选优质招商企业、潜力招商区域、空置招商载体，直接支撑招商决策，主键：investment_id</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
@@ -41,8 +41,8 @@
         <fields rdf:resource="#gridVehicleFlow_field"/>
         <fields rdf:resource="#updateTime_field"/>
         <fields rdf:resource="#etlCreateTime_field"/>
-        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;query_ads_investment_analysis&quot;]</action_refs>
-        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;rel_investment_grid&quot;, &quot;rel_enterprise_investment&quot;]</relations>
+        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[query_ads_investment_analysis]</action_refs>
+        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[rel_investment_grid, rel_enterprise_investment]</relations>
     </owl:NamedIndividual>
 
     <owl:NamedIndividual rdf:about="#investmentId_field">
@@ -56,7 +56,7 @@
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
-        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</property_category>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
         <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">主键，自生成</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
@@ -116,7 +116,7 @@
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
-        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</property_category>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
         <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">核心招商行业</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
@@ -316,7 +316,7 @@
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
-        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</property_category>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
         <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">区域内符合招商标准的企业数</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
@@ -336,7 +336,7 @@
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
-        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</property_category>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
         <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">区域内目标行业龙头企业数</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
@@ -356,7 +356,7 @@
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
-        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</property_category>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
         <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业名称拼接，如  “XX 科技，XX 制造”</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
@@ -376,7 +376,7 @@
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
-        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</property_category>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
         <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">0-100，取自产业链数据聚合</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
@@ -396,7 +396,7 @@
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
-        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</property_category>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
         <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">如  “上游原材料供应企业缺失”</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
@@ -436,7 +436,7 @@
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
-        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</property_category>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
         <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">高  / 中 / 低，按潜力分阈值</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#ACTIVE_LEVEL</term_type_code_path>
@@ -456,7 +456,7 @@
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
-        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</property_category>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
         <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">如  “重点引入新能源汽车上游电池企业，利用亦庄超活跃网格资源”</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
@@ -476,7 +476,7 @@
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
-        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</property_category>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
         <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">冗余</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
@@ -496,7 +496,7 @@
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
-        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</property_category>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
         <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">冗余</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>

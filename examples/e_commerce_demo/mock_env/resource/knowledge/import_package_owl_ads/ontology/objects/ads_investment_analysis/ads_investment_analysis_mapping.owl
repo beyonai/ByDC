@@ -11,7 +11,7 @@
 
     <owl:NamedIndividual rdf:about="#ads_investment_analysis_mapping">
         <rdf:type rdf:resource="#EntityMapping"/>
-        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</entity_code>
+        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</entity_code>
         <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">招商分析核心表</entity_name>
         <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业大脑招商，整合企业、网格、资产指标，筛选优质招商企业、潜力招商区域、空置招商载体，直接支撑招商决策，主键：investment_id</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
@@ -46,7 +46,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">investmentId</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">招商分析唯一  ID</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">investment_id</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -54,7 +54,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">adminCode</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行政区划编码</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">admin_code</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -62,7 +62,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">adminName</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">招商区域名称</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">admin_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -70,7 +70,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industryCode</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">目标招商行业编码</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_code</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -78,7 +78,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industryName</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">目标招商行业名称</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -86,7 +86,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">gridId</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">核心招商网格编码</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_id</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -94,7 +94,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">gridComprehensiveActive</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">网格综合活力值</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_comprehensive_active</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -102,7 +102,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">gridActiveLevelName</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">网格综合活跃等级</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_active_level_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -110,7 +110,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">buildingId</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">招商载体楼宇  ID</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">building_id</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -118,7 +118,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">buildingName</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">招商载体楼宇名称</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">building_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -126,7 +126,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">buildingEmptyRate</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">楼宇空置率（%）</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">building_empty_rate</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -134,7 +134,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">buildingEmptyArea</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">楼宇空置面积（㎡）</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">building_empty_area</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -142,7 +142,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">assetValuation</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">楼宇资产估值（万元）</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">asset_valuation</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -150,7 +150,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">targetEnterpriseCount</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">目标行业优质企业数量</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">target_enterprise_count</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -158,7 +158,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">leaderEnterpriseCount</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">龙头企业数量</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">leader_enterprise_count</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -166,7 +166,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">topEnterpriseList</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">重点招商企业名单</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">top_enterprise_list</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -174,7 +174,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industryChainComplete</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链完整度（%）</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_chain_complete</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -182,7 +182,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industryChainGap</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链缺口</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_chain_gap</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -190,7 +190,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">investmentPotentialScore</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">区域招商潜力分</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">investment_potential_score</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -198,7 +198,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">investmentPotentialLevel</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">招商潜力等级</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">investment_potential_level</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -206,7 +206,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">recommendInvest</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">招商建议</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">recommend_invest</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -214,7 +214,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">gridFootTraffic</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">网格月度日均人流量</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_foot_traffic</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -222,7 +222,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">gridVehicleFlow</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">网格月度日均车流量</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_vehicle_flow</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -230,7 +230,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">updateTime</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">分析表更新时间</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_time</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
@@ -238,7 +238,7 @@
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">etlCreateTime</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">分析表创建时间</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ADS_INVESTMENT_ANALYSIS</source_table_code>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_investment_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">etl_create_time</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">model_v2_ads_db</source_datasource_code>
     </owl:NamedIndividual>
