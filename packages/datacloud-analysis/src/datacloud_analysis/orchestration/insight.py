@@ -59,6 +59,11 @@ _CLARIFY_STATIC_SYSTEM = """你是一个高级数据分析管家。
 并引导用户在授权范围内重新提问。
 """
 
+_CHITCHAT_STATIC_SYSTEM = """你是产业数据分析助手。
+用户正在寒暄或闲聊，与具体数据查询无关。请用简短、自然、友好的口吻回应，
+并可温和提示：你更擅长企业、网格、产业链等指标与数据类问题，欢迎随时提出分析需求。
+不要编造查询结果，不要输出报告章节结构（title/sections），不要假装已调用数据工具。"""
+
 
 async def _emit_reasoning_log_end_before_answer(context: Any) -> None:
     """Emit ``reasoningLogEnd`` before any ``answerDelta`` (SSE: 推理结束 → 答案).
@@ -97,11 +102,7 @@ def _append_task_prompt_to_system(
     extra = str(task_extra).strip()
     if not extra:
         return base_system_prompt
-    return (
-        base_system_prompt.rstrip()
-        + "\n\n## 数字员工任务约束（来自 Agent 配置）\n"
-        + extra
-    )
+    return base_system_prompt.rstrip() + "\n\n## 数字员工任务约束（来自 Agent 配置）\n" + extra
 
 
 def _safe_int(value: Any, default: int) -> int:
@@ -121,6 +122,7 @@ def _safe_int(value: Any, default: int) -> int:
 # ---------------------------------------------------------------------------
 # Result formatters  (unchanged from previous version)
 # ---------------------------------------------------------------------------
+
 
 def _format_data_query_result(task_id: str, output: dict) -> str:
     """Convert a structured query output dict into a Markdown table string."""
@@ -158,11 +160,7 @@ def _format_records_meta_result(task_id: str, output: dict) -> str:
     """Format query output shaped as {records, meta} into Markdown."""
     records = output.get("records", [])
     meta = output.get("meta", {}) if isinstance(output.get("meta"), dict) else {}
-    total = (
-        _safe_int(meta.get("total"), len(records))
-        if isinstance(meta, dict)
-        else len(records)
-    )
+    total = _safe_int(meta.get("total"), len(records)) if isinstance(meta, dict) else len(records)
 
     columns_meta = meta.get("columns", []) if isinstance(meta, dict) else []
     keys: list[str] = []
@@ -207,11 +205,7 @@ def _format_code_exec_result(output: dict) -> str:
     if exit_code != 0:
         return f"【代码执行失败】\n```\n{stdout_output}\n```"
 
-    if (
-        isinstance(result_payload, list)
-        and result_payload
-        and isinstance(result_payload[0], dict)
-    ):
+    if isinstance(result_payload, list) and result_payload and isinstance(result_payload[0], dict):
         headers = list(result_payload[0].keys())
         md_lines = [
             "| " + " | ".join(headers) + " |",
@@ -276,7 +270,10 @@ def _aggregate_result(res: dict) -> dict[str, Any] | None:
                         "data": f"【知识检索 / 文本结果】\n{content}",
                     }
                 if "records" in output and "meta" in output:
-                    return {"task_id": task_id, "data": _format_records_meta_result(task_id, output)}
+                    return {
+                        "task_id": task_id,
+                        "data": _format_records_meta_result(task_id, output),
+                    }
                 if "preview" in output and "columns" in output:
                     return {"task_id": task_id, "data": _format_data_query_result(task_id, output)}
                 if "exit_code" in output:
@@ -295,6 +292,7 @@ def _aggregate_result(res: dict) -> dict[str, Any] | None:
 # Three-part content extractors
 # ---------------------------------------------------------------------------
 
+
 def _extract_tables_md(aggregated_data: list[dict]) -> str:
     """Extract all Markdown tables from aggregated_data and combine into one block.
 
@@ -303,9 +301,7 @@ def _extract_tables_md(aggregated_data: list[dict]) -> str:
     table_blocks: list[str] = []
     for item in aggregated_data:
         data = item.get("data", "")
-        if isinstance(data, str) and (
-            "【数据查询结果】" in data or "【计算结果】" in data
-        ):
+        if isinstance(data, str) and ("【数据查询结果】" in data or "【计算结果】" in data):
             table_blocks.append(data)
     return "\n\n---\n\n".join(table_blocks)
 
@@ -410,8 +406,7 @@ def _records_shaped_output(output: dict[str, Any]) -> dict[str, Any] | None:
         result = output.get("result")
         if isinstance(result, list) and result and isinstance(result[0], dict):
             columns = [
-                {"name": str(k), "label": str(k), "type": "string"}
-                for k in result[0].keys()
+                {"name": str(k), "label": str(k), "type": "string"} for k in result[0].keys()
             ]
             return {
                 "records": result,
@@ -482,9 +477,7 @@ def _default_notice_msg(meta: dict[str, Any], records: list[Any], overflow: str)
         return overflow.strip()
     total = _safe_int(meta.get("total"), len(records))
     if total > len(records):
-        return (
-            f"【重要】数据量较大（共 {total} 条），此处仅返回前 {len(records)} 条预览。"
-        )
+        return f"【重要】数据量较大（共 {total} 条），此处仅返回前 {len(records)} 条预览。"
     return ""
 
 
@@ -557,7 +550,12 @@ def build_structured_data_envelope(
         if meta_base is None:
             meta_base = shaped.get("meta") if isinstance(shaped.get("meta"), dict) else {}
         if not file_path:
-            file_path = str(out.get("file", {}).get("file_url", ) or "")
+            file_path = str(
+                out.get("file", {}).get(
+                    "file_url",
+                )
+                or ""
+            )
         if not file_id:
             file_id = out.get("file_id", "")
         if not download_url:
@@ -740,6 +738,7 @@ async def _emit_part2_part3(
 # Node
 # ---------------------------------------------------------------------------
 
+
 async def insight_node(
     state: AgentState,
     gateway_context: Any = None,
@@ -761,6 +760,53 @@ async def insight_node(
         api_key=os.getenv("OPENAI_API_KEY") or os.getenv("DATACLOUD_LLM_REASONING_API_KEY"),
         base_url=os.getenv("OPENAI_BASE_URL") or os.getenv("DATACLOUD_LLM_REASONING_API_BASE"),
     )
+
+    last_user_msg = messages[-1].content if messages and hasattr(messages[-1], "content") else ""
+
+    # ── chitchat path (bypass DAG / loop / render_report) ────────────────────
+    if state.get("query_mode") == "chitchat":
+        intent = state.get("intent", "") or str(last_user_msg)
+        if context is not None:
+            await context.emit_chunk(
+                StreamChunkEvent(content="闲聊应答"),
+                event_type=EventType.REASONING_LOG_DELTA.value,
+                content_type=SseReasonMessageType.think_title.value,
+            )
+            await context.emit_chunk(
+                StreamChunkEvent(content=f"已识别为闲聊，直接生成回复：{intent[:200]}"),
+                event_type=EventType.REASONING_LOG_DELTA.value,
+                content_type=SseReasonMessageType.think_text.value,
+            )
+        await _emit_reasoning_log_end_before_answer(context)
+        static_sys = prompts_overwrite.get(
+            "chitchat_system_prompt",
+            prompts_overwrite.get("chitchat_prompt", _CHITCHAT_STATIC_SYSTEM),
+        )
+        static_sys = _append_task_prompt_to_system(prompts_overwrite, static_sys)
+        dynamic_human = HumanMessage(
+            content=(
+                f"【用户原话】：{last_user_msg}\n"
+                f"【意图要点】：{intent}\n"
+                "请直接回复用户，不要输出 JSON 或 Markdown 报告框架。"
+            )
+        )
+        analysis_text = ""
+        async for chunk in llm.astream(
+            [SystemMessage(content=static_sys)] + messages[:-1] + [dynamic_human]
+        ):
+            if chunk.content:
+                analysis_text += chunk.content
+                if context is not None:
+                    await context.emit_chunk(
+                        StreamChunkEvent(content=chunk.content),
+                        event_type=EventType.ANSWER_DELTA.value,
+                        content_type=SseMessageType.text.value,
+                    )
+        logger.info(
+            "[user SSE text] chitchat path: answer_delta_total_chars=%d",
+            len(analysis_text),
+        )
+        return {"messages": [AIMessage(content=analysis_text)]}
 
     # ── clarify / chat path ─────────────────────────────────────────────────
     if state.get("clarify_needed"):
@@ -790,8 +836,8 @@ async def insight_node(
         analysis_text = ""
         async for chunk in llm.astream(
             [SystemMessage(content=static_sys)]  # Layer 0: static prefix, 100% cache hit
-            + messages[:-1]                       # Layer 2: conversation history
-            + [dynamic_human]                     # Layer 3: current-turn dynamic content
+            + messages[:-1]  # Layer 2: conversation history
+            + [dynamic_human]  # Layer 3: current-turn dynamic content
         ):
             if chunk.content:
                 analysis_text += chunk.content
@@ -868,8 +914,10 @@ async def insight_node(
 
     # Concise per-task summary; full rows go in the following SSE JSON (6001), not here
     data_summary = json.dumps(
-        [{"task_id": item["task_id"], "summary": str(item.get("data", ""))[:300]}
-         for item in aggregated_data],
+        [
+            {"task_id": item["task_id"], "summary": str(item.get("data", ""))[:300]}
+            for item in aggregated_data
+        ],
         ensure_ascii=False,
     )
 
@@ -882,19 +930,20 @@ async def insight_node(
     static_sys = _append_task_prompt_to_system(prompts_overwrite, static_sys)
 
     # Layer 3: dynamic data summary in a HumanMessage.
-    last_user_msg = messages[-1].content if messages and hasattr(messages[-1], "content") else ""
-    dynamic_human = HumanMessage(content=(
-        f"【用户问题】：{last_user_msg}\n\n"
-        f"【各子任务数据摘要】：\n{data_summary}\n\n"
-        "请结合以上数据和原始问题，生成分析报告。"
-    ))
+    dynamic_human = HumanMessage(
+        content=(
+            f"【用户问题】：{last_user_msg}\n\n"
+            f"【各子任务数据摘要】：\n{data_summary}\n\n"
+            "请结合以上数据和原始问题，生成分析报告。"
+        )
+    )
 
     # Part1: stream analysis text token by token
     analysis_text = ""
     async for chunk in llm.astream(
         [SystemMessage(content=static_sys)]  # Layer 0: static prefix, 100% cache hit
-        + messages[:-1]                       # Layer 2: conversation history (excl. current turn)
-        + [dynamic_human]                     # Layer 3: current-turn dynamic content
+        + messages[:-1]  # Layer 2: conversation history (excl. current turn)
+        + [dynamic_human]  # Layer 3: current-turn dynamic content
     ):
         if chunk.content:
             analysis_text += chunk.content

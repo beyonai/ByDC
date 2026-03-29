@@ -47,18 +47,38 @@ datacloud-analysis/
 
 ## 调用链路
 
+以下以电商 Demo 后端为宿主，入口为 `examples/e_commerce_demo/backend/datacloud_service/worker.py` 中的 `DataCloudWorker`，与 `datacloud-analysis` 的衔接关系如下。
+
+### 进程与启动
+
+1. **`datacloud_service/main.py`**：`load_dotenv` 后调用 **`by_framework.run_worker`**，传入 `worker_class=DataCloudWorker`、`plugin_list=[InitDataCloudDigitalEmployeePlugin]`，以及 Redis / workspace / LLM 等参数（见 `WorkerConfig.run_worker_kwargs()`）。
+2. **`DataCloudWorker.start_heartbeat`**（worker 启动后）：校验插件 `datacloud_init_agent_conf` 已加载数字员工配置；再 **`await datacloud_analysis.bootstrap.setup()`** 完成 SDK 一次性初始化（环境校验、OpenGauss 兼容的 LangGraph checkpoint 注册、memory 表等）。**须在首次 `create_agent()` 之前完成**，否则图会以无 checkpointer 方式编译，Human-in-the-loop / Resume 不可用。
+
+### 单条 Gateway 命令（`process_command`）
+
+1. **环境同步**：把 Worker 构造参数中的 `api_key`、`base_url`、`model_name` 写入 `os.environ`，供图内节点与 SDK 读取。
+2. **Demo 扩展短路（仅 Ask）**：若命令为 `AskAgentCommand` 且 `extra_payload.ext_params` 为 `dict`，则调用宿主侧 **`datacloud_service.commands.handle_ext_command`**；若返回已处理，则直接通过 `AgentContext` 推送 SSE（含可选 `6001` 数据表 JSON）、`flush_to_history`，**不进入 LangGraph**。
+3. **构图与缓存**：用 `context.list_agent_configs()` 按 `agent_id` 匹配配置，将 `prompts` / `tools` 摘要为 SHA1 缓存键，LRU 缓存已编译图；未命中时 **`_build_graph` → `datacloud_analysis.agent.create_agent`** → **`build_analysis_graph`** + **`graph.compile(checkpointer=get_checkpointer())`**（bootstrap 未就绪时退化为无 checkpoint 编译）。
+4. **LangGraph RunnableConfig**：`configurable.thread_id = session_id`（checkpoint 线程），`configurable.gateway_context = AgentContext`（各节点通过其 `emit_chunk` / `ask_user` 与 Gateway 交互，**不写入 state**，避免不可序列化对象进入 checkpoint）。
+5. **输入**：**Ask** 路径将网关消息归一化为 LangChain `messages`，并填充初始 `AgentState`（如 `workspace_dir`、`plan`/`results` 空、`query_mode` 等）；**Resume** 路径使用 **`Command(resume=...)`**，不重建 state。
+6. **`_stream_graph`**：对编译图调用 **`astream_events(..., version="v2")`**，将 **`on_tool_start` / `on_tool_end`** 转为 Gateway 推理任务事件；**聊天模型 token 流**主要由 **`insight_node` 等**经 `gateway_context` 自行推送，worker 不在 `on_chat_model_stream` 重复转发。流结束后若有 checkpointer，则 **`aget_state`** 检查 **`snapshot.interrupts`**：存在则 **`ask_user`** 并返回 `{"status": "waiting"}`；否则推送结束语并 **`flush_to_history`**，返回 `{"status": "done"}`。
+
+### 包内 LangGraph 拓扑
+
 ```mermaid
 flowchart TD
-    U[用户提问] --> G[Gateway]
-    G --> W[2 worker.py<br/>DataCloudWorker.process_command]
-    W --> A[3 datacloud_analysis.agent.create_agent]
-    A --> I[4.1 intent.py]
-    I --> D[4.2 dag.py]
-    D --> L[4.3 loop.py]
-    L --> S[4.4 sandbox_executor.py]
-    S --> L
-    L --> N[4.5 insight.py]
+    START([START]) --> intent[intent_node]
+    intent --> route{route_after_intent}
+    route -->|clarify_needed / chitchat| insight[insight_node]
+    route -->|online_query 且 target_tool 在 tools| direct[direct_tool_node]
+    route -->|默认分析路径| dag[dag_node]
+    direct --> insight
+    dag --> loop[loop_node]
+    loop --> loop_route{route_loop}
+    loop_route -->|仍有 pending 子任务| loop
+    loop_route -->|计划执行完| insight
+    insight --> END([END])
 ```
 
-- `gateway -> worker.py` 的入口方法是 `DataCloudWorker.process_command`。  
-- `worker.py` 内部通过 `create_agent()` 创建/获取 graph 后，按 `intent -> dag -> loop -> sandbox_executor -> insight` 执行。  
+- **`loop_node`** 在每轮对就绪子任务并发调用 **`sandbox_executor.execute_next_task`**（及归一化输出），再回到条件边判断是否继续 loop。
+- **`intent_node` / `dag_node` / `loop_node` / `direct_tool_node` / `insight_node`** 均从 `RunnableConfig.configurable.gateway_context` 取 `AgentContext`，与 Demo worker 侧事件流一致。
