@@ -30,8 +30,10 @@ def _make_route_after_intent(
     dt = default_tools or {}
 
     def route_after_intent(state: AgentState) -> str:
-        """Route after intent: clarify → insight; online_query+valid tool → direct_tool; else dag."""
+        """Route after intent: clarify → insight; chitchat → insight; online_query+valid tool → direct_tool; else dag."""
         if state.get("clarify_needed"):
+            return "insight"
+        if state.get("query_mode") == "chitchat":
             return "insight"
         if state.get("query_mode") == "online_query":
             tools = state.get("dynamic_tools") or dt
