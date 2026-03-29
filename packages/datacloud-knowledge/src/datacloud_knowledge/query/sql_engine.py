@@ -505,6 +505,8 @@ class SQLKnowledgeGraphQuery:
                     END AS match_type
                 FROM {schema}.term_name tn
                 JOIN {schema}.term t ON tn.term_id = t.term_id
+                WHERE tn.name_tags = '{{}}'::jsonb
+                   OR tn.name_tags->>'scope_user_id' IS NULL
             """).format(schema=Identifier(self.schema), schema2=Identifier(self.schema))
             cur.execute(query)
             for term_id, _standard_name, term_type, name_text, match_type in cur.fetchall():
