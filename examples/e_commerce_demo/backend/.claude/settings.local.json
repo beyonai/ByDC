@@ -24,7 +24,14 @@
       "Bash(find D:/data/code/baiying/whale_datacloud -type d -name *site-packages*)",
       "Bash(find D:/data/code/baiying/whale_datacloud/.venv/Lib/site-packages -type d -name *langgraph*)",
       "Read(//mnt/d/data/code/baiying/whale_datacloud/examples/e_commerce_demo/backend/**)",
-      "Read(//mnt/d/data/code/baiying/whale_datacloud/examples/e_commerce_demo/**)"
+      "Read(//mnt/d/data/code/baiying/whale_datacloud/examples/e_commerce_demo/**)",
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Bash(cd:*)",
+      "WebSearch",
+      "WebFetch(domain:mermaid.ai)",
+      "WebFetch(domain:github.com)",
+      "Bash(grep -E \"\\(query|router|__main__|__init__\\\\.py$\\)\")"
     ]
   }
 }
