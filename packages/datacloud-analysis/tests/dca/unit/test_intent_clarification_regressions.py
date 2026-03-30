@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any
 
@@ -14,14 +14,14 @@ def test_route_after_clarification_with_remaining_ambiguity_goes_to_insight() ->
     route = _make_route_after_clarification(default_tools={})
     state: dict[str, Any] = {
         "query_mode": "analysis",
-        "ambiguous_terms": [{"mention": "经营效益", "candidates": []}],
+        "ambiguous_terms": [{"mention": "profit", "candidates": []}],
     }
     assert route(state) == "insight"
 
 
 @pytest.mark.asyncio
 async def test_clarification_empty_reply_keeps_current_term_until_retry(monkeypatch: pytest.MonkeyPatch) -> None:
-    replies = ["", "利润率 > 20%", "", ""]
+    replies = ["", "profit > 20%", "", ""]
 
     def fake_interrupt(_prompt: str) -> str:
         if replies:
@@ -32,8 +32,8 @@ async def test_clarification_empty_reply_keeps_current_term_until_retry(monkeypa
 
     state: dict[str, Any] = {
         "ambiguous_terms": [
-            {"mention": "高效能企业", "candidates": []},
-            {"mention": "关键经营指标", "candidates": []},
+            {"mention": "high_eff_enterprise", "candidates": []},
+            {"mention": "key_metric", "candidates": []},
         ],
         "confirmed_terms": [],
         "session_alias_map": {},
@@ -43,7 +43,7 @@ async def test_clarification_empty_reply_keeps_current_term_until_retry(monkeypa
 
     out = await clarification_node(state, gateway_context=None)
     confirmed = out.get("confirmed_terms", [])
-    assert any(item.get("mention") == "高效能企业" for item in confirmed)
+    assert any(item.get("mention") == "high_eff_enterprise" for item in confirmed)
 
 
 @pytest.mark.asyncio
@@ -138,3 +138,32 @@ async def test_clarification_rewrites_intent_and_tool_params_with_confirmed_term
     out = await clarification_node(state, gateway_context=None)
     assert out.get("intent") == "query enterprise profit"
     assert out.get("tool_params", {}).get("query") == "enterprise profit"
+
+
+@pytest.mark.asyncio
+async def test_intent_numeric_or_symbol_only_input_forces_chitchat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _NeverKnowledge:
+        async def ainvoke(self, _payload: dict[str, Any]) -> str:
+            raise AssertionError("search_knowledge should not be called")
+
+    def _never_init_chat_model(**_kwargs: Any) -> Any:
+        raise AssertionError("init_chat_model should not be called")
+
+    monkeypatch.setattr("datacloud_analysis.orchestration.intent.search_knowledge", _NeverKnowledge())
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.intent.init_chat_model",
+        _never_init_chat_model,
+    )
+
+    state: dict[str, Any] = {"messages": [HumanMessage(content="1111!!!")]}
+    out = await intent_node(state, gateway_context=None)
+
+    assert out["query_mode"] == "chitchat"
+    assert out["chitchat_reply"] == out["intent"]
+    assert out["target_tool"] == ""
+    assert out["tool_params"] == {}
+    assert out["concept_terms"] == []
+    assert out["ambiguous_terms"] == []
+    assert "请告诉我你想查询的对象、指标和时间范围" in out["intent"]

@@ -1,11 +1,7 @@
-"""T_KNOW_SEARCH — enterprise knowledge & terminology search (design §3.1).
+"""Knowledge tools for intent orchestration.
 
-Calls the ``datacloud-knowledge-service`` to retrieve relevant domain
-knowledge (ontology, term definitions, business rules) before the Agent
-starts planning.
-
-Also provides composite term-retrieval and disambiguation helpers used by
-intent_node and clarification_node (design §4.1.3 / §4.1.4).
+This module only orchestrates calls to ``datacloud-knowledge`` facade APIs.
+No SQL/session operation should live here.
 """
 
 from __future__ import annotations
@@ -13,144 +9,137 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
-from sqlalchemy import bindparam, text
 
 logger = logging.getLogger(__name__)
 
 CandidateDict = dict[str, Any]
 
 
-@tool
-async def search_knowledge(query: str, n_hops: int = 4) -> str:
-    """Search the enterprise knowledge graph and return semantic tree text."""
-    try:
-        from datacloud_knowledge import nl_to_semantic_tree
-
-        result = await asyncio.to_thread(nl_to_semantic_tree, query, n_hops=n_hops)
-    except Exception as e:
-        logger.error("nl_to_semantic_tree failed: %s", e)
-        return f"(查询失败: {e})"
-    return str(result)
-
-
-def _build_global_name_index(session: Any) -> dict[str, list[tuple[str, str, str]]]:
-    """Build global name index from public ``term_name`` rows.
-
-    The shape matches ``match_mentions_with_search`` expectation:
-    ``{name_text: [(term_id, term_type_code, match_type), ...]}``.
-    """
-    sql = text(
-        """
-        SELECT
-            t.term_id,
-            t.term_type_code,
-            tn.name_text,
-            CASE WHEN tn.name_text = t.term_name THEN 'standard_name' ELSE 'alias' END AS match_type
-        FROM whale_datacloud.term_name tn
-        JOIN whale_datacloud.term t ON tn.term_id = t.term_id
-        WHERE tn.search_scope = '{}'::jsonb
-           OR tn.search_scope->>'scope_user_id' IS NULL
-        """
-    )
-    rows = session.execute(sql).fetchall()
-    index: dict[str, list[tuple[str, str, str]]] = {}
-    for term_id, term_type_code, name_text, match_type in rows:
-        index.setdefault(str(name_text), []).append(
-            (str(term_id), str(term_type_code), str(match_type))
-        )
-    return index
-
-
-def _query_name_ids_by_word(
-    session: Any,
-    *,
-    word: str,
-    term_ids: list[str],
-    user_id: str | None,
-) -> dict[str, str]:
-    """Resolve ``term_id -> name_id`` for a mention word.
-
-    Preference:
-    1) user-scoped alias (scope_user_id=user_id)
-    2) global alias/standard name
-    """
-    if not term_ids:
-        return {}
-
-    if user_id:
-        sql = text(
-            """
-            SELECT
-                tn.term_id,
-                tn.name_id
-            FROM whale_datacloud.term_name tn
-            WHERE tn.name_text = :name_text
-              AND tn.term_id IN :term_ids
-              AND (
-                    tn.search_scope = '{}'::jsonb
-                 OR tn.search_scope->>'scope_user_id' IS NULL
-                 OR tn.search_scope->>'scope_user_id' = :user_id
-              )
-            ORDER BY
-              CASE WHEN tn.search_scope->>'scope_user_id' = :user_id THEN 0 ELSE 1 END,
-              tn.updated_time DESC
-            """
-        ).bindparams(bindparam("term_ids", expanding=True))
-        rows = session.execute(
-            sql, {"name_text": word, "term_ids": term_ids, "user_id": user_id}
-        ).fetchall()
-    else:
-        sql = text(
-            """
-            SELECT
-                tn.term_id,
-                tn.name_id
-            FROM whale_datacloud.term_name tn
-            WHERE tn.name_text = :name_text
-              AND tn.term_id IN :term_ids
-              AND (
-                    tn.search_scope = '{}'::jsonb
-                 OR tn.search_scope->>'scope_user_id' IS NULL
-              )
-            ORDER BY tn.updated_time DESC
-            """
-        ).bindparams(bindparam("term_ids", expanding=True))
-        rows = session.execute(sql, {"name_text": word, "term_ids": term_ids}).fetchall()
-
-    mapping: dict[str, str] = {}
-    for term_id, name_id in rows:
-        term_id_text = str(term_id)
-        if term_id_text not in mapping:
-            mapping[term_id_text] = str(name_id)
-    return mapping
-
-
-def _candidate_to_dict(candidate: Any, *, name_id: str | None) -> CandidateDict:
+def _normalize_tree(node: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(node, dict):
+        return None
+    children_raw = node.get("children", [])
+    children = []
+    if isinstance(children_raw, list):
+        for item in children_raw:
+            normalized_child = _normalize_tree(item if isinstance(item, dict) else None)
+            if normalized_child is not None:
+                children.append(normalized_child)
     return {
-        "term_id": candidate.term_id,
-        "term_name": candidate.term_name,
-        "term_type_code": candidate.term_type_code,
-        "match_type": candidate.match_type,
-        "confidence": candidate.confidence,
-        "score": candidate.score,
-        "name_id": name_id,
+        "term_id": str(node.get("id", "")),
+        "term_name": str(node.get("name", "")),
+        "term_type_code": str(node.get("node_type", "")),
+        "relation_name": str(node.get("relation", "")) if node.get("relation") else "",
+        "knowledge": node.get("properties", {}).get("knowledge", []),
+        "children": children,
     }
 
 
-def _convert_hits(
-    session: Any,
-    *,
-    word: str,
-    hits: tuple[Any, ...],
-    user_id: str | None,
-) -> list[CandidateDict]:
-    term_ids = [str(c.term_id) for c in hits]
-    name_id_map = _query_name_ids_by_word(session, word=word, term_ids=term_ids, user_id=user_id)
-    return [_candidate_to_dict(c, name_id=name_id_map.get(str(c.term_id))) for c in hits]
+def _normalize_search_payload(raw: dict[str, Any], *, query: str) -> dict[str, Any]:
+    term_matches: list[dict[str, Any]] = []
+    for item in raw.get("entities_found", []):
+        if not isinstance(item, dict):
+            continue
+        term_matches.append(
+            {
+                "term_id": str(item.get("node_id", "")),
+                "term_name": str(item.get("name", "")),
+                "term_type_code": str(item.get("node_type", "")),
+                "match_type": str(item.get("match_type", "")),
+                "match_score": float(item.get("match_score", 0.0) or 0.0),
+            }
+        )
+
+    fuzzy_term_matches: list[dict[str, Any]] = []
+    for fuzzy_item in raw.get("fuzzy_suggestions", []):
+        if not isinstance(fuzzy_item, dict):
+            continue
+        mention = str(fuzzy_item.get("original", ""))
+        candidates: list[dict[str, Any]] = []
+        for match in fuzzy_item.get("matches", []):
+            if not isinstance(match, dict):
+                continue
+            candidates.append(
+                {
+                    "term_id": str(match.get("term_id", "")),
+                    "term_name": str(match.get("term", "")),
+                    "term_type_code": str(match.get("term_type", "")),
+                    "similarity": float(match.get("similarity", 0.0) or 0.0),
+                    "edit_distance": int(match.get("edit_distance", 0) or 0),
+                }
+            )
+        fuzzy_term_matches.append({"mention": mention, "candidates": candidates})
+
+    term_subgraphs: list[dict[str, Any]] = []
+    for item in raw.get("results", []):
+        if not isinstance(item, dict):
+            continue
+        center = item.get("center_entity", {})
+        center_term = (
+            {
+                "term_id": str(center.get("node_id", "")),
+                "term_name": str(center.get("name", "")),
+                "term_type_code": str(center.get("node_type", "")),
+                "match_type": str(center.get("match_type", "")),
+            }
+            if isinstance(center, dict)
+            else {"term_id": "", "term_name": "", "term_type_code": "", "match_type": ""}
+        )
+        term_subgraphs.append(
+            {
+                "center_term": center_term,
+                "hops": int(item.get("hops", 0) or 0),
+                "node_count": int(item.get("node_count", 0) or 0),
+                "edge_count": int(item.get("edge_count", 0) or 0),
+                "tree": _normalize_tree(item.get("tree") if isinstance(item.get("tree"), dict) else None),
+            }
+        )
+
+    return {
+        "query": str(raw.get("query") or query),
+        "term_matches": term_matches,
+        "fuzzy_term_matches": fuzzy_term_matches,
+        "term_subgraphs": term_subgraphs,
+        "message": str(raw.get("message", "")),
+    }
+
+
+@tool
+async def search_knowledge(query: str, n_hops: int = 4) -> dict[str, Any]:
+    """Search knowledge and return a structured payload for prompt context."""
+    from datacloud_knowledge.query import get_singleton_service
+
+    def _run_query() -> dict[str, Any]:
+        service = get_singleton_service(n_hops=n_hops, fast=True, warm_pool=False)
+        raw = service.query(query, n_hops=n_hops, include_knowledge=True)
+        if not isinstance(raw, dict):
+            return {
+                "query": query,
+                "term_matches": [],
+                "fuzzy_term_matches": [],
+                "term_subgraphs": [],
+                "message": "",
+                "error": "invalid_search_payload",
+            }
+        return _normalize_search_payload(raw, query=query)
+
+    try:
+        return await asyncio.to_thread(_run_query)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("search_knowledge failed: %s", exc)
+        return {
+            "query": query,
+            "term_matches": [],
+            "fuzzy_term_matches": [],
+            "term_subgraphs": [],
+            "message": "",
+            "error": str(exc),
+        }
 
 
 async def search_all_candidates(
@@ -159,87 +148,17 @@ async def search_all_candidates(
     user_id: str | None = None,
     top_k: int = 5,
 ) -> dict[str, list[CandidateDict]]:
-    """四步漏斗检索所有 concept_terms，返回 {word: [candidate_dict, ...]}。"""
-    from datacloud_knowledge.intent import UserNameCache, match_mentions_with_search
-    from datacloud_knowledge.intent.types import Mention
-    from datacloud_knowledge.knowledge_search.db.connection import get_session
-    from datacloud_knowledge.query.embedding import get_embedding_service
+    """Run strict->bm25->vector funnel search for all concept terms."""
+    from datacloud_knowledge.intent import search_all_candidates_with_name_id
 
     if not concept_terms:
         return {}
-
-    def _run_search() -> dict[str, list[CandidateDict]]:
-        user_cache = UserNameCache()
-        result: dict[str, list[CandidateDict]] = {}
-        with get_session() as session:
-            global_name_index = _build_global_name_index(session)
-            mentions = tuple(Mention(text=w) for w in concept_terms)
-
-            strict_hits = match_mentions_with_search(
-                mentions,
-                session,
-                user_id=user_id,
-                global_name_index=global_name_index,
-                user_cache=user_cache,
-                search_mode="strict",
-                top_k=top_k,
-            )
-
-            remaining: list[str] = []
-            for word in concept_terms:
-                hits = strict_hits.get(word)
-                if hits:
-                    result[word] = _convert_hits(session, word=word, hits=hits, user_id=user_id)
-                else:
-                    remaining.append(word)
-
-            if not remaining:
-                return result
-
-            bm25_mentions = tuple(Mention(text=w) for w in remaining)
-            bm25_hits = match_mentions_with_search(
-                bm25_mentions,
-                session,
-                search_mode="bm25",
-                top_k=top_k,
-            )
-
-            still_remaining: list[str] = []
-            for word in remaining:
-                hits = bm25_hits.get(word)
-                if hits:
-                    result[word] = _convert_hits(session, word=word, hits=hits, user_id=user_id)
-                else:
-                    still_remaining.append(word)
-
-            if not still_remaining:
-                return result
-
-            try:
-                embedding_svc = get_embedding_service()
-                vector_mentions = tuple(Mention(text=w) for w in still_remaining)
-                vector_hits = match_mentions_with_search(
-                    vector_mentions,
-                    session,
-                    search_mode="vector",
-                    embedding_service=embedding_svc,
-                    top_k=top_k,
-                )
-                for word in still_remaining:
-                    hits = vector_hits.get(word)
-                    result[word] = (
-                        _convert_hits(session, word=word, hits=hits, user_id=user_id)
-                        if hits
-                        else []
-                    )
-            except Exception as exc:
-                logger.warning("search_all_candidates: vector step failed: %s", exc)
-                for word in still_remaining:
-                    result[word] = []
-
-        return result
-
-    return await asyncio.to_thread(_run_search)
+    return await asyncio.to_thread(
+        search_all_candidates_with_name_id,
+        concept_terms,
+        user_id=user_id,
+        top_k=top_k,
+    )
 
 
 def _name_id_from_candidates(
@@ -261,44 +180,38 @@ async def disambiguate_candidates(
     *,
     llm: Any,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """三层消歧，返回 (confirmed_terms, ambiguous_terms)。"""
-    from datacloud_knowledge.intent import MatchCandidate, MatchResult, disambiguate
-    from datacloud_knowledge.knowledge_search.db.connection import get_session
+    """Three-layer disambiguation returning (confirmed_terms, ambiguous_terms)."""
+    from datacloud_knowledge.intent import (
+        MatchCandidate,
+        MatchResult,
+        disambiguate_with_session,
+    )
 
     if not candidates_map:
         return [], []
 
-    def _build_match_result() -> MatchResult:
-        exact: dict[str, tuple[MatchCandidate, ...]] = {}
-        fuzzy: dict[str, tuple[MatchCandidate, ...]] = {}
-        for word, candidates in candidates_map.items():
-            converted = tuple(
-                MatchCandidate(
-                    term_id=str(c["term_id"]),
-                    term_name=str(c["term_name"]),
-                    term_type_code=str(c["term_type_code"]),
-                    match_type=str(c["match_type"]),
-                    confidence=float(c["confidence"]),
-                    score=float(c["score"]),
-                )
-                for c in candidates
+    exact: dict[str, tuple[MatchCandidate, ...]] = {}
+    fuzzy: dict[str, tuple[MatchCandidate, ...]] = {}
+    for word, candidates in candidates_map.items():
+        converted = tuple(
+            MatchCandidate(
+                term_id=str(c["term_id"]),
+                term_name=str(c["term_name"]),
+                term_type_code=str(c["term_type_code"]),
+                match_type=str(c["match_type"]),
+                confidence=float(c["confidence"]),
+                score=float(c["score"]),
             )
-            if converted and converted[0].match_type in ("exact", "alias"):
-                exact[word] = converted
-            else:
-                fuzzy[word] = converted
-        return MatchResult(exact=exact, fuzzy=fuzzy)
+            for c in candidates
+        )
+        if converted and converted[0].match_type in ("exact", "alias"):
+            exact[word] = converted
+        else:
+            fuzzy[word] = converted
 
-    def _run_disambiguate() -> tuple[
-        dict[str, Any],
-        dict[str, tuple[Any, ...]],
-    ]:
-        match_result = _build_match_result()
-        with get_session() as session:
-            dis_result = disambiguate(match_result, session)
-            return dis_result.confirmed, dis_result.ambiguous
-
-    confirmed_raw, ambiguous_raw = await asyncio.to_thread(_run_disambiguate)
+    dis_result = await asyncio.to_thread(disambiguate_with_session, MatchResult(exact=exact, fuzzy=fuzzy))
+    confirmed_raw = dis_result.confirmed
+    ambiguous_raw = dis_result.ambiguous
 
     confirmed_terms: list[dict[str, Any]] = []
     for mention, candidate in confirmed_raw.items():
@@ -346,7 +259,6 @@ async def disambiguate_candidates(
         }
         for mention, candidates in still_ambiguous.items()
     ]
-
     return confirmed_terms, ambiguous_terms
 
 
@@ -357,7 +269,7 @@ async def _llm_disambiguate(
     *,
     candidates_map: dict[str, list[CandidateDict]],
 ) -> tuple[list[dict[str, Any]], dict[str, tuple[Any, ...]]]:
-    """层3：LLM 语境推理消歧，返回 (llm_confirmed, still_ambiguous)。"""
+    """Use LLM context reasoning to resolve residual ambiguities."""
     candidates_text = ""
     for mention, candidates in ambiguous_raw.items():
         if not candidates:
@@ -367,13 +279,12 @@ async def _llm_disambiguate(
             f"type={c.term_type_code} confidence={c.confidence:.2f}"
             for i, c in enumerate(candidates[:3])
         )
-        candidates_text += f"\n词：「{mention}」\n候选：\n{options}\n"
+        candidates_text += f"\n词：{mention}\n候选：\n{options}\n"
 
     if not candidates_text:
         return [], dict(ambiguous_raw)
 
-    prompt = f"""你是术语消歧专家。根据用户问题的语境，从候选术语中选出最合适的一个。
-
+    prompt = f"""你是术语消歧专家。根据用户问题上下文，从候选术语中选择最合适的一项。
 用户问题：{original_question}
 
 需要消歧的词及候选：{candidates_text}
@@ -399,7 +310,7 @@ async def _llm_disambiguate(
         elif "```" in content:
             content = content.split("```")[1].split("```")[0].strip()
         parsed = json.loads(content)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.warning("LLM disambiguate failed: %s", exc)
         return [], dict(ambiguous_raw)
 
@@ -432,7 +343,6 @@ async def _llm_disambiguate(
         if mention in still_ambiguous_words:
             still_ambiguous[mention] = candidates
         else:
-            # 未被 LLM 明确处理的词也保留为歧义。
             still_ambiguous[mention] = candidates
 
     return llm_confirmed, still_ambiguous
@@ -442,71 +352,53 @@ async def save_clarification_results(
     clarification_results: dict[str, Any],
     user_id: str,
 ) -> list[str]:
-    """写入澄清结果，返回 name_id 列表。"""
-    from datacloud_knowledge.intent.storage import (
-        create_term_with_knowledge,
-        create_user_term_name,
-    )
-    from datacloud_knowledge.knowledge_search.db.connection import get_session
+    """Persist clarification results and return created name_id list."""
+    from datacloud_knowledge.intent import store_clarification_results
 
-    def _run_store() -> list[str]:
-        created_ids: list[str] = []
-        with get_session() as session:
-            for mention_text, result in clarification_results.items():
-                if isinstance(result, dict) and "term_id" in result:
-                    name_id = create_user_term_name(
-                        name_text=mention_text,
-                        term_id=str(result["term_id"]),
-                        user_id=user_id,
-                        session=session,
-                    )
-                    created_ids.append(name_id)
-                    logger.info(
-                        "save_clarification_results: alias '%s' → %s",
-                        mention_text,
-                        result["term_id"],
-                    )
-                elif isinstance(result, str) and result.strip():
-                    term_id, _, name_id = create_term_with_knowledge(
-                        term_code=f"user_defined_{mention_text}",
-                        term_name=mention_text,
-                        term_type_code="USER_DEFINED",
-                        domain_id="DOMAIN_002",
-                        knowledge_text=result,
-                        user_id=user_id,
-                        session=session,
-                    )
-                    created_ids.append(name_id)
-                    logger.info(
-                        "save_clarification_results: new term '%s' term_id=%s",
-                        mention_text,
-                        term_id,
-                    )
-        return created_ids
-
-    return await asyncio.to_thread(_run_store)
+    return await asyncio.to_thread(store_clarification_results, clarification_results, user_id)
 
 
 async def update_term_scores(
     score_records: list[dict[str, Any]],
+    *,
+    gateway_context: Any | None = None,
 ) -> None:
-    """异步 fire-and-forget 更新别名 score。"""
-    from datacloud_knowledge.intent import ScoreUpdateRecord, batch_update_scores
-    from datacloud_knowledge.knowledge_search.db.connection import get_session
-
+    """Fire-and-forget update of term-name score via worker async command."""
     if not score_records:
         return
 
-    records = tuple(
-        ScoreUpdateRecord(name_id=str(r["name_id"]), success=bool(r["success"]))
+    normalized = [
+        {"name_id": str(r.get("name_id", "")).strip(), "success": bool(r.get("success"))}
         for r in score_records
-        if r.get("name_id")
-    )
-    if not records:
+        if str(r.get("name_id", "")).strip()
+    ]
+    if not normalized:
         return
 
-    def _run_update() -> None:
-        with get_session() as session:
-            batch_update_scores(records, session)
+    if gateway_context is not None:
+        target_agent_type = os.getenv("DATACLOUD_GATEWAY_WORKER_ID", "datacloud")
+        try:
+            await gateway_context.call_agent(
+                target_agent_type=target_agent_type,
+                content="update term-name scores",
+                payload={
+                    "ext_params": {
+                        "command": "updateTermsName",
+                        "score_records": normalized,
+                        "silent": True,
+                    }
+                },
+                wait_for_reply=False,
+                metadata={"event": "term_score_update"},
+            )
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("update_term_scores: async call_agent failed, fallback to local update: %s", exc)
 
-    asyncio.create_task(asyncio.to_thread(_run_update))
+    from datacloud_knowledge.intent import ScoreUpdateRecord, batch_update_scores_with_session
+
+    records = tuple(
+        ScoreUpdateRecord(name_id=item["name_id"], success=item["success"]) for item in normalized
+    )
+    await asyncio.to_thread(batch_update_scores_with_session, records)
+

@@ -188,12 +188,13 @@ class DataCloudWorker(GatewayWorker):
             if handled:
                 if payload is not None:
                     await self._emit_6001(context, payload)
-                await context.emit_chunk(
-                    StreamChunkEvent(content="回答完成"),
-                    event_type=EventType.APP_STREAM_RESPONSE.value,
-                    content_type=SseMessageType.text.value,
-                )
-                await context.flush_to_history()
+                if not bool(ext_params.get("silent")):
+                    await context.emit_chunk(
+                        StreamChunkEvent(content="回答完成"),
+                        event_type=EventType.APP_STREAM_RESPONSE.value,
+                        content_type=SseMessageType.text.value,
+                    )
+                    await context.flush_to_history()
                 return {"status": "done"}
 
         # ③ 查找 Agent 配置，构建图缓存键
@@ -315,6 +316,7 @@ class DataCloudWorker(GatewayWorker):
                 "intent": "",
                 "clarify_needed": False,
                 "query_mode": "analysis",
+                "chitchat_reply": None,
                 "target_tool": "",
                 "tool_params": {},
                 "concept_terms": [],

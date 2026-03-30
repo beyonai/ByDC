@@ -1,4 +1,4 @@
-"""ext_params command dispatcher and handlers."""
+"""Handler for ``getFileByPage`` ext command."""
 
 from __future__ import annotations
 
@@ -9,25 +9,22 @@ from pathlib import Path
 from typing import Any
 
 
-def handle_ext_command(
+def handle_get_file_by_page_command(
     *,
     ext_params: dict[str, Any],
     session_id: str,
     workspace_dir: str | None,
 ) -> tuple[bool, dict[str, Any] | None]:
-    """Handle ext_params command and return (handled, 6001_payload)."""
+    """Handle getFileByPage and return ``(handled, payload)``."""
     command = ext_params.get("command")
-    if not isinstance(command, str) or not command.strip():
+    if not isinstance(command, str) or command.strip() != "getFileByPage":
         return False, None
 
-    command = command.strip()
-    if command == "getFileByPage":
-        return True, _build_6001_for_get_file_by_page(
-            ext_params=ext_params,
-            session_id=session_id,
-            workspace_dir=workspace_dir,
-        )
-    return False, None
+    return True, _build_6001_for_get_file_by_page(
+        ext_params=ext_params,
+        session_id=session_id,
+        workspace_dir=workspace_dir,
+    )
 
 
 def _build_6001_for_get_file_by_page(
@@ -49,7 +46,7 @@ def _build_6001_for_get_file_by_page(
             file_id=file_id,
             workspace_dir=workspace_dir,
         )
-        meta, records, total, pagination = _read_file_page(
+        meta, records, _total, pagination = _read_file_page(
             file_path=target_file,
             page=page,
             page_size=page_size,
@@ -67,7 +64,7 @@ def _build_6001_for_get_file_by_page(
                 },
             },
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return _make_6001_error(str(exc), page=page, page_size=page_size)
 
 
@@ -81,7 +78,7 @@ def _to_int(
     """Parse int with clamped bounds and fallback."""
     try:
         value = int(str(raw).strip())
-    except Exception:  # noqa: BLE001
+    except Exception:
         value = default
     if minimum is not None and value < minimum:
         value = minimum
@@ -118,9 +115,9 @@ def _make_6001_error(message: str, page: int = 1, page_size: int = 50) -> dict[s
 def _is_within(base: Path, candidate: Path) -> bool:
     try:
         candidate.relative_to(base)
-        return True
     except ValueError:
         return False
+    return True
 
 
 def _resolve_workspace_file(session_id: str, file_id: str, workspace_dir: str | None) -> Path:
@@ -128,7 +125,9 @@ def _resolve_workspace_file(session_id: str, file_id: str, workspace_dir: str | 
     if rel_path.is_absolute() or ".." in rel_path.parts:
         raise ValueError("Invalid fileId (directory traversal not allowed)")
 
-    root = Path(workspace_dir or os.getenv("DATACLOUD_GATEWAY_WORKSPACE_DIR", "/tmp/datacloud")).resolve()
+    root = Path(
+        workspace_dir or os.getenv("DATACLOUD_GATEWAY_WORKSPACE_DIR", "/tmp/datacloud")  # noqa: S108
+    ).resolve()
     session_root = (root / session_id).resolve()
 
     candidate = (session_root / rel_path).resolve()
@@ -155,7 +154,7 @@ def _read_file_page(
     if file_path.suffix == ".jsonl":
         meta_info: dict[str, Any] = {}
         records: list[Any] = []
-        with open(file_path, "r", encoding="utf-8") as fh:
+        with file_path.open("r", encoding="utf-8") as fh:
             first_line = fh.readline()
             if not first_line:
                 return meta_info, records, 0, _pagination_dict(page, page_size, 0)
@@ -163,16 +162,16 @@ def _read_file_page(
                 meta_info = json.loads(first_line)
             except json.JSONDecodeError:
                 meta_info = {}
-            for line in itertools.islice(fh, start_idx, end_idx):
-                if line.strip():
-                    records.append(json.loads(line))
+            records.extend(
+                json.loads(line) for line in itertools.islice(fh, start_idx, end_idx) if line.strip()
+            )
         raw_total = meta_info.get("total")
         if raw_total is None:
-            raise ValueError("JSONL 文件首行 meta 缺少 total 字段，无法正确分页")
+            raise ValueError("JSONL file first line meta missing total field, cannot paginate")
         total = int(raw_total)
         return meta_info, records, total, _pagination_dict(page, page_size, total)
 
-    with open(file_path, "r", encoding="utf-8") as fh:
+    with file_path.open("r", encoding="utf-8") as fh:
         content = json.load(fh)
     if isinstance(content, list):
         total = len(content)
