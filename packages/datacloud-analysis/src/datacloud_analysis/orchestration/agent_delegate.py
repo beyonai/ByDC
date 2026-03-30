@@ -28,6 +28,8 @@ async def agent_delegate_node(
     target_tool = (state.get("target_tool") or "").strip()
     dynamic_tools = state.get("dynamic_tools") or default_tools or {}
     intent_text = str(state.get("intent") or "")
+    raw_tool_params = state.get("tool_params")
+    tool_params: dict[str, Any] = raw_tool_params if isinstance(raw_tool_params, dict) else {}
     gateway_context = (config or {}).get("configurable", {}).get("gateway_context")
 
     tool_fn = dynamic_tools.get(target_tool)
@@ -53,7 +55,7 @@ async def agent_delegate_node(
         )
 
     try:
-        result = await tool_fn(content=intent_text, _context=gateway_context)
+        result = await tool_fn(content=intent_text, _context=gateway_context, **tool_params)
         task = {
             "id": "t_agent_delegate",
             "type": target_tool,

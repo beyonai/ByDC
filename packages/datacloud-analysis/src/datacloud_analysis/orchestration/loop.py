@@ -12,11 +12,13 @@ Responsibilities
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 from pathlib import Path
 from typing import Any
 
+import anyio
 from by_framework import EventType, StreamChunkEvent
 from by_framework.core.protocol.content_type import SseReasonMessageType
 
@@ -32,8 +34,8 @@ logger = logging.getLogger(__name__)
 async def loop_node(
     state: AgentState,
     gateway_context: Any = None,
-    default_tools: dict | None = None,
-) -> dict:
+    default_tools: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """One round of the ReAct loop.
 
     Executes ALL currently-ready tasks (deps satisfied) concurrently,
@@ -52,20 +54,64 @@ async def loop_node(
 
     # Collect every task whose deps are already done → run them all at once
     ready_tasks = _pick_ready_tasks(pending, plan)
+    invocation_dedup_set = {
+        str(invocation_id)
+        for invocation_id in (state.get("invocation_dedup") or [])
+        if str(invocation_id).strip()
+    }
+    newly_done_invocations: list[str] = []
+    dedup_ready_tasks: list[dict[str, Any]] = []
+    execute_ready_tasks: list[dict[str, Any]] = []
+    for task in ready_tasks:
+        invocation_id = _task_invocation_id(task)
+        if invocation_id in invocation_dedup_set:
+            dedup_ready_tasks.append(task)
+        else:
+            execute_ready_tasks.append(task)
     is_multi_task = len(plan) > 1
-
-    logger.info(
-        "loop_node: executing %d ready task(s) concurrently: %s",
-        len(ready_tasks),
-        [t["id"] for t in ready_tasks],
-    )
 
     updated_plan = list(plan)
     context = gateway_context
 
+    if dedup_ready_tasks:
+        logger.info(
+            "loop_node: invocation_dedup skipped task ids: %s",
+            [t["id"] for t in dedup_ready_tasks],
+        )
+        for dedup_task in dedup_ready_tasks:
+            updated_task = {**dedup_task, "status": "done"}
+            updated_plan = [
+                updated_task if t["id"] == updated_task["id"] else t
+                for t in updated_plan
+            ]
+            if context is not None:
+                await context.emit_chunk(
+                    StreamChunkEvent(content="执行任务"),
+                    event_type=EventType.REASONING_LOG_DELTA.value,
+                    content_type=SseReasonMessageType.think_title.value,
+                )
+                await context.emit_chunk(
+                    StreamChunkEvent(content=f"■ 幂等跳过[{updated_task['id']}]：已执行"),
+                    event_type=EventType.REASONING_LOG_DELTA.value,
+                    content_type=SseReasonMessageType.think_text.value,
+                )
+
+    if not execute_ready_tasks:
+        return {
+            "plan": updated_plan,
+            "results": results,
+            "invocation_dedup_add": [],
+        }
+
+    logger.info(
+        "loop_node: executing %d ready task(s) concurrently: %s",
+        len(execute_ready_tasks),
+        [t["id"] for t in execute_ready_tasks],
+    )
+
     # ── 执行前：逐任务推送"开始执行"日志（含工具名和入参）──────────────
     if context is not None:
-        for t in ready_tasks:
+        for t in execute_ready_tasks:
             params_text = _format_params(t.get("params", {}))
             pre_thinking = (
                 f"▶ 开始执行 [{t['id']}]：{t.get('description', '')}\n"
@@ -84,18 +130,30 @@ async def loop_node(
             )
 
     # ── Concurrent execution ────────────────────────────────────────────
-    task_outputs: list[tuple[dict, Any]] = await asyncio.gather(
-        *[execute_next_task(t, state, gateway_context=gateway_context, custom_tools=dynamic_tools) for t in ready_tasks]
+    task_outputs: list[tuple[dict[str, Any], Any]] = await asyncio.gather(
+        *[
+            execute_next_task(
+                t,
+                state,
+                gateway_context=gateway_context,
+                custom_tools=dynamic_tools,
+            )
+            for t in execute_ready_tasks
+        ]
     )
 
     for updated_task, output in task_outputs:
+        if updated_task.get("status") == "done":
+            newly_done_invocations.append(_task_invocation_id(updated_task))
         # ── Persist output ──────────────────────────────────────────────
         if is_multi_task and workspace_dir:
             temp_dir = Path(workspace_dir) / "temp"
             temp_dir.mkdir(parents=True, exist_ok=True)
             file_path = temp_dir / f"{updated_task['id']}.json"
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(normalize_workspace_task_output(output), f, ensure_ascii=False)
+            payload_text = json.dumps(
+                normalize_workspace_task_output(output), ensure_ascii=False
+            )
+            await anyio.Path(file_path).write_text(payload_text, encoding="utf-8")
             logger.info("Saved intermediate result to %s", file_path)
             results.append({"task_id": updated_task["id"], "file_path": str(file_path)})
         else:
@@ -136,7 +194,11 @@ async def loop_node(
                 content_type=SseReasonMessageType.think_text.value,
             )
 
-    return {"plan": updated_plan, "results": results}
+    return {
+        "plan": updated_plan,
+        "results": results,
+        "invocation_dedup_add": newly_done_invocations,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +220,22 @@ def _pick_ready_tasks(
         if all(d in done_ids for d in t.get("deps", []))
     ]
     return ready if ready else [pending[0]]
+
+
+def _task_invocation_id(task: dict[str, Any]) -> str:
+    payload = json.dumps(
+        {
+            "id": str(task.get("id", "")),
+            "type": str(task.get("type", "")),
+            "params": task.get("params", {}),
+            "description": str(task.get("description", "")),
+            "deps": [str(dep) for dep in (task.get("deps") or [])],
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        default=str,
+    )
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()
 
 
 def _format_params(params: Any, max_len: int = 500) -> str:

@@ -14,8 +14,10 @@ def test_create_agent_returns_compiled_graph() -> None:
     graph = create_agent()
     assert graph is not None
     nodes = list(graph.get_graph().nodes.keys())
-    assert "intent" in nodes
-    assert "insight" in nodes
+    assert "knowledge_enhance" in nodes
+    assert "planning" in nodes
+    assert "execution" in nodes
+    assert "end" in nodes
 
 
 def test_get_checkpointer_raises_when_uri_missing(monkeypatch: pytest.MonkeyPatch) -> None:
