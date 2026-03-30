@@ -68,16 +68,16 @@ class UserNameCache:
             name_index for this user: {name_text: [(term_id, term_type_code, match_type, score), ...]}
         """
         sql = text(
-            "SELECT tn.name_text, t.term_id, t.term_type_code, tn.name_tags "
+            "SELECT tn.name_text, t.term_id, t.term_type_code, tn.search_scope "
             "FROM whale_datacloud.term_name tn "
             "JOIN whale_datacloud.term t ON tn.term_id = t.term_id "
-            "WHERE tn.name_tags->>'scope_user_id' = :user_id"
+            "WHERE tn.search_scope->>'scope_user_id' = :user_id"
         )
         rows = session.execute(sql, {"user_id": user_id}).fetchall()
 
         name_index: NameIndex = {}
-        for name_text, term_id, term_type_code, name_tags in rows:
-            score = float(name_tags.get("score", 0.0)) if isinstance(name_tags, dict) else 0.0
+        for name_text, term_id, term_type_code, search_scope in rows:
+            score = float(search_scope.get("score", 0.0)) if isinstance(search_scope, dict) else 0.0
             entry_list = name_index.setdefault(name_text, [])
             entry_list.append((term_id, term_type_code, "alias", score))
 
