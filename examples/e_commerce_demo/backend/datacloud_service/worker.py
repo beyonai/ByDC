@@ -528,10 +528,18 @@ class DataCloudWorker(GatewayWorker):
             # Bug 1 fix: interrupt() 的值在 snapshot.interrupts[0].value，而非 exc.args
             first = snapshot.interrupts[0]
             interrupt_value = first.value
+            interrupt_reason = "unknown_interrupt"
             if isinstance(interrupt_value, dict):
                 prompt = interrupt_value.get("prompt", str(interrupt_value))
+                interrupt_reason = str(
+                    interrupt_value.get("reason_code")
+                    or interrupt_value.get("interrupt_reason")
+                    or "interrupt"
+                )
             else:
                 prompt = str(interrupt_value) if interrupt_value else "请补充您的回答"
+                if prompt:
+                    interrupt_reason = "prompt_interrupt"
 
             checkpoint_id = snapshot.config.get("configurable", {}).get("checkpoint_id", "")
             # Bug 5 fix: 补充 checkpoint_ns（子图场景必填）
@@ -563,6 +571,7 @@ class DataCloudWorker(GatewayWorker):
                         "todo_active_id": todo_active_id,
                         "react_step_id": todo_active_id,
                         "pending_capability": pending_capability,
+                        "interrupt_reason": interrupt_reason,
                     },
                 )
             )

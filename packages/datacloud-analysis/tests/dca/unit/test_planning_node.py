@@ -86,3 +86,32 @@ async def test_planning_persists_todo_md_to_workspace(
     out = await planning_node(state, default_tools={"query_tool": _query_tool})
 
     assert out["todo_md_path"] is not None
+
+
+@pytest.mark.asyncio
+async def test_planning_emits_structured_required_capabilities_for_skill(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_intent_node(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "intent": "run skill",
+            "query_mode": "online_query",
+            "target_tool": "skill.normalize",
+            "tool_params": {"x": 1},
+            "confirmed_terms": [],
+            "ambiguous_terms": [],
+        }
+
+    monkeypatch.setattr(planning_module, "intent_node", _fake_intent_node)
+
+    async def _skill_tool(**_kwargs: Any) -> dict[str, Any]:
+        return {"ok": True}
+
+    _skill_tool._is_skill_capability = True  # type: ignore[attr-defined]
+
+    state = cast(AgentState, {"user_query": "q4"})
+    out = await planning_node(state, default_tools={"skill.normalize": _skill_tool})
+
+    assert out["todos"][0]["required_capabilities"] == [
+        {"capability_id": "skill.normalize", "capability_type": "skill"}
+    ]
