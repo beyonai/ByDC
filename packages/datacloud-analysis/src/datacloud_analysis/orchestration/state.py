@@ -28,6 +28,7 @@ class AgentState(MessagesState):
     knowledge_preview: str | None
     # 路由：online_query → direct_tool；chitchat → insight；analysis → dag
     query_mode: str | None
+    chitchat_reply: str | None
     target_tool: str | None
     tool_params: dict[str, Any] | None
 

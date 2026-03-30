@@ -1,12 +1,9 @@
-"""BM25 搜索实现。
-
-使用 PostgreSQL 的 tsvector + ts_rank_cd 实现 BM25 风格的全文搜索。
-术语名称使用单字分词，存储在 name_keywords 字段中。
-"""
+﻿"""BM25-style term name search over PostgreSQL/OpenGauss."""
 
 from __future__ import annotations
 
 import logging
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -17,18 +14,16 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+_COLUMN_CAPS_CACHE: dict[str, bool | None] = {"name_keywords": None}
+
+_SCHEMA = "whale_datacloud"
+_TABLE = "term_name"
+_TSV_COLUMN = "name_keywords"
+
 
 @dataclass(frozen=True, slots=True)
 class BM25Result:
-    """BM25 搜索结果。
-
-    Attributes:
-        term_id: 术语 ID
-        term_name: 术语名称
-        name_id: 名称 ID
-        term_type_code: 术语类型代码
-        score: BM25 分数
-    """
+    """Single BM25 match row."""
 
     term_id: str
     term_name: str
@@ -37,78 +32,139 @@ class BM25Result:
     score: float
 
 
+def _rollback_quietly(session: Session) -> None:
+    rollback = getattr(session, "rollback", None)
+    if callable(rollback):
+        with suppress(Exception):
+            rollback()
+
+
+def _has_name_keywords_column(session: Session) -> bool:
+    cached = _COLUMN_CAPS_CACHE["name_keywords"]
+    if cached is not None:
+        return cached
+
+    sql = text(
+        """
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = :table_schema
+          AND table_name = :table_name
+          AND column_name = :column_name
+        LIMIT 1
+        """
+    )
+    try:
+        rows = session.execute(
+            sql,
+            {
+                "table_schema": _SCHEMA,
+                "table_name": _TABLE,
+                "column_name": _TSV_COLUMN,
+            },
+        ).fetchall()
+        _COLUMN_CAPS_CACHE["name_keywords"] = bool(rows)
+    except Exception as exc:
+        _rollback_quietly(session)
+        log.warning("BM25 column capability check failed, fallback to expression mode: %s", exc)
+        _COLUMN_CAPS_CACHE["name_keywords"] = False
+
+    return bool(_COLUMN_CAPS_CACHE["name_keywords"])
+
+
+def _build_search_sql() -> object:
+    return text(
+        """
+        SELECT
+            tn.term_id,
+            tn.name_text AS term_name,
+            tn.name_id,
+            t.term_type_code,
+            ts_rank_cd(tn.name_keywords, query, 32) AS score
+        FROM
+            whale_datacloud.term_name tn,
+            whale_datacloud.term t,
+            to_tsquery('simple', :tsquery) query
+        WHERE
+            tn.name_keywords @@ query
+            AND tn.term_id = t.term_id
+            AND tn.name_keywords IS NOT NULL
+        ORDER BY
+            score DESC
+        LIMIT :limit
+    """
+    )
+
+
+def _run_search(
+    session: Session,
+    *,
+    tsquery: str,
+    top_k: int,
+    min_score: float,
+) -> list[BM25Result]:
+    sql = _build_search_sql()
+    rows = session.execute(sql, {"tsquery": tsquery, "limit": top_k}).fetchall()
+    return [
+        BM25Result(
+            term_id=term_id,
+            term_name=term_name,
+            name_id=name_id,
+            term_type_code=term_type_code,
+            score=float(score),
+        )
+        for term_id, term_name, name_id, term_type_code, score in rows
+        if score >= min_score
+    ]
+
+
+def _search(
+    session: Session,
+    query_text: str,
+    *,
+    ts_operator: str,
+    top_k: int,
+    min_score: float,
+) -> list[BM25Result]:
+    if not query_text or not query_text.strip():
+        return []
+
+    tsquery = f" {ts_operator} ".join(list(query_text.strip()))
+    if not _has_name_keywords_column(session):
+        message = (
+            "BM25 requires whale_datacloud.term_name.name_keywords column. "
+            "Please apply DDL/importer to populate this column before querying."
+        )
+        log.error(message)
+        raise RuntimeError(message)
+
+    try:
+        return _run_search(
+            session,
+            tsquery=tsquery,
+            top_k=top_k,
+            min_score=min_score,
+        )
+    except Exception:
+        _rollback_quietly(session)
+        log.exception("BM25 search failed")
+        raise
+
+
 def bm25_search(
     session: Session,
     query_text: str,
     top_k: int = 10,
     min_score: float = 0.01,
 ) -> list[BM25Result]:
-    """使用 BM25 搜索术语名称。
-
-    使用 PostgreSQL 的 ts_rank_cd 进行 BM25 风格的全文搜索。
-    查询文本会被转换为单字分词格式进行匹配。
-
-    Args:
-        session: SQLAlchemy Session
-        query_text: 查询文本
-        top_k: 返回结果数量上限
-        min_score: 最小分数阈值
-
-    Returns:
-        BM25Result 列表，按分数降序排列
-    """
-    if not query_text or not query_text.strip():
-        return []
-
-    # 将查询文本转换为单字分词格式（空格分隔）
-    query_tokens = " ".join(list(query_text.strip()))
-    # 构建 tsquery 格式（AND 连接）
-    tsquery = " & ".join(list(query_text.strip()))
-
-    sql = text("""
-        SELECT 
-            tn.term_id,
-            tn.name_text AS term_name,
-            tn.name_id,
-            t.term_type_code,
-            ts_rank_cd(tn.name_keywords, query, 32) AS score
-        FROM 
-            whale_datacloud.term_name tn,
-            whale_datacloud.term t,
-            to_tsquery('simple', :tsquery) query
-        WHERE 
-            tn.name_keywords @@ query
-            AND tn.term_id = t.term_id
-            AND tn.name_keywords IS NOT NULL
-        ORDER BY 
-            score DESC
-        LIMIT :limit
-    """)
-
-    try:
-        result = session.execute(sql, {"tsquery": tsquery, "limit": top_k})
-        rows = result.fetchall()
-
-        results: list[BM25Result] = []
-        for row in rows:
-            term_id, term_name, name_id, term_type_code, score = row
-            if score >= min_score:
-                results.append(
-                    BM25Result(
-                        term_id=term_id,
-                        term_name=term_name,
-                        name_id=name_id,
-                        term_type_code=term_type_code,
-                        score=float(score),
-                    )
-                )
-
-        log.debug("BM25 search '%s' found %d results", query_text, len(results))
-        return results
-
-    except Exception as e:
-        log.error("BM25 search failed: %s", e)
-        raise
+    """Search with AND semantics for every character token."""
+    return _search(
+        session,
+        query_text,
+        ts_operator="&",
+        top_k=top_k,
+        min_score=min_score,
+    )
 
 
 def bm25_search_with_or(
@@ -117,65 +173,12 @@ def bm25_search_with_or(
     top_k: int = 10,
     min_score: float = 0.01,
 ) -> list[BM25Result]:
-    """使用 BM25 搜索术语名称（OR 模式）。
+    """Search with OR semantics for character tokens."""
+    return _search(
+        session,
+        query_text,
+        ts_operator="|",
+        top_k=top_k,
+        min_score=min_score,
+    )
 
-    使用 OR 连接查询词，匹配任意一个字符即可。
-
-    Args:
-        session: SQLAlchemy Session
-        query_text: 查询文本
-        top_k: 返回结果数量上限
-        min_score: 最小分数阈值
-
-    Returns:
-        BM25Result 列表，按分数降序排列
-    """
-    if not query_text or not query_text.strip():
-        return []
-
-    # 构建 tsquery 格式（OR 连接）
-    tsquery = " | ".join(list(query_text.strip()))
-
-    sql = text("""
-        SELECT 
-            tn.term_id,
-            tn.name_text AS term_name,
-            tn.name_id,
-            t.term_type_code,
-            ts_rank_cd(tn.name_keywords, query, 32) AS score
-        FROM 
-            whale_datacloud.term_name tn,
-            whale_datacloud.term t,
-            to_tsquery('simple', :tsquery) query
-        WHERE 
-            tn.name_keywords @@ query
-            AND tn.term_id = t.term_id
-            AND tn.name_keywords IS NOT NULL
-        ORDER BY 
-            score DESC
-        LIMIT :limit
-    """)
-
-    try:
-        result = session.execute(sql, {"tsquery": tsquery, "limit": top_k})
-        rows = result.fetchall()
-
-        results: list[BM25Result] = []
-        for row in rows:
-            term_id, term_name, name_id, term_type_code, score = row
-            if score >= min_score:
-                results.append(
-                    BM25Result(
-                        term_id=term_id,
-                        term_name=term_name,
-                        name_id=name_id,
-                        term_type_code=term_type_code,
-                        score=float(score),
-                    )
-                )
-
-        return results
-
-    except Exception as e:
-        log.error("BM25 search failed: %s", e)
-        raise
