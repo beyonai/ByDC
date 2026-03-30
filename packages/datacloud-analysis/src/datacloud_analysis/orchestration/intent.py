@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import os
@@ -95,6 +96,105 @@ def _merge_concept_terms(*, llm_terms: list[str], km_terms: list[str]) -> list[s
     return selected
 
 
+def _compact_params_schema(raw_schema: Any) -> dict[str, Any]:
+    if not isinstance(raw_schema, dict):
+        return {}
+    properties = raw_schema.get("properties")
+    required = raw_schema.get("required")
+    if not isinstance(properties, dict):
+        return {}
+    fields: dict[str, dict[str, str]] = {}
+    for name, spec in properties.items():
+        if not isinstance(spec, dict):
+            continue
+        field_type = str(spec.get("type", "")).strip() or "any"
+        desc = str(spec.get("description", "")).strip()
+        if len(desc) > 80:
+            desc = desc[:80] + "..."
+        item: dict[str, str] = {"type": field_type}
+        if desc:
+            item["description"] = desc
+        fields[str(name)] = item
+    if not fields:
+        return {}
+    payload: dict[str, Any] = {"fields": fields}
+    if isinstance(required, list):
+        payload["required"] = [str(x) for x in required if str(x).strip()]
+    return payload
+
+
+def _schema_from_obj(schema_obj: Any) -> dict[str, Any]:
+    if schema_obj is None:
+        return {}
+    if isinstance(schema_obj, dict):
+        return _compact_params_schema(schema_obj)
+    try:
+        model_schema = getattr(schema_obj, "model_json_schema", None)
+        if callable(model_schema):
+            return _compact_params_schema(model_schema())
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        legacy_schema = getattr(schema_obj, "schema", None)
+        if callable(legacy_schema):
+            return _compact_params_schema(legacy_schema())
+    except Exception:  # noqa: BLE001
+        pass
+    return {}
+
+
+def _callable_params_hint(tool_obj: Any) -> list[dict[str, Any]]:
+    target = getattr(tool_obj, "ainvoke", tool_obj)
+    if not callable(target):
+        return []
+    try:
+        signature = inspect.signature(target)
+    except (TypeError, ValueError):
+        return []
+    hints: list[dict[str, Any]] = []
+    for name, param in signature.parameters.items():
+        if name in {"self", "cls"}:
+            continue
+        kind = str(param.kind).split(".")[-1]
+        required = param.default is inspect.Signature.empty and param.kind not in {
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        }
+        hints.append({"name": name, "kind": kind, "required": required})
+    return hints[:8]
+
+
+def _tool_specs_for_prompt(dynamic_tools: dict[str, Any]) -> list[dict[str, Any]]:
+    specs: list[dict[str, Any]] = []
+    for tool_name in sorted(dynamic_tools.keys()):
+        tool_obj = dynamic_tools[tool_name]
+        description = str(
+            getattr(tool_obj, "description", "") or getattr(tool_obj, "__doc__", "") or ""
+        ).strip()
+        if len(description) > 180:
+            description = description[:180] + "..."
+        capability_type = (
+            "skill"
+            if bool(getattr(tool_obj, "_is_skill_capability", False))
+            else ("agent_delegate" if bool(getattr(tool_obj, "_is_agent_delegate", False)) else "tool")
+        )
+        params_schema = _schema_from_obj(
+            getattr(tool_obj, "args_schema", None) or getattr(tool_obj, "input_schema", None)
+        )
+        params_hint = _callable_params_hint(tool_obj)
+        spec: dict[str, Any] = {
+            "name": tool_name,
+            "type": capability_type,
+            "description": description,
+        }
+        if params_schema:
+            spec["params_schema"] = params_schema
+        elif params_hint:
+            spec["params_hint"] = params_hint
+        specs.append(spec)
+    return specs
+
+
 def _history_records_to_messages(records: list[dict[str, Any]]) -> list[BaseMessage]:
     out: list[BaseMessage] = []
     for row in records:
@@ -173,6 +273,7 @@ _INTENT_STATIC_SYSTEM = """你是意图识别与问题改写专家。
 5. concept_terms 抽取时保持原文中连续名词短语的最大粒度，不要按语义拆分子词。例如"企业综合分析表"是一个术语，不要拆成"企业"和"综合分析表"。
 6. rewritten_intent 改写时保留原文中的专有名词，不得拆分或替换业务术语。
 7. clarify_needed 仅在用户问题本身残缺、缺少必要的查询条件（如完全没有说明要查什么对象）时才设为 true。不确定术语含义不属于此情况，术语不确定应放入 concept_terms 由后续流程处理，clarify_needed 此时必须为 false。
+8. online_query / agent_delegate 时，必须结合工具描述与参数结构选择最匹配工具，避免仅凭工具名猜测。
 """
 
 
@@ -226,6 +327,7 @@ async def intent_node(
     dynamic_tools = state.get("dynamic_tools") or default_tools or {}
     tool_names = sorted(dynamic_tools.keys())
     tools_line = ", ".join(tool_names) if tool_names else "（当前无动态工具，建议 analysis）"
+    tool_specs_line = json.dumps(_tool_specs_for_prompt(dynamic_tools), ensure_ascii=False)
 
     agent_tool_names = sorted(
         key for key, tool in dynamic_tools.items() if getattr(tool, "_is_agent_delegate", False)
@@ -257,6 +359,7 @@ async def intent_node(
     dynamic_human = HumanMessage(
         content=(
             f"【本轮可用工具】{tools_line}\n\n"
+            f"【工具详情（名称/类型/描述/参数）】{tool_specs_line}\n\n"
             f"【Agent委托工具】{agent_tools_line}\n\n"
             f"【知识检索结果】\n{knowledge_text}\n\n"
             f"【用户原始问题】{original_user_msg}\n"
