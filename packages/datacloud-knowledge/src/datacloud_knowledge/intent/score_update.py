@@ -29,7 +29,7 @@ def update_scores(
 ) -> None:
     """Batch update scores for alias records used in this dialog.
 
-    For each record, reads current name_tags from DB, applies
+    For each record, reads current search_scope from DB, applies
     decay + count update + score recalculation, writes back.
 
     Args:
@@ -40,32 +40,32 @@ def update_scores(
 
     for record in records:
         row = session.execute(
-            text("SELECT name_tags FROM whale_datacloud.term_name WHERE name_id = :name_id"),
+            text("SELECT search_scope FROM whale_datacloud.term_name WHERE name_id = :name_id"),
             {"name_id": record.name_id},
         ).fetchone()
         if row is None:
             log.debug("Skip score update for missing name_id=%s", record.name_id)
             continue
 
-        name_tags = _parse_name_tags(row[0])
-        if name_tags is None:
-            log.warning("Skip score update for invalid name_tags name_id=%s", record.name_id)
+        search_scope = _parse_search_scope(row[0])
+        if search_scope is None:
+            log.warning("Skip score update for invalid search_scope name_id=%s", record.name_id)
             continue
 
-        if not name_tags.get("scope_user_id"):
+        if not search_scope.get("scope_user_id"):
             log.debug("Skip score update for global alias name_id=%s", record.name_id)
             continue
 
-        use_count = _coerce_int(name_tags.get("use_count"))
-        confirmed_count = _coerce_int(name_tags.get("confirmed_count"))
-        decay = _compute_decay(_coerce_last_used_at(name_tags.get("last_used_at")))
+        use_count = _coerce_int(search_scope.get("use_count"))
+        confirmed_count = _coerce_int(search_scope.get("confirmed_count"))
+        decay = _compute_decay(_coerce_last_used_at(search_scope.get("last_used_at")))
 
         use_count += 1
         if record.success:
             confirmed_count += 1
 
         score = _recalculate_score(confirmed_count, use_count, decay)
-        name_tags.update(
+        search_scope.update(
             {
                 "use_count": use_count,
                 "confirmed_count": confirmed_count,
@@ -77,12 +77,12 @@ def update_scores(
         session.execute(
             text(
                 "UPDATE whale_datacloud.term_name "
-                "SET name_tags = CAST(:name_tags AS jsonb), updated_time = :now "
+                "SET search_scope = CAST(:search_scope AS jsonb), updated_time = :now "
                 "WHERE name_id = :name_id"
             ),
             {
                 "name_id": record.name_id,
-                "name_tags": json.dumps(name_tags),
+                "search_scope": json.dumps(search_scope),
                 "now": now,
             },
         )
@@ -114,13 +114,13 @@ def _recalculate_score(confirmed_count: int, use_count: int, decay: float) -> fl
     return confirmed_count / (use_count + 1) * decay
 
 
-def _parse_name_tags(name_tags_value: Any) -> dict[str, Any] | None:
-    """Normalize DB name_tags payload to a dict."""
-    if isinstance(name_tags_value, dict):
-        return dict(name_tags_value)
-    if isinstance(name_tags_value, str):
+def _parse_search_scope(search_scope_value: Any) -> dict[str, Any] | None:
+    """Normalize DB search_scope payload to a dict."""
+    if isinstance(search_scope_value, dict):
+        return dict(search_scope_value)
+    if isinstance(search_scope_value, str):
         try:
-            parsed = json.loads(name_tags_value)
+            parsed = json.loads(search_scope_value)
         except json.JSONDecodeError:
             return None
         if isinstance(parsed, dict):

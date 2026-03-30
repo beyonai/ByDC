@@ -1,7 +1,7 @@
-"""向量搜索实现。
+﻿"""鍚戦噺鎼滅储瀹炵幇銆?
 
-使用 PostgreSQL pgvector 扩展的 HNSW 索引进行向量相似度搜索。
-术语名称的向量存储在 name_vector 字段中（1024 维）。
+浣跨敤 PostgreSQL pgvector 鎵╁睍鐨?HNSW 绱㈠紩杩涜鍚戦噺鐩镐技搴︽悳绱€?
+鏈鍚嶇О鐨勫悜閲忓瓨鍌ㄥ湪 name_embedding 瀛楁涓紙1024 缁达級銆?
 """
 
 from __future__ import annotations
@@ -22,14 +22,14 @@ log = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class VectorResult:
-    """向量搜索结果。
+    """鍚戦噺鎼滅储缁撴灉銆?
 
     Attributes:
-        term_id: 术语 ID
-        term_name: 术语名称
-        name_id: 名称 ID
-        term_type_code: 术语类型代码
-        similarity: 相似度分数 (0-1)
+        term_id: 鏈 ID
+        term_name: 鏈鍚嶇О
+        name_id: 鍚嶇О ID
+        term_type_code: 鏈绫诲瀷浠ｇ爜
+        similarity: 鐩镐技搴﹀垎鏁?(0-1)
     """
 
     term_id: str
@@ -46,24 +46,24 @@ def vector_search(
     top_k: int = 10,
     min_similarity: float = 0.5,
 ) -> list[VectorResult]:
-    """使用向量相似度搜索术语名称。
+    """浣跨敤鍚戦噺鐩镐技搴︽悳绱㈡湳璇悕绉般€?
 
-    将查询文本转换为向量，使用余弦距离搜索最相似的术语。
+    灏嗘煡璇㈡枃鏈浆鎹负鍚戦噺锛屼娇鐢ㄤ綑寮﹁窛绂绘悳绱㈡渶鐩镐技鐨勬湳璇€?
 
     Args:
         session: SQLAlchemy Session
-        query_text: 查询文本
-        embedding_service: Embedding 服务
-        top_k: 返回结果数量上限
-        min_similarity: 最小相似度阈值 (0-1)
+        query_text: 鏌ヨ鏂囨湰
+        embedding_service: Embedding 鏈嶅姟
+        top_k: 杩斿洖缁撴灉鏁伴噺涓婇檺
+        min_similarity: 鏈€灏忕浉浼煎害闃堝€?(0-1)
 
     Returns:
-        VectorResult 列表，按相似度降序排列
+        VectorResult 鍒楄〃锛屾寜鐩镐技搴﹂檷搴忔帓鍒?
     """
     if not query_text or not query_text.strip():
         return []
 
-    # 获取查询向量
+    # 鑾峰彇鏌ヨ鍚戦噺
     query_vector = embedding_service.get_text_embedding(query_text.strip())
     vector_str = "[" + ",".join(map(str, query_vector)) + "]"
 
@@ -73,15 +73,15 @@ def vector_search(
             tn.name_text AS term_name,
             tn.name_id,
             t.term_type_code,
-            1 - (tn.name_vector <=> :vector::vector) AS similarity
+            1 - (tn.name_embedding <=> :vector::vector) AS similarity
         FROM 
             whale_datacloud.term_name tn,
             whale_datacloud.term t
         WHERE 
-            tn.name_vector IS NOT NULL
+            tn.name_embedding IS NOT NULL
             AND tn.term_id = t.term_id
         ORDER BY 
-            tn.name_vector <=> :vector::vector
+            tn.name_embedding <=> :vector::vector
         LIMIT :limit
     """)
 
@@ -117,16 +117,16 @@ def vector_search_by_vector(
     top_k: int = 10,
     min_similarity: float = 0.5,
 ) -> list[VectorResult]:
-    """使用预计算的向量进行搜索。
+    """浣跨敤棰勮绠楃殑鍚戦噺杩涜鎼滅储銆?
 
     Args:
         session: SQLAlchemy Session
-        query_vector: 查询向量
-        top_k: 返回结果数量上限
-        min_similarity: 最小相似度阈值 (0-1)
+        query_vector: 鏌ヨ鍚戦噺
+        top_k: 杩斿洖缁撴灉鏁伴噺涓婇檺
+        min_similarity: 鏈€灏忕浉浼煎害闃堝€?(0-1)
 
     Returns:
-        VectorResult 列表，按相似度降序排列
+        VectorResult 鍒楄〃锛屾寜鐩镐技搴﹂檷搴忔帓鍒?
     """
     vector_str = "[" + ",".join(map(str, query_vector)) + "]"
 
@@ -136,15 +136,15 @@ def vector_search_by_vector(
             tn.name_text AS term_name,
             tn.name_id,
             t.term_type_code,
-            1 - (tn.name_vector <=> :vector::vector) AS similarity
+            1 - (tn.name_embedding <=> :vector::vector) AS similarity
         FROM 
             whale_datacloud.term_name tn,
             whale_datacloud.term t
         WHERE 
-            tn.name_vector IS NOT NULL
+            tn.name_embedding IS NOT NULL
             AND tn.term_id = t.term_id
         ORDER BY 
-            tn.name_vector <=> :vector::vector
+            tn.name_embedding <=> :vector::vector
         LIMIT :limit
     """)
 
@@ -171,3 +171,4 @@ def vector_search_by_vector(
     except Exception as e:
         log.error("Vector search failed: %s", e)
         raise
+

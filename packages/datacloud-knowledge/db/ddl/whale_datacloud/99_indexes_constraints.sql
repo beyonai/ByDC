@@ -1,4 +1,4 @@
--- term_library
+﻿-- term_library
 CREATE INDEX IF NOT EXISTS idx_lib_name
     ON whale_datacloud.term_library(library_name);
 
@@ -85,20 +85,21 @@ CREATE INDEX IF NOT EXISTS idx_tn_name_text
 CREATE INDEX IF NOT EXISTS idx_tn_term
     ON whale_datacloud.term_name(term_id);
 
--- term_vocabulary：唯一索引保障去重查询极速（不依赖实时 DISTINCT）
+-- term_vocabulary锛氬敮涓€绱㈠紩淇濋殰鍘婚噸鏌ヨ鏋侀€燂紙涓嶄緷璧栧疄鏃?DISTINCT锛?
 CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_word
     ON whale_datacloud.term_vocabulary(word);
 
 -- term_name
-CREATE INDEX IF NOT EXISTS idx_tn_name_tags
-    ON whale_datacloud.term_name USING GIN (name_tags);
+CREATE INDEX IF NOT EXISTS idx_tn_search_scope
+    ON whale_datacloud.term_name USING GIN (search_scope);
 
--- term_name BM25 GIN 索引
-CREATE INDEX IF NOT EXISTS idx_tn_name_text_tsv
-    ON whale_datacloud.term_name USING GIN (name_text_tsv);
+-- term_name BM25 GIN 绱㈠紩
+CREATE INDEX IF NOT EXISTS idx_tn_name_keywords
+    ON whale_datacloud.term_name USING GIN (name_keywords);
 
--- term_name 向量 HNSW 索引（余弦距离）
-CREATE INDEX IF NOT EXISTS idx_tn_name_vector_hnsw
+-- term_name 鍚戦噺 HNSW 绱㈠紩锛堜綑寮﹁窛绂伙級
+CREATE INDEX IF NOT EXISTS idx_tn_name_embedding_hnsw
     ON whale_datacloud.term_name
-    USING hnsw (name_vector vector_cosine_ops)
+    USING hnsw (name_embedding vector_cosine_ops)
     WITH (m = 16, ef_construction = 64);
+
