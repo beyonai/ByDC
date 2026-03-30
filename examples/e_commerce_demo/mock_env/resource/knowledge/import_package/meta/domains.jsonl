@@ -1,2 +1,0 @@
-{"op": "add", "domain_code": "DOMAIN_001", "domain_name": "企业管理", "domain_desc": "企业管理"}
-{"op": "add", "domain_code": "DOMAIN_002", "domain_name": "产业管理", "parent_code": "DOMAIN_001", "domain_desc": "产业管理等"}
