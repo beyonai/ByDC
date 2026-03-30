@@ -11,6 +11,22 @@ from datacloud_analysis.orchestration.intent import intent_node
 from datacloud_analysis.orchestration.state import AgentState
 
 logger = logging.getLogger(__name__)
+_HIGH_CONFIDENCE_HINT_THRESHOLD = 0.8
+_PLANNER_BUILTIN_CAPABILITIES: frozenset[str] = frozenset(
+    {
+        "code_exec",
+        "file_read",
+        "file_write",
+        "workspace-file-read",
+        "workspace-file-write",
+        "workspace-file-upload",
+        "task-note-tool",
+        "chat-response-tool",
+        "recall_memory",
+        "build_skill",
+        "render_report",
+    }
+)
 
 
 def _semantic_type_from_term(term: dict[str, Any]) -> str:
@@ -41,10 +57,56 @@ def _build_term_context(confirmed_terms: list[dict[str, Any]]) -> list[dict[str,
     return out
 
 
+def _build_term_context_from_hints(term_hints: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for hint in term_hints:
+        confidence = float(hint.get("confidence", 0.0) or 0.0)
+        if confidence < _HIGH_CONFIDENCE_HINT_THRESHOLD:
+            continue
+        mention = str(hint.get("mention", "")).strip()
+        normalized = str(hint.get("normalized_term", mention)).strip()
+        semantic_type = str(hint.get("semantic_type", "")).strip() or _semantic_type_from_term(hint)
+        if not mention and not normalized:
+            continue
+        out.append(
+            {
+                "mention": mention or normalized,
+                "normalized_term": normalized or mention,
+                "term_id": str(hint.get("term_id", "")).strip(),
+                "confidence": confidence,
+                "source": str(hint.get("source", "knowledge_match")),
+                "semantic_type": semantic_type,
+                "note": str(hint.get("note", "")),
+            }
+        )
+    return out
+
+
+def _merge_term_context(
+    confirmed: list[dict[str, Any]],
+    hints: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in confirmed + hints:
+        mention = str(item.get("mention", "")).strip()
+        term_id = str(item.get("term_id", "")).strip()
+        key = (mention, term_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(item)
+    return merged
+
+
 def _capability_spec(capability_id: str, available_tools: dict[str, Any]) -> dict[str, str]:
     tool_obj = available_tools.get(capability_id)
     capability_type = "skill" if bool(getattr(tool_obj, "_is_skill_capability", False)) else "tool"
     return {"capability_id": capability_id, "capability_type": capability_type}
+
+
+def _is_available_capability(capability_id: str, available_tools: dict[str, Any]) -> bool:
+    return capability_id in available_tools or capability_id in _PLANNER_BUILTIN_CAPABILITIES
 
 
 def _plan_to_todos(
@@ -58,15 +120,22 @@ def _plan_to_todos(
         task_id = str(task.get("id") or f"t{idx}")
         task_type = str(task.get("type") or "")
         status = str(task.get("status") or "pending")
+        is_unavailable = bool(task_type) and not _is_available_capability(task_type, available_tools)
+        required_tools = [task_type] if task_type else []
+        required_capabilities = (
+            [_capability_spec(task_type, available_tools)] if task_type else []
+        )
+        blocked_tools = [task_type] if is_unavailable else []
+        blocked_capabilities = (
+            [_capability_spec(task_type, available_tools)] if is_unavailable and task_type else []
+        )
         todo = {
             "todo_id": task_id,
             "goal": str(task.get("description") or ""),
-            "required_tools": [task_type] if task_type else [],
-            "blocked_tools": [],
-            "required_capabilities": (
-                [_capability_spec(task_type, available_tools)] if task_type else []
-            ),
-            "blocked_capabilities": [],
+            "required_tools": required_tools,
+            "blocked_tools": blocked_tools,
+            "required_capabilities": required_capabilities,
+            "blocked_capabilities": blocked_capabilities,
             "inputs": dict(task.get("params") or {}),
             "depends_on": [str(x) for x in (task.get("deps") or [])],
             "term_context": term_context,
@@ -74,6 +143,12 @@ def _plan_to_todos(
             "status": status,
         }
         todos.append(todo)
+        if is_unavailable:
+            logger.warning(
+                "planning_node: task capability unavailable and temporarily blocked task_id=%s capability=%s",
+                task_id,
+                task_type,
+            )
     return todos
 
 
@@ -88,6 +163,9 @@ def _direct_todo_from_route(
 ) -> list[dict[str, Any]]:
     if query_mode not in {"online_query", "agent_delegate"} or not target_tool:
         return []
+    direct_inputs = dict(tool_params)
+    if query_mode == "agent_delegate" and "delegate_policy" not in direct_inputs:
+        direct_inputs["delegate_policy"] = {"mode": "sync", "wait_for_reply": True}
     return [
         {
             "todo_id": "t_direct",
@@ -96,7 +174,7 @@ def _direct_todo_from_route(
             "blocked_tools": [],
             "required_capabilities": [_capability_spec(target_tool, available_tools)],
             "blocked_capabilities": [],
-            "inputs": dict(tool_params),
+            "inputs": direct_inputs,
             "depends_on": [],
             "term_context": term_context,
             "acceptance_criteria": "direct tool completed",
@@ -160,7 +238,11 @@ async def planning_node(
     tool_params = raw_tool_params if isinstance(raw_tool_params, dict) else {}
     available_tools = state.get("dynamic_tools") or default_tools or {}
     confirmed_terms = list(intent_updates.get("confirmed_terms") or [])
-    term_context = _build_term_context(confirmed_terms)
+    term_hints = list(intent_updates.get("term_hints") or state.get("term_hints") or [])
+    term_context = _merge_term_context(
+        _build_term_context(confirmed_terms),
+        _build_term_context_from_hints(term_hints),
+    )
 
     if query_mode in {"online_query", "agent_delegate"}:
         tool_fn = available_tools.get(target_tool)

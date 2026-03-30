@@ -212,3 +212,45 @@ async def test_intent_node_uses_query_override_for_replan(
 
     assert captured_query["value"] == "澄清后问题"
     assert out["intent"] == "重算后的意图"
+
+
+@pytest.mark.asyncio
+async def test_intent_prompt_contains_tool_specs_with_description_and_params(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeKnowledgeTool:
+        async def ainvoke(self, payload: dict[str, Any]) -> dict[str, Any]:
+            return {"query": payload.get("query", ""), "term_matches": []}
+
+    captured_messages: dict[str, list[Any]] = {}
+
+    class _FakeLLM:
+        async def ainvoke(self, messages: list[Any]) -> AIMessage:
+            captured_messages["messages"] = messages
+            return AIMessage(
+                content=(
+                    '{"rewritten_intent":"查询企业宽表","clarify_needed":false,'
+                    '"query_mode":"online_query","target_tool":"enterprise_query",'
+                    '"tool_params":{"limit":100},"concept_terms":[]}'
+                )
+            )
+
+    async def _query_tool(content: str, limit: int = 50) -> dict[str, Any]:
+        """企业综合分析表查询工具。"""
+        return {"content": content, "limit": limit}
+
+    monkeypatch.setattr("datacloud_analysis.orchestration.intent.search_knowledge", _FakeKnowledgeTool())
+    monkeypatch.setattr("datacloud_analysis.orchestration.intent.init_chat_model", lambda **_: _FakeLLM())
+
+    state: dict[str, Any] = {"messages": [HumanMessage(content="查企业综合分析表100条")]}
+    out = await intent_node(
+        state,
+        gateway_context=None,
+        default_tools={"enterprise_query": _query_tool},
+    )
+
+    assert out["target_tool"] == "enterprise_query"
+    dynamic_human = captured_messages["messages"][-1]
+    assert "【工具详情（名称/类型/描述/参数）】" in str(dynamic_human.content)
+    assert "enterprise_query" in str(dynamic_human.content)
+    assert "企业综合分析表查询工具" in str(dynamic_human.content)
