@@ -195,7 +195,7 @@ def parse_args():
 def main():
     args = parse_args()
 
-    env_path = Path(__file__).resolve().parents[2] / ".env.example"
+    env_path = Path(__file__).resolve().parents[2] / ".env"
     if env_path.exists():
         load_dotenv(env_path, override=True)
 
