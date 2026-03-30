@@ -44,6 +44,7 @@ async def direct_tool_node(
     updated_task, output = await execute_next_task(
         task,
         state,
+        gateway_context=gateway_context,
         custom_tools=dynamic_tools,
     )
     logger.info(
