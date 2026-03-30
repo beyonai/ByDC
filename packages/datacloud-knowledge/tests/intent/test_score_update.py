@@ -66,7 +66,7 @@ def test_update_score_updates_alias_tags(db_session: Session) -> None:
     update_score(name_id=name_id, success=True, session=db_session)
 
     row = db_session.execute(
-        text("SELECT name_tags FROM whale_datacloud.term_name WHERE name_id = :name_id"),
+        text("SELECT search_scope FROM whale_datacloud.term_name WHERE name_id = :name_id"),
         {"name_id": name_id},
     ).fetchone()
     assert row is not None
@@ -100,7 +100,7 @@ def test_batch_update_scores_updates_multiple_aliases(db_session: Session) -> No
 
     rows = db_session.execute(
         text(
-            "SELECT name_id, name_tags FROM whale_datacloud.term_name "
+            "SELECT name_id, search_scope FROM whale_datacloud.term_name "
             "WHERE name_id IN (:first_name_id, :second_name_id)"
         ),
         {"first_name_id": first_name_id, "second_name_id": second_name_id},

@@ -32,7 +32,7 @@ def create_user_term_name(
     """
     name_id = str(uuid.uuid4())
     now = datetime.now(tz=UTC)
-    name_tags = {
+    search_scope = {
         "scope_user_id": user_id,
         "score": 1.0,
         "use_count": 1,
@@ -43,14 +43,14 @@ def create_user_term_name(
     session.execute(
         text(
             "INSERT INTO whale_datacloud.term_name "
-            "(name_id, term_id, name_text, name_tags, created_time, updated_time) "
-            "VALUES (:name_id, :term_id, :name_text, CAST(:name_tags AS jsonb), :now, :now)"
+            "(name_id, term_id, name_text, search_scope, created_time, updated_time) "
+            "VALUES (:name_id, :term_id, :name_text, CAST(:search_scope AS jsonb), :now, :now)"
         ),
         {
             "name_id": name_id,
             "term_id": term_id,
             "name_text": name_text,
-            "name_tags": json.dumps(name_tags),
+            "search_scope": json.dumps(search_scope),
             "now": now,
         },
     )
