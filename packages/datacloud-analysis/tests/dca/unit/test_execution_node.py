@@ -116,7 +116,7 @@ async def test_execution_uses_default_capability_fallback_when_required_empty(
     out = await execution_node(state, {"configurable": {}}, default_tools={})
 
     assert out["execution_status"] == "done"
-    assert called_types == ["file_read"]
+    assert called_types == ["chat-response-tool"]
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -248,3 +249,68 @@ async def test_hook_context_contains_workspace_and_todo_term_context(
     assert manager.last_context["checkpoint_ns"] == "n1"
     assert manager.last_context["term_hints"] == [{"mention": "m0"}]
     assert manager.last_context["term_context"] == [{"mention": "m1"}]
+
+
+@pytest.mark.asyncio
+async def test_builtin_chat_response_tool_dispatcher(monkeypatch: pytest.MonkeyPatch) -> None:
+    from datacloud_analysis.orchestration import sandbox_executor as se
+
+    monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _NoopHookManager())
+
+    task = {
+        "id": "t_chat",
+        "type": "chat-response-tool",
+        "status": "pending",
+        "deps": [],
+        "params": {"message": "hello"},
+        "description": "desc",
+    }
+    state: dict[str, Any] = {"messages": []}
+    updated_task, output = await execute_next_task(task=task, state=state, gateway_context=None)
+
+    assert updated_task["status"] == "done"
+    assert output == {"message": "hello", "result_type": "chat_response"}
+
+
+@pytest.mark.asyncio
+async def test_builtin_task_note_tool_roundtrip(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from datacloud_analysis.orchestration import sandbox_executor as se
+
+    monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _NoopHookManager())
+
+    state: dict[str, Any] = {"messages": [], "workspace_dir": str(tmp_path)}
+    write_task = {
+        "id": "t_note_write",
+        "type": "task-note-tool",
+        "status": "pending",
+        "deps": [],
+        "params": {"action": "write", "content": "# TODOs\n- a\n"},
+        "description": "desc",
+    }
+    updated_write, write_output = await execute_next_task(
+        task=write_task,
+        state=state,
+        gateway_context=None,
+    )
+    assert updated_write["status"] == "done"
+    assert "todo.md" in str(write_output["path"])
+
+    read_task = {
+        "id": "t_note_read",
+        "type": "task-note-tool",
+        "status": "pending",
+        "deps": [],
+        "params": {"action": "read"},
+        "description": "desc",
+    }
+    updated_read, read_output = await execute_next_task(
+        task=read_task,
+        state=state,
+        gateway_context=None,
+    )
+    assert updated_read["status"] == "done"
+    assert "# TODOs" in str(read_output["content"])
+

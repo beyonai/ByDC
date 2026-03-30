@@ -23,6 +23,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
+import anyio
 from langgraph.types import interrupt
 
 from datacloud_analysis.orchestration.query_shape_utils import count_rows_like_envelope_build
@@ -63,6 +64,72 @@ class _NullContext:
 
     def __exit__(self, *_: Any) -> None:
         pass
+
+
+def _workspace_dir_from_state(state: Mapping[str, Any]) -> Path | None:
+    value = state.get("workspace_dir")
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return Path(value)
+
+
+async def _chat_response_tool(params: dict[str, Any], state: Mapping[str, Any]) -> dict[str, Any]:
+    text = str(
+        params.get("message")
+        or params.get("content")
+        or params.get("text")
+        or params.get("question")
+        or state.get("intent")
+        or state.get("user_query")
+        or "请补充更具体的查询条件。"
+    ).strip()
+    return {"message": text, "result_type": "chat_response"}
+
+
+async def _task_note_tool(params: dict[str, Any], state: Mapping[str, Any]) -> dict[str, Any]:
+    workspace_dir = _workspace_dir_from_state(state)
+    note_path = (
+        workspace_dir / "temp" / "todo.md"
+        if workspace_dir is not None
+        else Path.cwd() / "todo.md"
+    )
+    note_path.parent.mkdir(parents=True, exist_ok=True)
+
+    action = str(params.get("action") or "read").strip().lower()
+    if action == "read":
+        content = note_path.read_text(encoding="utf-8") if note_path.exists() else ""
+        return {"path": str(note_path), "content": content, "action": "read"}
+
+    if action in {"append", "write", "replace"}:
+        raw_content = str(params.get("content") or "")
+        if action == "append":
+            previous = note_path.read_text(encoding="utf-8") if note_path.exists() else ""
+            joined = previous + raw_content
+            note_path.write_text(joined, encoding="utf-8")
+            return {"path": str(note_path), "content": joined, "action": "append"}
+        note_path.write_text(raw_content, encoding="utf-8")
+        return {"path": str(note_path), "content": raw_content, "action": action}
+
+    raise ValueError(f"Unsupported task-note-tool action: {action}")
+
+
+async def _workspace_file_upload_tool(
+    params: dict[str, Any], state: Mapping[str, Any]
+) -> dict[str, Any]:
+    _ = state
+    source = str(params.get("file_path") or params.get("path") or "").strip()
+    if not source:
+        raise ValueError("workspace-file-upload requires file_path")
+    file_path = anyio.Path(source)
+    if not await file_path.exists() or not await file_path.is_file():
+        raise FileNotFoundError(f"upload source not found: {file_path}")
+    resolved = await file_path.resolve()
+    return {
+        "file_id": resolved.name,
+        "file_url": str(resolved),
+        "original_download_url": str(resolved),
+        "message": "workspace upload simulated",
+    }
 
 
 def _log_tool_output_summary(task_id: str, task_type: str, output: Any) -> None:
@@ -567,6 +634,11 @@ def _register_dispatchers() -> None:
                 "code_exec": sbx_run_code,
                 "file_read": sbx_read_file,
                 "file_write": sbx_write_file,
+                "workspace-file-read": sbx_read_file,
+                "workspace-file-write": sbx_write_file,
+                "workspace-file-upload": _workspace_file_upload_tool,
+                "task-note-tool": _task_note_tool,
+                "chat-response-tool": _chat_response_tool,
                 "recall_memory": recall_memory,
                 "build_skill": build_skill,
                 "render_report": render_report,
