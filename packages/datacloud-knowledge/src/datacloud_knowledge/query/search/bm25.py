@@ -1,4 +1,8 @@
-﻿"""BM25-style term name search over PostgreSQL/OpenGauss."""
+﻿"""BM25 搜索实现。
+
+使用 PostgreSQL 的 tsvector + ts_rank_cd 实现 BM25 风格的全文搜索。
+术语名称使用单字分词，存储在 name_keywords 字段中。
+"""
 
 from __future__ import annotations
 
@@ -23,7 +27,7 @@ _TSV_COLUMN = "name_keywords"
 
 @dataclass(frozen=True, slots=True)
 class BM25Result:
-    """Single BM25 match row."""
+    """单条 BM25 匹配结果。"""
 
     term_id: str
     term_name: str
@@ -157,7 +161,7 @@ def bm25_search(
     top_k: int = 10,
     min_score: float = 0.01,
 ) -> list[BM25Result]:
-    """Search with AND semantics for every character token."""
+    """使用 BM25 搜索术语名称（AND 语义，所有字符必须匹配）。"""
     return _search(
         session,
         query_text,
@@ -173,7 +177,7 @@ def bm25_search_with_or(
     top_k: int = 10,
     min_score: float = 0.01,
 ) -> list[BM25Result]:
-    """Search with OR semantics for character tokens."""
+    """使用 BM25 搜索术语名称（OR 语义，匹配任意字符即可）。"""
     return _search(
         session,
         query_text,
