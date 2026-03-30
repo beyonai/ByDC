@@ -6,7 +6,7 @@ from datacloud_knowledge import nl_to_semantic_tree
 
 def main():
 
-    env_path = Path(__file__).resolve().parents[2] / ".env.example"
+    env_path = Path(__file__).resolve().parents[2] / ".env"
     if env_path.exists():
         load_dotenv(env_path, override=True)
 
