@@ -64,6 +64,37 @@ def _summarize_roles(msgs: list[BaseMessage]) -> str:
     return ",".join(labels)
 
 
+def _normalize_terms(terms: list[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for term in terms:
+        text = str(term).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        normalized.append(text)
+    return normalized
+
+
+def _merge_concept_terms(*, llm_terms: list[str], km_terms: list[str]) -> list[str]:
+    """Merge concept terms, preferring longer overlapping phrases."""
+    llm = _normalize_terms(llm_terms)
+    km = _normalize_terms(km_terms)
+
+    ordered = list(llm)
+    for term in km:
+        if term not in ordered:
+            ordered.append(term)
+
+    selected: list[str] = []
+    for term in ordered:
+        if any(term != kept and term in kept for kept in selected):
+            continue
+        selected = [kept for kept in selected if not (kept != term and kept in term)]
+        selected.append(term)
+    return selected
+
+
 def _history_records_to_messages(records: list[dict[str, Any]]) -> list[BaseMessage]:
     out: list[BaseMessage] = []
     for row in records:
@@ -136,9 +167,12 @@ _INTENT_STATIC_SYSTEM = """你是意图识别与问题改写专家。
 
 规则：
 1. chitchat 时，target_tool 必须是 ""，tool_params 必须是 {}，concept_terms 必须是 []。
-2. online_query 时，target_tool 必须从“本轮可用工具列表”中选择一个。
+2. online_query 时，target_tool 必须从"本轮可用工具列表"中选择一个。
 3. 若工具不确定或需要多步推理，query_mode 使用 analysis。
 4. concept_terms 仅抽取业务对象/指标/术语，不含时间词、语气词、纯数字。
+5. concept_terms 抽取时保持原文中连续名词短语的最大粒度，不要按语义拆分子词。例如"企业综合分析表"是一个术语，不要拆成"企业"和"综合分析表"。
+6. rewritten_intent 改写时保留原文中的专有名词，不得拆分或替换业务术语。
+7. clarify_needed 仅在用户问题本身残缺、缺少必要的查询条件（如完全没有说明要查什么对象）时才设为 true。不确定术语含义不属于此情况，术语不确定应放入 concept_terms 由后续流程处理，clarify_needed 此时必须为 false。
 """
 
 
@@ -147,6 +181,7 @@ async def intent_node(
     gateway_context: Any = None,
     default_prompts: dict[str, Any] | None = None,
     default_tools: dict[str, Any] | None = None,
+    query_override: str | None = None,
 ) -> dict[str, Any]:
     logger.debug("intent_node: classifying intent")
 
@@ -161,8 +196,9 @@ async def intent_node(
             "tool_params": {},
         }
 
-    last_user_msg = messages[-1].content if hasattr(messages[-1], "content") else str(messages[-1])
-    current_user_plain = _plain_text(last_user_msg)
+    original_user_msg = messages[-1].content if hasattr(messages[-1], "content") else str(messages[-1])
+    effective_user_msg = query_override if query_override and query_override.strip() else str(original_user_msg)
+    current_user_plain = _plain_text(effective_user_msg)
 
     if _is_numeric_or_symbol_only_input(current_user_plain):
         logger.info(
@@ -196,7 +232,7 @@ async def intent_node(
     )
     agent_tools_line = ", ".join(agent_tool_names) if agent_tool_names else "（无）"
 
-    knowledge_payload = await search_knowledge.ainvoke({"query": str(last_user_msg)})
+    knowledge_payload = await search_knowledge.ainvoke({"query": str(effective_user_msg)})
     knowledge_text = json.dumps(knowledge_payload, ensure_ascii=False) if knowledge_payload else "无"
 
     model = os.getenv("DATACLOUD_LLM_REASONING_MODEL", "openai:Qwen/Qwen3-235B-A22B")
@@ -218,7 +254,8 @@ async def intent_node(
             f"【本轮可用工具】{tools_line}\n\n"
             f"【Agent委托工具】{agent_tools_line}\n\n"
             f"【知识检索结果】\n{knowledge_text}\n\n"
-            f"【用户问题】{last_user_msg}\n"
+            f"【用户原始问题】{original_user_msg}\n"
+            f"【当前待分析问题】{effective_user_msg}\n"
         )
     )
 
@@ -241,7 +278,7 @@ async def intent_node(
     except Exception as exc:  # noqa: BLE001
         logger.warning("intent_node: LLM call failed, falling back to defaults. Error: %s", exc)
         return {
-            "intent": str(last_user_msg),
+            "intent": str(effective_user_msg),
             "chitchat_reply": None,
             "clarify_needed": False,
             "knowledge_preview": knowledge_text[:500] if knowledge_text else "无",
@@ -258,7 +295,7 @@ async def intent_node(
             content = content.split("```")[1].split("```")[0].strip()
         result = json.loads(content)
 
-        rewritten_intent = result.get("rewritten_intent", str(last_user_msg))
+        rewritten_intent = result.get("rewritten_intent", str(effective_user_msg))
         clarify_needed = bool(result.get("clarify_needed", False))
         query_mode = str(result.get("query_mode", "analysis"))
         if query_mode not in ("online_query", "analysis", "chitchat", "agent_delegate"):
@@ -269,14 +306,34 @@ async def intent_node(
         raw_tool_params = result.get("tool_params", {})
         tool_params = raw_tool_params if isinstance(raw_tool_params, dict) else {}
         raw_concept_terms = result.get("concept_terms", [])
-        concept_terms = (
+        llm_terms = (
             [str(term) for term in raw_concept_terms if str(term).strip()]
             if isinstance(raw_concept_terms, list)
             else []
         )
+        # 以 LLM 原句抽词为主，knowledge term_matches 只作为补充信号。
+        # 通过最长覆盖优先避免“企业综合分析表”被“企业”子词吞掉。
+        km_terms = [
+            str(m["term_name"])
+            for m in (
+                (knowledge_payload.get("term_matches") if isinstance(knowledge_payload, dict) else [])
+                or []
+            )
+            if isinstance(m, dict) and str(m.get("term_name", "")).strip()
+        ]
+        concept_terms = _merge_concept_terms(llm_terms=llm_terms, km_terms=km_terms)
+        logger.info(
+            "intent_node: concept_terms llm=%d km=%d total=%d llm=%s km=%s merged=%s",
+            len(llm_terms),
+            len(km_terms),
+            len(concept_terms),
+            llm_terms,
+            km_terms,
+            concept_terms,
+        )
     except Exception as exc:  # noqa: BLE001
         logger.warning("intent_node: parse intent JSON failed, fallback to default. Error: %s", exc)
-        rewritten_intent = str(last_user_msg)
+        rewritten_intent = str(effective_user_msg)
         clarify_needed = False
         query_mode = "analysis"
         target_tool = ""
@@ -299,7 +356,7 @@ async def intent_node(
             candidates_map = await search_all_candidates(concept_terms, user_id=user_id)
             confirmed_terms, ambiguous_terms = await disambiguate_candidates(
                 candidates_map,
-                str(last_user_msg),
+                str(effective_user_msg),
                 llm=llm,
             )
             logger.info(
@@ -377,4 +434,3 @@ async def intent_node(
         "confirmed_terms": confirmed_terms,
         "ambiguous_terms": ambiguous_terms,
     }
-
