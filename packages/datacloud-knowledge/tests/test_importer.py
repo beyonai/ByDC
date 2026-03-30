@@ -144,9 +144,9 @@ def generate_embeddings(batch_size: int = 50) -> dict:
     """为 term_name 表生成向量嵌入。
 
     流程：
-        1. 查询 name_vector 为 NULL 的记录
+        1. 查询 name_embedding 为 NULL 的记录
         2. 批量调用 embedding 服务生成向量
-        3. 写入 name_vector 字段
+        3. 写入 name_embedding 字段
 
     Args:
         batch_size: 批量处理大小
@@ -167,7 +167,7 @@ def generate_embeddings(batch_size: int = 50) -> dict:
     try:
         # 统计总数
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM whale_datacloud.term_name WHERE name_vector IS NULL")
+            cur.execute("SELECT COUNT(*) FROM whale_datacloud.term_name WHERE name_embedding IS NULL")
             total = cur.fetchone()[0]
 
         if total == 0:
@@ -186,7 +186,7 @@ def generate_embeddings(batch_size: int = 50) -> dict:
                     """
                     SELECT name_id, name_text
                     FROM whale_datacloud.term_name
-                    WHERE name_vector IS NULL
+                    WHERE name_embedding IS NULL
                     ORDER BY name_id
                     LIMIT %s OFFSET %s
                     """,
@@ -214,7 +214,7 @@ def generate_embeddings(batch_size: int = 50) -> dict:
                 for name_id, vector in zip(name_ids, vectors):
                     vector_str = "[" + ",".join(map(str, vector)) + "]"
                     cur.execute(
-                        "UPDATE whale_datacloud.term_name SET name_vector = %s::vector WHERE name_id = %s",
+                        "UPDATE whale_datacloud.term_name SET name_embedding = %s::vector WHERE name_id = %s",
                         (vector_str, name_id),
                     )
 
@@ -235,7 +235,7 @@ def generate_embeddings(batch_size: int = 50) -> dict:
 def populate_tsvector() -> dict:
     """为 term_name 表填充 tsvector 字段（BM25 全文搜索）。
 
-    使用单字分词方式更新 name_text_tsv 字段。
+    使用单字分词方式更新 name_keywords 字段。
 
     Returns:
         统计信息 {"updated": N}
@@ -248,7 +248,7 @@ def populate_tsvector() -> dict:
             # 更新 tsvector 字段（单字分词）
             cur.execute("""
                 UPDATE whale_datacloud.term_name
-                SET name_text_tsv = to_tsvector(
+                SET name_keywords = to_tsvector(
                     'simple',
                     array_to_string(string_to_array(COALESCE(name_text, ''), NULL), ' ')
                 )
