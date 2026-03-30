@@ -136,6 +136,38 @@ async def test_dynamic_ainvoke_dispatcher_backfills_content(monkeypatch: pytest.
 
 
 @pytest.mark.asyncio
+async def test_dynamic_ainvoke_keyword_only_content_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:
+    from datacloud_analysis.orchestration import sandbox_executor as se
+
+    monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _NoopHookManager())
+
+    class _AinvokeKeywordOnly:
+        async def ainvoke(self, *, content: str, _context: Any = None, **params: Any) -> dict[str, Any]:
+            return {"content": content, "context": _context, "params": params}
+
+    gateway_context = object()
+    task = {
+        "id": "t_direct",
+        "type": "ainvoke_tool",
+        "status": "pending",
+        "deps": [],
+        "params": {"question": "Q3"},
+        "description": "desc",
+    }
+    state: dict[str, Any] = {"messages": []}
+    updated_task, output = await execute_next_task(
+        task=task,
+        state=state,
+        gateway_context=gateway_context,
+        custom_tools={"ainvoke_tool": _AinvokeKeywordOnly()},
+    )
+
+    assert updated_task["status"] == "done"
+    assert output["content"] == "Q3"
+    assert output["context"] is gateway_context
+
+
+@pytest.mark.asyncio
 async def test_hook_legacy_short_circuit_schema_is_supported(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -195,6 +227,7 @@ async def test_hook_context_contains_workspace_and_todo_term_context(
         "agent_id": "a1",
         "workspace_dir": "/tmp/dc",
         "enriched_query": "q1",
+        "term_hints": [{"mention": "m0"}],
         "knowledge_snippets": [{"source": "k"}],
         "todos": [{"todo_id": "t1", "goal": "g1", "term_context": [{"mention": "m1"}]}],
         "resume_context": {"checkpoint_id": "c1", "checkpoint_ns": "n1"},
@@ -213,4 +246,5 @@ async def test_hook_context_contains_workspace_and_todo_term_context(
     assert manager.last_context["workspace_dir"] == "/tmp/dc"
     assert manager.last_context["checkpoint_id"] == "c1"
     assert manager.last_context["checkpoint_ns"] == "n1"
+    assert manager.last_context["term_hints"] == [{"mention": "m0"}]
     assert manager.last_context["term_context"] == [{"mention": "m1"}]

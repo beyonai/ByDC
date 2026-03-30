@@ -141,6 +141,7 @@ def _build_hook_context(
             str(state.get("enriched_query") or "")
             or (str(state.get("intent") or "") if state.get("intent") else None)
         ),
+        "term_hints": list(state.get("term_hints") or []),
         "term_context": list(_todo_term_context(state, task)),
         "knowledge_snippets": list(state.get("knowledge_snippets") or []),
         "workspace_dir": str(state.get("workspace_dir") or "") or None,
@@ -196,6 +197,8 @@ def _decision_action(decision: HookDecision | None) -> str:
 def _decision_output(decision: HookDecision | None) -> Any:
     if not isinstance(decision, dict):
         return None
+    if "tool_output" in decision:
+        return decision.get("tool_output")
     if "output" in decision:
         return decision.get("output")
     result = decision.get("result")
@@ -207,6 +210,11 @@ def _decision_output(decision: HookDecision | None) -> Any:
 def _decision_error_text(decision: HookDecision | None, default: str) -> str:
     if not isinstance(decision, dict):
         return default
+    tool_error = decision.get("tool_error")
+    if isinstance(tool_error, dict):
+        message = str(tool_error.get("message") or "").strip()
+        if message:
+            return message
     if isinstance(decision.get("error"), str) and str(decision.get("error")).strip():
         return str(decision.get("error")).strip()
     result = decision.get("result")
@@ -257,6 +265,59 @@ def _prepare_dynamic_callable_kwargs(
     if accepts_var_kwargs:
         return call_kwargs
     return {key: value for key, value in call_kwargs.items() if key in parameters}
+
+
+def _is_signature_mismatch_type_error(exc: TypeError) -> bool:
+    text = str(exc)
+    patterns = (
+        "required positional argument",
+        "unexpected keyword argument",
+        "positional arguments but",
+        "keyword-only argument",
+        "got multiple values for argument",
+    )
+    return any(pattern in text for pattern in patterns)
+
+
+async def _invoke_dynamic_callable_adaptive(
+    *,
+    callable_target: Any,
+    params: dict[str, Any],
+    task_description: str,
+    gateway_context: Any,
+) -> Any:
+    call_kwargs = _prepare_dynamic_callable_kwargs(
+        dynamic_dispatcher=callable_target,
+        params=params,
+        task_description=task_description,
+        gateway_context=gateway_context,
+    )
+
+    # Try kwargs first (best for function-call tools), then dict payload (best for wrapper .ainvoke).
+    attempts: list[tuple[str, Any]] = [
+        ("kwargs", lambda: callable_target(**call_kwargs)),
+        ("dict", lambda: callable_target(params)),
+    ]
+    last_signature_exc: TypeError | None = None
+    for mode, call in attempts:
+        try:
+            maybe = call()
+            return await maybe if hasattr(maybe, "__await__") else maybe
+        except TypeError as exc:
+            if not _is_signature_mismatch_type_error(exc):
+                raise
+            last_signature_exc = exc
+            logger.debug(
+                "dynamic callable %s invocation mode=%s signature mismatch: %s",
+                getattr(callable_target, "__qualname__", repr(callable_target)),
+                mode,
+                exc,
+            )
+            continue
+
+    if last_signature_exc is not None:
+        raise last_signature_exc
+    raise RuntimeError("dynamic callable invocation failed without TypeError details")
 
 
 def _ensure_dynamic_content_param(params: dict[str, Any], task_description: str) -> dict[str, Any]:
@@ -382,32 +443,31 @@ async def execute_next_task(
 
             with invocation_ctx:
                 if hasattr(dynamic_dispatcher, "ainvoke"):
+                    ainvoke_target = dynamic_dispatcher.ainvoke
                     try:
-                        output = await dynamic_dispatcher.ainvoke(params)
-                    except TypeError as exc:
-                        # Some wrappers expose ``ainvoke`` but still require function-style kwargs.
-                        err_text = str(exc)
-                        if "required positional argument: 'content'" not in err_text or not callable(
-                            dynamic_dispatcher
-                        ):
-                            raise
-                        call_kwargs = _prepare_dynamic_callable_kwargs(
-                            dynamic_dispatcher=dynamic_dispatcher,
+                        output = await _invoke_dynamic_callable_adaptive(
+                            callable_target=ainvoke_target,
                             params=params,
                             task_description=str(task.get("description") or ""),
                             gateway_context=gateway_context,
                         )
-                        maybe = dynamic_dispatcher(**call_kwargs)
-                        output = await maybe if hasattr(maybe, "__await__") else maybe
+                    except TypeError as exc:
+                        # Some wrappers expose ``ainvoke`` but only support __call__(**kwargs).
+                        if not callable(dynamic_dispatcher) or not _is_signature_mismatch_type_error(exc):
+                            raise
+                        output = await _invoke_dynamic_callable_adaptive(
+                            callable_target=dynamic_dispatcher,
+                            params=params,
+                            task_description=str(task.get("description") or ""),
+                            gateway_context=gateway_context,
+                        )
                 elif callable(dynamic_dispatcher):
-                    call_kwargs = _prepare_dynamic_callable_kwargs(
-                        dynamic_dispatcher=dynamic_dispatcher,
+                    output = await _invoke_dynamic_callable_adaptive(
+                        callable_target=dynamic_dispatcher,
                         params=params,
                         task_description=str(task.get("description") or ""),
                         gateway_context=gateway_context,
                     )
-                    maybe = dynamic_dispatcher(**call_kwargs)
-                    output = await maybe if hasattr(maybe, "__await__") else maybe
                 else:
                     output = dynamic_dispatcher
         else:

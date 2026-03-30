@@ -30,6 +30,7 @@ class HookContext(TypedDict, total=False):
     tool_params: dict[str, Any]
     user_query: str
     enriched_query: str | None
+    term_hints: list[dict[str, Any]]
     term_context: list[dict[str, Any]]
     knowledge_snippets: list[dict[str, Any]]
     workspace_dir: str | None
@@ -38,14 +39,56 @@ class HookContext(TypedDict, total=False):
     metadata: dict[str, Any]
 
 
+class HookPatch(TypedDict, total=False):
+    """Patch payload for context mutation."""
+
+    tool_params: dict[str, Any]
+    knowledge_snippets_append: list[dict[str, Any]]
+    term_context_append: list[dict[str, Any]]
+
+
+class HookResult(TypedDict, total=False):
+    """Terminal result payload for short_circuit/fail/recover."""
+
+    tool_output: Any
+    tool_error: HookError
+
+
+class HookInterrupt(TypedDict, total=False):
+    """Interrupt payload schema for human-in-the-loop."""
+
+    reason_code: str
+    prompt: str
+    required_fields: list[str]
+    resume_payload_schema: dict[str, Any]
+
+
+class HookAudit(TypedDict, total=False):
+    """Audit payload for plugin decision logs."""
+
+    plugin_id: str
+    message: str
+    risk_level: Literal["low", "medium", "high"]
+
+
 class HookDecision(TypedDict, total=False):
     """One hook decision returned by plugin callbacks."""
 
     action: HookAction
-    patch: dict[str, Any]
-    result: dict[str, Any]
-    interrupt: dict[str, Any]
-    audit: dict[str, Any]
+    patch: HookPatch
+    result: HookResult
+    interrupt: HookInterrupt
+    audit: HookAudit
+
+    # Legacy schema fields (kept for compatibility)
+    tool_params: dict[str, Any]
+    knowledge_snippets_append: list[dict[str, Any]]
+    term_context_append: list[dict[str, Any]]
+    short_circuit: bool
+    block: bool
+    recover: bool
+    output: Any
+    error: str | HookError
 
 
 ToolHookCallback = Callable[[HookContext], HookDecision | Awaitable[HookDecision] | None]
