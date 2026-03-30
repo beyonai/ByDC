@@ -1,7 +1,7 @@
-"""Knowledge tools for intent orchestration.
+"""意图编排的知识工具模块。
 
-This module only orchestrates calls to ``datacloud-knowledge`` facade APIs.
-No SQL/session operation should live here.
+本模块仅编排对 ``datacloud-knowledge`` 门面 API 的调用。
+不应在此处包含 SQL/session 操作。
 """
 
 from __future__ import annotations
@@ -111,7 +111,7 @@ def _normalize_search_payload(raw: dict[str, Any], *, query: str) -> dict[str, A
 
 @tool
 async def search_knowledge(query: str, n_hops: int = 4) -> dict[str, Any]:
-    """Search knowledge and return a structured payload for prompt context."""
+    """搜索知识图谱，返回结构化载荷供 prompt 上下文使用。"""
     from datacloud_knowledge.query import get_singleton_service
 
     def _run_query() -> dict[str, Any]:
@@ -148,7 +148,7 @@ async def search_all_candidates(
     user_id: str | None = None,
     top_k: int = 5,
 ) -> dict[str, list[CandidateDict]]:
-    """Run strict->bm25->vector funnel search for all concept terms."""
+    """对所有概念术语执行 strict→bm25→vector 漏斗搜索。"""
     from datacloud_knowledge.intent import search_all_candidates_with_name_id
 
     if not concept_terms:
@@ -180,7 +180,7 @@ async def disambiguate_candidates(
     *,
     llm: Any,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Three-layer disambiguation returning (confirmed_terms, ambiguous_terms)."""
+    """三层消歧，返回 (confirmed_terms, ambiguous_terms)。"""
     from datacloud_knowledge.intent import (
         MatchCandidate,
         MatchResult,
@@ -269,7 +269,7 @@ async def _llm_disambiguate(
     *,
     candidates_map: dict[str, list[CandidateDict]],
 ) -> tuple[list[dict[str, Any]], dict[str, tuple[Any, ...]]]:
-    """Use LLM context reasoning to resolve residual ambiguities."""
+    """使用 LLM 上下文推理解决剩余歧义。"""
     candidates_text = ""
     for mention, candidates in ambiguous_raw.items():
         if not candidates:
@@ -352,7 +352,7 @@ async def save_clarification_results(
     clarification_results: dict[str, Any],
     user_id: str,
 ) -> list[str]:
-    """Persist clarification results and return created name_id list."""
+    """持久化澄清结果，返回创建的 name_id 列表。"""
     from datacloud_knowledge.intent import store_clarification_results
 
     return await asyncio.to_thread(store_clarification_results, clarification_results, user_id)
@@ -363,7 +363,7 @@ async def update_term_scores(
     *,
     gateway_context: Any | None = None,
 ) -> None:
-    """Fire-and-forget update of term-name score via worker async command."""
+    """异步更新术语名称评分（fire-and-forget）。"""
     if not score_records:
         return
 
