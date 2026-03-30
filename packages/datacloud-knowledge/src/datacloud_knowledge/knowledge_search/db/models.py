@@ -66,7 +66,7 @@ class TermName(Base):
     name_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     term_id: Mapped[str] = mapped_column(String(255), nullable=False)
     name_text: Mapped[str] = mapped_column(String(255), nullable=False)
-    name_tags: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    search_scope: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     created_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 

@@ -11,10 +11,10 @@ DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'whale_datacloud' AND table_name = 'term_name' AND column_name = 'name_text_tsv'
+        WHERE table_schema = 'whale_datacloud' AND table_name = 'term_name' AND column_name = 'name_keywords'
     ) THEN
-        ALTER TABLE whale_datacloud.term_name ADD COLUMN name_text_tsv tsvector;
-        COMMENT ON COLUMN whale_datacloud.term_name.name_text_tsv IS 'BM25 全文搜索向量，基于 name_text 单字分词';
+        ALTER TABLE whale_datacloud.term_name ADD COLUMN name_keywords tsvector;
+        COMMENT ON COLUMN whale_datacloud.term_name.name_keywords IS 'BM25 全文搜索向量，基于 name_text 单字分词';
     END IF;
 END $$;
 
@@ -23,10 +23,10 @@ DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'whale_datacloud' AND table_name = 'term_name' AND column_name = 'name_vector'
+        WHERE table_schema = 'whale_datacloud' AND table_name = 'term_name' AND column_name = 'name_embedding'
     ) THEN
-        ALTER TABLE whale_datacloud.term_name ADD COLUMN name_vector vector(1024);
-        COMMENT ON COLUMN whale_datacloud.term_name.name_vector IS '向量语义召回，1024 维 embedding';
+        ALTER TABLE whale_datacloud.term_name ADD COLUMN name_embedding vector(1024);
+        COMMENT ON COLUMN whale_datacloud.term_name.name_embedding IS '向量语义召回，1024 维 embedding';
     END IF;
 END $$;
 
@@ -35,7 +35,7 @@ END $$;
 CREATE OR REPLACE FUNCTION whale_datacloud.term_name_tsv_trigger() RETURNS trigger AS $$
 BEGIN
     -- 单字分词：将 "企业分析" 转换为 "企 业 分 析"，使用 simple 配置索引
-    NEW.name_text_tsv := to_tsvector('simple', array_to_string(string_to_array(COALESCE(NEW.name_text, ''), NULL), ' '));
+    NEW.name_keywords := to_tsvector('simple', array_to_string(string_to_array(COALESCE(NEW.name_text, ''), NULL), ' '));
     RETURN NEW;
 END
 $$ LANGUAGE plpgsql;
@@ -52,4 +52,4 @@ END $$;
 
 -- 步骤 5: 为存量数据填充 tsvector（仅执行一次，可手动运行）
 -- UPDATE whale_datacloud.term_name
--- SET name_text_tsv = to_tsvector('simple', array_to_string(string_to_array(COALESCE(name_text, ''), NULL), ' '));
+-- SET name_keywords = to_tsvector('simple', array_to_string(string_to_array(COALESCE(name_text, ''), NULL), ' '));
