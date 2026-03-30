@@ -138,10 +138,10 @@ _INTENT_STATIC_SYSTEM = """你是一个意图识别与改写专家。
 - "chitchat"：问候、寒暄、感谢、玩笑等与业务数据/分析无关的闲聊；不需要查数、不需要任务规划或生成报告。
 - "agent_delegate"：问题属于某个专项子Agent的职责范围，应整体移交给 Agent委托工具处理。
 
-
 当 query_mode 为 "chitchat" 时：
 - "target_tool" 必须为 ""，"tool_params" 必须为 {}。
 - "rewritten_intent" 可保留用户原话或略作润色。
+- "concept_terms" 必须为 []。
 
 当 query_mode 为 "online_query" 时：
 - "target_tool" 必须从本轮 HumanMessage 提供的【可用工具列表】中选且仅选一个；\
@@ -151,7 +151,16 @@ _INTENT_STATIC_SYSTEM = """你是一个意图识别与改写专家。
 
 当 query_mode 为 "agent_delegate" 时：
 - "target_tool" 必须从【Agent委托工具】列表中选且仅选一个；若列表为空则必须使用 "analysis"。
-- "tool_params" 填空对象 {{}}。
+- "tool_params" 填空对象 {}。
+
+## concept_terms 提取规则
+从用户问题中提取需要在知识图谱中检索的业务术语词，例如：
+- 指标名称：利润、GMV、DAU
+- 对象名称：企业、门店、商品
+- 维度名称：大区、品类
+
+不要提取：时间词（今年、上月）、通用动词（查询、分析）、数字。
+如果问题是闲聊或无业务术语，返回空列表 []。
 
 ## 返回格式（严格 JSON，无多余字段）
 {
@@ -159,7 +168,8 @@ _INTENT_STATIC_SYSTEM = """你是一个意图识别与改写专家。
   "clarify_needed": true/false,
   "query_mode": "online_query" 或 "analysis" 或 "chitchat" 或 "agent_delegate",
   "target_tool": "工具名或空字符串",
-  "tool_params": {}
+  "tool_params": {},
+  "concept_terms": ["术语1", "术语2"]
 }
 """
 
@@ -167,9 +177,9 @@ _INTENT_STATIC_SYSTEM = """你是一个意图识别与改写专家。
 async def intent_node(
     state: AgentState,
     gateway_context: Any = None,
-    default_prompts: dict | None = None,
+    default_prompts: dict[str, Any] | None = None,
     default_tools: dict[str, Any] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Classify intent and attach knowledge context, then rewrite the query.
 
     Args:
@@ -204,7 +214,7 @@ async def intent_node(
 
     prompts_overwrite = state.get("prompts_overwrite") or default_prompts or {}
     dynamic_tools = state.get("dynamic_tools") or default_tools or {}
-    tool_names = sorted(dynamic_tools.keys()) if isinstance(dynamic_tools, dict) else []
+    tool_names = sorted(dynamic_tools.keys())
     tools_line = ", ".join(tool_names) if tool_names else "（当前无动态工具，请使用 analysis）"
 
     agent_tool_names = sorted(
@@ -304,6 +314,8 @@ async def intent_node(
             target_tool = str(target_tool) if target_tool is not None else ""
         raw_tp = result.get("tool_params", {})
         tool_params = raw_tp if isinstance(raw_tp, dict) else {}
+        raw_ct = result.get("concept_terms", [])
+        concept_terms: list[str] = [str(t) for t in raw_ct if t] if isinstance(raw_ct, list) else []
     except Exception as e:
         logger.warning("Failed to parse intent JSON, fallback to default. Error: %s", e)
         rewritten_intent = str(last_user_msg)
@@ -311,15 +323,65 @@ async def intent_node(
         query_mode = "analysis"
         target_tool = ""
         tool_params = {}
+        concept_terms = []
 
     # 截断知识预览（避免 Redis/前端爆量）
     knowledge_preview = knowledge_text[:500] if knowledge_text else "无"
+
+    # --- 术语检索 & 消歧 ---
+    # 仅当 LLM 识别出 concept_terms 且非闲聊时执行，避免无谓的 DB 查询
+    confirmed_terms: list[dict[str, Any]] = []
+    ambiguous_terms: list[dict[str, Any]] = []
+    if concept_terms and query_mode != "chitchat":
+        user_id: str | None = None
+        if gateway_context is not None:
+            user_id = getattr(gateway_context, "user_id", None)
+        try:
+            from datacloud_analysis.tools.knowledge import (
+                disambiguate_candidates,
+                search_all_candidates,
+                update_term_scores,
+            )
+            candidates_map = await search_all_candidates(
+                concept_terms, user_id=user_id
+            )
+            confirmed_terms, ambiguous_terms = await disambiguate_candidates(
+                candidates_map, str(last_user_msg), llm=llm
+            )
+            logger.info(
+                "intent_node: term_search concept_terms=%d confirmed=%d ambiguous=%d",
+                len(concept_terms), len(confirmed_terms), len(ambiguous_terms),
+            )
+            # 对已有别名的确认词异步更新 score（fire-and-forget）
+            score_records = [
+                {"name_id": t.get("name_id"), "success": True}
+                for t in confirmed_terms
+                if t.get("name_id")
+            ]
+            if score_records:
+                await update_term_scores(score_records)
+        except Exception as exc:
+            logger.warning("intent_node: term retrieval/disambiguation failed: %s", exc)
+            confirmed_terms = []
+            ambiguous_terms = [
+                {
+                    "mention": term,
+                    "candidates": [],
+                    "reason": "术语检索失败，需人工确认",
+                }
+                for term in concept_terms
+            ]
 
     async def _emit_intent_reasoning_snapshot() -> None:
         """Push intent-phase reasoning to the gateway (reads latest locals each call)."""
 
         if gateway_context is None:
             return
+        term_line = ""
+        if confirmed_terms:
+            term_line += f"\n■ 已确认术语：{', '.join(t['mention'] + '→' + t['term_name'] for t in confirmed_terms)}"
+        if ambiguous_terms:
+            term_line += f"\n■ 待澄清术语：{', '.join(t['mention'] for t in ambiguous_terms)}"
         thinking = (
             ""
             f"■ 检索到的业务知识（节选）：\n{knowledge_preview}\n\n"
@@ -328,6 +390,7 @@ async def intent_node(
             f"■ 路由：{query_mode}"
             + (f" / 工具：{target_tool}" if query_mode in ("online_query", "agent_delegate") else "")
             + (" / 闲聊直出" if query_mode == "chitchat" else "")
+            + term_line
         )
         await gateway_context.emit_chunk(
             StreamChunkEvent(content="问题理解"),
@@ -341,21 +404,8 @@ async def intent_node(
             content_type=SseReasonMessageType.think_text.value,
         )
 
-    # 必须在 interrupt() 之前推送思考：若在 clarify_needed 时先 interrupt，节点在挂起点之前
-    # 不会执行后面的 emit，前端会只有「思考中」而无「问题理解」；且无 checkpointer 时 Worker
-    # 无法 aget_state 检测中断，会误判为正常结束。
+    # 在返回路由前推送意图识别快照，保证前端有完整“问题理解”阶段信息。
     await _emit_intent_reasoning_snapshot()
-
-    # 当意图不清晰时，通过 interrupt() 挂起图；resume 后返回值写入 rewritten_intent。
-    if clarify_needed:
-        logger.info("intent_node: clarify_needed=True, calling interrupt() for HITL")
-        from langgraph.types import interrupt as lg_interrupt  # noqa: PLC0415
-
-        user_reply = lg_interrupt(rewritten_intent)
-        if user_reply:
-            rewritten_intent = str(user_reply)
-            clarify_needed = False
-        await _emit_intent_reasoning_snapshot()
 
     if query_mode == "chitchat":
         target_tool = ""
@@ -368,4 +418,7 @@ async def intent_node(
         "query_mode": query_mode,
         "target_tool": target_tool,
         "tool_params": tool_params,
+        "concept_terms": concept_terms,
+        "confirmed_terms": confirmed_terms,
+        "ambiguous_terms": ambiguous_terms,
     }
