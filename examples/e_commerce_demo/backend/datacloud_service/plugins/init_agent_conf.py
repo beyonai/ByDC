@@ -266,7 +266,9 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
                             # 当资源类型为 DB_TABLE 时，额外补充自身的 query() 动态工具
                             if resource_type == "DB_TABLE":
                                 dynamic_tools[f"{resource_code}_query"] = self._build_query_tool(
-                                    obj.query
+                                    obj.query,
+                                    tool_name=f"{resource_code}_query",
+                                    tool_desc=f"{rel.get('resourceName', resource_code)} {rel.get('resourceDesc', '')}".strip(),
                                 )
 
                     elif resource_biz_type == "VIEW":
@@ -274,13 +276,15 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
                         if view:
                             # 3：当作为 VIEW 挂载时，补充 view.query()
                             dynamic_tools[f"{resource_code}_query"] = self._build_query_tool(
-                                view.query
+                                view.query,
+                                tool_name=f"{resource_code}_query",
+                                tool_desc=f"{rel.get('resourceName', resource_code)} {rel.get('resourceDesc', '')}".strip(),
                             )
                 except Exception as e:
                     logger.warning("本体解析失败 rel=%s err=%s", rel, e)
         return dynamic_tools
 
-    def _build_query_tool(self, query_func):
+    def _build_query_tool(self, query_func, *, tool_name: str, tool_desc: str = ""):
         """Wrap query(question=...) into a dispatcher-compatible async callable."""
 
         async def _tool(**params):
@@ -289,6 +293,11 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             )
             return await query_func(question=str(question), include_plan=True)
 
+        _tool.__doc__ = (
+            f"查询工具：{tool_name}。"
+            f"{tool_desc}\n"
+            "参数：question/query/description（三选一，均表示查询语句）。"
+        )
         return _tool
 
     def _build_agent_delegate_tools(self, rel_resource_list: list) -> dict:

@@ -115,3 +115,128 @@ async def test_planning_emits_structured_required_capabilities_for_skill(
     assert out["todos"][0]["required_capabilities"] == [
         {"capability_id": "skill.normalize", "capability_type": "skill"}
     ]
+
+
+@pytest.mark.asyncio
+async def test_planning_blocks_unavailable_capability_from_dag_plan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_intent_node(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "intent": "run analysis plan",
+            "query_mode": "analysis",
+            "target_tool": "",
+            "tool_params": {},
+            "confirmed_terms": [],
+            "ambiguous_terms": [],
+        }
+
+    async def _fake_dag_node(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "plan": [
+                {
+                    "id": "t_missing",
+                    "type": "not_registered_tool",
+                    "description": "missing capability",
+                    "status": "pending",
+                    "deps": [],
+                    "params": {},
+                }
+            ]
+        }
+
+    monkeypatch.setattr(planning_module, "intent_node", _fake_intent_node)
+    monkeypatch.setattr(planning_module, "dag_node", _fake_dag_node)
+
+    state = cast(AgentState, {"user_query": "q5"})
+    out = await planning_node(state, default_tools={})
+    todo = out["todos"][0]
+
+    assert todo["required_tools"] == ["not_registered_tool"]
+    assert todo["blocked_tools"] == ["not_registered_tool"]
+    assert todo["required_capabilities"] == [
+        {"capability_id": "not_registered_tool", "capability_type": "tool"}
+    ]
+    assert todo["blocked_capabilities"] == [
+        {"capability_id": "not_registered_tool", "capability_type": "tool"}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_planning_includes_high_confidence_term_hints_in_term_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_intent_node(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "intent": "query with hints",
+            "query_mode": "online_query",
+            "target_tool": "query_tool",
+            "tool_params": {},
+            "confirmed_terms": [],
+            "ambiguous_terms": [],
+        }
+
+    monkeypatch.setattr(planning_module, "intent_node", _fake_intent_node)
+
+    async def _query_tool(**_kwargs: Any) -> dict[str, Any]:
+        return {"ok": True}
+
+    state = cast(
+        AgentState,
+        {
+            "user_query": "q6",
+            "term_hints": [
+                {
+                    "mention": "企业综合分析表",
+                    "normalized_term": "企业综合分析表",
+                    "term_id": "T100",
+                    "confidence": 0.95,
+                    "source": "knowledge_match",
+                    "semantic_type": "view",
+                },
+                {
+                    "mention": "企业",
+                    "normalized_term": "企业",
+                    "term_id": "T101",
+                    "confidence": 0.2,
+                    "source": "knowledge_match",
+                    "semantic_type": "object",
+                },
+            ],
+        },
+    )
+    out = await planning_node(state, default_tools={"query_tool": _query_tool})
+    term_context = out["todos"][0]["term_context"]
+
+    assert len(term_context) == 1
+    assert term_context[0]["mention"] == "企业综合分析表"
+    assert term_context[0]["semantic_type"] == "view"
+
+
+@pytest.mark.asyncio
+async def test_planning_agent_delegate_todo_injects_default_delegate_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_intent_node(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "intent": "delegate task",
+            "query_mode": "agent_delegate",
+            "target_tool": "delegate_tool",
+            "tool_params": {"content": "query text"},
+            "confirmed_terms": [],
+            "ambiguous_terms": [],
+        }
+
+    monkeypatch.setattr(planning_module, "intent_node", _fake_intent_node)
+
+    async def _delegate_tool(**_kwargs: Any) -> dict[str, Any]:
+        return {"ok": True}
+
+    _delegate_tool._is_agent_delegate = True  # type: ignore[attr-defined]
+
+    state = cast(AgentState, {"user_query": "q7"})
+    out = await planning_node(state, default_tools={"delegate_tool": _delegate_tool})
+    todo_inputs = out["todos"][0]["inputs"]
+
+    assert out["query_mode"] == "agent_delegate"
+    assert todo_inputs["delegate_policy"] == {"mode": "sync", "wait_for_reply": True}

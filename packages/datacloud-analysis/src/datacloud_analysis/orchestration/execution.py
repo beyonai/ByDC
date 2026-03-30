@@ -23,7 +23,19 @@ logger = logging.getLogger(__name__)
 
 _TODO_DONE_STATES: frozenset[str] = frozenset({"done", "skipped"})
 _BUILTIN_EXECUTOR_CAPABILITIES: frozenset[str] = frozenset(
-    {"code_exec", "file_read", "file_write", "recall_memory", "build_skill", "render_report"}
+    {
+        "code_exec",
+        "file_read",
+        "file_write",
+        "workspace-file-read",
+        "workspace-file-write",
+        "workspace-file-upload",
+        "task-note-tool",
+        "chat-response-tool",
+        "recall_memory",
+        "build_skill",
+        "render_report",
+    }
 )
 _DEFAULT_CAPABILITY_FALLBACK_ORDER: tuple[str, ...] = (
     "chat-response-tool",
@@ -458,20 +470,31 @@ async def _execute_one_todo(
     return failed_todo, None, invocation_add, trace, False
 
 
-def _ensure_direct_todo_from_route(state: AgentState) -> list[dict[str, Any]]:
+def _ensure_direct_todo_from_route(
+    state: AgentState,
+    *,
+    dynamic_tools: dict[str, Any],
+) -> list[dict[str, Any]]:
     current_todos = list(state.get("todos") or [])
     if current_todos:
         return current_todos
     target_tool = str(state.get("target_tool") or "").strip()
     if not target_tool:
         return []
+    capability_type = (
+        "skill"
+        if bool(getattr(dynamic_tools.get(target_tool), "_is_skill_capability", False))
+        else "tool"
+    )
     return [
         {
             "todo_id": "t_direct",
             "goal": str(state.get("intent") or state.get("user_query") or ""),
             "required_tools": [target_tool],
             "blocked_tools": [],
-            "required_capabilities": [target_tool],
+            "required_capabilities": [
+                {"capability_id": target_tool, "capability_type": capability_type}
+            ],
             "blocked_capabilities": [],
             "inputs": dict(state.get("tool_params") or {}),
             "depends_on": [],
@@ -507,7 +530,7 @@ async def execution_node(
     gateway_context = (config.get("configurable") or {}).get("gateway_context")
     dynamic_tools = state.get("dynamic_tools") or default_tools or {}
     available_capabilities = set(dynamic_tools.keys()) | set(_BUILTIN_EXECUTOR_CAPABILITIES)
-    todos = _ensure_direct_todo_from_route(state)
+    todos = _ensure_direct_todo_from_route(state, dynamic_tools=dynamic_tools)
     existing_todo_md_path = (
         str(state.get("todo_md_path")) if state.get("todo_md_path") else None
     )
