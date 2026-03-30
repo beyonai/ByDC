@@ -1,7 +1,7 @@
 """BM25 搜索实现。
 
 使用 PostgreSQL 的 tsvector + ts_rank_cd 实现 BM25 风格的全文搜索。
-术语名称使用单字分词，存储在 name_text_tsv 字段中。
+术语名称使用单字分词，存储在 name_keywords 字段中。
 """
 
 from __future__ import annotations
@@ -71,15 +71,15 @@ def bm25_search(
             tn.name_text AS term_name,
             tn.name_id,
             t.term_type_code,
-            ts_rank_cd(tn.name_text_tsv, query, 32) AS score
+            ts_rank_cd(tn.name_keywords, query, 32) AS score
         FROM 
             whale_datacloud.term_name tn,
             whale_datacloud.term t,
             to_tsquery('simple', :tsquery) query
         WHERE 
-            tn.name_text_tsv @@ query
+            tn.name_keywords @@ query
             AND tn.term_id = t.term_id
-            AND tn.name_text_tsv IS NOT NULL
+            AND tn.name_keywords IS NOT NULL
         ORDER BY 
             score DESC
         LIMIT :limit
@@ -142,15 +142,15 @@ def bm25_search_with_or(
             tn.name_text AS term_name,
             tn.name_id,
             t.term_type_code,
-            ts_rank_cd(tn.name_text_tsv, query, 32) AS score
+            ts_rank_cd(tn.name_keywords, query, 32) AS score
         FROM 
             whale_datacloud.term_name tn,
             whale_datacloud.term t,
             to_tsquery('simple', :tsquery) query
         WHERE 
-            tn.name_text_tsv @@ query
+            tn.name_keywords @@ query
             AND tn.term_id = t.term_id
-            AND tn.name_text_tsv IS NOT NULL
+            AND tn.name_keywords IS NOT NULL
         ORDER BY 
             score DESC
         LIMIT :limit

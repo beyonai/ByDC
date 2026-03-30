@@ -1,7 +1,7 @@
 """向量搜索实现。
 
 使用 PostgreSQL pgvector 扩展的 HNSW 索引进行向量相似度搜索。
-术语名称的向量存储在 name_vector 字段中（1024 维）。
+术语名称的向量存储在 name_embedding 字段中（1024 维）。
 """
 
 from __future__ import annotations
@@ -73,15 +73,15 @@ def vector_search(
             tn.name_text AS term_name,
             tn.name_id,
             t.term_type_code,
-            1 - (tn.name_vector <=> :vector::vector) AS similarity
+            1 - (tn.name_embedding <=> :vector::vector) AS similarity
         FROM 
             whale_datacloud.term_name tn,
             whale_datacloud.term t
         WHERE 
-            tn.name_vector IS NOT NULL
+            tn.name_embedding IS NOT NULL
             AND tn.term_id = t.term_id
         ORDER BY 
-            tn.name_vector <=> :vector::vector
+            tn.name_embedding <=> :vector::vector
         LIMIT :limit
     """)
 
@@ -136,15 +136,15 @@ def vector_search_by_vector(
             tn.name_text AS term_name,
             tn.name_id,
             t.term_type_code,
-            1 - (tn.name_vector <=> :vector::vector) AS similarity
+            1 - (tn.name_embedding <=> :vector::vector) AS similarity
         FROM 
             whale_datacloud.term_name tn,
             whale_datacloud.term t
         WHERE 
-            tn.name_vector IS NOT NULL
+            tn.name_embedding IS NOT NULL
             AND tn.term_id = t.term_id
         ORDER BY 
-            tn.name_vector <=> :vector::vector
+            tn.name_embedding <=> :vector::vector
         LIMIT :limit
     """)
 
