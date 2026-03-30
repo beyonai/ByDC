@@ -1,22 +1,40 @@
-"""Execution node for the 5-node main pipeline."""
+﻿"""Execution node for the 5-node main pipeline."""
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
+import anyio
 from langchain_core.runnables import RunnableConfig
 
-from datacloud_analysis.orchestration.agent_delegate import agent_delegate_node
 from datacloud_analysis.orchestration.clarification import clarification_node
-from datacloud_analysis.orchestration.direct_tool import direct_tool_node
-from datacloud_analysis.orchestration.loop import loop_node
+from datacloud_analysis.orchestration.sandbox_executor import (
+    execute_next_task,
+    normalize_workspace_task_output,
+)
 from datacloud_analysis.orchestration.state import AgentState
 
 logger = logging.getLogger(__name__)
+
+_TODO_DONE_STATES: frozenset[str] = frozenset({"done", "skipped"})
+_BUILTIN_EXECUTOR_CAPABILITIES: frozenset[str] = frozenset(
+    {"code_exec", "file_read", "file_write", "recall_memory", "build_skill", "render_report"}
+)
+_DEFAULT_CAPABILITY_FALLBACK_ORDER: tuple[str, ...] = (
+    "chat-response-tool",
+    "workspace-file-read",
+    "workspace-file-write",
+    "workspace-file-upload",
+    "task-note-tool",
+    "file_read",
+    "file_write",
+    "render_report",
+)
 
 
 def _todo_md_with_status(todos: list[dict[str, Any]]) -> str:
@@ -27,24 +45,11 @@ def _todo_md_with_status(todos: list[dict[str, Any]]) -> str:
         lines.append(
             f"- [{todo.get('status', 'pending')}] {todo.get('todo_id', '')}: {todo.get('goal', '')}"
         )
+        lines.append(f"  required_tools: {todo.get('required_tools', [])}")
+        lines.append(f"  blocked_tools: {todo.get('blocked_tools', [])}")
+        lines.append(f"  depends_on: {todo.get('depends_on', [])}")
     lines.append("")
     return "\n".join(lines)
-
-
-def _sync_todos_from_plan(
-    *,
-    todos: list[dict[str, Any]],
-    plan: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    if not todos:
-        return []
-    status_by_id = {str(task.get("id")): str(task.get("status", "pending")) for task in plan}
-    synced: list[dict[str, Any]] = []
-    for todo in todos:
-        todo_id = str(todo.get("todo_id", ""))
-        next_status = status_by_id.get(todo_id, str(todo.get("status", "pending")))
-        synced.append({**todo, "status": next_status})
-    return synced
 
 
 def _pick_active_todo(todos: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -54,21 +59,95 @@ def _pick_active_todo(todos: list[dict[str, Any]]) -> dict[str, Any] | None:
     return todos[0] if todos else None
 
 
-def _compute_effective_tools(todo: dict[str, Any]) -> list[str]:
-    required_capabilities = [
-        str(x) for x in (todo.get("required_capabilities") or []) if str(x).strip()
-    ]
-    required_tools = [str(x) for x in (todo.get("required_tools") or []) if str(x).strip()]
-    required = required_capabilities if required_capabilities else required_tools
+def _capability_entry_id(raw: Any) -> str:
+    if isinstance(raw, dict):
+        candidates = (
+            raw.get("capability_id"),
+            raw.get("id"),
+            raw.get("tool"),
+            raw.get("name"),
+        )
+        for value in candidates:
+            text = str(value or "").strip()
+            if text:
+                return text
+        return ""
+    return str(raw or "").strip()
 
+
+def _capability_entry_type(raw: Any, *, dynamic_tools: dict[str, Any]) -> str:
+    if isinstance(raw, dict):
+        text = str(raw.get("capability_type") or raw.get("type") or "").strip().lower()
+        if text in {"tool", "skill"}:
+            return text
+    cap_id = _capability_entry_id(raw)
+    tool_obj = dynamic_tools.get(cap_id)
+    if tool_obj is not None and bool(getattr(tool_obj, "_is_skill_capability", False)):
+        return "skill"
+    return "tool"
+
+
+def _normalize_required_capabilities(
+    *,
+    todo: dict[str, Any] | None,
+    dynamic_tools: dict[str, Any],
+) -> list[dict[str, str]]:
+    if not isinstance(todo, dict):
+        return []
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    raw_caps = list(todo.get("required_capabilities") or [])
+    if raw_caps:
+        for raw in raw_caps:
+            cap_id = _capability_entry_id(raw)
+            if not cap_id or cap_id in seen:
+                continue
+            seen.add(cap_id)
+            out.append(
+                {
+                    "capability_id": cap_id,
+                    "capability_type": _capability_entry_type(raw, dynamic_tools=dynamic_tools),
+                }
+            )
+        return out
+
+    for raw in (todo.get("required_tools") or []):
+        cap_id = _capability_entry_id(raw)
+        if not cap_id or cap_id in seen:
+            continue
+        seen.add(cap_id)
+        out.append({"capability_id": cap_id, "capability_type": "tool"})
+    return out
+
+
+def _compute_effective_tools(
+    todo: dict[str, Any] | None,
+    *,
+    dynamic_tools: dict[str, Any],
+    available_capabilities: set[str],
+) -> list[str]:
+    if not isinstance(todo, dict):
+        return []
+    required = [item["capability_id"] for item in _normalize_required_capabilities(todo=todo, dynamic_tools=dynamic_tools)]
     blocked = {
-        str(x)
+        _capability_entry_id(x)
         for x in ((todo.get("blocked_capabilities") or []) + (todo.get("blocked_tools") or []))
-        if str(x).strip()
+        if _capability_entry_id(x)
     }
     if not required:
-        return []
+        required = [
+            capability
+            for capability in _DEFAULT_CAPABILITY_FALLBACK_ORDER
+            if capability in available_capabilities
+        ]
     return [tool for tool in required if tool not in blocked]
+
+
+def _todo_has_required_capability(todo: dict[str, Any] | None, *, dynamic_tools: dict[str, Any]) -> bool:
+    if not isinstance(todo, dict):
+        return False
+    return bool(_normalize_required_capabilities(todo=todo, dynamic_tools=dynamic_tools))
 
 
 def _persist_todo_md(
@@ -133,60 +212,318 @@ def _append_trace(
     return next_trace
 
 
+def _todo_plan_from_todos(todos: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    plan: list[dict[str, Any]] = []
+    for todo in todos:
+        required_caps = list(todo.get("required_capabilities") or [])
+        required_capability_ids = [_capability_entry_id(item) for item in required_caps if _capability_entry_id(item)]
+        effective_tools = required_capability_ids or [
+            _capability_entry_id(item) for item in (todo.get("required_tools") or []) if _capability_entry_id(item)
+        ]
+        task_type = (
+            str(todo.get("last_capability") or "")
+            or (effective_tools[0] if effective_tools else "")
+            or (str((todo.get("required_tools") or [""])[0]) if todo.get("required_tools") else "")
+        )
+        plan.append(
+            {
+                "id": str(todo.get("todo_id") or ""),
+                "type": task_type,
+                "description": str(todo.get("goal") or ""),
+                "status": str(todo.get("status", "pending")),
+                "deps": [str(dep) for dep in (todo.get("depends_on") or [])],
+                "params": dict(todo.get("inputs") or {}),
+            }
+        )
+    return plan
+
+
+def _pick_ready_todo_indexes(todos: list[dict[str, Any]]) -> list[int]:
+    done_ids = {
+        str(todo.get("todo_id", ""))
+        for todo in todos
+        if str(todo.get("status", "pending")) in _TODO_DONE_STATES
+    }
+    ready_indexes: list[int] = []
+    pending_indexes: list[int] = []
+    for idx, todo in enumerate(todos):
+        status = str(todo.get("status", "pending"))
+        if status != "pending":
+            continue
+        pending_indexes.append(idx)
+        deps = [str(dep) for dep in (todo.get("depends_on") or [])]
+        if all(dep in done_ids for dep in deps):
+            ready_indexes.append(idx)
+    if ready_indexes:
+        return ready_indexes
+    if pending_indexes:
+        return [pending_indexes[0]]
+    return []
+
+
+async def _store_result_entry(
+    *,
+    todo_id: str,
+    output: Any,
+    workspace_dir: str | None,
+    is_multi_task: bool,
+) -> dict[str, Any]:
+    payload = normalize_workspace_task_output(output)
+    if is_multi_task and workspace_dir:
+        temp_dir = Path(workspace_dir) / "temp"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        file_path = temp_dir / f"{todo_id}.json"
+        await anyio.Path(file_path).write_text(
+            json.dumps(payload, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        return {"task_id": todo_id, "file_path": str(file_path)}
+    return {"task_id": todo_id, "data": payload}
+
+
+def _task_from_todo(todo: dict[str, Any], capability: str) -> dict[str, Any]:
+    todo_id = str(todo.get("todo_id") or "")
+    return {
+        "id": todo_id,
+        "type": capability,
+        "status": "pending",
+        "deps": [str(dep) for dep in (todo.get("depends_on") or [])],
+        "params": dict(todo.get("inputs") or {}),
+        "description": str(todo.get("goal") or ""),
+    }
+
+
+def _extract_appended_todos(
+    *,
+    output: Any,
+    existing_todos: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not isinstance(output, dict):
+        return []
+    raw_items = output.get("todo_append") or output.get("todos_append")
+    if not isinstance(raw_items, list):
+        return []
+
+    appended: list[dict[str, Any]] = []
+    used_ids = {str(todo.get("todo_id") or "") for todo in existing_todos}
+    next_index = len(existing_todos) + 1
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        goal = str(item.get("goal") or "").strip()
+        raw_required_capability_items = (
+            item.get("required_capabilities")
+            if isinstance(item.get("required_capabilities"), list)
+            else item.get("required_tools")
+        )
+        required_capability_items: list[Any] = (
+            raw_required_capability_items if isinstance(raw_required_capability_items, list) else []
+        )
+        required_tools = [_capability_entry_id(v) for v in required_capability_items if _capability_entry_id(v)]
+        required_capabilities = []
+        for v in required_capability_items:
+            cap_id = _capability_entry_id(v)
+            if not cap_id:
+                continue
+            if isinstance(v, dict):
+                cap_type = str(v.get("capability_type") or v.get("type") or "tool")
+            else:
+                cap_type = "tool"
+            required_capabilities.append({"capability_id": cap_id, "capability_type": cap_type})
+        if not goal or not required_tools:
+            continue
+
+        todo_id = str(item.get("todo_id") or "").strip()
+        while not todo_id or todo_id in used_ids:
+            todo_id = f"t_add_{next_index}"
+            next_index += 1
+        used_ids.add(todo_id)
+
+        appended.append(
+            {
+                "todo_id": todo_id,
+                "goal": goal,
+                "required_tools": required_tools,
+                "blocked_tools": [str(v).strip() for v in (item.get("blocked_tools") or []) if str(v).strip()],
+                "required_capabilities": required_capabilities,
+                "blocked_capabilities": [_capability_entry_id(v) for v in (item.get("blocked_capabilities") or []) if _capability_entry_id(v)],
+                "inputs": dict(item.get("inputs") or {}),
+                "depends_on": [str(v).strip() for v in (item.get("depends_on") or []) if str(v).strip()],
+                "term_context": [x for x in (item.get("term_context") or []) if isinstance(x, dict)],
+                "acceptance_criteria": str(item.get("acceptance_criteria") or "appended todo completed"),
+                "status": "pending",
+            }
+        )
+    return appended
+
+
+async def _execute_one_todo(
+    *,
+    todo: dict[str, Any],
+    state: AgentState,
+    query_mode: str,
+    gateway_context: Any,
+    dynamic_tools: dict[str, Any],
+    available_capabilities: set[str],
+    invocation_dedup_set: set[str],
+) -> tuple[dict[str, Any], dict[str, Any] | None, list[str], list[dict[str, Any]], bool]:
+    todo_id = str(todo.get("todo_id") or "")
+    effective_tools = _compute_effective_tools(
+        todo,
+        dynamic_tools=dynamic_tools,
+        available_capabilities=available_capabilities,
+    )
+    has_required = _todo_has_required_capability(todo, dynamic_tools=dynamic_tools)
+    trace: list[dict[str, Any]] = []
+    invocation_add: list[str] = []
+
+    if has_required and not effective_tools:
+        blocked_todo = {**todo, "status": "blocked"}
+        trace.append(
+            {
+                "stage": "execution",
+                "status": "blocked",
+                "detail": {"todo_id": todo_id, "reason": "no_effective_tools"},
+            }
+        )
+        return blocked_todo, None, invocation_add, trace, True
+
+    if not effective_tools:
+        skipped_todo = {**todo, "status": "skipped"}
+        trace.append(
+            {
+                "stage": "execution",
+                "status": "skipped",
+                "detail": {"todo_id": todo_id, "reason": "no_required_capability"},
+            }
+        )
+        return skipped_todo, None, invocation_add, trace, False
+
+    last_error = ""
+    for capability in effective_tools:
+        invocation_id = _build_invocation_id(
+            query_mode=query_mode,
+            target_tool=capability,
+            tool_params=cast(dict[str, Any], todo.get("inputs") or {}),
+            todo_active_id=todo_id,
+        )
+        if invocation_id in invocation_dedup_set:
+            trace.append(
+                {
+                    "stage": "execution",
+                    "status": "dedup_skipped",
+                    "detail": {"todo_id": todo_id, "capability": capability},
+                }
+            )
+            return (
+                {**todo, "status": "done", "last_capability": capability},
+                None,
+                invocation_add,
+                trace,
+                False,
+            )
+
+        task = _task_from_todo(todo, capability)
+        updated_task, output = await execute_next_task(
+            task,
+            state,
+            gateway_context=gateway_context,
+            custom_tools=dynamic_tools,
+        )
+        task_status = str(updated_task.get("status", "failed"))
+        trace.append(
+            {
+                "stage": "execution",
+                "status": task_status,
+                "detail": {"todo_id": todo_id, "capability": capability},
+            }
+        )
+        if task_status == "done":
+            invocation_add.append(invocation_id)
+            return (
+                {**todo, "status": "done", "last_capability": capability},
+                {"task_id": todo_id, "output": output},
+                invocation_add,
+                trace,
+                False,
+            )
+        last_error = str(updated_task.get("error", "task_failed"))
+
+    failed_todo = {
+        **todo,
+        "status": "failed",
+        "error": last_error or "all_capabilities_failed",
+        "last_capability": effective_tools[-1],
+    }
+    return failed_todo, None, invocation_add, trace, False
+
+
+def _ensure_direct_todo_from_route(state: AgentState) -> list[dict[str, Any]]:
+    current_todos = list(state.get("todos") or [])
+    if current_todos:
+        return current_todos
+    target_tool = str(state.get("target_tool") or "").strip()
+    if not target_tool:
+        return []
+    return [
+        {
+            "todo_id": "t_direct",
+            "goal": str(state.get("intent") or state.get("user_query") or ""),
+            "required_tools": [target_tool],
+            "blocked_tools": [],
+            "required_capabilities": [target_tool],
+            "blocked_capabilities": [],
+            "inputs": dict(state.get("tool_params") or {}),
+            "depends_on": [],
+            "term_context": [],
+            "acceptance_criteria": "direct tool completed",
+            "status": "pending",
+        }
+    ]
+
+
+def _resume_context_after_round(
+    *,
+    state: AgentState,
+    config: RunnableConfig,
+    todo_active_id: str,
+    pending_capability: str,
+) -> dict[str, Any]:
+    previous = dict(state.get("resume_context") or {})
+    configurable = config.get("configurable") or {}
+    previous["thread_id"] = str(configurable.get("thread_id") or previous.get("thread_id") or "")
+    previous["todo_active_id"] = todo_active_id
+    previous["react_step_id"] = todo_active_id
+    previous["pending_capability"] = pending_capability
+    return previous
+
+
 async def execution_node(
     state: AgentState,
     config: RunnableConfig,
     default_tools: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Execute current plan/direct route and decide next step."""
+    """Execute one dependency-ready todo batch and decide next step."""
     gateway_context = (config.get("configurable") or {}).get("gateway_context")
-    todos = list(state.get("todos") or [])
-    active_todo = _pick_active_todo(todos)
-    effective_tools = _compute_effective_tools(active_todo) if active_todo else []
-    todo_active_id = str(active_todo.get("todo_id", "")) if active_todo else ""
+    dynamic_tools = state.get("dynamic_tools") or default_tools or {}
+    available_capabilities = set(dynamic_tools.keys()) | set(_BUILTIN_EXECUTOR_CAPABILITIES)
+    todos = _ensure_direct_todo_from_route(state)
     existing_todo_md_path = (
         str(state.get("todo_md_path")) if state.get("todo_md_path") else None
     )
     invocation_dedup = [str(x) for x in (state.get("invocation_dedup") or []) if str(x).strip()]
     invocation_dedup_set = set(invocation_dedup)
     execution_trace = list(state.get("execution_trace") or [])
+    query_mode = str(state.get("query_mode") or "analysis")
 
-    has_required = bool(
-        active_todo
-        and (
-            list(active_todo.get("required_capabilities") or [])
-            or list(active_todo.get("required_tools") or [])
-        )
+    active_todo = _pick_active_todo(todos)
+    todo_active_id = str(active_todo.get("todo_id", "")) if active_todo else ""
+    active_tools = _compute_effective_tools(
+        active_todo,
+        dynamic_tools=dynamic_tools,
+        available_capabilities=available_capabilities,
     )
-    if has_required and not effective_tools and active_todo is not None:
-        blocked_todos: list[dict[str, Any]] = []
-        active_id = todo_active_id
-        for todo in todos:
-            if str(todo.get("todo_id", "")) == active_id:
-                blocked_todos.append({**todo, "status": "blocked"})
-            else:
-                blocked_todos.append(todo)
-        blocked_todo_md = _todo_md_with_status(blocked_todos)
-        todo_md_path = _persist_todo_md(
-            workspace_dir=state.get("workspace_dir"),
-            todo_md=blocked_todo_md,
-            existing_path=existing_todo_md_path,
-        )
-        return {
-            "todos": blocked_todos,
-            "todo_active_id": active_id,
-            "active_tools": [],
-            "execution_status": "replan",
-            "todo_md": blocked_todo_md,
-            "todo_md_path": todo_md_path,
-            "execution_trace": _append_trace(
-                execution_trace,
-                stage="execution",
-                status="replan",
-                detail={"reason": "no_effective_tools", "todo_id": active_id},
-            ),
-            "invocation_dedup": invocation_dedup,
-        }
+    pending_capability = active_tools[0] if active_tools else ""
 
     if state.get("ambiguous_terms"):
         updates = await clarification_node(state, gateway_context=gateway_context)
@@ -194,8 +531,14 @@ async def execution_node(
             return {
                 **updates,
                 "todo_active_id": todo_active_id,
-                "active_tools": effective_tools,
+                "active_tools": active_tools,
                 "execution_status": "done",
+                "resume_context": _resume_context_after_round(
+                    state=state,
+                    config=config,
+                    todo_active_id=todo_active_id,
+                    pending_capability=pending_capability,
+                ),
                 "execution_trace": _append_trace(
                     execution_trace,
                     stage="clarification",
@@ -207,8 +550,14 @@ async def execution_node(
         return {
             **updates,
             "todo_active_id": todo_active_id,
-            "active_tools": effective_tools,
+            "active_tools": active_tools,
             "execution_status": "replan",
+            "resume_context": _resume_context_after_round(
+                state=state,
+                config=config,
+                todo_active_id=todo_active_id,
+                pending_capability=pending_capability,
+            ),
             "execution_trace": _append_trace(
                 execution_trace,
                 stage="clarification",
@@ -218,12 +567,18 @@ async def execution_node(
             "invocation_dedup": invocation_dedup,
         }
 
-    query_mode = str(state.get("query_mode") or "analysis")
     if query_mode == "chitchat" or bool(state.get("clarify_needed")):
         return {
+            "todos": todos,
             "todo_active_id": todo_active_id,
-            "active_tools": effective_tools,
+            "active_tools": active_tools,
             "execution_status": "done",
+            "resume_context": _resume_context_after_round(
+                state=state,
+                config=config,
+                todo_active_id=todo_active_id,
+                pending_capability=pending_capability,
+            ),
             "execution_trace": _append_trace(
                 execution_trace,
                 stage="execution",
@@ -233,148 +588,181 @@ async def execution_node(
             "invocation_dedup": invocation_dedup,
         }
 
-    if query_mode == "agent_delegate":
-        invocation_id = _build_invocation_id(
-            query_mode=query_mode,
-            target_tool=str(state.get("target_tool") or ""),
-            tool_params=state.get("tool_params"),
-            todo_active_id=todo_active_id,
-        )
-        if invocation_id in invocation_dedup_set:
-            done_todos = [{**t, "status": "done"} for t in todos] if todos else []
-            dedup_online_todo_md: str | None = _todo_md_with_status(done_todos) if done_todos else None
-            todo_md_path = _persist_todo_md(
-                workspace_dir=state.get("workspace_dir"),
-                todo_md=dedup_online_todo_md,
-                existing_path=existing_todo_md_path,
-            )
-            return {
-                "todo_active_id": todo_active_id,
-                "active_tools": effective_tools,
-                "execution_status": "done",
-                "todos": done_todos if done_todos else todos,
-                "todo_md": dedup_online_todo_md,
-                "todo_md_path": todo_md_path,
-                "execution_trace": _append_trace(
-                    execution_trace,
-                    stage="agent_delegate",
-                    status="dedup_skipped",
-                    detail={"invocation_id": invocation_id},
-                ),
-                "invocation_dedup": invocation_dedup,
-            }
-        delegated = await agent_delegate_node(state, config, default_tools=default_tools)
-        invocation_dedup.append(invocation_id)
-        done_todos = [{**t, "status": "done"} for t in todos] if todos else []
-        delegated_todo_md: str | None = _todo_md_with_status(done_todos) if done_todos else None
-        todo_md_path = _persist_todo_md(
-            workspace_dir=state.get("workspace_dir"),
-            todo_md=delegated_todo_md,
-            existing_path=existing_todo_md_path,
-        )
+    if not todos:
         return {
-            **delegated,
-            "todo_active_id": todo_active_id,
-            "active_tools": effective_tools,
+            "plan": [],
+            "todos": [],
+            "todo_active_id": "",
+            "active_tools": [],
             "execution_status": "done",
-            "todos": done_todos if done_todos else todos,
-            "todo_md": delegated_todo_md,
-            "todo_md_path": todo_md_path,
+            "resume_context": _resume_context_after_round(
+                state=state,
+                config=config,
+                todo_active_id="",
+                pending_capability="",
+            ),
             "execution_trace": _append_trace(
                 execution_trace,
-                stage="agent_delegate",
+                stage="execution",
                 status="done",
-                detail={"invocation_id": invocation_id},
+                detail={"reason": "empty_todos"},
             ),
             "invocation_dedup": invocation_dedup,
         }
 
-    if query_mode == "online_query":
-        invocation_id = _build_invocation_id(
-            query_mode=query_mode,
-            target_tool=str(state.get("target_tool") or ""),
-            tool_params=state.get("tool_params"),
-            todo_active_id=todo_active_id,
-        )
-        if invocation_id in invocation_dedup_set:
-            done_todos = [{**t, "status": "done"} for t in todos] if todos else []
-            dedup_todo_md: str | None = _todo_md_with_status(done_todos) if done_todos else None
-            todo_md_path = _persist_todo_md(
-                workspace_dir=state.get("workspace_dir"),
-                todo_md=dedup_todo_md,
-                existing_path=existing_todo_md_path,
-            )
-            return {
-                "todo_active_id": todo_active_id,
-                "active_tools": effective_tools,
-                "execution_status": "done",
-                "todos": done_todos if done_todos else todos,
-                "todo_md": dedup_todo_md,
-                "todo_md_path": todo_md_path,
-                "execution_trace": _append_trace(
-                    execution_trace,
-                    stage="direct_tool",
-                    status="dedup_skipped",
-                    detail={"invocation_id": invocation_id},
-                ),
-                "invocation_dedup": invocation_dedup,
-            }
-        direct = await direct_tool_node(state, gateway_context=gateway_context, default_tools=default_tools)
-        invocation_dedup.append(invocation_id)
-        done_todos = [{**t, "status": "done"} for t in todos] if todos else []
-        direct_todo_md: str | None = _todo_md_with_status(done_todos) if done_todos else None
+    ready_indexes = _pick_ready_todo_indexes(todos)
+    if not ready_indexes:
+        deadlocked = [
+            {**todo, "status": "failed"} if str(todo.get("status", "")) == "pending" else todo
+            for todo in todos
+        ]
+        todo_md = _todo_md_with_status(deadlocked)
         todo_md_path = _persist_todo_md(
             workspace_dir=state.get("workspace_dir"),
-            todo_md=direct_todo_md,
+            todo_md=todo_md,
             existing_path=existing_todo_md_path,
         )
         return {
-            **direct,
-            "todo_active_id": todo_active_id,
-            "active_tools": effective_tools,
-            "execution_status": "done",
-            "todos": done_todos if done_todos else todos,
-            "todo_md": direct_todo_md,
+            "todos": deadlocked,
+            "plan": _todo_plan_from_todos(deadlocked),
+            "todo_md": todo_md,
             "todo_md_path": todo_md_path,
+            "todo_active_id": "",
+            "active_tools": [],
+            "execution_status": "done",
+            "resume_context": _resume_context_after_round(
+                state=state,
+                config=config,
+                todo_active_id="",
+                pending_capability="",
+            ),
             "execution_trace": _append_trace(
                 execution_trace,
-                stage="direct_tool",
-                status="done",
-                detail={"invocation_id": invocation_id},
+                stage="execution",
+                status="failed",
+                detail={"reason": "dependency_deadlock"},
             ),
             "invocation_dedup": invocation_dedup,
         }
 
-    # analysis path: run one loop round then continue until no pending tasks
-    loop_updates = await loop_node(state, gateway_context=gateway_context, default_tools=default_tools)
-    for invocation_id in (loop_updates.get("invocation_dedup_add") or []):
-        invocation_id_text = str(invocation_id).strip()
-        if invocation_id_text and invocation_id_text not in invocation_dedup_set:
-            invocation_dedup.append(invocation_id_text)
-            invocation_dedup_set.add(invocation_id_text)
-    updated_plan = list(loop_updates.get("plan") or state.get("plan") or [])
-    synced_todos = _sync_todos_from_plan(todos=todos, plan=updated_plan)
-    has_pending = any(str(task.get("status", "pending")) == "pending" for task in updated_plan)
-    todos_for_md = synced_todos if synced_todos else todos
-    todo_md = _todo_md_with_status(todos_for_md)
+    ready_todos = [todos[idx] for idx in ready_indexes]
+    multi_task = len(todos) > 1
+    batch_outputs = await asyncio.gather(
+        *[
+            _execute_one_todo(
+                todo=todo,
+                state=state,
+                query_mode=query_mode,
+                gateway_context=gateway_context,
+                dynamic_tools=dynamic_tools,
+                available_capabilities=available_capabilities,
+                invocation_dedup_set=invocation_dedup_set,
+            )
+            for todo in ready_todos
+        ]
+    )
+
+    results = list(state.get("results") or [])
+    blocked_in_batch = False
+    appended_todos: list[dict[str, Any]] = []
+    for idx, (updated_todo, maybe_output, invocation_add, todo_trace, blocked) in zip(
+        ready_indexes, batch_outputs, strict=False
+    ):
+        todos[idx] = updated_todo
+        blocked_in_batch = blocked_in_batch or blocked
+        for event in todo_trace:
+            execution_trace = _append_trace(
+                execution_trace,
+                stage=str(event.get("stage", "execution")),
+                status=str(event.get("status", "unknown")),
+                detail=cast(dict[str, Any] | None, event.get("detail")),
+            )
+        for invocation_id in invocation_add:
+            text_id = str(invocation_id).strip()
+            if text_id and text_id not in invocation_dedup_set:
+                invocation_dedup.append(text_id)
+                invocation_dedup_set.add(text_id)
+        if maybe_output is not None:
+            entry = await _store_result_entry(
+                todo_id=str(maybe_output.get("task_id", "")),
+                output=maybe_output.get("output"),
+                workspace_dir=state.get("workspace_dir"),
+                is_multi_task=multi_task,
+            )
+            results.append(entry)
+            append_items = _extract_appended_todos(
+                output=maybe_output.get("output"),
+                existing_todos=todos + appended_todos,
+            )
+            if append_items:
+                appended_todos.extend(append_items)
+                execution_trace = _append_trace(
+                    execution_trace,
+                    stage="react_replanning",
+                    status="append_todo",
+                    detail={
+                        "plugin_id": "react_replanning",
+                        "risk_level": "medium",
+                        "todo_id": str(updated_todo.get("todo_id") or ""),
+                        "append_count": len(append_items),
+                    },
+                )
+
+    if appended_todos:
+        todos.extend(appended_todos)
+
+    failed_ids = {
+        str(todo.get("todo_id") or "")
+        for todo in todos
+        if str(todo.get("status", "")) == "failed"
+    }
+    for idx, todo in enumerate(todos):
+        if str(todo.get("status", "pending")) != "pending":
+            continue
+        deps = [str(dep) for dep in (todo.get("depends_on") or [])]
+        if deps and any(dep in failed_ids for dep in deps):
+            todos[idx] = {**todo, "status": "skipped", "note": "dependency_failed"}
+            execution_trace = _append_trace(
+                execution_trace,
+                stage="execution",
+                status="skipped",
+                detail={"todo_id": str(todo.get("todo_id") or ""), "reason": "dependency_failed"},
+            )
+
+    next_active_todo = _pick_active_todo(todos)
+    next_todo_id = str(next_active_todo.get("todo_id", "")) if next_active_todo else ""
+    next_active_tools = _compute_effective_tools(
+        next_active_todo,
+        dynamic_tools=dynamic_tools,
+        available_capabilities=available_capabilities,
+    )
+    next_pending_capability = next_active_tools[0] if next_active_tools else ""
+    has_pending = any(str(todo.get("status", "pending")) == "pending" for todo in todos)
+
+    todo_md = _todo_md_with_status(todos)
     todo_md_path = _persist_todo_md(
         workspace_dir=state.get("workspace_dir"),
         todo_md=todo_md,
         existing_path=existing_todo_md_path,
     )
+
+    execution_status = "replan" if blocked_in_batch else ("execution" if has_pending else "done")
+
     return {
-        **loop_updates,
-        "todos": todos_for_md,
-        "todo_active_id": todo_active_id,
-        "active_tools": effective_tools,
+        "plan": _todo_plan_from_todos(todos),
+        "todos": todos,
+        "results": results,
         "todo_md": todo_md,
         "todo_md_path": todo_md_path,
-        "execution_status": "execution" if has_pending else "done",
-        "execution_trace": _append_trace(
-            execution_trace,
-            stage="loop",
-            status="pending" if has_pending else "done",
-            detail={"todo_id": todo_active_id},
+        "todo_active_id": next_todo_id,
+        "active_tools": next_active_tools,
+        "execution_status": execution_status,
+        "resume_context": _resume_context_after_round(
+            state=state,
+            config=config,
+            todo_active_id=next_todo_id,
+            pending_capability=next_pending_capability,
         ),
+        "execution_trace": execution_trace,
         "invocation_dedup": invocation_dedup,
     }

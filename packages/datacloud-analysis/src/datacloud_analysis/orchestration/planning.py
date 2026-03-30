@@ -41,9 +41,16 @@ def _build_term_context(confirmed_terms: list[dict[str, Any]]) -> list[dict[str,
     return out
 
 
+def _capability_spec(capability_id: str, available_tools: dict[str, Any]) -> dict[str, str]:
+    tool_obj = available_tools.get(capability_id)
+    capability_type = "skill" if bool(getattr(tool_obj, "_is_skill_capability", False)) else "tool"
+    return {"capability_id": capability_id, "capability_type": capability_type}
+
+
 def _plan_to_todos(
     *,
     plan: list[dict[str, Any]],
+    available_tools: dict[str, Any],
     term_context: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     todos: list[dict[str, Any]] = []
@@ -56,7 +63,9 @@ def _plan_to_todos(
             "goal": str(task.get("description") or ""),
             "required_tools": [task_type] if task_type else [],
             "blocked_tools": [],
-            "required_capabilities": [task_type] if task_type else [],
+            "required_capabilities": (
+                [_capability_spec(task_type, available_tools)] if task_type else []
+            ),
             "blocked_capabilities": [],
             "inputs": dict(task.get("params") or {}),
             "depends_on": [str(x) for x in (task.get("deps") or [])],
@@ -74,6 +83,7 @@ def _direct_todo_from_route(
     target_tool: str,
     tool_params: dict[str, Any],
     intent_text: str,
+    available_tools: dict[str, Any],
     term_context: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     if query_mode not in {"online_query", "agent_delegate"} or not target_tool:
@@ -84,7 +94,7 @@ def _direct_todo_from_route(
             "goal": intent_text,
             "required_tools": [target_tool],
             "blocked_tools": [],
-            "required_capabilities": [target_tool],
+            "required_capabilities": [_capability_spec(target_tool, available_tools)],
             "blocked_capabilities": [],
             "inputs": dict(tool_params),
             "depends_on": [],
@@ -189,13 +199,14 @@ async def planning_node(
     else:
         plan = []
 
-    todos = _plan_to_todos(plan=plan, term_context=term_context)
+    todos = _plan_to_todos(plan=plan, available_tools=available_tools, term_context=term_context)
     if not todos:
         todos = _direct_todo_from_route(
             query_mode=query_mode,
             target_tool=target_tool,
             tool_params=tool_params,
             intent_text=intent_text,
+            available_tools=available_tools,
             term_context=term_context,
         )
     todo_md = _build_todo_md(todos)
