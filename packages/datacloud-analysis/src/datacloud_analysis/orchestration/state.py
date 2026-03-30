@@ -31,6 +31,16 @@ class AgentState(MessagesState):
     target_tool: str | None
     tool_params: dict[str, Any] | None
 
+    # --- Term Disambiguation ---
+    # LLM 从问题中识别出的业务术语词列表（NER 输出）
+    concept_terms: list[str] | None
+    # 消歧后确认的术语：[{"mention": "企业", "term_id": "...", "term_name": "企业大宽表"}]
+    confirmed_terms: list[dict[str, Any]] | None
+    # 仍有歧义、需要追问的术语：[{"mention": "利润", "candidates": [...]}]
+    ambiguous_terms: list[dict[str, Any]] | None
+    # 当前会话临时别名映射（不持久化）：{"企业": "TERM_001"}
+    session_alias_map: dict[str, str] | None
+
     # --- Planning (Node 2) ---
     plan: list[dict[str, Any]]
 
