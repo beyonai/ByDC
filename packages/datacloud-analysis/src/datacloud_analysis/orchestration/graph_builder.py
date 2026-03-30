@@ -7,20 +7,22 @@ with node modules.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 
-logger = logging.getLogger(__name__)
-
 from datacloud_analysis.orchestration.agent_delegate import agent_delegate_node
+from datacloud_analysis.orchestration.clarification import clarification_node
 from datacloud_analysis.orchestration.dag import dag_node
 from datacloud_analysis.orchestration.direct_tool import direct_tool_node
 from datacloud_analysis.orchestration.insight import insight_node
 from datacloud_analysis.orchestration.intent import intent_node
 from datacloud_analysis.orchestration.loop import loop_node
 from datacloud_analysis.orchestration.state import AgentState
+
+logger = logging.getLogger(__name__)
 
 
 def _make_route_after_intent(
@@ -31,7 +33,18 @@ def _make_route_after_intent(
     dt = default_tools or {}
 
     def route_after_intent(state: AgentState) -> str:
-        """Route after intent: clarify → insight; chitchat → insight; online_query+valid tool → direct_tool; else dag."""
+        """Route after intent node.
+
+        Priority:
+          ambiguous_terms → clarification
+          clarify_needed / chitchat → insight
+          agent_delegate → agent_delegate
+          online_query + valid tool → direct_tool
+          else → dag
+        """
+        # 有歧义术语 → 先追问
+        if state.get("ambiguous_terms"):
+            return "clarification"
         if state.get("clarify_needed"):
             return "insight"
         if state.get("query_mode") == "chitchat":
@@ -59,6 +72,40 @@ def _make_route_after_intent(
     return route_after_intent
 
 
+def _make_route_after_clarification(
+    default_tools: dict[str, Any] | None,
+) -> Callable[[AgentState], str]:
+    """Route after clarification."""
+
+    dt = default_tools or {}
+
+    def route_after_clarification(state: AgentState) -> str:
+        # 用户跳过后仍有歧义：按设计回 insight 兜底，不继续执行 dag/direct_tool。
+        if state.get("ambiguous_terms"):
+            return "insight"
+        if state.get("query_mode") == "chitchat":
+            return "insight"
+        tools = state.get("dynamic_tools") or dt
+        tt = state.get("target_tool")
+        if (
+            state.get("query_mode") == "agent_delegate"
+            and tt
+            and tt in tools
+            and getattr(tools.get(tt), "_is_agent_delegate", False)
+        ):
+            return "agent_delegate"
+        if (
+            state.get("query_mode") == "online_query"
+            and isinstance(tt, str)
+            and tt.strip()
+            and tt.strip() in tools
+        ):
+            return "direct_tool"
+        return "dag"
+
+    return route_after_clarification
+
+
 def route_loop(state: AgentState) -> str:
     """Route after loop iteration."""
     plan = state.get("plan", [])
@@ -71,7 +118,7 @@ def route_loop(state: AgentState) -> str:
 def build_analysis_graph(
     prompts_overwrite: dict[str, Any] | None = None,
     tools: dict[str, Any] | None = None,
-) -> StateGraph:
+) -> StateGraph[AgentState]:
     """Return an uncompiled ``StateGraph`` for the DataCloud pipeline."""
     builder = StateGraph(AgentState)
 
@@ -97,6 +144,10 @@ def build_analysis_graph(
         gw_ctx = (config.get("configurable") or {}).get("gateway_context")
         return await loop_node(state, gateway_context=gw_ctx, default_tools=tools)
 
+    async def _clarification(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
+        gw_ctx = (config.get("configurable") or {}).get("gateway_context")
+        return await clarification_node(state, gateway_context=gw_ctx)
+
     async def _agent_delegate(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         return await agent_delegate_node(state, config, default_tools=tools)
 
@@ -108,36 +159,35 @@ def build_analysis_graph(
         gw_ctx = (config.get("configurable") or {}).get("gateway_context")
         return await insight_node(state, gateway_context=gw_ctx, default_prompts=prompts_overwrite)
 
-    builder.add_node(
-        "intent",
-        _intent,
-    )
-    builder.add_node(
-        "agent_delegate",
-        _agent_delegate,
-    )
-    builder.add_node(
-        "direct_tool",
-        _direct_tool,
-    )
-    builder.add_node(
-        "dag",
-        _dag,
-    )
-    builder.add_node(
-        "loop",
-        _loop,
-    )
-    builder.add_node(
-        "insight",
-        _insight,
-    )
+    builder.add_node("intent", _intent)
+    builder.add_node("clarification", _clarification)
+    builder.add_node("agent_delegate", _agent_delegate)
+    builder.add_node("direct_tool", _direct_tool)
+    builder.add_node("dag", _dag)
+    builder.add_node("loop", _loop)
+    builder.add_node("insight", _insight)
 
     builder.add_edge(START, "intent")
     builder.add_conditional_edges(
         "intent",
         _make_route_after_intent(tools),
-        {"insight": "insight", "agent_delegate": "agent_delegate", "direct_tool": "direct_tool", "dag": "dag"},
+        {
+            "clarification": "clarification",
+            "insight": "insight",
+            "agent_delegate": "agent_delegate",
+            "direct_tool": "direct_tool",
+            "dag": "dag",
+        },
+    )
+    builder.add_conditional_edges(
+        "clarification",
+        _make_route_after_clarification(tools),
+        {
+            "insight": "insight",
+            "agent_delegate": "agent_delegate",
+            "direct_tool": "direct_tool",
+            "dag": "dag",
+        },
     )
     builder.add_edge("agent_delegate", END)
     builder.add_edge("direct_tool", "insight")
