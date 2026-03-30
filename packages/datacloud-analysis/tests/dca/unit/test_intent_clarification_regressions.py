@@ -6,35 +6,15 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from datacloud_analysis.orchestration.clarification import clarification_node
-from datacloud_analysis.orchestration.graph_builder import (
-    _make_route_after_clarification,
-    build_analysis_graph,
-)
+from datacloud_analysis.orchestration.graph_builder import build_analysis_graph
 from datacloud_analysis.orchestration.intent import _merge_concept_terms, intent_node
 
 
-def test_route_after_clarification_with_remaining_ambiguity_goes_to_insight() -> None:
-    route = _make_route_after_clarification(default_tools={})
-    state: dict[str, Any] = {
-        "query_mode": "analysis",
-        "ambiguous_terms": [{"mention": "profit", "candidates": []}],
-    }
-    assert route(state) == "insight"
-
-
-def test_route_after_clarification_without_ambiguity_goes_to_intent_replan() -> None:
-    route = _make_route_after_clarification(default_tools={})
-    state: dict[str, Any] = {
-        "query_mode": "analysis",
-        "ambiguous_terms": [],
-        "target_tool": "",
-    }
-    assert route(state) == "intent_replan"
-
-
-def test_build_graph_contains_intent_replan_node() -> None:
+def test_build_graph_uses_five_node_pipeline_without_intent_replan() -> None:
     graph = build_analysis_graph()
-    assert "intent_replan" in graph.nodes
+    assert "intent_replan" not in graph.nodes
+    assert "planning" in graph.nodes
+    assert "execution" in graph.nodes
 
 
 def test_merge_concept_terms_prefers_longer_phrase_over_km_subterm() -> None:

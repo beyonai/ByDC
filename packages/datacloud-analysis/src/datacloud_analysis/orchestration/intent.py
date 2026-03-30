@@ -232,7 +232,12 @@ async def intent_node(
     )
     agent_tools_line = ", ".join(agent_tool_names) if agent_tool_names else "（无）"
 
-    knowledge_payload = await search_knowledge.ainvoke({"query": str(effective_user_msg)})
+    state_knowledge_payload = state.get("knowledge_payload")
+    if isinstance(state_knowledge_payload, dict):
+        knowledge_payload = state_knowledge_payload
+    else:
+        payload_raw = await search_knowledge.ainvoke({"query": str(effective_user_msg)})
+        knowledge_payload = payload_raw if isinstance(payload_raw, dict) else {}
     knowledge_text = json.dumps(knowledge_payload, ensure_ascii=False) if knowledge_payload else "无"
 
     model = os.getenv("DATACLOUD_LLM_REASONING_MODEL", "openai:Qwen/Qwen3-235B-A22B")
@@ -315,12 +320,15 @@ async def intent_node(
         # 通过最长覆盖优先避免“企业综合分析表”被“企业”子词吞掉。
         km_terms = [
             str(m["term_name"])
-            for m in (
-                (knowledge_payload.get("term_matches") if isinstance(knowledge_payload, dict) else [])
-                or []
-            )
+            for m in (knowledge_payload.get("term_matches", []) or [])
             if isinstance(m, dict) and str(m.get("term_name", "")).strip()
         ]
+        if not km_terms:
+            km_terms = [
+                str(item.get("normalized_term", "")).strip()
+                for item in (state.get("term_hints") or [])
+                if str(item.get("normalized_term", "")).strip()
+            ]
         concept_terms = _merge_concept_terms(llm_terms=llm_terms, km_terms=km_terms)
         logger.info(
             "intent_node: concept_terms llm=%d km=%d total=%d llm=%s km=%s merged=%s",

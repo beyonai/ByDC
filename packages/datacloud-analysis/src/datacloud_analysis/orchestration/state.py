@@ -8,45 +8,55 @@ from langgraph.graph.message import MessagesState
 
 
 class AgentState(MessagesState):
-    """The state dictionary for the core agent graph.
+    """State dictionary for the DataCloud 5-node orchestration graph."""
 
-    Inherits ``messages`` from MessagesState.
-    """
-
-    # --- Gateway / Request Context ---
+    # --- Gateway / request context ---
     agent_id: str | None
     agent_name: str | None
     workspace_dir: str | None
-    # gateway_context は state に含めない — PG checkpointer がシリアライズできない。
-    # worker は config["configurable"]["gateway_context"] に格納し、
-    # graph_builder クロージャが各ノードへ明示的に渡す。
 
-    # --- Intent Analysis (Node 1) ---
+    # --- Core query context ---
+    user_query: str | None
+    enriched_query: str | None
     intent: str | None
-    clarify_needed: bool
-    # intent_node 检索到的知识原文（截断），供后续节点引用
     knowledge_preview: str | None
-    # 路由：online_query → direct_tool；chitchat → insight；analysis → dag
+    knowledge_payload: dict[str, Any] | None
+    term_hints: list[dict[str, Any]] | None
+    knowledge_snippets: list[dict[str, Any]] | None
+
+    # --- Intent + routing ---
+    clarify_needed: bool
     query_mode: str | None
     chitchat_reply: str | None
     target_tool: str | None
     tool_params: dict[str, Any] | None
 
-    # --- Term Disambiguation ---
-    # LLM 从问题中识别出的业务术语词列表（NER 输出）
+    # --- Term disambiguation ---
     concept_terms: list[str] | None
-    # 消歧后确认的术语：[{"mention": "企业", "term_id": "...", "term_name": "企业大宽表"}]
     confirmed_terms: list[dict[str, Any]] | None
-    # 仍有歧义、需要追问的术语：[{"mention": "利润", "candidates": [...]}]
     ambiguous_terms: list[dict[str, Any]] | None
-    # 当前会话临时别名映射（不持久化）：{"企业": "TERM_001"}
     session_alias_map: dict[str, str] | None
 
-    # --- Planning (Node 2) ---
+    # --- Planning output ---
     plan: list[dict[str, Any]]
+    todos: list[dict[str, Any]] | None
+    todo_md: str | None
+    todo_md_path: str | None
 
-    # --- Execution / Results (Node 3) ---
+    # --- Execution runtime ---
+    execution_status: str | None
+    todo_active_id: str | None
+    todo_tool_plan: list[dict[str, Any]] | None
+    active_tools: list[str] | None
+    execution_trace: list[dict[str, Any]] | None
+    invocation_dedup: list[str] | None
+
+    # --- Results / finalization ---
     results: list[Any]
-    # Optional; Gateway+checkpointer 路径应留空，由 graph.compile 闭包注入，避免工具 callable 无法序列化。
+    final_answer: str | None
+    artifact_refs: list[dict[str, Any]] | None
+    resume_context: dict[str, Any] | None
+
+    # Optional; should not be persisted with callable objects in checkpoint.
     prompts_overwrite: dict[str, Any] | None
     dynamic_tools: dict[str, Any] | None
