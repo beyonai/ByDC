@@ -45,8 +45,6 @@ def _make_route_after_intent(
         # 有歧义术语 → 先追问
         if state.get("ambiguous_terms"):
             return "clarification"
-        if state.get("clarify_needed"):
-            return "insight"
         if state.get("query_mode") == "chitchat":
             return "insight"
         tools = state.get("dynamic_tools") or dt
@@ -77,7 +75,7 @@ def _make_route_after_clarification(
 ) -> Callable[[AgentState], str]:
     """Route after clarification."""
 
-    dt = default_tools or {}
+    _ = default_tools or {}
 
     def route_after_clarification(state: AgentState) -> str:
         # 用户跳过后仍有歧义：按设计回 insight 兜底，不继续执行 dag/direct_tool。
@@ -85,23 +83,7 @@ def _make_route_after_clarification(
             return "insight"
         if state.get("query_mode") == "chitchat":
             return "insight"
-        tools = state.get("dynamic_tools") or dt
-        tt = state.get("target_tool")
-        if (
-            state.get("query_mode") == "agent_delegate"
-            and tt
-            and tt in tools
-            and getattr(tools.get(tt), "_is_agent_delegate", False)
-        ):
-            return "agent_delegate"
-        if (
-            state.get("query_mode") == "online_query"
-            and isinstance(tt, str)
-            and tt.strip()
-            and tt.strip() in tools
-        ):
-            return "direct_tool"
-        return "dag"
+        return "intent_replan"
 
     return route_after_clarification
 
@@ -148,6 +130,17 @@ def build_analysis_graph(
         gw_ctx = (config.get("configurable") or {}).get("gateway_context")
         return await clarification_node(state, gateway_context=gw_ctx)
 
+    async def _intent_replan(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
+        gw_ctx = (config.get("configurable") or {}).get("gateway_context")
+        replan_query = str(state.get("intent") or "").strip()
+        return await intent_node(
+            state,
+            gateway_context=gw_ctx,
+            default_prompts=prompts_overwrite,
+            default_tools=tools,
+            query_override=replan_query if replan_query else None,
+        )
+
     async def _agent_delegate(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         return await agent_delegate_node(state, config, default_tools=tools)
 
@@ -161,6 +154,7 @@ def build_analysis_graph(
 
     builder.add_node("intent", _intent)
     builder.add_node("clarification", _clarification)
+    builder.add_node("intent_replan", _intent_replan)
     builder.add_node("agent_delegate", _agent_delegate)
     builder.add_node("direct_tool", _direct_tool)
     builder.add_node("dag", _dag)
@@ -183,6 +177,15 @@ def build_analysis_graph(
         "clarification",
         _make_route_after_clarification(tools),
         {
+            "insight": "insight",
+            "intent_replan": "intent_replan",
+        },
+    )
+    builder.add_conditional_edges(
+        "intent_replan",
+        _make_route_after_intent(tools),
+        {
+            "clarification": "clarification",
             "insight": "insight",
             "agent_delegate": "agent_delegate",
             "direct_tool": "direct_tool",

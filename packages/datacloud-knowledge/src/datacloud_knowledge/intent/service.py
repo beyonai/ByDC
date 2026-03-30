@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from importlib import import_module
 from typing import Any
 
@@ -20,6 +21,13 @@ from .types import DisambiguationResult, MatchResult, Mention, ScoreUpdateRecord
 logger = logging.getLogger(__name__)
 
 CandidateDict = dict[str, Any]
+_VECTOR_ENABLE_ENV = "DATACLOUD_INTENT_ENABLE_VECTOR"
+_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
+def _vector_search_enabled() -> bool:
+    raw = os.getenv(_VECTOR_ENABLE_ENV, "0").strip().lower()
+    return raw in _TRUE_VALUES
 
 
 def _build_global_name_index() -> dict[str, list[tuple[str, str, str]]]:
@@ -136,7 +144,7 @@ def search_all_candidates_with_name_id(
     user_id: str | None = None,
     top_k: int = 5,
 ) -> dict[str, list[CandidateDict]]:
-    """Run strict -> bm25 -> vector funnel and return name_id-enriched candidates."""
+    """Run strict -> bm25 (+ optional vector) and return name_id-enriched candidates."""
     if not concept_terms:
         return {}
 
@@ -184,6 +192,16 @@ def search_all_candidates_with_name_id(
                 still_remaining.append(word)
 
         if not still_remaining:
+            return result
+
+        if not _vector_search_enabled():
+            logger.info(
+                "search_all_candidates_with_name_id: vector disabled by env %s, unresolved=%d",
+                _VECTOR_ENABLE_ENV,
+                len(still_remaining),
+            )
+            for word in still_remaining:
+                result[word] = []
             return result
 
         try:

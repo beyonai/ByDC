@@ -6,8 +6,11 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from datacloud_analysis.orchestration.clarification import clarification_node
-from datacloud_analysis.orchestration.graph_builder import _make_route_after_clarification
-from datacloud_analysis.orchestration.intent import intent_node
+from datacloud_analysis.orchestration.graph_builder import (
+    _make_route_after_clarification,
+    build_analysis_graph,
+)
+from datacloud_analysis.orchestration.intent import _merge_concept_terms, intent_node
 
 
 def test_route_after_clarification_with_remaining_ambiguity_goes_to_insight() -> None:
@@ -17,6 +20,37 @@ def test_route_after_clarification_with_remaining_ambiguity_goes_to_insight() ->
         "ambiguous_terms": [{"mention": "profit", "candidates": []}],
     }
     assert route(state) == "insight"
+
+
+def test_route_after_clarification_without_ambiguity_goes_to_intent_replan() -> None:
+    route = _make_route_after_clarification(default_tools={})
+    state: dict[str, Any] = {
+        "query_mode": "analysis",
+        "ambiguous_terms": [],
+        "target_tool": "",
+    }
+    assert route(state) == "intent_replan"
+
+
+def test_build_graph_contains_intent_replan_node() -> None:
+    graph = build_analysis_graph()
+    assert "intent_replan" in graph.nodes
+
+
+def test_merge_concept_terms_prefers_longer_phrase_over_km_subterm() -> None:
+    merged = _merge_concept_terms(
+        llm_terms=["企业综合分析表"],
+        km_terms=["企业"],
+    )
+    assert merged == ["企业综合分析表"]
+
+
+def test_merge_concept_terms_deduplicates_and_keeps_longest_overlap() -> None:
+    merged = _merge_concept_terms(
+        llm_terms=["企业"],
+        km_terms=["企业综合分析表", "企业", "综合分析表"],
+    )
+    assert merged == ["企业综合分析表"]
 
 
 @pytest.mark.asyncio
@@ -167,3 +201,34 @@ async def test_intent_numeric_or_symbol_only_input_forces_chitchat(
     assert out["concept_terms"] == []
     assert out["ambiguous_terms"] == []
     assert "请告诉我你想查询的对象、指标和时间范围" in out["intent"]
+
+
+@pytest.mark.asyncio
+async def test_intent_node_uses_query_override_for_replan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_query: dict[str, str] = {}
+
+    class _FakeKnowledgeTool:
+        async def ainvoke(self, payload: dict[str, Any]) -> dict[str, Any]:
+            captured_query["value"] = str(payload.get("query", ""))
+            return {"query": payload.get("query", ""), "term_matches": []}
+
+    class _FakeLLM:
+        async def ainvoke(self, _messages: list[Any]) -> AIMessage:
+            return AIMessage(
+                content=(
+                    '{"rewritten_intent":"重算后的意图","clarify_needed":false,'
+                    '"query_mode":"analysis","target_tool":"","tool_params":{},'
+                    '"concept_terms":[]}'
+                )
+            )
+
+    monkeypatch.setattr("datacloud_analysis.orchestration.intent.search_knowledge", _FakeKnowledgeTool())
+    monkeypatch.setattr("datacloud_analysis.orchestration.intent.init_chat_model", lambda **_: _FakeLLM())
+
+    state: dict[str, Any] = {"messages": [HumanMessage(content="原始问题")]}
+    out = await intent_node(state, gateway_context=None, query_override="澄清后问题")
+
+    assert captured_query["value"] == "澄清后问题"
+    assert out["intent"] == "重算后的意图"
