@@ -629,12 +629,26 @@ class OwlParser:
 
         views = []
         for view in self._views.values():
+            view_objects = [{"object_code": code} for code in view.object_codes]
+            view_relations = []
+            for rel_code in view.relations:
+                if rel_code in self._relations:
+                    rel = self._relations[rel_code]
+                    view_relations.append({
+                        "relation_code": rel_code,
+                        "relation_name": rel.relation_name,
+                        "source_class": rel.source_class,
+                        "target_class": rel.target_class,
+                        "relation_type": rel.relation_type,
+                        "join_keys": rel.join_keys,
+                        "description": rel.description,
+                    })
             views.append({
                 "view_id": view.view_id,
                 "view_name": view.view_name,
                 "description": view.description,
-                "object_ids": view.object_codes,
-                "relation_ids": view.relations,
+                "objects": view_objects,
+                "relations": view_relations,
             })
 
         return {
