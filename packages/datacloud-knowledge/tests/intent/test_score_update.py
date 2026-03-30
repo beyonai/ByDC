@@ -1,4 +1,4 @@
-# ruff: noqa: S101
+﻿# ruff: noqa: S101
 from __future__ import annotations
 
 import json
@@ -46,7 +46,7 @@ def _create_user_alias(db_session: Session, *, user_id: str) -> str:
     create_user_term_name = storage_module.create_user_term_name
 
     term_id = _select_existing_term_id(db_session)
-    alias_text = f"评分别名_{uuid.uuid4().hex[:8]}"
+    alias_text = f"璇勫垎鍒悕_{uuid.uuid4().hex[:8]}"
     return create_user_term_name(
         name_text=alias_text,
         term_id=term_id,
@@ -66,7 +66,7 @@ def test_update_score_updates_alias_tags(db_session: Session) -> None:
     update_score(name_id=name_id, success=True, session=db_session)
 
     row = db_session.execute(
-        text("SELECT name_tags FROM whale_datacloud.term_name WHERE name_id = :name_id"),
+        text("SELECT search_scope FROM whale_datacloud.term_name WHERE name_id = :name_id"),
         {"name_id": name_id},
     ).fetchone()
     assert row is not None
@@ -100,7 +100,7 @@ def test_batch_update_scores_updates_multiple_aliases(db_session: Session) -> No
 
     rows = db_session.execute(
         text(
-            "SELECT name_id, name_tags FROM whale_datacloud.term_name "
+            "SELECT name_id, search_scope FROM whale_datacloud.term_name "
             "WHERE name_id IN (:first_name_id, :second_name_id)"
         ),
         {"first_name_id": first_name_id, "second_name_id": second_name_id},
@@ -122,3 +122,4 @@ def test_recalculate_score_uses_decay_adjusted_ratio() -> None:
     recalculate_score = score_update_module._recalculate_score
 
     assert recalculate_score(confirmed_count=3, use_count=5, decay=0.8) == pytest.approx(0.4)
+

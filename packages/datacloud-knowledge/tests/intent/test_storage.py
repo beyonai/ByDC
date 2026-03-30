@@ -62,7 +62,7 @@ def test_create_user_term_name(db_session: Session) -> None:
 
     verify = db_session.execute(
         text(
-            "SELECT term_id, name_text, name_tags "
+            "SELECT term_id, name_text, search_scope "
             "FROM whale_datacloud.term_name "
             "WHERE name_id = :name_id"
         ),
@@ -129,7 +129,7 @@ def test_create_term_with_knowledge(db_session: Session) -> None:
 
     alias_row = db_session.execute(
         text(
-            "SELECT name_text, name_tags FROM whale_datacloud.term_name "
+            "SELECT name_text, search_scope FROM whale_datacloud.term_name "
             "WHERE term_id = :term_id AND name_text = :name_text"
         ),
         {"term_id": term_id, "name_text": term_name},

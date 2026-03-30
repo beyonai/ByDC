@@ -65,6 +65,7 @@ async def run_agent(
             "clarify_needed": False,
             "results": [],
             "query_mode": "analysis",
+            "chitchat_reply": None,
             "target_tool": "",
             "tool_params": {},
             "dynamic_tools": {},

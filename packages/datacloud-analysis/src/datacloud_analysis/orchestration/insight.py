@@ -766,6 +766,7 @@ async def insight_node(
     # ── chitchat path (bypass DAG / loop / render_report) ────────────────────
     if state.get("query_mode") == "chitchat":
         intent = state.get("intent", "") or str(last_user_msg)
+        forced_reply = str(state.get("chitchat_reply") or "").strip()
         if context is not None:
             await context.emit_chunk(
                 StreamChunkEvent(content="闲聊应答"),
@@ -777,6 +778,20 @@ async def insight_node(
                 event_type=EventType.REASONING_LOG_DELTA.value,
                 content_type=SseReasonMessageType.think_text.value,
             )
+        if forced_reply:
+            await _emit_reasoning_log_end_before_answer(context)
+            if context is not None:
+                await context.emit_chunk(
+                    StreamChunkEvent(content=forced_reply),
+                    event_type=EventType.ANSWER_DELTA.value,
+                    content_type=SseMessageType.text.value,
+                )
+            logger.info(
+                "[user SSE text] chitchat forced path: answer_delta_total_chars=%d",
+                len(forced_reply),
+            )
+            return {"messages": [AIMessage(content=forced_reply)]}
+
         await _emit_reasoning_log_end_before_answer(context)
         static_sys = prompts_overwrite.get(
             "chitchat_system_prompt",
