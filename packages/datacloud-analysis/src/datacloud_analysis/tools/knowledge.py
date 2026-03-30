@@ -52,8 +52,8 @@ def _build_global_name_index(session: Any) -> dict[str, list[tuple[str, str, str
             CASE WHEN tn.name_text = t.term_name THEN 'standard_name' ELSE 'alias' END AS match_type
         FROM whale_datacloud.term_name tn
         JOIN whale_datacloud.term t ON tn.term_id = t.term_id
-        WHERE tn.name_tags = '{}'::jsonb
-           OR tn.name_tags->>'scope_user_id' IS NULL
+        WHERE tn.search_scope = '{}'::jsonb
+           OR tn.search_scope->>'scope_user_id' IS NULL
         """
     )
     rows = session.execute(sql).fetchall()
@@ -91,12 +91,12 @@ def _query_name_ids_by_word(
             WHERE tn.name_text = :name_text
               AND tn.term_id IN :term_ids
               AND (
-                    tn.name_tags = '{}'::jsonb
-                 OR tn.name_tags->>'scope_user_id' IS NULL
-                 OR tn.name_tags->>'scope_user_id' = :user_id
+                    tn.search_scope = '{}'::jsonb
+                 OR tn.search_scope->>'scope_user_id' IS NULL
+                 OR tn.search_scope->>'scope_user_id' = :user_id
               )
             ORDER BY
-              CASE WHEN tn.name_tags->>'scope_user_id' = :user_id THEN 0 ELSE 1 END,
+              CASE WHEN tn.search_scope->>'scope_user_id' = :user_id THEN 0 ELSE 1 END,
               tn.updated_time DESC
             """
         ).bindparams(bindparam("term_ids", expanding=True))
@@ -113,8 +113,8 @@ def _query_name_ids_by_word(
             WHERE tn.name_text = :name_text
               AND tn.term_id IN :term_ids
               AND (
-                    tn.name_tags = '{}'::jsonb
-                 OR tn.name_tags->>'scope_user_id' IS NULL
+                    tn.search_scope = '{}'::jsonb
+                 OR tn.search_scope->>'scope_user_id' IS NULL
               )
             ORDER BY tn.updated_time DESC
             """
