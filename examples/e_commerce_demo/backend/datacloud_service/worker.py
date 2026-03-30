@@ -159,10 +159,11 @@ class DataCloudWorker(GatewayWorker):
         if self.model_name:
             os.environ["DATACLOUD_LLM_REASONING_MODEL"] = self.model_name
 
-        # 提取 extra_payload 信息（Ask 和 Resume 均携带 agent_id / conf_hash）
+        # 提取 payload / header metadata 信息（Resume 可能只在 metadata 里带 agent_id/conf_hash）
         extra_payload = getattr(command, "extra_payload", {}) or {}
-        by_agent_id = extra_payload.get("agent_id")
-        by_agent_name = extra_payload.get("agent_name")
+        header_metadata = getattr(getattr(command, "header", None), "metadata", None) or {}
+        by_agent_id = extra_payload.get("agent_id") or header_metadata.get("agent_id")
+        by_agent_name = extra_payload.get("agent_name") or header_metadata.get("agent_name")
         ext_params = extra_payload.get("ext_params")
         logger.info(
             "Agent context: ID=%s (type=%s), Name=%s",
@@ -215,7 +216,18 @@ class DataCloudWorker(GatewayWorker):
             ensure_ascii=False,
             sort_keys=True,
         )
-        conf_hash = hashlib.sha1(conf_payload.encode("utf-8")).hexdigest()[:12]
+        computed_conf_hash = hashlib.sha1(conf_payload.encode("utf-8")).hexdigest()[:12]
+        resume_conf_hash = ""
+        if isinstance(command, ResumeCommand):
+            resume_conf_hash = str(header_metadata.get("conf_hash") or "").strip()
+            if resume_conf_hash and resume_conf_hash != computed_conf_hash:
+                logger.warning(
+                    "ResumeCommand conf_hash mismatch: metadata=%s computed=%s; "
+                    "using metadata hash for cache affinity",
+                    resume_conf_hash,
+                    computed_conf_hash,
+                )
+        conf_hash = resume_conf_hash or computed_conf_hash
         cache_key = f"{by_agent_id}:{conf_hash}" if by_agent_id else f"default:{conf_hash}"
 
         target_graph = self.graphs.get(cache_key)
@@ -272,8 +284,8 @@ class DataCloudWorker(GatewayWorker):
                 resume_payload_json,
             )
             # Resume 路径：用 Command(resume=...) 续跑，禁止重建 state
-            # Bug 2 fix: use `or` so empty string/dict falls through to content
-            resume_value = command.reply_data or command.content
+            # reply_data 允许空字符串/空对象，只有 None 时才回落到 content
+            resume_value = command.reply_data if command.reply_data is not None else command.content
             if isinstance(resume_value, str):
                 resume_preview = resume_value[:500]
             else:
@@ -305,13 +317,17 @@ class DataCloudWorker(GatewayWorker):
                 "query_mode": "analysis",
                 "target_tool": "",
                 "tool_params": {},
+                "concept_terms": [],
+                "confirmed_terms": [],
+                "ambiguous_terms": [],
+                "session_alias_map": {},
             }
 
         # Resume：把网关 header.metadata 里的 checkpoint 写入 LangGraph configurable。
         # 若不传 checkpoint_id，PG checkpointer 会按 thread 取「最新」快照；该快照往往已越过
         # interrupt 点，Command(resume=...) 无法接到挂起任务，表现为 astream_events 极少、秒结束。
         if isinstance(command, ResumeCommand):
-            md = getattr(command.header, "metadata", None) or {}
+            md = header_metadata
             ckpt_id = md.get("checkpoint_id")
             if ckpt_id:
                 config["configurable"]["checkpoint_id"] = str(ckpt_id)
