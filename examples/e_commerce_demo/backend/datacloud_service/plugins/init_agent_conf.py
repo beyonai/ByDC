@@ -230,8 +230,9 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
                     if not scene_path:
                         continue
 
-                    loader.load_from_path(scene_path)
-                    loader.load_scene_from_path(scene_path)
+                    # loader.load_from_path(scene_path)
+                    # loader.load_scene_from_path(scene_path)
+                    loader.load_from_owl_directory(scene_path)
 
                     # 使用环境变量摒弃硬编码
                     loader.configure(
@@ -355,9 +356,7 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             / "mock_env"
             / "resource"
             / "knowledge"
-            / "import_package"
-            / "ontology"
-            / "e_commerce_scene_01_data_analysis_full.json"
+            / "import_package_owl_onto"
         )
         if fixed_scene_file.exists():
             logger.info(
