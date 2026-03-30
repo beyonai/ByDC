@@ -73,7 +73,7 @@ def vector_search(
             tn.name_text AS term_name,
             tn.name_id,
             t.term_type_code,
-            1 - (tn.name_embedding <=> :vector::vector) AS similarity
+            1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS similarity
         FROM 
             whale_datacloud.term_name tn,
             whale_datacloud.term t
@@ -81,7 +81,7 @@ def vector_search(
             tn.name_embedding IS NOT NULL
             AND tn.term_id = t.term_id
         ORDER BY 
-            tn.name_embedding <=> :vector::vector
+            tn.name_embedding <=> CAST(:vector AS vector)
         LIMIT :limit
     """)
 
@@ -136,7 +136,7 @@ def vector_search_by_vector(
             tn.name_text AS term_name,
             tn.name_id,
             t.term_type_code,
-            1 - (tn.name_embedding <=> :vector::vector) AS similarity
+            1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS similarity
         FROM 
             whale_datacloud.term_name tn,
             whale_datacloud.term t
@@ -144,7 +144,7 @@ def vector_search_by_vector(
             tn.name_embedding IS NOT NULL
             AND tn.term_id = t.term_id
         ORDER BY 
-            tn.name_embedding <=> :vector::vector
+            tn.name_embedding <=> CAST(:vector AS vector)
         LIMIT :limit
     """)
 
