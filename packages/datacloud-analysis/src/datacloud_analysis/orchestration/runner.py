@@ -8,9 +8,11 @@ workers typically call ``create_agent().astream_events`` instead.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING, Any, cast
 
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
 from datacloud_analysis.orchestration.graph_builder import build_analysis_graph
@@ -60,21 +62,43 @@ async def run_agent(
             "agent_id": None,
             "agent_name": None,
             "workspace_dir": workspace_dir,
+            "user_query": "",
+            "enriched_query": "",
+            "knowledge_preview": "",
+            "knowledge_payload": {},
+            "term_hints": [],
+            "knowledge_snippets": [],
             "plan": [],
+            "todos": [],
+            "todo_md": "",
+            "todo_md_path": "",
             "intent": None,
             "clarify_needed": False,
             "results": [],
+            "execution_status": "",
+            "todo_active_id": "",
+            "todo_tool_plan": [],
+            "active_tools": [],
+            "execution_trace": [],
+            "invocation_dedup": [],
+            "final_answer": "",
+            "artifact_refs": [],
+            "resume_context": {},
             "query_mode": "analysis",
             "chitchat_reply": None,
             "target_tool": "",
             "tool_params": {},
+            "concept_terms": [],
+            "confirmed_terms": [],
+            "ambiguous_terms": [],
+            "session_alias_map": {},
             "dynamic_tools": {},
             "prompts_overwrite": {},
         }
 
     async for event in compiled.astream(
         input_payload,
-        config=run_config,
+        config=cast(RunnableConfig, run_config),
         stream_mode="values",
     ):
         yield event

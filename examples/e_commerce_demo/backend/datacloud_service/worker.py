@@ -14,6 +14,7 @@ import json
 import os
 import sys
 from collections import OrderedDict
+from collections.abc import Awaitable, Callable
 
 # 专门针对 Windows 系统切换事件循环策略以兼容 psycopg
 if sys.platform == "win32":
@@ -39,7 +40,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.types import Command
 
 from datacloud_analysis.agent import create_agent
-from datacloud_service.commands import handle_ext_command
+from datacloud_analysis.command_plugins import CommandPluginManager
 
 
 def _compiled_graph_has_checkpointer(graph: Any) -> bool:
@@ -84,6 +85,7 @@ class DataCloudWorker(GatewayWorker):
         self.base_url = base_url
         # 使用 OrderedDict 实现 LRU 缓存，防止长期运行内存无限增长
         self.graphs: OrderedDict = OrderedDict()
+        self.command_plugin_manager = CommandPluginManager.from_defaults()
 
     def _build_graph(self, prompts_dict: dict | None = None, tools_dict: dict | None = None) -> Any:
         """Instantiate the datacloud-analysis compiled graph with dynamic context."""
@@ -94,6 +96,54 @@ class DataCloudWorker(GatewayWorker):
             prompts_overwrite=prompts_dict,
             tools=tools_dict,
         )
+
+    @staticmethod
+    def _wrap_skill_callable(skill_name: str, run_fn: Callable[..., Any]) -> Callable[..., Awaitable[Any]]:
+        async def _skill_tool(**params: Any) -> Any:
+            maybe = run_fn(**params)
+            if hasattr(maybe, "__await__"):
+                return await maybe
+            return maybe
+
+        _skill_tool.__name__ = f"skill_{skill_name}"
+        _skill_tool.__doc__ = f"Skill capability: {skill_name}"
+        setattr(_skill_tool, "_is_skill_capability", True)
+        setattr(_skill_tool, "_skill_name", skill_name)
+        return _skill_tool
+
+    def _load_skill_capabilities(
+        self,
+        *,
+        user_id: str,
+        task_id: str,
+    ) -> dict[str, Any]:
+        try:
+            from datacloud_analysis.workspace.paths import build_task_paths  # noqa: PLC0415
+            from datacloud_analysis.workspace.skills_loader import SkillLoader  # noqa: PLC0415
+        except ImportError as exc:
+            logger.warning("Skill capability loader unavailable: %s", exc)
+            return {}
+
+        try:
+            task_paths = build_task_paths(user_id=user_id, task_id=task_id)
+            loader = SkillLoader(task_paths)
+            registry = loader.load_all()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to load skill capabilities user=%s task=%s error=%s", user_id, task_id, exc)
+            return {}
+
+        skills: dict[str, Any] = {}
+        for name, entry in registry.items():
+            run_fn = entry.get("run")
+            if not callable(run_fn):
+                continue
+            skill_name = str(name).strip()
+            if not skill_name:
+                continue
+            skills[skill_name] = self._wrap_skill_callable(skill_name, run_fn)
+        if skills:
+            logger.info("Loaded skill capabilities: count=%d names=%s", len(skills), sorted(skills.keys()))
+        return skills
 
     async def start_heartbeat(self) -> None:
         """Worker 启动后拦截."""
@@ -180,10 +230,11 @@ class DataCloudWorker(GatewayWorker):
 
         # ② ext_params 短路：仅 AskAgentCommand 路径执行，Resume 不做此检查
         if isinstance(command, AskAgentCommand) and isinstance(ext_params, dict):
-            handled, payload = handle_ext_command(
+            handled, payload = await self.command_plugin_manager.handle_ext_command(
                 ext_params=ext_params,
                 session_id=context.session_id,
                 workspace_dir=workspace_dir,
+                gateway_context=context,
             )
             if handled:
                 if payload is not None:
@@ -210,10 +261,25 @@ class DataCloudWorker(GatewayWorker):
         )
         tools_dict = getattr(config_for_this_call, "tools", None) or {}
         prompts_dict = getattr(config_for_this_call, "prompts", None) or {}
+        user_id = str(getattr(context, "user_id", "") or "anonymous")
+        skill_tools = self._load_skill_capabilities(user_id=user_id, task_id=context.session_id)
+        merged_tools = dict(tools_dict)
+        if skill_tools:
+            for skill_name, skill_tool in skill_tools.items():
+                if skill_name in merged_tools:
+                    alias = f"skill.{skill_name}"
+                    merged_tools[alias] = skill_tool
+                    logger.info(
+                        "Skill name conflict with tool: name=%s alias=%s",
+                        skill_name,
+                        alias,
+                    )
+                else:
+                    merged_tools[skill_name] = skill_tool
 
         # 版本化缓存：配置变化时自动重建图
         conf_payload = json.dumps(
-            {"prompts": prompts_dict, "tool_keys": sorted(tools_dict.keys())},
+            {"prompts": prompts_dict, "tool_keys": sorted(merged_tools.keys())},
             ensure_ascii=False,
             sort_keys=True,
         )
@@ -236,7 +302,7 @@ class DataCloudWorker(GatewayWorker):
             if config_for_this_call:
                 target_graph = self._build_graph(
                     prompts_dict=prompts_dict,
-                    tools_dict=tools_dict,
+                    tools_dict=merged_tools,
                 )
             else:
                 logger.warning("AgentConfig for %s not found, fallback to defaults.", by_agent_id)
@@ -311,14 +377,31 @@ class DataCloudWorker(GatewayWorker):
                 "agent_id": by_agent_id,
                 "agent_name": by_agent_name,
                 "workspace_dir": workspace_dir,
+                "user_query": "",
+                "enriched_query": "",
                 "plan": [],
+                "todos": [],
+                "todo_md": "",
+                "todo_md_path": "",
                 "results": [],
+                "execution_status": "",
+                "todo_active_id": "",
+                "todo_tool_plan": [],
+                "active_tools": [],
+                "execution_trace": [],
+                "invocation_dedup": [],
+                "final_answer": "",
+                "artifact_refs": [],
+                "resume_context": {},
                 "intent": "",
                 "clarify_needed": False,
                 "query_mode": "analysis",
                 "chitchat_reply": None,
                 "target_tool": "",
                 "tool_params": {},
+                "term_hints": [],
+                "knowledge_snippets": [],
+                "knowledge_payload": {},
                 "concept_terms": [],
                 "confirmed_terms": [],
                 "ambiguous_terms": [],
@@ -453,6 +536,14 @@ class DataCloudWorker(GatewayWorker):
             checkpoint_id = snapshot.config.get("configurable", {}).get("checkpoint_id", "")
             # Bug 5 fix: 补充 checkpoint_ns（子图场景必填）
             checkpoint_ns = snapshot.config.get("configurable", {}).get("checkpoint_ns", "")
+            snapshot_values = snapshot.values if isinstance(snapshot.values, dict) else {}
+            todo_active_id = str(snapshot_values.get("todo_active_id") or "")
+            active_tools = snapshot_values.get("active_tools")
+            pending_capability = ""
+            if isinstance(active_tools, list) and active_tools:
+                pending_capability = str(active_tools[0] or "")
+            if not pending_capability:
+                pending_capability = str(snapshot_values.get("target_tool") or "")
 
             logger.info(
                 "Graph interrupted: session=%s checkpoint_id=%s prompt=%r",
@@ -469,6 +560,9 @@ class DataCloudWorker(GatewayWorker):
                         "checkpoint_ns": checkpoint_ns,
                         "agent_id": by_agent_id,
                         "conf_hash": conf_hash,
+                        "todo_active_id": todo_active_id,
+                        "react_step_id": todo_active_id,
+                        "pending_capability": pending_capability,
                     },
                 )
             )

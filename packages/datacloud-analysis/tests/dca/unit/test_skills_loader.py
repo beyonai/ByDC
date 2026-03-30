@@ -69,3 +69,18 @@ def test_skill_descriptions(tmp_path: Path) -> None:
     descs = loader.skill_descriptions()
     names = [d["name"] for d in descs]
     assert "skill_a" in names
+
+
+def test_extension_skill_dir_overrides_builtin(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = _make_task_paths(tmp_path)
+    ext_dir = tmp_path / "ext_skill_plugins"
+    ext_dir.mkdir(parents=True, exist_ok=True)
+    _write_skill(ext_dir, "group_agg", "ext override")
+    monkeypatch.setenv("DATACLOUD_SKILL_PLUGIN_DIRS", str(ext_dir))
+
+    loader = SkillLoader(paths)
+    registry = loader.load_all()
+    assert registry["group_agg"]["meta"]["description"] == "ext override"
