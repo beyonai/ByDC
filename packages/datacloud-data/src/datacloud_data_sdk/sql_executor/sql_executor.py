@@ -17,6 +17,7 @@ SQL 执行器模块
 
 from __future__ import annotations
 import csv
+import logging
 from pathlib import Path
 from typing import Any
 from datacloud_data_sdk.executor.models import SqlExecTask
@@ -27,6 +28,8 @@ from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
 from datacloud_data_sdk.sql_executor.select_column_parser import extract_select_columns
 from datacloud_data_sdk.sql_executor.sql_alias_quoter import quote_aliases
 from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
+
+logger = logging.getLogger(__name__)
 
 
 class SqlExecutor:
@@ -90,6 +93,7 @@ class SqlExecutor:
 
         connector = self._ds.get_connector(task.datasource_alias)
         sql = quote_aliases(sql, connector.config.db_type)
+        logger.info("[SQL] step=%s ds=%s\n%s", task.output_ref, task.datasource_alias, sql)
         records = await connector.execute(sql)
 
         out_path = self._csv.get_path(request_id, task.output_ref)
