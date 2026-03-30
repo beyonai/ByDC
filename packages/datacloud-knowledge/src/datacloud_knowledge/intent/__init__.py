@@ -4,6 +4,12 @@ from .cache import UserNameCache
 from .disambiguation import disambiguate
 from .matching import match_mentions, match_mentions_with_search
 from .score_update import batch_update_scores, update_score, update_score_async
+from .service import (
+    batch_update_scores_with_session,
+    disambiguate_with_session,
+    search_all_candidates_with_name_id,
+    store_clarification_results,
+)
 from .storage import create_term_knowledge, create_term_with_knowledge, create_user_term_name
 from .types import (
     DisambiguationResult,
@@ -30,10 +36,15 @@ __all__ = [
     "UserNameCache",
     # Score Update (Algorithm E)
     "batch_update_scores",
+    "batch_update_scores_with_session",
     # Storage (Algorithm D)
     "create_term_knowledge",
     "create_term_with_knowledge",
     "create_user_term_name",
+    # Facade Services
+    "disambiguate_with_session",
+    "search_all_candidates_with_name_id",
+    "store_clarification_results",
     # Disambiguation (Algorithm C)
     "disambiguate",
     # Matching (Algorithm B)

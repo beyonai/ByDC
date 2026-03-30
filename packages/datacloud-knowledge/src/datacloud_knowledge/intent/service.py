@@ -1,0 +1,253 @@
+﻿"""Intent service facade with managed DB/session boundaries."""
+
+from __future__ import annotations
+
+import logging
+from importlib import import_module
+from typing import Any
+
+from sqlalchemy import bindparam, text
+
+from datacloud_knowledge.knowledge_search.db.connection import get_session
+
+from .cache import UserNameCache
+from .disambiguation import disambiguate
+from .matching import match_mentions_with_search
+from .score_update import batch_update_scores
+from .storage import create_term_with_knowledge, create_user_term_name
+from .types import DisambiguationResult, MatchResult, Mention, ScoreUpdateRecord
+
+logger = logging.getLogger(__name__)
+
+CandidateDict = dict[str, Any]
+
+
+def _build_global_name_index() -> dict[str, list[tuple[str, str, str]]]:
+    """Build global name index from public term_name rows."""
+    sql = text(
+        """
+        SELECT
+            t.term_id,
+            t.term_type_code,
+            tn.name_text,
+            CASE WHEN tn.name_text = t.term_name THEN 'standard_name' ELSE 'alias' END AS match_type
+        FROM whale_datacloud.term_name tn
+        JOIN whale_datacloud.term t ON tn.term_id = t.term_id
+        WHERE tn.search_scope = '{}'::jsonb
+           OR COALESCE((tn.search_scope->>'scope_user_id'), '') = ''
+        """
+    )
+    with get_session() as session:
+        rows = session.execute(sql).fetchall()
+    index: dict[str, list[tuple[str, str, str]]] = {}
+    for term_id, term_type_code, name_text, match_type in rows:
+        index.setdefault(str(name_text), []).append(
+            (str(term_id), str(term_type_code), str(match_type))
+        )
+    return index
+
+
+def _query_name_ids_by_word(
+    *,
+    word: str,
+    term_ids: list[str],
+    user_id: str | None,
+) -> dict[str, str]:
+    """Resolve term_id -> name_id for a mention word."""
+    if not term_ids:
+        return {}
+
+    if user_id:
+        sql = text(
+            """
+            SELECT
+                tn.term_id,
+                tn.name_id
+            FROM whale_datacloud.term_name tn
+            WHERE tn.name_text = :name_text
+              AND tn.term_id IN :term_ids
+              AND (
+                    tn.search_scope = '{}'::jsonb
+                 OR COALESCE((tn.search_scope->>'scope_user_id'), '') = ''
+                 OR COALESCE((tn.search_scope->>'scope_user_id'), '') = :user_id
+              )
+            ORDER BY
+              CASE WHEN COALESCE((tn.search_scope->>'scope_user_id'), '') = :user_id
+                   THEN 0 ELSE 1 END,
+              tn.updated_time DESC
+            """
+        ).bindparams(bindparam("term_ids", expanding=True))
+        params = {"name_text": word, "term_ids": term_ids, "user_id": user_id}
+    else:
+        sql = text(
+            """
+            SELECT
+                tn.term_id,
+                tn.name_id
+            FROM whale_datacloud.term_name tn
+            WHERE tn.name_text = :name_text
+              AND tn.term_id IN :term_ids
+              AND (
+                    tn.search_scope = '{}'::jsonb
+                 OR COALESCE((tn.search_scope->>'scope_user_id'), '') = ''
+              )
+            ORDER BY tn.updated_time DESC
+            """
+        ).bindparams(bindparam("term_ids", expanding=True))
+        params = {"name_text": word, "term_ids": term_ids}
+
+    with get_session() as session:
+        rows = session.execute(sql, params).fetchall()
+
+    mapping: dict[str, str] = {}
+    for term_id, name_id in rows:
+        term_id_text = str(term_id)
+        if term_id_text not in mapping:
+            mapping[term_id_text] = str(name_id)
+    return mapping
+
+
+def _candidate_to_dict(candidate: Any, *, name_id: str | None) -> CandidateDict:
+    return {
+        "term_id": candidate.term_id,
+        "term_name": candidate.term_name,
+        "term_type_code": candidate.term_type_code,
+        "match_type": candidate.match_type,
+        "confidence": candidate.confidence,
+        "score": candidate.score,
+        "name_id": name_id,
+    }
+
+
+def _convert_hits(
+    *,
+    word: str,
+    hits: tuple[Any, ...],
+    user_id: str | None,
+) -> list[CandidateDict]:
+    term_ids = [str(c.term_id) for c in hits]
+    name_id_map = _query_name_ids_by_word(word=word, term_ids=term_ids, user_id=user_id)
+    return [_candidate_to_dict(c, name_id=name_id_map.get(str(c.term_id))) for c in hits]
+
+
+def search_all_candidates_with_name_id(
+    concept_terms: list[str],
+    *,
+    user_id: str | None = None,
+    top_k: int = 5,
+) -> dict[str, list[CandidateDict]]:
+    """Run strict -> bm25 -> vector funnel and return name_id-enriched candidates."""
+    if not concept_terms:
+        return {}
+
+    user_cache = UserNameCache()
+    global_name_index = _build_global_name_index()
+    result: dict[str, list[CandidateDict]] = {}
+
+    with get_session() as session:
+        mentions = tuple(Mention(text=w) for w in concept_terms)
+        strict_hits = match_mentions_with_search(
+            mentions,
+            session,
+            user_id=user_id,
+            global_name_index=global_name_index,
+            user_cache=user_cache,
+            search_mode="strict",
+            top_k=top_k,
+        )
+
+        remaining: list[str] = []
+        for word in concept_terms:
+            hits = strict_hits.get(word)
+            if hits:
+                result[word] = _convert_hits(word=word, hits=hits, user_id=user_id)
+            else:
+                remaining.append(word)
+
+        if not remaining:
+            return result
+
+        bm25_mentions = tuple(Mention(text=w) for w in remaining)
+        bm25_hits = match_mentions_with_search(
+            bm25_mentions,
+            session,
+            search_mode="bm25",
+            top_k=top_k,
+        )
+
+        still_remaining: list[str] = []
+        for word in remaining:
+            hits = bm25_hits.get(word)
+            if hits:
+                result[word] = _convert_hits(word=word, hits=hits, user_id=user_id)
+            else:
+                still_remaining.append(word)
+
+        if not still_remaining:
+            return result
+
+        try:
+            embedding_module = import_module("datacloud_knowledge.query.embedding")
+            embedding_svc = embedding_module.get_embedding_service()
+            vector_mentions = tuple(Mention(text=w) for w in still_remaining)
+            vector_hits = match_mentions_with_search(
+                vector_mentions,
+                session,
+                search_mode="vector",
+                embedding_service=embedding_svc,
+                top_k=top_k,
+            )
+            for word in still_remaining:
+                hits = vector_hits.get(word)
+                result[word] = _convert_hits(word=word, hits=hits, user_id=user_id) if hits else []
+        except Exception as exc:
+            logger.warning("search_all_candidates_with_name_id: vector step failed: %s", exc)
+            for word in still_remaining:
+                result[word] = []
+
+    return result
+
+
+def disambiguate_with_session(match_result: MatchResult) -> DisambiguationResult:
+    """Execute disambiguation with a managed DB session."""
+    with get_session() as session:
+        return disambiguate(match_result, session)
+
+
+def store_clarification_results(
+    clarification_results: dict[str, Any],
+    user_id: str,
+) -> list[str]:
+    """Persist clarification results and return created name_id list."""
+    created_ids: list[str] = []
+    with get_session() as session:
+        for mention_text, result in clarification_results.items():
+            if isinstance(result, dict) and "term_id" in result:
+                name_id = create_user_term_name(
+                    name_text=mention_text,
+                    term_id=str(result["term_id"]),
+                    user_id=user_id,
+                    session=session,
+                )
+                created_ids.append(name_id)
+            elif isinstance(result, str) and result.strip():
+                _, _, name_id = create_term_with_knowledge(
+                    term_code=f"user_defined_{mention_text}",
+                    term_name=mention_text,
+                    term_type_code="USER_DEFINED",
+                    domain_id="DOMAIN_002",
+                    knowledge_text=result,
+                    user_id=user_id,
+                    session=session,
+                )
+                created_ids.append(name_id)
+    return created_ids
+
+
+def batch_update_scores_with_session(records: tuple[ScoreUpdateRecord, ...]) -> None:
+    """Update term-name score tags under a managed DB session."""
+    if not records:
+        return
+    with get_session() as session:
+        batch_update_scores(records, session)
+
