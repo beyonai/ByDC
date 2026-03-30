@@ -31,8 +31,8 @@ logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ENV_FILES = [
-    REPO_ROOT / ".vscode" / ".env.test",
-    REPO_ROOT / ".env.test",
+    REPO_ROOT / ".vscode" / ".env",
+    REPO_ROOT / ".env",
 ]
 
 DEFAULT_IMPORT_PACKAGE = (
@@ -56,7 +56,7 @@ TRUNCATE_ORDER = [
 
 
 def load_env() -> None:
-    """从 .env.test 文件加载环境变量（如果 DB_HOST 未设置）。"""
+    """从 .env 文件加载环境变量（如果 DB_HOST 未设置）。"""
     if os.getenv("DB_HOST"):
         return
 
