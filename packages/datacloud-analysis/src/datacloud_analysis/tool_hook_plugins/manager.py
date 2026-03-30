@@ -73,12 +73,13 @@ class ToolHookPluginManager:
             )
             if decision is None:
                 continue
-            action = str(decision.get("action") or "continue")
+            normalized = _normalize_decision(decision, phase="before")
+            action = str(normalized.get("action") or "continue")
             if action == "patch":
-                _apply_patch(ctx, decision.get("patch"))
+                _apply_patch(ctx, normalized.get("patch"))
                 continue
             if action in {"short_circuit", "interrupt", "fail"}:
-                return ctx, decision
+                return ctx, normalized
         return ctx, None
 
     async def run_after(self, context: HookContext) -> tuple[HookContext, HookDecision | None]:
@@ -96,12 +97,13 @@ class ToolHookPluginManager:
             )
             if decision is None:
                 continue
-            action = str(decision.get("action") or "continue")
+            normalized = _normalize_decision(decision, phase="after")
+            action = str(normalized.get("action") or "continue")
             if action == "patch":
-                _apply_patch(ctx, decision.get("patch"))
+                _apply_patch(ctx, normalized.get("patch"))
                 continue
             if action in {"recover", "fail"}:
-                terminal = decision
+                terminal = normalized
         return ctx, terminal
 
     async def _run_one_callback(
@@ -159,6 +161,62 @@ def _apply_patch(context: HookContext, patch: Any) -> None:
         current_terms = list(context.get("term_context") or [])
         current_terms.extend(item for item in append_terms if isinstance(item, dict))
         context["term_context"] = current_terms
+
+
+def _normalize_decision(decision: HookDecision, *, phase: str) -> HookDecision:
+    normalized: dict[str, Any] = dict(decision)
+    action = str(normalized.get("action") or "").strip().lower()
+
+    patch = normalized.get("patch")
+    if not isinstance(patch, dict):
+        patch = {}
+    patch = dict(patch)
+    for key in ("tool_params", "knowledge_snippets_append", "term_context_append"):
+        value = normalized.get(key)
+        if value is not None:
+            patch[key] = value
+    if patch:
+        normalized["patch"] = patch
+
+    result = normalized.get("result")
+    if not isinstance(result, dict):
+        result = {}
+    result = dict(result)
+    if "output" in normalized and "tool_output" not in result:
+        result["tool_output"] = normalized.get("output")
+    if "error" in normalized and "tool_error" not in result:
+        error_value = normalized.get("error")
+        if isinstance(error_value, dict):
+            result["tool_error"] = error_value
+        elif isinstance(error_value, str):
+            result["tool_error"] = {"message": error_value}
+    if result:
+        normalized["result"] = cast(Any, result)
+
+    if not action:
+        if bool(normalized.get("short_circuit")):
+            action = "short_circuit"
+        elif bool(normalized.get("block")):
+            action = "fail"
+        elif bool(normalized.get("recover")):
+            action = "recover"
+        elif bool(normalized.get("raise")):
+            action = "fail"
+        elif patch:
+            action = "patch"
+        elif phase == "after" and ("tool_output" in normalized or "output" in normalized):
+            action = "recover"
+            if "tool_output" not in result:
+                result["tool_output"] = normalized.get("tool_output")
+                normalized["result"] = result
+        else:
+            action = "continue"
+
+    if action == "patch" and not patch:
+        action = "continue"
+
+    normalized["action"] = action
+    return cast(HookDecision, normalized)
 
 
 def _load_builtin_plugins() -> list[_LoadedToolHookPlugin]:
