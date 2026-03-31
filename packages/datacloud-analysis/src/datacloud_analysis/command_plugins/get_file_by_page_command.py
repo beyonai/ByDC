@@ -1,12 +1,17 @@
-"""Handler for ``getFileByPage`` ext command."""
+"""Handler for the ``getFileByPage`` ext command."""
 
 from __future__ import annotations
 
+import csv
 import itertools
 import json
 import os
 from pathlib import Path
 from typing import Any
+# '/private/var/folders/04/x14p6sgj3sv6y1fsyd1np48c0000gn/T/datacloud/exports/04a9a9aa-ab84-40eb-a904-bae7baa98de4.csv'
+# _EXPORTS_DIR = Path("/private/tmp/datacloud/exports")
+_EXPORTS_DIR = Path("/private/var/folders/04/x14p6sgj3sv6y1fsyd1np48c0000gn/T/datacloud/exports")
+
 
 
 def handle_get_file_by_page_command(
@@ -15,12 +20,29 @@ def handle_get_file_by_page_command(
     session_id: str,
     workspace_dir: str | None,
 ) -> tuple[bool, dict[str, Any] | None]:
-    """Handle getFileByPage and return ``(handled, payload)``."""
+    """Handle ext_params command and return (handled, 6001_payload)."""
     command = ext_params.get("command")
-    if not isinstance(command, str) or command.strip() != "getFileByPage":
+    if not isinstance(command, str) or not command.strip():
         return False, None
 
-    return True, _build_6001_for_get_file_by_page(
+    command = command.strip()
+    if command == "getFileByPage":
+        return True, _build_6001_for_get_file_by_page(
+            ext_params=ext_params,
+            session_id=session_id,
+            workspace_dir=workspace_dir,
+        )
+    return False, None
+
+
+def handle_ext_command(
+    *,
+    ext_params: dict[str, Any],
+    session_id: str,
+    workspace_dir: str | None,
+) -> tuple[bool, dict[str, Any] | None]:
+    """Backward-compatible alias for legacy imports."""
+    return handle_get_file_by_page_command(
         ext_params=ext_params,
         session_id=session_id,
         workspace_dir=workspace_dir,
@@ -40,30 +62,25 @@ def _build_6001_for_get_file_by_page(
     if not file_id:
         return _make_6001_error("fileId 不能为空", page=page, page_size=page_size)
 
+    csv_path = _EXPORTS_DIR / f"{file_id}.csv"
+    meta_path = _EXPORTS_DIR / f"{file_id}_meta.json"
+
+    if not csv_path.exists():
+        return _make_6001_error(f"CSV 文件不存在: {csv_path}", page=page, page_size=page_size)
+
     try:
-        target_file = _resolve_workspace_file(
-            session_id=session_id,
-            file_id=file_id,
-            workspace_dir=workspace_dir,
-        )
-        meta, records, _total, pagination = _read_file_page(
-            file_path=target_file,
-            page=page,
-            page_size=page_size,
-        )
+        meta_info = _read_meta_file(meta_path)
+        records, total = _read_csv_page(csv_path, page=page, page_size=page_size)
         return {
-            "code": 0,
-            "message": "success",
-            "data": {
                 "records": records,
-                "meta": meta,
-                "pagination": pagination,
+                "meta": meta_info,
+                "pagination": _pagination_dict(page, page_size, total),
                 "file": {
                     "fileId": file_id,
-                    "path": str(target_file),
+                    "csvPath": str(csv_path),
+                    "metaPath": str(meta_path),
                 },
-            },
-        }
+            }
     except Exception as exc:  # noqa: BLE001
         return _make_6001_error(str(exc), page=page, page_size=page_size)
 
@@ -115,9 +132,9 @@ def _make_6001_error(message: str, page: int = 1, page_size: int = 50) -> dict[s
 def _is_within(base: Path, candidate: Path) -> bool:
     try:
         candidate.relative_to(base)
+        return True
     except ValueError:
         return False
-    return True
 
 
 def _resolve_workspace_file(session_id: str, file_id: str, workspace_dir: str | None) -> Path:
@@ -125,8 +142,7 @@ def _resolve_workspace_file(session_id: str, file_id: str, workspace_dir: str | 
     if rel_path.is_absolute() or ".." in rel_path.parts:
         raise ValueError("Invalid fileId (directory traversal not allowed)")
 
-    root_dir = workspace_dir or os.getenv("DATACLOUD_GATEWAY_WORKSPACE_DIR") or "/tmp/datacloud"  # noqa: S108
-    root = Path(root_dir).resolve()
+    root = Path(workspace_dir or os.getenv("DATACLOUD_GATEWAY_WORKSPACE_DIR", "/tmp/datacloud")).resolve()
     session_root = (root / session_id).resolve()
 
     candidate = (session_root / rel_path).resolve()
@@ -153,7 +169,7 @@ def _read_file_page(
     if file_path.suffix == ".jsonl":
         meta_info: dict[str, Any] = {}
         records: list[Any] = []
-        with file_path.open("r", encoding="utf-8") as fh:
+        with open(file_path, "r", encoding="utf-8") as fh:
             first_line = fh.readline()
             if not first_line:
                 return meta_info, records, 0, _pagination_dict(page, page_size, 0)
@@ -161,16 +177,14 @@ def _read_file_page(
                 meta_info = json.loads(first_line)
             except json.JSONDecodeError:
                 meta_info = {}
-            records.extend(
-                json.loads(line) for line in itertools.islice(fh, start_idx, end_idx) if line.strip()
-            )
+            for line in itertools.islice(fh, start_idx, end_idx):
+                if line.strip():
+                    records.append(json.loads(line))
         raw_total = meta_info.get("total")
-        if raw_total is None:
-            raise ValueError("JSONL file first line meta missing total field, cannot paginate")
-        total = int(raw_total)
+        total = int(raw_total) if raw_total is not None else len(records)
         return meta_info, records, total, _pagination_dict(page, page_size, total)
 
-    with file_path.open("r", encoding="utf-8") as fh:
+    with open(file_path, "r", encoding="utf-8") as fh:
         content = json.load(fh)
     if isinstance(content, list):
         total = len(content)
@@ -183,3 +197,28 @@ def _read_file_page(
         meta = content.get("meta", {}) if isinstance(content.get("meta"), dict) else {}
         return meta, records, total, _pagination_dict(page, page_size, total)
     raise ValueError("Only json/jsonl files with records are supported")
+
+
+def _read_meta_file(meta_path: Path) -> dict[str, Any]:
+    """读取元数据 JSON 文件，若不存在则返回空字典。"""
+    if not meta_path.exists():
+        return {}
+    with open(meta_path, "r", encoding="utf-8") as fh:
+        content = json.load(fh)
+    return content if isinstance(content, dict) else {}
+
+
+def _read_csv_page(csv_path: Path, page: int, page_size: int) -> tuple[list[dict[str, Any]], int]:
+    """读取 CSV 文件并返回指定页的数据和总数。"""
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+
+    all_rows: list[dict[str, Any]] = []
+    with open(csv_path, "r", encoding="utf-8", newline="") as fh:
+        reader = csv.DictReader(fh)
+        for row in reader:
+            all_rows.append(dict(row))
+
+    total = len(all_rows)
+    records = all_rows[start_idx:end_idx]
+    return records, total
