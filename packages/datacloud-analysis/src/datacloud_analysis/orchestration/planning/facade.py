@@ -1,10 +1,10 @@
-"""Facade to resolve planning context without hard coupling in planning node."""
+﻿"""Facade to resolve planning context without hard coupling in planning node."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from datacloud_analysis.orchestration.planner_contract import PlanningContext
+from datacloud_analysis.orchestration.planning.contract import PlanningContext
 from datacloud_analysis.orchestration.state import AgentState
 
 
@@ -37,4 +37,5 @@ async def resolve_planning_context(
     _ = default_prompts
     _ = default_tools
     return _context_from_state(state, query_input)
+
 
