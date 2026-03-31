@@ -1,4 +1,4 @@
-"""Agent State definitions for the LangGraph orchestrator."""
+﻿"""Agent State definitions for the LangGraph orchestrator."""
 
 from __future__ import annotations
 
@@ -59,6 +59,7 @@ class AgentState(MessagesState):
     artifact_refs: list[dict[str, Any]] | None
     execution_summary: dict[str, Any] | None
     execution_summary_persistence: dict[str, Any] | None
+    execution_summary_ref: dict[str, Any] | None
     resume_context: dict[str, Any] | None
 
     # Optional; should not be persisted with callable objects in checkpoint.
