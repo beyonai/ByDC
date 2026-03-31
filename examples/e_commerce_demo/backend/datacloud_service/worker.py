@@ -124,6 +124,7 @@ class DataCloudWorker(GatewayWorker):
         # 使用 OrderedDict 实现 LRU 缓存，防止长期运行内存无限增长
         self.graphs: OrderedDict = OrderedDict()
         self._resume_result_cache: OrderedDict[str, dict[str, Any]] = OrderedDict()
+        self._resume_inflight: dict[str, asyncio.Future[dict[str, Any]]] = {}
         self.command_plugin_manager = CommandPluginManager.from_defaults()
 
     def _build_resume_dedup_key(
@@ -155,6 +156,15 @@ class DataCloudWorker(GatewayWorker):
         self._resume_result_cache.move_to_end(key)
         while len(self._resume_result_cache) > self._RESUME_RESULT_CACHE_MAX:
             self._resume_result_cache.popitem(last=False)
+
+    @staticmethod
+    def _consume_future_exception(fut: asyncio.Future[dict[str, Any]]) -> None:
+        if fut.cancelled():
+            return
+        try:
+            fut.exception()
+        except Exception:
+            return
 
     def _build_graph(self, prompts_dict: dict | None = None, tools_dict: dict | None = None) -> Any:
         """Instantiate the datacloud-analysis compiled graph with dynamic context."""
@@ -543,22 +553,58 @@ class DataCloudWorker(GatewayWorker):
             )
 
         # ⑦ 流式驱动图，处理 GraphInterrupt
-        logger.info(
-            "⑦ _stream_graph invoke session=%s input_is_command_resume=%s",
-            context.session_id,
-            isinstance(graph_input, Command),
-        )
-        stream_result = await self._stream_graph(
-            target_graph=target_graph,
-            graph_input=graph_input,
-            config=config,
-            context=context,
-            by_agent_id=by_agent_id or "",
-            conf_hash=conf_hash,
-        )
+        resume_inflight_owner = False
+        resume_inflight_future: asyncio.Future[dict[str, Any]] | None = None
         if isinstance(command, ResumeCommand) and resume_cache_key:
-            self._cache_resume_result(resume_cache_key, stream_result)
-        return stream_result
+            inflight = self._resume_inflight.get(resume_cache_key)
+            if inflight is not None:
+                logger.info(
+                    "ResumeCommand inflight hit: session=%s checkpoint_id=%s checkpoint_ns=%s",
+                    context.session_id,
+                    str(header_metadata.get("checkpoint_id") or ""),
+                    str(header_metadata.get("checkpoint_ns") or ""),
+                )
+                inflight_result = await asyncio.shield(inflight)
+                return dict(inflight_result)
+            resume_inflight_owner = True
+            resume_inflight_future = asyncio.get_running_loop().create_future()
+            resume_inflight_future.add_done_callback(self._consume_future_exception)
+            self._resume_inflight[resume_cache_key] = resume_inflight_future
+
+        try:
+            logger.info(
+                "⑦ _stream_graph invoke session=%s input_is_command_resume=%s",
+                context.session_id,
+                isinstance(graph_input, Command),
+            )
+            stream_result = await self._stream_graph(
+                target_graph=target_graph,
+                graph_input=graph_input,
+                config=config,
+                context=context,
+                by_agent_id=by_agent_id or "",
+                conf_hash=conf_hash,
+            )
+            if isinstance(command, ResumeCommand) and resume_cache_key:
+                self._cache_resume_result(resume_cache_key, stream_result)
+            if (
+                resume_inflight_owner
+                and resume_inflight_future is not None
+                and not resume_inflight_future.done()
+            ):
+                resume_inflight_future.set_result(dict(stream_result))
+            return stream_result
+        except Exception as exc:
+            if (
+                resume_inflight_owner
+                and resume_inflight_future is not None
+                and not resume_inflight_future.done()
+            ):
+                resume_inflight_future.set_exception(exc)
+            raise
+        finally:
+            if resume_inflight_owner and resume_cache_key:
+                self._resume_inflight.pop(resume_cache_key, None)
 
     async def _stream_graph(
         self,

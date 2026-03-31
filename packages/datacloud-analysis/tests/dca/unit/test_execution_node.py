@@ -33,6 +33,19 @@ async def test_execution_uses_required_capabilities_for_effective_tools() -> Non
 
 
 @pytest.mark.asyncio
+async def test_execution_normalizes_invocation_dedup_stably() -> None:
+    state = cast(
+        AgentState,
+        {
+            "query_mode": "chitchat",
+            "invocation_dedup": ["dup", " dup ", "", "dup", "next"],
+        },
+    )
+    out = await execution_node(state, {"configurable": {}}, default_tools={})
+    assert out["invocation_dedup"] == ["dup", "next"]
+
+
+@pytest.mark.asyncio
 async def test_execution_supports_structured_required_capabilities() -> None:
     state = cast(
         AgentState,
