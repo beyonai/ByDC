@@ -1,14 +1,15 @@
-"""Execution summary model + persistence helpers for insight node."""
+﻿"""Execution summary model + persistence helpers for insight node."""
 
 from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, TypedDict, cast
 
 _LATEST_SUMMARY_FILE = "execution_summary_latest.json"
 _HISTORY_SUMMARY_FILE = "execution_summary_history.jsonl"
+_SUMMARY_MODEL_VERSION = "v1"
 
 
 class TodoStats(TypedDict):
@@ -21,7 +22,21 @@ class TodoStats(TypedDict):
     total: int
 
 
+class ExecutionSummaryTodo(TypedDict, total=False):
+    """Compact todo-level summary for persistence and replay."""
+
+    todo_id: str
+    goal: str
+    status: str
+    depends_on: list[str]
+    required_tools: list[str]
+    required_capabilities: list[str]
+    last_capability: str
+    error: str
+
+
 class ExecutionSummary(TypedDict, total=False):
+    # Legacy fields
     summary_version: str
     created_at: str
     session_id: str
@@ -39,6 +54,20 @@ class ExecutionSummary(TypedDict, total=False):
     part23_chars: int
     final_answer_preview: str
 
+    # G16 model fields
+    model_version: str
+    generated_at: str
+    thread_id: str
+    todo_total: int
+    todo_done: int
+    todo_failed: int
+    todo_skipped: int
+    todo_blocked: int
+    result_total: int
+    todos: list[ExecutionSummaryTodo]
+    final_answer_chars: int
+    extensions: dict[str, Any]
+
 
 class SummaryPersistResult(TypedDict, total=False):
     status: Literal["ok", "skipped", "failed"]
@@ -49,7 +78,9 @@ class SummaryPersistResult(TypedDict, total=False):
 
 
 def _safe_text(value: Any) -> str:
-    return str(value) if value is not None else ""
+    if value is None:
+        return ""
+    return str(value)
 
 
 def _compute_todo_stats(todos: list[dict[str, Any]]) -> TodoStats:
@@ -69,32 +100,119 @@ def _compute_todo_stats(todos: list[dict[str, Any]]) -> TodoStats:
     return stats
 
 
+def _todo_summary(todo: dict[str, Any]) -> ExecutionSummaryTodo:
+    raw_caps = todo.get("required_capabilities") or []
+    required_caps: list[str] = []
+    if isinstance(raw_caps, list):
+        for item in raw_caps:
+            if isinstance(item, dict):
+                cap = _safe_text(item.get("capability_id")).strip()
+                if cap:
+                    required_caps.append(cap)
+            else:
+                cap = _safe_text(item).strip()
+                if cap:
+                    required_caps.append(cap)
+
+    raw_required_tools = todo.get("required_tools") or []
+    required_tools = [_safe_text(item) for item in raw_required_tools if _safe_text(item).strip()]
+    depends_on = [_safe_text(item) for item in (todo.get("depends_on") or []) if _safe_text(item).strip()]
+
+    summary: ExecutionSummaryTodo = {
+        "todo_id": _safe_text(todo.get("todo_id")),
+        "goal": _safe_text(todo.get("goal")),
+        "status": _safe_text(todo.get("status")),
+        "depends_on": depends_on,
+        "required_tools": required_tools,
+        "required_capabilities": required_caps,
+    }
+    last_capability = _safe_text(todo.get("last_capability")).strip()
+    if last_capability:
+        summary["last_capability"] = last_capability
+    error = _safe_text(todo.get("error")).strip()
+    if error:
+        summary["error"] = error
+    return summary
+
+
 def build_execution_summary(
-    *,
     state: dict[str, Any],
-    history_content: str,
-    part23: str,
-    session_id: str,
+    *,
+    history_content: str = "",
+    part23: str = "",
+    session_id: str = "",
+    gateway_context: Any = None,
+    final_answer: str = "",
 ) -> ExecutionSummary:
+    """Build a summary compatible with legacy and G16 model contracts."""
     todos = [todo for todo in (state.get("todos") or []) if isinstance(todo, dict)]
+    artifact_refs = [item for item in (state.get("artifact_refs") or []) if isinstance(item, dict)]
+
+    now = datetime.now(UTC).isoformat()
+
+    context_session = _safe_text(getattr(gateway_context, "session_id", "")).strip()
+    resolved_session_id = (session_id or context_session).strip()
+    resume_context = state.get("resume_context")
+    resume = resume_context if isinstance(resume_context, dict) else {}
+    thread_id = _safe_text(resume.get("thread_id") or resolved_session_id).strip()
+
+    status_values = [_safe_text(todo.get("status")).lower() for todo in todos]
+    todo_total = len(todos)
+    todo_done = sum(1 for status in status_values if status == "done")
+    todo_failed = sum(1 for status in status_values if status == "failed")
+    todo_skipped = sum(1 for status in status_values if status == "skipped")
+    todo_blocked = sum(1 for status in status_values if status == "blocked")
+
+    raw_results = state.get("results") or []
+    result_total = len(raw_results) if isinstance(raw_results, list) else 0
+
+    resolved_history = history_content or final_answer
+
     return {
+        # Legacy fields
         "summary_version": "1.0",
-        "created_at": datetime.now(UTC).isoformat(),
-        "session_id": session_id,
+        "created_at": now,
+        "session_id": resolved_session_id,
         "agent_id": _safe_text(state.get("agent_id")),
         "query_mode": _safe_text(state.get("query_mode")),
         "user_query": _safe_text(state.get("user_query")),
         "enriched_query": _safe_text(state.get("enriched_query")),
         "intent": _safe_text(state.get("intent")),
         "execution_status": _safe_text(state.get("execution_status")),
-        "result_count": len(state.get("results") or []),
+        "result_count": result_total,
         "todo_stats": _compute_todo_stats(todos),
         "todo_active_id": _safe_text(state.get("todo_active_id")),
-        "artifact_refs": list(state.get("artifact_refs") or []),
-        "history_chars": len(history_content),
+        "artifact_refs": artifact_refs,
+        "history_chars": len(resolved_history),
         "part23_chars": len(part23),
-        "final_answer_preview": history_content[:500],
+        "final_answer_preview": resolved_history[:500],
+        # G16 model fields
+        "model_version": _SUMMARY_MODEL_VERSION,
+        "generated_at": now,
+        "thread_id": thread_id,
+        "todo_total": todo_total,
+        "todo_done": todo_done,
+        "todo_failed": todo_failed,
+        "todo_skipped": todo_skipped,
+        "todo_blocked": todo_blocked,
+        "result_total": result_total,
+        "todos": [_todo_summary(todo) for todo in todos],
+        "final_answer_chars": len(final_answer),
+        "extensions": {},
     }
+
+
+def execution_summary_to_json(summary: ExecutionSummary) -> str:
+    """Serialize summary to deterministic JSON for storage and tests."""
+    return json.dumps(summary, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def execution_summary_from_json(payload: str) -> ExecutionSummary:
+    """Deserialize summary JSON payload."""
+    decoded = json.loads(payload)
+    if not isinstance(decoded, dict):
+        raise ValueError("execution summary payload must decode to object")
+    return cast(ExecutionSummary, decoded)
 
 
 def _resolve_session_dir(
@@ -176,5 +294,5 @@ def load_latest_summary_by_session(
     except (OSError, json.JSONDecodeError):
         return None
     if isinstance(loaded, dict):
-        return loaded
+        return cast(ExecutionSummary, loaded)
     return None
