@@ -1,4 +1,4 @@
-"""Assemble the DataCloud analysis StateGraph.
+﻿"""Assemble the DataCloud analysis StateGraph.
 
 Main chain (5-node architecture):
 knowledge_enhance -> planning -> execution -> end
@@ -13,7 +13,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 
 from datacloud_analysis.orchestration.execution import execution_node
-from datacloud_analysis.orchestration.insight import insight_node
+from datacloud_analysis.orchestration.end import insight_node
 from datacloud_analysis.orchestration.knowledge_enhance import knowledge_enhance_node
 from datacloud_analysis.orchestration.planning import planning_node
 from datacloud_analysis.orchestration.state import AgentState
@@ -77,4 +77,5 @@ def build_analysis_graph(
     builder.add_edge("end", END)
 
     return builder
+
 

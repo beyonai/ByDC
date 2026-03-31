@@ -1,12 +1,12 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
 
 import pytest
 
-from datacloud_analysis.orchestration import react_runtime
-from datacloud_analysis.orchestration.react_runtime import select_react_capability
+from datacloud_analysis.orchestration.execution import react_runtime
+from datacloud_analysis.orchestration.execution.react_runtime import select_react_capability
 
 
 @dataclass
@@ -118,3 +118,5 @@ async def test_select_react_capability_returns_empty_fallback_for_empty_candidat
     assert out["capability_id"] == ""
     assert out["source"] == "fallback"
     assert out["reason"] == "empty_candidates"
+
+

@@ -1,13 +1,13 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any, cast
 
 import pytest
 from langchain_core.messages import HumanMessage
 
-from datacloud_analysis.orchestration import insight as insight_module
-from datacloud_analysis.orchestration.execution_summary import load_latest_summary_by_session
-from datacloud_analysis.orchestration.insight import insight_node
+from datacloud_analysis.orchestration.end import node as insight_module
+from datacloud_analysis.orchestration.end.execution_summary import load_latest_summary_by_session
+from datacloud_analysis.orchestration.end import insight_node
 from datacloud_analysis.orchestration.state import AgentState
 
 
@@ -73,3 +73,5 @@ async def test_insight_persist_summary_failure_does_not_break_reply(
     assert out["messages"][0].content == "hello!"
     assert out["execution_summary_persistence"]["status"] == "failed"
     assert "disk error" in out["execution_summary_persistence"]["error"]
+
+
