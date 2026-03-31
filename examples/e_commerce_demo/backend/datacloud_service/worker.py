@@ -170,6 +170,7 @@ class DataCloudWorker(GatewayWorker):
             return {}
 
         skills: dict[str, Any] = {}
+        source_counts: dict[str, int] = {}
         for name, entry in registry.items():
             run_fn = entry.get("run")
             if not callable(run_fn):
@@ -178,8 +179,15 @@ class DataCloudWorker(GatewayWorker):
             if not skill_name:
                 continue
             skills[skill_name] = self._wrap_skill_callable(skill_name, run_fn)
+            source = str(entry.get("source", "unknown"))
+            source_counts[source] = source_counts.get(source, 0) + 1
         if skills:
-            logger.info("Loaded skill capabilities: count=%d names=%s", len(skills), sorted(skills.keys()))
+            logger.info(
+                "Loaded skill capabilities: count=%d names=%s sources=%s",
+                len(skills),
+                sorted(skills.keys()),
+                source_counts,
+            )
         return skills
 
     async def start_heartbeat(self) -> None:
