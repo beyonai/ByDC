@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any
 
@@ -231,6 +232,51 @@ async def test_resume_idempotent_cache_prevents_duplicate_stream_execution(
 
     result_1 = await worker.process_command(command, context)
     result_2 = await worker.process_command(command, context)
+
+    assert result_1 == {"status": "done"}
+    assert result_2 == {"status": "done"}
+    assert stream_call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_resume_concurrent_singleflight_prevents_duplicate_stream_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worker = DataCloudWorker(worker_id="worker-test")
+    config = _AgentConfig(agent_id="agent-1", tools={"tool_a": object()}, prompts={"intent": "p"})
+    context = _FakeContext([config])
+    stream_call_count = 0
+
+    monkeypatch.setattr(worker, "_build_graph", lambda **_kwargs: object())
+
+    async def _fake_stream_graph(**_kwargs: Any) -> dict[str, Any]:
+        nonlocal stream_call_count
+        stream_call_count += 1
+        await asyncio.sleep(0.05)
+        return {"status": "done"}
+
+    monkeypatch.setattr(worker, "_stream_graph", _fake_stream_graph)
+
+    command = ResumeCommand(
+        header=MessageHeader(
+            message_id="m-idem-2",
+            session_id=context.session_id,
+            trace_id="trace-idem-2",
+            metadata={
+                "agent_id": "agent-1",
+                "checkpoint_id": "ckpt-idem",
+                "checkpoint_ns": "ns-idem",
+            },
+        ),
+        content="fallback-content",
+        reply_data={"confirm": "继续"},
+        extra_payload={},
+    )
+
+    result_1, result_2 = await asyncio.gather(
+        worker.process_command(command, context),
+        worker.process_command(command, context),
+    )
 
     assert result_1 == {"status": "done"}
     assert result_2 == {"status": "done"}
