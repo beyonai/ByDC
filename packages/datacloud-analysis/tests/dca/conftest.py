@@ -10,10 +10,22 @@ workspace_paths     Function-scoped: isolated TaskPaths backed by a tmp_path;
 
 from __future__ import annotations
 
+import sys
 import uuid
 from pathlib import Path
 
 import pytest
+
+
+def _ensure_backend_demo_import_path() -> None:
+    repo_root = Path(__file__).resolve().parents[4]
+    backend_root = repo_root / "examples" / "e_commerce_demo" / "backend"
+    backend_root_str = str(backend_root)
+    if backend_root.exists() and backend_root_str not in sys.path:
+        sys.path.insert(0, backend_root_str)
+
+
+_ensure_backend_demo_import_path()
 
 
 @pytest.fixture
