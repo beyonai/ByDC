@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from datacloud_analysis.orchestration.dag import dag_node
-from datacloud_analysis.orchestration.intent import intent_node
+from datacloud_analysis.orchestration.planner_facade import resolve_planning_context
 from datacloud_analysis.orchestration.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -211,7 +211,7 @@ async def planning_node(
     default_prompts: dict[str, Any] | None = None,
     default_tools: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Plan todos using intent classification + optional DAG decomposition."""
+    """Plan todos using resolved planning context + optional DAG decomposition."""
     query_input = str(
         state.get("intent")
         or state.get("enriched_query")
@@ -221,25 +221,26 @@ async def planning_node(
     if not query_input:
         return {"todos": [], "todo_md": "# TODOs\n\n- (empty)\n"}
 
-    intent_updates = await intent_node(
+    planning_context = await resolve_planning_context(
         state,
+        query_input=query_input,
         gateway_context=gateway_context,
         default_prompts=default_prompts,
         default_tools=default_tools,
-        query_override=query_input,
     )
-    query_mode = str(intent_updates.get("query_mode") or "analysis")
-    intent_text = str(intent_updates.get("intent") or query_input)
-    target_tool = str(intent_updates.get("target_tool") or "")
-    raw_tool_params = intent_updates.get("tool_params")
+    query_mode = str(planning_context.get("query_mode") or "analysis")
+    intent_text = str(planning_context.get("intent") or query_input)
+    target_tool = str(planning_context.get("target_tool") or "")
+    raw_tool_params = planning_context.get("tool_params")
     tool_params = raw_tool_params if isinstance(raw_tool_params, dict) else {}
     available_tools = state.get("dynamic_tools") or default_tools or {}
-    confirmed_terms = list(intent_updates.get("confirmed_terms") or [])
-    term_hints = list(intent_updates.get("term_hints") or state.get("term_hints") or [])
+    confirmed_terms = list(planning_context.get("confirmed_terms") or [])
+    term_hints = list(planning_context.get("term_hints") or state.get("term_hints") or [])
     term_context = _merge_term_context(
         _build_term_context(confirmed_terms),
         _build_term_context_from_hints(term_hints),
     )
+    planning_updates: dict[str, Any] = dict(planning_context)
 
     if query_mode in {"online_query", "agent_delegate"}:
         tool_fn = available_tools.get(target_tool)
@@ -253,21 +254,21 @@ async def planning_node(
                 target_tool,
             )
             query_mode = "analysis"
-            intent_updates["query_mode"] = "analysis"
-            intent_updates["target_tool"] = ""
+            planning_updates["query_mode"] = "analysis"
+            planning_updates["target_tool"] = ""
             target_tool = ""
         elif query_mode == "online_query" and is_delegate_tool:
             # Delegate tools should use the dedicated delegation path for gateway hand-off.
             query_mode = "agent_delegate"
-            intent_updates["query_mode"] = "agent_delegate"
+            planning_updates["query_mode"] = "agent_delegate"
         elif query_mode == "agent_delegate" and not is_delegate_tool:
             # Non-delegate tools should run through direct tool invocation.
             query_mode = "online_query"
-            intent_updates["query_mode"] = "online_query"
+            planning_updates["query_mode"] = "online_query"
 
     plan: list[dict[str, Any]] = []
-    if query_mode == "analysis" and not intent_updates.get("ambiguous_terms"):
-        merged_state = cast(AgentState, {**state, **intent_updates})
+    if query_mode == "analysis" and not planning_updates.get("ambiguous_terms"):
+        merged_state = cast(AgentState, {**state, **planning_updates})
         dag_updates = await dag_node(
             merged_state,
             gateway_context=gateway_context,
@@ -292,7 +293,7 @@ async def planning_node(
     todo_md_path = _persist_todo_md(state.get("workspace_dir"), todo_md)
 
     return {
-        **intent_updates,
+        **planning_updates,
         "plan": plan,
         "todos": todos,
         "todo_md": todo_md,
