@@ -71,6 +71,123 @@ def _planning_tools_view(dynamic_tools: dict[str, object]) -> dict[str, object]:
     return {k: v for k, v in dynamic_tools.items() if k not in _EXCLUDED_PLANNING_TOOLS}
 
 
+def _relation_semantic_types(todo: dict[str, Any]) -> set[str]:
+    raw_term_context = todo.get("term_context")
+    semantic_types: set[str] = set()
+    if isinstance(raw_term_context, dict):
+        raw_semantic_types = raw_term_context.get("semantic_types")
+        if isinstance(raw_semantic_types, list):
+            semantic_types.update(str(item).strip().lower() for item in raw_semantic_types if str(item).strip())
+        return semantic_types
+
+    if isinstance(raw_term_context, list):
+        for item in raw_term_context:
+            if not isinstance(item, dict):
+                continue
+            semantic_type = str(item.get("semantic_type") or "").strip().lower()
+            if semantic_type:
+                semantic_types.add(semantic_type)
+    return semantic_types
+
+
+def _should_split_relation_todo(todo: dict[str, Any]) -> bool:
+    """Return True when a relation todo should be expanded into locate + query."""
+    semantic_types = _relation_semantic_types(todo)
+    if "relation" not in semantic_types:
+        return False
+    return not todo.get("depends_on")
+
+
+def split_relation_todo(todo: dict[str, Any]) -> list[dict[str, Any]]:
+    """Split one relation todo into locate subject/object + query relation steps."""
+    todo_id = str(todo.get("todo_id") or "t_rel").strip() or "t_rel"
+    goal = str(todo.get("goal") or "")
+    status = str(todo.get("status") or "pending")
+    term_context = todo.get("term_context")
+    relation_inputs = dict(todo.get("inputs") or {}) if isinstance(todo.get("inputs"), dict) else {}
+
+    locate_todo = {
+        "todo_id": f"{todo_id}_locate",
+        "goal": f"定位「{goal}」中的主语和宾语实体",
+        "required_tools": ["search_knowledge"],
+        "blocked_tools": [],
+        "required_capabilities": [{"capability_id": "search_knowledge", "capability_type": "tool"}],
+        "blocked_capabilities": [],
+        "inputs": {"query": goal},
+        "depends_on": [],
+        "term_context": term_context,
+        "acceptance_criteria": f"task {todo_id}_locate executed successfully",
+        "status": status,
+    }
+    query_todo = {
+        "todo_id": f"{todo_id}_query",
+        "goal": goal,
+        "required_tools": list(todo.get("required_tools") or []),
+        "blocked_tools": list(todo.get("blocked_tools") or []),
+        "required_capabilities": list(todo.get("required_capabilities") or []),
+        "blocked_capabilities": list(todo.get("blocked_capabilities") or []),
+        "inputs": relation_inputs,
+        "depends_on": [f"{todo_id}_locate"],
+        "param_from_deps": {f"{todo_id}_locate": ["subject_id", "object_id"]},
+        "term_context": term_context,
+        "acceptance_criteria": str(
+            todo.get("acceptance_criteria") or f"task {todo_id}_query executed successfully"
+        ),
+        "status": status,
+    }
+    return [locate_todo, query_todo]
+
+
+def _unique_todo_id(base: str, used: set[str]) -> str:
+    candidate = base
+    suffix = 2
+    while candidate in used:
+        candidate = f"{base}_{suffix}"
+        suffix += 1
+    used.add(candidate)
+    return candidate
+
+
+def _rewrite_relation_split_ids(split_todos: list[dict[str, Any]], used_ids: set[str]) -> list[dict[str, Any]]:
+    if len(split_todos) != 2:
+        return split_todos
+    locate = dict(split_todos[0])
+    query = dict(split_todos[1])
+
+    locate_id = _unique_todo_id(str(locate.get("todo_id") or "t_rel_locate"), used_ids)
+    query_id = _unique_todo_id(str(query.get("todo_id") or "t_rel_query"), used_ids)
+
+    query_param_from_deps = dict(query.get("param_from_deps") or {})
+    source_dep_ids = list(query_param_from_deps.keys())
+    source_dep_id = source_dep_ids[0] if source_dep_ids else ""
+    dep_fields = list(query_param_from_deps.get(source_dep_id) or ["subject_id", "object_id"])
+
+    locate["todo_id"] = locate_id
+    query["todo_id"] = query_id
+    query["depends_on"] = [locate_id]
+    query["param_from_deps"] = {locate_id: dep_fields}
+    return [locate, query]
+
+
+def expand_relation_todos(raw_todos: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Expand relation todos to two-step orchestration when applicable."""
+    expanded: list[dict[str, Any]] = []
+    used_ids: set[str] = set()
+    for todo in raw_todos:
+        todo_id = str(todo.get("todo_id") or "").strip()
+        if todo_id:
+            used_ids.add(todo_id)
+
+    for todo in raw_todos:
+        if not _should_split_relation_todo(todo):
+            expanded.append(todo)
+            continue
+        split_todos = split_relation_todo(todo)
+        rewritten = _rewrite_relation_split_ids(split_todos, used_ids)
+        expanded.extend(rewritten)
+    return expanded
+
+
 def _normalize_query_params(plan: list[dict[str, object]], intent: str) -> list[dict[str, object]]:
     normalized: list[dict[str, object]] = []
     for task in plan:
