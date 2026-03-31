@@ -483,7 +483,7 @@ def _ensure_dynamic_content_param(params: dict[str, Any], task_description: str)
     return params
 
 
-async def execute_next_task(
+async def _execute_next_task_with_hooks(
     task: dict[str, Any],
     state: Mapping[str, Any],
     gateway_context: Any = None,
@@ -729,6 +729,42 @@ async def execute_next_task(
                 error=str(exc),
             )
         return {**task, "status": "failed", "error": str(exc)}, str(exc)
+
+
+class ToolRuntime:
+    """Unified tool execution entry that encapsulates before/after hook chains."""
+
+    def __init__(
+        self,
+        custom_tools: dict[str, Any] | None = None,
+        gateway_context: Any = None,
+    ) -> None:
+        self._custom_tools = custom_tools or {}
+        self._gateway_context = gateway_context
+
+    async def invoke_with_callbacks(
+        self,
+        task: dict[str, Any],
+        state: Mapping[str, Any],
+    ) -> tuple[dict[str, Any], Any]:
+        """Execute one task via the standardized hook-wrapped runtime path."""
+        return await _execute_next_task_with_hooks(
+            task=task,
+            state=state,
+            gateway_context=self._gateway_context,
+            custom_tools=self._custom_tools,
+        )
+
+
+async def execute_next_task(
+    task: dict[str, Any],
+    state: Mapping[str, Any],
+    gateway_context: Any = None,
+    custom_tools: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], Any]:
+    """Backward-compatible entry; delegates to ``ToolRuntime.invoke_with_callbacks``."""
+    runtime = ToolRuntime(custom_tools=custom_tools, gateway_context=gateway_context)
+    return await runtime.invoke_with_callbacks(task, state)
 
 
 def _log_hook_decision(phase: str, decision: HookDecision | None, *, task_id: str) -> None:

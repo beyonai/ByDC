@@ -14,10 +14,9 @@ import anyio
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
-from datacloud_analysis.orchestration.clarification import clarification_node
 from datacloud_analysis.orchestration.execution.react_runtime import select_react_capability
 from datacloud_analysis.orchestration.execution.sandbox_executor import (
-    execute_next_task,
+    ToolRuntime,
     normalize_workspace_task_output,
 )
 from datacloud_analysis.orchestration.state import AgentState
@@ -623,7 +622,7 @@ async def _execute_one_todo(
     todo: dict[str, Any],
     state: AgentState,
     query_mode: str,
-    gateway_context: Any,
+    runtime: ToolRuntime,
     dynamic_tools: dict[str, Any],
     available_capabilities: set[str],
     invocation_dedup_set: set[str],
@@ -721,12 +720,7 @@ async def _execute_one_todo(
             )
 
         task = _task_from_todo(todo, capability)
-        updated_task, output = await execute_next_task(
-            task,
-            state,
-            gateway_context=gateway_context,
-            custom_tools=dynamic_tools,
-        )
+        updated_task, output = await runtime.invoke_with_callbacks(task, state)
         task_status = str(updated_task.get("status", "failed"))
         trace.append(
             {
@@ -825,6 +819,7 @@ async def execution_node(
     """Execute one dependency-ready todo batch and decide next step."""
     gateway_context = (config.get("configurable") or {}).get("gateway_context")
     dynamic_tools = state.get("dynamic_tools") or default_tools or {}
+    runtime = ToolRuntime(custom_tools=dynamic_tools, gateway_context=gateway_context)
     available_capabilities = set(dynamic_tools.keys()) | set(_BUILTIN_EXECUTOR_CAPABILITIES)
     todos = _ensure_direct_todo_from_route(state, dynamic_tools=dynamic_tools)
     existing_todo_md_path = (
@@ -846,32 +841,15 @@ async def execution_node(
     pending_capability = active_tools[0] if active_tools else ""
 
     if state.get("ambiguous_terms"):
-        updates = await clarification_node(state, gateway_context=gateway_context)
-        if updates.get("ambiguous_terms"):
-            return {
-                **updates,
-                "todo_active_id": todo_active_id,
-                "active_tools": active_tools,
-                "execution_status": "done",
-                "resume_context": _resume_context_after_round(
-                    state=state,
-                    config=config,
-                    todo_active_id=todo_active_id,
-                    pending_capability=pending_capability,
-                ),
-                "execution_trace": _append_trace(
-                    execution_trace,
-                    stage="clarification",
-                    status="waiting",
-                    detail={"todo_id": todo_active_id},
-                ),
-                "invocation_dedup": invocation_dedup,
-            }
+        updates = {
+            "ambiguous_terms": list(state.get("ambiguous_terms") or []),
+            "clarify_needed": True,
+        }
         return {
             **updates,
             "todo_active_id": todo_active_id,
             "active_tools": active_tools,
-            "execution_status": "replan",
+            "execution_status": "done",
             "resume_context": _resume_context_after_round(
                 state=state,
                 config=config,
@@ -881,7 +859,7 @@ async def execution_node(
             "execution_trace": _append_trace(
                 execution_trace,
                 stage="clarification",
-                status="resolved",
+                status="waiting",
                 detail={"todo_id": todo_active_id},
             ),
             "invocation_dedup": invocation_dedup,
@@ -980,7 +958,7 @@ async def execution_node(
                 todo=todo,
                 state=state,
                 query_mode=query_mode,
-                gateway_context=gateway_context,
+                runtime=runtime,
                 dynamic_tools=dynamic_tools,
                 available_capabilities=available_capabilities,
                 invocation_dedup_set=invocation_dedup_set,
