@@ -125,3 +125,32 @@ async def test_tool_hook_manager_legacy_after_tool_output_schema_supported(
     assert decision["action"] == "recover"
     assert decision["result"]["tool_output"] == {"ok": True, "rewritten": True}
     get_tool_hook_plugin_manager.cache_clear()
+
+
+async def test_builtin_semantic_param_enhancer_patches_tool_params(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("DATACLOUD_TOOL_HOOK_PLUGIN_DIRS", raising=False)
+    get_tool_hook_plugin_manager.cache_clear()
+    manager = get_tool_hook_plugin_manager()
+    context: HookContext = {
+        "tool_name": "dws_enterprise_wide_query",
+        "tool_params": {"limit": 100},
+        "term_context": [
+            {"semantic_type": "view", "normalized_term": "企业综合分析表"},
+            {"semantic_type": "object", "normalized_term": "企业"},
+            {"semantic_type": "action", "normalized_term": "查询"},
+            {"semantic_type": "relation", "normalized_term": "企业-产业"},
+        ],
+        "knowledge_snippets": [],
+    }
+    updated_ctx, decision = await manager.run_before(context)
+
+    assert decision is None
+    params = updated_ctx["tool_params"]
+    assert params["view_name"] == "企业综合分析表"
+    assert params["object_name"] == "企业"
+    assert params["action_name"] == "查询"
+    assert params["relation_hint"] == "企业-产业"
+    assert updated_ctx["knowledge_snippets"]
+    get_tool_hook_plugin_manager.cache_clear()

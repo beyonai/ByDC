@@ -106,6 +106,7 @@ class DataCloudWorker(GatewayWorker):
 
     # 图实例缓存的最大条目数；超过时淘汰最久未使用的条目
     _GRAPH_CACHE_MAX: int = 32
+    _RESUME_RESULT_CACHE_MAX: int = 256
 
     def __init__(
         self,
@@ -122,7 +123,38 @@ class DataCloudWorker(GatewayWorker):
         self.base_url = base_url
         # 使用 OrderedDict 实现 LRU 缓存，防止长期运行内存无限增长
         self.graphs: OrderedDict = OrderedDict()
+        self._resume_result_cache: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self.command_plugin_manager = CommandPluginManager.from_defaults()
+
+    def _build_resume_dedup_key(
+        self,
+        *,
+        session_id: str,
+        checkpoint_id: str,
+        checkpoint_ns: str,
+        resume_value: Any,
+    ) -> str:
+        try:
+            resume_payload = json.dumps(resume_value, ensure_ascii=False, sort_keys=True, default=str)
+        except Exception:
+            resume_payload = repr(resume_value)
+        raw = json.dumps(
+            {
+                "session_id": session_id,
+                "checkpoint_id": checkpoint_id,
+                "checkpoint_ns": checkpoint_ns,
+                "resume_payload": resume_payload,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+    def _cache_resume_result(self, key: str, result: dict[str, Any]) -> None:
+        self._resume_result_cache[key] = dict(result)
+        self._resume_result_cache.move_to_end(key)
+        while len(self._resume_result_cache) > self._RESUME_RESULT_CACHE_MAX:
+            self._resume_result_cache.popitem(last=False)
 
     def _build_graph(self, prompts_dict: dict | None = None, tools_dict: dict | None = None) -> Any:
         """Instantiate the datacloud-analysis compiled graph with dynamic context."""
@@ -266,6 +298,28 @@ class DataCloudWorker(GatewayWorker):
             type(by_agent_id).__name__,
             by_agent_name,
         )
+
+        resume_cache_key: str | None = None
+        if isinstance(command, ResumeCommand):
+            resume_value_probe = command.reply_data if command.reply_data is not None else command.content
+            checkpoint_id_probe = str(header_metadata.get("checkpoint_id") or "")
+            checkpoint_ns_probe = str(header_metadata.get("checkpoint_ns") or "")
+            resume_cache_key = self._build_resume_dedup_key(
+                session_id=context.session_id,
+                checkpoint_id=checkpoint_id_probe,
+                checkpoint_ns=checkpoint_ns_probe,
+                resume_value=resume_value_probe,
+            )
+            cached = self._resume_result_cache.get(resume_cache_key)
+            if cached is not None:
+                logger.info(
+                    "ResumeCommand idempotent hit: session=%s checkpoint_id=%s checkpoint_ns=%s",
+                    context.session_id,
+                    checkpoint_id_probe,
+                    checkpoint_ns_probe,
+                )
+                self._resume_result_cache.move_to_end(resume_cache_key)
+                return dict(cached)
 
         # 获取当前挂载的 Workspace
         from by_framework.worker.sandbox.hook_sandbox import active_workspace  # noqa: PLC0415
@@ -494,7 +548,7 @@ class DataCloudWorker(GatewayWorker):
             context.session_id,
             isinstance(graph_input, Command),
         )
-        return await self._stream_graph(
+        stream_result = await self._stream_graph(
             target_graph=target_graph,
             graph_input=graph_input,
             config=config,
@@ -502,6 +556,9 @@ class DataCloudWorker(GatewayWorker):
             by_agent_id=by_agent_id or "",
             conf_hash=conf_hash,
         )
+        if isinstance(command, ResumeCommand) and resume_cache_key:
+            self._cache_resume_result(resume_cache_key, stream_result)
+        return stream_result
 
     async def _stream_graph(
         self,
