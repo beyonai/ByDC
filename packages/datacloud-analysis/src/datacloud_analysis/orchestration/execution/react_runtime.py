@@ -6,6 +6,7 @@ Provides a best-effort function-call based selector and deterministic fallback.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from collections.abc import Mapping
 from typing import Any, TypedDict
@@ -13,6 +14,14 @@ from typing import Any, TypedDict
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
+
+from datacloud_analysis.orchestration.shared import (
+    resolve_reasoning_api_key,
+    resolve_reasoning_base_url,
+    resolve_reasoning_model_spec,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class ReactSelection(TypedDict):
@@ -93,6 +102,22 @@ def _trim_text(value: str, *, limit: int = 2000) -> str:
     return text[:limit]
 
 
+def _trim_log_text(value: str, limit: int = 1200) -> str:
+    """Return a log-safe truncated string."""
+    if len(value) <= limit:
+        return value
+    return f"{value[:limit]}...(truncated)"
+
+
+def _exception_response_text(exc: Exception) -> str:
+    """Extract response body text from HTTP/client exceptions when present."""
+    response = getattr(exc, "response", None)
+    if response is None:
+        return ""
+    text = getattr(response, "text", "")
+    return text if isinstance(text, str) else ""
+
+
 async def select_react_capability(
     *,
     state: Mapping[str, Any],
@@ -112,22 +137,78 @@ async def select_react_capability(
         return _fallback_selection([], reason="empty_candidates")
 
     if not _is_function_call_enabled(state):
+        logger.info(
+            "react_runtime: skipping LLM (function-call disabled) candidates=%s round=%d",
+            candidates,
+            round_index,
+        )
         return _fallback_selection(candidates, reason="function_call_disabled")
 
-    model = os.getenv("DATACLOUD_LLM_REASONING_MODEL", "openai:Qwen/Qwen3-235B-A22B")
-    if not model.startswith("openai:"):
-        model = f"openai:{model}"
+    model_spec = resolve_reasoning_model_spec(
+        os.getenv("DATACLOUD_LLM_REASONING_MODEL", "Qwen/Qwen3-235B-A22B")
+    )
+    raw_model = model_spec["raw_model"]
+    model = model_spec["model"]
+    model_provider = model_spec["model_provider"]
+    provider_prefixed = model_spec["provider_prefixed"]
+    api_key = resolve_reasoning_api_key()
+    base_url = resolve_reasoning_base_url()
+    todo_id = str(todo.get("todo_id") or "")
+
+    logger.info(
+        "react_runtime: preparing bind_tools for function-call "
+        "model=%s raw_model=%s model_provider=%s provider_prefixed=%s "
+        "base_url=%s api_key_present=%s round=%d todo_id=%s candidate_count=%d candidates=%s",
+        model,
+        raw_model,
+        model_provider,
+        provider_prefixed,
+        base_url or "",
+        bool(api_key),
+        round_index,
+        todo_id,
+        len(candidates),
+        candidates,
+    )
 
     try:
         llm = init_chat_model(
             model,
-            model_provider="openai",
-            api_key=os.getenv("OPENAI_API_KEY"),
-            base_url=os.getenv("OPENAI_BASE_URL"),
+            model_provider=model_provider,
+            api_key=api_key,
+            base_url=base_url,
             temperature=0,
             streaming=False,
-        ).bind_tools([choose_capability], tool_choice="choose_capability")
-    except Exception:
+        )
+        llm = llm.bind_tools([choose_capability], tool_choice="choose_capability")
+        logger.info(
+            "react_runtime: bind_tools success model=%s raw_model=%s model_provider=%s "
+            "round=%d todo_id=%s candidates=%s",
+            model,
+            raw_model,
+            model_provider,
+            round_index,
+            todo_id,
+            candidates,
+        )
+    except Exception as exc:
+        response_text = _exception_response_text(exc)
+        logger.warning(
+            "react_runtime: bind_tools failed, fallback to first candidate: %s; "
+            "model=%s raw_model=%s model_provider=%s provider_prefixed=%s "
+            "base_url=%s api_key_present=%s candidates=%s round=%d todo_id=%s response_text=%s",
+            exc,
+            model,
+            raw_model,
+            model_provider,
+            provider_prefixed,
+            base_url or "",
+            bool(api_key),
+            candidates,
+            round_index,
+            todo_id,
+            _trim_log_text(response_text, 2000),
+        )
         return _fallback_selection(candidates, reason="bind_tools_unavailable")
 
     goal = str(todo.get("goal") or "")
@@ -142,26 +223,78 @@ async def select_react_capability(
         system_parts.append(f"\n## 当前任务进度\n{_trim_text(todo_md_summary)}")
     if observe:
         system_parts.append(f"\n## 上一轮执行结果\n{_trim_text(observe)}")
+    system_content = "".join(system_parts)
+    human_content = (
+        f"round={round_index}\n"
+        f"user_query={user_query}\n"
+        f"todo_goal={goal}\n"
+        f"candidates={candidates}\n"
+        f"term_context={term_context_text}\n"
+        "只选择一个最合适能力。"
+    )
     messages = [
-        SystemMessage(content="".join(system_parts)),
-        HumanMessage(
-            content=(
-                f"round={round_index}\n"
-                f"user_query={user_query}\n"
-                f"todo_goal={goal}\n"
-                f"candidates={candidates}\n"
-                f"term_context={term_context_text}\n"
-                "只选择一个最合适能力。"
-            )
-        ),
+        SystemMessage(content=system_content),
+        HumanMessage(content=human_content),
     ]
+    logger.info(
+        "react_runtime: llm request (function-call choose_capability) model=%s raw_model=%s "
+        "model_provider=%s provider_prefixed=%s base_url=%s api_key_present=%s "
+        "round=%d candidate_count=%d candidates=%s function_call_enabled=%s "
+        "system_len=%d user_msg_len=%d todo_md_len=%d observe_len=%d todo_id=%s",
+        model,
+        raw_model,
+        model_provider,
+        provider_prefixed,
+        base_url or "",
+        bool(api_key),
+        round_index,
+        len(candidates),
+        candidates,
+        _is_function_call_enabled(state),
+        len(system_content),
+        len(human_content),
+        len(todo_md_summary or ""),
+        len(observe or ""),
+        todo_id,
+    )
     try:
         ai_message = await llm.ainvoke(messages)
-    except Exception:
+    except Exception as exc:
+        response_text = _exception_response_text(exc)
+        logger.warning(
+            "react_runtime: llm ainvoke failed, fallback to first candidate: %s; "
+            "model=%s raw_model=%s model_provider=%s provider_prefixed=%s base_url=%s "
+            "candidates=%s round=%d todo_id=%s response_text=%s",
+            exc,
+            model,
+            raw_model,
+            model_provider,
+            provider_prefixed,
+            base_url or "",
+            candidates,
+            round_index,
+            todo_id,
+            _trim_log_text(response_text, 2000),
+        )
         return _fallback_selection(candidates, reason="llm_invoke_failed")
 
     choice = _extract_tool_call_choice(ai_message, candidates)
     if choice is not None:
+        logger.info(
+            "react_runtime: selection ok capability_id=%s source=%s reason=%s round=%d todo_id=%s",
+            choice.get("capability_id"),
+            choice.get("source"),
+            _trim_log_text(str(choice.get("reason") or ""), 300),
+            round_index,
+            todo_id,
+        )
         return choice
+    logger.warning(
+        "react_runtime: no valid tool_call in model output, fallback to first candidate; "
+        "candidates=%s round=%d todo_id=%s fallback_reason=%s",
+        candidates,
+        round_index,
+        todo_id,
+        "no_valid_tool_call",
+    )
     return _fallback_selection(candidates, reason="no_valid_tool_call")
-
