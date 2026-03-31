@@ -6,7 +6,6 @@ from typing import Any
 import pytest
 from by_framework.core.protocol.commands import AskAgentCommand, ResumeCommand
 from by_framework.core.protocol.message_header import MessageHeader
-
 from datacloud_service.worker import DataCloudWorker
 
 
@@ -194,3 +193,45 @@ async def test_ext_command_keeps_priority_over_chitchat_short_circuit(
 
     assert result == {"status": "done"}
     assert called["ext_params"] == {"command": "noop"}
+
+
+@pytest.mark.asyncio
+async def test_resume_idempotent_cache_prevents_duplicate_stream_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worker = DataCloudWorker(worker_id="worker-test")
+    config = _AgentConfig(agent_id="agent-1", tools={"tool_a": object()}, prompts={"intent": "p"})
+    context = _FakeContext([config])
+    stream_call_count = 0
+
+    monkeypatch.setattr(worker, "_build_graph", lambda **_kwargs: object())
+
+    async def _fake_stream_graph(**_kwargs: Any) -> dict[str, Any]:
+        nonlocal stream_call_count
+        stream_call_count += 1
+        return {"status": "done"}
+
+    monkeypatch.setattr(worker, "_stream_graph", _fake_stream_graph)
+
+    command = ResumeCommand(
+        header=MessageHeader(
+            message_id="m-idem-1",
+            session_id=context.session_id,
+            trace_id="trace-idem-1",
+            metadata={
+                "agent_id": "agent-1",
+                "checkpoint_id": "ckpt-idem",
+                "checkpoint_ns": "ns-idem",
+            },
+        ),
+        content="fallback-content",
+        reply_data={"confirm": "继续"},
+        extra_payload={},
+    )
+
+    result_1 = await worker.process_command(command, context)
+    result_2 = await worker.process_command(command, context)
+
+    assert result_1 == {"status": "done"}
+    assert result_2 == {"status": "done"}
+    assert stream_call_count == 1

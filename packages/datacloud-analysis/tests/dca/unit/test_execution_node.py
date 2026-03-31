@@ -254,3 +254,157 @@ async def test_execution_runs_dependency_batches_in_order(
     out2 = await execution_node(next_state, {"configurable": {}}, default_tools={})
     assert out2["execution_status"] == "done"
     assert call_order == ["t1", "t2"]
+
+
+@pytest.mark.asyncio
+async def test_execution_records_react_round_trace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _select_react_capability(**_kwargs: Any) -> dict[str, Any]:
+        return {
+            "capability_id": "tool_a",
+            "source": "llm_function_call",
+            "reason": "best_match",
+            "tool_call_id": "call_1",
+        }
+
+    async def _execute_next_task(*args: Any, **kwargs: Any) -> tuple[dict[str, Any], Any]:
+        task = args[0]
+        return ({**task, "status": "done"}, {"ok": True})
+
+    monkeypatch.setattr(execution_module, "select_react_capability", _select_react_capability)
+    monkeypatch.setattr(execution_module, "execute_next_task", _execute_next_task)
+
+    state = cast(
+        AgentState,
+        {
+            "query_mode": "analysis",
+            "todos": [
+                {
+                    "todo_id": "t1",
+                    "status": "pending",
+                    "goal": "react round test",
+                    "required_capabilities": ["tool_a"],
+                    "required_tools": ["tool_a"],
+                    "inputs": {"q": "x"},
+                    "depends_on": [],
+                }
+            ],
+            "results": [],
+            "invocation_dedup": [],
+        },
+    )
+    out = await execution_node(state, {"configurable": {}}, default_tools={})
+
+    assert out["execution_status"] == "done"
+    react_events = [x for x in out["execution_trace"] if x.get("stage") == "react_round"]
+    assert react_events
+    assert react_events[0]["detail"]["tool_call_id"] == "call_1"
+    assert react_events[0]["detail"]["selection_source"] == "llm_function_call"
+
+
+@pytest.mark.asyncio
+async def test_execution_level3_interrupt_confirmed_replans(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _select_react_capability(**_kwargs: Any) -> dict[str, Any]:
+        return {"capability_id": "tool_a", "source": "fallback", "reason": "test", "tool_call_id": None}
+
+    async def _execute_next_task(*args: Any, **kwargs: Any) -> tuple[dict[str, Any], Any]:
+        task = args[0]
+        return ({**task, "status": "failed", "error": "boom"}, {"error": "boom"})
+
+    monkeypatch.setattr(execution_module, "select_react_capability", _select_react_capability)
+    monkeypatch.setattr(execution_module, "execute_next_task", _execute_next_task)
+    monkeypatch.setattr(execution_module, "interrupt", lambda _payload: {"confirm": "继续"})
+
+    state = cast(
+        AgentState,
+        {
+            "query_mode": "analysis",
+            "level3_failure_threshold": 1,
+            "todos": [
+                {
+                    "todo_id": "t1",
+                    "status": "pending",
+                    "goal": "trigger level3",
+                    "required_capabilities": ["tool_a"],
+                    "required_tools": ["tool_a"],
+                    "inputs": {},
+                    "depends_on": [],
+                }
+            ],
+            "results": [],
+            "invocation_dedup": [],
+        },
+    )
+    out = await execution_node(state, {"configurable": {}}, default_tools={})
+
+    assert out["execution_status"] == "replan"
+    assert any(
+        x.get("stage") == "level3_replan" and x.get("status") == "confirmed"
+        for x in out["execution_trace"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_execution_level3_interrupt_cancelled_marks_done(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _select_react_capability(**_kwargs: Any) -> dict[str, Any]:
+        return {"capability_id": "tool_a", "source": "fallback", "reason": "test", "tool_call_id": None}
+
+    async def _execute_next_task(*args: Any, **kwargs: Any) -> tuple[dict[str, Any], Any]:
+        task = args[0]
+        return ({**task, "status": "failed", "error": "boom"}, {"error": "boom"})
+
+    monkeypatch.setattr(execution_module, "select_react_capability", _select_react_capability)
+    monkeypatch.setattr(execution_module, "execute_next_task", _execute_next_task)
+    monkeypatch.setattr(execution_module, "interrupt", lambda _payload: {"confirm": "取消"})
+
+    state = cast(
+        AgentState,
+        {
+            "query_mode": "analysis",
+            "level3_failure_threshold": 1,
+            "todos": [
+                {
+                    "todo_id": "t1",
+                    "status": "pending",
+                    "goal": "trigger level3 cancel",
+                    "required_capabilities": ["tool_a"],
+                    "required_tools": ["tool_a"],
+                    "inputs": {},
+                    "depends_on": [],
+                }
+            ],
+            "results": [],
+            "invocation_dedup": [],
+        },
+    )
+    out = await execution_node(state, {"configurable": {}}, default_tools={})
+
+    assert out["execution_status"] == "done"
+    assert "取消整体重规划" in str(out.get("final_answer") or "")
+
+
+@pytest.mark.asyncio
+async def test_execution_semantic_type_prioritizes_query_like_capability_for_object(
+) -> None:
+    state = cast(
+        AgentState,
+        {
+            "todos": [
+                {
+                    "todo_id": "t1",
+                    "status": "pending",
+                    "required_capabilities": ["act_tool", "query_tool"],
+                    "blocked_capabilities": [],
+                    "term_context": [{"semantic_type": "object"}],
+                }
+            ],
+            "query_mode": "chitchat",
+        },
+    )
+    out = await execution_node(state, {"configurable": {}}, default_tools={})
+    assert out["active_tools"][0] == "query_tool"

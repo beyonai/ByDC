@@ -6,13 +6,16 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, cast
 
 import anyio
 from langchain_core.runnables import RunnableConfig
+from langgraph.types import interrupt
 
 from datacloud_analysis.orchestration.clarification import clarification_node
+from datacloud_analysis.orchestration.react_runtime import select_react_capability
 from datacloud_analysis.orchestration.sandbox_executor import (
     execute_next_task,
     normalize_workspace_task_output,
@@ -47,6 +50,10 @@ _DEFAULT_CAPABILITY_FALLBACK_ORDER: tuple[str, ...] = (
     "file_write",
     "render_report",
 )
+_DEFAULT_REACT_MAX_ROUNDS = 6
+_DEFAULT_LEVEL3_FAILURE_THRESHOLD = 2
+_LEVEL3_CONFIRM_TEXTS = {"继续", "continue", "yes", "y", "ok", "确认", "重规划"}
+_LEVEL3_CANCEL_TEXTS = {"取消", "cancel", "no", "n", "停止"}
 
 
 def _todo_md_with_status(todos: list[dict[str, Any]]) -> str:
@@ -62,6 +69,58 @@ def _todo_md_with_status(todos: list[dict[str, Any]]) -> str:
         lines.append(f"  depends_on: {todo.get('depends_on', [])}")
     lines.append("")
     return "\n".join(lines)
+
+
+def _get_react_max_rounds(state: AgentState) -> int:
+    raw: Any = state.get("react_max_rounds")
+    if raw is None:
+        raw = os.getenv("DATACLOUD_REACT_MAX_ROUNDS", str(_DEFAULT_REACT_MAX_ROUNDS))
+    if not isinstance(raw, (int, float, str)):
+        return _DEFAULT_REACT_MAX_ROUNDS
+    try:
+        parsed = int(raw)
+    except (TypeError, ValueError):
+        return _DEFAULT_REACT_MAX_ROUNDS
+    return max(1, parsed)
+
+
+def _level3_failure_threshold(state: AgentState) -> int:
+    raw: Any = state.get("level3_failure_threshold")
+    if raw is None:
+        raw = os.getenv("DATACLOUD_LEVEL3_FAILURE_THRESHOLD", str(_DEFAULT_LEVEL3_FAILURE_THRESHOLD))
+    if not isinstance(raw, (int, float, str)):
+        return _DEFAULT_LEVEL3_FAILURE_THRESHOLD
+    try:
+        parsed = int(raw)
+    except (TypeError, ValueError):
+        return _DEFAULT_LEVEL3_FAILURE_THRESHOLD
+    return max(1, parsed)
+
+
+def _should_trigger_level3(state: AgentState, todos: list[dict[str, Any]]) -> bool:
+    threshold = _level3_failure_threshold(state)
+    failed_count = sum(1 for todo in todos if str(todo.get("status", "")) == "failed")
+    has_done = any(str(todo.get("status", "")) == "done" for todo in todos)
+    return failed_count >= threshold and not has_done
+
+
+def _parse_level3_confirmation(resume_value: Any) -> bool:
+    if isinstance(resume_value, dict):
+        raw = str(
+            resume_value.get("confirm")
+            or resume_value.get("action")
+            or resume_value.get("value")
+            or ""
+        ).strip().lower()
+    else:
+        raw = str(resume_value or "").strip().lower()
+    if not raw:
+        return False
+    if raw in _LEVEL3_CONFIRM_TEXTS:
+        return True
+    if raw in _LEVEL3_CANCEL_TEXTS:
+        return False
+    return False
 
 
 def _pick_active_todo(todos: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -154,6 +213,50 @@ def _compute_effective_tools(
             if capability in available_capabilities
         ]
     return [tool for tool in required if tool not in blocked]
+
+
+def _semantic_types_from_todo(todo: dict[str, Any] | None) -> set[str]:
+    if not isinstance(todo, dict):
+        return set()
+    semantic_types: set[str] = set()
+    for item in (todo.get("term_context") or []):
+        if not isinstance(item, dict):
+            continue
+        raw = str(item.get("semantic_type") or "").strip().lower()
+        if raw:
+            semantic_types.add(raw)
+    return semantic_types
+
+
+def _tool_priority_for_semantic(tool_name: str, semantic_types: set[str]) -> int:
+    lowered = tool_name.lower()
+    score = 100
+    if "action" in semantic_types and any(
+        k in lowered for k in ("action", "exec", "update", "write", "operate")
+    ):
+        score -= 40
+    if ("object" in semantic_types or "view" in semantic_types) and any(
+        k in lowered for k in ("query", "read", "search", "list", "select", "view")
+    ):
+        score -= 30
+    if "relation" in semantic_types and any(
+        k in lowered for k in ("relation", "graph", "link", "edge")
+    ):
+        score -= 25
+    return score
+
+
+def _prioritize_tools_by_semantic(
+    todo: dict[str, Any] | None,
+    tools: list[str],
+) -> list[str]:
+    semantic_types = _semantic_types_from_todo(todo)
+    if not semantic_types or len(tools) <= 1:
+        return tools
+    return sorted(
+        tools,
+        key=lambda tool_name: (_tool_priority_for_semantic(tool_name, semantic_types), tool_name),
+    )
 
 
 def _todo_has_required_capability(todo: dict[str, Any] | None, *, dynamic_tools: dict[str, Any]) -> bool:
@@ -385,6 +488,7 @@ async def _execute_one_todo(
         dynamic_tools=dynamic_tools,
         available_capabilities=available_capabilities,
     )
+    effective_tools = _prioritize_tools_by_semantic(todo, effective_tools)
     has_required = _todo_has_required_capability(todo, dynamic_tools=dynamic_tools)
     trace: list[dict[str, Any]] = []
     invocation_add: list[str] = []
@@ -411,8 +515,43 @@ async def _execute_one_todo(
         )
         return skipped_todo, None, invocation_add, trace, False
 
-    last_error = ""
-    for capability in effective_tools:
+    remaining_capabilities = list(effective_tools)
+    react_round = 0
+    max_rounds = _get_react_max_rounds(state)
+    while remaining_capabilities and react_round < max_rounds:
+        react_round += 1
+        selection = await select_react_capability(
+            state=cast(dict[str, Any], state),
+            todo=todo,
+            candidates=remaining_capabilities,
+            round_index=react_round,
+        )
+        capability = str(selection.get("capability_id") or "").strip()
+        if capability not in remaining_capabilities:
+            capability = remaining_capabilities[0]
+            selection = {
+                "capability_id": capability,
+                "source": "fallback",
+                "reason": "selector_out_of_candidates",
+                "tool_call_id": None,
+            }
+        remaining_capabilities = [x for x in remaining_capabilities if x != capability]
+        trace.append(
+            {
+                "stage": "react_round",
+                "status": "selected",
+                "detail": {
+                    "todo_id": todo_id,
+                    "round": react_round,
+                    "candidate_count": len(effective_tools),
+                    "selected_capability": capability,
+                    "selection_source": str(selection.get("source") or ""),
+                    "tool_call_id": str(selection.get("tool_call_id") or ""),
+                    "selection_reason": str(selection.get("reason") or ""),
+                },
+            }
+        )
+
         invocation_id = _build_invocation_id(
             query_mode=query_mode,
             target_tool=capability,
@@ -459,12 +598,23 @@ async def _execute_one_todo(
                 trace,
                 False,
             )
-        last_error = str(updated_task.get("error", "task_failed"))
+        trace.append(
+            {
+                "stage": "react_round",
+                "status": "observe_failed",
+                "detail": {
+                    "todo_id": todo_id,
+                    "round": react_round,
+                    "capability": capability,
+                    "error": str(updated_task.get("error", "task_failed")),
+                },
+            }
+        )
 
     failed_todo = {
         **todo,
         "status": "failed",
-        "error": last_error or "all_capabilities_failed",
+        "error": "all_capabilities_failed",
         "last_capability": effective_tools[-1],
     }
     return failed_todo, None, invocation_add, trace, False
@@ -546,6 +696,7 @@ async def execution_node(
         dynamic_tools=dynamic_tools,
         available_capabilities=available_capabilities,
     )
+    active_tools = _prioritize_tools_by_semantic(active_todo, active_tools)
     pending_capability = active_tools[0] if active_tools else ""
 
     if state.get("ambiguous_terms"):
@@ -759,6 +910,7 @@ async def execution_node(
         dynamic_tools=dynamic_tools,
         available_capabilities=available_capabilities,
     )
+    next_active_tools = _prioritize_tools_by_semantic(next_active_todo, next_active_tools)
     next_pending_capability = next_active_tools[0] if next_active_tools else ""
     has_pending = any(str(todo.get("status", "pending")) == "pending" for todo in todos)
 
@@ -768,6 +920,79 @@ async def execution_node(
         todo_md=todo_md,
         existing_path=existing_todo_md_path,
     )
+
+    if _should_trigger_level3(state, todos):
+        execution_trace = _append_trace(
+            execution_trace,
+            stage="level3_replan",
+            status="interrupt",
+            detail={"reason": "failed_threshold_reached"},
+        )
+        resume_value = interrupt(
+            {
+                "reason_code": "LEVEL3_GLOBAL_REPLAN_CONFIRM",
+                "prompt": "当前任务连续失败，是否进行整体重规划？回复“继续”或“取消”。",
+                "required_fields": ["confirm"],
+                "resume_payload_schema": {
+                    "type": "object",
+                    "properties": {"confirm": {"type": "string"}},
+                    "required": ["confirm"],
+                },
+                "todo_id": next_todo_id,
+                "react_step_id": next_todo_id,
+            }
+        )
+        confirmed = _parse_level3_confirmation(resume_value)
+        if confirmed:
+            execution_trace = _append_trace(
+                execution_trace,
+                stage="level3_replan",
+                status="confirmed",
+                detail={"decision": "replan"},
+            )
+            return {
+                "plan": _todo_plan_from_todos(todos),
+                "todos": todos,
+                "results": results,
+                "todo_md": todo_md,
+                "todo_md_path": todo_md_path,
+                "todo_active_id": next_todo_id,
+                "active_tools": next_active_tools,
+                "execution_status": "replan",
+                "resume_context": _resume_context_after_round(
+                    state=state,
+                    config=config,
+                    todo_active_id=next_todo_id,
+                    pending_capability=next_pending_capability,
+                ),
+                "execution_trace": execution_trace,
+                "invocation_dedup": invocation_dedup,
+            }
+        execution_trace = _append_trace(
+            execution_trace,
+            stage="level3_replan",
+            status="cancelled",
+            detail={"decision": "cancel"},
+        )
+        return {
+            "plan": _todo_plan_from_todos(todos),
+            "todos": todos,
+            "results": results,
+            "todo_md": todo_md,
+            "todo_md_path": todo_md_path,
+            "todo_active_id": next_todo_id,
+            "active_tools": next_active_tools,
+            "execution_status": "done",
+            "final_answer": "已取消整体重规划，请补充更明确的目标后重试。",
+            "resume_context": _resume_context_after_round(
+                state=state,
+                config=config,
+                todo_active_id=next_todo_id,
+                pending_capability=next_pending_capability,
+            ),
+            "execution_trace": execution_trace,
+            "invocation_dedup": invocation_dedup,
+        }
 
     execution_status = "replan" if blocked_in_batch else ("execution" if has_pending else "done")
 
