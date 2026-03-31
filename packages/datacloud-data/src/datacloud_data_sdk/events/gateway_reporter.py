@@ -82,12 +82,14 @@ class GatewayProgressReporter:
     async def _emit(self, title: str, text: str) -> None:
         """推送 think_title + think_text 两条事件。"""
         try:
-            chunk = _make_chunk(title)
-            await self._ctx.emit_chunk(
-                chunk,
-                event_type=_EVENT_REASONING_LOG_DELTA,
-                content_type=_CONTENT_THINK_TITLE,
-            )
+            # chunk = _make_chunk(title)
+            # await self._ctx.emit_chunk(
+            #     chunk,
+            #     event_type=_EVENT_REASONING_LOG_DELTA,
+            #     content_type=_CONTENT_THINK_TITLE,
+            # )
+
+            text = f"【{title}】\n{text} \n\n"
             chunk = _make_chunk(text)
             await self._ctx.emit_chunk(
                 chunk,
@@ -106,14 +108,14 @@ class GatewayProgressReporter:
                 event_type=_EVENT_REASONING_LOG_DELTA,
                 content_type=_CONTENT_THINK_TEXT,
             )
-        except Exception:
+        except Exception as e:
             logger.debug("GatewayProgressReporter._emit_text failed", exc_info=True)
 
 
 def _make_chunk(content: str) -> Any:
     """构造 StreamChunkEvent，若 gateway_sdk 不可用则返回简单对象。"""
     try:
-        from gateway_sdk import StreamChunkEvent  # noqa: PLC0415
+        from by_framework.core.protocol.events import StreamChunkEvent  # noqa: PLC0415
         return StreamChunkEvent(content=content)
     except ImportError:
         # 兜底：返回带 content 属性的简单对象

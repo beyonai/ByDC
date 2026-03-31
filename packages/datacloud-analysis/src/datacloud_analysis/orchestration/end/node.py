@@ -77,11 +77,11 @@ async def _emit_reasoning_log_end_before_answer(context: Any) -> None:
     """
     if context is None:
         return
-    await context.emit_chunk(
-        StreamChunkEvent(content="思考完成"),
-        event_type=EventType.REASONING_LOG_END.value,
-        content_type=SseReasonMessageType.think_title.value,
-    )
+    # await context.emit_chunk(
+    #     StreamChunkEvent(content="思考完成"),
+    #     event_type=EventType.REASONING_LOG_END.value,
+    #     content_type=SseReasonMessageType.think_title.value,
+    # )
 
 
 def _append_task_prompt_to_system(
