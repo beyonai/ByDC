@@ -54,6 +54,9 @@ _DEFAULT_REACT_MAX_ROUNDS = 6
 _DEFAULT_LEVEL3_FAILURE_THRESHOLD = 2
 _LEVEL3_CONFIRM_TEXTS = {"继续", "continue", "yes", "y", "ok", "确认", "重规划"}
 _LEVEL3_CANCEL_TEXTS = {"取消", "cancel", "no", "n", "停止"}
+_ACTION_KEYWORDS: tuple[str, ...] = ("action", "exec", "update", "write", "operate")
+_QUERY_KEYWORDS: tuple[str, ...] = ("query", "read", "search", "list", "select", "view")
+_RELATION_KEYWORDS: tuple[str, ...] = ("relation", "graph", "link", "edge")
 
 
 def _todo_md_with_status(todos: list[dict[str, Any]]) -> str:
@@ -352,18 +355,28 @@ def _semantic_types_from_todo(todo: dict[str, Any] | None) -> set[str]:
 def _tool_priority_for_semantic(tool_name: str, semantic_types: set[str]) -> int:
     lowered = tool_name.lower()
     score = 100
-    if "action" in semantic_types and any(
-        k in lowered for k in ("action", "exec", "update", "write", "operate")
-    ):
-        score -= 40
-    if ("object" in semantic_types or "view" in semantic_types) and any(
-        k in lowered for k in ("query", "read", "search", "list", "select", "view")
-    ):
-        score -= 30
-    if "relation" in semantic_types and any(
-        k in lowered for k in ("relation", "graph", "link", "edge")
-    ):
-        score -= 25
+    # action 语义：优先动作执行类 capability，抑制纯查询类。
+    if "action" in semantic_types:
+        if any(k in lowered for k in _ACTION_KEYWORDS):
+            score -= 45
+        elif any(k in lowered for k in _QUERY_KEYWORDS):
+            score += 8
+
+    # object/view 语义：优先查询/读取类 capability，抑制动作类。
+    if "object" in semantic_types or "view" in semantic_types:
+        if any(k in lowered for k in _QUERY_KEYWORDS):
+            score -= 35
+        elif any(k in lowered for k in _ACTION_KEYWORDS):
+            score += 10
+
+    # relation 语义：优先关系解析类；其次允许查询类用于定位主语/宾语。
+    if "relation" in semantic_types:
+        if any(k in lowered for k in _RELATION_KEYWORDS):
+            score -= 50
+        elif any(k in lowered for k in _QUERY_KEYWORDS):
+            score -= 18
+        elif any(k in lowered for k in _ACTION_KEYWORDS):
+            score += 12
     return score
 
 
