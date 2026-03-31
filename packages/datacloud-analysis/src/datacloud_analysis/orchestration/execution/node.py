@@ -59,6 +59,18 @@ _RELATION_KEYWORDS: tuple[str, ...] = ("relation", "graph", "link", "edge")
 _VALID_RISK_LEVELS: frozenset[str] = frozenset({"low", "medium", "high"})
 
 
+async def execute_next_task(
+    task: dict[str, Any],
+    state: AgentState,
+    runtime: ToolRuntime,
+) -> tuple[dict[str, Any], Any]:
+    """Compatibility wrapper for task execution.
+
+    Keeps a stable monkeypatch target for tests while delegating to ToolRuntime.
+    """
+    return await runtime.invoke_with_callbacks(task, state)
+
+
 def _normalize_context_tag_values(raw: Any) -> list[str]:
     if isinstance(raw, str):
         text = raw.strip()
@@ -1095,7 +1107,7 @@ async def _execute_one_todo(
             )
 
         task = _task_from_todo(todo, capability)
-        updated_task, output = await runtime.invoke_with_callbacks(task, state)
+        updated_task, output = await execute_next_task(task, state, runtime)
         task_status = str(updated_task.get("status", "failed"))
         trace.append(
             {
