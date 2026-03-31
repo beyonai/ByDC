@@ -71,6 +71,42 @@ def _planning_tools_view(dynamic_tools: dict[str, object]) -> dict[str, object]:
     return {k: v for k, v in dynamic_tools.items() if k not in _EXCLUDED_PLANNING_TOOLS}
 
 
+def _compact_prompt_text(raw: Any, *, fallback: str = "", max_len: int = 160) -> str:
+    text = " ".join(str(raw or fallback).split())
+    if len(text) <= max_len:
+        return text
+    return f"{text[: max_len - 1].rstrip()}…"
+
+
+def _tool_prompt_type(tool_obj: object) -> str:
+    return "skill" if bool(getattr(tool_obj, "_is_skill_capability", False)) else "tool"
+
+
+def _tool_prompt_description(tool_obj: object) -> str:
+    description = getattr(tool_obj, "description", None)
+    if description:
+        return _compact_prompt_text(description, max_len=180)
+    doc = getattr(tool_obj, "__doc__", None)
+    if doc:
+        return _compact_prompt_text(doc, max_len=180)
+    return "未提供描述，请仅在目标与工具名明显匹配时使用。"
+
+
+def _planning_tools_prompt_block(planning_tools: dict[str, object]) -> str:
+    if not planning_tools:
+        return "（无动态工具）"
+
+    lines = [
+        "以下工具名可以直接作为任务 `type` 使用，必须原样填写，不要改写名称：",
+    ]
+    for tool_name in sorted(planning_tools.keys()):
+        tool_obj = planning_tools[tool_name]
+        lines.append(f"- `{tool_name}`")
+        lines.append(f"  类型：{_tool_prompt_type(tool_obj)}")
+        lines.append(f"  用途：{_tool_prompt_description(tool_obj)}")
+    return "\n".join(lines)
+
+
 def _relation_semantic_types(todo: dict[str, Any]) -> set[str]:
     raw_term_context = todo.get("term_context")
     semantic_types: set[str] = set()
@@ -287,7 +323,7 @@ async def decompose_analysis_plan(
     prompts_overwrite = state.get("prompts_overwrite") or default_prompts or {}
     dynamic_tools = state.get("dynamic_tools") or default_tools or {}
     planning_tools = _planning_tools_view(cast(dict[str, object], dynamic_tools))
-    tools_line = ", ".join(sorted(planning_tools.keys())) if planning_tools else "（无动态工具）"
+    tools_block = _planning_tools_prompt_block(planning_tools)
 
     model = os.getenv("DATACLOUD_LLM_REASONING_MODEL", "openai:Qwen/Qwen3-235B-A22B")
     if not model.startswith("openai:"):
@@ -310,7 +346,7 @@ async def decompose_analysis_plan(
     )
     dynamic_human = HumanMessage(
         content=(
-            f"【可用动态工具列表】：{tools_line}\n\n"
+            f"【可用动态工具说明】\n{tools_block}\n\n"
             f"【需要分析的目标】：{intent}\n\n"
             "请输出 JSON 任务数组。"
         )
@@ -362,4 +398,3 @@ async def decompose_analysis_plan(
         plan=cast(list[dict[str, object]], plan),
     )
     return {"plan": plan}
-
