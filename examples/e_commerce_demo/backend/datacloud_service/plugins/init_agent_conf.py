@@ -226,6 +226,289 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
 
         return "\n\n".join(parts)
 
+    @staticmethod
+    def _rel_resource_snapshot(rel: dict[str, Any]) -> dict[str, str]:
+        return {
+            "resourceBizType": str(rel.get("resourceBizType") or ""),
+            "resourceType": str(rel.get("resourceType") or ""),
+            "resourceCode": str(rel.get("resourceCode") or ""),
+            "resourceName": str(rel.get("resourceName") or ""),
+        }
+
+    def _build_dynamic_tools_with_diagnostics(
+        self,
+        *,
+        agent_id: str,
+        rel_resource_list: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        rel_summaries = [self._rel_resource_snapshot(rel) for rel in rel_resource_list]
+        logger.info(
+            "[InitPlugin][ToolLoad][Input] agent_id=%s rel_count=%d rel_resources=%s",
+            agent_id,
+            len(rel_summaries),
+            rel_summaries,
+        )
+
+        ontology_candidates: list[dict[str, str]] = []
+        delegate_candidates: list[dict[str, str]] = []
+        filtered_resources: list[dict[str, Any]] = []
+        for rel in rel_resource_list:
+            snapshot = self._rel_resource_snapshot(rel)
+            biz_type = snapshot["resourceBizType"]
+            if biz_type in {"OBJECT", "VIEW"}:
+                ontology_candidates.append(snapshot)
+            elif biz_type == "AGENT":
+                delegate_candidates.append(snapshot)
+            else:
+                filtered_resources.append(
+                    {
+                        **snapshot,
+                        "reason": "condition_mismatch_filtered",
+                    }
+                )
+
+        logger.info(
+            "[InitPlugin][ToolLoad][Classify] agent_id=%s ontology_candidates=%d delegate_candidates=%d "
+            "filtered=%d filtered_resources=%s",
+            agent_id,
+            len(ontology_candidates),
+            len(delegate_candidates),
+            len(filtered_resources),
+            filtered_resources,
+        )
+
+        ontology_tools, ontology_report = self._build_ontology_tools_with_diagnostics(
+            agent_id=agent_id,
+            rel_resource_list=rel_resource_list,
+        )
+        delegate_tools, delegate_report = self._build_delegate_tools_with_diagnostics(
+            agent_id=agent_id,
+            rel_resource_list=rel_resource_list,
+        )
+        collisions = sorted(set(ontology_tools.keys()) & set(delegate_tools.keys()))
+        merged_tools = {**ontology_tools, **delegate_tools}
+
+        reason_summary: list[str] = []
+        if not rel_resource_list:
+            reason_summary.append("upstream_rel_resource_list_empty")
+        if filtered_resources:
+            reason_summary.append(f"condition_mismatch_filtered:{len(filtered_resources)}")
+        if len(ontology_report.get("failed", [])) > 0:
+            reason_summary.append(f"ontology_build_failed:{len(ontology_report['failed'])}")
+        if len(delegate_report.get("failed", [])) > 0:
+            reason_summary.append(f"delegate_build_failed:{len(delegate_report['failed'])}")
+        if collisions:
+            reason_summary.append(f"tool_name_collision_overwritten_by_delegate:{','.join(collisions)}")
+        if not merged_tools:
+            reason_summary.append("final_dynamic_tools_empty")
+
+        logger.info(
+            "[InitPlugin][ToolLoad][Final] agent_id=%s ontology_tools=%s delegate_tools=%s merged_tools=%s "
+            "tool_count=%d reason_summary=%s",
+            agent_id,
+            sorted(ontology_tools.keys()),
+            sorted(delegate_tools.keys()),
+            sorted(merged_tools.keys()),
+            len(merged_tools),
+            reason_summary,
+        )
+        return merged_tools, {
+            "rel_resources": rel_summaries,
+            "ontology_candidates": ontology_candidates,
+            "delegate_candidates": delegate_candidates,
+            "filtered_resources": filtered_resources,
+            "ontology_report": ontology_report,
+            "delegate_report": delegate_report,
+            "collisions": collisions,
+            "reason_summary": reason_summary,
+        }
+
+    def _build_ontology_tools_with_diagnostics(
+        self,
+        *,
+        agent_id: str,
+        rel_resource_list: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        report: dict[str, Any] = {"built": [], "failed": [], "skipped": []}
+        tools: dict[str, Any] = {}
+        if not rel_resource_list:
+            report["skipped"].append({"reason": "upstream_rel_resource_list_empty"})
+            return tools, report
+        if not OntologyLoader:
+            report["skipped"].append({"reason": "ontology_loader_unavailable"})
+            logger.warning(
+                "[InitPlugin][ToolLoad][Ontology] agent_id=%s skip: OntologyLoader unavailable",
+                agent_id,
+            )
+            return tools, report
+
+        for rel in rel_resource_list:
+            snapshot = self._rel_resource_snapshot(rel)
+            resource_code = snapshot["resourceCode"]
+            resource_biz_type = snapshot["resourceBizType"]
+            resource_type = snapshot["resourceType"]
+
+            if resource_biz_type not in {"OBJECT", "VIEW"}:
+                report["skipped"].append({**snapshot, "reason": "condition_mismatch_filtered"})
+                continue
+            if not resource_code:
+                report["skipped"].append({**snapshot, "reason": "missing_resource_code"})
+                continue
+
+            created_tool_keys: list[str] = []
+            try:
+                loader = OntologyLoader()
+                scene_path = self._resolve_scene_path(rel)
+                if not scene_path:
+                    report["skipped"].append({**snapshot, "reason": "scene_path_unresolved"})
+                    continue
+
+                loader.load_from_owl_directory(scene_path)
+                loader.configure(
+                    plan_generator=LangGraphPlanGenerator(
+                        model=os.environ.get("DATACLOUD_LLM_REASONING_MODEL", "Qwen/Qwen3-235B-A22B"),
+                        base_url=os.environ.get("OPENAI_BASE_URL"),
+                        api_key=os.environ.get("OPENAI_API_KEY"),
+                        temperature=0.0,
+                    ),
+                    term_loader=TermLoader.from_config({}),
+                    csv_base_dir=os.environ.get(
+                        "DATACLOUD_GATEWAY_WORKSPACE_DIR", str(Path("/tmp/datacloud").resolve())
+                    ),
+                    sql_execution_mode="internal",
+                )
+
+                if resource_biz_type == "OBJECT":
+                    obj = loader.get_object(resource_code)
+                    if obj is None:
+                        report["skipped"].append({**snapshot, "reason": "object_not_found"})
+                        continue
+                    if resource_type in {"api", "DB_TABLE"}:
+                        for act_code in obj.list_action_codes():
+                            tools[act_code] = obj.get_action_schema(act_code)
+                            created_tool_keys.append(act_code)
+                    if resource_type == "DB_TABLE":
+                        query_tool_name = f"{resource_code}_query"
+                        tools[query_tool_name] = self._build_query_tool(
+                            obj.query,
+                            tool_name=query_tool_name,
+                            tool_desc=f"{rel.get('resourceName', resource_code)} {rel.get('resourceDesc', '')}".strip(),
+                        )
+                        created_tool_keys.append(query_tool_name)
+
+                elif resource_biz_type == "VIEW":
+                    view = loader.get_view(resource_code)
+                    if view is None:
+                        report["skipped"].append({**snapshot, "reason": "view_not_found"})
+                        continue
+                    query_tool_name = f"{resource_code}_query"
+                    tools[query_tool_name] = self._build_query_tool(
+                        view.query,
+                        tool_name=query_tool_name,
+                        tool_desc=f"{rel.get('resourceName', resource_code)} {rel.get('resourceDesc', '')}".strip(),
+                    )
+                    created_tool_keys.append(query_tool_name)
+
+                if created_tool_keys:
+                    report["built"].append({**snapshot, "tool_keys": created_tool_keys})
+                    logger.info(
+                        "[InitPlugin][ToolLoad][Ontology] agent_id=%s build_ok resource_code=%s tool_keys=%s",
+                        agent_id,
+                        resource_code,
+                        created_tool_keys,
+                    )
+                else:
+                    report["skipped"].append({**snapshot, "reason": "matched_but_no_tool_generated"})
+            except Exception as exc:
+                report["failed"].append(
+                    {
+                        **snapshot,
+                        "reason": "matched_but_build_failed",
+                        "error": str(exc),
+                    }
+                )
+                logger.warning(
+                    "[InitPlugin][ToolLoad][Ontology] agent_id=%s build_failed resource=%s err=%s",
+                    agent_id,
+                    snapshot,
+                    exc,
+                )
+
+        logger.info(
+            "[InitPlugin][ToolLoad][OntologySummary] agent_id=%s built=%d failed=%d skipped=%d tool_count=%d "
+            "tool_keys=%s",
+            agent_id,
+            len(report["built"]),
+            len(report["failed"]),
+            len(report["skipped"]),
+            len(tools),
+            sorted(tools.keys()),
+        )
+        return tools, report
+
+    def _build_delegate_tools_with_diagnostics(
+        self,
+        *,
+        agent_id: str,
+        rel_resource_list: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        report: dict[str, Any] = {"built": [], "failed": [], "skipped": []}
+        tools: dict[str, Any] = {}
+        if not rel_resource_list:
+            report["skipped"].append({"reason": "upstream_rel_resource_list_empty"})
+            return tools, report
+
+        for rel in rel_resource_list:
+            snapshot = self._rel_resource_snapshot(rel)
+            resource_code = snapshot["resourceCode"]
+            if snapshot["resourceBizType"] != "AGENT":
+                report["skipped"].append({**snapshot, "reason": "condition_mismatch_filtered"})
+                continue
+            if not resource_code:
+                report["skipped"].append({**snapshot, "reason": "missing_resource_code"})
+                continue
+            try:
+                resource_name = str(rel.get("resourceName") or resource_code)
+                resource_desc = str(rel.get("resourceDesc") or "")
+                tools[resource_code] = self._build_agent_delegate_tool(
+                    target_agent_type=resource_code,
+                    agent_name=resource_name,
+                    agent_desc=resource_desc,
+                )
+                report["built"].append({**snapshot, "tool_keys": [resource_code]})
+                logger.info(
+                    "[InitPlugin][ToolLoad][Delegate] agent_id=%s build_ok resource_code=%s tool_key=%s",
+                    agent_id,
+                    resource_code,
+                    resource_code,
+                )
+            except Exception as exc:
+                report["failed"].append(
+                    {
+                        **snapshot,
+                        "reason": "matched_but_build_failed",
+                        "error": str(exc),
+                    }
+                )
+                logger.warning(
+                    "[InitPlugin][ToolLoad][Delegate] agent_id=%s build_failed resource=%s err=%s",
+                    agent_id,
+                    snapshot,
+                    exc,
+                )
+
+        logger.info(
+            "[InitPlugin][ToolLoad][DelegateSummary] agent_id=%s built=%d failed=%d skipped=%d tool_count=%d "
+            "tool_keys=%s",
+            agent_id,
+            len(report["built"]),
+            len(report["failed"]),
+            len(report["skipped"]),
+            len(tools),
+            sorted(tools.keys()),
+        )
+        return tools, report
+
     def _build_tools_from_ontology(self, rel_resource_list: list) -> dict:
         """基于本体加载工具。"""
         if not rel_resource_list or not OntologyLoader:
@@ -331,7 +614,17 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
     def _build_agent_delegate_tool(self, target_agent_type: str, agent_name: str, agent_desc: str):
         """Build a tool that delegates to another agent via context.call_agent."""
 
-        async def _tool(content: str, _context=None, **params):
+        async def _tool(content: str | None = None, _context=None, **params):
+            resolved_content = str(
+                content
+                or params.get("content")
+                or params.get("question")
+                or params.get("query")
+                or params.get("description")
+                or ""
+            ).strip()
+            if not resolved_content:
+                resolved_content = f"请处理与「{agent_name}」相关的问题。"
             if _context is None:
                 logger.error(
                     "[AgentDelegate] 运行时 context 未注入，无法调度 Agent: target=%s",
@@ -342,16 +635,16 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             logger.info(
                 "[AgentDelegate] 正在调度 Agent: target=%s content=%.100s",
                 target_agent_type,
-                content,
+                resolved_content,
             )
             await _context.emit_chunk(
-                StreamChunkEvent(content=f"正在将以下请求移交给专项Agent【{agent_name}】处理：\n\n{content}"),
+                StreamChunkEvent(content=f"正在将以下请求移交给专项Agent【{agent_name}】处理：\n\n{resolved_content}"),
                 event_type=EventType.ANSWER_DELTA.value,
                 content_type=SseMessageType.text.value,
             )
             await _context.call_agent(
                 target_agent_type=target_agent_type,
-                content=content,
+                content=resolved_content,
                 wait_for_reply=False,
             )
             # import asyncio
