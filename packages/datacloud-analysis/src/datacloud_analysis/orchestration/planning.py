@@ -11,7 +11,6 @@ from datacloud_analysis.orchestration.intent import intent_node
 from datacloud_analysis.orchestration.state import AgentState
 
 logger = logging.getLogger(__name__)
-_HIGH_CONFIDENCE_HINT_THRESHOLD = 0.8
 _PLANNER_BUILTIN_CAPABILITIES: frozenset[str] = frozenset(
     {
         "code_exec",
@@ -61,8 +60,6 @@ def _build_term_context_from_hints(term_hints: list[dict[str, Any]]) -> list[dic
     out: list[dict[str, Any]] = []
     for hint in term_hints:
         confidence = float(hint.get("confidence", 0.0) or 0.0)
-        if confidence < _HIGH_CONFIDENCE_HINT_THRESHOLD:
-            continue
         mention = str(hint.get("mention", "")).strip()
         normalized = str(hint.get("normalized_term", mention)).strip()
         semantic_type = str(hint.get("semantic_type", "")).strip() or _semantic_type_from_term(hint)
