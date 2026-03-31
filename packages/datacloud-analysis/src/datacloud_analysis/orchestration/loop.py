@@ -1,4 +1,4 @@
-"""③ ReAct execution loop + state router (design §3.1).
+﻿"""③ ReAct execution loop + state router (design §3.1).
 
 Responsibilities
 ----------------
@@ -22,7 +22,7 @@ import anyio
 from by_framework import EventType, StreamChunkEvent
 from by_framework.core.protocol.content_type import SseReasonMessageType
 
-from datacloud_analysis.orchestration.sandbox_executor import (
+from datacloud_analysis.orchestration.execution.sandbox_executor import (
     execute_next_task,
     normalize_workspace_task_output,
 )
@@ -309,3 +309,4 @@ def _format_output(output: Any, max_len: int = 500) -> str:
     if len(text) > max_len:
         text = text[:max_len] + "…（已截断）"
     return text
+

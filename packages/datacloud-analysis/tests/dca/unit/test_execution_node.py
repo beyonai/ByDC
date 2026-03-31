@@ -6,8 +6,8 @@ from typing import Any, cast
 import anyio
 import pytest
 
-from datacloud_analysis.orchestration import execution as execution_module
-from datacloud_analysis.orchestration.execution import _build_invocation_id, execution_node
+from datacloud_analysis.orchestration.execution import node as execution_module
+from datacloud_analysis.orchestration.execution.node import _build_invocation_id, execution_node
 from datacloud_analysis.orchestration.state import AgentState
 
 
@@ -548,3 +548,4 @@ async def test_execution_semantic_type_prioritizes_relation_capability_for_relat
     )
     out = await execution_node(state, {"configurable": {}}, default_tools={})
     assert out["active_tools"][0] == "graph_relation_tool"
+

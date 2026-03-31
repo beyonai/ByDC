@@ -1,11 +1,11 @@
-"""One-shot dynamic tool invocation for online_query fast path (skip dag/loop)."""
+﻿"""One-shot dynamic tool invocation for online_query fast path (skip dag/loop)."""
 
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-from datacloud_analysis.orchestration.sandbox_executor import execute_next_task
+from datacloud_analysis.orchestration.execution.sandbox_executor import execute_next_task
 from datacloud_analysis.orchestration.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -56,3 +56,4 @@ async def direct_tool_node(
         "plan": [updated_task],
         "results": [{"task_id": "t_direct", "data": output}],
     }
+

@@ -1,4 +1,4 @@
-"""Facade to resolve planning context without hard coupling in planning node."""
+﻿"""Facade to resolve planning context without hard coupling in planning node."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Any
 
-from datacloud_analysis.orchestration.planner_contract import PlanningContext
+from datacloud_analysis.orchestration.planning.contract import PlanningContext
 from datacloud_analysis.orchestration.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -88,4 +88,5 @@ async def resolve_planning_context(
         "chitchat_reply": str(intent_updates.get("chitchat_reply") or ""),
         "planning_context_source": "intent_compat",
     }
+
 
