@@ -14,7 +14,7 @@ from datacloud_analysis.orchestration.state import AgentState
 async def test_planning_normalizes_online_query_to_agent_delegate_for_delegate_tool(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_intent_node(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+    async def _fake_planning_context(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         return {
             "intent": "delegate this task",
             "query_mode": "online_query",
@@ -24,7 +24,7 @@ async def test_planning_normalizes_online_query_to_agent_delegate_for_delegate_t
             "ambiguous_terms": [],
         }
 
-    monkeypatch.setattr(planning_module, "intent_node", _fake_intent_node)
+    monkeypatch.setattr(planning_module, "resolve_planning_context", _fake_planning_context)
 
     async def _delegate_tool(content: str, **_kwargs: Any) -> dict[str, Any]:
         return {"content": content}
@@ -41,7 +41,7 @@ async def test_planning_normalizes_online_query_to_agent_delegate_for_delegate_t
 async def test_planning_normalizes_agent_delegate_to_online_query_for_non_delegate_tool(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_intent_node(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+    async def _fake_planning_context(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         return {
             "intent": "run direct query",
             "query_mode": "agent_delegate",
@@ -51,7 +51,7 @@ async def test_planning_normalizes_agent_delegate_to_online_query_for_non_delega
             "ambiguous_terms": [],
         }
 
-    monkeypatch.setattr(planning_module, "intent_node", _fake_intent_node)
+    monkeypatch.setattr(planning_module, "resolve_planning_context", _fake_planning_context)
 
     async def _query_tool(**_kwargs: Any) -> dict[str, Any]:
         return {"ok": True}
@@ -67,7 +67,7 @@ async def test_planning_normalizes_agent_delegate_to_online_query_for_non_delega
 async def test_planning_persists_todo_md_to_workspace(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    async def _fake_intent_node(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+    async def _fake_planning_context(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         return {
             "intent": "run direct query",
             "query_mode": "online_query",
@@ -77,7 +77,7 @@ async def test_planning_persists_todo_md_to_workspace(
             "ambiguous_terms": [],
         }
 
-    monkeypatch.setattr(planning_module, "intent_node", _fake_intent_node)
+    monkeypatch.setattr(planning_module, "resolve_planning_context", _fake_planning_context)
 
     async def _query_tool(**_kwargs: Any) -> dict[str, Any]:
         return {"ok": True}
@@ -92,7 +92,7 @@ async def test_planning_persists_todo_md_to_workspace(
 async def test_planning_emits_structured_required_capabilities_for_skill(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_intent_node(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+    async def _fake_planning_context(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         return {
             "intent": "run skill",
             "query_mode": "online_query",
@@ -102,7 +102,7 @@ async def test_planning_emits_structured_required_capabilities_for_skill(
             "ambiguous_terms": [],
         }
 
-    monkeypatch.setattr(planning_module, "intent_node", _fake_intent_node)
+    monkeypatch.setattr(planning_module, "resolve_planning_context", _fake_planning_context)
 
     async def _skill_tool(**_kwargs: Any) -> dict[str, Any]:
         return {"ok": True}
@@ -121,7 +121,7 @@ async def test_planning_emits_structured_required_capabilities_for_skill(
 async def test_planning_blocks_unavailable_capability_from_dag_plan(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_intent_node(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+    async def _fake_planning_context(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         return {
             "intent": "run analysis plan",
             "query_mode": "analysis",
@@ -145,7 +145,7 @@ async def test_planning_blocks_unavailable_capability_from_dag_plan(
             ]
         }
 
-    monkeypatch.setattr(planning_module, "intent_node", _fake_intent_node)
+    monkeypatch.setattr(planning_module, "resolve_planning_context", _fake_planning_context)
     monkeypatch.setattr(planning_module, "dag_node", _fake_dag_node)
 
     state = cast(AgentState, {"user_query": "q5"})
@@ -166,7 +166,7 @@ async def test_planning_blocks_unavailable_capability_from_dag_plan(
 async def test_planning_preserves_term_hints_from_knowledge_enhance_in_term_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_intent_node(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+    async def _fake_planning_context(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         return {
             "intent": "query with hints",
             "query_mode": "online_query",
@@ -176,7 +176,7 @@ async def test_planning_preserves_term_hints_from_knowledge_enhance_in_term_cont
             "ambiguous_terms": [],
         }
 
-    monkeypatch.setattr(planning_module, "intent_node", _fake_intent_node)
+    monkeypatch.setattr(planning_module, "resolve_planning_context", _fake_planning_context)
 
     async def _query_tool(**_kwargs: Any) -> dict[str, Any]:
         return {"ok": True}
@@ -209,7 +209,7 @@ async def test_planning_preserves_term_hints_from_knowledge_enhance_in_term_cont
 async def test_planning_agent_delegate_todo_injects_default_delegate_policy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_intent_node(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+    async def _fake_planning_context(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         return {
             "intent": "delegate task",
             "query_mode": "agent_delegate",
@@ -219,7 +219,7 @@ async def test_planning_agent_delegate_todo_injects_default_delegate_policy(
             "ambiguous_terms": [],
         }
 
-    monkeypatch.setattr(planning_module, "intent_node", _fake_intent_node)
+    monkeypatch.setattr(planning_module, "resolve_planning_context", _fake_planning_context)
 
     async def _delegate_tool(**_kwargs: Any) -> dict[str, Any]:
         return {"ok": True}
@@ -232,3 +232,42 @@ async def test_planning_agent_delegate_todo_injects_default_delegate_policy(
 
     assert out["query_mode"] == "agent_delegate"
     assert todo_inputs["delegate_policy"] == {"mode": "sync", "wait_for_reply": True}
+
+
+@pytest.mark.asyncio
+async def test_planning_compat_fallback_can_be_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_planning_context(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "intent": "state only planning",
+            "query_mode": "analysis",
+            "target_tool": "",
+            "tool_params": {},
+            "confirmed_terms": [],
+            "ambiguous_terms": [],
+            "planning_context_source": "state",
+        }
+
+    async def _fake_dag_node(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "plan": [
+                {
+                    "id": "t1",
+                    "type": "chat-response-tool",
+                    "description": "reply",
+                    "status": "pending",
+                    "deps": [],
+                    "params": {"message": "ok"},
+                }
+            ]
+        }
+
+    monkeypatch.setattr(planning_module, "resolve_planning_context", _fake_planning_context)
+    monkeypatch.setattr(planning_module, "dag_node", _fake_dag_node)
+
+    state = cast(AgentState, {"user_query": "q8"})
+    out = await planning_node(state, default_tools={})
+
+    assert out["planning_context_source"] == "state"
+    assert out["todos"][0]["required_tools"] == ["chat-response-tool"]
