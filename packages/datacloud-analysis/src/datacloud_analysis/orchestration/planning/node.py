@@ -6,8 +6,11 @@ import logging
 from pathlib import Path
 from typing import Any, cast
 
+from datacloud_analysis.orchestration.planning.decomposer import (
+    decompose_analysis_plan,
+    expand_relation_todos,
+)
 from datacloud_analysis.orchestration.planning.facade import resolve_planning_context
-from datacloud_analysis.orchestration.planning.decomposer import decompose_analysis_plan
 from datacloud_analysis.orchestration.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -290,6 +293,7 @@ async def planning_node(
             available_tools=available_tools,
             term_context=term_context,
         )
+    todos = expand_relation_todos(todos)
     todo_md = _build_todo_md(todos)
     todo_md_path = _persist_todo_md(state.get("workspace_dir"), todo_md)
 

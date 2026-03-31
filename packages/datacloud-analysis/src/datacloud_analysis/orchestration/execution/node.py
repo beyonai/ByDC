@@ -58,6 +58,98 @@ _QUERY_KEYWORDS: tuple[str, ...] = ("query", "read", "search", "list", "select",
 _RELATION_KEYWORDS: tuple[str, ...] = ("relation", "graph", "link", "edge")
 
 
+def _clarification_prompt_from_ambiguous(ambiguous_terms: list[dict[str, Any]]) -> str:
+    if not ambiguous_terms:
+        return "请补充术语含义。"
+    first = ambiguous_terms[0] if isinstance(ambiguous_terms[0], dict) else {}
+    mention = str(first.get("mention") or first.get("term") or "").strip()
+    candidates_raw = first.get("candidates")
+    candidates: list[str] = []
+    if isinstance(candidates_raw, list):
+        for item in candidates_raw:
+            if not isinstance(item, dict):
+                continue
+            text = str(item.get("term_name") or item.get("name") or "").strip()
+            if text:
+                candidates.append(text)
+    if mention and candidates:
+        return (
+            f"「{mention}」存在歧义，候选有：{', '.join(candidates[:5])}。"
+            "请补充具体含义，或回车跳过。"
+        )
+    if mention:
+        return f"「{mention}」未找到匹配术语，请补充具体含义，或回车跳过。"
+    return "存在未确认术语，请补充具体含义，或回车跳过。"
+
+
+def _parse_clarification_resume(resume_value: Any) -> str:
+    if isinstance(resume_value, dict):
+        return str(
+            resume_value.get("content")
+            or resume_value.get("answer")
+            or resume_value.get("value")
+            or resume_value.get("text")
+            or ""
+        ).strip()
+    return str(resume_value or "").strip()
+
+
+async def _handle_ambiguous_terms(
+    state: AgentState,
+    *,
+    todo_active_id: str,
+    pending_capability: str,
+) -> dict[str, Any]:
+    ambiguous_terms = list(state.get("ambiguous_terms") or [])
+    if not ambiguous_terms:
+        return {
+            "ambiguous_terms": [],
+            "confirmed_terms": list(state.get("confirmed_terms") or []),
+            "clarify_needed": False,
+        }
+
+    prompt = _clarification_prompt_from_ambiguous(ambiguous_terms)
+    resume_value = interrupt(
+        {
+            "reason_code": "TERM_CLARIFICATION",
+            "prompt": prompt,
+            "required_fields": ["content"],
+            "resume_payload_schema": {
+                "type": "object",
+                "properties": {"content": {"type": "string"}},
+                "required": ["content"],
+            },
+            "todo_active_id": todo_active_id,
+            "react_step_id": todo_active_id,
+            "pending_capability": pending_capability,
+            "interrupt_reason": "term_clarification",
+        }
+    )
+
+    clarified = _parse_clarification_resume(resume_value)
+    current = ambiguous_terms[0] if isinstance(ambiguous_terms[0], dict) else {}
+    remaining = ambiguous_terms[1:]
+    confirmed_terms = list(state.get("confirmed_terms") or [])
+    mention = str(current.get("mention") or current.get("term") or clarified).strip()
+
+    if clarified:
+        confirmed_terms.append(
+            {
+                "mention": mention,
+                "term_name": clarified,
+                "term_id": str(current.get("term_id") or ""),
+                "confidence": 1.0,
+                "source": "user_clarification",
+            }
+        )
+
+    return {
+        "ambiguous_terms": remaining,
+        "confirmed_terms": confirmed_terms,
+        "clarify_needed": bool(remaining),
+    }
+
+
 def _todo_md_with_status(todos: list[dict[str, Any]]) -> str:
     if not todos:
         return "# TODOs\n\n- (empty)\n"
@@ -580,6 +672,84 @@ def _apply_param_overrides(todo: dict[str, Any], overrides: dict[str, Any]) -> d
     return {**todo, "inputs": merged_inputs}
 
 
+def _fields_from_mapping(raw_fields: Any) -> list[str]:
+    if isinstance(raw_fields, str):
+        value = raw_fields.strip()
+        return [value] if value else []
+    if isinstance(raw_fields, (list, tuple, set)):
+        out: list[str] = []
+        for item in raw_fields:
+            text = str(item).strip()
+            if text:
+                out.append(text)
+        return out
+    return []
+
+
+def _result_output_payload(entry: dict[str, Any]) -> dict[str, Any]:
+    raw_data = entry.get("data")
+    if isinstance(raw_data, dict):
+        return raw_data
+
+    file_path = entry.get("file_path")
+    if isinstance(file_path, str) and file_path.strip():
+        try:
+            raw = Path(file_path).read_text(encoding="utf-8")
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                return parsed
+        except (OSError, json.JSONDecodeError, ValueError):
+            return {}
+    return {}
+
+
+def _build_completed_todos_map(results: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    completed: dict[str, dict[str, Any]] = {}
+    for entry in results:
+        if not isinstance(entry, dict):
+            continue
+        task_id = str(entry.get("task_id") or "").strip()
+        if not task_id:
+            continue
+        completed[task_id] = {"output": _result_output_payload(entry)}
+    return completed
+
+
+def _inject_params_from_deps(
+    todo: dict[str, Any],
+    completed_todos: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Inject fields from dependency outputs into current todo inputs/tool_params."""
+    raw_mapping = todo.get("param_from_deps")
+    if not isinstance(raw_mapping, dict) or not raw_mapping:
+        return todo
+
+    injected_params: dict[str, Any] = {}
+    for dep_id, fields in raw_mapping.items():
+        dep_key = str(dep_id).strip()
+        if not dep_key:
+            continue
+        dep_output = (completed_todos.get(dep_key) or {}).get("output")
+        if not isinstance(dep_output, dict):
+            continue
+        for field in _fields_from_mapping(fields):
+            if field in dep_output:
+                injected_params[field] = dep_output[field]
+
+    if not injected_params:
+        return todo
+
+    existing_inputs = dict(todo.get("inputs") or {}) if isinstance(todo.get("inputs"), dict) else {}
+    existing_tool_params = (
+        dict(todo.get("tool_params") or {}) if isinstance(todo.get("tool_params"), dict) else {}
+    )
+    return {
+        **todo,
+        "inputs": {**existing_inputs, **injected_params},
+        "tool_params": {**existing_tool_params, **injected_params},
+    }
+
+
 def _task_from_todo(todo: dict[str, Any], capability: str) -> dict[str, Any]:
     todo_id = str(todo.get("todo_id") or "")
     return {
@@ -902,15 +1072,36 @@ async def execution_node(
     pending_capability = active_tools[0] if active_tools else ""
 
     if state.get("ambiguous_terms"):
-        updates = {
-            "ambiguous_terms": list(state.get("ambiguous_terms") or []),
-            "clarify_needed": True,
-        }
+        updates = await _handle_ambiguous_terms(
+            state,
+            todo_active_id=todo_active_id,
+            pending_capability=pending_capability,
+        )
+        if updates.get("ambiguous_terms"):
+            return {
+                **updates,
+                "todo_active_id": todo_active_id,
+                "active_tools": active_tools,
+                "execution_status": "done",
+                "resume_context": _resume_context_after_round(
+                    state=state,
+                    config=config,
+                    todo_active_id=todo_active_id,
+                    pending_capability=pending_capability,
+                ),
+                "execution_trace": _append_trace(
+                    execution_trace,
+                    stage="clarification",
+                    status="waiting",
+                    detail={"todo_id": todo_active_id},
+                ),
+                "invocation_dedup": invocation_dedup,
+            }
         return {
             **updates,
             "todo_active_id": todo_active_id,
             "active_tools": active_tools,
-            "execution_status": "done",
+            "execution_status": "replan",
             "resume_context": _resume_context_after_round(
                 state=state,
                 config=config,
@@ -920,7 +1111,7 @@ async def execution_node(
             "execution_trace": _append_trace(
                 execution_trace,
                 stage="clarification",
-                status="waiting",
+                status="resolved",
                 detail={"todo_id": todo_active_id},
             ),
             "invocation_dedup": invocation_dedup,
@@ -1010,8 +1201,12 @@ async def execution_node(
         )
 
     ready_indexes = _pick_ready_todo_indexes(todos)
+    results = list(state.get("results") or [])
+    completed_todos_map = _build_completed_todos_map(results)
+    ready_todos = [_inject_params_from_deps(todos[idx], completed_todos_map) for idx in ready_indexes]
+    for idx, todo in zip(ready_indexes, ready_todos, strict=False):
+        todos[idx] = todo
 
-    ready_todos = [todos[idx] for idx in ready_indexes]
     multi_task = len(todos) > 1
     batch_outputs = await asyncio.gather(
         *[
@@ -1028,7 +1223,6 @@ async def execution_node(
         ]
     )
 
-    results = list(state.get("results") or [])
     blocked_in_batch = False
     appended_todos: list[dict[str, Any]] = []
     for idx, (updated_todo, maybe_output, invocation_add, todo_trace, blocked) in zip(
@@ -1056,6 +1250,10 @@ async def execution_node(
                 is_multi_task=multi_task,
             )
             results.append(entry)
+            todo_result_output = maybe_output.get("output")
+            completed_todos_map[str(maybe_output.get("task_id") or "")] = {
+                "output": todo_result_output if isinstance(todo_result_output, dict) else {}
+            }
             append_items = _extract_appended_todos(
                 output=maybe_output.get("output"),
                 existing_todos=todos + appended_todos,
