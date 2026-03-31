@@ -407,6 +407,12 @@ class DataCloudWorker(GatewayWorker):
         )
         tools_dict = getattr(config_for_this_call, "tools", None) or {}
         prompts_dict = getattr(config_for_this_call, "prompts", None) or {}
+        logger.info(
+            "Agent config payload: agent_id=%s prompt_keys=%s tool_keys=%s",
+            by_agent_id,
+            sorted(str(key) for key in prompts_dict.keys()),
+            sorted(str(key) for key in tools_dict.keys()),
+        )
         user_id = str(getattr(context, "user_id", "") or "anonymous")
         skill_tools = self._load_skill_capabilities(user_id=user_id, task_id=context.session_id)
         merged_tools = dict(tools_dict)
@@ -422,6 +428,12 @@ class DataCloudWorker(GatewayWorker):
                     )
                 else:
                     merged_tools[skill_name] = skill_tool
+        logger.info(
+            "Agent runtime merged tools: agent_id=%s merged_tool_keys=%s skill_tool_count=%d",
+            by_agent_id,
+            sorted(str(key) for key in merged_tools.keys()),
+            len(skill_tools),
+        )
 
         # 版本化缓存：配置变化时自动重建图
         conf_payload = json.dumps(

@@ -1,5 +1,6 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any, cast
 
@@ -7,6 +8,7 @@ import pytest
 
 from datacloud_analysis.orchestration.planning import node as planning_module
 from datacloud_analysis.orchestration.planning import planning_node
+from datacloud_analysis.orchestration.planning import decomposer as planning_decomposer
 from datacloud_analysis.orchestration.state import AgentState
 
 
@@ -279,4 +281,49 @@ async def test_planning_compat_fallback_can_be_disabled(
 
     assert out["planning_context_source"] == "state"
     assert out["todos"][0]["required_tools"] == ["chat-response-tool"]
+
+
+@pytest.mark.asyncio
+async def test_decompose_analysis_plan_logs_request_context_on_llm_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    class _FakeResponse:
+        text = '{"error":{"message":"bad request body"}}'
+
+    class _FakeBadRequest(Exception):
+        def __init__(self) -> None:
+            super().__init__("400 Bad Request")
+            self.response = _FakeResponse()
+
+    class _FakeLLM:
+        async def ainvoke(self, _messages: list[Any]) -> Any:
+            raise _FakeBadRequest()
+
+    monkeypatch.setattr(planning_decomposer, "init_chat_model", lambda **_kwargs: _FakeLLM())
+    monkeypatch.setenv("DATACLOUD_LLM_REASONING_MODEL", "Qwen/Qwen3-235B-A22B")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://example.test/v1")
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy")
+
+    state = cast(
+        AgentState,
+        {
+            "dynamic_tools": {"debug_10005080": object(), "group_agg": object()},
+            "prompts_overwrite": {"dag_system_prompt": "custom planner prompt"},
+        },
+    )
+
+    with caplog.at_level(logging.INFO):
+        result = await planning_decomposer.decompose_analysis_plan(
+            state,
+            intent="查询企业综合分析表的100条数据",
+        )
+
+    assert result["plan"][0]["type"] == "debug_10005080"
+    log_text = "\n".join(record.getMessage() for record in caplog.records)
+    assert "planning_decomposer llm request:" in log_text
+    assert "prompt_source=dag_system_prompt" in log_text
+    assert "tool_count=2" in log_text
+    assert "planning_decomposer: plan generation failed" in log_text
+    assert 'response_text={"error":{"message":"bad request body"}}' in log_text
 
