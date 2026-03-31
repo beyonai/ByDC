@@ -145,7 +145,7 @@ async def test_planning_blocks_unavailable_capability_from_dag_plan(
             ]
         }
 
-    monkeypatch.setattr(planning_module, "intent_node", _fake_intent_node)
+    monkeypatch.setattr(planning_module, "resolve_planning_context", _fake_planning_context)
     monkeypatch.setattr(
         planning_module,
         "decompose_analysis_plan",
