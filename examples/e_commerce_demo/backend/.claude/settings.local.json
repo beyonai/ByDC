@@ -31,7 +31,13 @@
       "WebSearch",
       "WebFetch(domain:mermaid.ai)",
       "WebFetch(domain:github.com)",
-      "Bash(grep -E \"\\(query|router|__main__|__init__\\\\.py$\\)\")"
+      "Bash(grep -E \"\\(query|router|__main__|__init__\\\\.py$\\)\")",
+      "Bash(head -20 grep -n \"clarification_node\\\\|intent_node\" \"/d/data/code/baiying/whale_datacloud/packages/datacloud-analysis/src/datacloud_analysis/orchestration/planner_facade.py\")",
+      "Bash(mkdir -p \"/d/data/code/baiying/whale_datacloud/docs/概要设计/重构剩余批次最终版/01-G18-旧节点代码下线\")",
+      "Bash(mkdir -p \"/d/data/code/baiying/whale_datacloud/docs/概要设计/重构剩余批次最终版/02-G19-旧测试与文档清理\")",
+      "Bash(mkdir -p \"/d/data/code/baiying/whale_datacloud/docs/概要设计/重构剩余批次最终版/03-G21-orchestration目录重组\")",
+      "Bash(mkdir -p \"/d/data/code/baiying/whale_datacloud/docs/概要设计/重构剩余批次最终版/04-G20-全链路回归与发布\")",
+      "Bash(find D:datacodebaiyingwhale_datacloudpackagesdatacloud-analysis -name *.py -type f)"
     ]
   }
 }

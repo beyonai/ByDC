@@ -8,6 +8,7 @@ import pytest
 
 from datacloud_analysis.orchestration.execution import node as execution_module
 from datacloud_analysis.orchestration.execution.node import _build_invocation_id, execution_node
+from datacloud_analysis.orchestration.execution.sandbox_executor import ToolRuntime
 from datacloud_analysis.orchestration.state import AgentState
 
 
@@ -102,12 +103,13 @@ async def test_execution_uses_default_capability_fallback_when_required_empty(
 ) -> None:
     called_types: list[str] = []
 
-    async def _execute_next_task(*args: Any, **kwargs: Any) -> tuple[dict[str, Any], Any]:
-        task = args[0]
+    async def _invoke_with_callbacks(
+        self: ToolRuntime, task: dict[str, Any], _state: Any
+    ) -> tuple[dict[str, Any], Any]:
         called_types.append(str(task.get("type")))
         return ({**task, "status": "done"}, {"ok": True})
 
-    monkeypatch.setattr(execution_module, "execute_next_task", _execute_next_task)
+    monkeypatch.setattr(execution_module.ToolRuntime, "invoke_with_callbacks", _invoke_with_callbacks)
 
     state = cast(
         AgentState,
@@ -136,10 +138,12 @@ async def test_execution_uses_default_capability_fallback_when_required_empty(
 async def test_execution_online_query_dedup_skips_duplicate_invocation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _should_not_run(*_args: Any, **_kwargs: Any) -> tuple[dict[str, Any], Any]:
-        raise AssertionError("execute_next_task should be skipped by invocation_dedup")
+    async def _should_not_run(
+        self: ToolRuntime, _task: dict[str, Any], _state: Any
+    ) -> tuple[dict[str, Any], Any]:
+        raise AssertionError("invoke_with_callbacks should be skipped by invocation_dedup")
 
-    monkeypatch.setattr(execution_module, "execute_next_task", _should_not_run)
+    monkeypatch.setattr(execution_module.ToolRuntime, "invoke_with_callbacks", _should_not_run)
 
     invocation_id = _build_invocation_id(
         query_mode="online_query",
@@ -178,12 +182,13 @@ async def test_execution_online_query_records_invocation_and_persists_todo_md(
 ) -> None:
     calls: list[dict[str, Any]] = []
 
-    async def _execute_next_task(*args: Any, **kwargs: Any) -> tuple[dict[str, Any], Any]:
-        task = args[0]
+    async def _invoke_with_callbacks(
+        self: ToolRuntime, task: dict[str, Any], _state: Any
+    ) -> tuple[dict[str, Any], Any]:
         calls.append({"task_id": task.get("id")})
         return ({**task, "status": "done"}, {"records": [{"id": 1}], "meta": {"total": 1}})
 
-    monkeypatch.setattr(execution_module, "execute_next_task", _execute_next_task)
+    monkeypatch.setattr(execution_module.ToolRuntime, "invoke_with_callbacks", _invoke_with_callbacks)
 
     state = cast(
         AgentState,
@@ -223,13 +228,14 @@ async def test_execution_runs_dependency_batches_in_order(
 ) -> None:
     call_order: list[str] = []
 
-    async def _execute_next_task(*args: Any, **kwargs: Any) -> tuple[dict[str, Any], Any]:
-        task = args[0]
+    async def _invoke_with_callbacks(
+        self: ToolRuntime, task: dict[str, Any], _state: Any
+    ) -> tuple[dict[str, Any], Any]:
         task_id = str(task.get("id"))
         call_order.append(task_id)
         return ({**task, "status": "done"}, {"ok": task_id})
 
-    monkeypatch.setattr(execution_module, "execute_next_task", _execute_next_task)
+    monkeypatch.setattr(execution_module.ToolRuntime, "invoke_with_callbacks", _invoke_with_callbacks)
 
     state = cast(
         AgentState,
@@ -281,12 +287,13 @@ async def test_execution_records_react_round_trace(
             "tool_call_id": "call_1",
         }
 
-    async def _execute_next_task(*args: Any, **kwargs: Any) -> tuple[dict[str, Any], Any]:
-        task = args[0]
+    async def _invoke_with_callbacks(
+        self: ToolRuntime, task: dict[str, Any], _state: Any
+    ) -> tuple[dict[str, Any], Any]:
         return ({**task, "status": "done"}, {"ok": True})
 
     monkeypatch.setattr(execution_module, "select_react_capability", _select_react_capability)
-    monkeypatch.setattr(execution_module, "execute_next_task", _execute_next_task)
+    monkeypatch.setattr(execution_module.ToolRuntime, "invoke_with_callbacks", _invoke_with_callbacks)
 
     state = cast(
         AgentState,
@@ -323,8 +330,9 @@ async def test_execution_level3_interrupt_confirmed_replans(
     async def _select_react_capability(**_kwargs: Any) -> dict[str, Any]:
         return {"capability_id": "tool_a", "source": "fallback", "reason": "test", "tool_call_id": None}
 
-    async def _execute_next_task(*args: Any, **kwargs: Any) -> tuple[dict[str, Any], Any]:
-        task = args[0]
+    async def _invoke_with_callbacks(
+        self: ToolRuntime, task: dict[str, Any], _state: Any
+    ) -> tuple[dict[str, Any], Any]:
         return ({**task, "status": "failed", "error": "boom"}, {"error": "boom"})
 
     interrupt_payload: dict[str, Any] = {}
@@ -334,7 +342,7 @@ async def test_execution_level3_interrupt_confirmed_replans(
         return {"confirm": "继续"}
 
     monkeypatch.setattr(execution_module, "select_react_capability", _select_react_capability)
-    monkeypatch.setattr(execution_module, "execute_next_task", _execute_next_task)
+    monkeypatch.setattr(execution_module.ToolRuntime, "invoke_with_callbacks", _invoke_with_callbacks)
     monkeypatch.setattr(execution_module, "interrupt", _fake_interrupt)
 
     state = cast(
@@ -378,12 +386,13 @@ async def test_execution_level3_interrupt_cancelled_marks_done(
     async def _select_react_capability(**_kwargs: Any) -> dict[str, Any]:
         return {"capability_id": "tool_a", "source": "fallback", "reason": "test", "tool_call_id": None}
 
-    async def _execute_next_task(*args: Any, **kwargs: Any) -> tuple[dict[str, Any], Any]:
-        task = args[0]
+    async def _invoke_with_callbacks(
+        self: ToolRuntime, task: dict[str, Any], _state: Any
+    ) -> tuple[dict[str, Any], Any]:
         return ({**task, "status": "failed", "error": "boom"}, {"error": "boom"})
 
     monkeypatch.setattr(execution_module, "select_react_capability", _select_react_capability)
-    monkeypatch.setattr(execution_module, "execute_next_task", _execute_next_task)
+    monkeypatch.setattr(execution_module.ToolRuntime, "invoke_with_callbacks", _invoke_with_callbacks)
     monkeypatch.setattr(execution_module, "interrupt", lambda _payload: {"confirm": "取消"})
 
     state = cast(
