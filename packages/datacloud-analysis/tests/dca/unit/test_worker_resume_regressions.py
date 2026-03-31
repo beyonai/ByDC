@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from by_framework.core.protocol.commands import ResumeCommand
+from by_framework.core.protocol.commands import AskAgentCommand, ResumeCommand
 from by_framework.core.protocol.message_header import MessageHeader
 
 from datacloud_service.worker import DataCloudWorker
@@ -20,16 +20,25 @@ class _AgentConfig:
 class _FakeContext:
     def __init__(self, configs: list[_AgentConfig]) -> None:
         self.session_id = "sess-1"
+        self.user_id = "u-1"
         self._configs = configs
+        self.emitted: list[dict[str, Any]] = []
+        self.flush_count = 0
 
     def list_agent_configs(self) -> list[_AgentConfig]:
         return self._configs
 
-    async def emit_chunk(self, *_args: Any, **_kwargs: Any) -> None:
-        return None
+    async def emit_chunk(self, event: Any, **kwargs: Any) -> None:
+        self.emitted.append(
+            {
+                "content": getattr(event, "content", ""),
+                "metadata": getattr(event, "metadata", {}) or {},
+                **kwargs,
+            }
+        )
 
     async def flush_to_history(self) -> None:
-        return None
+        self.flush_count += 1
 
     async def check_cancelled(self) -> None:
         return None
@@ -123,3 +132,65 @@ async def test_resume_keeps_empty_string_reply_data(
 
     assert result == {"status": "done"}
     assert captured["graph_input"].resume == ""
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("content", ["hi", "你好"])
+async def test_ask_chitchat_short_circuits_without_graph_execution(
+    monkeypatch: pytest.MonkeyPatch,
+    content: str,
+) -> None:
+    worker = DataCloudWorker(worker_id="worker-test")
+    context = _FakeContext([])
+    stream_called = False
+
+    async def _never_called(**_kwargs: Any) -> dict[str, Any]:
+        nonlocal stream_called
+        stream_called = True
+        return {"status": "done"}
+
+    monkeypatch.setattr(worker, "_stream_graph", _never_called)
+
+    command = AskAgentCommand(
+        header=MessageHeader(message_id="m-ask-1", session_id=context.session_id, trace_id="trace-ask-1"),
+        content=content,
+        extra_payload={},
+    )
+
+    result = await worker.process_command(command, context)
+
+    assert result == {"status": "done"}
+    assert stream_called is False
+    assert context.flush_count == 1
+    assert any(item["metadata"].get("graph_nodes_executed") == 0 for item in context.emitted)
+
+
+@pytest.mark.asyncio
+async def test_ext_command_keeps_priority_over_chitchat_short_circuit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worker = DataCloudWorker(worker_id="worker-test")
+    context = _FakeContext([])
+    called: dict[str, Any] = {}
+
+    async def _fake_handle_ext_command(**kwargs: Any) -> tuple[bool, Any]:
+        called.update(kwargs)
+        return True, None
+
+    worker.command_plugin_manager.handle_ext_command = _fake_handle_ext_command  # type: ignore[method-assign]
+
+    async def _never_called(**_kwargs: Any) -> dict[str, Any]:
+        raise AssertionError("_stream_graph should not be called for handled ext_command")
+
+    monkeypatch.setattr(worker, "_stream_graph", _never_called)
+
+    command = AskAgentCommand(
+        header=MessageHeader(message_id="m-ask-2", session_id=context.session_id, trace_id="trace-ask-2"),
+        content="hello",
+        extra_payload={"ext_params": {"command": "noop"}},
+    )
+
+    result = await worker.process_command(command, context)
+
+    assert result == {"status": "done"}
+    assert called["ext_params"] == {"command": "noop"}
