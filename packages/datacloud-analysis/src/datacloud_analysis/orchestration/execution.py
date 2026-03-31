@@ -312,6 +312,18 @@ def _build_invocation_id(
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()
 
 
+def _normalize_invocation_dedup(values: list[Any] | None) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in values or []:
+        text = str(raw).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        normalized.append(text)
+    return normalized
+
+
 def _append_trace(
     trace: list[dict[str, Any]],
     *,
@@ -684,7 +696,7 @@ async def execution_node(
     existing_todo_md_path = (
         str(state.get("todo_md_path")) if state.get("todo_md_path") else None
     )
-    invocation_dedup = [str(x) for x in (state.get("invocation_dedup") or []) if str(x).strip()]
+    invocation_dedup = _normalize_invocation_dedup(cast(list[Any] | None, state.get("invocation_dedup")))
     invocation_dedup_set = set(invocation_dedup)
     execution_trace = list(state.get("execution_trace") or [])
     query_mode = str(state.get("query_mode") or "analysis")
