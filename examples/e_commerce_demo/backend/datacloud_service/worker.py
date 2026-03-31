@@ -1,9 +1,5 @@
 """DataCloud Gateway Worker.
 
-灏?datacloud-analysis LangGraph 鎺ュ叆 by_framework锛圙ateway锛墂orker 鍗忚锛?
-- 鏀?AskAgentCommand 娑堟伅
-- 褰掍竴鍖栨秷鎭牸寮忥紝椹卞姩鍥炬墽琛?
-- 閫氳繃 EventType 灏?LLM token/宸ュ叿璋冪敤鐘舵€佸疄鏃跺洖浼?
 """
 
 from __future__ import annotations
@@ -16,7 +12,6 @@ import sys
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Mapping
 
-# 涓撻棬閽堝 Windows 绯荤粺鍒囨崲浜嬩欢寰幆绛栫暐浠ュ吋瀹?psycopg
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
@@ -197,13 +192,8 @@ _no_checkpointer_logged: bool = False
 class DataCloudWorker(GatewayWorker):
     """Worker that drives the datacloud-analysis graph inside the Gateway worker protocol.
 
-    鍚姩鏃堕€氳繃 run_worker(**worker_kwargs) 灏嗕互涓嬪弬鏁伴€忎紶鑷?__init__锛?
-        model_name  鈥?LLM 妯″瀷鍚嶏紙璇昏嚜 .env DATACLOUD_LLM_REASONING_MODEL锛?
-        api_key     鈥?OpenAI-compatible API key锛堣鑷?.env OPENAI_API_KEY锛?
-        base_url    鈥?OpenAI-compatible base URL锛堣鑷?.env OPENAI_BASE_URL锛?
     """
 
-    # 鍥惧疄渚嬬紦瀛樼殑鏈€澶ф潯鐩暟锛涜秴杩囨椂娣樻卑鏈€涔呮湭浣跨敤鐨勬潯鐩?
     _GRAPH_CACHE_MAX: int = 32
     _RESUME_RESULT_CACHE_MAX: int = 256
 
@@ -220,7 +210,6 @@ class DataCloudWorker(GatewayWorker):
         self.model_name = model_name
         self.api_key = api_key
         self.base_url = base_url
-        # 浣跨敤 OrderedDict 瀹炵幇 LRU 缂撳瓨锛岄槻姝㈤暱鏈熻繍琛屽唴瀛樻棤闄愬闀?
         self.graphs: OrderedDict = OrderedDict()
         self._resume_result_cache: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self._resume_inflight: dict[str, asyncio.Future[dict[str, Any]]] = {}
@@ -268,7 +257,7 @@ class DataCloudWorker(GatewayWorker):
     def _build_graph(self, prompts_dict: dict | None = None, tools_dict: dict | None = None) -> Any:
         """Instantiate the datacloud-analysis compiled graph with dynamic context."""
         return create_agent(
-            model=self.model_name,  # create_agent 鍐呴儴浼氳嚜鍔ㄥ姞 openai: 鍓嶇紑
+            model=self.model_name,  # 
             api_key=self.api_key,
             base_url=self.base_url,
             prompts_overwrite=prompts_dict,
@@ -349,7 +338,6 @@ class DataCloudWorker(GatewayWorker):
         return skills
 
     async def start_heartbeat(self) -> None:
-        """Worker 鍚姩鍚庢嫤鎴?"""
         await super().start_heartbeat()
 
         init_plugin = self.plugin_registry.get_plugin("datacloud_init_agent_conf")
@@ -362,7 +350,6 @@ class DataCloudWorker(GatewayWorker):
             loaded_agent_ids,
         )
 
-        # 鍒濆鍖?SDK 鐜 (PG 鏁版嵁搴撳缓琛? Checkpoint, Memory 绛?
         from datacloud_analysis import bootstrap
 
         await bootstrap.setup()
@@ -384,7 +371,6 @@ class DataCloudWorker(GatewayWorker):
         )
 
     # ------------------------------------------------------------------
-    # 鏍稿績娑堟伅澶勭悊
     # ------------------------------------------------------------------
 
     async def process_command(self, command: GatewayCommand, context: AgentContext) -> dict:
@@ -404,7 +390,6 @@ class DataCloudWorker(GatewayWorker):
             type(command).__name__,
         )
 
-        # 鈶?鍚屾 Worker 鏋勯€犲弬鏁?鈫?os.environ锛岀‘淇濆浘鍐呰妭鐐?os.getenv 鎷垮埌姝ｇ‘鍊?
         if self.api_key:
             os.environ["OPENAI_API_KEY"] = self.api_key
         if self.base_url:
@@ -412,7 +397,6 @@ class DataCloudWorker(GatewayWorker):
         if self.model_name:
             os.environ["DATACLOUD_LLM_REASONING_MODEL"] = self.model_name
 
-        # 鎻愬彇 payload / header metadata 淇℃伅锛圧esume 鍙兘鍙湪 metadata 閲屽甫 agent_id/conf_hash锛?
         extra_payload = getattr(command, "extra_payload", {}) or {}
         header_metadata = getattr(getattr(command, "header", None), "metadata", None) or {}
         by_agent_id = extra_payload.get("agent_id") or header_metadata.get("agent_id")
@@ -447,13 +431,11 @@ class DataCloudWorker(GatewayWorker):
                 self._resume_result_cache.move_to_end(resume_cache_key)
                 return dict(cached)
 
-        # 鑾峰彇褰撳墠鎸傝浇鐨?Workspace
         from by_framework.worker.sandbox.hook_sandbox import active_workspace  # noqa: PLC0415
 
         workspace_dir = active_workspace.get()
         logger.info("Active workspace for task: %s", workspace_dir)
 
-        # 鈶?ext_params 鐭矾锛氫粎 AskAgentCommand 璺緞鎵ц锛孯esume 涓嶅仛姝ゆ鏌?
         if isinstance(command, AskAgentCommand) and isinstance(ext_params, dict):
             handled, payload = await self.command_plugin_manager.handle_ext_command(
                 ext_params=ext_params,
@@ -473,7 +455,6 @@ class DataCloudWorker(GatewayWorker):
                     await context.flush_to_history()
                 return {"status": "done"}
 
-        # Ask 璺緞杞婚噺闂茶亰鐭矾锛氬懡涓悗鐩存帴鍥炲锛屼笉杩涘叆 LangGraph銆?
         if isinstance(command, AskAgentCommand):
             user_text = _latest_user_text_from_content(command.content)
             if _is_light_chitchat(user_text):
@@ -493,7 +474,6 @@ class DataCloudWorker(GatewayWorker):
                 await context.flush_to_history()
                 return {"status": "done"}
 
-        # 鈶?鏌ユ壘 Agent 閰嶇疆锛屾瀯寤哄浘缂撳瓨閿?
         agent_configs = context.list_agent_configs()
         config_for_this_call = next(
             (cfg for cfg in agent_configs if str(cfg.agent_id) == str(by_agent_id)),
@@ -534,7 +514,6 @@ class DataCloudWorker(GatewayWorker):
             len(skill_tools),
         )
 
-        # 鐗堟湰鍖栫紦瀛橈細閰嶇疆鍙樺寲鏃惰嚜鍔ㄩ噸寤哄浘
         conf_payload = json.dumps(
             {"prompts": prompts_dict, "tool_keys": sorted(merged_tools.keys())},
             ensure_ascii=False,
@@ -571,7 +550,6 @@ class DataCloudWorker(GatewayWorker):
         else:
             self.graphs.move_to_end(cache_key)
 
-        # 鈶?璁剧疆 LangGraph config锛坱hread_id 鐢ㄤ簬 checkpoint锛実ateway_context 涓嶈繘 state 閬垮厤搴忓垪鍖栧け璐ワ級
         config = {
             "configurable": {
                 "thread_id": context.session_id,
@@ -591,7 +569,7 @@ class DataCloudWorker(GatewayWorker):
             content_type=SseReasonMessageType.think_text.value,
         )
 
-        # 鈶?鏍规嵁鍛戒护绫诲瀷鏋勫缓鍥捐緭鍏?
+        #
         if isinstance(command, ResumeCommand):
             try:
                 resume_payload_json = json.dumps(
@@ -607,8 +585,6 @@ class DataCloudWorker(GatewayWorker):
                 getattr(command.header, "trace_id", ""),
                 resume_payload_json,
             )
-            # Resume 璺緞锛氱敤 Command(resume=...) 缁窇锛岀姝㈤噸寤?state
-            # reply_data 鍏佽绌哄瓧绗︿覆/绌哄璞★紝鍙湁 None 鏃舵墠鍥炶惤鍒?content
             resume_value = command.reply_data if command.reply_data is not None else command.content
             if isinstance(resume_value, str):
                 resume_preview = resume_value[:500]
@@ -624,11 +600,7 @@ class DataCloudWorker(GatewayWorker):
             )
             graph_input: Any = Command(resume=resume_value)
         else:
-            # Ask 璺緞锛氬綊涓€鍖栨秷鎭紝鏋勫缓瀹屾暣鍒濆 state
             input_messages = _normalize_messages(command.content)
-            # prompts_overwrite / dynamic_tools 涓嶅緱鏀惧叆 checkpoint 鐘舵€侊細宸ュ叿瀵硅薄鍐呭惈
-            # Python callable锛孡angGraph PG serde 浼氭姤銆宯ot msgpack serializable: function銆嶃€?
-            # 浜岃€呯敱 build_analysis_graph(..., prompts_overwrite=, tools=) 闂寘娉ㄥ叆鍚勮妭鐐广€?
             graph_input = {
                 "messages": input_messages,
                 "agent_id": by_agent_id,
@@ -667,9 +639,6 @@ class DataCloudWorker(GatewayWorker):
                 "session_alias_map": {},
             }
 
-        # Resume锛氭妸缃戝叧 header.metadata 閲岀殑 checkpoint 鍐欏叆 LangGraph configurable銆?
-        # 鑻ヤ笉浼?checkpoint_id锛孭G checkpointer 浼氭寜 thread 鍙栥€屾渶鏂般€嶅揩鐓э紱璇ュ揩鐓у線寰€宸茶秺杩?
-        # interrupt 鐐癸紝Command(resume=...) 鏃犳硶鎺ュ埌鎸傝捣浠诲姟锛岃〃鐜颁负 astream_events 鏋佸皯銆佺缁撴潫銆?
         if isinstance(command, ResumeCommand):
             md = header_metadata
             ckpt_id = md.get("checkpoint_id")
@@ -682,7 +651,6 @@ class DataCloudWorker(GatewayWorker):
                 config["configurable"].get("checkpoint_ns", ""),
             )
 
-        # 鈶?娴佸紡椹卞姩鍥撅紝澶勭悊 GraphInterrupt
         resume_inflight_owner = False
         resume_inflight_future: asyncio.Future[dict[str, Any]] | None = None
         if isinstance(command, ResumeCommand) and resume_cache_key:
@@ -954,7 +922,7 @@ class DataCloudWorker(GatewayWorker):
 
 
 # ------------------------------------------------------------------
-# 绉佹湁宸ュ叿鍑芥暟
+
 # ------------------------------------------------------------------
 
 
@@ -964,9 +932,6 @@ def _normalize_messages(
     """Convert gateway command content to a list of LangChain BaseMessage.
 
     Supports:
-        - str 鈫?single HumanMessage
-        - list[dict] with 'role'/'content' keys 鈫?typed messages
-        - list[str] 鈫?list of HumanMessage
     """
     if isinstance(content, str):
         return [HumanMessage(content=content)]
