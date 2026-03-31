@@ -548,3 +548,63 @@ async def test_execution_semantic_type_prioritizes_relation_capability_for_relat
     )
     out = await execution_node(state, {"configurable": {}}, default_tools={})
     assert out["active_tools"][0] == "graph_relation_tool"
+
+
+@pytest.mark.asyncio
+async def test_execution_inline_clarification_waiting_when_unresolved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(execution_module, "interrupt", lambda _payload: {"user_input": ""})
+
+    state = cast(
+        AgentState,
+        {
+            "query_mode": "analysis",
+            "ambiguous_terms": [
+                {
+                    "mention": "企业",
+                    "candidates": [
+                        {"term_id": "T1", "term_name": "企业", "term_type_code": "OBJECT"}
+                    ],
+                }
+            ],
+            "confirmed_terms": [],
+            "session_alias_map": {},
+            "tool_params": {},
+        },
+    )
+    out = await execution_node(state, {"configurable": {}}, default_tools={})
+
+    assert out["execution_status"] == "done"
+    assert out["ambiguous_terms"]
+
+
+@pytest.mark.asyncio
+async def test_execution_inline_clarification_resolved_replans(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(execution_module, "interrupt", lambda _payload: {"user_input": "1"})
+
+    state = cast(
+        AgentState,
+        {
+            "query_mode": "analysis",
+            "intent": "查询企业数据",
+            "ambiguous_terms": [
+                {
+                    "mention": "企业",
+                    "candidates": [
+                        {"term_id": "T1", "term_name": "企业主体", "term_type_code": "OBJECT"}
+                    ],
+                }
+            ],
+            "confirmed_terms": [],
+            "session_alias_map": {},
+            "tool_params": {"query": "查询企业数据"},
+        },
+    )
+    out = await execution_node(state, {"configurable": {}}, default_tools={})
+
+    assert out["execution_status"] == "replan"
+    assert out["ambiguous_terms"] == []
+    assert out["confirmed_terms"][0]["term_id"] == "T1"
