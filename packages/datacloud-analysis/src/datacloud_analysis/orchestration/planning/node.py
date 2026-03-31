@@ -313,14 +313,14 @@ async def planning_node(
     plan: list[dict[str, Any]] = []
     if query_mode == "analysis" and not planning_updates.get("ambiguous_terms"):
         merged_state = cast(AgentState, {**state, **planning_updates})
-        dag_updates = await decompose_analysis_plan(
+        plan_updates = await decompose_analysis_plan(
             merged_state,
             intent=intent_text,
             gateway_context=gateway_context,
             default_prompts=default_prompts,
             default_tools=default_tools,
         )
-        plan = list(dag_updates.get("plan", []) or [])
+        plan = list(plan_updates.get("plan", []) or [])
     else:
         plan = []
 

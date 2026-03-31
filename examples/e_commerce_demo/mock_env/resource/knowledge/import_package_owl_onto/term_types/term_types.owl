@@ -1,0 +1,149 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/termtype/ontology#">
+
+    <owl:Class rdf:about="#TermTypeDefinition"><rdfs:label>术语类型定义</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#termtype_enterprise_name">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#enterprise_name</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_name</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业全称</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业全称术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#termtype_industry_name">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业类型</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业类型术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#termtype_business_status_name">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#business_status_name</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">business_status_name</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业经营状态</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业经营状态术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#termtype_foot_active_level_name">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#foot_active_level_name</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">foot_active_level_name</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格人流活跃等级</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格人流活跃等级术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#termtype_vehicle_active_level_name">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#vehicle_active_level_name</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">vehicle_active_level_name</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格车流活跃等级</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格车流活跃等级术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#termtype_logistics_active_level_name">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#logistics_active_level_name</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">logistics_active_level_name</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格物流活跃等级</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格物流活跃等级术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#termtype_light_active_level_name">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#light_active_level_name</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">light_active_level_name</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格灯光活跃等级</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格灯光活跃等级术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#termtype_chain_name">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#termtype_manage_grid_name">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#manage_grid_name</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属管理网格名称</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属管理网格名称术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#termtype_enterprise_level_name">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#enterprise_level_name</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_level_name</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业等级</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业等级术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#termtype_risk_level_name">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#risk_level_name</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">risk_level_name</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合风险等级</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合风险等级术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#termtype_phy_grid_name">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#phy_grid_name</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格名称</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格名称术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#termtype_area_name">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#area_name</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">area_name</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属区域名称</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属区域名称术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#trem_type_code_path"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#trem_type_code"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#trem_type_name"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#trem_type_desc"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#term_data_type"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#library_code"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#version"><rdfs:domain rdf:resource="#TermTypeDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+</rdf:RDF>
