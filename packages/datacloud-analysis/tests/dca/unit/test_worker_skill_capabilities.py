@@ -28,8 +28,22 @@ class _FakeSkillLoader:
             return {"sync": True, "params": params}
 
         return {
-            "async_skill": {"run": _async_skill},
-            "sync_skill": {"run": _sync_skill},
+            "async_skill": {
+                "run": _async_skill,
+                "meta": {
+                    "risk_level": "high",
+                    "allowlist_tags": ["tenant_a"],
+                    "blocklist_tags": ["blocked_scene"],
+                },
+            },
+            "sync_skill": {
+                "run": _sync_skill,
+                "meta": {
+                    "risk_level": "low",
+                    "allowlist_tags": [],
+                    "blocklist_tags": [],
+                },
+            },
         }
 
 
@@ -58,3 +72,6 @@ async def test_worker_load_skill_capabilities_wraps_sync_and_async(
     sync_out = await skills["sync_skill"](y=2)
     assert async_out == {"async": True, "params": {"x": 1}}
     assert sync_out == {"sync": True, "params": {"y": 2}}
+    assert skills["async_skill"]._skill_risk_level == "high"  # type: ignore[attr-defined]
+    assert skills["async_skill"]._skill_allowlist_tags == ["tenant_a"]  # type: ignore[attr-defined]
+    assert skills["async_skill"]._skill_blocklist_tags == ["blocked_scene"]  # type: ignore[attr-defined]
