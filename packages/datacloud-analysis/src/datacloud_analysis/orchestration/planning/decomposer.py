@@ -321,7 +321,7 @@ async def _emit_planning_reasoning(
     )
     thinking = f"已将问题拆解为 {len(plan)} 个子任务：\n{task_lines}"
     await gateway_context.emit_chunk(
-        StreamChunkEvent(content="任务规划"),
+        StreamChunkEvent(content="任务生成"),
         event_type=EventType.REASONING_LOG_DELTA.value,
         content_type=SseReasonMessageType.think_title.value,
     )
