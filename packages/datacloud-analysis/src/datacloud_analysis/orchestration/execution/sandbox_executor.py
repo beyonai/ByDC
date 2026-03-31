@@ -880,7 +880,7 @@ def _register_dispatchers() -> None:
 def _resolve_input_files(dep_ids: list[str], state: Mapping[str, Any]) -> dict[str, str]:
     """Build a mapping of dep task_id 鈫?JSONL file path for code_exec tasks.
 
-    For each dep task, reads the intermediate temp JSON (written by loop_node),
+    For each dependency task, reads the intermediate temp JSON (written by execution stage),
     then extracts the actual JSONL file path stored inside the query output.
     Falls back to the temp JSON path itself if no inner file_path is found.
 
@@ -899,7 +899,7 @@ def _resolve_input_files(dep_ids: list[str], state: Mapping[str, Any]) -> dict[s
         if task_id not in dep_set:
             continue
 
-        # Multi-task path: loop_node saved output to temp/{task_id}.json
+        # Multi-task path: execution stage saved output to temp/{task_id}.json
         temp_path = res.get("file_path")
         if temp_path and Path(temp_path).exists():
             try:
