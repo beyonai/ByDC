@@ -1,9 +1,9 @@
 """DataCloud Gateway Worker.
 
-将 datacloud-analysis LangGraph 接入 by_framework（Gateway）worker 协议：
-- 收 AskAgentCommand 消息
-- 归一化消息格式，驱动图执行
-- 通过 EventType 将 LLM token/工具调用状态实时回传
+灏?datacloud-analysis LangGraph 鎺ュ叆 by_framework锛圙ateway锛墂orker 鍗忚锛?
+- 鏀?AskAgentCommand 娑堟伅
+- 褰掍竴鍖栨秷鎭牸寮忥紝椹卞姩鍥炬墽琛?
+- 閫氳繃 EventType 灏?LLM token/宸ュ叿璋冪敤鐘舵€佸疄鏃跺洖浼?
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import sys
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Mapping
 
-# 专门针对 Windows 系统切换事件循环策略以兼容 psycopg
+# 涓撻棬閽堝 Windows 绯荤粺鍒囨崲浜嬩欢寰幆绛栫暐浠ュ吋瀹?psycopg
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
@@ -52,7 +52,7 @@ _CHITCHAT_TOKENS = {
     "thank you",
     "你好",
     "您好",
-    "嗨",
+    "喂",
     "哈喽",
     "在吗",
     "谢谢",
@@ -79,6 +79,105 @@ _ANALYSIS_HINT_TOKENS = {
     "analy",
 }
 
+_NODE_THINKING_DESC: dict[str, str] = {
+    "knowledge_enhance": "正在理解问题并补充上下文...\n\n",
+    "planning": "正在生成任务计划...\n\n",
+    "execution": "正在执行任务...\n\n",
+    "end": "正在整理结果...",
+}
+_DEFAULT_THINKING_DESC = "正在处理，请稍候...\n\n"
+
+_NODE_PHASE_TITLE: dict[str, str] = {
+    "knowledge_enhance": "问题理解",
+    "execution": "任务执行",
+    "end": "结果生成",
+}
+
+_PLANNING_PHASE_TITLE = "任务生成"
+
+_HEARTBEAT_INTERVAL: float = 3.0
+_HEARTBEAT_MESSAGES: list[str] = [
+    "数据量较大，正在处理中...\n\n",
+    "查询较复杂，请耐心等待...\n\n",
+    "正在整合多维度数据...\n\n",
+    "即将完成，请稍候...\n\n",
+]
+
+
+_TOOL_DISPLAY = {
+    "search_knowledge": ("正在检索业务知识库", "业务知识检索完成"),
+    "recall_memory": ("正在回溯相关经验", "相关经验回溯完成"),
+    "sbx_run_code": ("正在执行数据分析", "数据分析执行完成"),
+    "sbx_read_file": ("正在读取分析文件", "分析文件读取完成"),
+    "sbx_write_file": ("正在保存分析结果", "分析结果保存完成"),
+    "build_skill": ("正在构建分析技能", "分析技能构建完成"),
+    "render_report": ("正在生成分析报告", "分析报告生成完成"),
+    "choose_capability": ("正在规划下一步操作", ""),
+}
+
+
+def _tool_display(tool_name: str) -> tuple[str, str]:
+    """Return (start_desc, end_desc) pair for a given tool name."""
+
+    return _TOOL_DISPLAY.get(tool_name, ("正在处理...", "处理完成"))
+
+
+def _extract_tool_detail(tool_name: str, tool_input: Any) -> str:
+    """Extract user-meaningful detail from tool parameters."""
+
+    if not isinstance(tool_input, dict):
+        return ""
+    if tool_name in {"sbx_read_file", "sbx_write_file"}:
+        path_value = tool_input.get("file_path") or tool_input.get("path") or ""
+        if path_value:
+            return os.path.basename(str(path_value))
+        return ""
+    if tool_name in {"search_knowledge", "recall_memory"}:
+        query_value = str(tool_input.get("query") or "").strip()
+        return query_value[:30]
+    return ""
+
+
+def _now_monotonic() -> float:
+    return asyncio.get_running_loop().time()
+
+
+def _touch_emit_time(last_emit_time_ref: list[float]) -> None:
+    last_emit_time_ref[0] = _now_monotonic()
+
+
+async def _heartbeat_loop(
+    context: AgentContext,
+    stop_event: asyncio.Event,
+    last_emit_time_ref: list[float],
+) -> None:
+    """Emit periodic think_text heartbeat when stream is temporarily silent."""
+    idx = 0
+    try:
+        while not stop_event.is_set():
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=1.0)
+                break
+            except TimeoutError:
+                pass
+
+            now = _now_monotonic()
+            if now - last_emit_time_ref[0] < _HEARTBEAT_INTERVAL:
+                continue
+
+            msg = _HEARTBEAT_MESSAGES[idx % len(_HEARTBEAT_MESSAGES)]
+            await context.emit_chunk(
+                StreamChunkEvent(content=msg),
+                event_type=EventType.REASONING_LOG_START.value,
+                content_type=SseReasonMessageType.think_text.value,
+            )
+            last_emit_time_ref[0] = now
+            idx += 1
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("heartbeat loop exited with error: %s", exc)
+
 
 def _compiled_graph_has_checkpointer(graph: Any) -> bool:
     """Return True if LangGraph was compiled with a usable checkpointer.
@@ -98,13 +197,13 @@ _no_checkpointer_logged: bool = False
 class DataCloudWorker(GatewayWorker):
     """Worker that drives the datacloud-analysis graph inside the Gateway worker protocol.
 
-    启动时通过 run_worker(**worker_kwargs) 将以下参数透传至 __init__：
-        model_name  — LLM 模型名（读自 .env DATACLOUD_LLM_REASONING_MODEL）
-        api_key     — OpenAI-compatible API key（读自 .env OPENAI_API_KEY）
-        base_url    — OpenAI-compatible base URL（读自 .env OPENAI_BASE_URL）
+    鍚姩鏃堕€氳繃 run_worker(**worker_kwargs) 灏嗕互涓嬪弬鏁伴€忎紶鑷?__init__锛?
+        model_name  鈥?LLM 妯″瀷鍚嶏紙璇昏嚜 .env DATACLOUD_LLM_REASONING_MODEL锛?
+        api_key     鈥?OpenAI-compatible API key锛堣鑷?.env OPENAI_API_KEY锛?
+        base_url    鈥?OpenAI-compatible base URL锛堣鑷?.env OPENAI_BASE_URL锛?
     """
 
-    # 图实例缓存的最大条目数；超过时淘汰最久未使用的条目
+    # 鍥惧疄渚嬬紦瀛樼殑鏈€澶ф潯鐩暟锛涜秴杩囨椂娣樻卑鏈€涔呮湭浣跨敤鐨勬潯鐩?
     _GRAPH_CACHE_MAX: int = 32
     _RESUME_RESULT_CACHE_MAX: int = 256
 
@@ -121,7 +220,7 @@ class DataCloudWorker(GatewayWorker):
         self.model_name = model_name
         self.api_key = api_key
         self.base_url = base_url
-        # 使用 OrderedDict 实现 LRU 缓存，防止长期运行内存无限增长
+        # 浣跨敤 OrderedDict 瀹炵幇 LRU 缂撳瓨锛岄槻姝㈤暱鏈熻繍琛屽唴瀛樻棤闄愬闀?
         self.graphs: OrderedDict = OrderedDict()
         self._resume_result_cache: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self._resume_inflight: dict[str, asyncio.Future[dict[str, Any]]] = {}
@@ -169,7 +268,7 @@ class DataCloudWorker(GatewayWorker):
     def _build_graph(self, prompts_dict: dict | None = None, tools_dict: dict | None = None) -> Any:
         """Instantiate the datacloud-analysis compiled graph with dynamic context."""
         return create_agent(
-            model=self.model_name,  # create_agent 内部会自动加 openai: 前缀
+            model=self.model_name,  # create_agent 鍐呴儴浼氳嚜鍔ㄥ姞 openai: 鍓嶇紑
             api_key=self.api_key,
             base_url=self.base_url,
             prompts_overwrite=prompts_dict,
@@ -250,20 +349,20 @@ class DataCloudWorker(GatewayWorker):
         return skills
 
     async def start_heartbeat(self) -> None:
-        """Worker 启动后拦截."""
+        """Worker 鍚姩鍚庢嫤鎴?"""
         await super().start_heartbeat()
 
         init_plugin = self.plugin_registry.get_plugin("datacloud_init_agent_conf")
         loaded_agent_ids = getattr(init_plugin, "loaded_agent_ids", []) if init_plugin else []
         if not loaded_agent_ids:
-            raise RuntimeError("启动失败：未加载到任何数字员工配置")
+            raise RuntimeError("启动失败：未加载到任何数字员工配置。")
         logger.info(
             "Init plugin loaded digital employees: count=%d ids=%s",
             len(loaded_agent_ids),
             loaded_agent_ids,
         )
 
-        # 初始化 SDK 环境 (PG 数据库建表, Checkpoint, Memory 等)
+        # 鍒濆鍖?SDK 鐜 (PG 鏁版嵁搴撳缓琛? Checkpoint, Memory 绛?
         from datacloud_analysis import bootstrap
 
         await bootstrap.setup()
@@ -271,7 +370,7 @@ class DataCloudWorker(GatewayWorker):
         logger.info("DataCloudWorker: SDK framework bootstrapped.")
 
     def get_capabilities(self) -> list[str]:
-        """向 gateway 注册本 worker 的能力标签。"""
+        """Capabilities registered by this worker."""
         return [os.environ.get("DATACLOUD_GATEWAY_WORKER_ID", "datacloud")]
 
     async def _emit_6001(self, context: AgentContext, payload: dict[str, Any]) -> None:
@@ -285,7 +384,7 @@ class DataCloudWorker(GatewayWorker):
         )
 
     # ------------------------------------------------------------------
-    # 核心消息处理
+    # 鏍稿績娑堟伅澶勭悊
     # ------------------------------------------------------------------
 
     async def process_command(self, command: GatewayCommand, context: AgentContext) -> dict:
@@ -296,8 +395,8 @@ class DataCloudWorker(GatewayWorker):
         - ResumeCommand:   resumes a suspended graph via Command(resume=...).
 
         Returns:
-            {"status": "done"}    — normal completion, flush_to_history called.
-            {"status": "waiting"} — graph interrupted, ask_user emitted, no flush.
+            {"status": "done"}    鈥?normal completion, flush_to_history called.
+            {"status": "waiting"} 鈥?graph interrupted, ask_user emitted, no flush.
         """
         logger.info(
             "DataCloudWorker.process_command: session=%s command=%s",
@@ -305,7 +404,7 @@ class DataCloudWorker(GatewayWorker):
             type(command).__name__,
         )
 
-        # ① 同步 Worker 构造参数 → os.environ，确保图内节点 os.getenv 拿到正确值
+        # 鈶?鍚屾 Worker 鏋勯€犲弬鏁?鈫?os.environ锛岀‘淇濆浘鍐呰妭鐐?os.getenv 鎷垮埌姝ｇ‘鍊?
         if self.api_key:
             os.environ["OPENAI_API_KEY"] = self.api_key
         if self.base_url:
@@ -313,7 +412,7 @@ class DataCloudWorker(GatewayWorker):
         if self.model_name:
             os.environ["DATACLOUD_LLM_REASONING_MODEL"] = self.model_name
 
-        # 提取 payload / header metadata 信息（Resume 可能只在 metadata 里带 agent_id/conf_hash）
+        # 鎻愬彇 payload / header metadata 淇℃伅锛圧esume 鍙兘鍙湪 metadata 閲屽甫 agent_id/conf_hash锛?
         extra_payload = getattr(command, "extra_payload", {}) or {}
         header_metadata = getattr(getattr(command, "header", None), "metadata", None) or {}
         by_agent_id = extra_payload.get("agent_id") or header_metadata.get("agent_id")
@@ -348,13 +447,13 @@ class DataCloudWorker(GatewayWorker):
                 self._resume_result_cache.move_to_end(resume_cache_key)
                 return dict(cached)
 
-        # 获取当前挂载的 Workspace
+        # 鑾峰彇褰撳墠鎸傝浇鐨?Workspace
         from by_framework.worker.sandbox.hook_sandbox import active_workspace  # noqa: PLC0415
 
         workspace_dir = active_workspace.get()
         logger.info("Active workspace for task: %s", workspace_dir)
 
-        # ② ext_params 短路：仅 AskAgentCommand 路径执行，Resume 不做此检查
+        # 鈶?ext_params 鐭矾锛氫粎 AskAgentCommand 璺緞鎵ц锛孯esume 涓嶅仛姝ゆ鏌?
         if isinstance(command, AskAgentCommand) and isinstance(ext_params, dict):
             handled, payload = await self.command_plugin_manager.handle_ext_command(
                 ext_params=ext_params,
@@ -367,14 +466,14 @@ class DataCloudWorker(GatewayWorker):
                     await self._emit_6001(context, payload)
                 if not bool(ext_params.get("silent")):
                     await context.emit_chunk(
-                        StreamChunkEvent(content="回答完成"),
+                        StreamChunkEvent(content="鍥炵瓟瀹屾垚"),
                         event_type=EventType.APP_STREAM_RESPONSE.value,
                         content_type=SseMessageType.text.value,
                     )
                     await context.flush_to_history()
                 return {"status": "done"}
 
-        # Ask 路径轻量闲聊短路：命中后直接回复，不进入 LangGraph。
+        # Ask 璺緞杞婚噺闂茶亰鐭矾锛氬懡涓悗鐩存帴鍥炲锛屼笉杩涘叆 LangGraph銆?
         if isinstance(command, AskAgentCommand):
             user_text = _latest_user_text_from_content(command.content)
             if _is_light_chitchat(user_text):
@@ -387,14 +486,14 @@ class DataCloudWorker(GatewayWorker):
                     content_type=SseMessageType.text.value,
                 )
                 await context.emit_chunk(
-                    StreamChunkEvent(content="回答完成"),
+                    StreamChunkEvent(content="鍥炵瓟瀹屾垚"),
                     event_type=EventType.APP_STREAM_RESPONSE.value,
                     content_type=SseMessageType.text.value,
                 )
                 await context.flush_to_history()
                 return {"status": "done"}
 
-        # ③ 查找 Agent 配置，构建图缓存键
+        # 鈶?鏌ユ壘 Agent 閰嶇疆锛屾瀯寤哄浘缂撳瓨閿?
         agent_configs = context.list_agent_configs()
         config_for_this_call = next(
             (cfg for cfg in agent_configs if str(cfg.agent_id) == str(by_agent_id)),
@@ -435,7 +534,7 @@ class DataCloudWorker(GatewayWorker):
             len(skill_tools),
         )
 
-        # 版本化缓存：配置变化时自动重建图
+        # 鐗堟湰鍖栫紦瀛橈細閰嶇疆鍙樺寲鏃惰嚜鍔ㄩ噸寤哄浘
         conf_payload = json.dumps(
             {"prompts": prompts_dict, "tool_keys": sorted(merged_tools.keys())},
             ensure_ascii=False,
@@ -472,27 +571,27 @@ class DataCloudWorker(GatewayWorker):
         else:
             self.graphs.move_to_end(cache_key)
 
-        # ④ 设置 LangGraph config（thread_id 用于 checkpoint，gateway_context 不进 state 避免序列化失败）
+        # 鈶?璁剧疆 LangGraph config锛坱hread_id 鐢ㄤ簬 checkpoint锛実ateway_context 涓嶈繘 state 閬垮厤搴忓垪鍖栧け璐ワ級
         config = {
             "configurable": {
                 "thread_id": context.session_id,
-                "gateway_context": context,  # Bug 6 fix: AgentContext 放 config 而非 state
+                "gateway_context": context,  # Bug 6 fix: AgentContext 鏀?config 鑰岄潪 state
             }
         }
 
-        # ⑤ 发送"开始推理"通知
+        # 初始提示：先发阶段标题，再发阶段说明文本。
         await context.emit_chunk(
-            StreamChunkEvent(content="思考中..."),
+            StreamChunkEvent(content=_NODE_PHASE_TITLE["knowledge_enhance"]),
             event_type=EventType.REASONING_LOG_START.value,
             content_type=SseReasonMessageType.think_title.value,
         )
         await context.emit_chunk(
-            StreamChunkEvent(content="已接收到用户消息，开始处理"),
+            StreamChunkEvent(content="已接收到用户消息，开始处理\n\n"),
             event_type=EventType.REASONING_LOG_START.value,
             content_type=SseReasonMessageType.think_text.value,
         )
 
-        # ⑥ 根据命令类型构建图输入
+        # 鈶?鏍规嵁鍛戒护绫诲瀷鏋勫缓鍥捐緭鍏?
         if isinstance(command, ResumeCommand):
             try:
                 resume_payload_json = json.dumps(
@@ -508,8 +607,8 @@ class DataCloudWorker(GatewayWorker):
                 getattr(command.header, "trace_id", ""),
                 resume_payload_json,
             )
-            # Resume 路径：用 Command(resume=...) 续跑，禁止重建 state
-            # reply_data 允许空字符串/空对象，只有 None 时才回落到 content
+            # Resume 璺緞锛氱敤 Command(resume=...) 缁窇锛岀姝㈤噸寤?state
+            # reply_data 鍏佽绌哄瓧绗︿覆/绌哄璞★紝鍙湁 None 鏃舵墠鍥炶惤鍒?content
             resume_value = command.reply_data if command.reply_data is not None else command.content
             if isinstance(resume_value, str):
                 resume_preview = resume_value[:500]
@@ -525,11 +624,11 @@ class DataCloudWorker(GatewayWorker):
             )
             graph_input: Any = Command(resume=resume_value)
         else:
-            # Ask 路径：归一化消息，构建完整初始 state
+            # Ask 璺緞锛氬綊涓€鍖栨秷鎭紝鏋勫缓瀹屾暣鍒濆 state
             input_messages = _normalize_messages(command.content)
-            # prompts_overwrite / dynamic_tools 不得放入 checkpoint 状态：工具对象内含
-            # Python callable，LangGraph PG serde 会报「not msgpack serializable: function」。
-            # 二者由 build_analysis_graph(..., prompts_overwrite=, tools=) 闭包注入各节点。
+            # prompts_overwrite / dynamic_tools 涓嶅緱鏀惧叆 checkpoint 鐘舵€侊細宸ュ叿瀵硅薄鍐呭惈
+            # Python callable锛孡angGraph PG serde 浼氭姤銆宯ot msgpack serializable: function銆嶃€?
+            # 浜岃€呯敱 build_analysis_graph(..., prompts_overwrite=, tools=) 闂寘娉ㄥ叆鍚勮妭鐐广€?
             graph_input = {
                 "messages": input_messages,
                 "agent_id": by_agent_id,
@@ -568,9 +667,9 @@ class DataCloudWorker(GatewayWorker):
                 "session_alias_map": {},
             }
 
-        # Resume：把网关 header.metadata 里的 checkpoint 写入 LangGraph configurable。
-        # 若不传 checkpoint_id，PG checkpointer 会按 thread 取「最新」快照；该快照往往已越过
-        # interrupt 点，Command(resume=...) 无法接到挂起任务，表现为 astream_events 极少、秒结束。
+        # Resume锛氭妸缃戝叧 header.metadata 閲岀殑 checkpoint 鍐欏叆 LangGraph configurable銆?
+        # 鑻ヤ笉浼?checkpoint_id锛孭G checkpointer 浼氭寜 thread 鍙栥€屾渶鏂般€嶅揩鐓э紱璇ュ揩鐓у線寰€宸茶秺杩?
+        # interrupt 鐐癸紝Command(resume=...) 鏃犳硶鎺ュ埌鎸傝捣浠诲姟锛岃〃鐜颁负 astream_events 鏋佸皯銆佺缁撴潫銆?
         if isinstance(command, ResumeCommand):
             md = header_metadata
             ckpt_id = md.get("checkpoint_id")
@@ -583,7 +682,7 @@ class DataCloudWorker(GatewayWorker):
                 config["configurable"].get("checkpoint_ns", ""),
             )
 
-        # ⑦ 流式驱动图，处理 GraphInterrupt
+        # 鈶?娴佸紡椹卞姩鍥撅紝澶勭悊 GraphInterrupt
         resume_inflight_owner = False
         resume_inflight_future: asyncio.Future[dict[str, Any]] | None = None
         if isinstance(command, ResumeCommand) and resume_cache_key:
@@ -604,7 +703,7 @@ class DataCloudWorker(GatewayWorker):
 
         try:
             logger.info(
-                "⑦ _stream_graph invoke session=%s input_is_command_resume=%s",
+                "鈶?_stream_graph invoke session=%s input_is_command_resume=%s",
                 context.session_id,
                 isinstance(graph_input, Command),
             )
@@ -647,171 +746,215 @@ class DataCloudWorker(GatewayWorker):
         by_agent_id: str,
         conf_hash: str,
     ) -> dict:
-        """Drive the graph via astream_events, then check for interrupt via aget_state.
-
-        LangGraph's root-graph suppresses GraphInterrupt internally — it never propagates
-        through astream_events.  The correct detection pattern is to call aget_state()
-        after the stream ends and inspect snapshot.interrupts.
-
-        Returns:
-            {"status": "done"}    — normal completion.
-            {"status": "waiting"} — graph interrupted, ask_user already emitted.
-        """
+        """Drive the graph stream and handle interrupt/done branches."""
         is_agent_delegate = False
         stream_event_count = 0
-        logger.info(
-            "_stream_graph: astream_events begin session=%s conf_hash=%s",
-            context.session_id,
-            conf_hash,
-        )
-        async for event in target_graph.astream_events(graph_input, config=config, version="v2"):
-            stream_event_count += 1
-            await context.check_cancelled()
-            kind: str = event["event"]
-
-            if kind == "on_chain_end" and event.get("name") == "agent_delegate":
-                is_agent_delegate = True
-            elif kind == "on_tool_start":
-                tool_name: str = event.get("name", "unknown_tool")
-                await context.emit_chunk(
-                    StreamChunkEvent(content=f"调用工具: {tool_name}"),
-                    event_type=EventType.TASK_CREATE.value,
-                    content_type=SseReasonMessageType.task_title.value,
-                )
-            elif kind == "on_tool_end":
-                tool_name = event.get("name", "unknown_tool")
-                await context.emit_chunk(
-                    StreamChunkEvent(content=f"工具完成: {tool_name}"),
-                    event_type=EventType.STEP_COMPLETE.value,
-                    content_type=SseReasonMessageType.task_finished.value,
-                )
-            # on_chat_model_stream: insight_node 自己通过 context.emit_chunk 推送，worker 不重复转发
-
-        logger.info(
-            "_stream_graph: astream_events end session=%s event_count=%d",
-            context.session_id,
-            stream_event_count,
+        phase_emitted: set[str] = set()
+        if not isinstance(graph_input, Command):
+            phase_emitted.add(_NODE_PHASE_TITLE["knowledge_enhance"])
+        last_emit_time_ref: list[float] = [_now_monotonic()]
+        heartbeat_stop = asyncio.Event()
+        heartbeat_task = asyncio.create_task(
+            _heartbeat_loop(context, heartbeat_stop, last_emit_time_ref)
         )
 
-        # GraphInterrupt 被 root 抑制时，流结束后用 aget_state 看 snapshot.interrupts。
-        # 若 create_agent 在未 bootstrap 时退化为无 checkpointer 编译，aget_state 会抛
-        # ValueError("No checkpointer set") — 必须先判断。
-        if _compiled_graph_has_checkpointer(target_graph):
-            snapshot = await target_graph.aget_state(config)
-        else:
-            global _no_checkpointer_logged
-            if not _no_checkpointer_logged:
-                logger.warning(
-                    "Graph has no checkpointer: aget_state skipped, HITL/resume disabled. "
-                    "Ensure bootstrap.setup() finished before the first create_agent(), "
-                    "or clear graph cache if bootstrap order was wrong."
-                )
-                _no_checkpointer_logged = True
-            snapshot = None
+        async def _emit(
+            *,
+            content: str,
+            event_type: str,
+            content_type: str,
+            metadata: dict[str, Any] | None = None,
+        ) -> None:
+            await context.emit_chunk(
+                StreamChunkEvent(content=content, metadata=metadata),
+                event_type=event_type,
+                content_type=content_type,
+            )
+            _touch_emit_time(last_emit_time_ref)
 
-        ckpt_after = (
-            snapshot.config.get("configurable", {}).get("checkpoint_id", "")
-            if snapshot is not None
-            else ""
-        )
-        logger.info(
-            "_stream_graph: after aget_state session=%s snapshot_present=%s "
-            "has_interrupts=%s checkpoint_id=%s",
-            context.session_id,
-            snapshot is not None,
-            bool(snapshot.interrupts) if snapshot is not None else False,
-            ckpt_after,
-        )
+        try:
+            logger.info(
+                "_stream_graph: astream_events begin session=%s conf_hash=%s",
+                context.session_id,
+                conf_hash,
+            )
+            async for event in target_graph.astream_events(graph_input, config=config, version="v2"):
+                stream_event_count += 1
+                await context.check_cancelled()
+                kind: str = str(event["event"])
 
-        if snapshot is not None and snapshot.interrupts:
-            # Bug 1 fix: interrupt() 的值在 snapshot.interrupts[0].value，而非 exc.args
-            first = snapshot.interrupts[0]
-            interrupt_value = first.value
-            interrupt_reason = "unknown_interrupt"
-            if isinstance(interrupt_value, dict):
-                prompt = interrupt_value.get("prompt", str(interrupt_value))
-                interrupt_reason = str(
-                    interrupt_value.get("reason_code")
-                    or interrupt_value.get("interrupt_reason")
-                    or "interrupt"
-                )
+                if kind == "on_chain_start":
+                    node_name = str(event.get("name") or "")
+                    phase_title = _NODE_PHASE_TITLE.get(node_name)
+                    if phase_title and phase_title not in phase_emitted:
+                        phase_emitted.add(phase_title)
+                        await _emit(
+                            content=phase_title,
+                            event_type=EventType.REASONING_LOG_START.value,
+                            content_type=SseReasonMessageType.think_title.value,
+                        )
+
+                elif kind == "on_chat_model_end":
+                    node_name = str((event.get("metadata") or {}).get("langgraph_node") or "")
+                    if node_name == "planning" and _PLANNING_PHASE_TITLE not in phase_emitted:
+                        phase_emitted.add(_PLANNING_PHASE_TITLE)
+                        await _emit(
+                            content=_PLANNING_PHASE_TITLE,
+                            event_type=EventType.REASONING_LOG_START.value,
+                            content_type=SseReasonMessageType.think_title.value,
+                        )
+
+                elif kind == "on_chain_end" and event.get("name") == "agent_delegate":
+                    is_agent_delegate = True
+
+                elif kind == "on_tool_start":
+                    tool_name = str(event.get("name") or "unknown_tool")
+                    tool_input = (event.get("data") or {}).get("input", {})
+                    start_desc, _ = _tool_display(tool_name)
+                    detail = _extract_tool_detail(tool_name, tool_input)
+                    display_text = f"{start_desc}：{detail}" if detail else start_desc
+                    await _emit(
+                        content=display_text,
+                        event_type=EventType.TASK_CREATE.value,
+                        content_type=SseReasonMessageType.task_title.value,
+                    )
+
+                elif kind == "on_tool_end":
+                    tool_name = str(event.get("name") or "unknown_tool")
+                    _, end_desc = _tool_display(tool_name)
+                    if end_desc:
+                        await _emit(
+                            content=end_desc,
+                            event_type=EventType.STEP_COMPLETE.value,
+                            content_type=SseReasonMessageType.task_finished.value,
+                        )
+
+                elif kind == "on_chat_model_start":
+                    metadata = event.get("metadata") or {}
+                    node_name = str(metadata.get("langgraph_node") or "").strip()
+                    desc = _NODE_THINKING_DESC.get(node_name, _DEFAULT_THINKING_DESC)
+                    await _emit(
+                        content=desc,
+                        event_type=EventType.REASONING_LOG_START.value,
+                        content_type=SseReasonMessageType.think_text.value,
+                    )
+
+            logger.info(
+                "_stream_graph: astream_events end session=%s event_count=%d",
+                context.session_id,
+                stream_event_count,
+            )
+
+            if _compiled_graph_has_checkpointer(target_graph):
+                snapshot = await target_graph.aget_state(config)
             else:
-                prompt = str(interrupt_value) if interrupt_value else "请补充您的回答"
-                if prompt:
-                    interrupt_reason = "prompt_interrupt"
+                global _no_checkpointer_logged
+                if not _no_checkpointer_logged:
+                    logger.warning(
+                        "Graph has no checkpointer: aget_state skipped, HITL/resume disabled. "
+                        "Ensure bootstrap.setup() finished before the first create_agent(), "
+                        "or clear graph cache if bootstrap order was wrong."
+                    )
+                    _no_checkpointer_logged = True
+                snapshot = None
 
-            checkpoint_id = snapshot.config.get("configurable", {}).get("checkpoint_id", "")
-            # Bug 5 fix: 补充 checkpoint_ns（子图场景必填）
-            checkpoint_ns = snapshot.config.get("configurable", {}).get("checkpoint_ns", "")
-            snapshot_values = snapshot.values if isinstance(snapshot.values, dict) else {}
-            todo_active_id = str(snapshot_values.get("todo_active_id") or "")
-            active_tools = snapshot_values.get("active_tools")
-            pending_capability = ""
-            if isinstance(active_tools, list) and active_tools:
-                pending_capability = str(active_tools[0] or "")
-            if not pending_capability:
-                pending_capability = str(snapshot_values.get("target_tool") or "")
-
-            logger.info(
-                "Graph interrupted: session=%s checkpoint_id=%s prompt=%r",
-                context.session_id,
-                checkpoint_id,
-                prompt,
+            ckpt_after = (
+                snapshot.config.get("configurable", {}).get("checkpoint_id", "")
+                if snapshot is not None
+                else ""
             )
-            await context.ask_user(
-                AskUserEvent(
-                    prompt=prompt,
-                    metadata={
-                        "thread_id": config["configurable"]["thread_id"],
-                        "checkpoint_id": checkpoint_id,
-                        "checkpoint_ns": checkpoint_ns,
-                        "agent_id": by_agent_id,
-                        "conf_hash": conf_hash,
-                        "todo_active_id": todo_active_id,
-                        "react_step_id": todo_active_id,
-                        "pending_capability": pending_capability,
-                        "interrupt_reason": interrupt_reason,
-                    },
+            logger.info(
+                "_stream_graph: after aget_state session=%s snapshot_present=%s "
+                "has_interrupts=%s checkpoint_id=%s",
+                context.session_id,
+                snapshot is not None,
+                bool(snapshot.interrupts) if snapshot is not None else False,
+                ckpt_after,
+            )
+
+            if snapshot is not None and snapshot.interrupts:
+                first = snapshot.interrupts[0]
+                interrupt_value = first.value
+                interrupt_reason = "unknown_interrupt"
+                if isinstance(interrupt_value, dict):
+                    prompt = interrupt_value.get("prompt", str(interrupt_value))
+                    interrupt_reason = str(
+                        interrupt_value.get("reason_code")
+                        or interrupt_value.get("interrupt_reason")
+                        or "interrupt"
+                    )
+                else:
+                    prompt = str(interrupt_value) if interrupt_value else "请补充您的回答。"
+                    if prompt:
+                        interrupt_reason = "prompt_interrupt"
+
+                checkpoint_id = snapshot.config.get("configurable", {}).get("checkpoint_id", "")
+                checkpoint_ns = snapshot.config.get("configurable", {}).get("checkpoint_ns", "")
+                snapshot_values = snapshot.values if isinstance(snapshot.values, dict) else {}
+                todo_active_id = str(snapshot_values.get("todo_active_id") or "")
+                active_tools = snapshot_values.get("active_tools")
+                pending_capability = ""
+                if isinstance(active_tools, list) and active_tools:
+                    pending_capability = str(active_tools[0] or "")
+                if not pending_capability:
+                    pending_capability = str(snapshot_values.get("target_tool") or "")
+
+                logger.info(
+                    "Graph interrupted: session=%s checkpoint_id=%s prompt=%r",
+                    context.session_id,
+                    checkpoint_id,
+                    prompt,
                 )
-            )
-            # 补充结束的标志
-            await context.emit_chunk(
-                StreamChunkEvent(
+                await context.ask_user(
+                    AskUserEvent(
+                        prompt=prompt,
+                        metadata={
+                            "thread_id": config["configurable"]["thread_id"],
+                            "checkpoint_id": checkpoint_id,
+                            "checkpoint_ns": checkpoint_ns,
+                            "agent_id": by_agent_id,
+                            "conf_hash": conf_hash,
+                            "todo_active_id": todo_active_id,
+                            "react_step_id": todo_active_id,
+                            "pending_capability": pending_capability,
+                            "interrupt_reason": interrupt_reason,
+                        },
+                    )
+                )
+                await _emit(
                     content="回答完成",
+                    event_type=EventType.APP_STREAM_RESPONSE.value,
+                    content_type=SseMessageType.text.value,
                     metadata={"relatedResources": ["推荐问题11"]},
-                ),
-                event_type=EventType.APP_STREAM_RESPONSE.value,
-                content_type=SseMessageType.text.value,
-            )
-            # 不调用 flush_to_history：对话尚未完成
+                )
+                logger.info("_stream_graph: return session=%s status=waiting", context.session_id)
+                return {"status": "waiting"}
+
+            if not is_agent_delegate:
+                await _emit(
+                    content="回答完成",
+                    event_type=EventType.APP_STREAM_RESPONSE.value,
+                    content_type=SseMessageType.text.value,
+                    metadata={"relatedResources": ["推荐问题11"]},
+                )
+
+            await context.flush_to_history()
             logger.info(
-                "_stream_graph: return session=%s status=waiting",
+                "_stream_graph: return session=%s status=done (flush_to_history ok)",
                 context.session_id,
             )
-            return {"status": "waiting"}
-
-        # 正常结束：推送完成通知并写入历史
-        # ⑥ 回答结束通知（agent_delegate 路径已由子Agent自行结束，无需重复通知）
-        if not is_agent_delegate:
-            await context.emit_chunk(
-                StreamChunkEvent(
-                    content="回答完成",
-                    metadata={"relatedResources": ["推荐问题11"]},
-                ),
-                event_type=EventType.APP_STREAM_RESPONSE.value,
-                content_type=SseMessageType.text.value,
-            )
-
-        await context.flush_to_history()
-        logger.info(
-            "_stream_graph: return session=%s status=done (flush_to_history ok)",
-            context.session_id,
-        )
-        return {"status": "done"}
+            return {"status": "done"}
+        finally:
+            heartbeat_stop.set()
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
 
 
 # ------------------------------------------------------------------
-# 私有工具函数
+# 绉佹湁宸ュ叿鍑芥暟
 # ------------------------------------------------------------------
 
 
@@ -821,9 +964,9 @@ def _normalize_messages(
     """Convert gateway command content to a list of LangChain BaseMessage.
 
     Supports:
-        - str → single HumanMessage
-        - list[dict] with 'role'/'content' keys → typed messages
-        - list[str] → list of HumanMessage
+        - str 鈫?single HumanMessage
+        - list[dict] with 'role'/'content' keys 鈫?typed messages
+        - list[str] 鈫?list of HumanMessage
     """
     if isinstance(content, str):
         return [HumanMessage(content=content)]
@@ -870,3 +1013,6 @@ def _is_light_chitchat(text: str) -> bool:
         return True
     # Keep heuristic narrow to avoid hijacking real requests.
     return len(normalized) <= 10 and any(token in normalized for token in _CHITCHAT_TOKENS)
+
+
+
