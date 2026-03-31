@@ -163,7 +163,7 @@ async def test_planning_blocks_unavailable_capability_from_dag_plan(
 
 
 @pytest.mark.asyncio
-async def test_planning_includes_high_confidence_term_hints_in_term_context(
+async def test_planning_preserves_term_hints_from_knowledge_enhance_in_term_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def _fake_intent_node(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
@@ -193,14 +193,6 @@ async def test_planning_includes_high_confidence_term_hints_in_term_context(
                     "confidence": 0.95,
                     "source": "knowledge_match",
                     "semantic_type": "view",
-                },
-                {
-                    "mention": "企业",
-                    "normalized_term": "企业",
-                    "term_id": "T101",
-                    "confidence": 0.2,
-                    "source": "knowledge_match",
-                    "semantic_type": "object",
                 },
             ],
         },
