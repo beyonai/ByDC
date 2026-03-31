@@ -954,11 +954,11 @@ async def insight_node(
             for item in aggregated_data
         ]
         thinking = f"共 {len(aggregated_data)} 个任务已完成：\n" + "\n".join(lines)
-        await context.emit_chunk(
-            StreamChunkEvent(content="数据分析"),
-            event_type=EventType.REASONING_LOG_DELTA.value,
-            content_type=SseReasonMessageType.think_title.value,
-        )
+        # await context.emit_chunk(
+        #     StreamChunkEvent(content="数据分析"),
+        #     event_type=EventType.REASONING_LOG_DELTA.value,
+        #     content_type=SseReasonMessageType.think_title.value,
+        # )
         await context.emit_chunk(
             StreamChunkEvent(content=thinking),
             event_type=EventType.REASONING_LOG_DELTA.value,
