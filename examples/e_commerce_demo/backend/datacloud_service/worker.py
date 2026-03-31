@@ -1,4 +1,4 @@
-﻿"""DataCloud Gateway Worker.
+"""DataCloud Gateway Worker.
 
 灏?datacloud-analysis LangGraph 鎺ュ叆 by_framework锛圙ateway锛墂orker 鍗忚锛?
 - 鏀?AskAgentCommand 娑堟伅
@@ -80,12 +80,12 @@ _ANALYSIS_HINT_TOKENS = {
 }
 
 _NODE_THINKING_DESC: dict[str, str] = {
-    "knowledge_enhance": "正在理解问题并补充上下文...",
-    "planning": "正在生成任务计划...",
-    "execution": "正在执行任务...",
+    "knowledge_enhance": "正在理解问题并补充上下文...\n\n",
+    "planning": "正在生成任务计划...\n\n",
+    "execution": "正在执行任务...\n\n",
     "end": "正在整理结果...",
 }
-_DEFAULT_THINKING_DESC = "正在处理，请稍候..."
+_DEFAULT_THINKING_DESC = "正在处理，请稍候...\n\n"
 
 _NODE_PHASE_TITLE: dict[str, str] = {
     "knowledge_enhance": "问题理解",
@@ -97,10 +97,10 @@ _PLANNING_PHASE_TITLE = "任务生成"
 
 _HEARTBEAT_INTERVAL: float = 3.0
 _HEARTBEAT_MESSAGES: list[str] = [
-    "数据量较大，正在处理中...",
-    "查询较复杂，请耐心等待...",
-    "正在整合多维度数据...",
-    "即将完成，请稍候...",
+    "数据量较大，正在处理中...\n\n",
+    "查询较复杂，请耐心等待...\n\n",
+    "正在整合多维度数据...\n\n",
+    "即将完成，请稍候...\n\n",
 ]
 
 
@@ -579,9 +579,14 @@ class DataCloudWorker(GatewayWorker):
             }
         }
 
-        # 初始提示
+        # 初始提示：先发阶段标题，再发阶段说明文本。
         await context.emit_chunk(
-            StreamChunkEvent(content="已接收到用户消息，开始处理"),
+            StreamChunkEvent(content=_NODE_PHASE_TITLE["knowledge_enhance"]),
+            event_type=EventType.REASONING_LOG_START.value,
+            content_type=SseReasonMessageType.think_title.value,
+        )
+        await context.emit_chunk(
+            StreamChunkEvent(content="已接收到用户消息，开始处理\n\n"),
             event_type=EventType.REASONING_LOG_START.value,
             content_type=SseReasonMessageType.think_text.value,
         )
@@ -745,6 +750,8 @@ class DataCloudWorker(GatewayWorker):
         is_agent_delegate = False
         stream_event_count = 0
         phase_emitted: set[str] = set()
+        if not isinstance(graph_input, Command):
+            phase_emitted.add(_NODE_PHASE_TITLE["knowledge_enhance"])
         last_emit_time_ref: list[float] = [_now_monotonic()]
         heartbeat_stop = asyncio.Event()
         heartbeat_task = asyncio.create_task(
