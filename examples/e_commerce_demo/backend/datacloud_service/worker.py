@@ -80,6 +80,40 @@ _ANALYSIS_HINT_TOKENS = {
 }
 
 
+_TOOL_DISPLAY = {
+    "search_knowledge": ("正在检索业务知识库", "业务知识检索完成"),
+    "recall_memory": ("正在回溯相关经验", "相关经验回溯完成"),
+    "sbx_run_code": ("正在执行数据分析", "数据分析执行完成"),
+    "sbx_read_file": ("正在读取分析文件", "分析文件读取完成"),
+    "sbx_write_file": ("正在保存分析结果", "分析结果保存完成"),
+    "build_skill": ("正在构建分析技能", "分析技能构建完成"),
+    "render_report": ("正在生成分析报告", "分析报告生成完成"),
+    "choose_capability": ("正在规划下一步操作", ""),
+}
+
+
+def _tool_display(tool_name: str) -> tuple[str, str]:
+    """Return (start_desc, end_desc) pair for a given tool name."""
+
+    return _TOOL_DISPLAY.get(tool_name, ("正在处理...", "处理完成"))
+
+
+def _extract_tool_detail(tool_name: str, tool_input: Any) -> str:
+    """Extract user-meaningful detail from tool parameters."""
+
+    if not isinstance(tool_input, dict):
+        return ""
+    if tool_name in {"sbx_read_file", "sbx_write_file"}:
+        path_value = tool_input.get("file_path") or tool_input.get("path") or ""
+        if path_value:
+            return os.path.basename(str(path_value))
+        return ""
+    if tool_name in {"search_knowledge", "recall_memory"}:
+        query_value = str(tool_input.get("query") or "").strip()
+        return query_value[:30]
+    return ""
+
+
 def _compiled_graph_has_checkpointer(graph: Any) -> bool:
     """Return True if LangGraph was compiled with a usable checkpointer.
 
@@ -672,19 +706,25 @@ class DataCloudWorker(GatewayWorker):
             if kind == "on_chain_end" and event.get("name") == "agent_delegate":
                 is_agent_delegate = True
             elif kind == "on_tool_start":
-                tool_name: str = event.get("name", "unknown_tool")
+                tool_name = str(event.get("name") or "unknown_tool")
+                tool_input = (event.get("data") or {}).get("input", {})
+                start_desc, _ = _tool_display(tool_name)
+                detail = _extract_tool_detail(tool_name, tool_input)
+                display_text = f"{start_desc}：{detail}" if detail else start_desc
                 await context.emit_chunk(
-                    StreamChunkEvent(content=f"调用工具: {tool_name}"),
+                    StreamChunkEvent(content=display_text),
                     event_type=EventType.TASK_CREATE.value,
                     content_type=SseReasonMessageType.task_title.value,
                 )
             elif kind == "on_tool_end":
-                tool_name = event.get("name", "unknown_tool")
-                await context.emit_chunk(
-                    StreamChunkEvent(content=f"工具完成: {tool_name}"),
-                    event_type=EventType.STEP_COMPLETE.value,
-                    content_type=SseReasonMessageType.task_finished.value,
-                )
+                tool_name = str(event.get("name") or "unknown_tool")
+                _, end_desc = _tool_display(tool_name)
+                if end_desc:
+                    await context.emit_chunk(
+                        StreamChunkEvent(content=end_desc),
+                        event_type=EventType.STEP_COMPLETE.value,
+                        content_type=SseReasonMessageType.task_finished.value,
+                    )
             # on_chat_model_stream: insight_node 自己通过 context.emit_chunk 推送，worker 不重复转发
 
         logger.info(
