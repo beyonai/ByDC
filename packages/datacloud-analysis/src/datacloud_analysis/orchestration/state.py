@@ -57,6 +57,8 @@ class AgentState(MessagesState):
     results: list[Any]
     final_answer: str | None
     artifact_refs: list[dict[str, Any]] | None
+    execution_summary: dict[str, Any] | None
+    execution_summary_persistence: dict[str, Any] | None
     resume_context: dict[str, Any] | None
 
     # Optional; should not be persisted with callable objects in checkpoint.
