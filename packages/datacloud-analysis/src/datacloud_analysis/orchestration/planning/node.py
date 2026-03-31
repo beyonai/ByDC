@@ -1,4 +1,4 @@
-﻿"""Planning node for the 5-node main pipeline."""
+"""Planning node for the 5-node main pipeline."""
 
 from __future__ import annotations
 
@@ -120,11 +120,11 @@ def _plan_to_todos(
         task_id = str(task.get("id") or f"t{idx}")
         task_type = str(task.get("type") or "")
         status = str(task.get("status") or "pending")
-        is_unavailable = bool(task_type) and not _is_available_capability(task_type, available_tools)
-        required_tools = [task_type] if task_type else []
-        required_capabilities = (
-            [_capability_spec(task_type, available_tools)] if task_type else []
+        is_unavailable = bool(task_type) and not _is_available_capability(
+            task_type, available_tools
         )
+        required_tools = [task_type] if task_type else []
+        required_capabilities = [_capability_spec(task_type, available_tools)] if task_type else []
         blocked_tools = [task_type] if is_unavailable else []
         blocked_capabilities = (
             [_capability_spec(task_type, available_tools)] if is_unavailable and task_type else []
@@ -188,11 +188,50 @@ def _build_todo_md(todos: list[dict[str, Any]]) -> str:
         return "# TODOs\n\n- (empty)\n"
     lines = ["# TODOs", ""]
     for todo in todos:
-        lines.append(f"- [{todo.get('status', 'pending')}] {todo.get('todo_id', '')}: {todo.get('goal', '')}")
+        lines.append(
+            f"- [{todo.get('status', 'pending')}] {todo.get('todo_id', '')}: {todo.get('goal', '')}"
+        )
         lines.append(f"  required_tools: {todo.get('required_tools', [])}")
         lines.append(f"  depends_on: {todo.get('depends_on', [])}")
     lines.append("")
     return "\n".join(lines)
+
+
+def _tool_kind_for_log(name: str, obj: Any) -> str:
+    """Return a short label for logging tool/skill/delegate kind."""
+    if getattr(obj, "_is_agent_delegate", False):
+        return "agent_delegate"
+    if getattr(obj, "_is_skill_capability", False):
+        return "skill"
+    return "tool"
+
+
+def _log_planning_injected_tools(
+    *,
+    state: AgentState,
+    default_tools: dict[str, Any] | None,
+    available_tools: dict[str, Any],
+) -> None:
+    """Log which tool dict planning uses and per-key kind for debugging."""
+    raw_dynamic = state.get("dynamic_tools")
+    if isinstance(raw_dynamic, dict) and raw_dynamic:
+        source = "state.dynamic_tools"
+    else:
+        source = "graph_closure_default_tools"
+    default_keys = sorted((default_tools or {}).keys())
+    state_dyn_keys = sorted(raw_dynamic.keys()) if isinstance(raw_dynamic, dict) else []
+    effective_keys = sorted(available_tools.keys())
+    breakdown = {name: _tool_kind_for_log(name, available_tools[name]) for name in effective_keys}
+    logger.info(
+        "planning_node: tools for planning — source=%s effective_count=%d effective_keys=%s "
+        "state_dynamic_keys=%s default_closure_keys=%s kind_by_key=%s",
+        source,
+        len(effective_keys),
+        effective_keys,
+        state_dyn_keys,
+        default_keys,
+        breakdown,
+    )
 
 
 def _persist_todo_md(workspace_dir: str | None, todo_md: str) -> str | None:
@@ -216,10 +255,7 @@ async def planning_node(
 ) -> dict[str, Any]:
     """Plan todos using resolved planning context + optional DAG decomposition."""
     query_input = str(
-        state.get("intent")
-        or state.get("enriched_query")
-        or state.get("user_query")
-        or ""
+        state.get("intent") or state.get("enriched_query") or state.get("user_query") or ""
     ).strip()
     if not query_input:
         return {"todos": [], "todo_md": "# TODOs\n\n- (empty)\n"}
@@ -237,6 +273,11 @@ async def planning_node(
     raw_tool_params = planning_context.get("tool_params")
     tool_params = raw_tool_params if isinstance(raw_tool_params, dict) else {}
     available_tools = state.get("dynamic_tools") or default_tools or {}
+    _log_planning_injected_tools(
+        state=state,
+        default_tools=default_tools,
+        available_tools=cast(dict[str, Any], available_tools),
+    )
     confirmed_terms = list(planning_context.get("confirmed_terms") or [])
     term_hints = list(planning_context.get("term_hints") or state.get("term_hints") or [])
     term_context = _merge_term_context(
@@ -304,4 +345,3 @@ async def planning_node(
         "todo_md": todo_md,
         "todo_md_path": todo_md_path,
     }
-
