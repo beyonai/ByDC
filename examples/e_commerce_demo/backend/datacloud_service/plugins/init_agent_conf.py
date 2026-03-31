@@ -396,7 +396,7 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             loader.load_from_owl_directory(scene_path)
             loader.configure(
                 plan_generator=LangGraphPlanGenerator(
-                    model=os.environ.get("DATACLOUD_LLM_REASONING_MODEL", "Qwen/Qwen3-235B-A22B"),
+                    model=os.environ.get("DATACLOUD_LLM_CODING_MODEL", "Qwen/Qwen3-235B-A22B"),
                     base_url=os.environ.get("OPENAI_BASE_URL"),
                     api_key=os.environ.get("OPENAI_API_KEY"),
                     temperature=0.0,

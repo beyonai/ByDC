@@ -91,12 +91,6 @@ _NODE_PHASE_TITLE: dict[str, str] = {
 _PLANNING_PHASE_TITLE = "任务生成"
 
 _HEARTBEAT_INTERVAL: float = 3.0
-_HEARTBEAT_MESSAGES: list[str] = [
-    "数据量较大，正在处理中...\n\n",
-    "查询较复杂，请耐心等待...\n\n",
-    "正在整合多维度数据...\n\n",
-    "即将完成，请稍候...\n\n",
-]
 
 
 _TOOL_DISPLAY = {
@@ -146,8 +140,8 @@ async def _heartbeat_loop(
     stop_event: asyncio.Event,
     last_emit_time_ref: list[float],
 ) -> None:
-    """Emit periodic think_text heartbeat when stream is temporarily silent."""
-    idx = 0
+    """Keep a silence watchdog alive without emitting frontend heartbeat text."""
+    _ = context
     try:
         while not stop_event.is_set():
             try:
@@ -159,15 +153,7 @@ async def _heartbeat_loop(
             now = _now_monotonic()
             if now - last_emit_time_ref[0] < _HEARTBEAT_INTERVAL:
                 continue
-
-            msg = _HEARTBEAT_MESSAGES[idx % len(_HEARTBEAT_MESSAGES)]
-            await context.emit_chunk(
-                StreamChunkEvent(content=msg),
-                event_type=EventType.REASONING_LOG_START.value,
-                content_type=SseReasonMessageType.think_text.value,
-            )
             last_emit_time_ref[0] = now
-            idx += 1
     except asyncio.CancelledError:
         raise
     except Exception as exc:  # noqa: BLE001
