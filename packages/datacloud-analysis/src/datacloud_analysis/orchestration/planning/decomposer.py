@@ -1,4 +1,4 @@
-"""Analysis-plan decomposition for planning node (without dag_node dependency)."""
+"""Analysis-plan decomposition for planning node (legacy DAG-free)."""
 
 from __future__ import annotations
 
@@ -326,8 +326,14 @@ async def decompose_analysis_plan(
     )
 
     static_sys = prompts_overwrite.get(
-        "dag_system_prompt",
-        prompts_overwrite.get("dag_prompt", _PLANNER_STATIC_SYSTEM),
+        "planning_system_prompt",
+        prompts_overwrite.get(
+            "planning_prompt",
+            prompts_overwrite.get(
+                "dag_system_prompt",
+                prompts_overwrite.get("dag_prompt", _PLANNER_STATIC_SYSTEM),
+            ),
+        ),
     )
     dynamic_human = HumanMessage(
         content=(

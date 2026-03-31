@@ -114,7 +114,7 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
                 for agent_id in agent_ids:
                     # 2. 通过 resourceId 请求 /findDetailsById 详情
                     res_detail = await client.post(
-                        f"{self.ai_factory_url}/aiFactoryServer/digitalEmployeeController/findDetailsById",
+                        f"{self.ai_factory_url}/byaiService/digitalEmployeeController/findDetailsById",
                         json={"resourceId": agent_id, "language": "zh-CN"},
                         headers=headers,
                     )
