@@ -314,3 +314,94 @@ async def test_builtin_task_note_tool_roundtrip(
     assert updated_read["status"] == "done"
     assert "# TODOs" in str(read_output["content"])
 
+
+@pytest.mark.asyncio
+async def test_skill_call_emits_structured_audit_log_with_masked_params(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from datacloud_analysis.orchestration import sandbox_executor as se
+
+    monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _NoopHookManager())
+
+    async def _skill_run(**_kwargs: Any) -> dict[str, Any]:
+        return {"rows": [1, 2, 3], "token": "result-secret"}
+
+    _skill_run._is_skill_capability = True  # type: ignore[attr-defined]
+
+    task = {
+        "id": "t_skill",
+        "type": "skill.normalize",
+        "status": "pending",
+        "deps": [],
+        "params": {"api_key": "sk-xxx", "keyword": "beijing"},
+        "description": "run normalize",
+    }
+    state: dict[str, Any] = {
+        "messages": [],
+        "resume_context": {"checkpoint_id": "ckpt-1", "checkpoint_ns": "ns-1"},
+    }
+
+    with caplog.at_level("INFO"):
+        updated_task, output = await execute_next_task(
+            task=task,
+            state=state,
+            gateway_context=None,
+            custom_tools={"skill.normalize": _skill_run},
+        )
+
+    assert updated_task["status"] == "done"
+    assert output["rows"] == [1, 2, 3]
+
+    log_text = "\n".join(record.getMessage() for record in caplog.records)
+    assert "skill_call_audit" in log_text
+    assert "skill.normalize" in log_text
+    assert "ckpt-1" in log_text
+    assert "ns-1" in log_text
+    assert "api_key" in log_text
+    assert "[REDACTED]" in log_text
+    assert "sk-xxx" not in log_text
+
+
+@pytest.mark.asyncio
+async def test_skill_call_failure_still_emits_structured_audit_log(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from datacloud_analysis.orchestration import sandbox_executor as se
+
+    monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _NoopHookManager())
+
+    async def _broken_skill(**_kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError("skill boom")
+
+    _broken_skill._is_skill_capability = True  # type: ignore[attr-defined]
+
+    task = {
+        "id": "t_skill_fail",
+        "type": "skill.broken",
+        "status": "pending",
+        "deps": [],
+        "params": {"password": "123456"},
+        "description": "run broken skill",
+    }
+    state: dict[str, Any] = {"messages": []}
+
+    with caplog.at_level("INFO"):
+        updated_task, output = await execute_next_task(
+            task=task,
+            state=state,
+            gateway_context=None,
+            custom_tools={"skill.broken": _broken_skill},
+        )
+
+    assert updated_task["status"] == "failed"
+    assert output == "skill boom"
+
+    log_text = "\n".join(record.getMessage() for record in caplog.records)
+    assert "skill_call_audit" in log_text
+    assert "skill.broken" in log_text
+    assert "status': 'failed'" in log_text or '"status": "failed"' in log_text
+    assert "[REDACTED]" in log_text
+    assert "123456" not in log_text
+
