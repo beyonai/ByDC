@@ -485,3 +485,66 @@ async def test_execution_semantic_type_prioritizes_query_like_capability_for_obj
     )
     out = await execution_node(state, {"configurable": {}}, default_tools={})
     assert out["active_tools"][0] == "query_tool"
+
+
+@pytest.mark.asyncio
+async def test_execution_semantic_type_prioritizes_action_capability_for_action() -> None:
+    state = cast(
+        AgentState,
+        {
+            "todos": [
+                {
+                    "todo_id": "t1",
+                    "status": "pending",
+                    "required_capabilities": ["query_tool", "operate_action_tool"],
+                    "blocked_capabilities": [],
+                    "term_context": [{"semantic_type": "action"}],
+                }
+            ],
+            "query_mode": "chitchat",
+        },
+    )
+    out = await execution_node(state, {"configurable": {}}, default_tools={})
+    assert out["active_tools"][0] == "operate_action_tool"
+
+
+@pytest.mark.asyncio
+async def test_execution_semantic_type_prioritizes_query_like_capability_for_view() -> None:
+    state = cast(
+        AgentState,
+        {
+            "todos": [
+                {
+                    "todo_id": "t1",
+                    "status": "pending",
+                    "required_capabilities": ["update_action_tool", "enterprise_view_query"],
+                    "blocked_capabilities": [],
+                    "term_context": [{"semantic_type": "view"}],
+                }
+            ],
+            "query_mode": "chitchat",
+        },
+    )
+    out = await execution_node(state, {"configurable": {}}, default_tools={})
+    assert out["active_tools"][0] == "enterprise_view_query"
+
+
+@pytest.mark.asyncio
+async def test_execution_semantic_type_prioritizes_relation_capability_for_relation() -> None:
+    state = cast(
+        AgentState,
+        {
+            "todos": [
+                {
+                    "todo_id": "t1",
+                    "status": "pending",
+                    "required_capabilities": ["enterprise_query_tool", "graph_relation_tool"],
+                    "blocked_capabilities": [],
+                    "term_context": [{"semantic_type": "relation"}],
+                }
+            ],
+            "query_mode": "chitchat",
+        },
+    )
+    out = await execution_node(state, {"configurable": {}}, default_tools={})
+    assert out["active_tools"][0] == "graph_relation_tool"

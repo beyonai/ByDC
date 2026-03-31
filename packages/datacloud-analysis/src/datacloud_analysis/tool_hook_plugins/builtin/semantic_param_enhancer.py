@@ -59,6 +59,9 @@ def before_call_back(ctx: dict[str, Any]) -> dict[str, Any] | None:
         if relation_hint and not str((ctx.get("tool_params") or {}).get("relation_hint") or "").strip():
             patched["relation_hint"] = relation_hint
             notes.append(f"补全relation_hint={relation_hint}")
+        if not str((ctx.get("tool_params") or {}).get("relation_strategy") or "").strip():
+            patched["relation_strategy"] = "resolve_subject_object_first"
+            notes.append("补全relation_strategy=resolve_subject_object_first")
 
     if not patched:
         return None
