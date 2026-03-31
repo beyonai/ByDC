@@ -35,7 +35,7 @@ def create_agent(
     tools: dict[str, Any] | None = None,
 ) -> Any:
     """Create a deep agent for DataCloud, usable with langgraph dev and deep-agents-ui."""
-    
+
     # 语言和环境的日志预警可以保留，这里为了兼容现有 SDK 初始化
     resolved_locale = locale or os.getenv("DATACLOUD_AGENT_LOCALE", "zh_CN")
     supported = get_supported_locales()
@@ -48,6 +48,13 @@ def create_agent(
         resolved_locale = "zh_CN"
 
     logger.info("create_agent: locale=%s (Custom StateGraph)", resolved_locale)
+    logger.info(
+        "create_agent: injecting tools into graph closure (planning_node default_tools / "
+        "execution_node default_tools) count=%d keys=%s prompts_overwrite_keys=%s",
+        len(tools or {}),
+        sorted((tools or {}).keys()),
+        sorted((prompts_overwrite or {}).keys()),
+    )
 
     graph = build_analysis_graph(
         prompts_overwrite=prompts_overwrite,

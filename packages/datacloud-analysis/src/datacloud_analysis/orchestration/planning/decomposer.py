@@ -12,6 +12,11 @@ from by_framework.core.protocol.content_type import SseReasonMessageType
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from datacloud_analysis.orchestration.shared import (
+    resolve_reasoning_api_key,
+    resolve_reasoning_base_url,
+    resolve_reasoning_model_spec,
+)
 from datacloud_analysis.orchestration.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -65,6 +70,22 @@ _PLANNER_STATIC_SYSTEM = """你是一个任务规划专家。请将分析目标�
 - "deps": 依赖的前置任务ID列表
 - "params": 执行所需的参数对象
 """
+
+
+def _trim_log_text(value: str, limit: int = 1200) -> str:
+    """Return a log-safe truncated string."""
+    if len(value) <= limit:
+        return value
+    return f"{value[:limit]}...(truncated)"
+
+
+def _exception_response_text(exc: Exception) -> str:
+    """Extract response text from HTTP/client exceptions when present."""
+    response = getattr(exc, "response", None)
+    if response is None:
+        return ""
+    text = getattr(response, "text", "")
+    return text if isinstance(text, str) else ""
 
 
 def _planning_tools_view(dynamic_tools: dict[str, object]) -> dict[str, object]:
@@ -325,13 +346,19 @@ async def decompose_analysis_plan(
     planning_tools = _planning_tools_view(cast(dict[str, object], dynamic_tools))
     tools_block = _planning_tools_prompt_block(planning_tools)
 
-    model = os.getenv("DATACLOUD_LLM_REASONING_MODEL", "openai:Qwen/Qwen3-235B-A22B")
-    if not model.startswith("openai:"):
-        model = f"openai:{model}"
+    model_spec = resolve_reasoning_model_spec(
+        os.getenv("DATACLOUD_LLM_REASONING_MODEL", "Qwen/Qwen3-235B-A22B")
+    )
+    raw_model = model_spec["raw_model"]
+    model = model_spec["model"]
+    model_provider = model_spec["model_provider"]
+    base_url = resolve_reasoning_base_url()
+    api_key = resolve_reasoning_api_key()
     llm = init_chat_model(
         model=model,
-        api_key=os.getenv("OPENAI_API_KEY") or os.getenv("DATACLOUD_LLM_REASONING_API_KEY"),
-        base_url=os.getenv("OPENAI_BASE_URL") or os.getenv("DATACLOUD_LLM_REASONING_API_BASE"),
+        model_provider=model_provider,
+        api_key=api_key,
+        base_url=base_url,
     )
 
     static_sys = prompts_overwrite.get(
@@ -352,6 +379,33 @@ async def decompose_analysis_plan(
         )
     )
 
+    prompt_source = (
+        "dag_system_prompt"
+        if "dag_system_prompt" in prompts_overwrite
+        else "dag_prompt"
+        if "dag_prompt" in prompts_overwrite
+        else "default"
+    )
+    logger.info(
+        "planning_decomposer llm request: model=%s raw_model=%s base_url=%s api_key_present=%s "
+        "model_provider=%s provider_prefixed=%s prompt_source=%s prompt_keys=%s "
+        "static_sys_len=%d user_msg_len=%d tool_count=%d tools=%s "
+        "intent_preview=%s",
+        model,
+        raw_model,
+        base_url or "",
+        bool(api_key),
+        model_provider,
+        model_spec["provider_prefixed"],
+        prompt_source,
+        sorted(str(key) for key in prompts_overwrite),
+        len(static_sys),
+        len(dynamic_human.content),
+        len(planning_tools),
+        sorted(planning_tools.keys()),
+        _trim_log_text(intent, 200),
+    )
+
     try:
         response = await llm.ainvoke([SystemMessage(content=static_sys), dynamic_human])
         content = cast(str, response.content)
@@ -365,7 +419,26 @@ async def decompose_analysis_plan(
         plan = _normalize_query_params(plan, intent=intent)
         plan = _strip_excluded_tasks_from_plan(plan, _EXCLUDED_PLANNING_TOOLS)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("planning_decomposer: plan generation failed, fallback to single step: %s", exc)
+        response_text = _exception_response_text(exc)
+        logger.warning(
+            "planning_decomposer: plan generation failed, fallback to single step: %s; "
+            "model=%s raw_model=%s model_provider=%s provider_prefixed=%s base_url=%s "
+            "prompt_source=%s prompt_keys=%s static_sys_len=%d user_msg_len=%d "
+            "tool_count=%d tools=%s response_text=%s",
+            exc,
+            model,
+            raw_model,
+            model_provider,
+            model_spec["provider_prefixed"],
+            base_url or "",
+            prompt_source,
+            sorted(str(key) for key in prompts_overwrite),
+            len(static_sys),
+            len(dynamic_human.content),
+            len(planning_tools),
+            sorted(planning_tools.keys()),
+            _trim_log_text(response_text, 2000),
+        )
         plan = []
 
     if not plan and planning_tools:

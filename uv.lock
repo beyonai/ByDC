@@ -329,8 +329,8 @@ wheels = [
 
 [[package]]
 name = "by-framework"
-version = "0.1.5"
-source = { editable = "D:/data/code/baiying/by-framework-python" }
+version = "0.1.6"
+source = { editable = "../by-framework-python" }
 dependencies = [
     { name = "httpx" },
     { name = "redis" },
@@ -796,7 +796,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "by-framework", editable = "D:/data/code/baiying/by-framework-python" },
+    { name = "by-framework", editable = "../by-framework-python" },
     { name = "datacloud-data", extras = ["sql"], editable = "packages/datacloud-data" },
     { name = "datacloud-knowledge", editable = "packages/datacloud-knowledge" },
     { name = "datacloud-memory", editable = "packages/datacloud-memory" },
@@ -1029,7 +1029,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "by-framework", editable = "D:/data/code/baiying/by-framework-python" },
+    { name = "by-framework", editable = "../by-framework-python" },
     { name = "datacloud-analysis", editable = "packages/datacloud-analysis" },
     { name = "langchain-openai", specifier = ">=1.1.11" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
