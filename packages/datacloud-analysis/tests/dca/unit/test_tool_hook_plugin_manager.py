@@ -154,3 +154,35 @@ async def test_builtin_semantic_param_enhancer_patches_tool_params(
     assert params["relation_hint"] == "企业-产业"
     assert updated_ctx["knowledge_snippets"]
     get_tool_hook_plugin_manager.cache_clear()
+
+
+async def test_tool_hook_manager_strict_mode_turns_callback_exception_into_fail_decision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plugin_dir = tmp_path / "tool_plugins"
+    plugin_dir.mkdir(parents=True, exist_ok=True)
+    plugin_file = plugin_dir / "raise_before.py"
+    plugin_file.write_text(
+        "\n".join(
+            [
+                "PRIORITY = 1",
+                "def before_call_back(ctx):",
+                "    raise RuntimeError('boom from plugin')",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("DATACLOUD_TOOL_HOOK_PLUGIN_DIRS", str(plugin_dir))
+    monkeypatch.setenv("DATACLOUD_TOOL_PLUGIN_STRICT", "true")
+    get_tool_hook_plugin_manager.cache_clear()
+    manager = get_tool_hook_plugin_manager()
+    context: HookContext = {"tool_name": "any_tool", "tool_params": {}}
+    _updated_ctx, decision = await manager.run_before(context)
+
+    assert decision is not None
+    assert decision["action"] == "fail"
+    assert decision["result"]["tool_error"]["error_type"] == "RuntimeError"
+    assert "boom from plugin" in decision["result"]["tool_error"]["message"]
+    assert decision["audit"]["plugin_id"]
+    get_tool_hook_plugin_manager.cache_clear()
