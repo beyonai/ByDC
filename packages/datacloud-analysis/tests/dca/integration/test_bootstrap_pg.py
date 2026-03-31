@@ -13,8 +13,17 @@ import os
 
 import pytest
 
+_PG_CHECKPOINT_URI = os.environ.get("DATACLOUD_PG_CHECKPOINT_URI", "").strip()
 
-@pytest.mark.integration
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not _PG_CHECKPOINT_URI,
+        reason="DATACLOUD_PG_CHECKPOINT_URI is required for integration bootstrap tests",
+    ),
+]
+
+
 @pytest.mark.asyncio
 async def test_setup_creates_tables(initialized_sdk: None) -> None:
     """After bootstrap.setup(), the checkpoint tables must exist."""
@@ -30,7 +39,6 @@ async def test_setup_creates_tables(initialized_sdk: None) -> None:
     assert row is not None, "Table 'checkpoints' should have been created by setup()."
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_setup_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
     """Calling bootstrap.setup() a second time must be a no-op (no errors)."""
