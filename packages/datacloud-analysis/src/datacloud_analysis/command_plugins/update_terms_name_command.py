@@ -3,9 +3,22 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any
+from collections.abc import Callable
 
-from datacloud_knowledge.intent import ScoreUpdateRecord, batch_update_scores_with_session
+try:
+    from datacloud_knowledge.intent import ScoreUpdateRecord
+    from datacloud_knowledge.intent import batch_update_scores_with_session
+except ModuleNotFoundError:
+    @dataclass(frozen=True)
+    class ScoreUpdateRecord:
+        """Fallback record type used when datacloud_knowledge is unavailable."""
+
+        name_id: str
+        success: bool
+
+    batch_update_scores_with_session: Callable[[tuple[ScoreUpdateRecord, ...]], None] | None = None
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +50,17 @@ def handle_update_terms_name_command(  # noqa: PLR0911
         if isinstance(record, dict) and str(record.get("name_id", "")).strip()
     )
 
+    updater = batch_update_scores_with_session
+    if updater is None:
+        message = "datacloud_knowledge is unavailable"
+        logger.warning("updateTermsName ignored: %s", message)
+        if silent:
+            return True, None
+        return True, {"code": 1, "message": message, "data": {"updated": 0}}
+
     try:
         if records:
-            batch_update_scores_with_session(records)
+            updater(records)
     except Exception as exc:  # noqa: BLE001
         logger.warning("updateTermsName failed: %s", exc)
         if silent:
@@ -49,4 +70,3 @@ def handle_update_terms_name_command(  # noqa: PLR0911
     if silent:
         return True, None
     return True, {"code": 0, "message": "success", "data": {"updated": len(records)}}
-
