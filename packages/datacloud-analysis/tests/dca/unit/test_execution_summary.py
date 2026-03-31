@@ -1,6 +1,6 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
-from datacloud_analysis.orchestration.execution_summary import (
+from datacloud_analysis.orchestration.end.execution_summary import (
     build_execution_summary,
     load_latest_summary_by_session,
     persist_execution_summary,
@@ -52,3 +52,4 @@ def test_execution_summary_persist_skips_when_session_dir_unresolved() -> None:
         workspace_root=None,
     )
     assert persisted["status"] == "skipped"
+

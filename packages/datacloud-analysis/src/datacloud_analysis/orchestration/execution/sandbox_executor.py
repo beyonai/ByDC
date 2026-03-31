@@ -27,7 +27,7 @@ from typing import Any, cast
 import anyio
 from langgraph.types import interrupt
 
-from datacloud_analysis.orchestration.query_shape_utils import count_rows_like_envelope_build
+from datacloud_analysis.orchestration.shared.query_shape_utils import count_rows_like_envelope_build
 from datacloud_analysis.tool_hook_plugins import get_tool_hook_plugin_manager
 from datacloud_analysis.tool_hook_plugins.types import (
     HookContext,
@@ -866,6 +866,7 @@ def _resolve_input_files(dep_ids: list[str], state: Mapping[str, Any]) -> dict[s
         logger.warning("_resolve_input_files: could not resolve file paths for deps: %s", missing)
 
     return input_files
+
 
 
 

@@ -1,16 +1,16 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any, cast
 
 import pytest
 
-from datacloud_analysis.orchestration.execution_summary import (
+from datacloud_analysis.orchestration.end.execution_summary import (
     build_execution_summary,
     execution_summary_from_json,
     execution_summary_to_json,
 )
 from datacloud_analysis.orchestration.state import AgentState
-from datacloud_analysis.orchestration.summary_persistence import get_execution_summary_store
+from datacloud_analysis.orchestration.end.summary_persistence import get_execution_summary_store
 
 
 class _FakeGatewayContext:
@@ -122,4 +122,5 @@ async def test_default_execution_summary_store_is_noop() -> None:
     )
     assert ref["status"] == "skipped"
     assert ref["storage"] == "noop"
+
 

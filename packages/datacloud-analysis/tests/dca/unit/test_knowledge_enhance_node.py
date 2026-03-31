@@ -1,11 +1,11 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any, cast
 
 import pytest
 from langchain_core.messages import HumanMessage
 
-from datacloud_analysis.orchestration import knowledge_enhance as ke_module
+from datacloud_analysis.orchestration.knowledge_enhance import node as ke_module
 from datacloud_analysis.orchestration.knowledge_enhance import knowledge_enhance_node
 from datacloud_analysis.orchestration.state import AgentState
 
@@ -58,3 +58,4 @@ async def test_knowledge_enhance_fallbacks_when_knowledge_search_failed(
     assert out["enriched_query"] == "query yesterday sales"
     assert out["enriched_query_source"] == "fallback_user_query"
     assert out["enriched_query_confidence"] == pytest.approx(0.0)
+

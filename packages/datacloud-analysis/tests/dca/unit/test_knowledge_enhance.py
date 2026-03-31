@@ -6,7 +6,7 @@ from typing import Any, cast
 import pytest
 from langchain_core.messages import HumanMessage
 
-from datacloud_analysis.orchestration import knowledge_enhance as knowledge_enhance_module
+from datacloud_analysis.orchestration.knowledge_enhance import node as knowledge_enhance_module
 from datacloud_analysis.orchestration.knowledge_enhance import knowledge_enhance_node
 from datacloud_analysis.orchestration.state import AgentState
 

@@ -1,11 +1,11 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
 
-from datacloud_analysis.orchestration import planning as planning_module
+from datacloud_analysis.orchestration.planning import node as planning_module
 from datacloud_analysis.orchestration.planning import planning_node
 from datacloud_analysis.orchestration.state import AgentState
 
@@ -279,3 +279,4 @@ async def test_planning_compat_fallback_can_be_disabled(
 
     assert out["planning_context_source"] == "state"
     assert out["todos"][0]["required_tools"] == ["chat-response-tool"]
+
