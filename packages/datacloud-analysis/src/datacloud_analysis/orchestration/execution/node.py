@@ -541,6 +541,45 @@ async def _store_result_entry(
     return {"task_id": todo_id, "data": payload}
 
 
+async def _read_todo_md(workspace_dir: str | None) -> str | None:
+    """Read ``temp/todo.md`` and silently degrade when unavailable."""
+    if not workspace_dir:
+        return None
+    todo_path = anyio.Path(Path(workspace_dir) / "temp" / "todo.md")
+    try:
+        return await todo_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def _format_observe(output: Any) -> str | None:
+    if output is None:
+        return None
+    if isinstance(output, str):
+        text = output.strip()
+    else:
+        try:
+            text = json.dumps(output, ensure_ascii=False, default=str)
+        except (TypeError, ValueError):
+            text = str(output)
+    text = text.strip()
+    if not text:
+        return None
+    if len(text) > 2000:
+        return text[:2000]
+    return text
+
+
+def _apply_param_overrides(todo: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+    """Apply LLM parameter overrides into todo inputs (shallow merge)."""
+    if not overrides:
+        return todo
+    current_inputs = todo.get("inputs")
+    merged_inputs = dict(current_inputs) if isinstance(current_inputs, dict) else {}
+    merged_inputs.update(overrides)
+    return {**todo, "inputs": merged_inputs}
+
+
 def _task_from_todo(todo: dict[str, Any], capability: str) -> dict[str, Any]:
     todo_id = str(todo.get("todo_id") or "")
     return {
@@ -663,14 +702,34 @@ async def _execute_one_todo(
     remaining_capabilities = list(effective_tools)
     react_round = 0
     max_rounds = _get_react_max_rounds(state)
+    last_output: Any = None
+    workspace_dir = str(state.get("workspace_dir") or "") or None
     while remaining_capabilities and react_round < max_rounds:
         react_round += 1
+        todo_md_summary = await _read_todo_md(workspace_dir)
+        observe_text = _format_observe(last_output)
         selection = await select_react_capability(
-            state=cast(dict[str, Any], state),
+            state=state,
             todo=todo,
             candidates=remaining_capabilities,
             round_index=react_round,
+            todo_md_summary=todo_md_summary,
+            observe=observe_text,
         )
+        param_overrides = selection.get("param_overrides")
+        if isinstance(param_overrides, dict) and param_overrides:
+            todo = _apply_param_overrides(todo, param_overrides)
+            trace.append(
+                {
+                    "stage": "react_round",
+                    "status": "param_overrides_applied",
+                    "detail": {
+                        "todo_id": todo_id,
+                        "round": react_round,
+                        "override_keys": sorted(str(k) for k in param_overrides.keys()),
+                    },
+                }
+            )
         capability = str(selection.get("capability_id") or "").strip()
         if capability not in remaining_capabilities:
             capability = remaining_capabilities[0]
@@ -679,6 +738,7 @@ async def _execute_one_todo(
                 "source": "fallback",
                 "reason": "selector_out_of_candidates",
                 "tool_call_id": None,
+                "param_overrides": {},
             }
         remaining_capabilities = [x for x in remaining_capabilities if x != capability]
         trace.append(
@@ -750,6 +810,7 @@ async def _execute_one_todo(
                 },
             }
         )
+        last_output = output
 
     failed_todo = {
         **todo,
