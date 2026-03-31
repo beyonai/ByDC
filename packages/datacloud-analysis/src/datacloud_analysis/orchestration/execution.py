@@ -123,6 +123,127 @@ def _parse_level3_confirmation(resume_value: Any) -> bool:
     return False
 
 
+def _is_overall_unreachable(
+    todos: list[dict[str, Any]],
+    *,
+    dependency_deadlock: bool = False,
+) -> bool:
+    if dependency_deadlock:
+        return True
+    has_done = any(str(todo.get("status", "")) == "done" for todo in todos)
+    has_pending = any(str(todo.get("status", "")) == "pending" for todo in todos)
+    has_failed = any(str(todo.get("status", "")) == "failed" for todo in todos)
+    return has_failed and not has_pending and not has_done
+
+
+def _has_dependency_deadlock(todos: list[dict[str, Any]]) -> bool:
+    done_ids = {
+        str(todo.get("todo_id", ""))
+        for todo in todos
+        if str(todo.get("status", "pending")) in _TODO_DONE_STATES
+    }
+    pending_todos = [todo for todo in todos if str(todo.get("status", "pending")) == "pending"]
+    if not pending_todos:
+        return False
+    ready = 0
+    for todo in pending_todos:
+        deps = [str(dep) for dep in (todo.get("depends_on") or [])]
+        if all(dep in done_ids for dep in deps):
+            ready += 1
+    return ready == 0
+
+
+def _build_level3_interrupt_payload(
+    *,
+    todo_active_id: str,
+    pending_capability: str,
+    interrupt_reason: str,
+) -> dict[str, Any]:
+    return {
+        "reason_code": "LEVEL3_GLOBAL_REPLAN_CONFIRM",
+        "prompt": "当前任务连续失败或不可达，是否进行整体重规划？回复“继续”或“取消”。",
+        "required_fields": ["confirm"],
+        "resume_payload_schema": {
+            "type": "object",
+            "properties": {"confirm": {"type": "string"}},
+            "required": ["confirm"],
+        },
+        "todo_id": todo_active_id,
+        "todo_active_id": todo_active_id,
+        "react_step_id": todo_active_id,
+        "pending_capability": pending_capability,
+        "interrupt_reason": interrupt_reason,
+    }
+
+
+def _build_level3_result(
+    *,
+    confirmed: bool,
+    state: AgentState,
+    config: RunnableConfig,
+    todos: list[dict[str, Any]],
+    results: list[dict[str, Any]],
+    todo_md: str,
+    todo_md_path: str | None,
+    todo_active_id: str,
+    active_tools: list[str],
+    pending_capability: str,
+    execution_trace: list[dict[str, Any]],
+    invocation_dedup: list[str],
+) -> dict[str, Any]:
+    if confirmed:
+        execution_trace = _append_trace(
+            execution_trace,
+            stage="level3_replan",
+            status="confirmed",
+            detail={"decision": "replan"},
+        )
+        return {
+            "plan": _todo_plan_from_todos(todos),
+            "todos": todos,
+            "results": results,
+            "todo_md": todo_md,
+            "todo_md_path": todo_md_path,
+            "todo_active_id": todo_active_id,
+            "active_tools": active_tools,
+            "execution_status": "replan",
+            "resume_context": _resume_context_after_round(
+                state=state,
+                config=config,
+                todo_active_id=todo_active_id,
+                pending_capability=pending_capability,
+            ),
+            "execution_trace": execution_trace,
+            "invocation_dedup": invocation_dedup,
+        }
+
+    execution_trace = _append_trace(
+        execution_trace,
+        stage="level3_replan",
+        status="cancelled",
+        detail={"decision": "cancel"},
+    )
+    return {
+        "plan": _todo_plan_from_todos(todos),
+        "todos": todos,
+        "results": results,
+        "todo_md": todo_md,
+        "todo_md_path": todo_md_path,
+        "todo_active_id": todo_active_id,
+        "active_tools": active_tools,
+        "execution_status": "done",
+        "final_answer": "已取消整体重规划，请补充更明确的目标后重试。",
+        "resume_context": _resume_context_after_round(
+            state=state,
+            config=config,
+            todo_active_id=todo_active_id,
+            pending_capability=pending_capability,
+        ),
+        "execution_trace": execution_trace,
+        "invocation_dedup": invocation_dedup,
+    }
+
+
 def _pick_active_todo(todos: list[dict[str, Any]]) -> dict[str, Any] | None:
     for todo in todos:
         if str(todo.get("status", "pending")) == "pending":
@@ -784,8 +905,8 @@ async def execution_node(
             "invocation_dedup": invocation_dedup,
         }
 
-    ready_indexes = _pick_ready_todo_indexes(todos)
-    if not ready_indexes:
+    dependency_deadlock = _has_dependency_deadlock(todos)
+    if dependency_deadlock:
         deadlocked = [
             {**todo, "status": "failed"} if str(todo.get("status", "")) == "pending" else todo
             for todo in todos
@@ -796,28 +917,35 @@ async def execution_node(
             todo_md=todo_md,
             existing_path=existing_todo_md_path,
         )
-        return {
-            "todos": deadlocked,
-            "plan": _todo_plan_from_todos(deadlocked),
-            "todo_md": todo_md,
-            "todo_md_path": todo_md_path,
-            "todo_active_id": "",
-            "active_tools": [],
-            "execution_status": "done",
-            "resume_context": _resume_context_after_round(
-                state=state,
-                config=config,
-                todo_active_id="",
-                pending_capability="",
-            ),
-            "execution_trace": _append_trace(
-                execution_trace,
-                stage="execution",
-                status="failed",
-                detail={"reason": "dependency_deadlock"},
-            ),
-            "invocation_dedup": invocation_dedup,
-        }
+        execution_trace = _append_trace(
+            execution_trace,
+            stage="level3_replan",
+            status="interrupt",
+            detail={"reason": "dependency_deadlock"},
+        )
+        resume_value = interrupt(
+            _build_level3_interrupt_payload(
+                todo_active_id=todo_active_id,
+                pending_capability=pending_capability,
+                interrupt_reason="dependency_deadlock",
+            )
+        )
+        return _build_level3_result(
+            confirmed=_parse_level3_confirmation(resume_value),
+            state=state,
+            config=config,
+            todos=deadlocked,
+            results=list(state.get("results") or []),
+            todo_md=todo_md,
+            todo_md_path=todo_md_path,
+            todo_active_id=todo_active_id,
+            active_tools=active_tools,
+            pending_capability=pending_capability,
+            execution_trace=execution_trace,
+            invocation_dedup=invocation_dedup,
+        )
+
+    ready_indexes = _pick_ready_todo_indexes(todos)
 
     ready_todos = [todos[idx] for idx in ready_indexes]
     multi_task = len(todos) > 1
@@ -921,78 +1049,37 @@ async def execution_node(
         existing_path=existing_todo_md_path,
     )
 
-    if _should_trigger_level3(state, todos):
+    failure_trigger = _should_trigger_level3(state, todos)
+    unreachable_trigger = _is_overall_unreachable(todos)
+    if failure_trigger or unreachable_trigger:
+        trigger_reason = "failed_threshold_reached" if failure_trigger else "overall_unreachable"
         execution_trace = _append_trace(
             execution_trace,
             stage="level3_replan",
             status="interrupt",
-            detail={"reason": "failed_threshold_reached"},
+            detail={"reason": trigger_reason},
         )
         resume_value = interrupt(
-            {
-                "reason_code": "LEVEL3_GLOBAL_REPLAN_CONFIRM",
-                "prompt": "当前任务连续失败，是否进行整体重规划？回复“继续”或“取消”。",
-                "required_fields": ["confirm"],
-                "resume_payload_schema": {
-                    "type": "object",
-                    "properties": {"confirm": {"type": "string"}},
-                    "required": ["confirm"],
-                },
-                "todo_id": next_todo_id,
-                "react_step_id": next_todo_id,
-            }
-        )
-        confirmed = _parse_level3_confirmation(resume_value)
-        if confirmed:
-            execution_trace = _append_trace(
-                execution_trace,
-                stage="level3_replan",
-                status="confirmed",
-                detail={"decision": "replan"},
-            )
-            return {
-                "plan": _todo_plan_from_todos(todos),
-                "todos": todos,
-                "results": results,
-                "todo_md": todo_md,
-                "todo_md_path": todo_md_path,
-                "todo_active_id": next_todo_id,
-                "active_tools": next_active_tools,
-                "execution_status": "replan",
-                "resume_context": _resume_context_after_round(
-                    state=state,
-                    config=config,
-                    todo_active_id=next_todo_id,
-                    pending_capability=next_pending_capability,
-                ),
-                "execution_trace": execution_trace,
-                "invocation_dedup": invocation_dedup,
-            }
-        execution_trace = _append_trace(
-            execution_trace,
-            stage="level3_replan",
-            status="cancelled",
-            detail={"decision": "cancel"},
-        )
-        return {
-            "plan": _todo_plan_from_todos(todos),
-            "todos": todos,
-            "results": results,
-            "todo_md": todo_md,
-            "todo_md_path": todo_md_path,
-            "todo_active_id": next_todo_id,
-            "active_tools": next_active_tools,
-            "execution_status": "done",
-            "final_answer": "已取消整体重规划，请补充更明确的目标后重试。",
-            "resume_context": _resume_context_after_round(
-                state=state,
-                config=config,
+            _build_level3_interrupt_payload(
                 todo_active_id=next_todo_id,
                 pending_capability=next_pending_capability,
-            ),
-            "execution_trace": execution_trace,
-            "invocation_dedup": invocation_dedup,
-        }
+                interrupt_reason=trigger_reason,
+            )
+        )
+        return _build_level3_result(
+            confirmed=_parse_level3_confirmation(resume_value),
+            state=state,
+            config=config,
+            todos=todos,
+            results=results,
+            todo_md=todo_md,
+            todo_md_path=todo_md_path,
+            todo_active_id=next_todo_id,
+            active_tools=next_active_tools,
+            pending_capability=next_pending_capability,
+            execution_trace=execution_trace,
+            invocation_dedup=invocation_dedup,
+        )
 
     execution_status = "replan" if blocked_in_batch else ("execution" if has_pending else "done")
 
