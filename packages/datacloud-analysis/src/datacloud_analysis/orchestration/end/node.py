@@ -31,8 +31,8 @@ from datacloud_analysis.orchestration.end.execution_summary import (
     build_execution_summary,
     persist_execution_summary,
 )
-from datacloud_analysis.orchestration.shared.query_shape_utils import count_rows_like_envelope_build
 from datacloud_analysis.orchestration.execution.sandbox_executor import WRAPPED_TASK_OUTPUT_KEY
+from datacloud_analysis.orchestration.shared.query_shape_utils import count_rows_like_envelope_build
 from datacloud_analysis.orchestration.state import AgentState
 
 # 6001：结构化数据表 JSON；协议层无对应枚举成员时回退为字面量
@@ -236,7 +236,7 @@ def _format_code_exec_result(output: dict) -> str:
 def _aggregate_result(res: dict) -> dict[str, Any] | None:
     """Normalise one entry from state['results'] into {task_id, data}.
 
-    Handles three layouts produced by loop_node:
+    Handles three layouts produced by execution stage:
       1. {"task_id": ..., "data": <query or code_exec output dict>}
          — single-task in-memory path
       2. {"task_id": ..., "file_path": "/workspace/temp/t1.json"}
