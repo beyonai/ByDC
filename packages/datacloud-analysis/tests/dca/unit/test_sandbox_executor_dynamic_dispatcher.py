@@ -38,6 +38,66 @@ class _CaptureContextHookManager:
         return context, None
 
 
+class _HookManagerBeforeInterrupt:
+    async def run_before(self, context: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+        return (
+            context,
+            {
+                "action": "interrupt",
+                "interrupt": {"reason_code": "NEED_CONFIRM", "prompt": "请确认"},
+            },
+        )
+
+    async def run_after(self, context: dict[str, Any]) -> tuple[dict[str, Any], None]:
+        return context, None
+
+
+class _HookManagerBeforeFail:
+    async def run_before(self, context: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+        return (
+            context,
+            {
+                "action": "fail",
+                "result": {"tool_error": {"error_type": "ValidationError", "message": "blocked"}},
+            },
+        )
+
+    async def run_after(self, context: dict[str, Any]) -> tuple[dict[str, Any], None]:
+        return context, None
+
+
+class _HookManagerAfterRecover:
+    async def run_before(self, context: dict[str, Any]) -> tuple[dict[str, Any], None]:
+        return context, None
+
+    async def run_after(
+        self, context: dict[str, Any]
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        return (
+            context,
+            {
+                "action": "recover",
+                "result": {"tool_output": {"ok": True, "recovered": True}},
+            },
+        )
+
+
+class _HookManagerAfterFail:
+    async def run_before(self, context: dict[str, Any]) -> tuple[dict[str, Any], None]:
+        return context, None
+
+    async def run_after(
+        self, context: dict[str, Any]
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        return (
+            context,
+            {
+                "action": "fail",
+                "result": {"tool_error": {"error_type": "RiskError", "message": "post-check failed"}},
+            },
+        )
+
+
 @pytest.mark.asyncio
 async def test_dynamic_callable_maps_question_to_content_and_injects_context(
     monkeypatch: pytest.MonkeyPatch,
@@ -201,6 +261,133 @@ async def test_hook_legacy_short_circuit_schema_is_supported(
 
     assert updated_task["status"] == "done"
     assert output == {"code": 0, "legacy": True}
+
+
+@pytest.mark.asyncio
+async def test_hook_before_interrupt_resumes_with_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datacloud_analysis.orchestration import sandbox_executor as se
+
+    monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _HookManagerBeforeInterrupt())
+    monkeypatch.setattr(se, "interrupt", lambda _payload: {"confirm": "继续"})
+
+    async def _tool(**params: Any) -> dict[str, Any]:
+        return {"received": params}
+
+    task = {
+        "id": "t_interrupt",
+        "type": "interrupt_tool",
+        "status": "pending",
+        "deps": [],
+        "params": {"query": "q"},
+        "description": "desc",
+    }
+    state: dict[str, Any] = {"messages": []}
+    updated_task, output = await execute_next_task(
+        task=task,
+        state=state,
+        gateway_context=None,
+        custom_tools={"interrupt_tool": _tool},
+    )
+
+    assert updated_task["status"] == "done"
+    assert output["received"]["confirm"] == "继续"
+
+
+@pytest.mark.asyncio
+async def test_hook_before_fail_blocks_dispatcher_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datacloud_analysis.orchestration import sandbox_executor as se
+
+    monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _HookManagerBeforeFail())
+
+    async def _should_not_run(**_kwargs: Any) -> dict[str, Any]:
+        raise AssertionError("dispatcher should not run when before hook fails")
+
+    task = {
+        "id": "t_before_fail",
+        "type": "blocked_tool",
+        "status": "pending",
+        "deps": [],
+        "params": {},
+        "description": "desc",
+    }
+    state: dict[str, Any] = {"messages": []}
+    updated_task, output = await execute_next_task(
+        task=task,
+        state=state,
+        gateway_context=None,
+        custom_tools={"blocked_tool": _should_not_run},
+    )
+
+    assert updated_task["status"] == "failed"
+    assert updated_task["error"] == "blocked"
+    assert output == "blocked"
+
+
+@pytest.mark.asyncio
+async def test_hook_after_recover_turns_exception_into_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datacloud_analysis.orchestration import sandbox_executor as se
+
+    monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _HookManagerAfterRecover())
+
+    async def _broken(**_kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError("boom")
+
+    task = {
+        "id": "t_after_recover",
+        "type": "recover_tool",
+        "status": "pending",
+        "deps": [],
+        "params": {},
+        "description": "desc",
+    }
+    state: dict[str, Any] = {"messages": []}
+    updated_task, output = await execute_next_task(
+        task=task,
+        state=state,
+        gateway_context=None,
+        custom_tools={"recover_tool": _broken},
+    )
+
+    assert updated_task["status"] == "done"
+    assert output == {"ok": True, "recovered": True}
+
+
+@pytest.mark.asyncio
+async def test_hook_after_fail_overrides_successful_tool_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datacloud_analysis.orchestration import sandbox_executor as se
+
+    monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _HookManagerAfterFail())
+
+    async def _ok_tool(**_kwargs: Any) -> dict[str, Any]:
+        return {"ok": True}
+
+    task = {
+        "id": "t_after_fail",
+        "type": "after_fail_tool",
+        "status": "pending",
+        "deps": [],
+        "params": {},
+        "description": "desc",
+    }
+    state: dict[str, Any] = {"messages": []}
+    updated_task, output = await execute_next_task(
+        task=task,
+        state=state,
+        gateway_context=None,
+        custom_tools={"after_fail_tool": _ok_tool},
+    )
+
+    assert updated_task["status"] == "failed"
+    assert updated_task["error"] == "post-check failed"
+    assert output == "post-check failed"
 
 
 @pytest.mark.asyncio
