@@ -14,13 +14,13 @@ import json
 import os
 import sys
 from collections import OrderedDict
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 
 # 专门针对 Windows 系统切换事件循环策略以兼容 psycopg
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from by_framework import (
     AgentContext,
@@ -177,17 +177,30 @@ class DataCloudWorker(GatewayWorker):
         )
 
     @staticmethod
-    def _wrap_skill_callable(skill_name: str, run_fn: Callable[..., Any]) -> Callable[..., Awaitable[Any]]:
+    def _wrap_skill_callable(
+        skill_name: str,
+        run_fn: Callable[..., Any],
+        skill_meta: Mapping[str, Any] | None = None,
+    ) -> Callable[..., Awaitable[Any]]:
         async def _skill_tool(**params: Any) -> Any:
             maybe = run_fn(**params)
             if hasattr(maybe, "__await__"):
                 return await maybe
             return maybe
 
+        metadata = dict(skill_meta or {})
+        allowlist_tags = [str(tag).strip() for tag in metadata.get("allowlist_tags") or [] if str(tag).strip()]
+        blocklist_tags = [str(tag).strip() for tag in metadata.get("blocklist_tags") or [] if str(tag).strip()]
+        risk_level = str(metadata.get("risk_level") or "medium").strip().lower() or "medium"
+
         _skill_tool.__name__ = f"skill_{skill_name}"
         _skill_tool.__doc__ = f"Skill capability: {skill_name}"
         setattr(_skill_tool, "_is_skill_capability", True)
         setattr(_skill_tool, "_skill_name", skill_name)
+        setattr(_skill_tool, "_skill_meta", metadata)
+        setattr(_skill_tool, "_skill_risk_level", risk_level)
+        setattr(_skill_tool, "_skill_allowlist_tags", allowlist_tags)
+        setattr(_skill_tool, "_skill_blocklist_tags", blocklist_tags)
         return _skill_tool
 
     def _load_skill_capabilities(
@@ -220,7 +233,11 @@ class DataCloudWorker(GatewayWorker):
             skill_name = str(name).strip()
             if not skill_name:
                 continue
-            skills[skill_name] = self._wrap_skill_callable(skill_name, run_fn)
+            skills[skill_name] = self._wrap_skill_callable(
+                skill_name,
+                run_fn,
+                cast(Mapping[str, Any] | None, entry.get("meta")),
+            )
             source = str(entry.get("source", "unknown"))
             source_counts[source] = source_counts.get(source, 0) + 1
         if skills:

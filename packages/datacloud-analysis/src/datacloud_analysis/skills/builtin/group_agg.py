@@ -9,6 +9,9 @@ SKILL_META = {
     "description": "按指定维度分组聚合，支持 sum / mean / count / ratio 等聚合方法。",
     "version": "1.0.0",
     "author": "system",
+    "risk_level": "low",
+    "allowlist_tags": [],
+    "blocklist_tags": [],
 }
 
 

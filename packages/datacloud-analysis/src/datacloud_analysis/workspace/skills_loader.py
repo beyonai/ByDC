@@ -36,7 +36,7 @@ import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 
 if TYPE_CHECKING:
     from datacloud_analysis.workspace.paths import TaskPaths
@@ -45,6 +45,58 @@ logger = logging.getLogger(__name__)
 
 # Built-in skills shipped with the SDK.
 _BUILTIN_SKILLS_DIR = Path(__file__).parent.parent / "skills" / "builtin"
+_DEFAULT_SKILL_RISK_LEVEL: Literal["low", "medium", "high"] = "medium"
+_VALID_SKILL_RISK_LEVELS: frozenset[str] = frozenset({"low", "medium", "high"})
+
+
+class SkillMeta(TypedDict, total=False):
+    """Normalized metadata contract for all loaded skills."""
+
+    name: str
+    description: str
+    version: str
+    author: str
+    risk_level: Literal["low", "medium", "high"]
+    allowlist_tags: list[str]
+    blocklist_tags: list[str]
+
+
+def _normalize_skill_tags(raw: Any) -> list[str]:
+    if isinstance(raw, str):
+        text = raw.strip()
+        return [text] if text else []
+    if not isinstance(raw, list):
+        return []
+    tags: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        text = str(item).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        tags.append(text)
+    return tags
+
+
+def _normalize_risk_level(raw: Any) -> Literal["low", "medium", "high"]:
+    text = str(raw or "").strip().lower()
+    if text in _VALID_SKILL_RISK_LEVELS:
+        return cast(Literal["low", "medium", "high"], text)
+    return _DEFAULT_SKILL_RISK_LEVEL
+
+
+def _normalize_skill_meta(raw: dict[str, Any], *, default_name: str) -> SkillMeta:
+    name = str(raw.get("name") or default_name).strip() or default_name
+    description = str(raw.get("description") or "").strip()
+    normalized: SkillMeta = {"name": name, "description": description}
+    if "version" in raw:
+        normalized["version"] = str(raw.get("version") or "").strip()
+    if "author" in raw:
+        normalized["author"] = str(raw.get("author") or "").strip()
+    normalized["risk_level"] = _normalize_risk_level(raw.get("risk_level"))
+    normalized["allowlist_tags"] = _normalize_skill_tags(raw.get("allowlist_tags"))
+    normalized["blocklist_tags"] = _normalize_skill_tags(raw.get("blocklist_tags"))
+    return normalized
 
 
 def _find_repo_root() -> Path | None:
@@ -163,14 +215,15 @@ class SkillLoader:
             loader = spec.loader
             loader.exec_module(module)
 
-            meta: dict[str, Any] | None = getattr(module, "SKILL_META", None)
+            raw_meta: dict[str, Any] | None = getattr(module, "SKILL_META", None)
             run_fn: Callable[..., Any] | None = getattr(module, "run", None)
 
-            if meta is None or run_fn is None:
+            if raw_meta is None or run_fn is None:
                 logger.debug("Skipping %s: missing SKILL_META or run()", path.name)
                 return False
 
-            name: str = meta.get("name", path.stem)
+            meta = _normalize_skill_meta(raw_meta, default_name=path.stem)
+            name: str = meta["name"]
             previous_entry = self._registry.get(name)
             self._registry[name] = {"meta": meta, "run": run_fn, "source": source, "path": path}
             if previous_entry is not None:

@@ -201,6 +201,47 @@ def _is_skill_call(task_type: str, dynamic_dispatcher: Any) -> bool:
     return bool(getattr(dynamic_dispatcher, "_is_skill_capability", False))
 
 
+def _normalize_skill_risk_level(raw: Any) -> str:
+    text = str(raw or "").strip().lower()
+    if text in {"low", "medium", "high"}:
+        return text
+    return "medium"
+
+
+def _normalize_skill_tag_list(raw: Any) -> list[str]:
+    if isinstance(raw, str):
+        text = raw.strip()
+        return [text] if text else []
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        text = str(item).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return out
+
+
+def _skill_audit_metadata(task: Mapping[str, Any], dynamic_dispatcher: Any) -> tuple[str, list[str], list[str]]:
+    _ = task
+    skill_meta = getattr(dynamic_dispatcher, "_skill_meta", None)
+    if not isinstance(skill_meta, dict):
+        skill_meta = {}
+    risk_level = _normalize_skill_risk_level(
+        getattr(dynamic_dispatcher, "_skill_risk_level", None) or skill_meta.get("risk_level")
+    )
+    allowlist_tags = _normalize_skill_tag_list(
+        getattr(dynamic_dispatcher, "_skill_allowlist_tags", None) or skill_meta.get("allowlist_tags")
+    )
+    blocklist_tags = _normalize_skill_tag_list(
+        getattr(dynamic_dispatcher, "_skill_blocklist_tags", None) or skill_meta.get("blocklist_tags")
+    )
+    return risk_level, allowlist_tags, blocklist_tags
+
+
 def _is_sensitive_key(key: str) -> bool:
     lowered = key.lower()
     return any(token in lowered for token in _SENSITIVE_PARAM_TOKENS)
@@ -235,13 +276,18 @@ def _log_skill_call_audit(
     output: Any,
     status: str,
     elapsed_ms: int,
+    dynamic_dispatcher: Any,
     error: str | None = None,
 ) -> None:
+    risk_level, allowlist_tags, blocklist_tags = _skill_audit_metadata(task, dynamic_dispatcher)
     audit_record: SkillCallAudit = {
         "event": "skill_call_audit",
         "task_id": str(task.get("id") or ""),
         "skill_name": str(task.get("type") or ""),
         "trigger_tool": str(task.get("type") or ""),
+        "risk_level": risk_level,
+        "allowlist_tags": allowlist_tags,
+        "blocklist_tags": blocklist_tags,
         "status": status,
         "elapsed_ms": elapsed_ms,
         "input_summary": {
@@ -566,6 +612,7 @@ async def _execute_next_task_with_hooks(
                 output=short_circuit_output,
                 status="short_circuit",
                 elapsed_ms=int((time.perf_counter() - started_at) * 1000),
+                dynamic_dispatcher=dynamic_dispatcher,
             )
         _log_tool_output_summary(str(task.get("id", "?")), task_type, short_circuit_output)
         return {**task, "status": "done"}, short_circuit_output
@@ -579,6 +626,7 @@ async def _execute_next_task_with_hooks(
                 output={"error": error_text},
                 status="failed",
                 elapsed_ms=int((time.perf_counter() - started_at) * 1000),
+                dynamic_dispatcher=dynamic_dispatcher,
                 error=error_text,
             )
         return {**task, "status": "failed", "error": error_text}, error_text
@@ -675,6 +723,7 @@ async def _execute_next_task_with_hooks(
                 output=output,
                 status="done",
                 elapsed_ms=int((time.perf_counter() - started_at) * 1000),
+                dynamic_dispatcher=dynamic_dispatcher,
             )
         _log_tool_output_summary(str(task.get("id", "?")), task_type, output)
         return {**task, "status": "done"}, output
@@ -699,6 +748,7 @@ async def _execute_next_task_with_hooks(
                     output=recovered_output,
                     status="recovered",
                     elapsed_ms=int((time.perf_counter() - started_at) * 1000),
+                    dynamic_dispatcher=dynamic_dispatcher,
                     error=str(exc),
                 )
             _log_tool_output_summary(str(task.get("id", "?")), task_type, recovered_output)
@@ -714,6 +764,7 @@ async def _execute_next_task_with_hooks(
                     output={"error": error_text},
                     status="failed",
                     elapsed_ms=int((time.perf_counter() - started_at) * 1000),
+                    dynamic_dispatcher=dynamic_dispatcher,
                     error=error_text,
                 )
             return {**task, "status": "failed", "error": error_text}, error_text
@@ -726,6 +777,7 @@ async def _execute_next_task_with_hooks(
                 output={"error": str(exc)},
                 status="failed",
                 elapsed_ms=int((time.perf_counter() - started_at) * 1000),
+                dynamic_dispatcher=dynamic_dispatcher,
                 error=str(exc),
             )
         return {**task, "status": "failed", "error": str(exc)}, str(exc)

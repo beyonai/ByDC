@@ -9,6 +9,9 @@ SKILL_META = {
     "description": "对时序 DataFrame 按指定周期重采样，并计算环比/同比增量。",
     "version": "1.0.0",
     "author": "system",
+    "risk_level": "low",
+    "allowlist_tags": [],
+    "blocklist_tags": [],
 }
 
 
