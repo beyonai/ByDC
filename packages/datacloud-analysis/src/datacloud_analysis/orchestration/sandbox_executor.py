@@ -19,6 +19,7 @@ from __future__ import annotations
 import inspect
 import json
 import logging
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
@@ -28,7 +29,12 @@ from langgraph.types import interrupt
 
 from datacloud_analysis.orchestration.query_shape_utils import count_rows_like_envelope_build
 from datacloud_analysis.tool_hook_plugins import get_tool_hook_plugin_manager
-from datacloud_analysis.tool_hook_plugins.types import HookContext, HookDecision, HookError
+from datacloud_analysis.tool_hook_plugins.types import (
+    HookContext,
+    HookDecision,
+    HookError,
+    SkillCallAudit,
+)
 
 try:
     from langgraph.errors import GraphInterrupt
@@ -41,6 +47,19 @@ logger = logging.getLogger(__name__)
 # Tools that return plain str would otherwise serialize as a JSON string
 # and break _resolve_input_files / insight readers that call .get on the payload.
 WRAPPED_TASK_OUTPUT_KEY = "_datacloud_wrapped_output"
+_SENSITIVE_PARAM_TOKENS: tuple[str, ...] = (
+    "password",
+    "passwd",
+    "secret",
+    "token",
+    "api_key",
+    "apikey",
+    "authorization",
+    "credential",
+    "access_key",
+    "private_key",
+    "session_key",
+)
 
 
 def normalize_workspace_task_output(output: Any) -> Any:
@@ -174,6 +193,68 @@ def _log_tool_output_summary(task_id: str, task_type: str, output: Any) -> None:
         type(output).__name__,
         repr(output)[:240],
     )
+
+
+def _is_skill_call(task_type: str, dynamic_dispatcher: Any) -> bool:
+    if task_type == "build_skill":
+        return True
+    return bool(getattr(dynamic_dispatcher, "_is_skill_capability", False))
+
+
+def _is_sensitive_key(key: str) -> bool:
+    lowered = key.lower()
+    return any(token in lowered for token in _SENSITIVE_PARAM_TOKENS)
+
+
+def _sanitize_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(k): ("[REDACTED]" if _is_sensitive_key(str(k)) else _sanitize_value(v))
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_sanitize_value(item) for item in value]
+    return value
+
+
+def _summarize_value(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return {"type": "dict", "size": len(value), "keys": sorted(value.keys())[:12]}
+    if isinstance(value, list):
+        return {"type": "list", "size": len(value)}
+    if isinstance(value, str):
+        return {"type": "str", "length": len(value), "preview": value[:80]}
+    return {"type": type(value).__name__, "preview": repr(value)[:80]}
+
+
+def _log_skill_call_audit(
+    *,
+    task: Mapping[str, Any],
+    params: dict[str, Any],
+    hook_context: HookContext,
+    output: Any,
+    status: str,
+    elapsed_ms: int,
+    error: str | None = None,
+) -> None:
+    audit_record: SkillCallAudit = {
+        "event": "skill_call_audit",
+        "task_id": str(task.get("id") or ""),
+        "skill_name": str(task.get("type") or ""),
+        "trigger_tool": str(task.get("type") or ""),
+        "status": status,
+        "elapsed_ms": elapsed_ms,
+        "input_summary": {
+            "masked_params": _sanitize_value(params),
+            "shape": _summarize_value(params),
+        },
+        "output_summary": _summarize_value(_sanitize_value(output)),
+        "checkpoint_id": hook_context.get("checkpoint_id"),
+        "checkpoint_ns": hook_context.get("checkpoint_ns"),
+    }
+    if error:
+        audit_record["error"] = error
+    logger.info("skill_call_audit: %s", audit_record)
 
 
 def _build_hook_context(
@@ -448,8 +529,8 @@ async def execute_next_task(
         if "question" not in params and "query" not in params and task.get("description"):
             params["question"] = str(task.get("description"))
         params = _ensure_dynamic_content_param(params, str(task.get("description") or ""))
-        logger.info("Task %s planned params: %s", task["id"], planned_params)
-        logger.info("Task %s execution params: %s", task["id"], params)
+        logger.info("Task %s planned params: %s", task["id"], _sanitize_value(planned_params))
+        logger.info("Task %s execution params: %s", task["id"], _sanitize_value(params))
         logger.info("Task %s params consistent: %s", task["id"], params == planned_params)
     elif task_type == "code_exec":
         raw_params = task.get("params", {})
@@ -470,15 +551,36 @@ async def execute_next_task(
     )
     hook_context, before_decision = await hook_manager.run_before(hook_context)
     params = dict(hook_context.get("tool_params") or params)
+    is_skill_call = _is_skill_call(task_type, dynamic_dispatcher)
+    started_at = time.perf_counter()
     _log_hook_decision("before", before_decision, task_id=str(task.get("id") or "?"))
 
     before_action = _decision_action(before_decision)
     if before_action == "short_circuit":
         short_circuit_output = _decision_output(before_decision)
+        if is_skill_call:
+            _log_skill_call_audit(
+                task=task,
+                params=params,
+                hook_context=hook_context,
+                output=short_circuit_output,
+                status="short_circuit",
+                elapsed_ms=int((time.perf_counter() - started_at) * 1000),
+            )
         _log_tool_output_summary(str(task.get("id", "?")), task_type, short_circuit_output)
         return {**task, "status": "done"}, short_circuit_output
     if before_action == "fail":
         error_text = _decision_error_text(before_decision, "Tool blocked by hook plugin")
+        if is_skill_call:
+            _log_skill_call_audit(
+                task=task,
+                params=params,
+                hook_context=hook_context,
+                output={"error": error_text},
+                status="failed",
+                elapsed_ms=int((time.perf_counter() - started_at) * 1000),
+                error=error_text,
+            )
         return {**task, "status": "failed", "error": error_text}, error_text
     if before_action == "interrupt":
         interrupt_payload = {}
@@ -565,6 +667,15 @@ async def execute_next_task(
             logger.warning("Task %s (code_exec) failed: %s", task["id"], error_msg[:200])
             return {**task, "status": "failed", "error": error_msg}, output
 
+        if is_skill_call:
+            _log_skill_call_audit(
+                task=task,
+                params=params,
+                hook_context=hook_context,
+                output=output,
+                status="done",
+                elapsed_ms=int((time.perf_counter() - started_at) * 1000),
+            )
         _log_tool_output_summary(str(task.get("id", "?")), task_type, output)
         return {**task, "status": "done"}, output
     except GraphInterrupt:
@@ -580,13 +691,43 @@ async def execute_next_task(
         after_action = _decision_action(after_decision)
         if after_action == "recover":
             recovered_output = _decision_output(after_decision)
+            if is_skill_call:
+                _log_skill_call_audit(
+                    task=task,
+                    params=params,
+                    hook_context=hook_context,
+                    output=recovered_output,
+                    status="recovered",
+                    elapsed_ms=int((time.perf_counter() - started_at) * 1000),
+                    error=str(exc),
+                )
             _log_tool_output_summary(str(task.get("id", "?")), task_type, recovered_output)
             return {**task, "status": "done"}, recovered_output
         if after_action == "fail":
             error_text = _decision_error_text(after_decision, str(exc))
             logger.error("Task %s failed after hook decision: %s", task["id"], error_text)
+            if is_skill_call:
+                _log_skill_call_audit(
+                    task=task,
+                    params=params,
+                    hook_context=hook_context,
+                    output={"error": error_text},
+                    status="failed",
+                    elapsed_ms=int((time.perf_counter() - started_at) * 1000),
+                    error=error_text,
+                )
             return {**task, "status": "failed", "error": error_text}, error_text
         logger.error("Task %s failed: %s", task["id"], exc)
+        if is_skill_call:
+            _log_skill_call_audit(
+                task=task,
+                params=params,
+                hook_context=hook_context,
+                output={"error": str(exc)},
+                status="failed",
+                elapsed_ms=int((time.perf_counter() - started_at) * 1000),
+                error=str(exc),
+            )
         return {**task, "status": "failed", "error": str(exc)}, str(exc)
 
 
