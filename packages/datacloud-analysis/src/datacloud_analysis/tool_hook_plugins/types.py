@@ -98,6 +98,9 @@ class SkillCallAudit(TypedDict, total=False):
     task_id: str
     skill_name: str
     trigger_tool: str
+    risk_level: Literal["low", "medium", "high"]
+    allowlist_tags: list[str]
+    blocklist_tags: list[str]
     status: str
     elapsed_ms: int
     input_summary: dict[str, Any]

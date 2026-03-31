@@ -124,3 +124,36 @@ def test_skill_override_audit_log_emitted(
     assert any("Skill override: name=group_agg old_source=builtin new_source=extension" in m for m in messages)
     assert any("Skill override: name=group_agg old_source=extension new_source=public" in m for m in messages)
     assert any("SkillLoader scan summary:" in m for m in messages)
+
+
+def test_skill_meta_defaults_are_normalized(tmp_path: Path) -> None:
+    paths = _make_task_paths(tmp_path)
+    _write_skill(paths.skills_public, "meta_defaults", "meta defaults")
+    loader = SkillLoader(paths)
+    registry = loader.load_all()
+    meta = registry["meta_defaults"]["meta"]
+    assert meta["risk_level"] == "medium"
+    assert meta["allowlist_tags"] == []
+    assert meta["blocklist_tags"] == []
+
+
+def test_skill_meta_risk_and_tags_are_normalized(tmp_path: Path) -> None:
+    paths = _make_task_paths(tmp_path)
+    skill_file = paths.skills_public / "meta_normalize.py"
+    skill_file.write_text(
+        "SKILL_META = {\n"
+        '    "name": "meta_normalize",\n'
+        '    "description": "normalize",\n'
+        '    "risk_level": "HIGH",\n'
+        '    "allowlist_tags": ["tenant_a", "tenant_a", " "],\n'
+        '    "blocklist_tags": "scene_x",\n'
+        "}\n"
+        "def run(*args, **kwargs):\n    return 'ok'\n",
+        encoding="utf-8",
+    )
+    loader = SkillLoader(paths)
+    registry = loader.load_all()
+    meta = registry["meta_normalize"]["meta"]
+    assert meta["risk_level"] == "high"
+    assert meta["allowlist_tags"] == ["tenant_a"]
+    assert meta["blocklist_tags"] == ["scene_x"]

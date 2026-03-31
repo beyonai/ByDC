@@ -56,6 +56,139 @@ _LEVEL3_CANCEL_TEXTS = {"取消", "cancel", "no", "n", "停止"}
 _ACTION_KEYWORDS: tuple[str, ...] = ("action", "exec", "update", "write", "operate")
 _QUERY_KEYWORDS: tuple[str, ...] = ("query", "read", "search", "list", "select", "view")
 _RELATION_KEYWORDS: tuple[str, ...] = ("relation", "graph", "link", "edge")
+_VALID_RISK_LEVELS: frozenset[str] = frozenset({"low", "medium", "high"})
+
+
+def _normalize_context_tag_values(raw: Any) -> list[str]:
+    if isinstance(raw, str):
+        text = raw.strip()
+        return [text] if text else []
+    if not isinstance(raw, list):
+        return []
+    tags: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        text = str(item).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        tags.append(text)
+    return tags
+
+
+def _extract_context_tags_from_gateway_context(gateway_context: Any) -> list[str]:
+    if gateway_context is None:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    candidate_keys = (
+        "context_tags",
+        "tenant_tags",
+        "scene_tags",
+        "tags",
+    )
+    for key in candidate_keys:
+        values = _normalize_context_tag_values(getattr(gateway_context, key, None))
+        if not values and isinstance(gateway_context, dict):
+            values = _normalize_context_tag_values(gateway_context.get(key))
+        for value in values:
+            if value in seen:
+                continue
+            seen.add(value)
+            out.append(value)
+    metadata: dict[str, Any] | None = None
+    raw_metadata = getattr(gateway_context, "metadata", None)
+    if isinstance(raw_metadata, dict):
+        metadata = raw_metadata
+    elif isinstance(gateway_context, dict) and isinstance(gateway_context.get("metadata"), dict):
+        metadata = cast(dict[str, Any], gateway_context.get("metadata"))
+    if metadata:
+        for key in candidate_keys:
+            for value in _normalize_context_tag_values(metadata.get(key)):
+                if value in seen:
+                    continue
+                seen.add(value)
+                out.append(value)
+    return out
+
+
+def _resolve_context_tags(state: AgentState, gateway_context: Any) -> list[str]:
+    tags = _normalize_context_tag_values(state.get("context_tags"))
+    if tags:
+        return tags
+    return _extract_context_tags_from_gateway_context(gateway_context)
+
+
+def _normalize_skill_tags(raw: Any) -> set[str]:
+    if isinstance(raw, str):
+        text = raw.strip()
+        return {text} if text else set()
+    if not isinstance(raw, list):
+        return set()
+    out: set[str] = set()
+    for item in raw:
+        text = str(item).strip()
+        if text:
+            out.add(text)
+    return out
+
+
+def _normalize_risk_level(raw: Any) -> str:
+    text = str(raw or "").strip().lower()
+    if text in _VALID_RISK_LEVELS:
+        return text
+    return "medium"
+
+
+def _is_skill_allowed_for_context(
+    capability_id: str,
+    *,
+    dynamic_tools: dict[str, Any],
+    context_tags: list[str],
+) -> bool:
+    tool_obj = dynamic_tools.get(capability_id)
+    if tool_obj is None or not bool(getattr(tool_obj, "_is_skill_capability", False)):
+        return True
+
+    # context_tags 为空时不做标签过滤。
+    context_tag_set = set(context_tags)
+    if not context_tag_set:
+        return True
+
+    blocklist = _normalize_skill_tags(getattr(tool_obj, "_skill_blocklist_tags", None))
+    if blocklist and context_tag_set & blocklist:
+        return False
+    allowlist = _normalize_skill_tags(getattr(tool_obj, "_skill_allowlist_tags", None))
+    if allowlist and not (context_tag_set & allowlist):
+        return False
+    return True
+
+
+def _capability_risk_level(capability_id: str, dynamic_tools: dict[str, Any]) -> str:
+    tool_obj = dynamic_tools.get(capability_id)
+    if tool_obj is None:
+        return "medium"
+    return _normalize_risk_level(getattr(tool_obj, "_skill_risk_level", None))
+
+
+async def _clarification_updates(
+    state: AgentState,
+    *,
+    gateway_context: Any,
+) -> dict[str, Any]:
+    try:
+        from datacloud_analysis.orchestration.execution.clarification_runtime import (
+            clarification_node as runtime_clarification_node,
+        )
+    except ImportError:
+        _ = gateway_context
+        return {
+            "ambiguous_terms": list(state.get("ambiguous_terms") or []),
+            "confirmed_terms": list(state.get("confirmed_terms") or []),
+            "clarify_needed": bool(state.get("ambiguous_terms")),
+        }
+
+    return await runtime_clarification_node(state, gateway_context=gateway_context)
 
 
 def _clarification_prompt_from_ambiguous(ambiguous_terms: list[dict[str, Any]]) -> str:
@@ -412,6 +545,7 @@ def _compute_effective_tools(
     *,
     dynamic_tools: dict[str, Any],
     available_capabilities: set[str],
+    context_tags: list[str],
 ) -> list[str]:
     if not isinstance(todo, dict):
         return []
@@ -427,7 +561,16 @@ def _compute_effective_tools(
             for capability in _DEFAULT_CAPABILITY_FALLBACK_ORDER
             if capability in available_capabilities
         ]
-    return [tool for tool in required if tool not in blocked]
+    return [
+        tool
+        for tool in required
+        if tool not in blocked
+        and _is_skill_allowed_for_context(
+            tool,
+            dynamic_tools=dynamic_tools,
+            context_tags=context_tags,
+        )
+    ]
 
 
 def _semantic_types_from_todo(todo: dict[str, Any] | None) -> set[str]:
@@ -834,6 +977,7 @@ async def _execute_one_todo(
     runtime: ToolRuntime,
     dynamic_tools: dict[str, Any],
     available_capabilities: set[str],
+    context_tags: list[str],
     invocation_dedup_set: set[str],
 ) -> tuple[dict[str, Any], dict[str, Any] | None, list[str], list[dict[str, Any]], bool]:
     todo_id = str(todo.get("todo_id") or "")
@@ -841,6 +985,7 @@ async def _execute_one_todo(
         todo,
         dynamic_tools=dynamic_tools,
         available_capabilities=available_capabilities,
+        context_tags=context_tags,
     )
     effective_tools = _prioritize_tools_by_semantic(todo, effective_tools)
     has_required = _todo_has_required_capability(todo, dynamic_tools=dynamic_tools)
@@ -1049,6 +1194,7 @@ async def execution_node(
 ) -> dict[str, Any]:
     """Execute one dependency-ready todo batch and decide next step."""
     gateway_context = (config.get("configurable") or {}).get("gateway_context")
+    context_tags = _resolve_context_tags(state, gateway_context)
     dynamic_tools = state.get("dynamic_tools") or default_tools or {}
     runtime = ToolRuntime(custom_tools=dynamic_tools, gateway_context=gateway_context)
     available_capabilities = set(dynamic_tools.keys()) | set(_BUILTIN_EXECUTOR_CAPABILITIES)
@@ -1067,6 +1213,7 @@ async def execution_node(
         active_todo,
         dynamic_tools=dynamic_tools,
         available_capabilities=available_capabilities,
+        context_tags=context_tags,
     )
     active_tools = _prioritize_tools_by_semantic(active_todo, active_tools)
     pending_capability = active_tools[0] if active_tools else ""
@@ -1217,6 +1364,7 @@ async def execution_node(
                 runtime=runtime,
                 dynamic_tools=dynamic_tools,
                 available_capabilities=available_capabilities,
+                context_tags=context_tags,
                 invocation_dedup_set=invocation_dedup_set,
             )
             for todo in ready_todos
@@ -1266,7 +1414,10 @@ async def execution_node(
                     status="append_todo",
                     detail={
                         "plugin_id": "react_replanning",
-                        "risk_level": "medium",
+                        "risk_level": _capability_risk_level(
+                            str(updated_todo.get("last_capability") or ""),
+                            dynamic_tools,
+                        ),
                         "todo_id": str(updated_todo.get("todo_id") or ""),
                         "append_count": len(append_items),
                     },
@@ -1299,6 +1450,7 @@ async def execution_node(
         next_active_todo,
         dynamic_tools=dynamic_tools,
         available_capabilities=available_capabilities,
+        context_tags=context_tags,
     )
     next_active_tools = _prioritize_tools_by_semantic(next_active_todo, next_active_tools)
     next_pending_capability = next_active_tools[0] if next_active_tools else ""

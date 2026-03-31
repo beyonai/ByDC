@@ -14,7 +14,19 @@ Quick-start::
     asyncio.run(main())
 """
 
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
+
 from . import bootstrap
-from .agent import create_agent
+
+
+def create_agent(*args: Any, **kwargs: Any) -> Any:
+    """Lazily import agent factory to avoid import-time graph side effects."""
+    from .agent import create_agent as _create_agent
+
+    factory: Callable[..., Any] = _create_agent
+    return factory(*args, **kwargs)
 
 __all__ = ["bootstrap", "create_agent"]
