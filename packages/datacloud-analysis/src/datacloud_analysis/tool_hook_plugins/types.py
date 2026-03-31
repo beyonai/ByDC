@@ -91,4 +91,20 @@ class HookDecision(TypedDict, total=False):
     error: str | HookError
 
 
+class SkillCallAudit(TypedDict, total=False):
+    """Structured audit record for skill invocation."""
+
+    event: Literal["skill_call_audit"]
+    task_id: str
+    skill_name: str
+    trigger_tool: str
+    status: str
+    elapsed_ms: int
+    input_summary: dict[str, Any]
+    output_summary: dict[str, Any]
+    checkpoint_id: str | None
+    checkpoint_ns: str | None
+    error: str
+
+
 ToolHookCallback = Callable[[HookContext], HookDecision | Awaitable[HookDecision] | None]
