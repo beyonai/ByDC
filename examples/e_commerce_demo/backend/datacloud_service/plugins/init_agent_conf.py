@@ -6,6 +6,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
 import httpx
 from dotenv import load_dotenv
@@ -131,13 +132,14 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
                             key: str(value)[:200] for key, value in dynamic_prompts.items()
                         }
 
-                        # 4. 构建工具：本体工具 + Agent 委托工具
+                        # 4. 构建工具：本体工具 + Agent 委托工具（含全链路诊断）
                         rel_resource_list = detail_data.get("relResourceList", [])
-                        dynamic_tools = {
-                            **self._build_tools_from_ontology(rel_resource_list),
-                            **self._build_agent_delegate_tools(rel_resource_list),
-                        }
+                        dynamic_tools, build_diag = self._build_dynamic_tools_with_diagnostics(
+                            agent_id=str(agent_id),
+                            rel_resource_list=rel_resource_list,
+                        )
                         tool_names = sorted(dynamic_tools.keys())
+                        reason_summary = list(build_diag.get("reason_summary") or [])
 
                         logger.info(
                             "[InitPlugin] Agent loaded: agent_id=%s prompt_keys=%s tool_count=%d tool_names=%s",
@@ -151,12 +153,20 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
                             agent_id,
                             prompt_preview,
                         )
+                        if reason_summary:
+                            logger.warning(
+                                "[InitPlugin] Tool diagnostic summary: agent_id=%s reasons=%s",
+                                agent_id,
+                                reason_summary,
+                            )
                         if not tool_names:
                             empty_tool_agent_ids.append(agent_id)
                             logger.error(
-                                "[InitPlugin] Agent has no tools: agent_id=%s tool_count=0 tool_names=%s",
+                                "[InitPlugin] Agent has no tools: agent_id=%s tool_count=0 tool_names=%s "
+                                "reason_summary=%s",
                                 agent_id,
                                 tool_names,
+                                reason_summary,
                             )
                             continue
 
