@@ -43,6 +43,43 @@ from datacloud_analysis.agent import create_agent
 from datacloud_analysis.command_plugins import CommandPluginManager
 
 
+_CHITCHAT_DIRECT_REPLY = "你好，我在。需要我帮你查询或分析什么数据？"
+_CHITCHAT_TOKENS = {
+    "hi",
+    "hello",
+    "hey",
+    "thanks",
+    "thank you",
+    "你好",
+    "您好",
+    "嗨",
+    "哈喽",
+    "在吗",
+    "谢谢",
+    "早上好",
+    "中午好",
+    "下午好",
+    "晚上好",
+}
+_ANALYSIS_HINT_TOKENS = {
+    "查",
+    "查询",
+    "分析",
+    "统计",
+    "报表",
+    "销量",
+    "销售",
+    "订单",
+    "数据",
+    "多少",
+    "趋势",
+    "sql",
+    "report",
+    "query",
+    "analy",
+}
+
+
 def _compiled_graph_has_checkpointer(graph: Any) -> bool:
     """Return True if LangGraph was compiled with a usable checkpointer.
 
@@ -246,6 +283,26 @@ class DataCloudWorker(GatewayWorker):
                         content_type=SseMessageType.text.value,
                     )
                     await context.flush_to_history()
+                return {"status": "done"}
+
+        # Ask 路径轻量闲聊短路：命中后直接回复，不进入 LangGraph。
+        if isinstance(command, AskAgentCommand):
+            user_text = _latest_user_text_from_content(command.content)
+            if _is_light_chitchat(user_text):
+                await context.emit_chunk(
+                    StreamChunkEvent(
+                        content=_CHITCHAT_DIRECT_REPLY,
+                        metadata={"graph_nodes_executed": 0},
+                    ),
+                    event_type=EventType.ANSWER_DELTA.value,
+                    content_type=SseMessageType.text.value,
+                )
+                await context.emit_chunk(
+                    StreamChunkEvent(content="回答完成"),
+                    event_type=EventType.APP_STREAM_RESPONSE.value,
+                    content_type=SseMessageType.text.value,
+                )
+                await context.flush_to_history()
                 return {"status": "done"}
 
         # ③ 查找 Agent 配置，构建图缓存键
@@ -647,3 +704,27 @@ def _normalize_messages(
             messages.append(HumanMessage(content=str(item)))
 
     return messages
+
+
+def _latest_user_text_from_content(content: Any) -> str:
+    if isinstance(content, str):
+        return content.strip()
+    if not isinstance(content, list) or not content:
+        return str(content).strip() if content is not None else ""
+    last = content[-1]
+    if isinstance(last, dict):
+        raw = last.get("content", "")
+        return raw.strip() if isinstance(raw, str) else str(raw).strip()
+    return str(last).strip()
+
+
+def _is_light_chitchat(text: str) -> bool:
+    normalized = " ".join(text.lower().split())
+    if not normalized:
+        return False
+    if any(token in normalized for token in _ANALYSIS_HINT_TOKENS):
+        return False
+    if normalized in _CHITCHAT_TOKENS:
+        return True
+    # Keep heuristic narrow to avoid hijacking real requests.
+    return len(normalized) <= 10 and any(token in normalized for token in _CHITCHAT_TOKENS)
