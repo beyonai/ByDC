@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from datacloud_analysis.orchestration.sandbox_executor import execute_next_task
+from datacloud_analysis.orchestration.execution.sandbox_executor import execute_next_task
 
 
 class _NoopHookManager:
@@ -102,7 +102,7 @@ class _HookManagerAfterFail:
 async def test_dynamic_callable_maps_question_to_content_and_injects_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from datacloud_analysis.orchestration import sandbox_executor as se
+    from datacloud_analysis.orchestration.execution import sandbox_executor as se
 
     monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _NoopHookManager())
 
@@ -136,7 +136,7 @@ async def test_dynamic_callable_maps_question_to_content_and_injects_context(
 async def test_dynamic_callable_filters_unaccepted_kwargs_for_fixed_signature(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from datacloud_analysis.orchestration import sandbox_executor as se
+    from datacloud_analysis.orchestration.execution import sandbox_executor as se
 
     monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _NoopHookManager())
 
@@ -165,7 +165,7 @@ async def test_dynamic_callable_filters_unaccepted_kwargs_for_fixed_signature(
 
 @pytest.mark.asyncio
 async def test_dynamic_ainvoke_dispatcher_backfills_content(monkeypatch: pytest.MonkeyPatch) -> None:
-    from datacloud_analysis.orchestration import sandbox_executor as se
+    from datacloud_analysis.orchestration.execution import sandbox_executor as se
 
     monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _NoopHookManager())
 
@@ -198,7 +198,7 @@ async def test_dynamic_ainvoke_dispatcher_backfills_content(monkeypatch: pytest.
 
 @pytest.mark.asyncio
 async def test_dynamic_ainvoke_keyword_only_content_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:
-    from datacloud_analysis.orchestration import sandbox_executor as se
+    from datacloud_analysis.orchestration.execution import sandbox_executor as se
 
     monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _NoopHookManager())
 
@@ -232,7 +232,7 @@ async def test_dynamic_ainvoke_keyword_only_content_wrapper(monkeypatch: pytest.
 async def test_hook_legacy_short_circuit_schema_is_supported(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from datacloud_analysis.orchestration import sandbox_executor as se
+    from datacloud_analysis.orchestration.execution import sandbox_executor as se
 
     monkeypatch.setattr(
         se,
@@ -267,7 +267,7 @@ async def test_hook_legacy_short_circuit_schema_is_supported(
 async def test_hook_before_interrupt_resumes_with_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from datacloud_analysis.orchestration import sandbox_executor as se
+    from datacloud_analysis.orchestration.execution import sandbox_executor as se
 
     monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _HookManagerBeforeInterrupt())
     monkeypatch.setattr(se, "interrupt", lambda _payload: {"confirm": "继续"})
@@ -299,7 +299,7 @@ async def test_hook_before_interrupt_resumes_with_payload(
 async def test_hook_before_fail_blocks_dispatcher_execution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from datacloud_analysis.orchestration import sandbox_executor as se
+    from datacloud_analysis.orchestration.execution import sandbox_executor as se
 
     monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _HookManagerBeforeFail())
 
@@ -331,7 +331,7 @@ async def test_hook_before_fail_blocks_dispatcher_execution(
 async def test_hook_after_recover_turns_exception_into_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from datacloud_analysis.orchestration import sandbox_executor as se
+    from datacloud_analysis.orchestration.execution import sandbox_executor as se
 
     monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _HookManagerAfterRecover())
 
@@ -362,7 +362,7 @@ async def test_hook_after_recover_turns_exception_into_success(
 async def test_hook_after_fail_overrides_successful_tool_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from datacloud_analysis.orchestration import sandbox_executor as se
+    from datacloud_analysis.orchestration.execution import sandbox_executor as se
 
     monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _HookManagerAfterFail())
 
@@ -394,7 +394,7 @@ async def test_hook_after_fail_overrides_successful_tool_result(
 async def test_hook_context_contains_workspace_and_todo_term_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from datacloud_analysis.orchestration import sandbox_executor as se
+    from datacloud_analysis.orchestration.execution import sandbox_executor as se
 
     manager = _CaptureContextHookManager()
     monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: manager)
@@ -440,7 +440,7 @@ async def test_hook_context_contains_workspace_and_todo_term_context(
 
 @pytest.mark.asyncio
 async def test_builtin_chat_response_tool_dispatcher(monkeypatch: pytest.MonkeyPatch) -> None:
-    from datacloud_analysis.orchestration import sandbox_executor as se
+    from datacloud_analysis.orchestration.execution import sandbox_executor as se
 
     monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _NoopHookManager())
 
@@ -464,7 +464,7 @@ async def test_builtin_task_note_tool_roundtrip(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    from datacloud_analysis.orchestration import sandbox_executor as se
+    from datacloud_analysis.orchestration.execution import sandbox_executor as se
 
     monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _NoopHookManager())
 
@@ -507,7 +507,7 @@ async def test_skill_call_emits_structured_audit_log_with_masked_params(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    from datacloud_analysis.orchestration import sandbox_executor as se
+    from datacloud_analysis.orchestration.execution import sandbox_executor as se
 
     monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _NoopHookManager())
 
@@ -555,7 +555,7 @@ async def test_skill_call_failure_still_emits_structured_audit_log(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    from datacloud_analysis.orchestration import sandbox_executor as se
+    from datacloud_analysis.orchestration.execution import sandbox_executor as se
 
     monkeypatch.setattr(se, "get_tool_hook_plugin_manager", lambda: _NoopHookManager())
 
@@ -591,4 +591,6 @@ async def test_skill_call_failure_still_emits_structured_audit_log(
     assert "status': 'failed'" in log_text or '"status": "failed"' in log_text
     assert "[REDACTED]" in log_text
     assert "123456" not in log_text
+
+
 

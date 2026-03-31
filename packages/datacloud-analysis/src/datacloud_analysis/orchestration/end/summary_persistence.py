@@ -1,11 +1,11 @@
-"""Execution summary persistence interface (G16 contract)."""
+﻿"""Execution summary persistence interface (G16 contract)."""
 
 from __future__ import annotations
 
 from functools import lru_cache
 from typing import Protocol, TypedDict
 
-from datacloud_analysis.orchestration.execution_summary import ExecutionSummary
+from datacloud_analysis.orchestration.end.execution_summary import ExecutionSummary
 
 
 class ExecutionSummaryPersistRef(TypedDict, total=False):
@@ -36,4 +36,5 @@ class NoopExecutionSummaryStore:
 def get_execution_summary_store() -> ExecutionSummaryStore:
     """Return process-level summary persistence implementation."""
     return NoopExecutionSummaryStore()
+
 

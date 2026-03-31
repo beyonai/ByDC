@@ -1,4 +1,4 @@
-"""④ Summary and reply generation (design §3.1 INSIGHT).
+﻿"""④ Summary and reply generation (design §3.1 INSIGHT).
 
 Responsibilities
 ----------------
@@ -27,12 +27,12 @@ from by_framework.core.protocol.content_type import SseMessageType, SseReasonMes
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from datacloud_analysis.orchestration.execution_summary import (
+from datacloud_analysis.orchestration.end.execution_summary import (
     build_execution_summary,
     persist_execution_summary,
 )
-from datacloud_analysis.orchestration.query_shape_utils import count_rows_like_envelope_build
-from datacloud_analysis.orchestration.sandbox_executor import WRAPPED_TASK_OUTPUT_KEY
+from datacloud_analysis.orchestration.shared.query_shape_utils import count_rows_like_envelope_build
+from datacloud_analysis.orchestration.execution.sandbox_executor import WRAPPED_TASK_OUTPUT_KEY
 from datacloud_analysis.orchestration.state import AgentState
 
 # 6001：结构化数据表 JSON；协议层无对应枚举成员时回退为字面量
@@ -383,7 +383,7 @@ def _records_shaped_output(output: dict[str, Any]) -> dict[str, Any] | None:
     """Return a normalised {records, meta, file_path, ...} or None.
 
     Row-count rules for logging/reconcile must stay aligned with
-    :func:`datacloud_analysis.orchestration.query_shape_utils.count_rows_like_envelope_build`.
+    :func:`datacloud_analysis.orchestration.shared.query_shape_utils.count_rows_like_envelope_build`.
     """
     if not isinstance(output, dict):
         return None
@@ -1069,3 +1069,4 @@ async def insight_node(
         part23=part23,
     )
     return {"messages": [AIMessage(content=history_content)], **summary_updates}
+

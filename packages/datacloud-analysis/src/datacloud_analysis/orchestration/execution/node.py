@@ -11,12 +11,12 @@ from pathlib import Path
 from typing import Any, cast
 
 import anyio
-from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
-from datacloud_analysis.orchestration.react_runtime import select_react_capability
-from datacloud_analysis.orchestration.sandbox_executor import (
+from datacloud_analysis.orchestration.clarification import clarification_node
+from datacloud_analysis.orchestration.execution.react_runtime import select_react_capability
+from datacloud_analysis.orchestration.execution.sandbox_executor import (
     execute_next_task,
     normalize_workspace_task_output,
 )
@@ -52,7 +52,6 @@ _DEFAULT_CAPABILITY_FALLBACK_ORDER: tuple[str, ...] = (
 )
 _DEFAULT_REACT_MAX_ROUNDS = 6
 _DEFAULT_LEVEL3_FAILURE_THRESHOLD = 2
-_MAX_EMPTY_CLARIFICATION_REPLIES = 2
 _LEVEL3_CONFIRM_TEXTS = {"继续", "continue", "yes", "y", "ok", "确认", "重规划"}
 _LEVEL3_CANCEL_TEXTS = {"取消", "cancel", "no", "n", "停止"}
 _ACTION_KEYWORDS: tuple[str, ...] = ("action", "exec", "update", "write", "operate")
@@ -802,198 +801,6 @@ def _ensure_direct_todo_from_route(
     ]
 
 
-def _build_clarification_prompt(term_info: dict[str, Any]) -> tuple[str, list[dict[str, Any]], str]:
-    mention = str(term_info.get("mention") or "").strip()
-    candidates_raw = term_info.get("candidates") or []
-    candidates = [item for item in candidates_raw if isinstance(item, dict)]
-    if candidates:
-        options = "\n".join(
-            f"  {idx + 1}. {str(item.get('term_name', ''))}（{str(item.get('term_type_code', ''))}）"
-            for idx, item in enumerate(candidates[:5])
-        )
-        prompt = (
-            f"「{mention}」有多个匹配，请选择您指的是哪个：\n"
-            f"{options}\n"
-            f"请输入序号（1-{min(len(candidates), 5)}），或直接描述您的意思，或回车跳过。"
-        )
-        return mention, candidates, prompt
-    prompt = f"「{mention}」未找到匹配的业务术语，请描述它的含义，或回车跳过。"
-    return mention, candidates, prompt
-
-
-def _extract_clarification_reply(resume_value: Any) -> str:
-    if isinstance(resume_value, dict):
-        candidates = (
-            resume_value.get("user_input"),
-            resume_value.get("reply"),
-            resume_value.get("content"),
-            resume_value.get("value"),
-            resume_value.get("confirm"),
-        )
-        for item in candidates:
-            text = str(item or "").strip()
-            if text:
-                return text
-        return ""
-    return str(resume_value or "").strip()
-
-
-def _resolve_clarification_candidate(
-    *,
-    candidates: list[dict[str, Any]],
-    reply: str,
-) -> dict[str, Any] | None:
-    if not candidates:
-        return None
-    if reply.isdigit():
-        idx = int(reply) - 1
-        if 0 <= idx < len(candidates):
-            return candidates[idx]
-    for item in candidates:
-        if reply == str(item.get("term_name") or "").strip():
-            return item
-    return None
-
-
-def _replace_mentions_in_text(text: str, mapping: dict[str, str]) -> str:
-    out = text
-    for mention, replacement in mapping.items():
-        if mention and replacement:
-            out = out.replace(mention, replacement)
-    return out
-
-
-def _replace_mentions_in_params(params: dict[str, Any], mapping: dict[str, str]) -> dict[str, Any]:
-    def _walk(value: Any) -> Any:
-        if isinstance(value, str):
-            return _replace_mentions_in_text(value, mapping)
-        if isinstance(value, dict):
-            return {k: _walk(v) for k, v in value.items()}
-        if isinstance(value, list):
-            return [_walk(v) for v in value]
-        return value
-
-    return cast(dict[str, Any], _walk(params))
-
-
-async def _build_clarification_interrupt(
-    state: AgentState,
-    *,
-    gateway_context: Any,
-) -> dict[str, Any]:
-    ambiguous_terms = [item for item in (state.get("ambiguous_terms") or []) if isinstance(item, dict)]
-    if not ambiguous_terms:
-        return {}
-
-    confirmed_terms = [item for item in (state.get("confirmed_terms") or []) if isinstance(item, dict)]
-    session_alias_map = dict(state.get("session_alias_map") or {})
-    query_mode = str(state.get("query_mode") or "analysis")
-    target_tool = str(state.get("target_tool") or "")
-    intent_text = str(state.get("intent") or "")
-    tool_params = dict(state.get("tool_params") or {})
-
-    try:
-        empty_reply_count = int(state.get("clarification_empty_reply_count") or 0)
-    except (TypeError, ValueError):
-        empty_reply_count = 0
-
-    assistant_messages: list[AIMessage] = []
-    newly_confirmed: list[dict[str, Any]] = []
-    clarification_results: dict[str, Any] = {}
-    remaining = list(ambiguous_terms)
-    todo_active_id = str(state.get("todo_active_id") or "")
-
-    while remaining:
-        mention, candidates, prompt = _build_clarification_prompt(remaining[0])
-        assistant_messages.append(AIMessage(content=prompt))
-
-        resume_value = interrupt(
-            {
-                "reason_code": "TERM_CLARIFICATION",
-                "prompt": prompt,
-                "required_fields": ["user_input"],
-                "todo_id": todo_active_id,
-                "todo_active_id": todo_active_id,
-                "react_step_id": todo_active_id,
-                "pending_capability": "clarification",
-            }
-        )
-        user_reply = _extract_clarification_reply(resume_value)
-
-        if not user_reply:
-            empty_reply_count += 1
-            if empty_reply_count >= _MAX_EMPTY_CLARIFICATION_REPLIES:
-                logger.info(
-                    "execution_node: %d consecutive empty clarification replies, keep remaining=%d",
-                    empty_reply_count,
-                    len(remaining),
-                )
-                break
-            continue
-
-        empty_reply_count = 0
-        resolved_candidate = _resolve_clarification_candidate(candidates=candidates, reply=user_reply)
-        if resolved_candidate is not None:
-            entry = {
-                "mention": mention,
-                "term_id": str(resolved_candidate.get("term_id") or ""),
-                "term_name": str(resolved_candidate.get("term_name") or mention),
-                "term_type_code": str(resolved_candidate.get("term_type_code") or ""),
-                "confidence": 1.0,
-                "source": "clarification",
-            }
-            newly_confirmed.append(entry)
-            session_alias_map[mention] = str(resolved_candidate.get("term_id") or "")
-            clarification_results[mention] = resolved_candidate
-        else:
-            entry = {
-                "mention": mention,
-                "term_id": "",
-                "term_name": mention,
-                "term_type_code": "USER_DEFINED",
-                "confidence": 1.0,
-                "source": "clarification_custom",
-                "user_description": user_reply,
-            }
-            newly_confirmed.append(entry)
-            session_alias_map[mention] = mention
-            clarification_results[mention] = user_reply
-        remaining.pop(0)
-
-    if clarification_results:
-        try:
-            from datacloud_analysis.tools.knowledge import save_clarification_results
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("execution_node: import save_clarification_results failed: %s", exc)
-        else:
-            user_id = str(getattr(gateway_context, "user_id", "") or "").strip()
-            if user_id:
-                asyncio.create_task(save_clarification_results(clarification_results, user_id))
-
-    confirmed_terms.extend(newly_confirmed)
-    mention_to_term_name = {
-        str(item.get("mention") or ""): str(item.get("term_name") or "")
-        for item in newly_confirmed
-        if str(item.get("mention") or "") and str(item.get("term_name") or "")
-    }
-    rewritten_intent = _replace_mentions_in_text(intent_text, mention_to_term_name)
-    rewritten_tool_params = _replace_mentions_in_params(tool_params, mention_to_term_name)
-
-    updates: dict[str, Any] = {
-        "intent": rewritten_intent,
-        "tool_params": rewritten_tool_params,
-        "confirmed_terms": confirmed_terms,
-        "ambiguous_terms": remaining,
-        "session_alias_map": session_alias_map,
-        "query_mode": query_mode,
-        "target_tool": target_tool,
-        "clarification_empty_reply_count": empty_reply_count,
-    }
-    if assistant_messages:
-        updates["messages"] = assistant_messages
-    return updates
-
-
 def _resume_context_after_round(
     *,
     state: AgentState,
@@ -1039,7 +846,7 @@ async def execution_node(
     pending_capability = active_tools[0] if active_tools else ""
 
     if state.get("ambiguous_terms"):
-        updates = await _build_clarification_interrupt(state, gateway_context=gateway_context)
+        updates = await clarification_node(state, gateway_context=gateway_context)
         if updates.get("ambiguous_terms"):
             return {
                 **updates,
@@ -1319,3 +1126,4 @@ async def execution_node(
         "execution_trace": execution_trace,
         "invocation_dedup": invocation_dedup,
     }
+
