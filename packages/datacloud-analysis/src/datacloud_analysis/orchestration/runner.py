@@ -83,6 +83,8 @@ async def run_agent(
             "invocation_dedup": [],
             "final_answer": "",
             "artifact_refs": [],
+            "execution_summary": None,
+            "execution_summary_persistence": None,
             "resume_context": {},
             "query_mode": "analysis",
             "chitchat_reply": None,
