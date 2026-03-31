@@ -131,7 +131,7 @@ async def test_planning_blocks_unavailable_capability_from_dag_plan(
             "ambiguous_terms": [],
         }
 
-    async def _fake_dag_node(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+    async def _fake_decompose_analysis_plan(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         return {
             "plan": [
                 {
@@ -146,7 +146,11 @@ async def test_planning_blocks_unavailable_capability_from_dag_plan(
         }
 
     monkeypatch.setattr(planning_module, "resolve_planning_context", _fake_planning_context)
-    monkeypatch.setattr(planning_module, "dag_node", _fake_dag_node)
+    monkeypatch.setattr(
+        planning_module,
+        "decompose_analysis_plan",
+        _fake_decompose_analysis_plan,
+    )
 
     state = cast(AgentState, {"user_query": "q5"})
     out = await planning_node(state, default_tools={})
@@ -249,7 +253,7 @@ async def test_planning_compat_fallback_can_be_disabled(
             "planning_context_source": "state",
         }
 
-    async def _fake_dag_node(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+    async def _fake_decompose_analysis_plan(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         return {
             "plan": [
                 {
@@ -264,7 +268,11 @@ async def test_planning_compat_fallback_can_be_disabled(
         }
 
     monkeypatch.setattr(planning_module, "resolve_planning_context", _fake_planning_context)
-    monkeypatch.setattr(planning_module, "dag_node", _fake_dag_node)
+    monkeypatch.setattr(
+        planning_module,
+        "decompose_analysis_plan",
+        _fake_decompose_analysis_plan,
+    )
 
     state = cast(AgentState, {"user_query": "q8"})
     out = await planning_node(state, default_tools={})
