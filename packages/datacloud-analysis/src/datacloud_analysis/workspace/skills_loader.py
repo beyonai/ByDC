@@ -34,6 +34,7 @@ import importlib.util
 import logging
 import os
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -75,6 +76,14 @@ def _extension_skill_dirs() -> list[Path]:
     return dirs
 
 
+@dataclass(frozen=True)
+class SkillScanLayer:
+    """One scan layer in the skill loading chain."""
+
+    source: str
+    path: Path
+
+
 class SkillLoader:
     """Scan skill directories and build a registry of callable skills.
 
@@ -84,9 +93,16 @@ class SkillLoader:
     """
 
     def __init__(self, task_paths: TaskPaths) -> None:
-        self._dirs: list[Path] = [_BUILTIN_SKILLS_DIR]
-        self._dirs.extend(_extension_skill_dirs())
-        self._dirs.extend([task_paths.skills_public, task_paths.skills_private])
+        self._layers: list[SkillScanLayer] = [SkillScanLayer(source="builtin", path=_BUILTIN_SKILLS_DIR)]
+        self._layers.extend(
+            SkillScanLayer(source="extension", path=path) for path in _extension_skill_dirs()
+        )
+        self._layers.extend(
+            [
+                SkillScanLayer(source="public", path=task_paths.skills_public),
+                SkillScanLayer(source="private", path=task_paths.skills_private),
+            ]
+        )
         self._registry: dict[str, dict[str, Any]] = {}
 
     # ------------------------------------------------------------------
@@ -99,14 +115,26 @@ class SkillLoader:
         Returns:
             ``{skill_name: {"meta": SKILL_META_dict, "run": Callable}}``
         """
-        for directory in self._dirs:
+        loaded_by_source: dict[str, int] = {"builtin": 0, "extension": 0, "public": 0, "private": 0}
+        for layer in self._layers:
+            directory = layer.path
             if not directory.exists():
-                logger.debug("Skills directory not found, skipping: %s", directory)
+                logger.debug(
+                    "Skills directory not found, skipping: source=%s path=%s",
+                    layer.source,
+                    directory,
+                )
                 continue
             for skill_file in sorted(directory.glob("*.py")):
-                self._load_file(skill_file)
+                if self._load_file(skill_file, source=layer.source):
+                    loaded_by_source[layer.source] = loaded_by_source.get(layer.source, 0) + 1
 
-        logger.info("SkillLoader: loaded %d skills.", len(self._registry))
+        logger.info(
+            "SkillLoader scan summary: total=%d by_source=%s scan_order=%s",
+            len(self._registry),
+            loaded_by_source,
+            [layer.source for layer in self._layers],
+        )
         return self._registry
 
     def get(self, name: str) -> Callable[..., Any] | None:
@@ -125,12 +153,12 @@ class SkillLoader:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _load_file(self, path: Path) -> None:
+    def _load_file(self, path: Path, *, source: str) -> bool:
         """Dynamically import a skill file and register it."""
         try:
             spec = importlib.util.spec_from_file_location(path.stem, path)
             if spec is None or spec.loader is None:
-                return
+                return False
             module = importlib.util.module_from_spec(spec)
             loader = spec.loader
             loader.exec_module(module)
@@ -140,13 +168,31 @@ class SkillLoader:
 
             if meta is None or run_fn is None:
                 logger.debug("Skipping %s: missing SKILL_META or run()", path.name)
-                return
+                return False
 
             name: str = meta.get("name", path.stem)
-            self._registry[name] = {"meta": meta, "run": run_fn}
-            logger.debug("Registered skill: %s (from %s)", name, path)
+            previous_entry = self._registry.get(name)
+            self._registry[name] = {"meta": meta, "run": run_fn, "source": source, "path": path}
+            if previous_entry is not None:
+                logger.info(
+                    "Skill override: name=%s old_source=%s new_source=%s old_path=%s new_path=%s",
+                    name,
+                    previous_entry.get("source", "unknown"),
+                    source,
+                    previous_entry.get("path", "unknown"),
+                    path,
+                )
+            else:
+                logger.debug(
+                    "Registered skill: name=%s source=%s path=%s",
+                    name,
+                    source,
+                    path,
+                )
+            return True
 
         except Exception as exc:  # noqa: BLE001
             logger.warning("Failed to load skill file %s: %s", path, exc)
+            return False
 
 

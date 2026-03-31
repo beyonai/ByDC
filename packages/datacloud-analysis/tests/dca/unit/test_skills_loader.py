@@ -84,3 +84,43 @@ def test_extension_skill_dir_overrides_builtin(
     loader = SkillLoader(paths)
     registry = loader.load_all()
     assert registry["group_agg"]["meta"]["description"] == "ext override"
+
+
+def test_skill_load_order_extension_public_private(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = _make_task_paths(tmp_path)
+    ext_dir = tmp_path / "ext_skill_plugins"
+    ext_dir.mkdir(parents=True, exist_ok=True)
+    _write_skill(ext_dir, "group_agg", "from extension")
+    _write_skill(paths.skills_public, "group_agg", "from public")
+    _write_skill(paths.skills_private, "group_agg", "from private")
+    monkeypatch.setenv("DATACLOUD_SKILL_PLUGIN_DIRS", str(ext_dir))
+
+    loader = SkillLoader(paths)
+    registry = loader.load_all()
+    assert registry["group_agg"]["meta"]["description"] == "from private"
+    assert registry["group_agg"]["source"] == "private"
+
+
+def test_skill_override_audit_log_emitted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    paths = _make_task_paths(tmp_path)
+    ext_dir = tmp_path / "ext_skill_plugins"
+    ext_dir.mkdir(parents=True, exist_ok=True)
+    _write_skill(ext_dir, "group_agg", "from extension")
+    _write_skill(paths.skills_public, "group_agg", "from public")
+    monkeypatch.setenv("DATACLOUD_SKILL_PLUGIN_DIRS", str(ext_dir))
+    caplog.set_level("INFO")
+
+    loader = SkillLoader(paths)
+    loader.load_all()
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("Skill override: name=group_agg old_source=builtin new_source=extension" in m for m in messages)
+    assert any("Skill override: name=group_agg old_source=extension new_source=public" in m for m in messages)
+    assert any("SkillLoader scan summary:" in m for m in messages)
