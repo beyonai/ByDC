@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any, cast
 
-from datacloud_analysis.orchestration.intent import intent_node
+from datacloud_analysis.orchestration.planner_facade import resolve_planning_context
 from datacloud_analysis.orchestration.planning_decomposer import decompose_analysis_plan
 from datacloud_analysis.orchestration.state import AgentState
 
@@ -267,8 +267,8 @@ async def planning_node(
             planning_updates["query_mode"] = "online_query"
 
     plan: list[dict[str, Any]] = []
-    if query_mode == "analysis" and not intent_updates.get("ambiguous_terms"):
-        merged_state = cast(AgentState, {**state, **intent_updates})
+    if query_mode == "analysis" and not planning_updates.get("ambiguous_terms"):
+        merged_state = cast(AgentState, {**state, **planning_updates})
         dag_updates = await decompose_analysis_plan(
             merged_state,
             intent=intent_text,
