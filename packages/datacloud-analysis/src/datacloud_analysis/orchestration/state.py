@@ -18,6 +18,8 @@ class AgentState(MessagesState):
     # --- Core query context ---
     user_query: str | None
     enriched_query: str | None
+    enriched_query_source: str | None
+    enriched_query_confidence: float | None
     intent: str | None
     knowledge_preview: str | None
     knowledge_payload: dict[str, Any] | None
