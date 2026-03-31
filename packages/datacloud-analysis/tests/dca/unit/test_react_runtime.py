@@ -120,3 +120,37 @@ async def test_select_react_capability_returns_empty_fallback_for_empty_candidat
     assert out["reason"] == "empty_candidates"
 
 
+@pytest.mark.asyncio
+async def test_select_react_capability_normalizes_provider_prefixed_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def _fake_init_chat_model(*args: Any, **kwargs: Any) -> _FakeModel:
+        captured["model"] = args[0] if args else None
+        captured["model_provider"] = kwargs.get("model_provider")
+        return _FakeModel(
+            tool_calls=[
+                {
+                    "id": "call_prefixed",
+                    "name": "choose_capability",
+                    "args": {"capability_id": "tool.query", "reason": "normalized"},
+                }
+            ]
+        )
+
+    monkeypatch.setenv("DATACLOUD_LLM_REASONING_MODEL", "openai:Qwen/Qwen3-235B-A22B")
+    monkeypatch.setattr(react_runtime, "init_chat_model", _fake_init_chat_model)
+
+    out = await select_react_capability(
+        state={},
+        todo={"goal": "query"},
+        candidates=["tool.query", "tool.search"],
+        round_index=1,
+    )
+
+    assert out["capability_id"] == "tool.query"
+    assert captured["model"] == "Qwen/Qwen3-235B-A22B"
+    assert captured["model_provider"] == "openai"
+
+
