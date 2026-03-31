@@ -43,36 +43,36 @@ from datacloud_analysis.agent import create_agent
 from datacloud_analysis.command_plugins import CommandPluginManager
 
 
-_CHITCHAT_DIRECT_REPLY = "浣犲ソ锛屾垜鍦ㄣ€傞渶瑕佹垜甯綘鏌ヨ鎴栧垎鏋愪粈涔堟暟鎹紵"
+_CHITCHAT_DIRECT_REPLY = "你好，我在。需要我帮你查询或分析什么数据？"
 _CHITCHAT_TOKENS = {
     "hi",
     "hello",
     "hey",
     "thanks",
     "thank you",
-    "浣犲ソ",
-    "鎮ㄥソ",
-    "鍡?,
-    "鍝堝柦",
-    "鍦ㄥ悧",
-    "璋㈣阿",
-    "鏃╀笂濂?,
-    "涓崍濂?,
-    "涓嬪崍濂?,
-    "鏅氫笂濂?,
+    "你好",
+    "您好",
+    "喂",
+    "哈喽",
+    "在吗",
+    "谢谢",
+    "早上好",
+    "中午好",
+    "下午好",
+    "晚上好",
 }
 _ANALYSIS_HINT_TOKENS = {
-    "鏌?,
-    "鏌ヨ",
-    "鍒嗘瀽",
-    "缁熻",
-    "鎶ヨ〃",
-    "閿€閲?,
-    "閿€鍞?,
-    "璁㈠崟",
-    "鏁版嵁",
-    "澶氬皯",
-    "瓒嬪娍",
+    "查",
+    "查询",
+    "分析",
+    "统计",
+    "报表",
+    "销量",
+    "销售",
+    "订单",
+    "数据",
+    "多少",
+    "趋势",
     "sql",
     "report",
     "query",
@@ -80,12 +80,28 @@ _ANALYSIS_HINT_TOKENS = {
 }
 
 _NODE_THINKING_DESC: dict[str, str] = {
-    "knowledge_enhance": "濮濓絽婀悶鍡毿掓稉姘閺堫垵顕?..",
-    "planning": "濮濓絽婀崚鍡毿掗崚鍡樼€芥禒璇插...",
-    "execution": "濮濓絽婀崘宕囩摜閹笛嗩攽濮濄儵顎?..",
-    "end": "濮濓絽婀悽鐔稿灇閸掑棙鐎界紒鎾诡啈...",
+    "knowledge_enhance": "正在理解问题并补充上下文...",
+    "planning": "正在生成任务计划...",
+    "execution": "正在执行任务...",
+    "end": "正在整理结果...",
 }
-_DEFAULT_THINKING_DESC = "濮濓絽婀ǎ鍗炲弳閸掑棙鐎介敍宀冾嚞缁嬪秴鈧?.."
+_DEFAULT_THINKING_DESC = "正在处理，请稍候..."
+
+_NODE_PHASE_TITLE: dict[str, str] = {
+    "knowledge_enhance": "问题理解",
+    "execution": "任务执行",
+    "end": "结果生成",
+}
+
+_PLANNING_PHASE_TITLE = "任务生成"
+
+_HEARTBEAT_INTERVAL: float = 3.0
+_HEARTBEAT_MESSAGES: list[str] = [
+    "数据量较大，正在处理中...",
+    "查询较复杂，请耐心等待...",
+    "正在整合多维度数据...",
+    "即将完成，请稍候...",
+]
 
 
 _TOOL_DISPLAY = {
@@ -120,6 +136,47 @@ def _extract_tool_detail(tool_name: str, tool_input: Any) -> str:
         query_value = str(tool_input.get("query") or "").strip()
         return query_value[:30]
     return ""
+
+
+def _now_monotonic() -> float:
+    return asyncio.get_running_loop().time()
+
+
+def _touch_emit_time(last_emit_time_ref: list[float]) -> None:
+    last_emit_time_ref[0] = _now_monotonic()
+
+
+async def _heartbeat_loop(
+    context: AgentContext,
+    stop_event: asyncio.Event,
+    last_emit_time_ref: list[float],
+) -> None:
+    """Emit periodic think_text heartbeat when stream is temporarily silent."""
+    idx = 0
+    try:
+        while not stop_event.is_set():
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=1.0)
+                break
+            except TimeoutError:
+                pass
+
+            now = _now_monotonic()
+            if now - last_emit_time_ref[0] < _HEARTBEAT_INTERVAL:
+                continue
+
+            msg = _HEARTBEAT_MESSAGES[idx % len(_HEARTBEAT_MESSAGES)]
+            await context.emit_chunk(
+                StreamChunkEvent(content=msg),
+                event_type=EventType.REASONING_LOG_START.value,
+                content_type=SseReasonMessageType.think_text.value,
+            )
+            last_emit_time_ref[0] = now
+            idx += 1
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("heartbeat loop exited with error: %s", exc)
 
 
 def _compiled_graph_has_checkpointer(graph: Any) -> bool:
@@ -298,7 +355,7 @@ class DataCloudWorker(GatewayWorker):
         init_plugin = self.plugin_registry.get_plugin("datacloud_init_agent_conf")
         loaded_agent_ids = getattr(init_plugin, "loaded_agent_ids", []) if init_plugin else []
         if not loaded_agent_ids:
-            raise RuntimeError("鍚姩澶辫触锛氭湭鍔犺浇鍒颁换浣曟暟瀛楀憳宸ラ厤缃?)
+            raise RuntimeError("启动失败：未加载到任何数字员工配置。")
         logger.info(
             "Init plugin loaded digital employees: count=%d ids=%s",
             len(loaded_agent_ids),
@@ -313,7 +370,7 @@ class DataCloudWorker(GatewayWorker):
         logger.info("DataCloudWorker: SDK framework bootstrapped.")
 
     def get_capabilities(self) -> list[str]:
-        """鍚?gateway 娉ㄥ唽鏈?worker 鐨勮兘鍔涙爣绛俱€?""
+        """Capabilities registered by this worker."""
         return [os.environ.get("DATACLOUD_GATEWAY_WORKER_ID", "datacloud")]
 
     async def _emit_6001(self, context: AgentContext, payload: dict[str, Any]) -> None:
@@ -522,14 +579,9 @@ class DataCloudWorker(GatewayWorker):
             }
         }
 
-        # 鈶?鍙戦€?寮€濮嬫帹鐞?閫氱煡
+        # 初始提示
         await context.emit_chunk(
-            StreamChunkEvent(content="鎬濊€冧腑..."),
-            event_type=EventType.REASONING_LOG_START.value,
-            content_type=SseReasonMessageType.think_title.value,
-        )
-        await context.emit_chunk(
-            StreamChunkEvent(content="宸叉帴鏀跺埌鐢ㄦ埛娑堟伅锛屽紑濮嬪鐞?),
+            StreamChunkEvent(content="已接收到用户消息，开始处理"),
             event_type=EventType.REASONING_LOG_START.value,
             content_type=SseReasonMessageType.think_text.value,
         )
@@ -689,196 +741,209 @@ class DataCloudWorker(GatewayWorker):
         by_agent_id: str,
         conf_hash: str,
     ) -> dict:
-        """Drive the graph via astream_events, then check for interrupt via aget_state.
-
-        LangGraph's root-graph suppresses GraphInterrupt internally 鈥?it never propagates
-        through astream_events.  The correct detection pattern is to call aget_state()
-        after the stream ends and inspect snapshot.interrupts.
-
-        Returns:
-            {"status": "done"}    鈥?normal completion.
-            {"status": "waiting"} 鈥?graph interrupted, ask_user already emitted.
-        """
+        """Drive the graph stream and handle interrupt/done branches."""
         is_agent_delegate = False
         stream_event_count = 0
-        logger.info(
-            "_stream_graph: astream_events begin session=%s conf_hash=%s",
-            context.session_id,
-            conf_hash,
+        phase_emitted: set[str] = set()
+        last_emit_time_ref: list[float] = [_now_monotonic()]
+        heartbeat_stop = asyncio.Event()
+        heartbeat_task = asyncio.create_task(
+            _heartbeat_loop(context, heartbeat_stop, last_emit_time_ref)
         )
-        async for event in target_graph.astream_events(graph_input, config=config, version="v2"):
-            stream_event_count += 1
-            await context.check_cancelled()
-            kind: str = event["event"]
 
-            if kind == "on_chain_end" and event.get("name") == "agent_delegate":
-                is_agent_delegate = True
-            elif kind == "on_tool_start":
-                tool_name = str(event.get("name") or "unknown_tool")
-                tool_input = (event.get("data") or {}).get("input", {})
-                start_desc, _ = _tool_display(tool_name)
-                detail = _extract_tool_detail(tool_name, tool_input)
-                display_text = f"{start_desc}：{detail}" if detail else start_desc
-                await context.emit_chunk(
-<<<<<<< HEAD
-                    StreamChunkEvent(content=display_text),
-=======
-                    StreamChunkEvent(content=f"璋冪敤宸ュ叿: {tool_name}"),
->>>>>>> 8bf95c0 (fix(core): task-02)
-                    event_type=EventType.TASK_CREATE.value,
-                    content_type=SseReasonMessageType.task_title.value,
-                )
-            elif kind == "on_tool_end":
-<<<<<<< HEAD
-                tool_name = str(event.get("name") or "unknown_tool")
-                _, end_desc = _tool_display(tool_name)
-                if end_desc:
-                    await context.emit_chunk(
-                        StreamChunkEvent(content=end_desc),
-                        event_type=EventType.STEP_COMPLETE.value,
-                        content_type=SseReasonMessageType.task_finished.value,
+        async def _emit(
+            *,
+            content: str,
+            event_type: str,
+            content_type: str,
+            metadata: dict[str, Any] | None = None,
+        ) -> None:
+            await context.emit_chunk(
+                StreamChunkEvent(content=content, metadata=metadata),
+                event_type=event_type,
+                content_type=content_type,
+            )
+            _touch_emit_time(last_emit_time_ref)
+
+        try:
+            logger.info(
+                "_stream_graph: astream_events begin session=%s conf_hash=%s",
+                context.session_id,
+                conf_hash,
+            )
+            async for event in target_graph.astream_events(graph_input, config=config, version="v2"):
+                stream_event_count += 1
+                await context.check_cancelled()
+                kind: str = str(event["event"])
+
+                if kind == "on_chain_start":
+                    node_name = str(event.get("name") or "")
+                    phase_title = _NODE_PHASE_TITLE.get(node_name)
+                    if phase_title and phase_title not in phase_emitted:
+                        phase_emitted.add(phase_title)
+                        await _emit(
+                            content=phase_title,
+                            event_type=EventType.REASONING_LOG_START.value,
+                            content_type=SseReasonMessageType.think_title.value,
+                        )
+
+                elif kind == "on_chat_model_end":
+                    node_name = str((event.get("metadata") or {}).get("langgraph_node") or "")
+                    if node_name == "planning" and _PLANNING_PHASE_TITLE not in phase_emitted:
+                        phase_emitted.add(_PLANNING_PHASE_TITLE)
+                        await _emit(
+                            content=_PLANNING_PHASE_TITLE,
+                            event_type=EventType.REASONING_LOG_START.value,
+                            content_type=SseReasonMessageType.think_title.value,
+                        )
+
+                elif kind == "on_chain_end" and event.get("name") == "agent_delegate":
+                    is_agent_delegate = True
+
+                elif kind == "on_tool_start":
+                    tool_name = str(event.get("name") or "unknown_tool")
+                    tool_input = (event.get("data") or {}).get("input", {})
+                    start_desc, _ = _tool_display(tool_name)
+                    detail = _extract_tool_detail(tool_name, tool_input)
+                    display_text = f"{start_desc}：{detail}" if detail else start_desc
+                    await _emit(
+                        content=display_text,
+                        event_type=EventType.TASK_CREATE.value,
+                        content_type=SseReasonMessageType.task_title.value,
                     )
-            # on_chat_model_stream: insight_node 自己通过 context.emit_chunk 推送，worker 不重复转发
-=======
-                tool_name = event.get("name", "unknown_tool")
-                await context.emit_chunk(
-                    StreamChunkEvent(content=f"宸ュ叿瀹屾垚: {tool_name}"),
-                    event_type=EventType.STEP_COMPLETE.value,
-                    content_type=SseReasonMessageType.task_finished.value,
-                )
-            elif kind == "on_chat_model_start":
-                metadata = event.get("metadata") or {}
-                node_name = str(metadata.get("langgraph_node") or "").strip()
-                desc = _NODE_THINKING_DESC.get(node_name, _DEFAULT_THINKING_DESC)
-                await context.emit_chunk(
-                    StreamChunkEvent(content=desc),
-                    event_type=EventType.REASONING_LOG_START.value,
-                    content_type=SseReasonMessageType.think_text.value,
-                )
-            # on_chat_model_stream: insight_node 鑷繁閫氳繃 context.emit_chunk 鎺ㄩ€侊紝worker 涓嶉噸澶嶈浆鍙?
->>>>>>> 8bf95c0 (fix(core): task-02)
 
-        logger.info(
-            "_stream_graph: astream_events end session=%s event_count=%d",
-            context.session_id,
-            stream_event_count,
-        )
+                elif kind == "on_tool_end":
+                    tool_name = str(event.get("name") or "unknown_tool")
+                    _, end_desc = _tool_display(tool_name)
+                    if end_desc:
+                        await _emit(
+                            content=end_desc,
+                            event_type=EventType.STEP_COMPLETE.value,
+                            content_type=SseReasonMessageType.task_finished.value,
+                        )
 
-        # GraphInterrupt 琚?root 鎶戝埗鏃讹紝娴佺粨鏉熷悗鐢?aget_state 鐪?snapshot.interrupts銆?
-        # 鑻?create_agent 鍦ㄦ湭 bootstrap 鏃堕€€鍖栦负鏃?checkpointer 缂栬瘧锛宎get_state 浼氭姏
-        # ValueError("No checkpointer set") 鈥?蹇呴』鍏堝垽鏂€?
-        if _compiled_graph_has_checkpointer(target_graph):
-            snapshot = await target_graph.aget_state(config)
-        else:
-            global _no_checkpointer_logged
-            if not _no_checkpointer_logged:
-                logger.warning(
-                    "Graph has no checkpointer: aget_state skipped, HITL/resume disabled. "
-                    "Ensure bootstrap.setup() finished before the first create_agent(), "
-                    "or clear graph cache if bootstrap order was wrong."
-                )
-                _no_checkpointer_logged = True
-            snapshot = None
+                elif kind == "on_chat_model_start":
+                    metadata = event.get("metadata") or {}
+                    node_name = str(metadata.get("langgraph_node") or "").strip()
+                    desc = _NODE_THINKING_DESC.get(node_name, _DEFAULT_THINKING_DESC)
+                    await _emit(
+                        content=desc,
+                        event_type=EventType.REASONING_LOG_START.value,
+                        content_type=SseReasonMessageType.think_text.value,
+                    )
 
-        ckpt_after = (
-            snapshot.config.get("configurable", {}).get("checkpoint_id", "")
-            if snapshot is not None
-            else ""
-        )
-        logger.info(
-            "_stream_graph: after aget_state session=%s snapshot_present=%s "
-            "has_interrupts=%s checkpoint_id=%s",
-            context.session_id,
-            snapshot is not None,
-            bool(snapshot.interrupts) if snapshot is not None else False,
-            ckpt_after,
-        )
+            logger.info(
+                "_stream_graph: astream_events end session=%s event_count=%d",
+                context.session_id,
+                stream_event_count,
+            )
 
-        if snapshot is not None and snapshot.interrupts:
-            # Bug 1 fix: interrupt() 鐨勫€煎湪 snapshot.interrupts[0].value锛岃€岄潪 exc.args
-            first = snapshot.interrupts[0]
-            interrupt_value = first.value
-            interrupt_reason = "unknown_interrupt"
-            if isinstance(interrupt_value, dict):
-                prompt = interrupt_value.get("prompt", str(interrupt_value))
-                interrupt_reason = str(
-                    interrupt_value.get("reason_code")
-                    or interrupt_value.get("interrupt_reason")
-                    or "interrupt"
-                )
+            if _compiled_graph_has_checkpointer(target_graph):
+                snapshot = await target_graph.aget_state(config)
             else:
-                prompt = str(interrupt_value) if interrupt_value else "璇疯ˉ鍏呮偍鐨勫洖绛?
-                if prompt:
-                    interrupt_reason = "prompt_interrupt"
+                global _no_checkpointer_logged
+                if not _no_checkpointer_logged:
+                    logger.warning(
+                        "Graph has no checkpointer: aget_state skipped, HITL/resume disabled. "
+                        "Ensure bootstrap.setup() finished before the first create_agent(), "
+                        "or clear graph cache if bootstrap order was wrong."
+                    )
+                    _no_checkpointer_logged = True
+                snapshot = None
 
-            checkpoint_id = snapshot.config.get("configurable", {}).get("checkpoint_id", "")
-            # Bug 5 fix: 琛ュ厖 checkpoint_ns锛堝瓙鍥惧満鏅繀濉級
-            checkpoint_ns = snapshot.config.get("configurable", {}).get("checkpoint_ns", "")
-            snapshot_values = snapshot.values if isinstance(snapshot.values, dict) else {}
-            todo_active_id = str(snapshot_values.get("todo_active_id") or "")
-            active_tools = snapshot_values.get("active_tools")
-            pending_capability = ""
-            if isinstance(active_tools, list) and active_tools:
-                pending_capability = str(active_tools[0] or "")
-            if not pending_capability:
-                pending_capability = str(snapshot_values.get("target_tool") or "")
-
-            logger.info(
-                "Graph interrupted: session=%s checkpoint_id=%s prompt=%r",
-                context.session_id,
-                checkpoint_id,
-                prompt,
+            ckpt_after = (
+                snapshot.config.get("configurable", {}).get("checkpoint_id", "")
+                if snapshot is not None
+                else ""
             )
-            await context.ask_user(
-                AskUserEvent(
-                    prompt=prompt,
-                    metadata={
-                        "thread_id": config["configurable"]["thread_id"],
-                        "checkpoint_id": checkpoint_id,
-                        "checkpoint_ns": checkpoint_ns,
-                        "agent_id": by_agent_id,
-                        "conf_hash": conf_hash,
-                        "todo_active_id": todo_active_id,
-                        "react_step_id": todo_active_id,
-                        "pending_capability": pending_capability,
-                        "interrupt_reason": interrupt_reason,
-                    },
+            logger.info(
+                "_stream_graph: after aget_state session=%s snapshot_present=%s "
+                "has_interrupts=%s checkpoint_id=%s",
+                context.session_id,
+                snapshot is not None,
+                bool(snapshot.interrupts) if snapshot is not None else False,
+                ckpt_after,
+            )
+
+            if snapshot is not None and snapshot.interrupts:
+                first = snapshot.interrupts[0]
+                interrupt_value = first.value
+                interrupt_reason = "unknown_interrupt"
+                if isinstance(interrupt_value, dict):
+                    prompt = interrupt_value.get("prompt", str(interrupt_value))
+                    interrupt_reason = str(
+                        interrupt_value.get("reason_code")
+                        or interrupt_value.get("interrupt_reason")
+                        or "interrupt"
+                    )
+                else:
+                    prompt = str(interrupt_value) if interrupt_value else "请补充您的回答。"
+                    if prompt:
+                        interrupt_reason = "prompt_interrupt"
+
+                checkpoint_id = snapshot.config.get("configurable", {}).get("checkpoint_id", "")
+                checkpoint_ns = snapshot.config.get("configurable", {}).get("checkpoint_ns", "")
+                snapshot_values = snapshot.values if isinstance(snapshot.values, dict) else {}
+                todo_active_id = str(snapshot_values.get("todo_active_id") or "")
+                active_tools = snapshot_values.get("active_tools")
+                pending_capability = ""
+                if isinstance(active_tools, list) and active_tools:
+                    pending_capability = str(active_tools[0] or "")
+                if not pending_capability:
+                    pending_capability = str(snapshot_values.get("target_tool") or "")
+
+                logger.info(
+                    "Graph interrupted: session=%s checkpoint_id=%s prompt=%r",
+                    context.session_id,
+                    checkpoint_id,
+                    prompt,
                 )
-            )
-            # 琛ュ厖缁撴潫鐨勬爣蹇?
-            await context.emit_chunk(
-                StreamChunkEvent(
-                    content="鍥炵瓟瀹屾垚",
-                    metadata={"relatedResources": ["鎺ㄨ崘闂11"]},
-                ),
-                event_type=EventType.APP_STREAM_RESPONSE.value,
-                content_type=SseMessageType.text.value,
-            )
-            # 涓嶈皟鐢?flush_to_history锛氬璇濆皻鏈畬鎴?
+                await context.ask_user(
+                    AskUserEvent(
+                        prompt=prompt,
+                        metadata={
+                            "thread_id": config["configurable"]["thread_id"],
+                            "checkpoint_id": checkpoint_id,
+                            "checkpoint_ns": checkpoint_ns,
+                            "agent_id": by_agent_id,
+                            "conf_hash": conf_hash,
+                            "todo_active_id": todo_active_id,
+                            "react_step_id": todo_active_id,
+                            "pending_capability": pending_capability,
+                            "interrupt_reason": interrupt_reason,
+                        },
+                    )
+                )
+                await _emit(
+                    content="回答完成",
+                    event_type=EventType.APP_STREAM_RESPONSE.value,
+                    content_type=SseMessageType.text.value,
+                    metadata={"relatedResources": ["推荐问题11"]},
+                )
+                logger.info("_stream_graph: return session=%s status=waiting", context.session_id)
+                return {"status": "waiting"}
+
+            if not is_agent_delegate:
+                await _emit(
+                    content="回答完成",
+                    event_type=EventType.APP_STREAM_RESPONSE.value,
+                    content_type=SseMessageType.text.value,
+                    metadata={"relatedResources": ["推荐问题11"]},
+                )
+
+            await context.flush_to_history()
             logger.info(
-                "_stream_graph: return session=%s status=waiting",
+                "_stream_graph: return session=%s status=done (flush_to_history ok)",
                 context.session_id,
             )
-            return {"status": "waiting"}
-
-        # 姝ｅ父缁撴潫锛氭帹閫佸畬鎴愰€氱煡骞跺啓鍏ュ巻鍙?
-        # 鈶?鍥炵瓟缁撴潫閫氱煡锛坅gent_delegate 璺緞宸茬敱瀛怉gent鑷缁撴潫锛屾棤闇€閲嶅閫氱煡锛?
-        if not is_agent_delegate:
-            await context.emit_chunk(
-                StreamChunkEvent(
-                    content="鍥炵瓟瀹屾垚",
-                    metadata={"relatedResources": ["鎺ㄨ崘闂11"]},
-                ),
-                event_type=EventType.APP_STREAM_RESPONSE.value,
-                content_type=SseMessageType.text.value,
-            )
-
-        await context.flush_to_history()
-        logger.info(
-            "_stream_graph: return session=%s status=done (flush_to_history ok)",
-            context.session_id,
-        )
-        return {"status": "done"}
+            return {"status": "done"}
+        finally:
+            heartbeat_stop.set()
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
 
 
 # ------------------------------------------------------------------
