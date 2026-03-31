@@ -327,9 +327,15 @@ async def test_execution_level3_interrupt_confirmed_replans(
         task = args[0]
         return ({**task, "status": "failed", "error": "boom"}, {"error": "boom"})
 
+    interrupt_payload: dict[str, Any] = {}
+
+    def _fake_interrupt(payload: dict[str, Any]) -> dict[str, Any]:
+        interrupt_payload.update(payload)
+        return {"confirm": "继续"}
+
     monkeypatch.setattr(execution_module, "select_react_capability", _select_react_capability)
     monkeypatch.setattr(execution_module, "execute_next_task", _execute_next_task)
-    monkeypatch.setattr(execution_module, "interrupt", lambda _payload: {"confirm": "继续"})
+    monkeypatch.setattr(execution_module, "interrupt", _fake_interrupt)
 
     state = cast(
         AgentState,
@@ -354,6 +360,11 @@ async def test_execution_level3_interrupt_confirmed_replans(
     out = await execution_node(state, {"configurable": {}}, default_tools={})
 
     assert out["execution_status"] == "replan"
+    assert interrupt_payload["reason_code"] == "LEVEL3_GLOBAL_REPLAN_CONFIRM"
+    assert interrupt_payload["todo_active_id"] == "t1"
+    assert interrupt_payload["react_step_id"] == "t1"
+    assert interrupt_payload["pending_capability"] == "tool_a"
+    assert interrupt_payload["interrupt_reason"] == "failed_threshold_reached"
     assert any(
         x.get("stage") == "level3_replan" and x.get("status") == "confirmed"
         for x in out["execution_trace"]
@@ -399,6 +410,59 @@ async def test_execution_level3_interrupt_cancelled_marks_done(
 
     assert out["execution_status"] == "done"
     assert "取消整体重规划" in str(out.get("final_answer") or "")
+
+
+@pytest.mark.asyncio
+async def test_execution_level3_interrupt_for_dependency_deadlock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    interrupt_payload: dict[str, Any] = {}
+
+    def _fake_interrupt(payload: dict[str, Any]) -> dict[str, Any]:
+        interrupt_payload.update(payload)
+        return {"confirm": "继续"}
+
+    monkeypatch.setattr(execution_module, "interrupt", _fake_interrupt)
+
+    state = cast(
+        AgentState,
+        {
+            "query_mode": "analysis",
+            "todos": [
+                {
+                    "todo_id": "t1",
+                    "status": "pending",
+                    "goal": "deadlock t1",
+                    "required_capabilities": ["tool_a"],
+                    "required_tools": ["tool_a"],
+                    "inputs": {},
+                    "depends_on": ["t2"],
+                },
+                {
+                    "todo_id": "t2",
+                    "status": "pending",
+                    "goal": "deadlock t2",
+                    "required_capabilities": ["tool_b"],
+                    "required_tools": ["tool_b"],
+                    "inputs": {},
+                    "depends_on": ["t1"],
+                },
+            ],
+            "results": [],
+            "invocation_dedup": [],
+        },
+    )
+    out = await execution_node(state, {"configurable": {}}, default_tools={})
+
+    assert out["execution_status"] == "replan"
+    assert interrupt_payload["reason_code"] == "LEVEL3_GLOBAL_REPLAN_CONFIRM"
+    assert interrupt_payload["interrupt_reason"] == "dependency_deadlock"
+    assert any(
+        x.get("stage") == "level3_replan"
+        and x.get("status") == "interrupt"
+        and x.get("detail", {}).get("reason") == "dependency_deadlock"
+        for x in out["execution_trace"]
+    )
 
 
 @pytest.mark.asyncio
