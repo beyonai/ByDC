@@ -27,6 +27,10 @@ from by_framework.core.protocol.content_type import SseMessageType, SseReasonMes
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
+from datacloud_analysis.orchestration.execution_summary import (
+    build_execution_summary,
+    persist_execution_summary,
+)
 from datacloud_analysis.orchestration.query_shape_utils import count_rows_like_envelope_build
 from datacloud_analysis.orchestration.sandbox_executor import WRAPPED_TASK_OUTPUT_KEY
 from datacloud_analysis.orchestration.state import AgentState
@@ -260,7 +264,7 @@ def _aggregate_result(res: dict) -> dict[str, Any] | None:
 
     if "file_path" in res:
         try:
-            with open(res["file_path"], "r", encoding="utf-8") as f:
+            with open(res["file_path"], encoding="utf-8") as f:
                 output = json.load(f)
             if isinstance(output, dict):
                 if output.get(WRAPPED_TASK_OUTPUT_KEY):
@@ -406,7 +410,7 @@ def _records_shaped_output(output: dict[str, Any]) -> dict[str, Any] | None:
         result = output.get("result")
         if isinstance(result, list) and result and isinstance(result[0], dict):
             columns = [
-                {"name": str(k), "label": str(k), "type": "string"} for k in result[0].keys()
+                {"name": str(k), "label": str(k), "type": "string"} for k in result[0]
             ]
             return {
                 "records": result,
@@ -577,7 +581,7 @@ def build_structured_data_envelope(
         first_row = merged_records[0]
         if isinstance(first_row, dict):
             columns_norm = [
-                {"name": str(k), "label": str(k), "type": "string"} for k in first_row.keys()
+                {"name": str(k), "label": str(k), "type": "string"} for k in first_row
             ]
 
     notice_base = _default_notice_msg(meta_base, merged_records, notice_overflow)
@@ -614,9 +618,9 @@ def _log_reconcile_raw_results_vs_sse(
         n = count_rows_like_envelope_build(out)
         if n is not None:
             merged += n
-            per_task.append("%s=%d" % (tid, n))
+            per_task.append(f"{tid}={n}")
         else:
-            per_task.append("%s=na" % tid)
+            per_task.append(f"{tid}=na")
     data = envelope.get("data")
     sse_n: int | None = None
     if isinstance(data, dict):
@@ -739,6 +743,49 @@ async def _emit_part2_part3(
 # ---------------------------------------------------------------------------
 
 
+def _session_id_from_state_or_context(state: AgentState, gateway_context: Any) -> str:
+    if gateway_context is not None:
+        context_session = str(getattr(gateway_context, "session_id", "") or "").strip()
+        if context_session:
+            return context_session
+    resume = state.get("resume_context")
+    if isinstance(resume, dict):
+        thread_id = str(resume.get("thread_id", "") or "").strip()
+        if thread_id:
+            return thread_id
+    return ""
+
+
+def _persist_execution_summary_non_blocking(
+    *,
+    state: AgentState,
+    gateway_context: Any,
+    history_content: str,
+    part23: str,
+) -> dict[str, Any]:
+    session_id = _session_id_from_state_or_context(state, gateway_context)
+    summary = build_execution_summary(
+        state=state,
+        history_content=history_content,
+        part23=part23,
+        session_id=session_id,
+    )
+    try:
+        persist_result = persist_execution_summary(
+            summary=summary,
+            workspace_dir=str(state.get("workspace_dir") or "") or None,
+            session_id=session_id,
+            workspace_root=str(os.getenv("DATACLOUD_GATEWAY_WORKSPACE_DIR", "") or "") or None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("insight_node: persist execution summary failed (degraded): %s", exc)
+        persist_result = {"status": "failed", "error": str(exc)}
+    return {
+        "execution_summary": summary,
+        "execution_summary_persistence": persist_result,
+    }
+
+
 async def insight_node(
     state: AgentState,
     gateway_context: Any = None,
@@ -790,7 +837,14 @@ async def insight_node(
                 "[user SSE text] chitchat forced path: answer_delta_total_chars=%d",
                 len(forced_reply),
             )
-            return {"messages": [AIMessage(content=forced_reply)]}
+            history_content = forced_reply
+            summary_updates = _persist_execution_summary_non_blocking(
+                state=state,
+                gateway_context=context,
+                history_content=history_content,
+                part23="",
+            )
+            return {"messages": [AIMessage(content=history_content)], **summary_updates}
 
         await _emit_reasoning_log_end_before_answer(context)
         static_sys = prompts_overwrite.get(
@@ -821,7 +875,14 @@ async def insight_node(
             "[user SSE text] chitchat path: answer_delta_total_chars=%d",
             len(analysis_text),
         )
-        return {"messages": [AIMessage(content=analysis_text)]}
+        history_content = analysis_text
+        summary_updates = _persist_execution_summary_non_blocking(
+            state=state,
+            gateway_context=context,
+            history_content=history_content,
+            part23="",
+        )
+        return {"messages": [AIMessage(content=history_content)], **summary_updates}
 
     # ── clarify / chat path ─────────────────────────────────────────────────
     if state.get("clarify_needed"):
@@ -866,7 +927,14 @@ async def insight_node(
             "[user SSE text] clarify path: answer_delta_total_chars=%d",
             len(analysis_text),
         )
-        return {"messages": [AIMessage(content=analysis_text)]}
+        history_content = analysis_text
+        summary_updates = _persist_execution_summary_non_blocking(
+            state=state,
+            gateway_context=context,
+            history_content=history_content,
+            part23="",
+        )
+        return {"messages": [AIMessage(content=history_content)], **summary_updates}
 
     # ── aggregate & format all results ──────────────────────────────────────
     raw_results = state.get("results", [])
@@ -923,7 +991,14 @@ async def insight_node(
             "[user SSE summary] single-task fast path: part23_only_chars=%d (6001 or markdown inside)",
             len(part23),
         )
-        return {"messages": [AIMessage(content=part23)]}
+        history_content = part23
+        summary_updates = _persist_execution_summary_non_blocking(
+            state=state,
+            gateway_context=context,
+            history_content=history_content,
+            part23=part23,
+        )
+        return {"messages": [AIMessage(content=history_content)], **summary_updates}
 
     # ── LLM path: Part1 analysis + Part2+Part3 as one 6001 JSON or Markdown ─
 
@@ -987,4 +1062,10 @@ async def insight_node(
     if part23:
         history_content += f"\n\n{part23}"
 
-    return {"messages": [AIMessage(content=history_content)]}
+    summary_updates = _persist_execution_summary_non_blocking(
+        state=state,
+        gateway_context=context,
+        history_content=history_content,
+        part23=part23,
+    )
+    return {"messages": [AIMessage(content=history_content)], **summary_updates}

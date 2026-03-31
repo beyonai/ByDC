@@ -521,6 +521,8 @@ class DataCloudWorker(GatewayWorker):
                 "invocation_dedup": [],
                 "final_answer": "",
                 "artifact_refs": [],
+                "execution_summary": None,
+                "execution_summary_persistence": None,
                 "resume_context": {},
                 "intent": "",
                 "clarify_needed": False,
