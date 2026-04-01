@@ -158,6 +158,8 @@ async def test_knowledge_enhance_emits_non_blocking_thinking_logs(
     out = await knowledge_enhance_node(state, gateway_context=_GatewayContext())
 
     assert out["ambiguous_terms"][0]["mention"] == "活跃用户"
-    assert any("存在歧义的术语：活跃用户" in chunk for chunk in emitted)
-    assert any("已确权的术语：" in chunk and "企业综合分析表" in chunk for chunk in emitted)
-    assert any("改写后的问题：" in chunk and "补充知识：" in chunk for chunk in emitted)
+    assert out["thinking_log"]["recognized_terms"]
+    assert any("1、本次识别出来的术语清单：" in chunk for chunk in emitted)
+    assert any("2、已确权的清单是：" in chunk and "企业综合分析表" in chunk for chunk in emitted)
+    assert any("3、待澄清的清单是：" in chunk and "活跃用户" in chunk for chunk in emitted)
+    assert any("4、增强的上下文是如下：" in chunk and "补充知识：" in chunk for chunk in emitted)
