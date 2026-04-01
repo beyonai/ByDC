@@ -64,7 +64,6 @@ async def run_agent(
             "workspace_dir": workspace_dir,
             "user_query": "",
             "enriched_query": "",
-            "knowledge_preview": "",
             "knowledge_payload": {},
             "term_hints": [],
             "knowledge_snippets": [],
