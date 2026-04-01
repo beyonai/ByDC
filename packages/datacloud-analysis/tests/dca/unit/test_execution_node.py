@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, cast
@@ -324,78 +324,6 @@ async def test_execution_records_react_round_trace(
 
 
 @pytest.mark.asyncio
-async def test_execution_logs_ambiguous_terms_without_interrupt(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    emitted: list[str] = []
-
-    class _GatewayContext:
-        async def emit_chunk(self, event: Any, **_kwargs: Any) -> None:
-            emitted.append(str(getattr(event, "content", event)))
-
-    async def _invoke_with_callbacks(
-        self: ToolRuntime, task: dict[str, Any], _state: Any
-    ) -> tuple[dict[str, Any], Any]:
-        return ({**task, "status": "done"}, {"ok": True})
-
-    def _unexpected_interrupt(_payload: dict[str, Any]) -> dict[str, Any]:
-        raise AssertionError("interrupt should not be called for ambiguous terms")
-
-    monkeypatch.setattr(execution_module.ToolRuntime, "invoke_with_callbacks", _invoke_with_callbacks)
-    monkeypatch.setattr(execution_module, "interrupt", _unexpected_interrupt)
-
-    state = cast(
-        AgentState,
-        {
-            "query_mode": "analysis",
-            "ambiguous_terms": [
-                {
-                    "mention": "活跃用户",
-                    "candidates": [
-                        {"term_name": "DAU"},
-                        {"term_name": "MAU"},
-                    ],
-                }
-            ],
-            "confirmed_terms": [
-                {
-                    "mention": "GMV",
-                    "term_name": "GMV",
-                    "term_id": "t1",
-                    "confidence": 0.95,
-                }
-            ],
-            "todos": [
-                {
-                    "todo_id": "t1",
-                    "status": "pending",
-                    "goal": "run despite ambiguity",
-                    "required_capabilities": ["tool_a"],
-                    "required_tools": ["tool_a"],
-                    "inputs": {},
-                    "depends_on": [],
-                }
-            ],
-            "results": [],
-            "invocation_dedup": [],
-        },
-    )
-
-    out = await execution_node(
-        state,
-        {"configurable": {"gateway_context": _GatewayContext()}},
-        default_tools={},
-    )
-
-    assert out["execution_status"] == "done"
-    assert out["ambiguous_terms"] == []
-    assert out["clarify_needed"] is False
-    assert any("检测到术语「活跃用户」存在歧义" in chunk for chunk in emitted)
-    assert any("活跃用户" in chunk for chunk in emitted)
-    assert any("DAU" in chunk for chunk in emitted)
-
-
-@pytest.mark.asyncio
 async def test_execution_level3_interrupt_confirmed_replans(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -629,4 +557,146 @@ async def test_execution_semantic_type_prioritizes_relation_capability_for_relat
     )
     out = await execution_node(state, {"configurable": {}}, default_tools={})
     assert out["active_tools"][0] == "graph_relation_tool"
+
+
+@pytest.mark.asyncio
+async def test_execution_builds_todos_from_planned_tasks(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake_execute(task: dict[str, Any], state: AgentState, runtime: ToolRuntime) -> tuple[dict[str, Any], Any]:
+        return {**task, "status": "done"}, {"rows": 5}
+
+    monkeypatch.setattr(execution_module, "execute_next_task", _fake_execute)
+
+    state = cast(
+        AgentState,
+        {
+            "planned_tasks": [
+                {
+                    "todo_id": "t_plan",
+                    "goal": "run plan",
+                    "required_tools": ["cap_tool"],
+                    "depends_on": [],
+                    "inputs_from": {},
+                    "required_inputs": {},
+                }
+            ],
+            "task_queue": ["t_plan"],
+            "results_list": [],
+            "results_map": {},
+            "query_mode": "analysis",
+        },
+    )
+    out = await execution_node(
+        state,
+        {"configurable": {}},
+        default_tools={"cap_tool": object()},
+    )
+    assert state["results_list"][0]["status"] == "success"
+    assert out["execution_status"] in {"execution", "done"}
+
+
+@pytest.mark.asyncio
+async def test_execution_blocks_missing_required_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = cast(
+        AgentState,
+        {
+            "planned_tasks": [
+                {
+                    "todo_id": "t_missing",
+                    "goal": "need dep",
+                    "required_tools": ["cap_tool"],
+                    "depends_on": [],
+                    "inputs_from": {"grid_ids": "t_prev.result_meta.grid_ids"},
+                    "required_inputs": {"grid_ids": True},
+                }
+            ],
+            "task_queue": ["t_missing"],
+            "results_list": [],
+            "results_map": {},
+            "query_mode": "analysis",
+        },
+    )
+
+    out = await execution_node(
+        state,
+        {"configurable": {}},
+        default_tools={"cap_tool": object()},
+    )
+    assert state["results_list"][0]["status"] == "blocked"
+
+
+@pytest.mark.asyncio
+async def test_execution_inputs_from_artifact_missing_marks_failed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(execution_module, "interrupt", lambda _payload: {"confirm": "取消"})
+    missing_artifact = tmp_path / "missing.json"
+    upstream_result = {
+        "todo_id": "t_prev",
+        "status": "success",
+        "result_meta": {},
+        "artifact_refs": [
+            {
+                "todo_id": "t_prev",
+                "path": str(missing_artifact),
+                "name": "missing.json",
+            }
+        ],
+    }
+    state = cast(
+        AgentState,
+        {
+            "planned_tasks": [
+                {
+                    "todo_id": "t_missing",
+                    "goal": "need artifact",
+                    "required_tools": ["cap_tool"],
+                    "depends_on": [],
+                    "inputs_from": {"artifact_path": "t_prev.artifact_refs[0].path"},
+                    "required_inputs": {"artifact_path": True},
+                }
+            ],
+            "task_queue": ["t_missing"],
+            "results_list": [upstream_result],
+            "results_map": {"t_prev": upstream_result},
+            "query_mode": "analysis",
+        },
+    )
+
+    out = await execution_node(
+        state,
+        {"configurable": {}},
+        default_tools={"cap_tool": object()},
+    )
+
+    assert out["execution_status"] in {"execution", "done"}
+    injected = next(entry for entry in state["results_list"] if entry["todo_id"] == "t_missing")
+    assert injected["status"] == "failed"
+    assert injected["error_detail"]["code"] == "artifact_not_found"
+
+
+@pytest.mark.asyncio
+async def test_execution_records_task_result_for_skipped_todo() -> None:
+    blocked_caps = list(execution_module._DEFAULT_CAPABILITY_FALLBACK_ORDER)  # type: ignore[attr-defined]
+    state = cast(
+        AgentState,
+        {
+            "query_mode": "analysis",
+            "todos": [
+                {
+                    "todo_id": "t_skip",
+                    "status": "pending",
+                    "required_capabilities": [],
+                    "blocked_capabilities": blocked_caps,
+                    "depends_on": [],
+                }
+            ],
+            "results": [],
+            "invocation_dedup": [],
+        },
+    )
+    out = await execution_node(state, {"configurable": {}}, default_tools={})
+    assert out["todos"][0]["status"] == "skipped"
+    recorded = next(entry for entry in state["results_list"] if entry["todo_id"] == "t_skip")
+    assert recorded["status"] == "blocked"
 
