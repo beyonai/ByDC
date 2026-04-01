@@ -12,7 +12,7 @@
         <rdf:type rdf:resource="#SceneDefinition"/>
                 <view_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_analysis_view</view_code>
                 <view_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads分析联合视图</view_name>
-                <description rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据 最新owl版本.md 生成</description>
+                <description rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业分析视图，可以根据管理网格名称和物理网格的亩产效益查询企业信息，还可以根据企业名称、行业类型、企业等级、风险等级等其他条件进行查询</description>
                 <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
                 <object_codes rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["ads_enterprise_analysis", "ads_grid_analysis", "ads_manage_grid_analysis"]</object_codes>
                 <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["rel_view_ads_analysis_to_ads_enterprise_analysis", "rel_view_ads_analysis_to_ads_manage_grid_analysis", "rel_view_ads_analysis_to_ads_grid_analysis", "rel_ads_enterprise_analysis_to_ads_manage_grid_analysis", "rel_ads_enterprise_analysis_to_ads_grid_analysis", "rel_ads_grid_analysis_to_ads_manage_grid_analysis"]</relations>
