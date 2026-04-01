@@ -358,7 +358,7 @@ async def planning_node(
             planning_updates["query_mode"] = "online_query"
 
     plan: list[dict[str, Any]] = []
-    if query_mode == "analysis" and not planning_updates.get("ambiguous_terms"):
+    if query_mode == "analysis":
         merged_state = cast(AgentState, {**state, **planning_updates})
         # await _emit_planning_stage_status(
         #     gateway_context=gateway_context,
