@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping, MutableMapping, Sequence
+from collections.abc import Mapping, MutableMapping, Sequence
+from typing import Any
 
 from langgraph.graph.message import MessagesState
 
 from datacloud_analysis.orchestration.shared.contracts import PlanTask, TaskResult
+
 
 class AgentState(MessagesState):
     """State dictionary for the DataCloud 5-node orchestration graph."""
@@ -25,6 +27,7 @@ class AgentState(MessagesState):
     knowledge_payload: dict[str, Any] | None
     term_hints: list[dict[str, Any]] | None
     knowledge_snippets: list[dict[str, Any]] | None
+    thinking_log: dict[str, Any] | None
     planning_input_source: str | None
 
     # --- Intent + routing ---

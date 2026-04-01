@@ -67,6 +67,7 @@ async def run_agent(
             "knowledge_payload": {},
             "term_hints": [],
             "knowledge_snippets": [],
+            "thinking_log": {},
             "planning_input_source": "",
             "plan": [],
             "todos": [],

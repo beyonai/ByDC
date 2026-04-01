@@ -6,8 +6,8 @@ from typing import Any, cast
 import pytest
 from langchain_core.messages import HumanMessage
 
-from datacloud_analysis.orchestration.knowledge_enhance import node as knowledge_enhance_module
 from datacloud_analysis.orchestration.knowledge_enhance import knowledge_enhance_node
+from datacloud_analysis.orchestration.knowledge_enhance import node as knowledge_enhance_module
 from datacloud_analysis.orchestration.state import AgentState
 
 
@@ -26,7 +26,10 @@ async def test_knowledge_enhance_filters_low_confidence_term_hints_and_keeps_evi
                 {
                     "tree": {
                         "term_id": "T1",
-                        "knowledge": ["高置信术语A 用于测试知识摘要生成。"],
+                        "knowledge": [
+                            "高置信术语A用于测试知识摘要生成，主要用于企业经营分析与指标解释，"
+                            "能够帮助规划节点理解术语语义并生成稳定任务。"
+                        ],
                         "children": [],
                     }
                 }
@@ -51,6 +54,7 @@ async def test_knowledge_enhance_filters_low_confidence_term_hints_and_keeps_evi
     assert "补充知识：" in out["enriched_query"]
     assert out["enriched_query_source"] == "confirmed_terms"
     assert out["ambiguous_terms"][0]["mention"] == "模糊术语"
+    assert out["ambiguous_terms"][0]["reason"] == "no_high_confidence_match"
     assert "knowledge_preview" not in out
 
 
@@ -126,7 +130,10 @@ async def test_knowledge_enhance_emits_non_blocking_thinking_logs(
                     "normalized_term": "企业综合分析表",
                     "term_id": "T1",
                     "match_score": 0.95,
-                    "definition": "企业综合分析表用于分析企业经营情况和基础画像。",
+                    "definition": (
+                        "企业综合分析表用于分析企业经营情况和基础画像，覆盖企业规模、营收变化、"
+                        "经营稳定性等维度，并支持横向对比和趋势追踪。"
+                    ),
                 }
             ],
             "fuzzy_term_matches": [
