@@ -365,6 +365,7 @@ def _log_thinking(
 def _build_thinking_log(
     *,
     user_query: str,
+    recognized_terms: list[str],
     summaries: list[dict[str, Any]],
     ambiguities: list[dict[str, Any]],
     enriched_query: str,
@@ -372,6 +373,7 @@ def _build_thinking_log(
 ) -> dict[str, Any]:
     return {
         "raw_question": user_query,
+        "recognized_terms": recognized_terms,
         "ambiguous_terms": ambiguities,
         "confirmed_term_summaries": summaries,
         "enriched_query": enriched_query,
@@ -381,9 +383,111 @@ def _build_thinking_log(
     }
 
 
+def _normalize_term_text(value: Any) -> str:
+    text = str(value or "").strip()
+    if len(text) < 2:
+        return ""
+    if text in {"无", "none", "null"}:
+        return ""
+    return text
+
+
+def _extract_recognized_terms(payload: dict[str, Any] | None) -> list[str]:
+    if not isinstance(payload, dict):
+        return []
+    terms: list[str] = []
+    seen: set[str] = set()
+    for row in payload.get("term_matches", []) or []:
+        if not isinstance(row, dict):
+            continue
+        term = _normalize_term_text(row.get("normalized_term") or row.get("term_name"))
+        if term and term not in seen:
+            seen.add(term)
+            terms.append(term)
+    for row in payload.get("fuzzy_term_matches", []) or []:
+        if not isinstance(row, dict):
+            continue
+        mention = _normalize_term_text(row.get("mention") or row.get("original"))
+        if mention and mention not in seen:
+            seen.add(mention)
+            terms.append(mention)
+    return terms
+
+
+def _format_recognized_terms_line(recognized_terms: list[str]) -> str:
+    if not recognized_terms:
+        return "1、本次识别出来的术语清单：【无】"
+    return f"1、本次识别出来的术语清单：【{'、'.join(recognized_terms)}】"
+
+
+def _format_confirmed_terms_block(summaries: list[dict[str, Any]]) -> str:
+    if not summaries:
+        return "2、已确权的清单是：【无】"
+    names = [str(item.get("term_name") or "").strip() for item in summaries]
+    names = [name for name in names if name]
+    lines = [f"2、已确权的清单是：【{'、'.join(names) if names else '无'}】"]
+    for index, item in enumerate(summaries, start=1):
+        term_name = str(item.get("term_name") or "").strip() or "未命名术语"
+        summary = str(item.get("summary") or "").strip() or "无补充知识"
+        lines.append(f"{index}）{term_name}：{summary}")
+    return "\n".join(lines)
+
+
+def _format_ambiguous_terms_block(ambiguities: list[dict[str, Any]]) -> str:
+    if not ambiguities:
+        return "3、待澄清的清单是：【无】"
+    mentions: list[str] = []
+    lines: list[str] = []
+    for index, entry in enumerate(ambiguities, start=1):
+        mention = str(entry.get("mention") or entry.get("term") or "").strip() or "未命名术语"
+        mentions.append(mention)
+        candidates_raw = entry.get("candidates") or []
+        candidate_names: list[str] = []
+        if isinstance(candidates_raw, list):
+            for candidate in candidates_raw[:5]:
+                if not isinstance(candidate, dict):
+                    continue
+                name = str(candidate.get("term_name") or candidate.get("name") or "").strip()
+                if name:
+                    candidate_names.append(name)
+        reason = str(entry.get("reason") or "").strip() or "待用户补充"
+        candidate_text = "、".join(candidate_names) if candidate_names else "暂无候选"
+        lines.append(f"{index}）{mention}：候选={candidate_text}；原因={reason}")
+    return f"3、待澄清的清单是：【{'、'.join(mentions)}】\n" + "\n".join(lines)
+
+
+def _format_enhanced_context_block(user_query: str, enriched_query: str) -> str:
+    if enriched_query.strip() == user_query.strip():
+        knowledge_text = "无（回退为原始问题）"
+    else:
+        knowledge_text = enriched_query
+    return (
+        "4、增强的上下文是如下：\n"
+        f"{user_query}\n"
+        f"{knowledge_text}"
+    )
+
+
+def _format_thinking_report(
+    *,
+    recognized_terms: list[str],
+    summaries: list[dict[str, Any]],
+    ambiguities: list[dict[str, Any]],
+    user_query: str,
+    enriched_query: str,
+) -> str:
+    blocks = [
+        _format_recognized_terms_line(recognized_terms),
+        _format_confirmed_terms_block(summaries),
+        _format_ambiguous_terms_block(ambiguities),
+        _format_enhanced_context_block(user_query, enriched_query),
+    ]
+    return "\n\n".join(blocks)
+
+
 def _format_ambiguous_terms_notice(ambiguities: list[dict[str, Any]]) -> str:
     if not ambiguities:
-        return "存在歧义的术语：无"
+        return "待澄清术语：无"
     lines: list[str] = []
     for entry in ambiguities:
         mention = str(entry.get("mention") or entry.get("term") or "").strip() or "未命名术语"
@@ -397,7 +501,7 @@ def _format_ambiguous_terms_notice(ambiguities: list[dict[str, Any]]) -> str:
                 if name:
                     candidate_names.append(name)
         candidate_text = "、".join(candidate_names) if candidate_names else "无候选"
-        lines.append(f"存在歧义的术语：{mention}，【候选集】{candidate_text}")
+        lines.append(f"待澄清术语：{mention}（候选：{candidate_text}）")
     return "\n".join(lines)
 
 
@@ -422,6 +526,7 @@ def _format_enriched_query_notice(user_query: str, enriched_query: str) -> str:
 async def _emit_thinking_logs(
     *,
     gateway_context: Any,
+    recognized_terms: list[str],
     user_query: str,
     summaries: list[dict[str, Any]],
     ambiguities: list[dict[str, Any]],
@@ -430,9 +535,13 @@ async def _emit_thinking_logs(
     if gateway_context is None:
         return
     chunks = [
-        _format_ambiguous_terms_notice(ambiguities),
-        _format_confirmed_terms_notice(summaries),
-        _format_enriched_query_notice(user_query, enriched_query),
+        _format_thinking_report(
+            recognized_terms=recognized_terms,
+            summaries=summaries,
+            ambiguities=ambiguities,
+            user_query=user_query,
+            enriched_query=enriched_query,
+        )
     ]
     for content in chunks:
         try:
@@ -571,6 +680,7 @@ async def knowledge_enhance_node(
 
     confidence_threshold = _term_hint_confidence_threshold(state)
     term_hints = _extract_term_hints(payload, confidence_threshold=confidence_threshold)
+    recognized_terms = _extract_recognized_terms(payload)
     confirmed_terms = _build_confirmed_terms(payload, term_hints)
     knowledge_summaries = _build_confirmed_knowledge_summaries(payload, term_hints)
     enriched_query, enriched_query_source, enriched_query_confidence = _compose_enriched_query(
@@ -581,6 +691,7 @@ async def knowledge_enhance_node(
     knowledge_snippets = _build_knowledge_snippets(payload, knowledge_summaries)
     thinking_log = _build_thinking_log(
         user_query=user_query,
+        recognized_terms=recognized_terms,
         summaries=knowledge_summaries,
         ambiguities=ambiguities,
         enriched_query=enriched_query,
@@ -595,6 +706,7 @@ async def knowledge_enhance_node(
     )
     await _emit_thinking_logs(
         gateway_context=gateway_context,
+        recognized_terms=recognized_terms,
         user_query=user_query,
         summaries=knowledge_summaries,
         ambiguities=ambiguities,
