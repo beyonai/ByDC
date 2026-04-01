@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping, MutableMapping, Sequence
 
 from langgraph.graph.message import MessagesState
 
+from datacloud_analysis.orchestration.shared.contracts import PlanTask, TaskResult
 
 class AgentState(MessagesState):
     """State dictionary for the DataCloud 5-node orchestration graph."""
@@ -21,10 +22,10 @@ class AgentState(MessagesState):
     enriched_query_source: str | None
     enriched_query_confidence: float | None
     intent: str | None
+    knowledge_preview: str | None
     knowledge_payload: dict[str, Any] | None
     term_hints: list[dict[str, Any]] | None
     knowledge_snippets: list[dict[str, Any]] | None
-    knowledge_mode: str | None
 
     # --- Intent + routing ---
     clarify_needed: bool
@@ -65,3 +66,129 @@ class AgentState(MessagesState):
     # Optional; should not be persisted with callable objects in checkpoint.
     prompts_overwrite: dict[str, Any] | None
     dynamic_tools: dict[str, Any] | None
+    planned_tasks: list[dict[str, Any]] | None
+    task_queue: list[str] | None
+    results_list: list[dict[str, Any]] | None
+    results_map: dict[str, dict[str, Any]] | None
+    final_summary: dict[str, Any] | None
+
+
+StateDict = MutableMapping[str, Any]
+
+
+def ensure_multitask_defaults(state: StateDict) -> None:
+    """Initialize empty containers for multi-task context keys."""
+    if not isinstance(state.get("planned_tasks"), list):
+        state["planned_tasks"] = []
+    if not isinstance(state.get("task_queue"), list):
+        state["task_queue"] = []
+    if not isinstance(state.get("results_list"), list):
+        state["results_list"] = []
+    raw_map = state.get("results_map")
+    if not isinstance(raw_map, dict):
+        state["results_map"] = {}
+    else:
+        sanitized: dict[str, dict[str, Any]] = {}
+        for key, value in raw_map.items():
+            key_str = str(key).strip()
+            if not key_str:
+                continue
+            if isinstance(value, Mapping):
+                sanitized[key_str] = dict(value)
+        state["results_map"] = sanitized
+
+
+def set_planned_tasks(state: StateDict, tasks: Sequence[PlanTask]) -> None:
+    ensure_multitask_defaults(state)
+    state["planned_tasks"] = [task.to_dict() for task in tasks]
+
+
+def get_planned_tasks(state: Mapping[str, Any]) -> list[PlanTask]:
+    raw = state.get("planned_tasks") or []
+    tasks: list[PlanTask] = []
+    if isinstance(raw, list):
+        for entry in raw:
+            if isinstance(entry, Mapping):
+                try:
+                    tasks.append(PlanTask.from_dict(entry))
+                except ValueError:
+                    continue
+    return tasks
+
+
+def set_task_queue(state: StateDict, queue: Sequence[str]) -> None:
+    ensure_multitask_defaults(state)
+    normalized = [str(item).strip() for item in queue if str(item).strip()]
+    state["task_queue"] = normalized
+
+
+def get_task_queue(state: Mapping[str, Any]) -> list[str]:
+    raw = state.get("task_queue") or []
+    if not isinstance(raw, list):
+        return []
+    return [str(item).strip() for item in raw if str(item).strip()]
+
+
+def upsert_task_result(state: StateDict, result: TaskResult) -> None:
+    """Insert or replace a TaskResult in both list/map containers."""
+    ensure_multitask_defaults(state)
+    serialized = result.to_dict()
+    results_list = state["results_list"]
+    assert isinstance(results_list, list)
+    replaced = False
+    for idx, entry in enumerate(results_list):
+        if isinstance(entry, Mapping) and str(entry.get("todo_id")) == result.todo_id:
+            results_list[idx] = serialized
+            replaced = True
+            break
+    if not replaced:
+        results_list.append(serialized)
+    results_map = state["results_map"]
+    assert isinstance(results_map, dict)
+    results_map[result.todo_id] = serialized
+
+
+def get_task_results(state: Mapping[str, Any]) -> list[TaskResult]:
+    raw = state.get("results_list") or []
+    results: list[TaskResult] = []
+    if isinstance(raw, list):
+        for entry in raw:
+            if isinstance(entry, Mapping):
+                try:
+                    results.append(TaskResult.from_dict(entry))
+                except ValueError:
+                    continue
+    return results
+
+
+def get_task_result_map(state: Mapping[str, Any]) -> dict[str, TaskResult]:
+    raw_map = state.get("results_map")
+    task_map: dict[str, TaskResult] = {}
+    if not isinstance(raw_map, Mapping):
+        return task_map
+    for key, entry in raw_map.items():
+        key_str = str(key).strip()
+        if not key_str or not isinstance(entry, Mapping):
+            continue
+        try:
+            task_map[key_str] = TaskResult.from_dict(entry)
+        except ValueError:
+            continue
+    return task_map
+
+
+def ensure_blocked_task(
+    state: StateDict,
+    task: PlanTask,
+    *,
+    blocked_by: str = "missing_dependency",
+) -> None:
+    """Prefill a blocked TaskResult for downstream consumers."""
+    blocked_result = TaskResult(
+        todo_id=task.todo_id,
+        status="blocked",
+        result_meta={},
+        artifact_refs=[],
+        blocked_by=blocked_by,
+    )
+    upsert_task_result(state, blocked_result)
