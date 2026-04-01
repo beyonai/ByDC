@@ -110,7 +110,7 @@
     <owl:NamedIndividual rdf:about="#industry_name_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业类型</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
@@ -150,7 +150,7 @@
     <owl:NamedIndividual rdf:about="#lng_lat_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">lng_lat</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业经纬度</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业经纬度(lng,lat)</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
@@ -170,7 +170,7 @@
     <owl:NamedIndividual rdf:about="#height_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">height</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">地理高度</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">地理高度(米)</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
@@ -290,7 +290,7 @@
     <owl:NamedIndividual rdf:about="#avg_foot_traffic_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_foot_traffic</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格日均人流量（人次）</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格人流量(人次)</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">INT</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
@@ -310,7 +310,7 @@
     <owl:NamedIndividual rdf:about="#foot_active_level_name_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">foot_active_level_name</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格人流活跃等级</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格人流活跃等级</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
@@ -330,7 +330,7 @@
     <owl:NamedIndividual rdf:about="#avg_vehicle_flow_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_vehicle_flow</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格日均车流量（辆次）</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格车流量(辆次)</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">INT</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
@@ -350,7 +350,7 @@
     <owl:NamedIndividual rdf:about="#vehicle_active_level_name_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">vehicle_active_level_name</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格车流活跃等级</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格车流活跃等级</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
@@ -370,7 +370,7 @@
     <owl:NamedIndividual rdf:about="#avg_light_intensity_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_light_intensity</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格灯光强度</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业灯光强度</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOUBLE</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
@@ -390,7 +390,7 @@
     <owl:NamedIndividual rdf:about="#light_active_level_name_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">light_active_level_name</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格灯光活跃等级</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业灯光活跃等级</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
@@ -570,7 +570,7 @@
     <owl:NamedIndividual rdf:about="#phy_grid_id_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格编码</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格编码</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
@@ -590,7 +590,7 @@
     <owl:NamedIndividual rdf:about="#phy_grid_name_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格名称</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格名称</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
