@@ -200,3 +200,43 @@ async def test_knowledge_enhance_recognized_terms_are_partitioned_into_confirmed
     assert any("1、本次识别出来的术语清单：【亩产效益、企业】" in chunk for chunk in emitted)
     assert any("2、已确权的清单是：【无】" in chunk for chunk in emitted)
     assert any("3、待澄清的清单是：【亩产效益、企业】" in chunk for chunk in emitted)
+
+
+@pytest.mark.asyncio
+async def test_knowledge_enhance_filters_short_noise_terms_from_confirmed_report(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    emitted: list[str] = []
+
+    class _GatewayContext:
+        async def emit_chunk(self, event: Any, **_kwargs: Any) -> None:
+            emitted.append(str(getattr(event, "content", event)))
+
+    async def _fake_ainvoke(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "term_matches": [
+                {"term_name": "亩产效益", "normalized_term": "亩产效益", "term_id": "T1", "match_score": 0.96},
+                {"term_name": "低", "normalized_term": "低", "term_id": "TX1", "match_score": 0.99},
+                {"term_name": "低", "normalized_term": "低", "term_id": "TX2", "match_score": 0.98},
+                {"term_name": "低", "normalized_term": "低", "term_id": "TX3", "match_score": 0.97},
+                {"term_name": "企业", "normalized_term": "企业", "term_id": "T2", "match_score": 0.94},
+            ],
+            "fuzzy_term_matches": [],
+        }
+
+    monkeypatch.setattr(
+        knowledge_enhance_module,
+        "search_knowledge",
+        SimpleNamespace(ainvoke=_fake_ainvoke),
+    )
+
+    state = cast(AgentState, {"messages": [HumanMessage(content="找出亩产效益最低的后3地块上的企业清单")]})
+    out = await knowledge_enhance_node(state, gateway_context=_GatewayContext())
+
+    assert set(out["thinking_log"]["recognized_terms"]) == {"亩产效益", "企业"}
+    assert {item["term_name"] for item in out["confirmed_terms"]} == {"亩产效益", "企业"}
+    assert not out["ambiguous_terms"]
+    assert any("1、本次识别出来的术语清单：【亩产效益、企业】" in chunk for chunk in emitted)
+    assert any("2、已确权的清单是：【亩产效益、企业】" in chunk for chunk in emitted)
+    assert not any("低、低、低" in chunk or "）低：" in chunk for chunk in emitted)
+    assert any("3、待澄清的清单是：【无】" in chunk for chunk in emitted)
