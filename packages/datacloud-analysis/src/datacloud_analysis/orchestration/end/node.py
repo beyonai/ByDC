@@ -49,10 +49,10 @@ logger = logging.getLogger(__name__)
 # so that these prefixes are 100% KV-Cache-friendly.
 # ---------------------------------------------------------------------------
 _INSIGHT_STATIC_SYSTEM = """你是一个高级数据分析师。
-请基于用户的原始问题和各子任务数据摘要，输出专业的自然语言分析报告。
+请基于用户的原始问题和各子任务数据摘要，输出专业的分析报告。
 
 输出要求：
-1. 只输出文字分析，不要输出 Markdown 表格（完整数据已通过独立 JSON 消息推送）。
+1. 输出Markdown格式的分析，不要输出 Markdown 表格（完整数据已通过独立 JSON 消息推送）。
 2. 引用数据中的关键数字和结论，简明扼要，聚焦核心洞察。
 3. 不要重复整张表或逐行列举记录。
 """
@@ -67,6 +67,11 @@ _CHITCHAT_STATIC_SYSTEM = """你是产业数据分析助手。
 用户正在寒暄或闲聊，与具体数据查询无关。请用简短、自然、友好的口吻回应，
 并可温和提示：你更擅长企业、网格、产业链等指标与数据类问题，欢迎随时提出分析需求。
 不要编造查询结果，不要输出报告章节结构（title/sections），不要假装已调用数据工具。"""
+
+
+def _format_reasoning_heading(title: object) -> str:
+    text = str(title).strip()
+    return f"## {text}\n" if text else ""
 
 
 async def _emit_reasoning_log_end_before_answer(context: Any) -> None:
@@ -816,9 +821,9 @@ async def insight_node(
         forced_reply = str(state.get("chitchat_reply") or "").strip()
         if context is not None:
             await context.emit_chunk(
-                StreamChunkEvent(content="闲聊应答"),
+                StreamChunkEvent(content=_format_reasoning_heading("闲聊应答")),
                 event_type=EventType.REASONING_LOG_DELTA.value,
-                content_type=SseReasonMessageType.think_title.value,
+                content_type=SseReasonMessageType.think_text.value,
             )
             await context.emit_chunk(
                 StreamChunkEvent(content=f"已识别为闲聊，直接生成回复：{intent[:200]}"),
@@ -889,9 +894,9 @@ async def insight_node(
         intent = state.get("intent", "未匹配到具体查询意图")
         if context is not None:
             await context.emit_chunk(
-                StreamChunkEvent(content="意图澄清与对话"),
+                StreamChunkEvent(content=_format_reasoning_heading("意图澄清与对话")),
                 event_type=EventType.REASONING_LOG_DELTA.value,
-                content_type=SseReasonMessageType.think_title.value,
+                content_type=SseReasonMessageType.think_text.value,
             )
             await context.emit_chunk(
                 StreamChunkEvent(content=f"识别为闲聊或未明确数据意图：{intent}"),
@@ -1069,4 +1074,3 @@ async def insight_node(
         part23=part23,
     )
     return {"messages": [AIMessage(content=history_content)], **summary_updates}
-
