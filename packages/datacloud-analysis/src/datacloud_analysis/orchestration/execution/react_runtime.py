@@ -22,6 +22,7 @@ from datacloud_analysis.orchestration.shared import (
 )
 
 logger = logging.getLogger(__name__)
+_ENRICHED_WARN_THRESHOLD = 1500
 
 
 class ReactSelection(TypedDict):
@@ -214,7 +215,17 @@ async def select_react_capability(
     goal = str(todo.get("goal") or "")
     term_context = todo.get("term_context")
     term_context_text = json.dumps(term_context, ensure_ascii=False)[:1000]
-    user_query = str(state.get("enriched_query") or state.get("user_query") or "")
+    enriched_query_text = str(state.get("enriched_query") or "")
+    user_query_fallback = str(state.get("user_query") or "")
+    user_query = enriched_query_text or user_query_fallback
+    enriched_query_len = len(enriched_query_text)
+    if enriched_query_len > _ENRICHED_WARN_THRESHOLD:
+        logger.warning(
+            "react_runtime: enriched_query length exceeds threshold len=%d threshold=%d todo_id=%s",
+            enriched_query_len,
+            _ENRICHED_WARN_THRESHOLD,
+            todo_id,
+        )
     system_parts = [
         "你是执行器能力选择器。必须调用工具 choose_capability，"
         "并从候选 capability_id 中精确选择一个。"
@@ -236,11 +247,12 @@ async def select_react_capability(
         SystemMessage(content=system_content),
         HumanMessage(content=human_content),
     ]
+    prompt_char_len = len(system_content) + len(human_content)
     logger.info(
         "react_runtime: llm request (function-call choose_capability) model=%s raw_model=%s "
         "model_provider=%s provider_prefixed=%s base_url=%s api_key_present=%s "
         "round=%d candidate_count=%d candidates=%s function_call_enabled=%s "
-        "system_len=%d user_msg_len=%d todo_md_len=%d observe_len=%d todo_id=%s",
+        "system_len=%d user_msg_len=%d prompt_len=%d enriched_query_len=%d todo_md_len=%d observe_len=%d todo_id=%s",
         model,
         raw_model,
         model_provider,
@@ -253,6 +265,8 @@ async def select_react_capability(
         _is_function_call_enabled(state),
         len(system_content),
         len(human_content),
+        prompt_char_len,
+        enriched_query_len,
         len(todo_md_summary or ""),
         len(observe or ""),
         todo_id,

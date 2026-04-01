@@ -13,6 +13,38 @@ from datacloud_analysis.orchestration.state import AgentState
 
 
 @pytest.mark.asyncio
+async def test_planning_prefers_enriched_query_and_sets_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_inputs: list[str] = []
+
+    async def _fake_planning_context(*_args: Any, **kwargs: Any) -> dict[str, Any]:
+        captured_inputs.append(str(kwargs.get("query_input")))
+        return {
+            "intent": "delegate this task",
+            "query_mode": "online_query",
+            "target_tool": "query_tool",
+            "tool_params": {},
+            "confirmed_terms": [],
+            "ambiguous_terms": [],
+        }
+
+    monkeypatch.setattr(planning_module, "resolve_planning_context", _fake_planning_context)
+
+    async def _query_tool(**_kwargs: Any) -> dict[str, Any]:
+        return {"ok": True}
+
+    state = cast(
+        AgentState,
+        {"enriched_query": "增强版本", "intent": "普通意图", "user_query": "原始问题"},
+    )
+    await planning_node(state, default_tools={"query_tool": _query_tool})
+
+    assert captured_inputs == ["增强版本"]
+    assert state["planning_input_source"] == "enriched_query"
+
+
+@pytest.mark.asyncio
 async def test_planning_normalizes_online_query_to_agent_delegate_for_delegate_tool(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
