@@ -109,6 +109,22 @@ def _is_available_capability(capability_id: str, available_tools: dict[str, Any]
     return capability_id in available_tools or capability_id in _PLANNER_BUILTIN_CAPABILITIES
 
 
+def _inject_delegate_policy_defaults(
+    *,
+    capability_id: str,
+    available_tools: dict[str, Any],
+    inputs: dict[str, Any],
+) -> dict[str, Any]:
+    tool_obj = available_tools.get(capability_id)
+    if not bool(tool_obj and getattr(tool_obj, "_is_agent_delegate", False)):
+        return inputs
+    if "delegate_policy" in inputs:
+        return inputs
+    next_inputs = dict(inputs)
+    next_inputs["delegate_policy"] = {"mode": "sync", "wait_for_reply": True}
+    return next_inputs
+
+
 def _plan_to_todos(
     *,
     plan: list[dict[str, Any]],
@@ -129,6 +145,11 @@ def _plan_to_todos(
         blocked_capabilities = (
             [_capability_spec(task_type, available_tools)] if is_unavailable and task_type else []
         )
+        task_inputs = _inject_delegate_policy_defaults(
+            capability_id=task_type,
+            available_tools=available_tools,
+            inputs=dict(task.get("params") or {}),
+        )
         todo = {
             "todo_id": task_id,
             "goal": str(task.get("description") or ""),
@@ -136,7 +157,7 @@ def _plan_to_todos(
             "blocked_tools": blocked_tools,
             "required_capabilities": required_capabilities,
             "blocked_capabilities": blocked_capabilities,
-            "inputs": dict(task.get("params") or {}),
+            "inputs": task_inputs,
             "depends_on": [str(x) for x in (task.get("deps") or [])],
             "term_context": term_context,
             "acceptance_criteria": f"task {task_id} executed successfully",
