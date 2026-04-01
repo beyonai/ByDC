@@ -71,7 +71,7 @@
     <owl:NamedIndividual rdf:about="#industry_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业类型</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
@@ -87,7 +87,7 @@
     <owl:NamedIndividual rdf:about="#lng_lat_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">lng_lat</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业经纬度</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业经纬度(lng,lat)</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">lng_lat</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
@@ -95,7 +95,7 @@
     <owl:NamedIndividual rdf:about="#height_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">height</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">地理高度</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">地理高度(米)</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">height</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
@@ -143,7 +143,7 @@
     <owl:NamedIndividual rdf:about="#avg_foot_traffic_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_foot_traffic</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格日均人流量（人次）</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格人流量(人次)</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_foot_traffic</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
@@ -151,7 +151,7 @@
     <owl:NamedIndividual rdf:about="#foot_active_level_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">foot_active_level_name</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格人流活跃等级</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格人流活跃等级</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">foot_active_level_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
@@ -159,7 +159,7 @@
     <owl:NamedIndividual rdf:about="#avg_vehicle_flow_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_vehicle_flow</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格日均车流量（辆次）</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格车流量(辆次)</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_vehicle_flow</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
@@ -167,7 +167,7 @@
     <owl:NamedIndividual rdf:about="#vehicle_active_level_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">vehicle_active_level_name</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格车流活跃等级</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格车流活跃等级</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">vehicle_active_level_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
@@ -175,7 +175,7 @@
     <owl:NamedIndividual rdf:about="#avg_light_intensity_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_light_intensity</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格灯光强度</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业灯光强度</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_light_intensity</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
@@ -183,7 +183,7 @@
     <owl:NamedIndividual rdf:about="#light_active_level_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">light_active_level_name</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格灯光活跃等级</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业灯光活跃等级</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">light_active_level_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
@@ -255,7 +255,7 @@
     <owl:NamedIndividual rdf:about="#phy_grid_id_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格编码</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格编码</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
@@ -263,7 +263,7 @@
     <owl:NamedIndividual rdf:about="#phy_grid_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属物理网格名称</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格名称</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
