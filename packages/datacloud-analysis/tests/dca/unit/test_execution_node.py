@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, cast
@@ -321,6 +321,78 @@ async def test_execution_records_react_round_trace(
     assert react_events
     assert react_events[0]["detail"]["tool_call_id"] == "call_1"
     assert react_events[0]["detail"]["selection_source"] == "llm_function_call"
+
+
+@pytest.mark.asyncio
+async def test_execution_logs_ambiguous_terms_without_interrupt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    emitted: list[str] = []
+
+    class _GatewayContext:
+        async def emit_chunk(self, event: Any, **_kwargs: Any) -> None:
+            emitted.append(str(getattr(event, "content", event)))
+
+    async def _invoke_with_callbacks(
+        self: ToolRuntime, task: dict[str, Any], _state: Any
+    ) -> tuple[dict[str, Any], Any]:
+        return ({**task, "status": "done"}, {"ok": True})
+
+    def _unexpected_interrupt(_payload: dict[str, Any]) -> dict[str, Any]:
+        raise AssertionError("interrupt should not be called for ambiguous terms")
+
+    monkeypatch.setattr(execution_module.ToolRuntime, "invoke_with_callbacks", _invoke_with_callbacks)
+    monkeypatch.setattr(execution_module, "interrupt", _unexpected_interrupt)
+
+    state = cast(
+        AgentState,
+        {
+            "query_mode": "analysis",
+            "ambiguous_terms": [
+                {
+                    "mention": "活跃用户",
+                    "candidates": [
+                        {"term_name": "DAU"},
+                        {"term_name": "MAU"},
+                    ],
+                }
+            ],
+            "confirmed_terms": [
+                {
+                    "mention": "GMV",
+                    "term_name": "GMV",
+                    "term_id": "t1",
+                    "confidence": 0.95,
+                }
+            ],
+            "todos": [
+                {
+                    "todo_id": "t1",
+                    "status": "pending",
+                    "goal": "run despite ambiguity",
+                    "required_capabilities": ["tool_a"],
+                    "required_tools": ["tool_a"],
+                    "inputs": {},
+                    "depends_on": [],
+                }
+            ],
+            "results": [],
+            "invocation_dedup": [],
+        },
+    )
+
+    out = await execution_node(
+        state,
+        {"configurable": {"gateway_context": _GatewayContext()}},
+        default_tools={},
+    )
+
+    assert out["execution_status"] == "done"
+    assert out["ambiguous_terms"] == []
+    assert out["clarify_needed"] is False
+    assert any("检测到术语「活跃用户」存在歧义" in chunk for chunk in emitted)
+    assert any("活跃用户" in chunk for chunk in emitted)
+    assert any("DAU" in chunk for chunk in emitted)
 
 
 @pytest.mark.asyncio
