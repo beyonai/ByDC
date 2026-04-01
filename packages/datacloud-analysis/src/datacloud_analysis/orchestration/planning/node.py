@@ -360,11 +360,11 @@ async def planning_node(
     plan: list[dict[str, Any]] = []
     if query_mode == "analysis" and not planning_updates.get("ambiguous_terms"):
         merged_state = cast(AgentState, {**state, **planning_updates})
-        await _emit_planning_stage_status(
-            gateway_context=gateway_context,
-            title="任务生成",
-            detail="正在根据用户问题创建任务计划，请稍候...",
-        )
+        # await _emit_planning_stage_status(
+        #     gateway_context=gateway_context,
+        #     title="任务生成",
+        #     detail="正在根据用户问题创建任务计划，请稍候...",
+        # )
         plan_updates = await decompose_analysis_plan(
             merged_state,
             intent=intent_text,

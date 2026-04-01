@@ -21,10 +21,10 @@ class AgentState(MessagesState):
     enriched_query_source: str | None
     enriched_query_confidence: float | None
     intent: str | None
-    knowledge_preview: str | None
     knowledge_payload: dict[str, Any] | None
     term_hints: list[dict[str, Any]] | None
     knowledge_snippets: list[dict[str, Any]] | None
+    knowledge_mode: str | None
 
     # --- Intent + routing ---
     clarify_needed: bool
