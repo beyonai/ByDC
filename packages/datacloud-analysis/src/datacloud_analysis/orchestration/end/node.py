@@ -146,6 +146,10 @@ def _build_final_summary(state: AgentState) -> dict[str, Any]:
         "blocked": sum(1 for entry in entries if entry["status"] == "blocked"),
         "artifacts": len(artifact_index),
     }
+    knowledge_context = {
+        "enriched_query": str(state.get("enriched_query") or ""),
+        "confirmed_terms": _confirmed_terms_preview(state),
+    }
 
     combined_parts: list[str] = []
     for entry in entries:
@@ -161,6 +165,7 @@ def _build_final_summary(state: AgentState) -> dict[str, Any]:
         "combined_narrative": combined_narrative,
         "artifact_index": artifact_index,
         "stats": stats,
+        "knowledge_context": knowledge_context,
     }
 
 
@@ -183,6 +188,35 @@ def _ensure_final_summary(state: AgentState) -> dict[str, Any]:
         return existing
     state["final_summary"] = {}
     return {}
+
+
+def _truncate_preview(value: str, *, limit: int = 120) -> str:
+    text = str(value or "").strip()
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}..."
+
+
+def _confirmed_terms_preview(state: AgentState, *, max_items: int = 5) -> list[str]:
+    raw = state.get("confirmed_terms")
+    if not isinstance(raw, list):
+        return []
+    lines: list[str] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        mention = str(item.get("mention") or "").strip()
+        term_name = str(item.get("term_name") or mention).strip()
+        confidence = float(item.get("confidence", 0.0) or 0.0)
+        if not term_name:
+            continue
+        line = f"{mention or term_name}→{term_name}"
+        if confidence > 0:
+            line = f"{line} (confidence={confidence:.2f})"
+        lines.append(line)
+        if len(lines) >= max_items:
+            break
+    return lines
 
 
 # ---------------------------------------------------------------------------
@@ -1255,6 +1289,9 @@ async def insight_node(
         ],
         ensure_ascii=False,
     )
+    enriched_query_text = _truncate_preview(str(state.get("enriched_query") or ""), limit=800)
+    confirmed_term_lines = _confirmed_terms_preview(state)
+    confirmed_terms_text = "\n".join(f"- {line}" for line in confirmed_term_lines) or "- 无"
 
     # Layer 0: static system prompt — no variable interpolation, 100% KV-Cache hit.
     # Support legacy key "insight_prompt" for backward compatibility.
@@ -1268,6 +1305,8 @@ async def insight_node(
     dynamic_human = HumanMessage(
         content=(
             f"【用户问题】：{last_user_msg}\n\n"
+            f"【知识增强问题】：\n{enriched_query_text or last_user_msg}\n\n"
+            f"【已确权术语（摘要）】：\n{confirmed_terms_text}\n\n"
             f"【各子任务数据摘要】：\n{data_summary}\n\n"
             "请结合以上数据和原始问题，生成分析报告。"
         )

@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterable
+from datetime import datetime
 from difflib import SequenceMatcher
-from typing import Any, Iterable
+from typing import Any
 
 from by_framework import EventType, StreamChunkEvent
 from by_framework.core.protocol.content_type import SseReasonMessageType
+
 from datacloud_analysis.orchestration.state import AgentState
 from datacloud_analysis.tools.knowledge import search_knowledge
 
@@ -16,8 +19,12 @@ logger = logging.getLogger(__name__)
 _DEFAULT_TERM_HINT_CONFIDENCE_THRESHOLD = 0.8
 _SUMMARY_MAX_ITEMS = 5
 _SUMMARY_MAX_CHARS = 150
-_SNIPPET_MAX_CHARS = 600
-_SNIPPET_SIMILARITY_THRESHOLD = 0.85
+_SUMMARY_MIN_CHARS = 80
+_SUMMARY_QUALITY_THRESHOLD = 0.4
+_SNIPPET_ITEM_MAX_CHARS = 300
+_SNIPPET_SIMILARITY_THRESHOLD = 0.8
+_ENRICHED_MAX_CHARS = 1200
+_ENRICHED_DEGRADE_MAX_ITEMS = 3
 _LOG_PREVIEW_LIMIT = 200
 
 
@@ -129,30 +136,108 @@ def _truncate_text(value: str, *, limit: int) -> str:
     return f"{text[:limit]}..."
 
 
+def _parse_update_time(value: Any) -> datetime:
+    if value is None:
+        return datetime.min
+    text = str(value).strip()
+    if not text:
+        return datetime.min
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return datetime.min
+
+
+def _summary_quality_score(term_name: str, summary: str) -> float:
+    text = summary.strip()
+    if not text:
+        return 0.0
+    score = 0.0
+    length = len(text)
+    if length >= _SUMMARY_MIN_CHARS:
+        score += 0.45
+    else:
+        score += max(0.0, (length / _SUMMARY_MIN_CHARS) * 0.45)
+    if "：" in text or ":" in text:
+        score += 0.2
+    if term_name and term_name in text:
+        score += 0.2
+    unique_chars = len(set(text))
+    if unique_chars >= 20:
+        score += 0.15
+    return min(score, 1.0)
+
+
+def _summary_text(raw: str) -> str:
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    if len(text) > _SUMMARY_MAX_CHARS:
+        return _truncate_text(text, limit=_SUMMARY_MAX_CHARS)
+    return text
+
+
+def _summary_sort_key(
+    hint: dict[str, Any],
+    match: dict[str, Any],
+) -> tuple[float, datetime]:
+    confidence = float(hint.get("confidence", 0.0) or 0.0)
+    update_dt = _parse_update_time(
+        match.get("updateTime")
+        or match.get("update_time")
+        or match.get("createTime")
+        or match.get("create_time")
+    )
+    return confidence, update_dt
+
+
 def _build_confirmed_knowledge_summaries(
     payload: dict[str, Any] | None,
     term_hints: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     knowledge_map = _collect_term_knowledge(payload)
+    match_by_id: dict[str, dict[str, Any]] = {}
+    if isinstance(payload, dict):
+        for row in payload.get("term_matches", []) or []:
+            if not isinstance(row, dict):
+                continue
+            term_id = str(row.get("term_id", "")).strip()
+            if term_id:
+                match_by_id[term_id] = row
     ordered_hints = sorted(
         term_hints,
-        key=lambda item: float(item.get("confidence", 0.0) or 0.0),
+        key=lambda item: _summary_sort_key(
+            item,
+            match_by_id.get(str(item.get("term_id", "")).strip(), {}),
+        ),
         reverse=True,
     )
     summaries: list[dict[str, Any]] = []
+    seen_term_ids: set[str] = set()
     for hint in ordered_hints:
         term_id = str(hint.get("term_id", "")).strip()
+        if not term_id or term_id in seen_term_ids:
+            continue
+        seen_term_ids.add(term_id)
         knowledge_entries = knowledge_map.get(term_id) or []
         if not knowledge_entries:
             continue
-        summary_text = _truncate_text(knowledge_entries[0], limit=_SUMMARY_MAX_CHARS)
+        term_name = str(hint.get("normalized_term") or hint.get("mention") or term_id)
+        summary_text = _summary_text(knowledge_entries[0])
         if not summary_text:
             continue
+        summary_quality = _summary_quality_score(term_name, summary_text)
         summaries.append(
             {
-                "term_name": str(hint.get("normalized_term") or hint.get("mention") or term_id),
+                "term_name": term_name,
                 "summary": summary_text,
                 "confidence": float(hint.get("confidence", 0.0) or 0.0),
+                "summary_quality": summary_quality,
             }
         )
         if len(summaries) >= _SUMMARY_MAX_ITEMS:
@@ -198,12 +283,24 @@ def _compose_enriched_query(
     user_query: str,
     knowledge_summaries: list[dict[str, Any]],
 ) -> tuple[str, str, float]:
-    if not knowledge_summaries:
+    valid_summaries = [
+        item
+        for item in knowledge_summaries
+        if float(item.get("summary_quality", 0.0) or 0.0) >= _SUMMARY_QUALITY_THRESHOLD
+    ]
+    if not valid_summaries:
         return user_query, "fallback_user_query", 0.0
 
-    bullets = [f"- {item['term_name']}：{item['summary']}" for item in knowledge_summaries]
+    bullets = [f"- {item['term_name']}：{item['summary']}" for item in valid_summaries]
     enriched = f"原始问题：\n{user_query}\n\n补充知识：\n" + "\n".join(bullets)
-    confidence = max((float(item.get("confidence", 0.0) or 0.0) for item in knowledge_summaries), default=0.0)
+    if len(enriched) > _ENRICHED_MAX_CHARS:
+        fallback_items = valid_summaries[:_ENRICHED_DEGRADE_MAX_ITEMS]
+        fallback_bullets = [f"- {item['term_name']}：{item['summary']}" for item in fallback_items]
+        enriched = f"原始问题：\n{user_query}\n\n补充知识：\n" + "\n".join(fallback_bullets)
+    confidence = max(
+        (float(item.get("confidence", 0.0) or 0.0) for item in valid_summaries),
+        default=0.0,
+    )
     return enriched, "confirmed_terms", confidence
 
 
@@ -231,7 +328,8 @@ def _extract_ambiguities(payload: dict[str, Any] | None) -> list[dict[str, Any]]
                     }
                 )
         if mention or candidates:
-            ambiguities.append({"mention": mention, "candidates": candidates})
+            reason = "multiple_candidates" if len(candidates) > 1 else "no_high_confidence_match"
+            ambiguities.append({"mention": mention, "candidates": candidates, "reason": reason})
     return ambiguities
 
 
@@ -262,6 +360,25 @@ def _log_thinking(
         enriched_source,
         _safe_preview(enriched_query),
     )
+
+
+def _build_thinking_log(
+    *,
+    user_query: str,
+    summaries: list[dict[str, Any]],
+    ambiguities: list[dict[str, Any]],
+    enriched_query: str,
+    enriched_source: str,
+) -> dict[str, Any]:
+    return {
+        "raw_question": user_query,
+        "ambiguous_terms": ambiguities,
+        "confirmed_term_summaries": summaries,
+        "enriched_query": enriched_query,
+        "enriched_query_source": enriched_source,
+        "ambiguous_terms_count": len(ambiguities),
+        "confirmed_terms_count": len(summaries),
+    }
 
 
 def _format_ambiguous_terms_notice(ambiguities: list[dict[str, Any]]) -> str:
@@ -337,25 +454,53 @@ def _is_duplicate_of_summary(text: str, summaries: list[str]) -> bool:
     return False
 
 
-def _truncate_snippet_entries(
-    entries: list[dict[str, Any]],
-    *,
-    summaries: list[str],
-) -> tuple[list[dict[str, Any]], int]:
-    truncated: list[dict[str, Any]] = []
-    accumulated = 0
-    for entry in entries:
-        serialized = json.dumps(entry, ensure_ascii=False)
-        if _is_duplicate_of_summary(serialized, summaries):
-            continue
-        projected = accumulated + len(serialized)
-        if truncated:
-            projected += 1  # comma in JSON array
-        if projected > _SNIPPET_MAX_CHARS:
-            break
-        truncated.append(entry)
-        accumulated = projected
-    return truncated, accumulated
+def _entry_similarity_text(entry: dict[str, Any]) -> str:
+    text_parts: list[str] = []
+    for key in ("term_desc", "definition", "description", "term_name", "normalized_term", "mention"):
+        value = str(entry.get(key, "")).strip()
+        if value:
+            text_parts.append(value)
+    if not text_parts:
+        return json.dumps(entry, ensure_ascii=False)
+    return " ".join(text_parts)
+
+
+def _trim_entry_for_snippet(source_key: str, entry: dict[str, Any]) -> dict[str, Any]:
+    if source_key == "term_matches":
+        out = {
+            "term_id": str(entry.get("term_id", "")),
+            "term_name": str(entry.get("term_name", "")),
+            "normalized_term": str(entry.get("normalized_term", "")),
+            "term_type_code": str(entry.get("term_type_code", "")),
+            "match_score": float(entry.get("match_score", 0.0) or 0.0),
+        }
+        desc = str(entry.get("term_desc") or entry.get("definition") or entry.get("description") or "").strip()
+        if desc:
+            out["summary"] = _truncate_text(desc, limit=140)
+        return out
+
+    if source_key == "fuzzy_term_matches":
+        candidates_out: list[dict[str, Any]] = []
+        for candidate in entry.get("candidates", []) or []:
+            if not isinstance(candidate, dict):
+                continue
+            candidates_out.append(
+                {
+                    "term_id": str(candidate.get("term_id", "")),
+                    "term_name": str(candidate.get("term_name", "")),
+                    "term_type_code": str(candidate.get("term_type_code", "")),
+                    "similarity": float(candidate.get("similarity", 0.0) or 0.0),
+                    "edit_distance": int(candidate.get("edit_distance", 0) or 0),
+                }
+            )
+            if len(candidates_out) >= 5:
+                break
+        return {
+            "mention": str(entry.get("mention", "")),
+            "candidates": candidates_out,
+        }
+
+    return dict(entry)
 
 
 def _build_knowledge_snippets(
@@ -370,13 +515,31 @@ def _build_knowledge_snippets(
         entries = payload.get(source_key)
         if not isinstance(entries, list) or not entries:
             continue
-        normalized_entries = [entry for entry in entries if isinstance(entry, dict)]
+        normalized_entries = [
+            _trim_entry_for_snippet(source_key, entry)
+            for entry in entries
+            if isinstance(entry, dict)
+        ]
         if not normalized_entries:
             continue
-        truncated, char_len = _truncate_snippet_entries(normalized_entries, summaries=summary_texts)
-        if not truncated:
+        selected_entries: list[dict[str, Any]] = []
+        for entry in normalized_entries:
+            similarity_text = _entry_similarity_text(entry)
+            if _is_duplicate_of_summary(similarity_text, summary_texts):
+                continue
+            serialized = json.dumps(entry, ensure_ascii=False)
+            if len(serialized) > _SNIPPET_ITEM_MAX_CHARS:
+                continue
+            selected_entries.append(entry)
+        if not selected_entries:
             continue
-        snippets.append({"source": source_key, "data": truncated, "char_len": char_len})
+        snippets.append(
+            {
+                "source": source_key,
+                "data": selected_entries,
+                "char_len": sum(len(json.dumps(item, ensure_ascii=False)) for item in selected_entries),
+            }
+        )
     return snippets
 
 
@@ -416,6 +579,13 @@ async def knowledge_enhance_node(
     )
     ambiguities = _extract_ambiguities(payload)
     knowledge_snippets = _build_knowledge_snippets(payload, knowledge_summaries)
+    thinking_log = _build_thinking_log(
+        user_query=user_query,
+        summaries=knowledge_summaries,
+        ambiguities=ambiguities,
+        enriched_query=enriched_query,
+        enriched_source=enriched_query_source,
+    )
     _log_thinking(
         user_query=user_query,
         summaries=knowledge_summaries,
@@ -441,4 +611,5 @@ async def knowledge_enhance_node(
         "knowledge_snippets": knowledge_snippets,
         "knowledge_payload": payload,
         "ambiguous_terms": ambiguities,
+        "thinking_log": thinking_log,
     }
