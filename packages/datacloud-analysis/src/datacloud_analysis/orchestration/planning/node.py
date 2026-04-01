@@ -437,6 +437,14 @@ def _log_planning_injected_tools(
     )
 
 
+def _resolve_planning_input(state: AgentState) -> tuple[str, str]:
+    for key in ("enriched_query", "intent", "user_query"):
+        value = str(state.get(key) or "").strip()
+        if value:
+            return value, key
+    return "", "empty"
+
+
 def _persist_todo_md(workspace_dir: str | None, todo_md: str) -> str | None:
     if not workspace_dir:
         return None
@@ -457,9 +465,13 @@ async def planning_node(
     default_tools: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Plan todos using resolved planning context + optional DAG decomposition."""
-    query_input = str(
-        state.get("intent") or state.get("enriched_query") or state.get("user_query") or ""
-    ).strip()
+    query_input, planning_input_source = _resolve_planning_input(state)
+    state["planning_input_source"] = planning_input_source
+    logger.info(
+        "planning_node: using %s as planning input len=%d",
+        planning_input_source,
+        len(query_input),
+    )
     if not query_input:
         return {"todos": [], "todo_md": "# TODOs\n\n- (empty)\n"}
 
