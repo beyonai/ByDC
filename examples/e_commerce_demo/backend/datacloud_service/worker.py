@@ -9,8 +9,6 @@ import hashlib
 import json
 import os
 import sys
-import traceback
-import uuid
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Mapping
 
@@ -28,14 +26,10 @@ from by_framework import (
     ResumeCommand,
     StreamChunkEvent,
 )
-from by_framework.common.constants import TASK_GROUP_FIELD_COMPLETED, TASK_GROUP_FIELD_TOTAL, TASK_GROUP_TTL_SECONDS, RedisKeys
 from by_framework.common.logger import logger
 from by_framework.core.extensions import PluginRegistry
-from by_framework.core.protocol.agent_state import AgentState as GatewayAgentState
-from by_framework.core.protocol.agent_state import AgentStateLiteral, is_terminal_state
 from by_framework.core.protocol.commands import AskAgentCommand
 from by_framework.core.protocol.content_type import SseMessageType, SseReasonMessageType
-from by_framework.core.protocol.events import StateChangeEvent
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.types import Command
@@ -109,11 +103,6 @@ _TOOL_DISPLAY = {
     "render_report": ("正在生成分析报告", "分析报告生成完成"),
     "choose_capability": ("正在规划下一步操作", ""),
 }
-
-
-def _format_reasoning_heading(title: object) -> str:
-    text = str(title).strip()
-    return f"## {text}\n" if text else ""
 
 
 def _tool_display(tool_name: str) -> tuple[str, str]:
@@ -241,314 +230,6 @@ class DataCloudWorker(GatewayWorker):
         self._resume_result_cache.move_to_end(key)
         while len(self._resume_result_cache) > self._RESUME_RESULT_CACHE_MAX:
             self._resume_result_cache.popitem(last=False)
-
-    @staticmethod
-    def _stringify_metadata_value(value: Any) -> str:
-        return str(value or "").strip()
-
-    def _resolve_runtime_agent_key(
-        self,
-        *,
-        command: GatewayCommand,
-        by_agent_id: Any,
-        header_metadata: dict[str, Any],
-    ) -> str:
-        if isinstance(command, ResumeCommand):
-            resume_agent_id = self._stringify_metadata_value(header_metadata.get("resume_agent_id"))
-            if resume_agent_id:
-                return resume_agent_id
-            resume_agent_type = self._stringify_metadata_value(
-                header_metadata.get("resume_agent_type")
-            )
-            if resume_agent_type:
-                return resume_agent_type
-
-        by_agent_text = self._stringify_metadata_value(by_agent_id)
-        if by_agent_text:
-            return by_agent_text
-        target_agent_type = self._stringify_metadata_value(
-            getattr(command.header, "target_agent_type", "")
-        )
-        if target_agent_type:
-            return target_agent_type
-        return self.worker_id
-
-    @classmethod
-    def _resolve_resume_checkpoint_target(
-        cls,
-        *,
-        header_metadata: Mapping[str, Any],
-    ) -> tuple[str, str]:
-        resume_checkpoint_id = cls._stringify_metadata_value(
-            header_metadata.get("resume_checkpoint_id")
-        )
-        resume_checkpoint_ns = cls._stringify_metadata_value(
-            header_metadata.get("resume_checkpoint_ns")
-        )
-        plain_checkpoint_id = cls._stringify_metadata_value(header_metadata.get("checkpoint_id"))
-        plain_checkpoint_ns = cls._stringify_metadata_value(header_metadata.get("checkpoint_ns"))
-        resume_thread_id = cls._stringify_metadata_value(header_metadata.get("resume_thread_id"))
-
-        if resume_checkpoint_id:
-            return resume_checkpoint_id, resume_checkpoint_ns or plain_checkpoint_ns
-
-        if resume_thread_id and plain_checkpoint_id:
-            logger.warning(
-                "ResumeCommand metadata contains resume_thread_id=%s but only plain checkpoint_id=%s; "
-                "ignoring plain checkpoint_id and resuming from latest checkpoint on that thread",
-                resume_thread_id,
-                plain_checkpoint_id,
-            )
-            return "", ""
-
-        return plain_checkpoint_id, plain_checkpoint_ns
-
-    @classmethod
-    def _build_thread_id(cls, *, session_id: str, agent_key: str) -> str:
-        agent_text = cls._stringify_metadata_value(agent_key)
-        session_text = cls._stringify_metadata_value(session_id)
-        if not agent_text or not session_text:
-            return session_text or agent_text
-        return f"{agent_text}:{session_text}"
-
-    @staticmethod
-    def _is_internal_wait_result(process_result: Any, context: AgentContext) -> bool:
-        if not getattr(context, "_is_suspended", False):
-            return False
-        if not isinstance(process_result, dict):
-            return False
-        return str(process_result.get("status") or "").strip().lower() == "waiting"
-
-    async def _handle_message(
-        self,
-        command: GatewayCommand,
-        cancel_event: asyncio.Event | None = None,
-        cancel_reason: str = "",
-        execution: Any | None = None,
-    ) -> str:
-        trace_id = uuid.uuid4().hex
-        header = command.header
-
-        is_agent_return = isinstance(command, ResumeCommand)
-        source_agent_type = header.source_agent_type
-        has_source_agent = bool(source_agent_type) and not is_agent_return
-        workspace_dir = None
-
-        context_parent_id = header.message_id
-        if execution and execution.is_resumed and execution.existing_data:
-            context_parent_id = execution.message_id or header.message_id
-
-        context = AgentContext(
-            session_id=header.session_id,
-            trace_id=header.trace_id if header.trace_id else trace_id,
-            redis_client=self.redis,
-            current_agent_id=header.target_agent_type if header.target_agent_type else "",
-            parent_message_id=context_parent_id,
-            current_command=command,
-            cancel_event=cancel_event,
-            cancel_reason=cancel_reason,
-            plugin_registry=self.plugin_registry,
-            tenant_id=header.tenant_id,
-            workspace_dir=workspace_dir,
-            agent_configs=self.plugin_registry.agent_configs,
-            storage=self.storage,
-            is_sub_agent=has_source_agent,
-        )
-        if execution:
-            execution.context = context
-        process_result: Any = None
-
-        logger.info(
-            "[%s] Received message: %s (Trace: %s)",
-            self.worker_id,
-            header.message_id,
-            trace_id,
-        )
-        logger.info("[%s] Target Agent Type: %s", self.worker_id, header.target_agent_type)
-        logger.info("[%s] Session ID: %s", self.worker_id, header.session_id)
-
-        token = None
-        try:
-            await self.plugin_registry.on_task_start(context)
-
-            if not is_agent_return and hasattr(command, "content"):
-                await context.agent_runtime_state.session_manager.history.save_message(
-                    role="user",
-                    content=command.content,
-                    metadata={
-                        "message_id": header.message_id,
-                        "trace_id": header.trace_id,
-                    },
-                )
-
-            logger.info("[%s] Setting up workspace for session: %s", self.worker_id, header.session_id)
-            paths = await self.workspace_manager.setup_workspace(
-                header.session_id, header.message_id
-            )
-            logger.debug("[%s] Workspace paths: %s", self.worker_id, paths)
-
-            if self.sandbox:
-                logger.info("[%s] Installing sandbox", self.worker_id)
-                self.sandbox.install()
-
-            from by_framework.worker.sandbox.hook_sandbox import active_workspace  # noqa: PLC0415
-
-            token = active_workspace.set(paths["private"])
-
-            logger.info("[%s] Starting task processing", self.worker_id)
-            if is_agent_return:
-                await self._persist_agent_return_state(paths, command)
-
-                if header.task_group_id:
-                    group_key = RedisKeys.task_group(header.task_group_id)
-                    results_key = RedisKeys.task_group_results(header.task_group_id)
-                    total_str = await self.redis.hget(group_key, TASK_GROUP_FIELD_TOTAL)
-                    if total_str is not None:
-                        if isinstance(command, ResumeCommand):
-                            result_data = {
-                                "status": command.status,
-                                "reply_data": command.reply_data,
-                                "content": command.content,
-                            }
-                            await self.redis.hset(
-                                results_key,
-                                header.message_id,
-                                json.dumps(result_data),
-                            )
-                            await self.redis.expire(results_key, TASK_GROUP_TTL_SECONDS)
-
-                        completed = await self.redis.hincrby(
-                            group_key, TASK_GROUP_FIELD_COMPLETED, 1
-                        )
-                        if completed < int(total_str):
-                            logger.info(
-                                "[%s] TaskGroup %s completed %d/%s, waiting...",
-                                self.worker_id,
-                                header.task_group_id,
-                                completed,
-                                total_str,
-                            )
-                            return f"{GatewayAgentState.QUEUED.value}: waiting_for_group"
-                        logger.info(
-                            "[%s] TaskGroup %s ALL COMPLETED (%s)!",
-                            self.worker_id,
-                            header.task_group_id,
-                            total_str,
-                        )
-
-                await context.emit_state(StateChangeEvent(state=GatewayAgentState.RESUMED.value))
-
-            process_result = await self.process_command(command, context)
-
-            final_status = GatewayAgentState.COMPLETED.value
-            if isinstance(process_result, dict) and "status" in process_result:
-                final_status = str(process_result["status"])
-            elif isinstance(process_result, str) and process_result in AgentStateLiteral.__args__:
-                final_status = process_result
-
-            if self._is_internal_wait_result(process_result, context):
-                # wait_state = (
-                #     GatewayAgentState.WAITING_AGENT.value
-                #     if not is_agent_return
-                #     else GatewayAgentState.RESUMED.value
-                # )
-                # await context.emit_state(StateChangeEvent(state=wait_state))
-                # logger.info(
-                #     "[%s] Task suspended internally with status=%s",
-                #     self.worker_id,
-                #     final_status,
-                # )
-                # await self.plugin_registry.on_task_complete(context, process_result)
-                await context.flush_to_history()
-                return final_status
-
-            if has_source_agent:
-                await self._enqueue_agent_return(
-                    command,
-                    status=GatewayAgentState.COMPLETED.value,
-                    reply_data=process_result,
-                )
-            #     await context.emit_state(
-            #         StateChangeEvent(state=f"{GatewayAgentState.QUEUED.value}: {source_agent_type}")
-            #     )
-            # else:
-            #     await context.emit_state(StateChangeEvent(state=GatewayAgentState.COMPLETED.value))
-            logger.info(
-                "[%s] Task completed successfully with status: %s",
-                self.worker_id,
-                final_status,
-            )
-            await self.plugin_registry.on_task_complete(context, process_result)
-
-            should_emit_stream_end = (
-                not has_source_agent
-                and is_terminal_state(final_status)
-                and not getattr(context, "_permission_transferred", False)
-                and not getattr(context, "_is_suspended", False)
-            )
-            if should_emit_stream_end:
-                if not getattr(context, "_is_stream_finished", False):
-                    await context.emit_chunk("", event_type=EventType.APP_STREAM_RESPONSE.value)
-            else:
-                await context.flush_to_history()
-
-            return final_status
-
-        except asyncio.CancelledError as e:
-            logger.info("[%s] Task cancellation requested: %s", self.worker_id, str(e))
-            await context.emit_state(StateChangeEvent(state=GatewayAgentState.CANCELLING.value))
-            if has_source_agent:
-                await self._enqueue_agent_return(
-                    command,
-                    status=GatewayAgentState.CANCELLED.value,
-                    reply_data={"reason": str(e)},
-                )
-            await context.emit_state(StateChangeEvent(state=GatewayAgentState.CANCELLED.value))
-
-            should_emit_stream_end = (
-                not has_source_agent and not getattr(context, "_permission_transferred", False)
-            )
-            if should_emit_stream_end and not getattr(context, "_is_stream_finished", False):
-                await context.emit_chunk("", event_type=EventType.APP_STREAM_RESPONSE.value)
-            else:
-                await context.flush_to_history()
-
-            return GatewayAgentState.CANCELLED.value
-
-        except Exception as e:
-            error_msg = f"[{self.worker_id}] Task failed: {str(e)}"
-            logger.error(error_msg)
-            if has_source_agent:
-                await self._enqueue_agent_return(
-                    command,
-                    status=GatewayAgentState.FAILED.value,
-                    reply_data={"error": str(e)},
-                )
-            await context.emit_state(
-                StateChangeEvent(state=f"{GatewayAgentState.FAILED.value}: {str(e)}")
-            )
-            logger.error(traceback.format_exc())
-            await self.plugin_registry.on_task_error(context, e)
-
-            should_emit_stream_end = (
-                not has_source_agent and not getattr(context, "_permission_transferred", False)
-            )
-            if should_emit_stream_end and not getattr(context, "_is_stream_finished", False):
-                await context.emit_chunk("", event_type=EventType.APP_STREAM_RESPONSE.value)
-            else:
-                await context.flush_to_history()
-
-            return GatewayAgentState.FAILED.value
-        finally:
-            from by_framework.worker.sandbox.hook_sandbox import active_workspace  # noqa: PLC0415
-
-            if token is not None:
-                active_workspace.reset(token)
-            if self.sandbox:
-                logger.info("[%s] Uninstalling sandbox", self.worker_id)
-                self.sandbox.uninstall()
-            logger.info("[%s] Cleaning up task: %s", self.worker_id, header.message_id)
-            await self.workspace_manager.cleanup_task(header.session_id, header.message_id)
 
     @staticmethod
     def _consume_future_exception(fut: asyncio.Future[dict[str, Any]]) -> None:
@@ -704,40 +385,21 @@ class DataCloudWorker(GatewayWorker):
 
         extra_payload = getattr(command, "extra_payload", {}) or {}
         header_metadata = getattr(getattr(command, "header", None), "metadata", None) or {}
-        if isinstance(command, ResumeCommand):
-            by_agent_id = (
-                extra_payload.get("agent_id")
-                or header_metadata.get("resume_agent_id")
-                or header_metadata.get("agent_id")
-            )
-            by_agent_name = (
-                extra_payload.get("agent_name")
-                or header_metadata.get("resume_agent_name")
-                or header_metadata.get("agent_name")
-            )
-        else:
-            by_agent_id = extra_payload.get("agent_id") or header_metadata.get("agent_id")
-            by_agent_name = extra_payload.get("agent_name") or header_metadata.get("agent_name")
+        by_agent_id = extra_payload.get("agent_id") or header_metadata.get("agent_id")
+        by_agent_name = extra_payload.get("agent_name") or header_metadata.get("agent_name")
         ext_params = extra_payload.get("ext_params")
-        runtime_agent_key = self._resolve_runtime_agent_key(
-            command=command,
-            by_agent_id=by_agent_id,
-            header_metadata=header_metadata,
-        )
         logger.info(
-            "Agent context: ID=%s (type=%s), Name=%s runtime_agent_key=%s",
+            "Agent context: ID=%s (type=%s), Name=%s",
             by_agent_id,
             type(by_agent_id).__name__,
             by_agent_name,
-            runtime_agent_key,
         )
 
         resume_cache_key: str | None = None
         if isinstance(command, ResumeCommand):
             resume_value_probe = command.reply_data if command.reply_data is not None else command.content
-            checkpoint_id_probe, checkpoint_ns_probe = self._resolve_resume_checkpoint_target(
-                header_metadata=header_metadata
-            )
+            checkpoint_id_probe = str(header_metadata.get("checkpoint_id") or "")
+            checkpoint_ns_probe = str(header_metadata.get("checkpoint_ns") or "")
             resume_cache_key = self._build_resume_dedup_key(
                 session_id=context.session_id,
                 checkpoint_id=checkpoint_id_probe,
@@ -846,9 +508,7 @@ class DataCloudWorker(GatewayWorker):
         computed_conf_hash = hashlib.sha1(conf_payload.encode("utf-8")).hexdigest()[:12]
         resume_conf_hash = ""
         if isinstance(command, ResumeCommand):
-            resume_conf_hash = str(
-                header_metadata.get("resume_conf_hash") or header_metadata.get("conf_hash") or ""
-            ).strip()
+            resume_conf_hash = str(header_metadata.get("conf_hash") or "").strip()
             if resume_conf_hash and resume_conf_hash != computed_conf_hash:
                 logger.warning(
                     "ResumeCommand conf_hash mismatch: metadata=%s computed=%s; "
@@ -876,27 +536,18 @@ class DataCloudWorker(GatewayWorker):
         else:
             self.graphs.move_to_end(cache_key)
 
-        thread_id = str(
-            header_metadata.get("resume_thread_id") or header_metadata.get("thread_id") or ""
-        ).strip()
-        if not thread_id:
-            thread_id = self._build_thread_id(
-                session_id=context.session_id,
-                agent_key=runtime_agent_key,
-            )
         config = {
             "configurable": {
-                "thread_id": thread_id,
-                "gateway_context": context,  # Bug 6 fix: AgentContext 放 config 而非 state
+                "thread_id": context.session_id,
+                "gateway_context": context,  # Bug 6 fix: AgentContext 鏀?config 鑰岄潪 state
             }
         }
-        context._langgraph_thread_id = thread_id
 
         # 初始提示：先发阶段标题，再发阶段说明文本。
         await context.emit_chunk(
-            StreamChunkEvent(content=_format_reasoning_heading(_NODE_PHASE_TITLE["knowledge_enhance"])),
+            StreamChunkEvent(content=_NODE_PHASE_TITLE["knowledge_enhance"]),
             event_type=EventType.REASONING_LOG_START.value,
-            content_type=SseReasonMessageType.think_text.value,
+            content_type=SseReasonMessageType.think_title.value,
         )
         await context.emit_chunk(
             StreamChunkEvent(content="已接收到用户消息，开始处理\n\n"),
@@ -972,18 +623,21 @@ class DataCloudWorker(GatewayWorker):
                 "confirmed_terms": [],
                 "ambiguous_terms": [],
                 "session_alias_map": {},
+                "planned_tasks": [],
+                "task_queue": [],
+                "results_list": [],
+                "results_map": {},
+                "final_summary": {},
             }
 
         if isinstance(command, ResumeCommand):
             md = header_metadata
-            ckpt_id, ckpt_ns = self._resolve_resume_checkpoint_target(header_metadata=md)
+            ckpt_id = md.get("checkpoint_id")
             if ckpt_id:
-                config["configurable"]["checkpoint_id"] = ckpt_id
-                config["configurable"]["checkpoint_ns"] = ckpt_ns
+                config["configurable"]["checkpoint_id"] = str(ckpt_id)
+                config["configurable"]["checkpoint_ns"] = str(md.get("checkpoint_ns", ""))
             logger.info(
-                "ResumeCommand: langgraph thread_id=%s checkpoint_id=%s checkpoint_ns=%r "
-                "(from header.metadata)",
-                config["configurable"].get("thread_id", ""),
+                "ResumeCommand: langgraph checkpoint_id=%s checkpoint_ns=%r (from header.metadata)",
                 config["configurable"].get("checkpoint_id", ""),
                 config["configurable"].get("checkpoint_ns", ""),
             )
@@ -1094,9 +748,9 @@ class DataCloudWorker(GatewayWorker):
                     if phase_title and phase_title not in phase_emitted:
                         phase_emitted.add(phase_title)
                         await _emit(
-                            content=_format_reasoning_heading(phase_title),
+                            content=phase_title,
                             event_type=EventType.REASONING_LOG_START.value,
-                            content_type=SseReasonMessageType.think_text.value,
+                            content_type=SseReasonMessageType.think_title.value,
                         )
 
                 elif kind == "on_chat_model_end":
@@ -1104,9 +758,9 @@ class DataCloudWorker(GatewayWorker):
                     if node_name == "planning" and _PLANNING_PHASE_TITLE not in phase_emitted:
                         phase_emitted.add(_PLANNING_PHASE_TITLE)
                         await _emit(
-                            content=_format_reasoning_heading(_PLANNING_PHASE_TITLE),
+                            content=_PLANNING_PHASE_TITLE,
                             event_type=EventType.REASONING_LOG_START.value,
-                            content_type=SseReasonMessageType.think_text.value,
+                            content_type=SseReasonMessageType.think_title.value,
                         )
 
                 elif kind == "on_chain_end" and event.get("name") == "agent_delegate":
@@ -1139,7 +793,7 @@ class DataCloudWorker(GatewayWorker):
                     node_name = str(metadata.get("langgraph_node") or "").strip()
                     desc = _NODE_THINKING_DESC.get(node_name, _DEFAULT_THINKING_DESC)
                     await _emit(
-                        content=_format_reasoning_heading(desc),
+                        content=desc,
                         event_type=EventType.REASONING_LOG_START.value,
                         content_type=SseReasonMessageType.think_text.value,
                     )
@@ -1151,11 +805,7 @@ class DataCloudWorker(GatewayWorker):
             )
 
             if _compiled_graph_has_checkpointer(target_graph):
-                snapshot_config = {
-                    "configurable": dict(config.get("configurable") or {}),
-                }
-                snapshot_config["configurable"].pop("checkpoint_id", None)
-                snapshot = await target_graph.aget_state(snapshot_config)
+                snapshot = await target_graph.aget_state(config)
             else:
                 global _no_checkpointer_logged
                 if not _no_checkpointer_logged:
@@ -1214,16 +864,6 @@ class DataCloudWorker(GatewayWorker):
                     checkpoint_id,
                     prompt,
                 )
-                if interrupt_reason == "AGENT_DELEGATE_WAIT":
-                    logger.info(
-                        "_stream_graph: delegate wait interrupt stays internal session=%s "
-                        "checkpoint_id=%s todo_active_id=%s pending_capability=%s",
-                        context.session_id,
-                        checkpoint_id,
-                        todo_active_id,
-                        pending_capability,
-                    )
-                    return {"status": "waiting"}
                 await context.ask_user(
                     AskUserEvent(
                         prompt=prompt,
@@ -1329,3 +969,6 @@ def _is_light_chitchat(text: str) -> bool:
         return True
     # Keep heuristic narrow to avoid hijacking real requests.
     return len(normalized) <= 10 and any(token in normalized for token in _CHITCHAT_TOKENS)
+
+
+

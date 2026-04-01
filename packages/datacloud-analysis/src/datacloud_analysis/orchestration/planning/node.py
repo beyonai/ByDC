@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+from collections import defaultdict, deque
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Iterable, Mapping, cast
 
 from by_framework import EventType, StreamChunkEvent
 from by_framework.core.protocol.content_type import SseReasonMessageType
@@ -13,7 +14,14 @@ from datacloud_analysis.orchestration.planning.decomposer import (
     expand_relation_todos,
 )
 from datacloud_analysis.orchestration.planning.facade import resolve_planning_context
-from datacloud_analysis.orchestration.state import AgentState
+from datacloud_analysis.orchestration.shared import PlanTask
+from datacloud_analysis.orchestration.state import (
+    AgentState,
+    ensure_blocked_task,
+    ensure_multitask_defaults,
+    set_planned_tasks,
+    set_task_queue,
+)
 
 logger = logging.getLogger(__name__)
 _PLANNER_BUILTIN_CAPABILITIES: frozenset[str] = frozenset(
@@ -31,30 +39,6 @@ _PLANNER_BUILTIN_CAPABILITIES: frozenset[str] = frozenset(
         "render_report",
     }
 )
-
-async def _emit_planning_stage_status(
-    *,
-    gateway_context: Any,
-    detail: str,
-    title: str | None = None,
-) -> None:
-    """Emit incremental updates so the frontend sees planning progress."""
-    if gateway_context is None:
-        return
-    try:
-        if title:
-            await gateway_context.emit_chunk(
-                StreamChunkEvent(content=title),
-                event_type=EventType.REASONING_LOG_DELTA.value,
-                content_type=SseReasonMessageType.think_title.value,
-            )
-        await gateway_context.emit_chunk(
-            StreamChunkEvent(content=detail),
-            event_type=EventType.REASONING_LOG_DELTA.value,
-            content_type=SseReasonMessageType.think_text.value,
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("planning_node: failed to emit progress hint: %s", exc)
 
 
 def _semantic_type_from_term(term: dict[str, Any]) -> str:
@@ -135,20 +119,197 @@ def _is_available_capability(capability_id: str, available_tools: dict[str, Any]
     return capability_id in available_tools or capability_id in _PLANNER_BUILTIN_CAPABILITIES
 
 
-def _inject_delegate_policy_defaults(
-    *,
-    capability_id: str,
-    available_tools: dict[str, Any],
-    inputs: dict[str, Any],
-) -> dict[str, Any]:
-    tool_obj = available_tools.get(capability_id)
-    if not bool(tool_obj and getattr(tool_obj, "_is_agent_delegate", False)):
-        return inputs
-    if "delegate_policy" in inputs:
-        return inputs
-    next_inputs = dict(inputs)
-    next_inputs["delegate_policy"] = {"mode": "sync", "wait_for_reply": True}
-    return next_inputs
+def _coerce_str_list(value: Any) -> list[str]:
+    if not isinstance(value, Iterable):
+        return []
+    result: list[str] = []
+    for item in value:
+        text = str(item or "").strip()
+        if text:
+            result.append(text)
+    return result
+
+
+def _log_inputs_warning(todo_id: str, param: str, detail: str) -> None:
+    logger.warning(
+        "planning_node: invalid inputs_from entry todo_id=%s param=%s detail=%s",
+        todo_id,
+        param,
+        detail,
+    )
+
+
+def _parse_inputs_spec(raw_task: Mapping[str, Any]) -> tuple[dict[str, str], dict[str, bool]]:
+    raw_inputs = raw_task.get("inputs_from")
+    if raw_inputs is None and isinstance(raw_task.get("params"), Mapping):
+        raw_inputs = raw_task["params"].get("inputs_from")
+
+    inputs_from: dict[str, str] = {}
+    required_inputs: dict[str, bool] = {}
+
+    if isinstance(raw_inputs, Mapping):
+        iterator = raw_inputs.items()
+    elif isinstance(raw_inputs, list):
+        iterator = []
+        for item in raw_inputs:
+            if isinstance(item, Mapping):
+                name = str(item.get("name") or "").strip()
+                value = item.get("path") or item.get("value")
+                iterator.append((name, value))
+    else:
+        iterator = []
+
+    for key, spec in iterator:
+        param = str(key or "").strip()
+        if not param:
+            continue
+        if isinstance(spec, Mapping):
+            path = str(spec.get("path") or spec.get("value") or "").strip()
+            required = bool(spec.get("required"))
+        else:
+            path = str(spec or "").strip()
+            required = False
+        if not path:
+            _log_inputs_warning(
+                str(raw_task.get("id") or param),
+                param,
+                "missing path",
+            )
+            continue
+        inputs_from[param] = path
+        if required:
+            required_inputs[param] = True
+
+    return inputs_from, required_inputs
+
+
+def _extract_dependency_from_expr(expr: str) -> str | None:
+    cleaned = str(expr or "").strip()
+    if not cleaned:
+        return None
+    cutoff = len(cleaned)
+    dot_index = cleaned.find(".")
+    bracket_index = cleaned.find("[")
+    if dot_index != -1:
+        cutoff = min(cutoff, dot_index)
+    if bracket_index != -1:
+        cutoff = min(cutoff, bracket_index)
+    source = cleaned[:cutoff].strip()
+    return source or None
+
+
+def _plan_tasks_from_analysis_plan(
+    plan: list[dict[str, Any]],
+) -> list[PlanTask]:
+    tasks: list[PlanTask] = []
+    seen_ids: set[str] = set()
+    for idx, raw_task in enumerate(plan, start=1):
+        todo_id = str(raw_task.get("id") or f"t{idx}").strip()
+        if not todo_id:
+            todo_id = f"t{idx}"
+        base_id = todo_id
+        suffix = 1
+        while todo_id in seen_ids:
+            suffix += 1
+            todo_id = f"{base_id}_{suffix}"
+        seen_ids.add(todo_id)
+
+        inputs_from, required_inputs = _parse_inputs_spec(raw_task)
+        depends_on = _coerce_str_list(raw_task.get("deps"))
+        required_tools = _coerce_str_list([raw_task.get("type")])
+        task = PlanTask(
+            todo_id=todo_id,
+            goal=str(raw_task.get("description") or ""),
+            required_tools=required_tools,
+            depends_on=depends_on,
+            inputs_from=inputs_from,
+            required_inputs=required_inputs,
+        )
+        tasks.append(task)
+    return tasks
+
+
+def _direct_plan_task(
+    todo_id: str,
+    goal: str,
+    tool: str,
+) -> PlanTask:
+    return PlanTask(
+        todo_id=todo_id,
+        goal=goal,
+        required_tools=[tool] if tool else [],
+        depends_on=[],
+        inputs_from={},
+        required_inputs={},
+    )
+
+
+def _resolve_dependency_graph(
+    tasks: list[PlanTask],
+) -> tuple[list[str], dict[str, str]]:
+    """Return topological order and blocked reasons by todo_id."""
+    task_map = {task.todo_id: task for task in tasks}
+    blocked_by: dict[str, str] = {}
+
+    for task in tasks:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for dep in task.depends_on:
+            dep_id = dep.strip()
+            if not dep_id:
+                continue
+            if dep_id not in task_map:
+                blocked_by[task.todo_id] = "missing_dependency"
+                _log_inputs_warning(task.todo_id, dep_id, "dependency not found")
+                continue
+            if dep_id == task.todo_id or dep_id in seen:
+                continue
+            seen.add(dep_id)
+            normalized.append(dep_id)
+
+        for expr in task.inputs_from.values():
+            dep_id = _extract_dependency_from_expr(expr)
+            if not dep_id or dep_id == task.todo_id:
+                continue
+            if dep_id not in task_map:
+                blocked_by.setdefault(task.todo_id, "missing_dependency")
+                _log_inputs_warning(
+                    task.todo_id,
+                    expr,
+                    "inputs_from dependency not found",
+                )
+                continue
+            if dep_id not in normalized:
+                normalized.append(dep_id)
+        task.depends_on = normalized
+
+    indegree: dict[str, int] = defaultdict(int)
+    adjacency: dict[str, list[str]] = {task_id: [] for task_id in task_map}
+    active_nodes = [tid for tid in task_map if tid not in blocked_by]
+
+    for task in tasks:
+        if task.todo_id in blocked_by:
+            continue
+        for dep in task.depends_on:
+            if dep in blocked_by:
+                blocked_by[task.todo_id] = "missing_dependency"
+                break
+            adjacency.setdefault(dep, []).append(task.todo_id)
+            indegree[task.todo_id] += 1
+    queue = deque([tid for tid in active_nodes if indegree.get(tid, 0) == 0])
+    order: list[str] = []
+    while queue:
+        node = queue.popleft()
+        order.append(node)
+        for follower in adjacency.get(node, []):
+            indegree[follower] -= 1
+            if indegree[follower] == 0:
+                queue.append(follower)
+    residual = [tid for tid in active_nodes if tid not in order]
+    for tid in residual:
+        blocked_by[tid] = "cycle_detected"
+        logger.warning("planning_node: detected cycle involving task_id=%s", tid)
+    return order, blocked_by
 
 
 def _plan_to_todos(
@@ -171,11 +332,6 @@ def _plan_to_todos(
         blocked_capabilities = (
             [_capability_spec(task_type, available_tools)] if is_unavailable and task_type else []
         )
-        task_inputs = _inject_delegate_policy_defaults(
-            capability_id=task_type,
-            available_tools=available_tools,
-            inputs=dict(task.get("params") or {}),
-        )
         todo = {
             "todo_id": task_id,
             "goal": str(task.get("description") or ""),
@@ -183,7 +339,7 @@ def _plan_to_todos(
             "blocked_tools": blocked_tools,
             "required_capabilities": required_capabilities,
             "blocked_capabilities": blocked_capabilities,
-            "inputs": task_inputs,
+            "inputs": dict(task.get("params") or {}),
             "depends_on": [str(x) for x in (task.get("deps") or [])],
             "term_context": term_context,
             "acceptance_criteria": f"task {task_id} executed successfully",
@@ -358,13 +514,8 @@ async def planning_node(
             planning_updates["query_mode"] = "online_query"
 
     plan: list[dict[str, Any]] = []
-    if query_mode == "analysis":
+    if query_mode == "analysis" and not planning_updates.get("ambiguous_terms"):
         merged_state = cast(AgentState, {**state, **planning_updates})
-        # await _emit_planning_stage_status(
-        #     gateway_context=gateway_context,
-        #     title="任务生成",
-        #     detail="正在根据用户问题创建任务计划，请稍候...",
-        # )
         plan_updates = await decompose_analysis_plan(
             merged_state,
             intent=intent_text,
@@ -389,6 +540,32 @@ async def planning_node(
     todos = expand_relation_todos(todos)
     todo_md = _build_todo_md(todos)
     todo_md_path = _persist_todo_md(state.get("workspace_dir"), todo_md)
+    plan_tasks = _plan_tasks_from_analysis_plan(plan)
+    if not plan_tasks and target_tool:
+        plan_tasks = [_direct_plan_task(todo_id="t_direct", goal=intent_text, tool=target_tool)]
+    ensure_multitask_defaults(state)
+    set_planned_tasks(state, plan_tasks)
+    if plan_tasks:
+        queue_order, blocked_reasons = _resolve_dependency_graph(plan_tasks)
+    else:
+        queue_order, blocked_reasons = ([], {})
+    set_task_queue(state, queue_order)
+    for task in plan_tasks:
+        reason = blocked_reasons.get(task.todo_id)
+        if reason:
+            ensure_blocked_task(state, task, blocked_by=reason)
+    logger.info(
+        "planning_node: resolved tasks planned=%d queue_len=%d blocked=%s",
+        len(plan_tasks),
+        len(queue_order),
+        list(blocked_reasons.keys()),
+    )
+    multitask_updates = {
+        "planned_tasks": state.get("planned_tasks"),
+        "task_queue": state.get("task_queue"),
+        "results_list": state.get("results_list"),
+        "results_map": state.get("results_map"),
+    }
 
     return {
         **planning_updates,
@@ -396,4 +573,5 @@ async def planning_node(
         "todos": todos,
         "todo_md": todo_md,
         "todo_md_path": todo_md_path,
+        **multitask_updates,
     }
