@@ -1,4 +1,4 @@
-﻿"""④ Summary and reply generation (design §3.1 INSIGHT).
+"""④ Summary and reply generation (design §3.1 INSIGHT).
 
 Responsibilities
 ----------------
@@ -33,8 +33,14 @@ from datacloud_analysis.orchestration.end.execution_summary import (
     persist_execution_summary,
 )
 from datacloud_analysis.orchestration.execution.sandbox_executor import WRAPPED_TASK_OUTPUT_KEY
+from datacloud_analysis.orchestration.shared import PlanTask, TaskResult
 from datacloud_analysis.orchestration.shared.query_shape_utils import count_rows_like_envelope_build
-from datacloud_analysis.orchestration.state import AgentState
+from datacloud_analysis.orchestration.state import (
+    AgentState,
+    get_planned_tasks,
+    get_task_queue,
+    get_task_results,
+)
 
 # 6001：结构化数据表 JSON；协议层无对应枚举成员时回退为字面量
 _SSE_DATA_TABLE_JSON = getattr(SseMessageType, "data_table_json", None)
@@ -44,16 +50,151 @@ CONTENT_TYPE_DATA_TABLE_JSON = (
 
 logger = logging.getLogger(__name__)
 
+
+def _normalize_goal_text(goal: str, todo_id: str) -> str:
+    text = str(goal or "").strip()
+    return text or f"任务 {todo_id or '?'}"
+
+
+def _summarize_task_text(
+    goal: str,
+    status: str,
+    blocked_by: str | None,
+    error_message: str,
+) -> str:
+    if status == "success":
+        return f"{goal}已完成。"
+    if status == "failed":
+        if error_message:
+            return f"{goal}执行失败：{error_message}"
+        return f"{goal}执行失败。"
+    reason = blocked_by or "缺少依赖"
+    return f"{goal}未执行，原因：{reason}。"
+
+
+def _task_summary_entry(plan: PlanTask | None, result: TaskResult | None) -> dict[str, Any]:
+    todo_id = result.todo_id if result else (plan.todo_id if plan else "")
+    todo_id = todo_id or "unknown"
+    goal = _normalize_goal_text(plan.goal if plan else "", todo_id)
+    status = result.status if result else "blocked"
+    blocked_by = result.blocked_by if result else "missing_dependency"
+    error_message = ""
+    error_detail_dict: dict[str, Any] | None = None
+    if result and result.error_detail:
+        error_message = result.error_detail.message
+        error_detail_dict = result.error_detail.to_dict()
+    summary = _summarize_task_text(goal, status, blocked_by, error_message)
+    artifact_refs = [ref.to_dict() for ref in (result.artifact_refs if result else [])]
+    entry: dict[str, Any] = {
+        "todo_id": todo_id,
+        "goal": goal,
+        "status": status,
+        "summary": summary,
+        "result_meta": dict(result.result_meta) if result else {},
+        "artifact_refs": artifact_refs,
+        "blocked_by": blocked_by,
+        "depends_on": list(plan.depends_on) if plan else [],
+    }
+    if error_detail_dict:
+        entry["error_detail"] = error_detail_dict
+    return entry
+
+
+def _build_final_summary(state: AgentState) -> dict[str, Any]:
+    planned_tasks = get_planned_tasks(state)
+    task_queue = get_task_queue(state)
+    queue_index = {todo_id: idx for idx, todo_id in enumerate(task_queue)}
+    results = get_task_results(state)
+    result_map = {result.todo_id: result for result in results}
+    entries: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    sorted_tasks = sorted(
+        planned_tasks,
+        key=lambda task: queue_index.get(task.todo_id, len(queue_index) + len(entries)),
+    )
+    for task in sorted_tasks:
+        entry = _task_summary_entry(task, result_map.get(task.todo_id))
+        entries.append(entry)
+        seen.add(task.todo_id)
+
+    for result in results:
+        if result.todo_id in seen:
+            continue
+        entries.append(_task_summary_entry(None, result))
+        seen.add(result.todo_id)
+
+    if not entries:
+        return {}
+
+    artifact_index: list[dict[str, Any]] = []
+    for entry in entries:
+        for ref in entry.get("artifact_refs", []):
+            artifact_index.append(
+                {
+                    "todo_id": entry["todo_id"],
+                    "path": ref.get("path"),
+                    "name": ref.get("name"),
+                    "mime": ref.get("mime"),
+                }
+            )
+
+    stats = {
+        "total": len(entries),
+        "success": sum(1 for entry in entries if entry["status"] == "success"),
+        "failed": sum(1 for entry in entries if entry["status"] == "failed"),
+        "blocked": sum(1 for entry in entries if entry["status"] == "blocked"),
+        "artifacts": len(artifact_index),
+    }
+
+    combined_parts: list[str] = []
+    for entry in entries:
+        depends_on = entry.get("depends_on") or []
+        prefix = entry["todo_id"]
+        if depends_on:
+            prefix = f"{', '.join(depends_on)} -> {entry['todo_id']}"
+        combined_parts.append(f"{prefix}：{entry['summary']}")
+    combined_narrative = "；".join(combined_parts)
+
+    return {
+        "tasks": entries,
+        "combined_narrative": combined_narrative,
+        "artifact_index": artifact_index,
+        "stats": stats,
+    }
+
+
+def _ensure_final_summary(state: AgentState) -> dict[str, Any]:
+    summary = _build_final_summary(state)
+    if summary:
+        state["final_summary"] = summary
+        stats = summary.get("stats") or {}
+        logger.info(
+            "final_summary built: total=%s success=%s failed=%s blocked=%s artifact_count=%s",
+            stats.get("total", 0),
+            stats.get("success", 0),
+            stats.get("failed", 0),
+            stats.get("blocked", 0),
+            stats.get("artifacts", 0),
+        )
+        return summary
+    existing = state.get("final_summary")
+    if isinstance(existing, dict):
+        return existing
+    state["final_summary"] = {}
+    return {}
+
+
 # ---------------------------------------------------------------------------
 # Static system prompts — contain NO variable interpolation.
 # All dynamic content (data_summary, intent) goes into Layer 3 HumanMessage
 # so that these prefixes are 100% KV-Cache-friendly.
 # ---------------------------------------------------------------------------
 _INSIGHT_STATIC_SYSTEM = """你是一个高级数据分析师。
-请基于用户的原始问题和各子任务数据摘要，输出专业的分析报告。
+请基于用户的原始问题和各子任务数据摘要，输出专业的自然语言分析报告。
 
 输出要求：
-1. 输出Markdown格式的分析，不要输出 Markdown 表格（完整数据已通过独立 JSON 消息推送）。
+1. 只输出文字分析，不要输出 Markdown 表格（完整数据已通过独立 JSON 消息推送）。
 2. 引用数据中的关键数字和结论，简明扼要，聚焦核心洞察。
 3. 不要重复整张表或逐行列举记录。
 """
@@ -68,11 +209,6 @@ _CHITCHAT_STATIC_SYSTEM = """你是产业数据分析助手。
 用户正在寒暄或闲聊，与具体数据查询无关。请用简短、自然、友好的口吻回应，
 并可温和提示：你更擅长企业、网格、产业链等指标与数据类问题，欢迎随时提出分析需求。
 不要编造查询结果，不要输出报告章节结构（title/sections），不要假装已调用数据工具。"""
-
-
-def _format_reasoning_heading(title: object) -> str:
-    text = str(title).strip()
-    return f"## {text}\n" if text else ""
 
 
 async def _emit_reasoning_log_end_before_answer(context: Any) -> None:
@@ -415,9 +551,7 @@ def _records_shaped_output(output: dict[str, Any]) -> dict[str, Any] | None:
             return None  # 执行失败，无结构化数据
         result = output.get("result")
         if isinstance(result, list) and result and isinstance(result[0], dict):
-            columns = [
-                {"name": str(k), "label": str(k), "type": "string"} for k in result[0]
-            ]
+            columns = [{"name": str(k), "label": str(k), "type": "string"} for k in result[0]]
             return {
                 "records": result,
                 "meta": {
@@ -642,9 +776,7 @@ def build_structured_data_envelope(
     if not any(c.get("name") for c in columns_norm) and merged_records:
         first_row = merged_records[0]
         if isinstance(first_row, dict):
-            columns_norm = [
-                {"name": str(k), "label": str(k), "type": "string"} for k in first_row
-            ]
+            columns_norm = [{"name": str(k), "label": str(k), "type": "string"} for k in first_row]
 
     notice_base = _default_notice_msg(meta_base, merged_records, notice_overflow)
     fb = _file_block_from_paths(file_path, download_url)
@@ -871,6 +1003,21 @@ async def insight_node(
 ) -> dict:
     """Generate the final answer: Part1 LLM stream, then Part2+Part3 as one JSON (6001) or Markdown."""
     logger.debug("insight_node: synthesising final answer …")
+    final_summary = _ensure_final_summary(state)
+    summary_stats = final_summary.get("stats") if isinstance(final_summary, dict) else {}
+    returned_tasks = (
+        [task.get("todo_id") for task in final_summary.get("tasks", [])]
+        if isinstance(final_summary, dict)
+        else []
+    )
+    logger.info(
+        "insight_node: returned_tasks=%s success=%s failed=%s blocked=%s artifact_count=%s",
+        returned_tasks,
+        summary_stats.get("success", 0) if isinstance(summary_stats, dict) else 0,
+        summary_stats.get("failed", 0) if isinstance(summary_stats, dict) else 0,
+        summary_stats.get("blocked", 0) if isinstance(summary_stats, dict) else 0,
+        summary_stats.get("artifacts", 0) if isinstance(summary_stats, dict) else 0,
+    )
 
     messages = state.get("messages", [])
     context = gateway_context
@@ -894,9 +1041,9 @@ async def insight_node(
         forced_reply = str(state.get("chitchat_reply") or "").strip()
         if context is not None:
             await context.emit_chunk(
-                StreamChunkEvent(content=_format_reasoning_heading("闲聊应答")),
+                StreamChunkEvent(content="闲聊应答"),
                 event_type=EventType.REASONING_LOG_DELTA.value,
-                content_type=SseReasonMessageType.think_text.value,
+                content_type=SseReasonMessageType.think_title.value,
             )
             await context.emit_chunk(
                 StreamChunkEvent(content=f"已识别为闲聊，直接生成回复：{intent[:200]}"),
@@ -922,7 +1069,11 @@ async def insight_node(
                 history_content=history_content,
                 part23="",
             )
-            return {"messages": [AIMessage(content=history_content)], **summary_updates}
+            return {
+                "messages": [AIMessage(content=history_content)],
+                "final_summary": final_summary,
+                **summary_updates,
+            }
 
         await _emit_reasoning_log_end_before_answer(context)
         static_sys = prompts_overwrite.get(
@@ -960,16 +1111,20 @@ async def insight_node(
             history_content=history_content,
             part23="",
         )
-        return {"messages": [AIMessage(content=history_content)], **summary_updates}
+        return {
+            "messages": [AIMessage(content=history_content)],
+            "final_summary": final_summary,
+            **summary_updates,
+        }
 
     # ── clarify / chat path ─────────────────────────────────────────────────
     if state.get("clarify_needed"):
         intent = state.get("intent", "未匹配到具体查询意图")
         if context is not None:
             await context.emit_chunk(
-                StreamChunkEvent(content=_format_reasoning_heading("意图澄清与对话")),
+                StreamChunkEvent(content="意图澄清与对话"),
                 event_type=EventType.REASONING_LOG_DELTA.value,
-                content_type=SseReasonMessageType.think_text.value,
+                content_type=SseReasonMessageType.think_title.value,
             )
             await context.emit_chunk(
                 StreamChunkEvent(content=f"识别为闲聊或未明确数据意图：{intent}"),
@@ -1012,7 +1167,11 @@ async def insight_node(
             history_content=history_content,
             part23="",
         )
-        return {"messages": [AIMessage(content=history_content)], **summary_updates}
+        return {
+            "messages": [AIMessage(content=history_content)],
+            "final_summary": final_summary,
+            **summary_updates,
+        }
 
     # ── aggregate & format all results ──────────────────────────────────────
     raw_results = state.get("results", [])
@@ -1080,7 +1239,11 @@ async def insight_node(
             history_content=history_content,
             part23=part23,
         )
-        return {"messages": [AIMessage(content=history_content)], **summary_updates}
+        return {
+            "messages": [AIMessage(content=history_content)],
+            "final_summary": final_summary,
+            **summary_updates,
+        }
 
     # ── LLM path: Part1 analysis + Part2+Part3 as one 6001 JSON or Markdown ─
 
@@ -1151,4 +1314,8 @@ async def insight_node(
         history_content=history_content,
         part23=part23,
     )
-    return {"messages": [AIMessage(content=history_content)], **summary_updates}
+    return {
+        "messages": [AIMessage(content=history_content)],
+        "final_summary": final_summary,
+        **summary_updates,
+    }

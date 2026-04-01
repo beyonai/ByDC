@@ -7,12 +7,11 @@ import hashlib
 import json
 import logging
 import os
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
 import anyio
-from by_framework import EventType, StreamChunkEvent
-from by_framework.core.protocol.content_type import SseReasonMessageType
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
@@ -21,7 +20,21 @@ from datacloud_analysis.orchestration.execution.sandbox_executor import (
     ToolRuntime,
     normalize_workspace_task_output,
 )
-from datacloud_analysis.orchestration.state import AgentState
+from datacloud_analysis.orchestration.shared import (
+    ArtifactRef,
+    PlanTask,
+    TaskError,
+    TaskResult,
+    TaskStatus,
+)
+from datacloud_analysis.orchestration.state import (
+    AgentState,
+    ensure_multitask_defaults,
+    get_planned_tasks,
+    get_task_queue,
+    get_task_result_map,
+    upsert_task_result,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -173,8 +186,8 @@ def _is_skill_allowed_for_context(
     if blocklist and context_tag_set & blocklist:
         return False
     allowlist = _normalize_skill_tags(getattr(tool_obj, "_skill_allowlist_tags", None))
-    if allowlist and not (context_tag_set & allowlist):
-        return False
+    if allowlist:
+        return bool(context_tag_set & allowlist)
     return True
 
 
@@ -241,62 +254,9 @@ def _parse_clarification_resume(resume_value: Any) -> str:
     return str(resume_value or "").strip()
 
 
-def _format_ambiguous_terms_notice(ambiguous_terms: list[dict[str, Any]]) -> str:
-    """Render ambiguous terms as a non-blocking reasoning log."""
-    mentions: list[str] = []
-    for item in ambiguous_terms:
-        if not isinstance(item, dict):
-            continue
-        mention = str(item.get("mention") or item.get("term") or "").strip()
-        if mention and mention not in mentions:
-            mentions.append(mention)
-    if mentions:
-        mention_text = "、".join(f"「{mention}」" for mention in mentions)
-        lines: list[str] = [f"检测到术语{mention_text}存在歧义，先按已确权术语继续处理："]
-    else:
-        lines = ["检测到部分术语存在歧义，先按已确权术语继续处理："]
-    for item in ambiguous_terms:
-        if not isinstance(item, dict):
-            continue
-        mention = str(item.get("mention") or item.get("term") or "").strip() or "未命名术语"
-        candidates_raw = item.get("candidates")
-        candidate_names: list[str] = []
-        if isinstance(candidates_raw, list):
-            for candidate in candidates_raw[:5]:
-                if not isinstance(candidate, dict):
-                    continue
-                name = str(candidate.get("term_name") or candidate.get("name") or "").strip()
-                if name:
-                    candidate_names.append(name)
-        if candidate_names:
-            lines.append(f"- {mention}: {', '.join(candidate_names)}")
-        else:
-            lines.append(f"- {mention}")
-    return "\n".join(lines)
-
-
-async def _emit_ambiguous_terms_notice(
-    *,
-    gateway_context: Any,
-    ambiguous_terms: list[dict[str, Any]],
-) -> None:
-    """Emit a best-effort frontend message for ambiguous terms."""
-    if gateway_context is None or not ambiguous_terms:
-        return
-    try:
-        await gateway_context.emit_chunk(
-            StreamChunkEvent(content=_format_ambiguous_terms_notice(ambiguous_terms)),
-            event_type=EventType.REASONING_LOG_DELTA.value,
-            content_type=SseReasonMessageType.think_text.value,
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("execution_node: failed to emit ambiguous terms notice: %s", exc)
-
-
 async def _handle_ambiguous_terms(
     state: AgentState,
     *,
-    gateway_context: Any,
     todo_active_id: str,
     pending_capability: str,
 ) -> dict[str, Any]:
@@ -308,16 +268,45 @@ async def _handle_ambiguous_terms(
             "clarify_needed": False,
         }
 
-    _ = todo_active_id
-    _ = pending_capability
-    await _emit_ambiguous_terms_notice(
-        gateway_context=gateway_context,
-        ambiguous_terms=ambiguous_terms,
+    prompt = _clarification_prompt_from_ambiguous(ambiguous_terms)
+    resume_value = interrupt(
+        {
+            "reason_code": "TERM_CLARIFICATION",
+            "prompt": prompt,
+            "required_fields": ["content"],
+            "resume_payload_schema": {
+                "type": "object",
+                "properties": {"content": {"type": "string"}},
+                "required": ["content"],
+            },
+            "todo_active_id": todo_active_id,
+            "react_step_id": todo_active_id,
+            "pending_capability": pending_capability,
+            "interrupt_reason": "term_clarification",
+        }
     )
+
+    clarified = _parse_clarification_resume(resume_value)
+    current = ambiguous_terms[0] if isinstance(ambiguous_terms[0], dict) else {}
+    remaining = ambiguous_terms[1:]
+    confirmed_terms = list(state.get("confirmed_terms") or [])
+    mention = str(current.get("mention") or current.get("term") or clarified).strip()
+
+    if clarified:
+        confirmed_terms.append(
+            {
+                "mention": mention,
+                "term_name": clarified,
+                "term_id": str(current.get("term_id") or ""),
+                "confidence": 1.0,
+                "source": "user_clarification",
+            }
+        )
+
     return {
-        "ambiguous_terms": [],
-        "confirmed_terms": list(state.get("confirmed_terms") or []),
-        "clarify_needed": False,
+        "ambiguous_terms": remaining,
+        "confirmed_terms": confirmed_terms,
+        "clarify_needed": bool(remaining),
     }
 
 
@@ -352,7 +341,9 @@ def _get_react_max_rounds(state: AgentState) -> int:
 def _level3_failure_threshold(state: AgentState) -> int:
     raw: Any = state.get("level3_failure_threshold")
     if raw is None:
-        raw = os.getenv("DATACLOUD_LEVEL3_FAILURE_THRESHOLD", str(_DEFAULT_LEVEL3_FAILURE_THRESHOLD))
+        raw = os.getenv(
+            "DATACLOUD_LEVEL3_FAILURE_THRESHOLD", str(_DEFAULT_LEVEL3_FAILURE_THRESHOLD)
+        )
     if not isinstance(raw, (int, float, str)):
         return _DEFAULT_LEVEL3_FAILURE_THRESHOLD
     try:
@@ -371,12 +362,16 @@ def _should_trigger_level3(state: AgentState, todos: list[dict[str, Any]]) -> bo
 
 def _parse_level3_confirmation(resume_value: Any) -> bool:
     if isinstance(resume_value, dict):
-        raw = str(
-            resume_value.get("confirm")
-            or resume_value.get("action")
-            or resume_value.get("value")
-            or ""
-        ).strip().lower()
+        raw = (
+            str(
+                resume_value.get("confirm")
+                or resume_value.get("action")
+                or resume_value.get("value")
+                or ""
+            )
+            .strip()
+            .lower()
+        )
     else:
         raw = str(resume_value or "").strip().lower()
     if not raw:
@@ -569,13 +564,204 @@ def _normalize_required_capabilities(
             )
         return out
 
-    for raw in (todo.get("required_tools") or []):
+    for raw in todo.get("required_tools") or []:
         cap_id = _capability_entry_id(raw)
         if not cap_id or cap_id in seen:
             continue
         seen.add(cap_id)
         out.append({"capability_id": cap_id, "capability_type": "tool"})
     return out
+
+
+def _extract_dependency_from_expr(expr: str) -> str | None:
+    cleaned = str(expr or "").strip()
+    if not cleaned:
+        return None
+    cutoff = len(cleaned)
+    dot_index = cleaned.find(".")
+    bracket_index = cleaned.find("[")
+    if dot_index != -1:
+        cutoff = min(cutoff, dot_index)
+    if bracket_index != -1:
+        cutoff = min(cutoff, bracket_index)
+    candidate = cleaned[:cutoff].strip()
+    return candidate or None
+
+
+def _resolve_expr_value(expr: str, *, results_map: Mapping[str, TaskResult]) -> Any:
+    source = _extract_dependency_from_expr(expr)
+    if not source:
+        return None
+    task_result = results_map.get(source)
+    if not task_result:
+        return None
+    remainder = str(expr).strip()[len(source) :].lstrip(".")
+    if not remainder:
+        return None
+    current: Any = task_result.to_dict()
+    tokens = [token for token in remainder.split(".") if token]
+    for token in tokens:
+        name, index = _split_token(token)
+        if isinstance(current, dict):
+            current = current.get(name)
+        else:
+            return None
+        if index is not None:
+            if not isinstance(current, list) or index >= len(current):
+                return None
+            current = current[index]
+    return current
+
+
+def _split_token(token: str) -> tuple[str, int | None]:
+    token = token.strip()
+    if "[" not in token:
+        return token, None
+    name, _, index_part = token.partition("[")
+    index_part = index_part.rstrip("]")
+    try:
+        return name, int(index_part)
+    except ValueError:
+        return name, None
+
+
+def _resolve_param_from_expr(
+    *,
+    param: str,
+    expr: str,
+    results_map: Mapping[str, TaskResult],
+) -> tuple[Any | None, dict[str, Any] | None]:
+    """Resolve an ``inputs_from`` expression and attach diagnostic metadata."""
+    source = _extract_dependency_from_expr(expr) or ""
+    value = _resolve_expr_value(expr, results_map=results_map)
+    if ".artifact_refs" not in expr:
+        return value, None
+    path_text = str(value or "").strip()
+    if not path_text:
+        return None, {
+            "code": "artifact_not_found",
+            "message": f"Artifact reference resolved empty for param {param}",
+            "param": param,
+            "expr": expr,
+            "source_todo": source,
+            "artifact_path": path_text,
+        }
+    artifact_path = Path(path_text)
+    if not artifact_path.exists():
+        return None, {
+            "code": "artifact_not_found",
+            "message": f"Artifact path missing for param {param}: {artifact_path}",
+            "param": param,
+            "expr": expr,
+            "source_todo": source,
+            "artifact_path": str(artifact_path),
+        }
+    return path_text, None
+
+
+def _todo_from_plan_task(
+    plan: PlanTask,
+    *,
+    results_map: Mapping[str, TaskResult],
+) -> dict[str, Any]:
+    status = "pending"
+    blocked_reason = None
+    if plan.todo_id in results_map:
+        plan_result = results_map[plan.todo_id]
+        status = plan_result.status
+        blocked_reason = plan_result.blocked_by
+    required_capabilities = [
+        {"capability_id": tool, "capability_type": "tool"} for tool in plan.required_tools
+    ]
+    todo: dict[str, Any] = {
+        "todo_id": plan.todo_id,
+        "goal": plan.goal,
+        "required_tools": plan.required_tools,
+        "blocked_tools": [],
+        "required_capabilities": required_capabilities,
+        "blocked_capabilities": [],
+        "inputs": {},
+        "depends_on": plan.depends_on,
+        "term_context": [],
+        "acceptance_criteria": f"{plan.todo_id} completed",
+        "status": status,
+        "param_from_deps": {},  # reuse existing injection path
+        "inputs_from": plan.inputs_from,
+        "required_inputs": plan.required_inputs,
+    }
+    if blocked_reason:
+        todo["note"] = blocked_reason
+    return todo
+
+
+def _build_plan_todos(state: AgentState, dynamic_tools: dict[str, Any]) -> list[dict[str, Any]]:
+    """Hydrate legacy todo list from planned tasks for execution compatibility."""
+    ensure_multitask_defaults(state)
+    plan_tasks = get_planned_tasks(state)
+    if not plan_tasks:
+        return []
+    results_map = get_task_result_map(state)
+    todos = [_todo_from_plan_task(plan, results_map=results_map) for plan in plan_tasks]
+    # Propagate plan queue order by re-sorting todos to match queue (pending first)
+    queue = get_task_queue(state)
+    order_index = {todo_id: idx for idx, todo_id in enumerate(queue)}
+    todos.sort(key=lambda todo: order_index.get(str(todo.get("todo_id") or ""), 1_000_000))
+    # Determine dependency injection mapping for compatibility
+    for todo in todos:
+        inputs_from = todo.get("inputs_from")
+        if not isinstance(inputs_from, dict) or not inputs_from:
+            continue
+        resolved_inputs: dict[str, Any] = {}
+        missing_required: list[str] = []
+        optional_missing: list[dict[str, str]] = []
+        injection_errors: list[dict[str, Any]] = []
+        required_inputs = todo.get("required_inputs") or {}
+        for param, expr in inputs_from.items():
+            value, error = _resolve_param_from_expr(
+                param=param,
+                expr=expr,
+                results_map=results_map,
+            )
+            if error:
+                error_payload = {**error, "todo_id": todo.get("todo_id")}
+                injection_errors.append(error_payload)
+                continue
+            if value is None:
+                if required_inputs.get(param):
+                    missing_required.append(param)
+                else:
+                    optional_missing.append({"param": param, "expr": expr})
+                continue
+            resolved_inputs[param] = value
+        if resolved_inputs:
+            todo_inputs = dict(todo.get("inputs") or {})
+            todo_inputs.update(resolved_inputs)
+            todo["inputs"] = todo_inputs
+        if missing_required:
+            todo["missing_required_inputs"] = missing_required
+        if optional_missing:
+            todo["optional_missing_inputs"] = optional_missing
+            for warn in optional_missing:
+                logger.warning(
+                    "execution: optional param injection resolved None todo_id=%s param=%s expr=%s",
+                    todo.get("todo_id"),
+                    warn.get("param"),
+                    warn.get("expr"),
+                )
+        if injection_errors:
+            todo["injection_errors"] = injection_errors
+            for err in injection_errors:
+                logger.error(
+                    "execution: param injection error todo_id=%s param=%s code=%s expr=%s source=%s path=%s",
+                    err.get("todo_id"),
+                    err.get("param"),
+                    err.get("code"),
+                    err.get("expr"),
+                    err.get("source_todo"),
+                    err.get("artifact_path"),
+                )
+    state["todos"] = todos
+    return todos
 
 
 def _compute_effective_tools(
@@ -587,7 +773,10 @@ def _compute_effective_tools(
 ) -> list[str]:
     if not isinstance(todo, dict):
         return []
-    required = [item["capability_id"] for item in _normalize_required_capabilities(todo=todo, dynamic_tools=dynamic_tools)]
+    required = [
+        item["capability_id"]
+        for item in _normalize_required_capabilities(todo=todo, dynamic_tools=dynamic_tools)
+    ]
     blocked = {
         _capability_entry_id(x)
         for x in ((todo.get("blocked_capabilities") or []) + (todo.get("blocked_tools") or []))
@@ -615,7 +804,7 @@ def _semantic_types_from_todo(todo: dict[str, Any] | None) -> set[str]:
     if not isinstance(todo, dict):
         return set()
     semantic_types: set[str] = set()
-    for item in (todo.get("term_context") or []):
+    for item in todo.get("term_context") or []:
         if not isinstance(item, dict):
             continue
         raw = str(item.get("semantic_type") or "").strip().lower()
@@ -665,7 +854,9 @@ def _prioritize_tools_by_semantic(
     )
 
 
-def _todo_has_required_capability(todo: dict[str, Any] | None, *, dynamic_tools: dict[str, Any]) -> bool:
+def _todo_has_required_capability(
+    todo: dict[str, Any] | None, *, dynamic_tools: dict[str, Any]
+) -> bool:
     if not isinstance(todo, dict):
         return False
     return bool(_normalize_required_capabilities(todo=todo, dynamic_tools=dynamic_tools))
@@ -749,9 +940,13 @@ def _todo_plan_from_todos(todos: list[dict[str, Any]]) -> list[dict[str, Any]]:
     plan: list[dict[str, Any]] = []
     for todo in todos:
         required_caps = list(todo.get("required_capabilities") or [])
-        required_capability_ids = [_capability_entry_id(item) for item in required_caps if _capability_entry_id(item)]
+        required_capability_ids = [
+            _capability_entry_id(item) for item in required_caps if _capability_entry_id(item)
+        ]
         effective_tools = required_capability_ids or [
-            _capability_entry_id(item) for item in (todo.get("required_tools") or []) if _capability_entry_id(item)
+            _capability_entry_id(item)
+            for item in (todo.get("required_tools") or [])
+            if _capability_entry_id(item)
         ]
         task_type = (
             str(todo.get("last_capability") or "")
@@ -812,6 +1007,56 @@ async def _store_result_entry(
         )
         return {"task_id": todo_id, "file_path": str(file_path)}
     return {"task_id": todo_id, "data": payload}
+
+
+def _task_result_from_entry(
+    *,
+    todo: dict[str, Any],
+    entry: dict[str, Any] | None,
+    status: str,
+    error: str | None = None,
+    blocked_by: str | None = None,
+) -> TaskResult:
+    artifact_refs: list[ArtifactRef] = []
+    result_meta: dict[str, Any] = {}
+    if entry:
+        if isinstance(entry.get("data"), dict):
+            result_meta = cast(dict[str, Any], entry["data"])
+        file_path = str(entry.get("file_path") or "").strip()
+        if file_path:
+            artifact_refs.append(
+                ArtifactRef(
+                    todo_id=str(todo.get("todo_id") or ""),
+                    path=file_path,
+                    name=Path(file_path).name,
+                )
+            )
+    error_detail = None
+    raw_error_detail = todo.get("error_detail")
+    if isinstance(raw_error_detail, Mapping):
+        try:
+            error_detail = TaskError.from_dict(raw_error_detail)
+        except ValueError:
+            error_detail = None
+    if not error_detail and error:
+        error_detail = TaskError(code="execution_error", message=error)
+    if status == "blocked" and blocked_by:
+        error_detail = error_detail or TaskError(code="blocked", message=blocked_by)
+    normalized_status = status
+    if normalized_status == "done":
+        normalized_status = "success"
+    elif normalized_status == "skipped":
+        normalized_status = "blocked"
+    elif normalized_status not in {"success", "failed", "blocked"}:
+        normalized_status = "failed"
+    return TaskResult(
+        todo_id=str(todo.get("todo_id") or ""),
+        status=cast(TaskStatus, normalized_status),
+        result_meta=result_meta,
+        artifact_refs=artifact_refs,
+        error_detail=error_detail,
+        blocked_by=blocked_by,
+    )
 
 
 async def _read_todo_md(workspace_dir: str | None) -> str | None:
@@ -931,9 +1176,9 @@ def _inject_params_from_deps(
     }
 
 
-def _task_from_todo(todo: dict[str, Any], capability: str) -> dict[str, Any]:
+def _task_from_todo(todo: dict[str, Any], capability: str, *, state: AgentState) -> dict[str, Any]:
     todo_id = str(todo.get("todo_id") or "")
-    return {
+    task: dict[str, Any] = {
         "id": todo_id,
         "type": capability,
         "status": "pending",
@@ -941,6 +1186,14 @@ def _task_from_todo(todo: dict[str, Any], capability: str) -> dict[str, Any]:
         "params": dict(todo.get("inputs") or {}),
         "description": str(todo.get("goal") or ""),
     }
+    context = {
+        "user_query": str(state.get("user_query") or ""),
+        "enriched_query": str(state.get("enriched_query") or ""),
+    }
+    normalized_context = {key: value for key, value in context.items() if value}
+    if normalized_context:
+        task["context"] = normalized_context
+    return task
 
 
 def _extract_appended_todos(
@@ -969,7 +1222,9 @@ def _extract_appended_todos(
         required_capability_items: list[Any] = (
             raw_required_capability_items if isinstance(raw_required_capability_items, list) else []
         )
-        required_tools = [_capability_entry_id(v) for v in required_capability_items if _capability_entry_id(v)]
+        required_tools = [
+            _capability_entry_id(v) for v in required_capability_items if _capability_entry_id(v)
+        ]
         required_capabilities = []
         for v in required_capability_items:
             cap_id = _capability_entry_id(v)
@@ -994,13 +1249,25 @@ def _extract_appended_todos(
                 "todo_id": todo_id,
                 "goal": goal,
                 "required_tools": required_tools,
-                "blocked_tools": [str(v).strip() for v in (item.get("blocked_tools") or []) if str(v).strip()],
+                "blocked_tools": [
+                    str(v).strip() for v in (item.get("blocked_tools") or []) if str(v).strip()
+                ],
                 "required_capabilities": required_capabilities,
-                "blocked_capabilities": [_capability_entry_id(v) for v in (item.get("blocked_capabilities") or []) if _capability_entry_id(v)],
+                "blocked_capabilities": [
+                    _capability_entry_id(v)
+                    for v in (item.get("blocked_capabilities") or [])
+                    if _capability_entry_id(v)
+                ],
                 "inputs": dict(item.get("inputs") or {}),
-                "depends_on": [str(v).strip() for v in (item.get("depends_on") or []) if str(v).strip()],
-                "term_context": [x for x in (item.get("term_context") or []) if isinstance(x, dict)],
-                "acceptance_criteria": str(item.get("acceptance_criteria") or "appended todo completed"),
+                "depends_on": [
+                    str(v).strip() for v in (item.get("depends_on") or []) if str(v).strip()
+                ],
+                "term_context": [
+                    x for x in (item.get("term_context") or []) if isinstance(x, dict)
+                ],
+                "acceptance_criteria": str(
+                    item.get("acceptance_criteria") or "appended todo completed"
+                ),
                 "status": "pending",
             }
         )
@@ -1030,8 +1297,61 @@ async def _execute_one_todo(
     trace: list[dict[str, Any]] = []
     invocation_add: list[str] = []
 
+    optional_missing = todo.get("optional_missing_inputs") or []
+    if optional_missing:
+        logger.warning(
+            "execution: optional inputs missing before execution todo_id=%s count=%d",
+            todo_id,
+            len(optional_missing),
+        )
+
+    injection_errors = todo.get("injection_errors") or []
+    if injection_errors:
+        first_error = injection_errors[0]
+        error_detail = {
+            "code": str(first_error.get("code") or "param_injection_error"),
+            "message": str(first_error.get("message") or "param injection failed"),
+        }
+        source_todo = str(first_error.get("source_todo") or "")
+        if source_todo:
+            error_detail["trace_id"] = source_todo
+        artifact_path = str(first_error.get("artifact_path") or "")
+        if artifact_path:
+            error_detail["remediation"] = f"检查文件是否存在: {artifact_path}"
+        failed_todo = {
+            **todo,
+            "status": "failed",
+            "note": error_detail["code"],
+            "error": error_detail["message"],
+            "error_detail": error_detail,
+        }
+        trace.append(
+            {
+                "stage": "execution",
+                "status": "failed",
+                "detail": {
+                    "todo_id": todo_id,
+                    "reason": "param_injection_error",
+                    "code": error_detail["code"],
+                },
+            }
+        )
+        return failed_todo, None, invocation_add, trace, True
+
+    missing_required = todo.get("missing_required_inputs")
+    if missing_required:
+        blocked_todo = {**todo, "status": "blocked", "note": "missing_required_inputs"}
+        trace.append(
+            {
+                "stage": "execution",
+                "status": "blocked",
+                "detail": {"todo_id": todo_id, "reason": "missing_required_inputs"},
+            }
+        )
+        return blocked_todo, None, invocation_add, trace, True
+
     if has_required and not effective_tools:
-        blocked_todo = {**todo, "status": "blocked"}
+        blocked_todo = {**todo, "status": "blocked", "note": "no_effective_tools"}
         trace.append(
             {
                 "stage": "execution",
@@ -1042,7 +1362,12 @@ async def _execute_one_todo(
         return blocked_todo, None, invocation_add, trace, True
 
     if not effective_tools:
-        skipped_todo = {**todo, "status": "skipped"}
+        skipped_todo = {
+            **todo,
+            "status": "skipped",
+            "note": "no_required_capability",
+            "error": "no_required_capability",
+        }
         trace.append(
             {
                 "stage": "execution",
@@ -1079,7 +1404,7 @@ async def _execute_one_todo(
                     "detail": {
                         "todo_id": todo_id,
                         "round": react_round,
-                        "override_keys": sorted(str(k) for k in param_overrides.keys()),
+                        "override_keys": sorted(str(k) for k in param_overrides),
                     },
                 }
             )
@@ -1132,7 +1457,16 @@ async def _execute_one_todo(
                 False,
             )
 
-        task = _task_from_todo(todo, capability)
+        task = _task_from_todo(todo, capability, state=state)
+        logger.info(
+            "execution_node: invoking capability=%s todo_id=%s round=%d user_query=%.120s goal=%.120s input_keys=%s",
+            capability,
+            todo_id,
+            react_round,
+            str(state.get("user_query") or state.get("enriched_query") or "")[:120],
+            str(todo.get("goal") or "")[:120],
+            sorted(task.get("params", {}).keys()),
+        )
         updated_task, output = await execute_next_task(task, state, runtime)
         task_status = str(updated_task.get("status", "failed"))
         trace.append(
@@ -1236,11 +1570,12 @@ async def execution_node(
     dynamic_tools = state.get("dynamic_tools") or default_tools or {}
     runtime = ToolRuntime(custom_tools=dynamic_tools, gateway_context=gateway_context)
     available_capabilities = set(dynamic_tools.keys()) | set(_BUILTIN_EXECUTOR_CAPABILITIES)
-    todos = _ensure_direct_todo_from_route(state, dynamic_tools=dynamic_tools)
-    existing_todo_md_path = (
-        str(state.get("todo_md_path")) if state.get("todo_md_path") else None
+    plan_todos = _build_plan_todos(state, dynamic_tools=dynamic_tools)
+    todos = plan_todos or _ensure_direct_todo_from_route(state, dynamic_tools=dynamic_tools)
+    existing_todo_md_path = str(state.get("todo_md_path")) if state.get("todo_md_path") else None
+    invocation_dedup = _normalize_invocation_dedup(
+        cast(list[Any] | None, state.get("invocation_dedup"))
     )
-    invocation_dedup = _normalize_invocation_dedup(cast(list[Any] | None, state.get("invocation_dedup")))
     invocation_dedup_set = set(invocation_dedup)
     execution_trace = list(state.get("execution_trace") or [])
     query_mode = str(state.get("query_mode") or "analysis")
@@ -1256,30 +1591,57 @@ async def execution_node(
     active_tools = _prioritize_tools_by_semantic(active_todo, active_tools)
     pending_capability = active_tools[0] if active_tools else ""
 
-    ambiguous_updates: dict[str, Any] = {}
     if state.get("ambiguous_terms"):
-        original_ambiguous_count = len(list(state.get("ambiguous_terms") or []))
         updates = await _handle_ambiguous_terms(
             state,
-            gateway_context=gateway_context,
             todo_active_id=todo_active_id,
             pending_capability=pending_capability,
         )
-        ambiguous_updates = dict(updates)
-        state = cast(AgentState, {**state, **updates})
-        execution_trace = _append_trace(
-            execution_trace,
-            stage="clarification",
-            status="logged",
-            detail={"todo_id": todo_active_id, "ambiguous_count": original_ambiguous_count},
-        )
+        if updates.get("ambiguous_terms"):
+            return {
+                **updates,
+                "todo_active_id": todo_active_id,
+                "active_tools": active_tools,
+                "execution_status": "done",
+                "resume_context": _resume_context_after_round(
+                    state=state,
+                    config=config,
+                    todo_active_id=todo_active_id,
+                    pending_capability=pending_capability,
+                ),
+                "execution_trace": _append_trace(
+                    execution_trace,
+                    stage="clarification",
+                    status="waiting",
+                    detail={"todo_id": todo_active_id},
+                ),
+                "invocation_dedup": invocation_dedup,
+            }
+        return {
+            **updates,
+            "todo_active_id": todo_active_id,
+            "active_tools": active_tools,
+            "execution_status": "replan",
+            "resume_context": _resume_context_after_round(
+                state=state,
+                config=config,
+                todo_active_id=todo_active_id,
+                pending_capability=pending_capability,
+            ),
+            "execution_trace": _append_trace(
+                execution_trace,
+                stage="clarification",
+                status="resolved",
+                detail={"todo_id": todo_active_id},
+            ),
+            "invocation_dedup": invocation_dedup,
+        }
 
     if query_mode == "chitchat" or bool(state.get("clarify_needed")):
         return {
             "todos": todos,
             "todo_active_id": todo_active_id,
             "active_tools": active_tools,
-            **ambiguous_updates,
             "execution_status": "done",
             "resume_context": _resume_context_after_round(
                 state=state,
@@ -1296,79 +1658,12 @@ async def execution_node(
             "invocation_dedup": invocation_dedup,
         }
 
-    # --- delegate_wait 恢复路径 ---
-    # 如果 resume_context 里有 delegate_wait_todo_id，说明是从 AGENT_DELEGATE_WAIT 中断恢复的。
-    # 此时直接在顶层调用 interrupt() 拿到子 agent 结果，注入到对应 todo 的 inputs，
-    # 避免 replay 时重新执行 call_agent。
-    resume_context = dict(state.get("resume_context") or {})
-    delegate_wait_todo_id_from_ctx = str(resume_context.get("delegate_wait_todo_id") or "")
-    if delegate_wait_todo_id_from_ctx:
-        wait_idx = next(
-            (i for i, t in enumerate(todos) if str(t.get("todo_id") or "") == delegate_wait_todo_id_from_ctx),
-            -1,
-        )
-        if wait_idx >= 0:
-            wait_todo = todos[wait_idx]
-            wait_active_tools = _compute_effective_tools(
-                wait_todo,
-                dynamic_tools=dynamic_tools,
-                available_capabilities=available_capabilities,
-                context_tags=context_tags,
-            )
-            wait_pending_capability = wait_active_tools[0] if wait_active_tools else ""
-            logger.info(
-                "execution_node: delegate_wait resume detected todo_id=%s",
-                delegate_wait_todo_id_from_ctx,
-            )
-            resume_value = interrupt(
-                {
-                    "reason_code": "AGENT_DELEGATE_WAIT",
-                    "prompt": "已委派子Agent，等待处理结果回传。",
-                    "todo_id": delegate_wait_todo_id_from_ctx,
-                    "todo_active_id": delegate_wait_todo_id_from_ctx,
-                    "pending_capability": wait_pending_capability,
-                    "interrupt_reason": "AGENT_DELEGATE_WAIT",
-                    "resume_payload_schema": {
-                        "description": "ResumeCommand.reply_data should contain delegated agent output.",
-                    },
-                }
-            )
-            # 恢复后：注入子 agent 结果，清除 delegate_wait_todo_id，重置为 pending
-            todos[wait_idx] = {
-                **wait_todo,
-                "status": "pending",
-                "inputs": {
-                    **dict(wait_todo.get("inputs") or {}),
-                    "__delegate_result__": resume_value,
-                },
-            }
-            resume_context.pop("delegate_wait_todo_id", None)
-            execution_trace = _append_trace(
-                execution_trace,
-                stage="agent_delegate",
-                status="resumed",
-                detail={"todo_id": delegate_wait_todo_id_from_ctx},
-            )
-            return {
-                "plan": _todo_plan_from_todos(todos),
-                "todos": todos,
-                "results": list(state.get("results") or []),
-                "todo_active_id": delegate_wait_todo_id_from_ctx,
-                "active_tools": wait_active_tools,
-                **ambiguous_updates,
-                "execution_status": "execution",
-                "resume_context": {**resume_context, "delegate_wait_todo_id": ""},
-                "execution_trace": execution_trace,
-                "invocation_dedup": invocation_dedup,
-            }
-
     if not todos:
         return {
             "plan": [],
             "todos": [],
             "todo_active_id": "",
             "active_tools": [],
-            **ambiguous_updates,
             "execution_status": "done",
             "resume_context": _resume_context_after_round(
                 state=state,
@@ -1428,7 +1723,9 @@ async def execution_node(
     ready_indexes = _pick_ready_todo_indexes(todos)
     results = list(state.get("results") or [])
     completed_todos_map = _build_completed_todos_map(results)
-    ready_todos = [_inject_params_from_deps(todos[idx], completed_todos_map) for idx in ready_indexes]
+    ready_todos = [
+        _inject_params_from_deps(todos[idx], completed_todos_map) for idx in ready_indexes
+    ]
     for idx, todo in zip(ready_indexes, ready_todos, strict=False):
         todos[idx] = todo
 
@@ -1451,9 +1748,6 @@ async def execution_node(
 
     blocked_in_batch = False
     appended_todos: list[dict[str, Any]] = []
-    # todo_id -> idx，用于 delegate_wait 恢复时定位
-    delegate_wait_todo_id: str = ""
-    delegate_wait_idx: int = -1
     for idx, (updated_todo, maybe_output, invocation_add, todo_trace, blocked) in zip(
         ready_indexes, batch_outputs, strict=False
     ):
@@ -1472,32 +1766,25 @@ async def execution_node(
                 invocation_dedup.append(text_id)
                 invocation_dedup_set.add(text_id)
         if maybe_output is not None:
-            # 检测 delegate_wait 标记：tool 返回了 __delegate_wait__ 而非真实结果
-            raw_output = maybe_output.get("output")
-            if isinstance(raw_output, dict) and raw_output.get("__delegate_wait__"):
-                delegate_wait_todo_id = str(maybe_output.get("task_id", ""))
-                delegate_wait_idx = idx
-                # 将 todo 标记为 waiting，不存入 results
-                todos[idx] = {**updated_todo, "status": "waiting"}
-                execution_trace = _append_trace(
-                    execution_trace,
-                    stage="agent_delegate",
-                    status="waiting",
-                    detail={"todo_id": delegate_wait_todo_id},
-                )
-                continue
             entry = await _store_result_entry(
                 todo_id=str(maybe_output.get("task_id", "")),
-                output=raw_output,
+                output=maybe_output.get("output"),
                 workspace_dir=state.get("workspace_dir"),
                 is_multi_task=multi_task,
             )
             results.append(entry)
+            task_result = _task_result_from_entry(
+                todo=updated_todo,
+                entry=entry,
+                status=str(updated_todo.get("status", "done")),
+            )
+            upsert_task_result(state, task_result)
+            todo_result_output = maybe_output.get("output")
             completed_todos_map[str(maybe_output.get("task_id") or "")] = {
-                "output": raw_output if isinstance(raw_output, dict) else {}
+                "output": todo_result_output if isinstance(todo_result_output, dict) else {}
             }
             append_items = _extract_appended_todos(
-                output=raw_output,
+                output=maybe_output.get("output"),
                 existing_todos=todos + appended_todos,
             )
             if append_items:
@@ -1516,60 +1803,28 @@ async def execution_node(
                         "append_count": len(append_items),
                     },
                 )
+        elif str(updated_todo.get("status")) in {"failed", "blocked", "skipped"}:
+            todo_status = str(updated_todo.get("status"))
+            result_status = "blocked" if todo_status == "skipped" else todo_status
+            blocked_reason = str(updated_todo.get("note") or "")
+            upsert_task_result(
+                state,
+                _task_result_from_entry(
+                    todo=updated_todo,
+                    entry=None,
+                    status=result_status,
+                    error=str(updated_todo.get("error") or ""),
+                    blocked_by=blocked_reason
+                    if result_status == "blocked" and blocked_reason
+                    else None,
+                ),
+            )
 
     if appended_todos:
         todos.extend(appended_todos)
 
-    # 处理 agent_delegate 中断：
-    # 不在此处直接 interrupt()，而是先把 delegate_wait_todo_id 写入 resume_context，
-    # 然后 return execution_status="execution" 触发下一轮 execution_node。
-    # 下一轮进入时，顶部的 delegate_wait 恢复路径会检测到 delegate_wait_todo_id 并调用 interrupt()。
-    # 这样 interrupt() 时 checkpoint 里已经有 delegate_wait_todo_id，恢复时不会重复执行 call_agent。
-    if delegate_wait_todo_id:
-        todo_md = _todo_md_with_status(todos)
-        todo_md_path = _persist_todo_md(
-            workspace_dir=state.get("workspace_dir"),
-            todo_md=todo_md,
-            existing_path=existing_todo_md_path,
-        )
-        wait_todo = todos[delegate_wait_idx]
-        wait_active_tools = _compute_effective_tools(
-            wait_todo,
-            dynamic_tools=dynamic_tools,
-            available_capabilities=available_capabilities,
-            context_tags=context_tags,
-        )
-        wait_pending_capability = wait_active_tools[0] if wait_active_tools else ""
-        logger.info(
-            "execution_node: agent_delegate detected todo_id=%s, saving to resume_context for next round",
-            delegate_wait_todo_id,
-        )
-        next_resume_context = _resume_context_after_round(
-            state=state,
-            config=config,
-            todo_active_id=delegate_wait_todo_id,
-            pending_capability=wait_pending_capability,
-        )
-        next_resume_context["delegate_wait_todo_id"] = delegate_wait_todo_id
-        return {
-            "plan": _todo_plan_from_todos(todos),
-            "todos": todos,
-            "results": results,
-            "todo_md": todo_md,
-            "todo_md_path": todo_md_path,
-            "todo_active_id": delegate_wait_todo_id,
-            "active_tools": wait_active_tools,
-            **ambiguous_updates,
-            "execution_status": "execution",
-            "resume_context": next_resume_context,
-            "execution_trace": execution_trace,
-            "invocation_dedup": invocation_dedup,
-        }
-
     failed_ids = {
-        str(todo.get("todo_id") or "")
-        for todo in todos
-        if str(todo.get("status", "")) == "failed"
+        str(todo.get("todo_id") or "") for todo in todos if str(todo.get("status", "")) == "failed"
     }
     for idx, todo in enumerate(todos):
         if str(todo.get("status", "pending")) != "pending":
@@ -1577,6 +1832,16 @@ async def execution_node(
         deps = [str(dep) for dep in (todo.get("depends_on") or [])]
         if deps and any(dep in failed_ids for dep in deps):
             todos[idx] = {**todo, "status": "skipped", "note": "dependency_failed"}
+            upsert_task_result(
+                state,
+                _task_result_from_entry(
+                    todo=todos[idx],
+                    entry=None,
+                    status="blocked",
+                    error="dependency_failed",
+                    blocked_by="dependency_failed",
+                ),
+            )
             execution_trace = _append_trace(
                 execution_trace,
                 stage="execution",
@@ -1645,7 +1910,6 @@ async def execution_node(
         "todo_md_path": todo_md_path,
         "todo_active_id": next_todo_id,
         "active_tools": next_active_tools,
-        **ambiguous_updates,
         "execution_status": execution_status,
         "resume_context": _resume_context_after_round(
             state=state,
@@ -1656,4 +1920,3 @@ async def execution_node(
         "execution_trace": execution_trace,
         "invocation_dedup": invocation_dedup,
     }
-
