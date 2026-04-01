@@ -212,6 +212,62 @@ async def test_planning_preserves_term_hints_from_knowledge_enhance_in_term_cont
 
 
 @pytest.mark.asyncio
+async def test_planning_continues_with_confirmed_terms_when_ambiguous_terms_exist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_planning_context(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "intent": "查询企业数据",
+            "query_mode": "analysis",
+            "target_tool": "",
+            "tool_params": {},
+            "confirmed_terms": [
+                {
+                    "mention": "企业综合分析表",
+                    "term_name": "企业综合分析表",
+                    "term_id": "T100",
+                    "term_type_code": "VIEW",
+                    "confidence": 0.95,
+                }
+            ],
+            "ambiguous_terms": [
+                {
+                    "mention": "活跃用户",
+                    "candidates": [{"term_name": "DAU"}, {"term_name": "MAU"}],
+                }
+            ],
+        }
+
+    async def _fake_decompose_analysis_plan(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "plan": [
+                {
+                    "id": "t1",
+                    "type": "chat-response-tool",
+                    "description": "query confirmed knowledge",
+                    "status": "pending",
+                    "deps": [],
+                    "params": {"message": "ok"},
+                }
+            ]
+        }
+
+    monkeypatch.setattr(planning_module, "resolve_planning_context", _fake_planning_context)
+    monkeypatch.setattr(
+        planning_module,
+        "decompose_analysis_plan",
+        _fake_decompose_analysis_plan,
+    )
+
+    state = cast(AgentState, {"user_query": "q6"})
+    out = await planning_node(state, default_tools={})
+
+    assert out["plan"][0]["id"] == "t1"
+    assert out["todos"][0]["required_tools"] == ["chat-response-tool"]
+    assert out["todos"][0]["term_context"][0]["mention"] == "企业综合分析表"
+
+
+@pytest.mark.asyncio
 async def test_planning_agent_delegate_todo_injects_default_delegate_policy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
