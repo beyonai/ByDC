@@ -526,7 +526,7 @@ async def planning_node(
             planning_updates["query_mode"] = "online_query"
 
     plan: list[dict[str, Any]] = []
-    if query_mode == "analysis" and not planning_updates.get("ambiguous_terms"):
+    if query_mode == "analysis":
         merged_state = cast(AgentState, {**state, **planning_updates})
         plan_updates = await decompose_analysis_plan(
             merged_state,
