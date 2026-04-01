@@ -11,7 +11,7 @@ from datacloud_analysis.orchestration.state import AgentState
 def _context_from_state(state: AgentState, query_input: str) -> PlanningContext:
     raw_tool_params = state.get("tool_params")
     return {
-        "intent": str(state.get("intent") or query_input),
+        "intent": str(query_input or state.get("intent") or ""),
         "query_mode": str(state.get("query_mode") or "analysis"),
         "target_tool": str(state.get("target_tool") or ""),
         "tool_params": raw_tool_params if isinstance(raw_tool_params, dict) else {},

@@ -6,9 +6,9 @@ from typing import Any, cast
 
 import pytest
 
+from datacloud_analysis.orchestration.planning import decomposer as planning_decomposer
 from datacloud_analysis.orchestration.planning import node as planning_module
 from datacloud_analysis.orchestration.planning import planning_node
-from datacloud_analysis.orchestration.planning import decomposer as planning_decomposer
 from datacloud_analysis.orchestration.state import AgentState
 
 
@@ -42,6 +42,55 @@ async def test_planning_prefers_enriched_query_and_sets_source(
 
     assert captured_inputs == ["增强版本"]
     assert state["planning_input_source"] == "enriched_query"
+
+
+@pytest.mark.asyncio
+async def test_planning_decomposer_uses_enriched_query_not_intent_when_both_present(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_intents: list[str] = []
+
+    async def _fake_decompose(
+        _state: AgentState,
+        *,
+        intent: str,
+        gateway_context: Any = None,
+        default_prompts: dict[str, Any] | None = None,
+        default_tools: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        _ = gateway_context
+        _ = default_prompts
+        _ = default_tools
+        captured_intents.append(intent)
+        return {
+            "plan": [
+                {
+                    "id": "t1",
+                    "type": "chat-response-tool",
+                    "description": intent,
+                    "status": "pending",
+                    "deps": [],
+                    "params": {"message": "ok"},
+                }
+            ]
+        }
+
+    monkeypatch.setattr(planning_module, "decompose_analysis_plan", _fake_decompose)
+
+    state = cast(
+        AgentState,
+        {
+            "enriched_query": "原始问题：\nA\n\n补充知识：\n- X：Y",
+            "intent": "旧意图文本",
+            "query_mode": "analysis",
+            "user_query": "A",
+        },
+    )
+    out = await planning_node(state, default_tools={})
+
+    assert state["planning_input_source"] == "enriched_query"
+    assert captured_intents == ["原始问题：\nA\n\n补充知识：\n- X：Y"]
+    assert out["plan"][0]["description"] == "原始问题：\nA\n\n补充知识：\n- X：Y"
 
 
 @pytest.mark.asyncio
@@ -466,14 +515,14 @@ async def test_decompose_analysis_plan_logs_request_context_on_llm_failure(
     class _FakeResponse:
         text = '{"error":{"message":"bad request body"}}'
 
-    class _FakeBadRequest(Exception):
+    class _FakeBadRequestError(Exception):
         def __init__(self) -> None:
             super().__init__("400 Bad Request")
             self.response = _FakeResponse()
 
     class _FakeLLM:
         async def ainvoke(self, _messages: list[Any]) -> Any:
-            raise _FakeBadRequest()
+            raise _FakeBadRequestError()
 
     monkeypatch.setattr(planning_decomposer, "init_chat_model", lambda **_kwargs: _FakeLLM())
     monkeypatch.setenv("DATACLOUD_LLM_REASONING_MODEL", "Qwen/Qwen3-235B-A22B")

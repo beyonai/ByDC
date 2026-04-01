@@ -216,6 +216,7 @@ async def select_react_capability(
     term_context = todo.get("term_context")
     term_context_text = json.dumps(term_context, ensure_ascii=False)[:1000]
     enriched_query_text = str(state.get("enriched_query") or "")
+    enriched_query_source = str(state.get("enriched_query_source") or "")
     user_query_fallback = str(state.get("user_query") or "")
     user_query = enriched_query_text or user_query_fallback
     enriched_query_len = len(enriched_query_text)
@@ -252,7 +253,8 @@ async def select_react_capability(
         "react_runtime: llm request (function-call choose_capability) model=%s raw_model=%s "
         "model_provider=%s provider_prefixed=%s base_url=%s api_key_present=%s "
         "round=%d candidate_count=%d candidates=%s function_call_enabled=%s "
-        "system_len=%d user_msg_len=%d prompt_len=%d enriched_query_len=%d todo_md_len=%d observe_len=%d todo_id=%s",
+        "system_len=%d user_msg_len=%d prompt_len=%d enriched_query_len=%d "
+        "enriched_query_source=%s todo_md_len=%d observe_len=%d todo_id=%s",
         model,
         raw_model,
         model_provider,
@@ -267,6 +269,7 @@ async def select_react_capability(
         len(human_content),
         prompt_char_len,
         enriched_query_len,
+        enriched_query_source,
         len(todo_md_summary or ""),
         len(observe or ""),
         todo_id,
