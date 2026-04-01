@@ -362,8 +362,8 @@ async def planning_node(
         merged_state = cast(AgentState, {**state, **planning_updates})
         await _emit_planning_stage_status(
             gateway_context=gateway_context,
-            title="浠诲姟鐢熸垚",
-            detail="姝ｅ湪鏍规嵁鐢ㄦ埛闂彛鍒涘缓浠诲姟璁＄畝锛岃绋嶅€?",
+            title="任务生成",
+            detail="正在根据用户问题创建任务计划，请稍候...",
         )
         plan_updates = await decompose_analysis_plan(
             merged_state,
