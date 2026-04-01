@@ -22,20 +22,6 @@
         <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#rel_ads_manage_grid_analysis_query_ads_manage_grid_analysis">
-        <rdf:type rdf:resource="#TermRelation"/>
-        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</source_libeary>
-        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">对象</source_type>
-        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_manage_grid_analysis</source_code>
-        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</target_libeary>
-        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">动作</target_type>
-        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">query_ads_manage_grid_analysis</target_code>
-        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格综合分析表拥有查询动作</relation_name>
-        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_ACTION</relation_type>
-        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
-        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
-        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-    </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#rel_ads_grid_analysis_query_ads_grid_analysis">
         <rdf:type rdf:resource="#TermRelation"/>
         <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</source_libeary>
@@ -45,6 +31,20 @@
         <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">动作</target_type>
         <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">query_ads_grid_analysis</target_code>
         <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格综合分析表拥有查询动作</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_ACTION</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_ads_manage_grid_analysis_query_ads_manage_grid_analysis">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">对象</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_manage_grid_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">动作</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">query_ads_manage_grid_analysis</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格综合分析表拥有查询动作</relation_name>
         <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_ACTION</relation_type>
         <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
         <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
