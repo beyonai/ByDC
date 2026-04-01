@@ -31,7 +31,6 @@
         <fields rdf:resource="#foot_active_level_name_field"/>
         <fields rdf:resource="#avg_vehicle_flow_field"/>
         <fields rdf:resource="#vehicle_active_level_name_field"/>
-        <fields rdf:resource="#avg_logistics_activity_field"/>
         <fields rdf:resource="#logistics_active_level_name_field"/>
         <fields rdf:resource="#avg_light_intensity_field"/>
         <fields rdf:resource="#avg_light_intensity_gy_field"/>
@@ -341,26 +340,6 @@
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
-    </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#avg_logistics_activity_field">
-        <rdf:type rdf:resource="#EntityField"/>
-        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_logistics_activity</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格日均物流活跃度（次）</property_name>
-        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">INT</data_type>
-        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
-        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
-        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_logistics_activity</source_column>
-        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
-        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
-        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
-        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
-        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
-        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
-        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
-        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
-        <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
-        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
     <owl:NamedIndividual rdf:about="#logistics_active_level_name_field">
         <rdf:type rdf:resource="#EntityField"/>
