@@ -66,25 +66,6 @@ logger = logging.getLogger(__name__)
 # OpenGaussSaver — mixin that replaces all incompatible SQL
 # ---------------------------------------------------------------------------
 
-
-def _normalize_db_text(value: Any) -> str:
-    if isinstance(value, memoryview):
-        value = bytes(value)
-    if isinstance(value, bytes):
-        return value.decode("utf-8")
-    return str(value)
-
-
-def _normalize_db_blob(value: Any) -> bytes | None:
-    if value is None:
-        return None
-    if isinstance(value, memoryview):
-        return bytes(value)
-    if isinstance(value, bytearray):
-        return bytes(value)
-    return value
-
-
 class OpenGaussSaver:
     """Mixin that replaces every incompatible SQL statement for OpenGauss.
 
@@ -140,40 +121,16 @@ class OpenGaussSaver:
         """
         if not channel_versions:
             return None
-        expected_versions = {
-            _normalize_db_text(channel): _normalize_db_text(version)
-            for channel, version in channel_versions.items()
-        }
         cur.execute(
             "SELECT channel, type, blob, version "
             "FROM checkpoint_blobs WHERE thread_id=%s AND checkpoint_ns=%s",
             (thread_id, checkpoint_ns),
         )
-        result = []
-        matched_channels: set[str] = set()
-        for row in cur.fetchall():
-            channel = _normalize_db_text(row["channel"])
-            version = _normalize_db_text(row["version"])
-            expected_version = expected_versions.get(channel)
-            if expected_version != version:
-                continue
-            matched_channels.add(channel)
-            result.append(
-                (
-                    channel.encode(),
-                    _normalize_db_text(row["type"]).encode(),
-                    _normalize_db_blob(row["blob"]),
-                )
-            )
-        missing_channels = sorted(set(expected_versions) - matched_channels)
-        if missing_channels:
-            logger.warning(
-                "OpenGaussSaver._fetch_blobs: missing blob rows for thread_id=%s checkpoint_ns=%s "
-                "channels=%s",
-                thread_id,
-                checkpoint_ns,
-                missing_channels[:20],
-            )
+        result = [
+            (r["channel"].encode(), r["type"].encode(), r["blob"])
+            for r in cur.fetchall()
+            if channel_versions.get(r["channel"]) == r["version"]
+        ]
         return result or None
 
     def _fetch_writes(
@@ -191,12 +148,7 @@ class OpenGaussSaver:
         if not rows:
             return None
         return [
-            (
-                _normalize_db_text(r["task_id"]).encode(),
-                _normalize_db_text(r["channel"]).encode(),
-                _normalize_db_text(r["type"]).encode(),
-                _normalize_db_blob(r["blob"]),
-            )
+            (r["task_id"].encode(), r["channel"].encode(), r["type"].encode(), r["blob"])
             for r in rows
         ]
 

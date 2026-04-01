@@ -64,6 +64,7 @@ async def run_agent(
             "workspace_dir": workspace_dir,
             "user_query": "",
             "enriched_query": "",
+            "knowledge_preview": "",
             "knowledge_payload": {},
             "term_hints": [],
             "knowledge_snippets": [],
@@ -95,6 +96,11 @@ async def run_agent(
             "session_alias_map": {},
             "dynamic_tools": {},
             "prompts_overwrite": {},
+            "planned_tasks": [],
+            "task_queue": [],
+            "results_list": [],
+            "results_map": {},
+            "final_summary": {},
         }
 
     async for event in compiled.astream(
