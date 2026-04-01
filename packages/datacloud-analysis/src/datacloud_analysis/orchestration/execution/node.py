@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any, cast
 
 import anyio
+from by_framework import EventType, StreamChunkEvent
+from by_framework.core.protocol.content_type import SseReasonMessageType
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
@@ -254,9 +256,64 @@ def _parse_clarification_resume(resume_value: Any) -> str:
     return str(resume_value or "").strip()
 
 
+def _format_ambiguous_terms_notice(ambiguous_terms: list[dict[str, Any]]) -> str:
+    if not ambiguous_terms:
+        return "检测到部分术语存在歧义，先按已确权术语继续处理："
+    lines: list[str] = []
+    mentions: list[str] = []
+    for item in ambiguous_terms:
+        if not isinstance(item, dict):
+            continue
+        mention = str(item.get("mention") or item.get("term") or "").strip()
+        if mention and mention not in mentions:
+            mentions.append(mention)
+    if mentions:
+        lines.append(
+            f"检测到术语{'、'.join(f'「{mention}」' for mention in mentions)}存在歧义，先按已确权术语继续处理："
+        )
+    else:
+        lines.append("检测到部分术语存在歧义，先按已确权术语继续处理：")
+    for item in ambiguous_terms:
+        if not isinstance(item, dict):
+            continue
+        mention = str(item.get("mention") or item.get("term") or "").strip() or "未命名术语"
+        candidates_raw = item.get("candidates")
+        candidate_names: list[str] = []
+        if isinstance(candidates_raw, list):
+            for candidate in candidates_raw[:5]:
+                if not isinstance(candidate, dict):
+                    continue
+                name = str(candidate.get("term_name") or candidate.get("name") or "").strip()
+                if name:
+                    candidate_names.append(name)
+        if candidate_names:
+            lines.append(f"- {mention}: {', '.join(candidate_names)}")
+        else:
+            lines.append(f"- {mention}")
+    return "\n".join(lines)
+
+
+async def _emit_ambiguous_terms_notice(
+    *,
+    gateway_context: Any,
+    ambiguous_terms: list[dict[str, Any]],
+) -> None:
+    if gateway_context is None or not ambiguous_terms:
+        return
+    try:
+        await gateway_context.emit_chunk(
+            StreamChunkEvent(content=_format_ambiguous_terms_notice(ambiguous_terms)),
+            event_type=EventType.REASONING_LOG_DELTA.value,
+            content_type=SseReasonMessageType.think_text.value,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("execution_node: failed to emit ambiguous terms notice: %s", exc)
+
+
 async def _handle_ambiguous_terms(
     state: AgentState,
     *,
+    gateway_context: Any,
     todo_active_id: str,
     pending_capability: str,
 ) -> dict[str, Any]:
@@ -268,45 +325,16 @@ async def _handle_ambiguous_terms(
             "clarify_needed": False,
         }
 
-    prompt = _clarification_prompt_from_ambiguous(ambiguous_terms)
-    resume_value = interrupt(
-        {
-            "reason_code": "TERM_CLARIFICATION",
-            "prompt": prompt,
-            "required_fields": ["content"],
-            "resume_payload_schema": {
-                "type": "object",
-                "properties": {"content": {"type": "string"}},
-                "required": ["content"],
-            },
-            "todo_active_id": todo_active_id,
-            "react_step_id": todo_active_id,
-            "pending_capability": pending_capability,
-            "interrupt_reason": "term_clarification",
-        }
+    _ = todo_active_id
+    _ = pending_capability
+    await _emit_ambiguous_terms_notice(
+        gateway_context=gateway_context,
+        ambiguous_terms=ambiguous_terms,
     )
-
-    clarified = _parse_clarification_resume(resume_value)
-    current = ambiguous_terms[0] if isinstance(ambiguous_terms[0], dict) else {}
-    remaining = ambiguous_terms[1:]
-    confirmed_terms = list(state.get("confirmed_terms") or [])
-    mention = str(current.get("mention") or current.get("term") or clarified).strip()
-
-    if clarified:
-        confirmed_terms.append(
-            {
-                "mention": mention,
-                "term_name": clarified,
-                "term_id": str(current.get("term_id") or ""),
-                "confidence": 1.0,
-                "source": "user_clarification",
-            }
-        )
-
     return {
-        "ambiguous_terms": remaining,
-        "confirmed_terms": confirmed_terms,
-        "clarify_needed": bool(remaining),
+        "ambiguous_terms": [],
+        "confirmed_terms": list(state.get("confirmed_terms") or []),
+        "clarify_needed": False,
     }
 
 
@@ -934,6 +962,29 @@ def _append_trace(
         entry["detail"] = detail
     next_trace.append(entry)
     return next_trace
+
+
+def _summarize_task_results_map(state: AgentState) -> dict[str, str]:
+    """Return a compact todo_id -> status map for debug logging."""
+    results_map = get_task_result_map(state)
+    return {todo_id: task_result.status for todo_id, task_result in results_map.items()}
+
+
+def _summarize_todos(todos: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return a compact todo snapshot for debug logging."""
+    summary: list[dict[str, Any]] = []
+    for todo in todos:
+        if not isinstance(todo, dict):
+            continue
+        summary.append(
+            {
+                "todo_id": str(todo.get("todo_id") or ""),
+                "status": str(todo.get("status", "")),
+                "depends_on": [str(dep) for dep in (todo.get("depends_on") or [])],
+                "last_capability": str(todo.get("last_capability") or ""),
+            }
+        )
+    return summary
 
 
 def _todo_plan_from_todos(todos: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1579,6 +1630,15 @@ async def execution_node(
     invocation_dedup_set = set(invocation_dedup)
     execution_trace = list(state.get("execution_trace") or [])
     query_mode = str(state.get("query_mode") or "analysis")
+    logger.info(
+        "execution_node: entry snapshot query_mode=%s planned_tasks=%s task_queue=%s "
+        "results_map=%s todos=%s",
+        query_mode,
+        [task.todo_id for task in get_planned_tasks(state)],
+        get_task_queue(state),
+        _summarize_task_results_map(state),
+        _summarize_todos(todos),
+    )
 
     active_todo = _pick_active_todo(todos)
     todo_active_id = str(active_todo.get("todo_id", "")) if active_todo else ""
@@ -1590,55 +1650,23 @@ async def execution_node(
     )
     active_tools = _prioritize_tools_by_semantic(active_todo, active_tools)
     pending_capability = active_tools[0] if active_tools else ""
+    ambiguous_updates = {
+        "ambiguous_terms": list(state.get("ambiguous_terms") or []),
+        "confirmed_terms": list(state.get("confirmed_terms") or []),
+        "clarify_needed": bool(state.get("clarify_needed")),
+    }
 
     if state.get("ambiguous_terms"):
-        updates = await _handle_ambiguous_terms(
+        ambiguous_updates = await _handle_ambiguous_terms(
             state,
+            gateway_context=gateway_context,
             todo_active_id=todo_active_id,
             pending_capability=pending_capability,
         )
-        if updates.get("ambiguous_terms"):
-            return {
-                **updates,
-                "todo_active_id": todo_active_id,
-                "active_tools": active_tools,
-                "execution_status": "done",
-                "resume_context": _resume_context_after_round(
-                    state=state,
-                    config=config,
-                    todo_active_id=todo_active_id,
-                    pending_capability=pending_capability,
-                ),
-                "execution_trace": _append_trace(
-                    execution_trace,
-                    stage="clarification",
-                    status="waiting",
-                    detail={"todo_id": todo_active_id},
-                ),
-                "invocation_dedup": invocation_dedup,
-            }
-        return {
-            **updates,
-            "todo_active_id": todo_active_id,
-            "active_tools": active_tools,
-            "execution_status": "replan",
-            "resume_context": _resume_context_after_round(
-                state=state,
-                config=config,
-                todo_active_id=todo_active_id,
-                pending_capability=pending_capability,
-            ),
-            "execution_trace": _append_trace(
-                execution_trace,
-                stage="clarification",
-                status="resolved",
-                detail={"todo_id": todo_active_id},
-            ),
-            "invocation_dedup": invocation_dedup,
-        }
 
-    if query_mode == "chitchat" or bool(state.get("clarify_needed")):
+    if query_mode == "chitchat" or bool(ambiguous_updates.get("clarify_needed")):
         return {
+            **ambiguous_updates,
             "todos": todos,
             "todo_active_id": todo_active_id,
             "active_tools": active_tools,
@@ -1660,6 +1688,7 @@ async def execution_node(
 
     if not todos:
         return {
+            **ambiguous_updates,
             "plan": [],
             "todos": [],
             "todo_active_id": "",
@@ -1779,6 +1808,14 @@ async def execution_node(
                 status=str(updated_todo.get("status", "done")),
             )
             upsert_task_result(state, task_result)
+            logger.info(
+                "execution_node: task result persisted todo_id=%s updated_status=%s "
+                "results_map=%s in_memory_results=%s",
+                str(updated_todo.get("todo_id") or ""),
+                str(updated_todo.get("status", "")),
+                _summarize_task_results_map(state),
+                [str(item.get("task_id") or "") for item in results if isinstance(item, dict)],
+            )
             todo_result_output = maybe_output.get("output")
             completed_todos_map[str(maybe_output.get("task_id") or "")] = {
                 "output": todo_result_output if isinstance(todo_result_output, dict) else {}
@@ -1901,8 +1938,19 @@ async def execution_node(
         )
 
     execution_status = "replan" if blocked_in_batch else ("execution" if has_pending else "done")
+    logger.info(
+        "execution_node: exit snapshot execution_status=%s has_pending=%s next_todo_id=%s "
+        "next_active_tools=%s results_map=%s todos=%s",
+        execution_status,
+        has_pending,
+        next_todo_id,
+        next_active_tools,
+        _summarize_task_results_map(state),
+        _summarize_todos(todos),
+    )
 
     return {
+        **ambiguous_updates,
         "plan": _todo_plan_from_todos(todos),
         "todos": todos,
         "results": results,
