@@ -1,4 +1,4 @@
-﻿"""Execution node for the 5-node main pipeline."""
+"""Execution node for the 5-node main pipeline."""
 
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any, cast
 
 import anyio
+from by_framework import EventType, StreamChunkEvent
+from by_framework.core.protocol.content_type import SseReasonMessageType
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
@@ -239,9 +241,62 @@ def _parse_clarification_resume(resume_value: Any) -> str:
     return str(resume_value or "").strip()
 
 
+def _format_ambiguous_terms_notice(ambiguous_terms: list[dict[str, Any]]) -> str:
+    """Render ambiguous terms as a non-blocking reasoning log."""
+    mentions: list[str] = []
+    for item in ambiguous_terms:
+        if not isinstance(item, dict):
+            continue
+        mention = str(item.get("mention") or item.get("term") or "").strip()
+        if mention and mention not in mentions:
+            mentions.append(mention)
+    if mentions:
+        mention_text = "、".join(f"「{mention}」" for mention in mentions)
+        lines: list[str] = [f"检测到术语{mention_text}存在歧义，先按已确权术语继续处理："]
+    else:
+        lines = ["检测到部分术语存在歧义，先按已确权术语继续处理："]
+    for item in ambiguous_terms:
+        if not isinstance(item, dict):
+            continue
+        mention = str(item.get("mention") or item.get("term") or "").strip() or "未命名术语"
+        candidates_raw = item.get("candidates")
+        candidate_names: list[str] = []
+        if isinstance(candidates_raw, list):
+            for candidate in candidates_raw[:5]:
+                if not isinstance(candidate, dict):
+                    continue
+                name = str(candidate.get("term_name") or candidate.get("name") or "").strip()
+                if name:
+                    candidate_names.append(name)
+        if candidate_names:
+            lines.append(f"- {mention}: {', '.join(candidate_names)}")
+        else:
+            lines.append(f"- {mention}")
+    return "\n".join(lines)
+
+
+async def _emit_ambiguous_terms_notice(
+    *,
+    gateway_context: Any,
+    ambiguous_terms: list[dict[str, Any]],
+) -> None:
+    """Emit a best-effort frontend message for ambiguous terms."""
+    if gateway_context is None or not ambiguous_terms:
+        return
+    try:
+        await gateway_context.emit_chunk(
+            StreamChunkEvent(content=_format_ambiguous_terms_notice(ambiguous_terms)),
+            event_type=EventType.REASONING_LOG_DELTA.value,
+            content_type=SseReasonMessageType.think_text.value,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("execution_node: failed to emit ambiguous terms notice: %s", exc)
+
+
 async def _handle_ambiguous_terms(
     state: AgentState,
     *,
+    gateway_context: Any,
     todo_active_id: str,
     pending_capability: str,
 ) -> dict[str, Any]:
@@ -253,45 +308,16 @@ async def _handle_ambiguous_terms(
             "clarify_needed": False,
         }
 
-    prompt = _clarification_prompt_from_ambiguous(ambiguous_terms)
-    resume_value = interrupt(
-        {
-            "reason_code": "TERM_CLARIFICATION",
-            "prompt": prompt,
-            "required_fields": ["content"],
-            "resume_payload_schema": {
-                "type": "object",
-                "properties": {"content": {"type": "string"}},
-                "required": ["content"],
-            },
-            "todo_active_id": todo_active_id,
-            "react_step_id": todo_active_id,
-            "pending_capability": pending_capability,
-            "interrupt_reason": "term_clarification",
-        }
+    _ = todo_active_id
+    _ = pending_capability
+    await _emit_ambiguous_terms_notice(
+        gateway_context=gateway_context,
+        ambiguous_terms=ambiguous_terms,
     )
-
-    clarified = _parse_clarification_resume(resume_value)
-    current = ambiguous_terms[0] if isinstance(ambiguous_terms[0], dict) else {}
-    remaining = ambiguous_terms[1:]
-    confirmed_terms = list(state.get("confirmed_terms") or [])
-    mention = str(current.get("mention") or current.get("term") or clarified).strip()
-
-    if clarified:
-        confirmed_terms.append(
-            {
-                "mention": mention,
-                "term_name": clarified,
-                "term_id": str(current.get("term_id") or ""),
-                "confidence": 1.0,
-                "source": "user_clarification",
-            }
-        )
-
     return {
-        "ambiguous_terms": remaining,
-        "confirmed_terms": confirmed_terms,
-        "clarify_needed": bool(remaining),
+        "ambiguous_terms": [],
+        "confirmed_terms": list(state.get("confirmed_terms") or []),
+        "clarify_needed": False,
     }
 
 
@@ -1230,57 +1256,30 @@ async def execution_node(
     active_tools = _prioritize_tools_by_semantic(active_todo, active_tools)
     pending_capability = active_tools[0] if active_tools else ""
 
+    ambiguous_updates: dict[str, Any] = {}
     if state.get("ambiguous_terms"):
+        original_ambiguous_count = len(list(state.get("ambiguous_terms") or []))
         updates = await _handle_ambiguous_terms(
             state,
+            gateway_context=gateway_context,
             todo_active_id=todo_active_id,
             pending_capability=pending_capability,
         )
-        if updates.get("ambiguous_terms"):
-            return {
-                **updates,
-                "todo_active_id": todo_active_id,
-                "active_tools": active_tools,
-                "execution_status": "done",
-                "resume_context": _resume_context_after_round(
-                    state=state,
-                    config=config,
-                    todo_active_id=todo_active_id,
-                    pending_capability=pending_capability,
-                ),
-                "execution_trace": _append_trace(
-                    execution_trace,
-                    stage="clarification",
-                    status="waiting",
-                    detail={"todo_id": todo_active_id},
-                ),
-                "invocation_dedup": invocation_dedup,
-            }
-        return {
-            **updates,
-            "todo_active_id": todo_active_id,
-            "active_tools": active_tools,
-            "execution_status": "replan",
-            "resume_context": _resume_context_after_round(
-                state=state,
-                config=config,
-                todo_active_id=todo_active_id,
-                pending_capability=pending_capability,
-            ),
-            "execution_trace": _append_trace(
-                execution_trace,
-                stage="clarification",
-                status="resolved",
-                detail={"todo_id": todo_active_id},
-            ),
-            "invocation_dedup": invocation_dedup,
-        }
+        ambiguous_updates = dict(updates)
+        state = cast(AgentState, {**state, **updates})
+        execution_trace = _append_trace(
+            execution_trace,
+            stage="clarification",
+            status="logged",
+            detail={"todo_id": todo_active_id, "ambiguous_count": original_ambiguous_count},
+        )
 
     if query_mode == "chitchat" or bool(state.get("clarify_needed")):
         return {
             "todos": todos,
             "todo_active_id": todo_active_id,
             "active_tools": active_tools,
+            **ambiguous_updates,
             "execution_status": "done",
             "resume_context": _resume_context_after_round(
                 state=state,
@@ -1356,6 +1355,7 @@ async def execution_node(
                 "results": list(state.get("results") or []),
                 "todo_active_id": delegate_wait_todo_id_from_ctx,
                 "active_tools": wait_active_tools,
+                **ambiguous_updates,
                 "execution_status": "execution",
                 "resume_context": {**resume_context, "delegate_wait_todo_id": ""},
                 "execution_trace": execution_trace,
@@ -1368,6 +1368,7 @@ async def execution_node(
             "todos": [],
             "todo_active_id": "",
             "active_tools": [],
+            **ambiguous_updates,
             "execution_status": "done",
             "resume_context": _resume_context_after_round(
                 state=state,
@@ -1558,6 +1559,7 @@ async def execution_node(
             "todo_md_path": todo_md_path,
             "todo_active_id": delegate_wait_todo_id,
             "active_tools": wait_active_tools,
+            **ambiguous_updates,
             "execution_status": "execution",
             "resume_context": next_resume_context,
             "execution_trace": execution_trace,
@@ -1643,6 +1645,7 @@ async def execution_node(
         "todo_md_path": todo_md_path,
         "todo_active_id": next_todo_id,
         "active_tools": next_active_tools,
+        **ambiguous_updates,
         "execution_status": execution_status,
         "resume_context": _resume_context_after_round(
             state=state,

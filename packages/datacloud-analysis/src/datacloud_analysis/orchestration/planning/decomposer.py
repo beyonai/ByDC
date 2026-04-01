@@ -325,11 +325,11 @@ async def _emit_planning_reasoning(
         if isinstance(task, dict)
     )
     thinking = f"已将问题拆解为 {len(plan)} 个子任务：\n{task_lines}"
-    await gateway_context.emit_chunk(
-        StreamChunkEvent(content=_format_reasoning_heading("任务生成")),
-        event_type=EventType.REASONING_LOG_DELTA.value,
-        content_type=SseReasonMessageType.think_text.value,
-    )
+    # await gateway_context.emit_chunk(
+    #     StreamChunkEvent(content=_format_reasoning_heading("任务生成")),
+    #     event_type=EventType.REASONING_LOG_DELTA.value,
+    #     content_type=SseReasonMessageType.think_text.value,
+    # )
     await gateway_context.emit_chunk(
         StreamChunkEvent(content=thinking),
         event_type=EventType.REASONING_LOG_DELTA.value,
