@@ -163,3 +163,40 @@ async def test_knowledge_enhance_emits_non_blocking_thinking_logs(
     assert any("2、已确权的清单是：" in chunk and "企业综合分析表" in chunk for chunk in emitted)
     assert any("3、待澄清的清单是：" in chunk and "活跃用户" in chunk for chunk in emitted)
     assert any("4、增强的上下文是如下：" in chunk and "补充知识：" in chunk for chunk in emitted)
+
+
+@pytest.mark.asyncio
+async def test_knowledge_enhance_recognized_terms_are_partitioned_into_confirmed_or_ambiguous(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    emitted: list[str] = []
+
+    class _GatewayContext:
+        async def emit_chunk(self, event: Any, **_kwargs: Any) -> None:
+            emitted.append(str(getattr(event, "content", event)))
+
+    async def _fake_ainvoke(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "term_matches": [
+                {"term_name": "亩产效益", "normalized_term": "亩产效益", "term_id": "T1", "match_score": 0.62},
+                {"term_name": "企业", "normalized_term": "企业", "term_id": "T2", "match_score": 0.66},
+            ],
+            "fuzzy_term_matches": [],
+        }
+
+    monkeypatch.setattr(
+        knowledge_enhance_module,
+        "search_knowledge",
+        SimpleNamespace(ainvoke=_fake_ainvoke),
+    )
+
+    state = cast(AgentState, {"messages": [HumanMessage(content="找出亩产效益后3的地块上的企业清单")]})
+    out = await knowledge_enhance_node(state, gateway_context=_GatewayContext())
+
+    assert set(out["thinking_log"]["recognized_terms"]) == {"亩产效益", "企业"}
+    assert not out["confirmed_terms"]
+    ambiguous_mentions = {item["mention"] for item in out["ambiguous_terms"]}
+    assert {"亩产效益", "企业"} <= ambiguous_mentions
+    assert any("1、本次识别出来的术语清单：【亩产效益、企业】" in chunk for chunk in emitted)
+    assert any("2、已确权的清单是：【无】" in chunk for chunk in emitted)
+    assert any("3、待澄清的清单是：【亩产效益、企业】" in chunk for chunk in emitted)
