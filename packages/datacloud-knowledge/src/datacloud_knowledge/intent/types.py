@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,3 +124,47 @@ class ScoreUpdateRecord:
 
     name_id: str
     success: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ShortestPathTreeNode:
+    """最短路径树节点。"""
+
+    term_id: str
+    term_name: str
+    term_type_code: str
+    description: str | None = None
+    relation_from_parent: str = ""
+    children: tuple[ShortestPathTreeNode, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True, slots=True)
+class ShortestPathGraphNode:
+    """最短路径子图节点。"""
+
+    term_id: str
+    term_name: str
+    term_type_code: str
+    description: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ShortestPathGraphEdge:
+    """最短路径子图边。"""
+
+    source_term_id: str
+    target_term_id: str
+    relation_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class ShortestPathTreeResult:
+    """最短路径子图及树文本结果。"""
+
+    target_term_id: str
+    source_term_type_codes: tuple[str, ...]
+    root_term_ids: tuple[str, ...]
+    nodes: tuple[ShortestPathGraphNode, ...] = ()
+    edges: tuple[ShortestPathGraphEdge, ...] = ()
+    roots: tuple[ShortestPathTreeNode, ...] = ()
+    tree_text: str = ""
