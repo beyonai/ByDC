@@ -1,4 +1,4 @@
-﻿"""Intent service facade with managed DB/session boundaries."""
+"""Intent service facade with managed DB/session boundaries."""
 
 from __future__ import annotations
 
@@ -12,11 +12,17 @@ from sqlalchemy import bindparam, text
 from datacloud_knowledge.knowledge_search.db.connection import get_session
 
 from .cache import UserNameCache
-from .disambiguation import disambiguate
+from .disambiguation import build_shortest_path_tree, disambiguate
 from .matching import match_mentions_with_search
 from .score_update import batch_update_scores
 from .storage import create_term_with_knowledge, create_user_term_name
-from .types import DisambiguationResult, MatchResult, Mention, ScoreUpdateRecord
+from .types import (
+    DisambiguationResult,
+    MatchResult,
+    Mention,
+    ScoreUpdateRecord,
+    ShortestPathTreeResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +238,22 @@ def disambiguate_with_session(match_result: MatchResult) -> DisambiguationResult
         return disambiguate(match_result, session)
 
 
+def build_shortest_path_tree_with_session(
+    *,
+    target_term_id: str,
+    source_term_type_codes: list[str] | tuple[str, ...],
+    max_depth: int = 6,
+) -> ShortestPathTreeResult:
+    """Build shortest-path tree with a managed DB session."""
+    with get_session() as session:
+        return build_shortest_path_tree(
+            target_term_id=target_term_id,
+            source_term_type_codes=source_term_type_codes,
+            session=session,
+            max_depth=max_depth,
+        )
+
+
 def store_clarification_results(
     clarification_results: dict[str, Any],
     user_id: str,
@@ -268,4 +290,3 @@ def batch_update_scores_with_session(records: tuple[ScoreUpdateRecord, ...]) -> 
         return
     with get_session() as session:
         batch_update_scores(records, session)
-
