@@ -13,7 +13,7 @@
         <rdf:type rdf:resource="#EntityDefinition"/>
         <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_manage_grid_analysis</entity_code>
         <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格综合分析表</entity_name>
-        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格综合分析宽表，聚合管理网格面积、经营指标、IoT 活跃度、灯光、POI 密度等信息，主键为 `manage_grid_id`。</entity_desc>
+        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格综合分析宽表，聚合管理网格面积、经营指标、IoT 活跃度、灯光、POI 密度等信息，主键为 `manage_grid_id`。默认都返回主键</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
         <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DB</entity_source>
         <fields rdf:resource="#manage_grid_id_field"/>

@@ -13,7 +13,7 @@
         <rdf:type rdf:resource="#EntityDefinition"/>
         <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</entity_code>
         <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表</entity_name>
-        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析宽表，整合企业经营、税收、利润、网格活力、产业环节、企业等级、风险等级等信息，主键为 `enterprise_id`。</entity_desc>
+        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析宽表，整合企业经营、税收、利润、网格活力、产业环节、企业等级、风险等级等信息，主键为 `enterprise_id`。默认都返回主键，还有排序默认根据营收降序(用户未明确排序时)</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
         <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DB</entity_source>
         <fields rdf:resource="#enterprise_id_field"/>
