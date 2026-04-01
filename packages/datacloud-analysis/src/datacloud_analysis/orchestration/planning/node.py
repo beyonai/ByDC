@@ -6,6 +6,8 @@ import logging
 from pathlib import Path
 from typing import Any, cast
 
+from by_framework import EventType, StreamChunkEvent
+from by_framework.core.protocol.content_type import SseReasonMessageType
 from datacloud_analysis.orchestration.planning.decomposer import (
     decompose_analysis_plan,
     expand_relation_todos,
@@ -29,6 +31,30 @@ _PLANNER_BUILTIN_CAPABILITIES: frozenset[str] = frozenset(
         "render_report",
     }
 )
+
+async def _emit_planning_stage_status(
+    *,
+    gateway_context: Any,
+    detail: str,
+    title: str | None = None,
+) -> None:
+    """Emit incremental updates so the frontend sees planning progress."""
+    if gateway_context is None:
+        return
+    try:
+        if title:
+            await gateway_context.emit_chunk(
+                StreamChunkEvent(content=title),
+                event_type=EventType.REASONING_LOG_DELTA.value,
+                content_type=SseReasonMessageType.think_title.value,
+            )
+        await gateway_context.emit_chunk(
+            StreamChunkEvent(content=detail),
+            event_type=EventType.REASONING_LOG_DELTA.value,
+            content_type=SseReasonMessageType.think_text.value,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("planning_node: failed to emit progress hint: %s", exc)
 
 
 def _semantic_type_from_term(term: dict[str, Any]) -> str:
@@ -334,6 +360,11 @@ async def planning_node(
     plan: list[dict[str, Any]] = []
     if query_mode == "analysis" and not planning_updates.get("ambiguous_terms"):
         merged_state = cast(AgentState, {**state, **planning_updates})
+        await _emit_planning_stage_status(
+            gateway_context=gateway_context,
+            title="任务生成",
+            detail="正在根据用户问题创建任务计划，请稍候...",
+        )
         plan_updates = await decompose_analysis_plan(
             merged_state,
             intent=intent_text,
