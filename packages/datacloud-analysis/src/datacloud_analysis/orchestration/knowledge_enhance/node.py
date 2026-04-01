@@ -333,6 +333,76 @@ def _extract_ambiguities(payload: dict[str, Any] | None) -> list[dict[str, Any]]
     return ambiguities
 
 
+def _term_key(value: str) -> str:
+    return _normalize_term_text(value)
+
+
+def _candidate_from_term_match(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "term_id": str(row.get("term_id", "")),
+        "term_name": str(row.get("normalized_term") or row.get("term_name") or ""),
+        "term_type_code": str(row.get("term_type_code") or row.get("term_type") or ""),
+        "similarity": float(row.get("match_score", 0.0) or 0.0),
+        "edit_distance": int(row.get("edit_distance", 0) or 0),
+    }
+
+
+def _reconcile_ambiguities_with_recognized(
+    *,
+    payload: dict[str, Any] | None,
+    recognized_terms: list[str],
+    confirmed_terms: list[dict[str, Any]],
+    ambiguities: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Ensure: recognized_terms == confirmed_terms U ambiguous_terms (by normalized key)."""
+    confirmed_keys = {
+        _term_key(str(item.get("term_name") or item.get("mention") or ""))
+        for item in confirmed_terms
+        if _term_key(str(item.get("term_name") or item.get("mention") or ""))
+    }
+    ambiguous_by_key: dict[str, dict[str, Any]] = {}
+    for item in ambiguities:
+        if not isinstance(item, dict):
+            continue
+        mention = str(item.get("mention") or item.get("term") or "").strip()
+        key = _term_key(mention)
+        if not key:
+            continue
+        ambiguous_by_key[key] = item
+
+    match_rows: list[dict[str, Any]] = []
+    if isinstance(payload, dict):
+        for row in payload.get("term_matches", []) or []:
+            if isinstance(row, dict):
+                match_rows.append(row)
+
+    for term in recognized_terms:
+        key = _term_key(term)
+        if not key:
+            continue
+        if key in confirmed_keys or key in ambiguous_by_key:
+            continue
+
+        matched_rows = [
+            row
+            for row in match_rows
+            if _term_key(str(row.get("normalized_term") or row.get("term_name") or "")) == key
+        ]
+        candidates = [_candidate_from_term_match(row) for row in matched_rows][:5]
+        reason = "recognized_but_unresolved"
+        if matched_rows:
+            max_score = max(float(row.get("match_score", 0.0) or 0.0) for row in matched_rows)
+            if max_score < _DEFAULT_TERM_HINT_CONFIDENCE_THRESHOLD:
+                reason = "low_confidence_match"
+            else:
+                reason = "matched_but_not_confirmed"
+        item = {"mention": term, "candidates": candidates, "reason": reason}
+        ambiguities.append(item)
+        ambiguous_by_key[key] = item
+
+    return ambiguities
+
+
 def _safe_preview(value: str) -> str:
     text = value.strip()
     if len(text) <= _LOG_PREVIEW_LIMIT:
@@ -366,6 +436,7 @@ def _build_thinking_log(
     *,
     user_query: str,
     recognized_terms: list[str],
+    confirmed_terms: list[dict[str, Any]],
     summaries: list[dict[str, Any]],
     ambiguities: list[dict[str, Any]],
     enriched_query: str,
@@ -374,6 +445,7 @@ def _build_thinking_log(
     return {
         "raw_question": user_query,
         "recognized_terms": recognized_terms,
+        "confirmed_terms": confirmed_terms,
         "ambiguous_terms": ambiguities,
         "confirmed_term_summaries": summaries,
         "enriched_query": enriched_query,
@@ -420,15 +492,26 @@ def _format_recognized_terms_line(recognized_terms: list[str]) -> str:
     return f"1、本次识别出来的术语清单：【{'、'.join(recognized_terms)}】"
 
 
-def _format_confirmed_terms_block(summaries: list[dict[str, Any]]) -> str:
-    if not summaries:
+def _format_confirmed_terms_block(
+    confirmed_terms: list[dict[str, Any]],
+    summaries: list[dict[str, Any]],
+) -> str:
+    if not confirmed_terms:
         return "2、已确权的清单是：【无】"
-    names = [str(item.get("term_name") or "").strip() for item in summaries]
+    summary_by_name = {
+        str(item.get("term_name") or "").strip(): str(item.get("summary") or "").strip()
+        for item in summaries
+        if str(item.get("term_name") or "").strip()
+    }
+    names = [
+        str(item.get("term_name") or item.get("mention") or "").strip()
+        for item in confirmed_terms
+    ]
     names = [name for name in names if name]
     lines = [f"2、已确权的清单是：【{'、'.join(names) if names else '无'}】"]
-    for index, item in enumerate(summaries, start=1):
-        term_name = str(item.get("term_name") or "").strip() or "未命名术语"
-        summary = str(item.get("summary") or "").strip() or "无补充知识"
+    for index, item in enumerate(confirmed_terms, start=1):
+        term_name = str(item.get("term_name") or item.get("mention") or "").strip() or "未命名术语"
+        summary = summary_by_name.get(term_name, "").strip() or "无补充知识"
         lines.append(f"{index}）{term_name}：{summary}")
     return "\n".join(lines)
 
@@ -471,6 +554,7 @@ def _format_enhanced_context_block(user_query: str, enriched_query: str) -> str:
 def _format_thinking_report(
     *,
     recognized_terms: list[str],
+    confirmed_terms: list[dict[str, Any]],
     summaries: list[dict[str, Any]],
     ambiguities: list[dict[str, Any]],
     user_query: str,
@@ -478,7 +562,7 @@ def _format_thinking_report(
 ) -> str:
     blocks = [
         _format_recognized_terms_line(recognized_terms),
-        _format_confirmed_terms_block(summaries),
+        _format_confirmed_terms_block(confirmed_terms, summaries),
         _format_ambiguous_terms_block(ambiguities),
         _format_enhanced_context_block(user_query, enriched_query),
     ]
@@ -527,6 +611,7 @@ async def _emit_thinking_logs(
     *,
     gateway_context: Any,
     recognized_terms: list[str],
+    confirmed_terms: list[dict[str, Any]],
     user_query: str,
     summaries: list[dict[str, Any]],
     ambiguities: list[dict[str, Any]],
@@ -537,6 +622,7 @@ async def _emit_thinking_logs(
     chunks = [
         _format_thinking_report(
             recognized_terms=recognized_terms,
+            confirmed_terms=confirmed_terms,
             summaries=summaries,
             ambiguities=ambiguities,
             user_query=user_query,
@@ -688,10 +774,17 @@ async def knowledge_enhance_node(
         knowledge_summaries,
     )
     ambiguities = _extract_ambiguities(payload)
+    ambiguities = _reconcile_ambiguities_with_recognized(
+        payload=payload,
+        recognized_terms=recognized_terms,
+        confirmed_terms=confirmed_terms,
+        ambiguities=ambiguities,
+    )
     knowledge_snippets = _build_knowledge_snippets(payload, knowledge_summaries)
     thinking_log = _build_thinking_log(
         user_query=user_query,
         recognized_terms=recognized_terms,
+        confirmed_terms=confirmed_terms,
         summaries=knowledge_summaries,
         ambiguities=ambiguities,
         enriched_query=enriched_query,
@@ -707,6 +800,7 @@ async def knowledge_enhance_node(
     await _emit_thinking_logs(
         gateway_context=gateway_context,
         recognized_terms=recognized_terms,
+        confirmed_terms=confirmed_terms,
         user_query=user_query,
         summaries=knowledge_summaries,
         ambiguities=ambiguities,
