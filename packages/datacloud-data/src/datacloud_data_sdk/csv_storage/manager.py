@@ -50,6 +50,36 @@ class CsvStorageManager:
         """
         self._base = Path(base_dir)
 
+    def _effective_base_dir(self) -> Path:
+        """Resolve the CSV base dir for the current invocation.
+
+        When running inside the gateway/agent flow, prefer the current task
+        workspace so exports and step CSVs stay inside that workspace.
+        """
+        try:
+            from datacloud_data_sdk.context import get_current_context
+        except ImportError:
+            return self._base
+
+        try:
+            ctx = get_current_context()
+        except Exception:
+            return self._base
+
+        workspace_dir = str(getattr(ctx, "workspace_dir", "") or "").strip()
+        if workspace_dir:
+            return self._shared_workspace_dir(Path(workspace_dir))
+        return self._base
+
+    @staticmethod
+    def _shared_workspace_dir(workspace_dir: Path) -> Path:
+        """Drop only the dynamic request leaf; keep stable ``private/public`` roots."""
+        if workspace_dir.name in {"private", "public"}:
+            return workspace_dir
+        if workspace_dir.parent.name in {"private", "public"}:
+            return workspace_dir.parent
+        return workspace_dir
+
     def get_path(self, request_id: str, output_ref: str) -> Path:
         """
         获取 CSV 文件路径
@@ -63,7 +93,7 @@ class CsvStorageManager:
         Returns:
             Path: CSV 文件路径
         """
-        dir_path = self._base / request_id
+        dir_path = self._effective_base_dir() / request_id
         dir_path.mkdir(parents=True, exist_ok=True)
         return dir_path / f"{output_ref}.csv"
 
@@ -86,7 +116,7 @@ class CsvStorageManager:
         Returns:
             tuple: (file_id, 文件路径)
         """
-        exports_dir = self._base / "exports"
+        exports_dir = self._effective_base_dir() / "exports"
         exports_dir.mkdir(parents=True, exist_ok=True)
         file_id = str(uuid.uuid4())
         path = exports_dir / f"{file_id}.csv"
@@ -113,8 +143,9 @@ class CsvStorageManager:
         """
         if not re.match(r"^[a-f0-9\-]{36}$", file_id):
             return None
-        path = (self._base / "exports" / f"{file_id}.csv").resolve()
-        base_resolved = self._base.resolve()
+        base_dir = self._effective_base_dir()
+        path = (base_dir / "exports" / f"{file_id}.csv").resolve()
+        base_resolved = base_dir.resolve()
         if not path.exists() or not path.is_file():
             return None
         try:
@@ -137,7 +168,7 @@ class CsvStorageManager:
         """
         if not re.match(r"^[a-f0-9\-]{36}$", file_id):
             return None
-        meta_path = self._base / "exports" / f"{file_id}_meta.json"
+        meta_path = self._effective_base_dir() / "exports" / f"{file_id}_meta.json"
         if not meta_path.exists():
             return None
         try:
@@ -155,6 +186,6 @@ class CsvStorageManager:
         Args:
             request_id: 请求 ID
         """
-        dir_path = self._base / request_id
+        dir_path = self._effective_base_dir() / request_id
         if dir_path.exists():
             shutil.rmtree(dir_path, ignore_errors=True)

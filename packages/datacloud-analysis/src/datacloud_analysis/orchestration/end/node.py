@@ -24,6 +24,7 @@ from typing import Any
 
 from by_framework import EventType, StreamChunkEvent
 from by_framework.core.protocol.content_type import SseMessageType, SseReasonMessageType
+from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
@@ -490,6 +491,59 @@ def _default_notice_msg(meta: dict[str, Any], records: list[Any], overflow: str)
     return ""
 
 
+def _persist_aggregated_export(
+    *,
+    workspace_dir: str | None,
+    records: list[Any],
+    meta: dict[str, Any],
+) -> dict[str, str] | None:
+    """Persist merged agent results to workspace exports for later pagination."""
+    if not workspace_dir or not records:
+        return None
+    if not all(isinstance(row, dict) for row in records):
+        return None
+
+    columns_raw = meta.get("columns", [])
+    columns: list[str] = []
+    if isinstance(columns_raw, list):
+        for col in columns_raw:
+            if isinstance(col, dict):
+                name = str(col.get("name") or col.get("label") or "").strip()
+            else:
+                name = str(col).strip()
+            if name:
+                columns.append(name)
+    if not columns and isinstance(records[0], dict):
+        columns = [str(key) for key in records[0]]
+
+    export_meta = {
+        **meta,
+        "total": len(records),
+        "generated_by": "datacloud_analysis.aggregate",
+    }
+
+    try:
+        csv_manager = CsvStorageManager(str(_shared_workspace_dir(Path(workspace_dir))))
+        file_id, file_path = csv_manager.save_export(
+            records,
+            columns=columns or None,
+            meta=export_meta,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("build_structured_data_envelope: persist aggregate export failed: %s", exc)
+        return None
+
+    return {"file_url": str(file_path), "file_id": file_id}
+
+
+def _shared_workspace_dir(workspace_dir: Path) -> Path:
+    if workspace_dir.name in {"private", "public"}:
+        return workspace_dir
+    if workspace_dir.parent.name in {"private", "public"}:
+        return workspace_dir.parent
+    return workspace_dir
+
+
 def _enrich_notice_with_download(
     notice: str,
     file_path: str,
@@ -520,6 +574,7 @@ def build_structured_data_envelope(
     raw_results: list[dict[str, Any]],
     *,
     result_type: str = "normal",
+    workspace_dir: str | None = None,
 ) -> dict[str, Any] | None:
     """Build {code, message, data} for SSE content_type 6001, or None if no query shape.
 
@@ -546,6 +601,7 @@ def build_structured_data_envelope(
     notice_overflow = ""
     file_id = ""
     found = False
+    shaped_count = 0
 
     for res in raw_results:
         out = _load_raw_output_dict(res)
@@ -553,6 +609,7 @@ def build_structured_data_envelope(
         if not shaped:
             continue
         found = True
+        shaped_count += 1
         recs = shaped.get("records", [])
         if isinstance(recs, list):
             merged_records.extend(recs)
@@ -591,6 +648,21 @@ def build_structured_data_envelope(
 
     notice_base = _default_notice_msg(meta_base, merged_records, notice_overflow)
     fb = _file_block_from_paths(file_path, download_url)
+    should_persist_aggregate = bool(merged_records) and (shaped_count > 1 or fb is None)
+    if should_persist_aggregate:
+        aggregate_fb = _persist_aggregated_export(
+            workspace_dir=workspace_dir,
+            records=merged_records,
+            meta={
+                **meta_base,
+                "columns": columns_norm,
+            },
+        )
+        if aggregate_fb is not None:
+            fb = aggregate_fb
+            file_path = aggregate_fb["file_url"]
+            download_url = ""
+            file_id = aggregate_fb["file_id"]
     notice_final = _enrich_notice_with_download(notice_base, file_path, download_url)
 
     data_inner: dict[str, Any] = {
@@ -697,13 +769,14 @@ async def _emit_part2_part3(
     file_info_md: str,
     *,
     envelope: dict[str, Any] | None = None,
+    workspace_dir: str | None = None,
 ) -> str:
     """Emit merged JSON (6001) when query-shaped results exist; else Markdown Part2+Part3.
 
     Returns the same string stored in conversation history (JSON or Markdown).
     """
     if envelope is None:
-        envelope = build_structured_data_envelope(raw_results)
+        envelope = build_structured_data_envelope(raw_results, workspace_dir=workspace_dir)
     if envelope is not None:
         _log_reconcile_raw_results_vs_sse(raw_results, envelope)
         _log_user_facing_6001(envelope, raw_results)
@@ -973,7 +1046,10 @@ async def insight_node(
     # Pre-build Part2 and Part3 (needed for both Fix4 and LLM paths)
     tables_md = _extract_tables_md(aggregated_data)
     file_info_md = _extract_file_info_md(raw_results)
-    structured_envelope = build_structured_data_envelope(raw_results)
+    structured_envelope = build_structured_data_envelope(
+        raw_results,
+        workspace_dir=str(state.get("workspace_dir") or "") or None,
+    )
 
     await _emit_reasoning_log_end_before_answer(context)
 
@@ -991,6 +1067,7 @@ async def insight_node(
             tables_md,
             file_info_md,
             envelope=structured_envelope,
+            workspace_dir=str(state.get("workspace_dir") or "") or None,
         )
         logger.info(
             "[user SSE summary] single-task fast path: part23_only_chars=%d (6001 or markdown inside)",
@@ -1055,6 +1132,7 @@ async def insight_node(
         tables_md,
         file_info_md,
         envelope=structured_envelope,
+        workspace_dir=str(state.get("workspace_dir") or "") or None,
     )
     logger.info(
         "[user SSE summary] main path: part1_text_chars=%d part23_chars=%d",

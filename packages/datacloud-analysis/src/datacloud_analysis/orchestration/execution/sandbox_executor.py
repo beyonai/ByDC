@@ -92,6 +92,15 @@ def _workspace_dir_from_state(state: Mapping[str, Any]) -> Path | None:
     return Path(value)
 
 
+def _shared_workspace_dir_str(workspace_dir: str) -> str:
+    path = Path(workspace_dir).resolve()
+    if path.name in {"private", "public"}:
+        return str(path)
+    if path.parent.name in {"private", "public"}:
+        return str(path.parent)
+    return str(path)
+
+
 async def _chat_response_tool(params: dict[str, Any], state: Mapping[str, Any]) -> dict[str, Any]:
     text = str(
         params.get("message")
@@ -654,6 +663,9 @@ async def _execute_next_task_with_hooks(
                 if gateway_context is not None:
                     ctx_kwargs["gateway_context"] = gateway_context
                     ctx_kwargs["session_id"] = getattr(gateway_context, "session_id", "")
+                workspace_dir = str(state.get("workspace_dir") or "").strip()
+                if workspace_dir:
+                    ctx_kwargs["workspace_dir"] = _shared_workspace_dir_str(workspace_dir)
                 invocation_ctx: Any = InvocationContext(**ctx_kwargs)
             except ImportError:
                 invocation_ctx = _NullContext()
@@ -954,7 +966,4 @@ def _resolve_input_files(dep_ids: list[str], state: Mapping[str, Any]) -> dict[s
         logger.warning("_resolve_input_files: could not resolve file paths for deps: %s", missing)
 
     return input_files
-
-
-
 
