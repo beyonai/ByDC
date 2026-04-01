@@ -3,13 +3,24 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
-from .types import DisambiguationResult, MatchCandidate, MatchResult
+from .types import (
+    DisambiguationResult,
+    MatchCandidate,
+    MatchResult,
+    ShortestPathGraphEdge,
+    ShortestPathGraphNode,
+    ShortestPathTreeNode,
+    ShortestPathTreeResult,
+)
 
 log = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 _CONFIDENCE_GAP_THRESHOLD = 0.15
 _CONFIRMED_CONFIDENCE_THRESHOLD = 0.95
@@ -106,9 +117,9 @@ def _bfs_distance(
         """
         WITH RECURSIVE bfs AS (
             SELECT
-                :source_id::varchar AS current_id,
+                CAST(:source_id AS varchar) AS current_id,
                 0 AS depth,
-                ARRAY[:source_id::varchar]::varchar[] AS path
+                ARRAY[CAST(:source_id AS varchar)]::varchar[] AS path
 
             UNION ALL
 
@@ -227,3 +238,376 @@ def _weighted_score(candidate: MatchCandidate) -> float:
     """计算候选加权分数。"""
     score_boost = min(candidate.score * _SCORE_WEIGHT, _MAX_SCORE_BOOST)
     return candidate.confidence * (1 + score_boost)
+
+
+def build_shortest_path_tree(
+    *,
+    target_term_id: str,
+    source_term_type_codes: Sequence[str],
+    session: Any,
+    schema: str = "whale_datacloud",
+    max_depth: int = 6,
+) -> ShortestPathTreeResult:
+    """构建从限定类型根节点到目标术语的最短路径子图与树文本。"""
+    normalized_type_codes = tuple(code.strip() for code in source_term_type_codes if code.strip())
+    if not target_term_id.strip():
+        msg = "target_term_id must not be blank"
+        raise ValueError(msg)
+    if not normalized_type_codes:
+        msg = "source_term_type_codes must not be empty"
+        raise ValueError(msg)
+    if max_depth <= 0:
+        msg = "max_depth must be positive"
+        raise ValueError(msg)
+    rows = _query_shortest_path_rows(
+        target_term_id=target_term_id,
+        source_term_type_codes=normalized_type_codes,
+        session=session,
+        schema=schema,
+        max_depth=max_depth,
+    )
+    if not rows:
+        return ShortestPathTreeResult(
+            target_term_id=target_term_id,
+            source_term_type_codes=normalized_type_codes,
+            root_term_ids=(),
+        )
+    return _build_shortest_path_tree_result(
+        target_term_id=target_term_id,
+        source_term_type_codes=normalized_type_codes,
+        rows=rows,
+    )
+
+
+def _query_shortest_path_rows(
+    *,
+    target_term_id: str,
+    source_term_type_codes: tuple[str, ...],
+    session: Any,
+    schema: str,
+    max_depth: int,
+) -> list[Any]:
+    """查询满足根类型约束的最短路径行。"""
+    if schema != "whale_datacloud":
+        msg = "Only whale_datacloud schema is supported in shortest path query."
+        raise ValueError(msg)
+
+    sql = text(
+        """
+        WITH RECURSIVE upward AS (
+            SELECT
+                t.term_id,
+                t.term_name,
+                t.term_type_code,
+                t.desc_summary AS term_desc_summary,
+                (
+                    SELECT COALESCE(NULLIF(k.desc_summary, ''), NULLIF(k."desc", ''))
+                    FROM whale_datacloud.term_knowledge k
+                    WHERE k.term_id = t.term_id
+                    ORDER BY k.knowledge_id
+                    LIMIT 1
+                ) AS description,
+                0 AS depth,
+                ARRAY[t.term_id]::text[] AS path_term_ids,
+                ARRAY[t.term_name]::text[] AS path_term_names,
+                ARRAY[t.term_type_code]::text[] AS path_term_type_codes,
+                ARRAY[COALESCE(t.desc_summary, '')]::text[] AS path_term_desc_summaries,
+                ARRAY[
+                    COALESCE(
+                        (
+                            SELECT COALESCE(NULLIF(k.desc_summary, ''), NULLIF(k."desc", ''))
+                            FROM whale_datacloud.term_knowledge k
+                            WHERE k.term_id = t.term_id
+                            ORDER BY k.knowledge_id
+                            LIMIT 1
+                        ),
+                        ''
+                    )
+                ]::text[] AS path_descriptions,
+                ARRAY[]::text[] AS path_relations,
+                ARRAY[t.term_id]::text[] AS visited_ids
+            FROM whale_datacloud.term t
+            WHERE t.term_id = :target_term_id
+
+            UNION ALL
+
+            SELECT
+                parent.term_id,
+                parent.term_name,
+                parent.term_type_code,
+                parent.desc_summary AS term_desc_summary,
+                (
+                    SELECT COALESCE(NULLIF(k.desc_summary, ''), NULLIF(k."desc", ''))
+                    FROM whale_datacloud.term_knowledge k
+                    WHERE k.term_id = parent.term_id
+                    ORDER BY k.knowledge_id
+                    LIMIT 1
+                ) AS description,
+                upward.depth + 1 AS depth,
+                ARRAY[parent.term_id]::text[] || upward.path_term_ids,
+                ARRAY[parent.term_name]::text[] || upward.path_term_names,
+                ARRAY[parent.term_type_code]::text[] || upward.path_term_type_codes,
+                ARRAY[COALESCE(parent.desc_summary, '')]::text[] || upward.path_term_desc_summaries,
+                ARRAY[
+                    COALESCE(
+                        (
+                            SELECT COALESCE(NULLIF(k.desc_summary, ''), NULLIF(k."desc", ''))
+                            FROM whale_datacloud.term_knowledge k
+                            WHERE k.term_id = parent.term_id
+                            ORDER BY k.knowledge_id
+                            LIMIT 1
+                        ),
+                        ''
+                    )
+                ]::text[] || upward.path_descriptions,
+                ARRAY[tr.relation_name]::text[] || upward.path_relations,
+                upward.visited_ids || ARRAY[parent.term_id]::text[]
+            FROM upward
+            JOIN whale_datacloud.term_relation tr ON tr.target_term_id = upward.term_id
+            JOIN whale_datacloud.term parent ON parent.term_id = tr.source_term_id
+            WHERE upward.depth < :max_depth
+              AND NOT parent.term_id = ANY(upward.visited_ids)
+        ),
+        candidate_roots AS (
+            SELECT *
+            FROM upward
+            WHERE term_type_code IN :source_term_type_codes
+        ),
+        min_depth AS (
+            SELECT MIN(depth) AS depth FROM candidate_roots
+        )
+        SELECT
+            term_id,
+            term_name,
+            term_type_code,
+            description,
+            depth,
+            path_term_ids,
+            path_term_names,
+            path_term_type_codes,
+            path_term_desc_summaries,
+            path_descriptions,
+            path_relations
+        FROM candidate_roots
+        WHERE depth = (SELECT depth FROM min_depth)
+        ORDER BY term_name, term_id, path_term_ids
+        """
+    ).bindparams(bindparam("source_term_type_codes", expanding=True))
+
+    return list(
+        session.execute(
+            sql,
+            {
+                "target_term_id": target_term_id,
+                "source_term_type_codes": list(source_term_type_codes),
+                "max_depth": max_depth,
+            },
+        ).fetchall()
+    )
+
+
+def _build_shortest_path_tree_result(
+    *,
+    target_term_id: str,
+    source_term_type_codes: tuple[str, ...],
+    rows: Sequence[Any],
+) -> ShortestPathTreeResult:
+    """将最短路径查询结果转换为结构化结果。"""
+    node_map: dict[str, ShortestPathGraphNode] = {}
+    edge_map: dict[tuple[str, str, str], ShortestPathGraphEdge] = {}
+    path_payloads: list[dict[str, Any]] = []
+
+    for row in rows:
+        path_term_ids = [str(value) for value in row.path_term_ids]
+        path_term_names = [str(value) for value in row.path_term_names]
+        path_term_type_codes = [str(value) for value in row.path_term_type_codes]
+        path_term_desc_summaries = [
+            str(value) if value is not None else "" for value in row.path_term_desc_summaries
+        ]
+        path_descriptions = [
+            str(value) if value is not None else "" for value in row.path_descriptions
+        ]
+        path_relations = [str(value) for value in row.path_relations]
+
+        for index, term_id in enumerate(path_term_ids):
+            if term_id not in node_map:
+                description = _merge_node_descriptions(
+                    path_term_desc_summaries[index],
+                    path_descriptions[index],
+                )
+                node_map[term_id] = ShortestPathGraphNode(
+                    term_id=term_id,
+                    term_name=path_term_names[index],
+                    term_type_code=path_term_type_codes[index],
+                    description=description,
+                )
+            if index == 0:
+                continue
+            edge_key = (path_term_ids[index - 1], term_id, path_relations[index - 1])
+            edge_map.setdefault(
+                edge_key,
+                ShortestPathGraphEdge(
+                    source_term_id=path_term_ids[index - 1],
+                    target_term_id=term_id,
+                    relation_name=path_relations[index - 1],
+                ),
+            )
+
+        path_payloads.append(
+            {
+                "term_ids": path_term_ids,
+                "relations": path_relations,
+            }
+        )
+
+    roots = _build_tree_roots(node_map=node_map, path_payloads=path_payloads)
+    tree_text = _render_shortest_path_tree_text(roots)
+    ordered_nodes = tuple(
+        sorted(node_map.values(), key=lambda item: (item.term_name, item.term_id))
+    )
+    ordered_edges = tuple(
+        sorted(
+            edge_map.values(),
+            key=lambda item: (item.source_term_id, item.target_term_id, item.relation_name),
+        )
+    )
+
+    return ShortestPathTreeResult(
+        target_term_id=target_term_id,
+        source_term_type_codes=source_term_type_codes,
+        root_term_ids=tuple(root.term_id for root in roots),
+        nodes=ordered_nodes,
+        edges=ordered_edges,
+        roots=roots,
+        tree_text=tree_text,
+    )
+
+
+def _merge_node_descriptions(*parts: str) -> str | None:
+    """合并多个描述来源，去空与去重。"""
+    normalized_parts: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        normalized = part.strip()
+        if not normalized:
+            continue
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        normalized_parts.append(normalized)
+    if not normalized_parts:
+        return None
+    return "；".join(normalized_parts)
+
+
+def _build_tree_roots(
+    *,
+    node_map: dict[str, ShortestPathGraphNode],
+    path_payloads: Sequence[dict[str, Any]],
+) -> tuple[ShortestPathTreeNode, ...]:
+    """根据路径集合构建树根节点。"""
+
+    def _build_branch(
+        path_index_pairs: Sequence[tuple[int, str]], level: int = 0
+    ) -> tuple[ShortestPathTreeNode, ...]:
+        grouped: dict[str, list[int]] = {}
+        for payload_index, term_id in path_index_pairs:
+            grouped.setdefault(term_id, []).append(payload_index)
+
+        branches: list[ShortestPathTreeNode] = []
+        for term_id in sorted(grouped, key=lambda value: (node_map[value].term_name, value)):
+            indices = grouped[term_id]
+            child_pairs: list[tuple[int, str]] = []
+            relation_from_parent = ""
+            if level > 0:
+                first_payload = path_payloads[indices[0]]
+                relation_from_parent = str(first_payload["relations"][level - 1])
+            for payload_index in indices:
+                payload = path_payloads[payload_index]
+                term_ids = payload["term_ids"]
+                next_level = level + 1
+                if next_level >= len(term_ids):
+                    continue
+                child_term_id = term_ids[next_level]
+                child_pairs.append((payload_index, child_term_id))
+
+            graph_node = node_map[term_id]
+            branches.append(
+                ShortestPathTreeNode(
+                    term_id=graph_node.term_id,
+                    term_name=graph_node.term_name,
+                    term_type_code=graph_node.term_type_code,
+                    description=graph_node.description,
+                    relation_from_parent=relation_from_parent,
+                    children=_build_branch(child_pairs, level + 1) if child_pairs else (),
+                )
+            )
+        return tuple(branches)
+
+    root_pairs = [(index, payload["term_ids"][0]) for index, payload in enumerate(path_payloads)]
+    return _build_branch(root_pairs)
+
+
+def _render_shortest_path_tree_text(roots: Sequence[ShortestPathTreeNode]) -> str:
+    """将树节点渲染为目录树风格文本。"""
+    lines: list[str] = []
+    child_prefix = "    " if len(roots) == 1 else ""
+    for index, root in enumerate(roots):
+        lines.append(_format_tree_node_line(node=root, prefix="", is_last=index == len(roots) - 1))
+        root_is_last = index == len(roots) - 1
+        for child_index, child in enumerate(root.children):
+            lines.extend(
+                _render_tree_node_lines(
+                    child,
+                    prefix=child_prefix,
+                    is_last=child_index == len(root.children) - 1,
+                    display_is_last=root_is_last if len(roots) > 1 and not child_prefix else None,
+                )
+            )
+    return "\n".join(lines)
+
+
+def _render_tree_node_lines(
+    node: ShortestPathTreeNode,
+    *,
+    prefix: str,
+    is_last: bool,
+    display_is_last: bool | None = None,
+) -> list[str]:
+    """递归渲染树节点。"""
+    effective_is_last = is_last if display_is_last is None else display_is_last
+    line = _format_tree_node_line(
+        node=node,
+        prefix=prefix,
+        is_last=effective_is_last,
+    )
+    lines = [line]
+    child_prefix = prefix + ("    " if effective_is_last else "│   ")
+    for child_index, child in enumerate(node.children):
+        lines.extend(
+            _render_tree_node_lines(
+                child,
+                prefix=child_prefix,
+                is_last=child_index == len(node.children) - 1,
+                display_is_last=None,
+            )
+        )
+    return lines
+
+
+def _format_tree_node_line(
+    *,
+    node: ShortestPathTreeNode,
+    prefix: str,
+    is_last: bool,
+) -> str:
+    """格式化单个树节点行。"""
+    connector = ""
+    if prefix or node.relation_from_parent:
+        connector = "└── "
+    if (prefix or node.relation_from_parent) and not is_last:
+        connector = "├── "
+    relation_prefix = f"[{node.relation_from_parent}] " if node.relation_from_parent else ""
+    base = f"{prefix}{connector}{relation_prefix}{node.term_name} [{node.term_type_code}]"
+    description = (node.description or "").strip()
+    return f"{base} - {description}" if description else base
