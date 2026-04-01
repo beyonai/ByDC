@@ -5,8 +5,8 @@ from typing import Any, cast
 import pytest
 from langchain_core.messages import HumanMessage
 
-from datacloud_analysis.orchestration.knowledge_enhance import node as ke_module
 from datacloud_analysis.orchestration.knowledge_enhance import knowledge_enhance_node
+from datacloud_analysis.orchestration.knowledge_enhance import node as ke_module
 from datacloud_analysis.orchestration.state import AgentState
 
 
@@ -23,6 +23,11 @@ async def test_knowledge_enhance_rewrites_enriched_query_with_high_confidence_te
                         "normalized_term": "enterprise comprehensive report",
                         "term_id": "T100",
                         "match_score": 0.95,
+                        "definition": (
+                            "enterprise comprehensive report contains profitability metrics, "
+                            "operational indicators, ownership profile, and historical trend details "
+                            "to support downstream planning decisions."
+                        ),
                     }
                 ]
             }
@@ -36,8 +41,10 @@ async def test_knowledge_enhance_rewrites_enriched_query_with_high_confidence_te
     out = await knowledge_enhance_node(state)
 
     assert out["user_query"] == "query enterprise report profitability"
-    assert out["enriched_query"] == "query enterprise comprehensive report profitability"
-    assert out["enriched_query_source"] == "knowledge_rewrite"
+    assert "原始问题：" in out["enriched_query"]
+    assert "补充知识：" in out["enriched_query"]
+    assert "enterprise comprehensive report" in out["enriched_query"]
+    assert out["enriched_query_source"] == "confirmed_terms"
     assert out["enriched_query_confidence"] == pytest.approx(0.95)
 
 
