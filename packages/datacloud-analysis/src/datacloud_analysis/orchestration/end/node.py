@@ -421,9 +421,33 @@ def _aggregate_result(res: dict) -> dict[str, Any] | None:
     """
     task_id = res.get("task_id", "?")
 
+    def _format_delegate_result(output: dict[str, Any]) -> str | None:
+        content = str(output.get("content") or "").strip()
+        nested_results = output.get("results")
+        if not content and not isinstance(nested_results, list):
+            return None
+
+        lines = ["【子智能体结果】"]
+        if content:
+            lines.append(content)
+        if isinstance(nested_results, list) and nested_results:
+            lines.append("")
+            lines.append(f"子任务数：{len(nested_results)}")
+            nested_task_ids = [
+                str(item.get("task_id") or "").strip()
+                for item in nested_results
+                if isinstance(item, dict) and str(item.get("task_id") or "").strip()
+            ]
+            if nested_task_ids:
+                lines.append(f"子任务ID：{', '.join(nested_task_ids)}")
+        return "\n".join(lines)
+
     if "data" in res:
         output = res["data"]
         if isinstance(output, dict):
+            delegate_result = _format_delegate_result(output)
+            if delegate_result:
+                return {"task_id": task_id, "data": delegate_result}
             if output.get(WRAPPED_TASK_OUTPUT_KEY):
                 content = output.get("content", "")
                 return {
@@ -443,6 +467,9 @@ def _aggregate_result(res: dict) -> dict[str, Any] | None:
             with open(res["file_path"], encoding="utf-8") as f:
                 output = json.load(f)
             if isinstance(output, dict):
+                delegate_result = _format_delegate_result(output)
+                if delegate_result:
+                    return {"task_id": task_id, "data": delegate_result}
                 if output.get(WRAPPED_TASK_OUTPUT_KEY):
                     content = output.get("content", "")
                     return {
