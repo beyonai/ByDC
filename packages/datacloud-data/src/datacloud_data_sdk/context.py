@@ -55,6 +55,7 @@ class RequestContext:
     view_id: str = ""
     object_ids: list[str] | None = None
     gateway_context: Any = field(default=None, repr=False)
+    workspace_dir: str = ""
 
 
 _ctx_var: contextvars.ContextVar[RequestContext | None] = contextvars.ContextVar(
@@ -105,6 +106,7 @@ class InvocationContext:
             view_id=kwargs.get("view_id", ""),
             object_ids=kwargs.get("object_ids"),
             gateway_context=kwargs.get("gateway_context"),
+            workspace_dir=kwargs.get("workspace_dir", ""),
         )
         self._token: contextvars.Token[RequestContext | None] | None = None
 

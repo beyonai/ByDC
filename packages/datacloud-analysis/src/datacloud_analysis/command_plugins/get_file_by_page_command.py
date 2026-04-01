@@ -5,13 +5,14 @@ from __future__ import annotations
 import csv
 import itertools
 import json
-import os
+import re
 from pathlib import Path
 from typing import Any
-# '/private/var/folders/04/x14p6sgj3sv6y1fsyd1np48c0000gn/T/datacloud/exports/04a9a9aa-ab84-40eb-a904-bae7baa98de4.csv'
-# _EXPORTS_DIR = Path("/private/tmp/datacloud/exports")
-_EXPORTS_DIR = Path("/private/var/folders/04/x14p6sgj3sv6y1fsyd1np48c0000gn/T/datacloud/exports")
 
+_UUID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
 
 
 def handle_get_file_by_page_command(
@@ -62,25 +63,43 @@ def _build_6001_for_get_file_by_page(
     if not file_id:
         return _make_6001_error("fileId 不能为空", page=page, page_size=page_size)
 
-    csv_path = _EXPORTS_DIR / f"{file_id}.csv"
-    meta_path = _EXPORTS_DIR / f"{file_id}_meta.json"
+    if not workspace_dir:
+        return _make_6001_error("workspace_dir 不能为空", page=page, page_size=page_size)
 
-    if not csv_path.exists():
-        return _make_6001_error(f"CSV 文件不存在: {csv_path}", page=page, page_size=page_size)
+    try:
+        file_path, meta_path = _resolve_file_and_meta_paths(
+            workspace_dir=workspace_dir,
+            file_id=file_id,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _make_6001_error(str(exc), page=page, page_size=page_size)
 
     try:
         meta_info = _read_meta_file(meta_path)
-        records, total = _read_csv_page(csv_path, page=page, page_size=page_size)
+        if file_path.suffix.lower() == ".csv":
+            records, total = _read_csv_page(file_path, page=page, page_size=page_size)
+        else:
+            file_meta, records, total, _ = _read_file_page(
+                file_path=file_path,
+                page=page,
+                page_size=page_size,
+            )
+            if not meta_info:
+                meta_info = file_meta
         return {
+            "code": 0,
+            "message": "success",
+            "data": {
                 "records": records,
                 "meta": meta_info,
                 "pagination": _pagination_dict(page, page_size, total),
                 "file": {
                     "fileId": file_id,
-                    "csvPath": str(csv_path),
-                    "metaPath": str(meta_path),
+                    "filePath": str(file_path),
+                    "metaPath": str(meta_path) if meta_path.exists() else "",
                 },
-            }
+            },
+        }
     except Exception as exc:  # noqa: BLE001
         return _make_6001_error(str(exc), page=page, page_size=page_size)
 
@@ -118,15 +137,42 @@ def _pagination_dict(page: int, page_size: int, total: int) -> dict[str, Any]:
 
 def _make_6001_error(message: str, page: int = 1, page_size: int = 50) -> dict[str, Any]:
     return {
-        "code": 1,
-        "message": message,
-        "data": {
             "records": [],
             "meta": {},
             "pagination": _pagination_dict(page, page_size, 0),
             "file": {},
-        },
-    }
+        }
+
+
+def _resolve_file_and_meta_paths(*, workspace_dir: str, file_id: str) -> tuple[Path, Path]:
+    workspace_root = _shared_workspace_dir(Path(workspace_dir).resolve())
+    if not workspace_root.exists():
+        raise FileNotFoundError(f"workspace_dir 不存在: {workspace_root}")
+
+    if _UUID_PATTERN.fullmatch(file_id):
+        csv_path = workspace_root / "exports" / f"{file_id}.csv"
+        if csv_path.exists():
+            return csv_path, workspace_root / "exports" / f"{file_id}_meta.json"
+
+    rel_path = Path(file_id)
+    if rel_path.is_absolute() or ".." in rel_path.parts:
+        raise ValueError("Invalid fileId (directory traversal not allowed)")
+
+    direct_path = (workspace_root / rel_path).resolve()
+    if _is_within(workspace_root, direct_path) and direct_path.exists() and direct_path.is_file():
+        return direct_path, direct_path.with_name(f"{direct_path.stem}_meta.json")
+
+    matches = [
+        path.resolve()
+        for path in workspace_root.rglob(rel_path.name)
+        if path.is_file() and _is_within(workspace_root, path.resolve())
+    ]
+    if len(matches) == 1:
+        match = matches[0]
+        return match, match.with_name(f"{match.stem}_meta.json")
+    if len(matches) > 1:
+        raise ValueError(f"workspace_dir 下存在多个同名文件，请使用相对路径: {file_id}")
+    raise FileNotFoundError(f"File not found in workspace_dir: {file_id}")
 
 
 def _is_within(base: Path, candidate: Path) -> bool:
@@ -137,24 +183,12 @@ def _is_within(base: Path, candidate: Path) -> bool:
         return False
 
 
-def _resolve_workspace_file(session_id: str, file_id: str, workspace_dir: str | None) -> Path:
-    rel_path = Path(file_id)
-    if rel_path.is_absolute() or ".." in rel_path.parts:
-        raise ValueError("Invalid fileId (directory traversal not allowed)")
-
-    root = Path(workspace_dir or os.getenv("DATACLOUD_GATEWAY_WORKSPACE_DIR", "/tmp/datacloud")).resolve()
-    session_root = (root / session_id).resolve()
-
-    candidate = (session_root / rel_path).resolve()
-    if _is_within(session_root, candidate) and candidate.exists():
-        return candidate
-
-    fallback = (root / rel_path).resolve()
-    if not _is_within(root, fallback):
-        raise ValueError("Invalid fileId (outside workspace)")
-    if not fallback.exists():
-        raise FileNotFoundError(f"File not found: {file_id}")
-    return fallback
+def _shared_workspace_dir(workspace_dir: Path) -> Path:
+    if workspace_dir.name in {"private", "public"}:
+        return workspace_dir
+    if workspace_dir.parent.name in {"private", "public"}:
+        return workspace_dir.parent
+    return workspace_dir
 
 
 def _read_file_page(
