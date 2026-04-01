@@ -1,4 +1,4 @@
-﻿"""Knowledge enhancement node for the 5-node main pipeline."""
+"""Knowledge enhancement node for the 5-node main pipeline."""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ import logging
 from difflib import SequenceMatcher
 from typing import Any, Iterable
 
+from by_framework import EventType, StreamChunkEvent
+from by_framework.core.protocol.content_type import SseReasonMessageType
 from datacloud_analysis.orchestration.state import AgentState
 from datacloud_analysis.tools.knowledge import search_knowledge
 
@@ -158,6 +160,40 @@ def _build_confirmed_knowledge_summaries(
     return summaries
 
 
+def _build_confirmed_terms(
+    payload: dict[str, Any] | None,
+    term_hints: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    match_by_id: dict[str, dict[str, Any]] = {}
+    if isinstance(payload, dict):
+        for row in payload.get("term_matches", []) or []:
+            if not isinstance(row, dict):
+                continue
+            term_id = str(row.get("term_id", "")).strip()
+            if term_id:
+                match_by_id[term_id] = row
+
+    confirmed_terms: list[dict[str, Any]] = []
+    for hint in term_hints:
+        term_id = str(hint.get("term_id", "")).strip()
+        match = match_by_id.get(term_id, {})
+        mention = str(hint.get("mention") or match.get("term_name") or "").strip()
+        term_name = str(hint.get("normalized_term") or match.get("normalized_term") or mention).strip()
+        if not mention and not term_name:
+            continue
+        confirmed_terms.append(
+            {
+                "mention": mention or term_name,
+                "term_name": term_name or mention,
+                "term_id": term_id,
+                "term_type_code": str(match.get("term_type_code") or match.get("term_type") or ""),
+                "confidence": float(hint.get("confidence", 0.0) or 0.0),
+                "source": str(hint.get("source", "knowledge_match")),
+            }
+        )
+    return confirmed_terms
+
+
 def _compose_enriched_query(
     user_query: str,
     knowledge_summaries: list[dict[str, Any]],
@@ -228,6 +264,70 @@ def _log_thinking(
     )
 
 
+def _format_ambiguous_terms_notice(ambiguities: list[dict[str, Any]]) -> str:
+    if not ambiguities:
+        return "存在歧义的术语：无"
+    lines: list[str] = []
+    for entry in ambiguities:
+        mention = str(entry.get("mention") or entry.get("term") or "").strip() or "未命名术语"
+        candidates_raw = entry.get("candidates") or []
+        candidate_names: list[str] = []
+        if isinstance(candidates_raw, list):
+            for candidate in candidates_raw[:5]:
+                if not isinstance(candidate, dict):
+                    continue
+                name = str(candidate.get("term_name") or candidate.get("name") or "").strip()
+                if name:
+                    candidate_names.append(name)
+        candidate_text = "、".join(candidate_names) if candidate_names else "无候选"
+        lines.append(f"存在歧义的术语：{mention}，【候选集】{candidate_text}")
+    return "\n".join(lines)
+
+
+def _format_confirmed_terms_notice(summaries: list[dict[str, Any]]) -> str:
+    if not summaries:
+        return "已确权的术语：无"
+    lines = ["已确权的术语："]
+    for item in summaries:
+        term_name = str(item.get("term_name") or "").strip() or "未命名术语"
+        summary = str(item.get("summary") or "").strip()
+        if summary:
+            lines.append(f"- {term_name}：{summary}")
+        else:
+            lines.append(f"- {term_name}")
+    return "\n".join(lines)
+
+
+def _format_enriched_query_notice(user_query: str, enriched_query: str) -> str:
+    return f"原始问题：\n{user_query}\n\n改写后的问题：\n{enriched_query}"
+
+
+async def _emit_thinking_logs(
+    *,
+    gateway_context: Any,
+    user_query: str,
+    summaries: list[dict[str, Any]],
+    ambiguities: list[dict[str, Any]],
+    enriched_query: str,
+) -> None:
+    if gateway_context is None:
+        return
+    chunks = [
+        _format_ambiguous_terms_notice(ambiguities),
+        _format_confirmed_terms_notice(summaries),
+        _format_enriched_query_notice(user_query, enriched_query),
+    ]
+    for content in chunks:
+        try:
+            await gateway_context.emit_chunk(
+                StreamChunkEvent(content=content),
+                event_type=EventType.REASONING_LOG_DELTA.value,
+                content_type=SseReasonMessageType.think_text.value,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("knowledge_enhance_node: failed to emit thinking chunk: %s", exc)
+
+
 def _is_duplicate_of_summary(text: str, summaries: list[str]) -> bool:
     for summary in summaries:
         if not summary:
@@ -285,7 +385,6 @@ async def knowledge_enhance_node(
     gateway_context: Any = None,
 ) -> dict[str, Any]:
     """Build structured enhancement artifacts for downstream planning."""
-    _ = gateway_context
     user_query = _last_user_text(list(state.get("messages", [])))
     if not user_query.strip():
         return {
@@ -293,6 +392,7 @@ async def knowledge_enhance_node(
             "enriched_query": "",
             "enriched_query_source": "empty_query",
             "enriched_query_confidence": 0.0,
+            "confirmed_terms": [],
             "term_hints": [],
             "knowledge_snippets": [],
             "knowledge_payload": {},
@@ -308,6 +408,7 @@ async def knowledge_enhance_node(
 
     confidence_threshold = _term_hint_confidence_threshold(state)
     term_hints = _extract_term_hints(payload, confidence_threshold=confidence_threshold)
+    confirmed_terms = _build_confirmed_terms(payload, term_hints)
     knowledge_summaries = _build_confirmed_knowledge_summaries(payload, term_hints)
     enriched_query, enriched_query_source, enriched_query_confidence = _compose_enriched_query(
         user_query,
@@ -322,12 +423,20 @@ async def knowledge_enhance_node(
         enriched_query=enriched_query,
         enriched_source=enriched_query_source,
     )
+    await _emit_thinking_logs(
+        gateway_context=gateway_context,
+        user_query=user_query,
+        summaries=knowledge_summaries,
+        ambiguities=ambiguities,
+        enriched_query=enriched_query,
+    )
 
     return {
         "user_query": user_query,
         "enriched_query": enriched_query,
         "enriched_query_source": enriched_query_source,
         "enriched_query_confidence": enriched_query_confidence,
+        "confirmed_terms": confirmed_terms,
         "term_hints": term_hints,
         "knowledge_snippets": knowledge_snippets,
         "knowledge_payload": payload,
