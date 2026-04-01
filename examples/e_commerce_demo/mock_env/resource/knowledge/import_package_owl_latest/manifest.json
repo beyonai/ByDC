@@ -18,13 +18,13 @@
       "type": "term_types",
       "file": "term_types/term_types.owl",
       "description": "术语类型定义",
-      "count": 13
+      "count": 16
     },
     {
       "type": "terms",
       "file": "terms/terms.owl",
       "description": "术语定义",
-      "count": 17941
+      "count": 62577
     },
     {
       "type": "relations",
@@ -42,7 +42,7 @@
       "type": "relations",
       "file": "relations/relation_attribute.owl",
       "description": "对象属性关系定义",
-      "count": 79
+      "count": 72
     },
     {
       "type": "relations",
@@ -54,7 +54,7 @@
       "type": "relations",
       "file": "relations/relation_term.owl",
       "description": "术语值关系定义",
-      "count": 17934
+      "count": 62570
     },
     {
       "type": "ontology",
@@ -88,27 +88,27 @@
     },
     {
       "type": "ontology",
-      "file": "ontology/objects/ads_manage_grid_analysis/ads_manage_grid_analysis_object.owl",
-      "description": "管理网格综合分析表对象定义",
-      "count": 25
-    },
-    {
-      "type": "ontology",
-      "file": "ontology/objects/ads_manage_grid_analysis/ads_manage_grid_analysis_mapping.owl",
-      "description": "管理网格综合分析表对象映射",
-      "count": 25
-    },
-    {
-      "type": "ontology",
       "file": "ontology/objects/ads_grid_analysis/ads_grid_analysis_object.owl",
       "description": "物理网格综合分析表对象定义",
-      "count": 27
+      "count": 23
     },
     {
       "type": "ontology",
       "file": "ontology/objects/ads_grid_analysis/ads_grid_analysis_mapping.owl",
       "description": "物理网格综合分析表对象映射",
-      "count": 27
+      "count": 23
+    },
+    {
+      "type": "ontology",
+      "file": "ontology/objects/ads_manage_grid_analysis/ads_manage_grid_analysis_object.owl",
+      "description": "管理网格综合分析表对象定义",
+      "count": 22
+    },
+    {
+      "type": "ontology",
+      "file": "ontology/objects/ads_manage_grid_analysis/ads_manage_grid_analysis_mapping.owl",
+      "description": "管理网格综合分析表对象映射",
+      "count": 22
     }
   ]
 }
