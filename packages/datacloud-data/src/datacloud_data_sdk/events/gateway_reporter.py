@@ -14,13 +14,10 @@ logger = logging.getLogger(__name__)
 
 # EventType.REASONING_LOG_DELTA.value
 _EVENT_REASONING_LOG_DELTA = "reasoningLogDelta"
+# SseReasonMessageType.think_title.value
+_CONTENT_THINK_TITLE = "3003"
 # SseReasonMessageType.think_text.value
 _CONTENT_THINK_TEXT = "1002"
-
-
-def _format_reasoning_heading(title: object) -> str:
-    text = str(title).strip()
-    return f"## {text}\n" if text else ""
 
 
 class GatewayProgressReporter:
@@ -83,9 +80,16 @@ class GatewayProgressReporter:
     # ------------------------------------------------------------------
 
     async def _emit(self, title: str, text: str) -> None:
-        """将标题与正文合并为单条 think_text 事件。"""
+        """推送 think_title + think_text 两条事件。"""
         try:
-            text = f"{_format_reasoning_heading(title)}{str(text).rstrip()}\n"
+            # chunk = _make_chunk(title)
+            # await self._ctx.emit_chunk(
+            #     chunk,
+            #     event_type=_EVENT_REASONING_LOG_DELTA,
+            #     content_type=_CONTENT_THINK_TITLE,
+            # )
+
+            text = f"【{title}】\n{text} \n\n"
             chunk = _make_chunk(text)
             await self._ctx.emit_chunk(
                 chunk,
