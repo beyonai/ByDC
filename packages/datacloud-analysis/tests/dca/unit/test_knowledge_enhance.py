@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any, cast
@@ -106,3 +106,51 @@ async def test_knowledge_enhance_fallback_when_no_knowledge(
 
     assert out["enriched_query"] == "查询一下"
     assert out["enriched_query_source"] == "fallback_user_query"
+
+
+@pytest.mark.asyncio
+async def test_knowledge_enhance_emits_non_blocking_thinking_logs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    emitted: list[str] = []
+
+    class _GatewayContext:
+        async def emit_chunk(self, event: Any, **_kwargs: Any) -> None:
+            emitted.append(str(getattr(event, "content", event)))
+
+    async def _fake_ainvoke(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "term_matches": [
+                {
+                    "term_name": "企业综合分析表",
+                    "normalized_term": "企业综合分析表",
+                    "term_id": "T1",
+                    "match_score": 0.95,
+                    "definition": "企业综合分析表用于分析企业经营情况和基础画像。",
+                }
+            ],
+            "fuzzy_term_matches": [
+                {
+                    "mention": "活跃用户",
+                    "candidates": [
+                        {"term_id": "A1", "term_name": "DAU", "term_type_code": "METRIC"},
+                        {"term_id": "A2", "term_name": "MAU", "term_type_code": "METRIC"},
+                    ],
+                }
+            ],
+            "term_subgraphs": [],
+        }
+
+    monkeypatch.setattr(
+        knowledge_enhance_module,
+        "search_knowledge",
+        SimpleNamespace(ainvoke=_fake_ainvoke),
+    )
+
+    state = cast(AgentState, {"messages": [HumanMessage(content="查询企业综合分析表和活跃用户")]})
+    out = await knowledge_enhance_node(state, gateway_context=_GatewayContext())
+
+    assert out["ambiguous_terms"][0]["mention"] == "活跃用户"
+    assert any("存在歧义的术语：活跃用户" in chunk for chunk in emitted)
+    assert any("已确权的术语：" in chunk and "企业综合分析表" in chunk for chunk in emitted)
+    assert any("改写后的问题：" in chunk and "补充知识：" in chunk for chunk in emitted)
