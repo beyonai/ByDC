@@ -37,7 +37,9 @@ def resolve_reasoning_model_spec(raw_model: str | None = None) -> ReasoningModel
     3. Strip known provider prefix and return provider separately.
     4. Keep unknown prefixes as-is (treat whole value as model).
     """
-    raw = (raw_model if raw_model is not None else os.getenv("DATACLOUD_LLM_REASONING_MODEL", "")).strip()
+    raw = (
+        raw_model if raw_model is not None else os.getenv("DATACLOUD_LLM_REASONING_MODEL", "")
+    ).strip()
     if not raw:
         raw = _DEFAULT_REASONING_MODEL
 
@@ -48,8 +50,9 @@ def resolve_reasoning_model_spec(raw_model: str | None = None) -> ReasoningModel
         prefix, suffix = raw.split(":", 1)
         prefix = prefix.strip()
         suffix = suffix.strip()
-        if prefix in _KNOWN_PROVIDERS and suffix:
-            provider = prefix
+        normalized_prefix = prefix.lower()
+        if normalized_prefix in _KNOWN_PROVIDERS and suffix:
+            provider = normalized_prefix
             model = suffix
             provider_prefixed = True
 
@@ -69,4 +72,3 @@ def resolve_reasoning_api_key() -> str | None:
 def resolve_reasoning_base_url() -> str | None:
     """Resolve base URL fallback chain for reasoning model requests."""
     return os.getenv("OPENAI_BASE_URL") or os.getenv("DATACLOUD_LLM_REASONING_API_BASE")
-
