@@ -1297,6 +1297,71 @@ async def execution_node(
             "invocation_dedup": invocation_dedup,
         }
 
+    # --- delegate_wait 恢复路径 ---
+    # 如果 resume_context 里有 delegate_wait_todo_id，说明是从 AGENT_DELEGATE_WAIT 中断恢复的。
+    # 此时直接在顶层调用 interrupt() 拿到子 agent 结果，注入到对应 todo 的 inputs，
+    # 避免 replay 时重新执行 call_agent。
+    resume_context = dict(state.get("resume_context") or {})
+    delegate_wait_todo_id_from_ctx = str(resume_context.get("delegate_wait_todo_id") or "")
+    if delegate_wait_todo_id_from_ctx:
+        wait_idx = next(
+            (i for i, t in enumerate(todos) if str(t.get("todo_id") or "") == delegate_wait_todo_id_from_ctx),
+            -1,
+        )
+        if wait_idx >= 0:
+            wait_todo = todos[wait_idx]
+            wait_active_tools = _compute_effective_tools(
+                wait_todo,
+                dynamic_tools=dynamic_tools,
+                available_capabilities=available_capabilities,
+                context_tags=context_tags,
+            )
+            wait_pending_capability = wait_active_tools[0] if wait_active_tools else ""
+            logger.info(
+                "execution_node: delegate_wait resume detected todo_id=%s",
+                delegate_wait_todo_id_from_ctx,
+            )
+            resume_value = interrupt(
+                {
+                    "reason_code": "AGENT_DELEGATE_WAIT",
+                    "prompt": "已委派子Agent，等待处理结果回传。",
+                    "todo_id": delegate_wait_todo_id_from_ctx,
+                    "todo_active_id": delegate_wait_todo_id_from_ctx,
+                    "pending_capability": wait_pending_capability,
+                    "interrupt_reason": "AGENT_DELEGATE_WAIT",
+                    "resume_payload_schema": {
+                        "description": "ResumeCommand.reply_data should contain delegated agent output.",
+                    },
+                }
+            )
+            # 恢复后：注入子 agent 结果，清除 delegate_wait_todo_id，重置为 pending
+            todos[wait_idx] = {
+                **wait_todo,
+                "status": "pending",
+                "inputs": {
+                    **dict(wait_todo.get("inputs") or {}),
+                    "__delegate_result__": resume_value,
+                },
+            }
+            resume_context.pop("delegate_wait_todo_id", None)
+            execution_trace = _append_trace(
+                execution_trace,
+                stage="agent_delegate",
+                status="resumed",
+                detail={"todo_id": delegate_wait_todo_id_from_ctx},
+            )
+            return {
+                "plan": _todo_plan_from_todos(todos),
+                "todos": todos,
+                "results": list(state.get("results") or []),
+                "todo_active_id": delegate_wait_todo_id_from_ctx,
+                "active_tools": wait_active_tools,
+                "execution_status": "execution",
+                "resume_context": {**resume_context, "delegate_wait_todo_id": ""},
+                "execution_trace": execution_trace,
+                "invocation_dedup": invocation_dedup,
+            }
+
     if not todos:
         return {
             "plan": [],
@@ -1385,6 +1450,9 @@ async def execution_node(
 
     blocked_in_batch = False
     appended_todos: list[dict[str, Any]] = []
+    # todo_id -> idx，用于 delegate_wait 恢复时定位
+    delegate_wait_todo_id: str = ""
+    delegate_wait_idx: int = -1
     for idx, (updated_todo, maybe_output, invocation_add, todo_trace, blocked) in zip(
         ready_indexes, batch_outputs, strict=False
     ):
@@ -1403,19 +1471,32 @@ async def execution_node(
                 invocation_dedup.append(text_id)
                 invocation_dedup_set.add(text_id)
         if maybe_output is not None:
+            # 检测 delegate_wait 标记：tool 返回了 __delegate_wait__ 而非真实结果
+            raw_output = maybe_output.get("output")
+            if isinstance(raw_output, dict) and raw_output.get("__delegate_wait__"):
+                delegate_wait_todo_id = str(maybe_output.get("task_id", ""))
+                delegate_wait_idx = idx
+                # 将 todo 标记为 waiting，不存入 results
+                todos[idx] = {**updated_todo, "status": "waiting"}
+                execution_trace = _append_trace(
+                    execution_trace,
+                    stage="agent_delegate",
+                    status="waiting",
+                    detail={"todo_id": delegate_wait_todo_id},
+                )
+                continue
             entry = await _store_result_entry(
                 todo_id=str(maybe_output.get("task_id", "")),
-                output=maybe_output.get("output"),
+                output=raw_output,
                 workspace_dir=state.get("workspace_dir"),
                 is_multi_task=multi_task,
             )
             results.append(entry)
-            todo_result_output = maybe_output.get("output")
             completed_todos_map[str(maybe_output.get("task_id") or "")] = {
-                "output": todo_result_output if isinstance(todo_result_output, dict) else {}
+                "output": raw_output if isinstance(raw_output, dict) else {}
             }
             append_items = _extract_appended_todos(
-                output=maybe_output.get("output"),
+                output=raw_output,
                 existing_todos=todos + appended_todos,
             )
             if append_items:
@@ -1437,6 +1518,51 @@ async def execution_node(
 
     if appended_todos:
         todos.extend(appended_todos)
+
+    # 处理 agent_delegate 中断：
+    # 不在此处直接 interrupt()，而是先把 delegate_wait_todo_id 写入 resume_context，
+    # 然后 return execution_status="execution" 触发下一轮 execution_node。
+    # 下一轮进入时，顶部的 delegate_wait 恢复路径会检测到 delegate_wait_todo_id 并调用 interrupt()。
+    # 这样 interrupt() 时 checkpoint 里已经有 delegate_wait_todo_id，恢复时不会重复执行 call_agent。
+    if delegate_wait_todo_id:
+        todo_md = _todo_md_with_status(todos)
+        todo_md_path = _persist_todo_md(
+            workspace_dir=state.get("workspace_dir"),
+            todo_md=todo_md,
+            existing_path=existing_todo_md_path,
+        )
+        wait_todo = todos[delegate_wait_idx]
+        wait_active_tools = _compute_effective_tools(
+            wait_todo,
+            dynamic_tools=dynamic_tools,
+            available_capabilities=available_capabilities,
+            context_tags=context_tags,
+        )
+        wait_pending_capability = wait_active_tools[0] if wait_active_tools else ""
+        logger.info(
+            "execution_node: agent_delegate detected todo_id=%s, saving to resume_context for next round",
+            delegate_wait_todo_id,
+        )
+        next_resume_context = _resume_context_after_round(
+            state=state,
+            config=config,
+            todo_active_id=delegate_wait_todo_id,
+            pending_capability=wait_pending_capability,
+        )
+        next_resume_context["delegate_wait_todo_id"] = delegate_wait_todo_id
+        return {
+            "plan": _todo_plan_from_todos(todos),
+            "todos": todos,
+            "results": results,
+            "todo_md": todo_md,
+            "todo_md_path": todo_md_path,
+            "todo_active_id": delegate_wait_todo_id,
+            "active_tools": wait_active_tools,
+            "execution_status": "execution",
+            "resume_context": next_resume_context,
+            "execution_trace": execution_trace,
+            "invocation_dedup": invocation_dedup,
+        }
 
     failed_ids = {
         str(todo.get("todo_id") or "")

@@ -13,7 +13,6 @@ import httpx
 from by_framework import AgentConfig, EventType, Plugin, PluginManifest, StreamChunkEvent
 from by_framework.core.protocol.content_type import SseMessageType
 from dotenv import load_dotenv
-
 try:
     from datacloud_data_sdk.ontology.loader import OntologyLoader
     from datacloud_data_sdk.ontology.term_loader import TermLoader
@@ -597,7 +596,12 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
     ) -> Any:
         """Build a tool that delegates to another agent via context.call_agent."""
 
-        async def _tool(content: str | None = None, _context: Any = None, **params: Any) -> str:
+        async def _tool(content: str | None = None, _context: Any = None, **params: Any) -> Any:
+            # 恢复路径：execution_node 将子 agent 结果注入 inputs["__delegate_result__"]
+            delegate_result = params.get("__delegate_result__")
+            if delegate_result is not None:
+                return delegate_result
+
             resolved_content = str(
                 content
                 or params.get("content")
@@ -616,11 +620,89 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
                 )
                 return f"Error: missing runtime context for delegated agent {agent_name}."
 
+            raw_delegate_policy = params.get("delegate_policy")
+            delegate_policy = (
+                dict(raw_delegate_policy) if isinstance(raw_delegate_policy, dict) else {}
+            )
+            delegate_mode = str(delegate_policy.get("mode") or "").strip().lower()
+            wait_for_reply = bool(delegate_policy.get("wait_for_reply"))
+            sync_wait = not delegate_policy or delegate_mode == "sync" or wait_for_reply
+
+            raw_payload = params.get("payload")
+            delegate_payload = dict(raw_payload) if isinstance(raw_payload, dict) else {}
+            raw_metadata = params.get("metadata")
+            delegate_metadata = dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
+
+            parent_session_id = str(getattr(_context, "session_id", "") or "").strip()
+            current_command = getattr(_context, "current_command", None)
+            current_extra_payload = (
+                getattr(current_command, "extra_payload", {}) if current_command is not None else {}
+            )
+            current_header = getattr(current_command, "header", None)
+            current_header_metadata = (
+                getattr(current_header, "metadata", {}) if current_header is not None else {}
+            )
+            parent_agent_id = str(
+                current_extra_payload.get("agent_id")
+                or current_header_metadata.get("agent_id")
+                or ""
+            ).strip()
+            parent_agent_name = str(
+                current_extra_payload.get("agent_name")
+                or current_header_metadata.get("agent_name")
+                or ""
+            ).strip()
+            parent_conf_hash = str(current_header_metadata.get("conf_hash") or "").strip()
+            parent_runtime_agent_type = str(getattr(_context, "current_agent_id", "") or "").strip()
+            parent_resume_target = {
+                "session_id": parent_session_id,
+                "agent_id": parent_agent_id,
+                "resume_via": "ResumeCommand.reply_data",
+                "interrupt_reason": "AGENT_DELEGATE_WAIT",
+            }
+            delegate_metadata.setdefault("parent_resume_target", parent_resume_target)
+            if parent_agent_id:
+                delegate_metadata.setdefault("resume_agent_id", parent_agent_id)
+            if parent_agent_name:
+                delegate_metadata.setdefault("resume_agent_name", parent_agent_name)
+            if parent_runtime_agent_type:
+                delegate_metadata.setdefault("resume_agent_type", parent_runtime_agent_type)
+            if parent_conf_hash:
+                delegate_metadata.setdefault("resume_conf_hash", parent_conf_hash)
+            # 将父 agent 的 thread_id 传给子 agent，子 agent 回调时带回，
+            # 确保 ResumeCommand 能找到正确的 LangGraph checkpoint
+            parent_thread_id = str(getattr(_context, "_langgraph_thread_id", "") or "")
+            if parent_thread_id:
+                delegate_metadata.setdefault("resume_thread_id", parent_thread_id)
+
+            call_agent_kwargs: dict[str, Any] = {
+                "target_agent_type": target_agent_type,
+                "content": resolved_content,
+                # wait_for_reply=True 只负责注册回调路由；父图是否继续由 interrupt 控制。
+                "wait_for_reply": True,
+            }
+            if delegate_payload:
+                call_agent_kwargs["payload"] = delegate_payload
+            if delegate_metadata:
+                call_agent_kwargs["metadata"] = delegate_metadata
+
             logger.info(
-                "[AgentDelegate] delegating: target=%s content=%.100s",
+                "[AgentDelegate] delegating: target=%s sync_wait=%s content=%.100s",
                 target_agent_type,
+                sync_wait,
                 resolved_content,
             )
+
+            if sync_wait:
+                await _context.call_agent(**call_agent_kwargs)
+                # 不在 tool 内部 interrupt，返回标记让 execution_node 在顶层统一处理
+                return {
+                    "__delegate_wait__": True,
+                    "target_agent_type": target_agent_type,
+                    "target_agent_name": agent_name,
+                    "delegate_content": resolved_content,
+                }
+
             await _context.emit_chunk(
                 StreamChunkEvent(
                     content=f"Delegating request to agent [{agent_name}]:\n\n{resolved_content}"
@@ -628,11 +710,7 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
                 event_type=EventType.ANSWER_DELTA.value,
                 content_type=SseMessageType.text.value,
             )
-            await _context.call_agent(
-                target_agent_type=target_agent_type,
-                content=resolved_content,
-                wait_for_reply=False,
-            )
+            await _context.call_agent(**call_agent_kwargs)
             return f"Request has been delegated to [{agent_name}]."
 
         _tool.__doc__ = (
