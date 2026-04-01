@@ -595,6 +595,102 @@ async def test_execution_builds_todos_from_planned_tasks(monkeypatch: pytest.Mon
 
 
 @pytest.mark.asyncio
+async def test_execution_delegate_resume_preserves_injected_delegate_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, Any]] = []
+
+    async def _fake_execute(
+        task: dict[str, Any], state: AgentState, runtime: ToolRuntime
+    ) -> tuple[dict[str, Any], Any]:
+        _ = state, runtime
+        calls.append(dict(task))
+        delegate_result = (task.get("params") or {}).get("__delegate_result__")
+        if delegate_result is None:
+            return {**task, "status": "done"}, {"__delegate_wait__": True}
+        return {**task, "status": "done"}, delegate_result
+
+    monkeypatch.setattr(execution_module, "execute_next_task", _fake_execute)
+    monkeypatch.setattr(
+        execution_module,
+        "interrupt",
+        lambda _payload: {"content": "这是子智能体恢复后的结果"},
+    )
+
+    state = cast(
+        AgentState,
+        {
+            "planned_tasks": [
+                {
+                    "todo_id": "t_delegate",
+                    "goal": "delegate task",
+                    "required_tools": ["cap_tool"],
+                    "depends_on": [],
+                    "inputs_from": {},
+                    "required_inputs": {},
+                }
+            ],
+            "task_queue": ["t_delegate"],
+            "todos": [
+                {
+                    "todo_id": "t_delegate",
+                    "goal": "delegate task",
+                    "required_tools": ["cap_tool"],
+                    "required_capabilities": [
+                        {"capability_id": "cap_tool", "capability_type": "tool"}
+                    ],
+                    "blocked_tools": [],
+                    "blocked_capabilities": [],
+                    "inputs": {},
+                    "depends_on": [],
+                    "term_context": [],
+                    "acceptance_criteria": "delegate completed",
+                    "status": "pending",
+                }
+            ],
+            "results": [],
+            "results_list": [],
+            "results_map": {},
+            "invocation_dedup": [],
+            "query_mode": "analysis",
+        },
+    )
+
+    out1 = await execution_node(
+        state,
+        {"configurable": {}},
+        default_tools={"cap_tool": object()},
+    )
+    assert out1["execution_status"] == "execution"
+    assert out1["resume_context"]["delegate_wait_todo_id"] == "t_delegate"
+
+    state2 = cast(AgentState, {**state, **out1})
+    out2 = await execution_node(
+        state2,
+        {"configurable": {}},
+        default_tools={"cap_tool": object()},
+    )
+    assert out2["execution_status"] == "execution"
+    assert out2["todos"][0]["inputs"]["__delegate_result__"] == {
+        "content": "这是子智能体恢复后的结果"
+    }
+
+    state3 = cast(AgentState, {**state2, **out2})
+    out3 = await execution_node(
+        state3,
+        {"configurable": {}},
+        default_tools={"cap_tool": object()},
+    )
+
+    assert out3["execution_status"] == "done"
+    assert out3["results"][0]["data"] == {"content": "这是子智能体恢复后的结果"}
+    assert len(calls) == 2
+    assert calls[-1]["params"]["__delegate_result__"] == {
+        "content": "这是子智能体恢复后的结果"
+    }
+
+
+@pytest.mark.asyncio
 async def test_execution_blocks_missing_required_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
     state = cast(
         AgentState,
@@ -767,4 +863,3 @@ async def test_execution_logs_ambiguous_terms_without_interrupt(
     assert out["clarify_needed"] is False
     assert any("活跃用户" in chunk for chunk in emitted)
     assert any("DAU" in chunk for chunk in emitted)
-
