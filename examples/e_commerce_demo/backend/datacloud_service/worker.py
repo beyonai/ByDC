@@ -111,6 +111,11 @@ _TOOL_DISPLAY = {
 }
 
 
+def _format_reasoning_heading(title: object) -> str:
+    text = str(title).strip()
+    return f"## {text}\n" if text else ""
+
+
 def _tool_display(tool_name: str) -> tuple[str, str]:
     """Return (start_desc, end_desc) pair for a given tool name."""
 
@@ -463,11 +468,11 @@ class DataCloudWorker(GatewayWorker):
                     status=GatewayAgentState.COMPLETED.value,
                     reply_data=process_result,
                 )
-                await context.emit_state(
-                    StateChangeEvent(state=f"{GatewayAgentState.QUEUED.value}: {source_agent_type}")
-                )
-            else:
-                await context.emit_state(StateChangeEvent(state=GatewayAgentState.COMPLETED.value))
+            #     await context.emit_state(
+            #         StateChangeEvent(state=f"{GatewayAgentState.QUEUED.value}: {source_agent_type}")
+            #     )
+            # else:
+            #     await context.emit_state(StateChangeEvent(state=GatewayAgentState.COMPLETED.value))
             logger.info(
                 "[%s] Task completed successfully with status: %s",
                 self.worker_id,
@@ -889,7 +894,7 @@ class DataCloudWorker(GatewayWorker):
 
         # 初始提示：先发阶段标题，再发阶段说明文本。
         await context.emit_chunk(
-            StreamChunkEvent(content=_NODE_PHASE_TITLE["knowledge_enhance"]),
+            StreamChunkEvent(content=_format_reasoning_heading(_NODE_PHASE_TITLE["knowledge_enhance"])),
             event_type=EventType.REASONING_LOG_START.value,
             content_type=SseReasonMessageType.think_text.value,
         )
@@ -1089,7 +1094,7 @@ class DataCloudWorker(GatewayWorker):
                     if phase_title and phase_title not in phase_emitted:
                         phase_emitted.add(phase_title)
                         await _emit(
-                            content=phase_title,
+                            content=_format_reasoning_heading(phase_title),
                             event_type=EventType.REASONING_LOG_START.value,
                             content_type=SseReasonMessageType.think_text.value,
                         )
@@ -1099,7 +1104,7 @@ class DataCloudWorker(GatewayWorker):
                     if node_name == "planning" and _PLANNING_PHASE_TITLE not in phase_emitted:
                         phase_emitted.add(_PLANNING_PHASE_TITLE)
                         await _emit(
-                            content=_PLANNING_PHASE_TITLE,
+                            content=_format_reasoning_heading(_PLANNING_PHASE_TITLE),
                             event_type=EventType.REASONING_LOG_START.value,
                             content_type=SseReasonMessageType.think_text.value,
                         )
@@ -1134,7 +1139,7 @@ class DataCloudWorker(GatewayWorker):
                     node_name = str(metadata.get("langgraph_node") or "").strip()
                     desc = _NODE_THINKING_DESC.get(node_name, _DEFAULT_THINKING_DESC)
                     await _emit(
-                        content=desc,
+                        content=_format_reasoning_heading(desc),
                         event_type=EventType.REASONING_LOG_START.value,
                         content_type=SseReasonMessageType.think_text.value,
                     )
