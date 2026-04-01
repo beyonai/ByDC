@@ -60,7 +60,7 @@ def _extract_term_hints(
 ) -> list[dict[str, Any]]:
     if not isinstance(payload, dict):
         return []
-    hints: list[dict[str, Any]] = []
+    best_by_term: dict[str, dict[str, Any]] = {}
     for row in payload.get("term_matches", []) or []:
         if not isinstance(row, dict):
             continue
@@ -69,18 +69,26 @@ def _extract_term_hints(
             continue
         term_name = str(row.get("term_name", ""))
         normalized_term = str(row.get("normalized_term", term_name))
-        hints.append(
-            {
-                "mention": term_name,
-                "normalized_term": normalized_term,
-                "term_id": str(row.get("term_id", "")),
-                "confidence": confidence,
-                "source": "knowledge_match",
-                "semantic_type": "",
-                "note": "",
-            }
-        )
-    return hints
+        term_key = _normalize_term_text(normalized_term or term_name)
+        if not term_key:
+            continue
+        current = {
+            "mention": term_name,
+            "normalized_term": term_key,
+            "term_id": str(row.get("term_id", "")),
+            "confidence": confidence,
+            "source": "knowledge_match",
+            "semantic_type": "",
+            "note": "",
+        }
+        previous = best_by_term.get(term_key)
+        if previous is None or float(current["confidence"]) > float(previous.get("confidence", 0.0)):
+            best_by_term[term_key] = current
+    return sorted(
+        best_by_term.values(),
+        key=lambda item: float(item.get("confidence", 0.0) or 0.0),
+        reverse=True,
+    )
 
 
 def _iterate_tree_nodes(tree: Any) -> Iterable[dict[str, Any]]:
@@ -259,13 +267,19 @@ def _build_confirmed_terms(
                 match_by_id[term_id] = row
 
     confirmed_terms: list[dict[str, Any]] = []
+    seen: set[str] = set()
     for hint in term_hints:
         term_id = str(hint.get("term_id", "")).strip()
         match = match_by_id.get(term_id, {})
         mention = str(hint.get("mention") or match.get("term_name") or "").strip()
-        term_name = str(hint.get("normalized_term") or match.get("normalized_term") or mention).strip()
+        term_name = _normalize_term_text(hint.get("normalized_term") or match.get("normalized_term") or mention)
+        mention = _normalize_term_text(mention) or term_name
         if not mention and not term_name:
             continue
+        dedup_key = term_name or mention
+        if dedup_key in seen:
+            continue
+        seen.add(dedup_key)
         confirmed_terms.append(
             {
                 "mention": mention or term_name,
@@ -277,6 +291,24 @@ def _build_confirmed_terms(
             }
         )
     return confirmed_terms
+
+
+def _filter_confirmed_terms_by_recognized(
+    confirmed_terms: list[dict[str, Any]],
+    recognized_terms: list[str],
+) -> list[dict[str, Any]]:
+    recognized_keys = {_term_key(item) for item in recognized_terms if _term_key(item)}
+    if not recognized_keys:
+        return []
+    filtered: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in confirmed_terms:
+        key = _term_key(str(item.get("term_name") or item.get("mention") or ""))
+        if not key or key not in recognized_keys or key in seen:
+            continue
+        seen.add(key)
+        filtered.append(item)
+    return filtered
 
 
 def _compose_enriched_query(
@@ -768,6 +800,7 @@ async def knowledge_enhance_node(
     term_hints = _extract_term_hints(payload, confidence_threshold=confidence_threshold)
     recognized_terms = _extract_recognized_terms(payload)
     confirmed_terms = _build_confirmed_terms(payload, term_hints)
+    confirmed_terms = _filter_confirmed_terms_by_recognized(confirmed_terms, recognized_terms)
     knowledge_summaries = _build_confirmed_knowledge_summaries(payload, term_hints)
     enriched_query, enriched_query_source, enriched_query_confidence = _compose_enriched_query(
         user_query,
