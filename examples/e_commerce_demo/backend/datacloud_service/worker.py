@@ -39,7 +39,7 @@ from by_framework.core.extensions import PluginRegistry
 from by_framework.core.protocol.agent_state import AgentState as GatewayAgentState
 from by_framework.core.protocol.agent_state import AgentStateLiteral, is_terminal_state
 from by_framework.core.protocol.commands import AskAgentCommand
-from by_framework.core.protocol.content_type import SseMessageType, SseReasonMessageType
+from by_framework.core.protocol.content_type import SseMessageType
 from by_framework.core.protocol.events import StateChangeEvent
 from datacloud_analysis.agent import create_agent
 from datacloud_analysis.command_plugins import CommandPluginManager
@@ -84,66 +84,13 @@ _ANALYSIS_HINT_TOKENS = {
     "analy",
 }
 
-_NODE_THINKING_DESC: dict[str, str] = {
-    "knowledge_enhance": "正在理解问题并补充上下文...\n\n",
-    "planning": "正在生成任务计划...\n\n",
-    "execution": "正在执行任务...\n\n",
-    "end": "正在整理结果...",
-}
-_DEFAULT_THINKING_DESC = "正在处理，请稍候...\n\n"
-
-_NODE_PHASE_TITLE: dict[str, str] = {
-    "knowledge_enhance": "问题理解",
-    "execution": "任务执行",
-    "end": "结果生成",
-}
-
 _PLANNING_PHASE_TITLE = "任务生成"
 
 _HEARTBEAT_INTERVAL: float = 3.0
 
 
-_TOOL_DISPLAY = {
-    "search_knowledge": ("正在检索业务知识库", "业务知识检索完成"),
-    "recall_memory": ("正在回溯相关经验", "相关经验回溯完成"),
-    "sbx_run_code": ("正在执行数据分析", "数据分析执行完成"),
-    "sbx_read_file": ("正在读取分析文件", "分析文件读取完成"),
-    "sbx_write_file": ("正在保存分析结果", "分析结果保存完成"),
-    "build_skill": ("正在构建分析技能", "分析技能构建完成"),
-    "render_report": ("正在生成分析报告", "分析报告生成完成"),
-    "choose_capability": ("正在规划下一步操作", ""),
-}
-
-
-def _tool_display(tool_name: str) -> tuple[str, str]:
-    """Return (start_desc, end_desc) pair for a given tool name."""
-
-    return _TOOL_DISPLAY.get(tool_name, ("正在处理...", "处理完成"))
-
-
-def _extract_tool_detail(tool_name: str, tool_input: Any) -> str:
-    """Extract user-meaningful detail from tool parameters."""
-
-    if not isinstance(tool_input, dict):
-        return ""
-    if tool_name in {"sbx_read_file", "sbx_write_file"}:
-        path_value = tool_input.get("file_path") or tool_input.get("path") or ""
-        if path_value:
-            return os.path.basename(str(path_value))
-        return ""
-    if tool_name in {"search_knowledge", "recall_memory"}:
-        query_value = str(tool_input.get("query") or "").strip()
-        return query_value[:30]
-    return ""
-
-
 def _now_monotonic() -> float:
     return asyncio.get_running_loop().time()
-
-
-def _touch_emit_time(last_emit_time_ref: list[float]) -> None:
-    last_emit_time_ref[0] = _now_monotonic()
-
 
 async def _heartbeat_loop(
     context: AgentContext,
@@ -1097,30 +1044,11 @@ class DataCloudWorker(GatewayWorker):
         is_agent_delegate = False
         stream_event_count = 0
         phase_emitted: set[str] = set()
-        if not isinstance(graph_input, Command):
-            phase_emitted.add(_NODE_PHASE_TITLE["knowledge_enhance"])
         last_emit_time_ref: list[float] = [_now_monotonic()]
         heartbeat_stop = asyncio.Event()
         heartbeat_task = asyncio.create_task(
             _heartbeat_loop(context, heartbeat_stop, last_emit_time_ref)
         )
-
-        async def _emit(
-            *,
-            content: str,
-            event_type: str,
-            content_type: str,
-            metadata: dict[str, Any] | None = None,
-        ) -> None:
-            await context.emit_chunk(
-                StreamChunkEvent(
-                    content=coerce_stream_chunk_text(content),
-                    metadata=metadata or {},
-                ),
-                event_type=event_type,
-                content_type=content_type,
-            )
-            _touch_emit_time(last_emit_time_ref)
 
         try:
             logger.info(
@@ -1133,15 +1061,7 @@ class DataCloudWorker(GatewayWorker):
                 await context.check_cancelled()
                 kind: str = str(event["event"])
 
-                if kind == "on_chain_start":
-                    node_name = str(event.get("name") or "")
-                    phase_title = _NODE_PHASE_TITLE.get(node_name)
-                    if phase_title and phase_title not in phase_emitted:
-                        phase_emitted.add(phase_title)
-                        async with context.sub_step(phase_title + "\n\n"):
-                            pass
-
-                elif kind == "on_chat_model_end":
+                if kind == "on_chat_model_end":
                     node_name = str((event.get("metadata") or {}).get("langgraph_node") or "")
                     if node_name == "planning" and _PLANNING_PHASE_TITLE not in phase_emitted:
                         phase_emitted.add(_PLANNING_PHASE_TITLE)
@@ -1150,38 +1070,6 @@ class DataCloudWorker(GatewayWorker):
 
                 elif kind == "on_chain_end" and event.get("name") == "agent_delegate":
                     is_agent_delegate = True
-
-                elif kind == "on_tool_start":
-                    tool_name = str(event.get("name") or "unknown_tool")
-                    tool_input = (event.get("data") or {}).get("input", {})
-                    start_desc, _ = _tool_display(tool_name)
-                    detail = _extract_tool_detail(tool_name, tool_input)
-                    display_text = f"{start_desc}：{detail}" if detail else start_desc
-                    await _emit(
-                        content=display_text,
-                        event_type=EventType.TASK_CREATE.value,
-                        content_type=SseReasonMessageType.task_title.value,
-                    )
-
-                elif kind == "on_tool_end":
-                    tool_name = str(event.get("name") or "unknown_tool")
-                    _, end_desc = _tool_display(tool_name)
-                    if end_desc:
-                        await _emit(
-                            content=end_desc,
-                            event_type=EventType.STEP_COMPLETE.value,
-                            content_type=SseReasonMessageType.task_finished.value,
-                        )
-
-                # elif kind == "on_chat_model_start":
-                #     metadata = event.get("metadata") or {}
-                #     node_name = str(metadata.get("langgraph_node") or "").strip()
-                #     desc = _NODE_THINKING_DESC.get(node_name, _DEFAULT_THINKING_DESC)
-                #     await _emit(
-                #         content=desc,
-                #         event_type=EventType.REASONING_LOG_START.value,
-                #         content_type=SseReasonMessageType.think_text.value,
-                #     )
 
             logger.info(
                 "_stream_graph: astream_events end session=%s event_count=%d",
@@ -1279,21 +1167,25 @@ class DataCloudWorker(GatewayWorker):
                         },
                     )
                 )
-                await _emit(
-                    content="回答完成",
+                await context.emit_chunk(
+                    StreamChunkEvent(
+                        content="回答完成",
+                        metadata={"relatedResources": ["推荐问题11"]},
+                    ),
                     event_type=EventType.APP_STREAM_RESPONSE.value,
                     content_type=SseMessageType.text.value,
-                    metadata={"relatedResources": ["推荐问题11"]},
                 )
                 logger.info("_stream_graph: return session=%s status=waiting", context.session_id)
                 return {"status": "waiting"}
 
             if not is_agent_delegate:
-                await _emit(
-                    content="回答完成",
+                await context.emit_chunk(
+                    StreamChunkEvent(
+                        content="回答完成",
+                        metadata={"relatedResources": ["推荐问题11"]},
+                    ),
                     event_type=EventType.APP_STREAM_RESPONSE.value,
                     content_type=SseMessageType.text.value,
-                    metadata={"relatedResources": ["推荐问题11"]},
                 )
 
             await context.flush_to_history()

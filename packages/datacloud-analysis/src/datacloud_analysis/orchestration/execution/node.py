@@ -24,6 +24,8 @@ _DISABLE_ASK_USER_TOOL = os.environ.get("DATACLOUD_DISABLE_ASK_USER_TOOL", "").l
     "yes",
 )
 
+_EXECUTION_REASONING_TITLE = "任务执行"
+
 _BUILTIN_TOOLS: list[BaseTool] = [
     ask_user,
     read_file,
@@ -152,12 +154,16 @@ async def execution_node(
         max_rounds,
     )
 
+    gateway_context = (config.get("configurable") or {}).get("gateway_context")
+    if gateway_context is not None:
+        async with gateway_context.sub_step(_EXECUTION_REASONING_TITLE):
+            pass
     result = await run_react_loop(
         state=state,
         tools_list=tools_list,
         system_prompt=system_prompt,
         max_rounds=max_rounds,
-        gateway_context=(config.get("configurable") or {}).get("gateway_context"),
+        gateway_context=gateway_context,
     )
 
     return result

@@ -667,12 +667,50 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             if parent_thread_id:
                 delegate_metadata.setdefault("resume_thread_id", parent_thread_id)
 
+            delegate_message_id = ""
+            generate_message_id = getattr(_context, "generate_message_id", None)
+            if callable(generate_message_id):
+                try:
+                    delegate_message_id = str(generate_message_id() or "").strip()
+                except Exception:
+                    logger.debug(
+                        "[AgentDelegate] generate_message_id failed for target=%s",
+                        target_agent_type,
+                        exc_info=True,
+                    )
+
+            delegate_parent_message_id = ""
+            resolve_delegate_parent_message_id = getattr(
+                _context,
+                "_resolve_delegate_parent_message_id",
+                None,
+            )
+            if callable(resolve_delegate_parent_message_id):
+                try:
+                    delegate_parent_message_id = str(
+                        resolve_delegate_parent_message_id() or ""
+                    ).strip()
+                except Exception:
+                    logger.debug(
+                        "[AgentDelegate] resolve delegate parent message id failed for target=%s",
+                        target_agent_type,
+                        exc_info=True,
+                    )
+            if not delegate_parent_message_id:
+                delegate_parent_message_id = str(
+                    getattr(_context, "message_id", "") or ""
+                ).strip()
+
             call_agent_kwargs: dict[str, Any] = {
                 "target_agent_type": target_agent_type,
                 "content": resolved_content,
                 # wait_for_reply=True 只负责注册回调路由；父图是否继续由 interrupt 控制。
                 "wait_for_reply": True,
             }
+            if delegate_message_id:
+                call_agent_kwargs["message_id"] = delegate_message_id
+            if delegate_parent_message_id:
+                call_agent_kwargs["parent_message_id"] = delegate_parent_message_id
             if delegate_payload:
                 call_agent_kwargs["payload"] = delegate_payload
             if delegate_metadata:
