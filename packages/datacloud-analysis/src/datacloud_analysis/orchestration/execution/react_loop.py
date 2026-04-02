@@ -11,6 +11,8 @@ from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_too
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MAX_ROUNDS = 10
+_TOOL_MSG_MAX_LEN = 2000   # ToolMessage 内容最大字符数
+_TRIM_KEEP_ROUNDS = 6      # 滑动窗口：保留最近 N 轮 AI+Tool 消息对
 
 @tool("finish_react")
 async def finish_react(
@@ -81,6 +83,68 @@ def _build_llm(state: Any) -> Any:
     # 兜底
     return init_chat_model(model="gpt-4o", model_provider="openai", temperature=0.0)
 
+def _compress_tool_result(result: Any, tool_name: str) -> str:
+    """将工具返回值压缩为 ToolMessage 内容，避免大数据撑爆上下文。
+
+    策略：
+    - 含 _hint 的 dict（data_query 类）：直接使用 _hint，LLM 已获得足够决策信息
+    - 含 records+meta 的 data block：替换为行数摘要
+    - 其他：JSON 序列化后截断至 _TOOL_MSG_MAX_LEN 字符
+    """
+    if isinstance(result, dict):
+        # 优先使用 _hint（已由 tool_wrapper 注入）
+        hint = result.get("_hint")
+        if hint:
+            return str(hint)
+        # 识别 data_query data block（直接或嵌套在 data 键下）
+        data_block = result.get("data") if isinstance(result.get("data"), dict) else result
+        if isinstance(data_block, dict) and "records" in data_block and "meta" in data_block:
+            records = data_block.get("records") or []
+            meta = data_block.get("meta") or {}
+            meta_keys = list(meta.keys()) if isinstance(meta, dict) else []
+            file_block = data_block.get("file")
+            file_hint = ""
+            if isinstance(file_block, dict) and file_block.get("file_url"):
+                file_hint = f", file_url={file_block['file_url']}"
+            return (
+                f"[{tool_name} \u8fd4\u56de: {len(records)} \u6761 records"
+                f", meta={meta_keys}{file_hint}]"
+                f" \u8bf7\u7acb\u5373\u8c03\u7528 finish_react \u4f7f\u7528 result_type=query_result\u3002"
+            )
+    # 通用：序列化后截断
+    try:
+        text = json.dumps(result, ensure_ascii=False, default=str) if isinstance(result, (dict, list)) else str(result)
+    except Exception:
+        text = repr(result)
+    if len(text) > _TOOL_MSG_MAX_LEN:
+        return text[:_TOOL_MSG_MAX_LEN] + f"... [\u5df2\u622a\u65ad, \u539f\u957f {len(text)} \u5b57\u7b26]"
+    return text
+
+
+def _trim_messages_window(messages: list) -> list:
+    """滑动窗口裁剪：保留 SystemMessage + HumanMessage + 最近 _TRIM_KEEP_ROUNDS 轮。
+
+    只裁剪送给 LLM 的副本，原始 messages 列表不受影响。
+    """
+    head = []
+    tail = []
+    for i, m in enumerate(messages):
+        if isinstance(m, (SystemMessage, HumanMessage)):
+            head.append(m)
+        else:
+            tail = messages[i:]
+            break
+    if not tail:
+        return list(messages)
+    # 每轮 = 1 AIMessage + N ToolMessage，保留最近 _TRIM_KEEP_ROUNDS * 2 条（保守估计）
+    keep = _TRIM_KEEP_ROUNDS * 2
+    if len(tail) > keep:
+        trimmed_count = len(tail) - keep
+        tail = tail[-keep:]
+        logger.debug("[react_loop] trim_messages: dropped %d old messages, kept %d", trimmed_count, len(tail))
+    return head + tail
+
+
 async def run_react_loop(
     *,
     state: Any,
@@ -123,7 +187,7 @@ async def run_react_loop(
 
     for round_idx in range(max_rounds):
         logger.info("[react_loop] round=%d/%d", round_idx + 1, max_rounds)
-        ai_msg: AIMessage = await llm_with_tools.ainvoke(messages)
+        ai_msg: AIMessage = await llm_with_tools.ainvoke(_trim_messages_window(messages))
         messages.append(ai_msg)
 
         if not getattr(ai_msg, "tool_calls", None):
@@ -165,7 +229,7 @@ async def run_react_loop(
                 }
 
             messages.append(
-                ToolMessage(content=str(result) if result is not None else "", tool_call_id=tool_id)
+                ToolMessage(content=_compress_tool_result(result, tc["name"]), tool_call_id=tool_id)
             )
 
     # L3: 超出最大轮数
