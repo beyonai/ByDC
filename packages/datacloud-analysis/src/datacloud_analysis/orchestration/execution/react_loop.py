@@ -214,6 +214,21 @@ async def run_react_loop(
         if not getattr(ai_msg, "tool_calls", None):
             # L2: 无 tool_calls，直接文字结束
             logger.info("[react_loop] stop: no_tool_call at round=%d", round_idx + 1)
+            if _last_query_data is not None:
+                logger.info(
+                    "[react_loop] no_tool_call: force query_result with cached data (records=%d has_file=%s)",
+                    len(_last_query_data.get("records") or []),
+                    bool(_last_query_data.get("file")),
+                )
+                return {
+                    "react_final": {
+                        "result_type": "query_result",
+                        "answer": str(ai_msg.content or ""),
+                        "query_data": _last_query_data,
+                        "stop_reason": "no_tool_call_with_query_data",
+                    },
+                    "react_rounds": round_idx + 1,
+                }
             return {
                 "react_final": {
                     "result_type": "text",
@@ -241,26 +256,34 @@ async def run_react_loop(
             if isinstance(result, dict) and result.get("__finish__"):
                 logger.info("[react_loop] stop: finish_tool at round=%d", round_idx + 1)
                 final = {**result, "stop_reason": "finish_tool"}
-                # 如果 LLM 声明 query_result，注入缓存的 data block
-                if final.get("result_type") == "query_result" and _last_query_data is not None:
-                    final["query_data"] = _last_query_data
-                    # 如已返回结构化表格，避免文本与表格矛盾
-                    answer = str(final.get("answer") or "")
-                    if answer:
-                        meta = _last_query_data.get("meta") if isinstance(_last_query_data, dict) else {}
-                        columns_raw = meta.get("columns", []) if isinstance(meta, dict) else []
-                        col_names: list[str] = []
-                        for col in columns_raw:
-                            if isinstance(col, dict):
-                                name = str(col.get("name") or col.get("label") or "")
-                                if name:
-                                    col_names.append(name)
-                            elif isinstance(col, str):
-                                col_names.append(col)
-                        has_count_col = any("数量" in n for n in col_names)
-                        has_row_data = bool(_last_query_data.get("records"))
-                        if has_count_col and has_row_data and ("未" in answer and "数量" in answer):
-                            final["answer"] = "已返回结果表，详见下方数据。"
+                if _last_query_data is not None:
+                    logger.info(
+                        "[react_loop] finish_tool: cached query_data found (records=%d has_file=%s)",
+                        len(_last_query_data.get("records") or []),
+                        bool(_last_query_data.get("file")),
+                    )
+                    # 如果 LLM 未显式选择 query_result，也强制走结构化输出
+                    if final.get("result_type") not in {"query_result", "csv_file", "json_file"}:
+                        final["result_type"] = "query_result"
+                    if final.get("result_type") == "query_result":
+                        final["query_data"] = _last_query_data
+                        # 如已返回结构化表格，避免文本与表格矛盾
+                        answer = str(final.get("answer") or "")
+                        if answer:
+                            meta = _last_query_data.get("meta") if isinstance(_last_query_data, dict) else {}
+                            columns_raw = meta.get("columns", []) if isinstance(meta, dict) else []
+                            col_names: list[str] = []
+                            for col in columns_raw:
+                                if isinstance(col, dict):
+                                    name = str(col.get("name") or col.get("label") or "")
+                                    if name:
+                                        col_names.append(name)
+                                elif isinstance(col, str):
+                                    col_names.append(col)
+                            has_count_col = any("数量" in n for n in col_names)
+                            has_row_data = bool(_last_query_data.get("records"))
+                            if has_count_col and has_row_data and ("未" in answer and "数量" in answer):
+                                final["answer"] = "已返回结果表，详见下方数据。"
                 return {
                     "react_final": final,
                     "react_rounds": round_idx + 1,
@@ -272,6 +295,21 @@ async def run_react_loop(
 
     # L3: 超出最大轮数
     logger.warning("[react_loop] stop: max_rounds=%d reached", max_rounds)
+    if _last_query_data is not None:
+        logger.info(
+            "[react_loop] max_rounds: force query_result with cached data (records=%d has_file=%s)",
+            len(_last_query_data.get("records") or []),
+            bool(_last_query_data.get("file")),
+        )
+        return {
+            "react_final": {
+                "result_type": "query_result",
+                "answer": _summarize_last_output(messages),
+                "query_data": _last_query_data,
+                "stop_reason": "max_rounds_with_query_data",
+            },
+            "react_rounds": max_rounds,
+        }
     return {
         "react_final": {
             "result_type": "text",
