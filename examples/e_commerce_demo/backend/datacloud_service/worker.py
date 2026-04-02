@@ -17,7 +17,7 @@ from collections.abc import Awaitable, Callable, Mapping
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 from by_framework import (
     AgentContext,
@@ -28,7 +28,12 @@ from by_framework import (
     ResumeCommand,
     StreamChunkEvent,
 )
-from by_framework.common.constants import TASK_GROUP_FIELD_COMPLETED, TASK_GROUP_FIELD_TOTAL, TASK_GROUP_TTL_SECONDS, RedisKeys
+from by_framework.common.constants import (
+    TASK_GROUP_FIELD_COMPLETED,
+    TASK_GROUP_FIELD_TOTAL,
+    TASK_GROUP_TTL_SECONDS,
+    RedisKeys,
+)
 from by_framework.common.logger import logger
 from by_framework.core.extensions import PluginRegistry
 from by_framework.core.protocol.agent_state import AgentState as GatewayAgentState
@@ -36,13 +41,12 @@ from by_framework.core.protocol.agent_state import AgentStateLiteral, is_termina
 from by_framework.core.protocol.commands import AskAgentCommand
 from by_framework.core.protocol.content_type import SseMessageType, SseReasonMessageType
 from by_framework.core.protocol.events import StateChangeEvent
+from datacloud_analysis.agent import create_agent
+from datacloud_analysis.command_plugins import CommandPluginManager
+from datacloud_data_sdk.stream_text import coerce_stream_chunk_text
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.types import Command
-
-from datacloud_analysis.agent import create_agent
-from datacloud_analysis.command_plugins import CommandPluginManager
-
 
 _CHITCHAT_DIRECT_REPLY = "你好，我在。需要我帮你查询或分析什么数据？"
 _CHITCHAT_TOKENS = {
@@ -162,7 +166,7 @@ async def _heartbeat_loop(
             last_emit_time_ref[0] = now
     except asyncio.CancelledError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("heartbeat loop exited with error: %s", exc)
 
 
@@ -194,7 +198,7 @@ class DataCloudWorker(GatewayWorker):
         model_name: str | None = None,
         api_key: str | None = None,
         base_url: str | None = None,
-        plugin_registry: Optional[PluginRegistry] = None,
+        plugin_registry: PluginRegistry | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -511,7 +515,7 @@ class DataCloudWorker(GatewayWorker):
             return GatewayAgentState.CANCELLED.value
 
         except Exception as e:
-            error_msg = f"[{self.worker_id}] Task failed: {str(e)}"
+            error_msg = f"[{self.worker_id}] Task failed: {e!s}"
             logger.error(error_msg)
             if has_source_agent:
                 await self._enqueue_agent_return(
@@ -520,7 +524,7 @@ class DataCloudWorker(GatewayWorker):
                     reply_data={"error": str(e)},
                 )
             await context.emit_state(
-                StateChangeEvent(state=f"{GatewayAgentState.FAILED.value}: {str(e)}")
+                StateChangeEvent(state=f"{GatewayAgentState.FAILED.value}: {e!s}")
             )
             logger.error(traceback.format_exc())
             await self.plugin_registry.on_task_error(context, e)
@@ -557,7 +561,7 @@ class DataCloudWorker(GatewayWorker):
     def _build_graph(self, prompts_dict: dict | None = None, tools_dict: dict | None = None) -> Any:
         """Instantiate the datacloud-analysis compiled graph with dynamic context."""
         return create_agent(
-            model=self.model_name,  #
+            model=self.model_name,
             api_key=self.api_key,
             base_url=self.base_url,
             prompts_overwrite=prompts_dict,
@@ -583,12 +587,12 @@ class DataCloudWorker(GatewayWorker):
 
         _skill_tool.__name__ = f"skill_{skill_name}"
         _skill_tool.__doc__ = f"Skill capability: {skill_name}"
-        setattr(_skill_tool, "_is_skill_capability", True)
-        setattr(_skill_tool, "_skill_name", skill_name)
-        setattr(_skill_tool, "_skill_meta", metadata)
-        setattr(_skill_tool, "_skill_risk_level", risk_level)
-        setattr(_skill_tool, "_skill_allowlist_tags", allowlist_tags)
-        setattr(_skill_tool, "_skill_blocklist_tags", blocklist_tags)
+        _skill_tool._is_skill_capability = True
+        _skill_tool._skill_name = skill_name
+        _skill_tool._skill_meta = metadata
+        _skill_tool._skill_risk_level = risk_level
+        _skill_tool._skill_allowlist_tags = allowlist_tags
+        _skill_tool._skill_blocklist_tags = blocklist_tags
         return _skill_tool
 
     def _load_skill_capabilities(
@@ -608,7 +612,7 @@ class DataCloudWorker(GatewayWorker):
             task_paths = build_task_paths(user_id=user_id, task_id=task_id)
             loader = SkillLoader(task_paths)
             registry = loader.load_all()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("Failed to load skill capabilities user=%s task=%s error=%s", user_id, task_id, exc)
             return {}
 
@@ -624,7 +628,7 @@ class DataCloudWorker(GatewayWorker):
             skills[skill_name] = self._wrap_skill_callable(
                 skill_name,
                 run_fn,
-                cast(Mapping[str, Any] | None, entry.get("meta")),
+                cast("Mapping[str, Any] | None", entry.get("meta")),
             )
             source = str(entry.get("source", "unknown"))
             source_counts[source] = source_counts.get(source, 0) + 1
@@ -681,8 +685,8 @@ class DataCloudWorker(GatewayWorker):
         - ResumeCommand:   resumes a suspended graph via Command(resume=...).
 
         Returns:
-            {"status": "done"}    鈥?normal completion, flush_to_history called.
-            {"status": "waiting"} 鈥?graph interrupted, ask_user emitted, no flush.
+            {"status": "done"}    normal completion, flush_to_history called.
+            {"status": "waiting"} graph interrupted, ask_user emitted, no flush.
         """
         logger.info(
             "DataCloudWorker.process_command: session=%s command=%s",
@@ -829,7 +833,7 @@ class DataCloudWorker(GatewayWorker):
         logger.info(
             "Agent runtime merged tools: agent_id=%s merged_tool_keys=%s skill_tool_count=%d",
             by_agent_id,
-            sorted(str(key) for key in merged_tools.keys()),
+            sorted(str(key) for key in merged_tools),
             len(skill_tools),
         )
 
@@ -895,7 +899,6 @@ class DataCloudWorker(GatewayWorker):
                 content_type=SseReasonMessageType.think_text.value,
             )
 
-        #
         if isinstance(command, ResumeCommand):
             try:
                 resume_payload_json = json.dumps(
@@ -926,9 +929,52 @@ class DataCloudWorker(GatewayWorker):
             )
             graph_input: Any = Command(resume=resume_value)
         else:
+            latest_user_text = _latest_user_text_from_content(command.content)
+            history_messages = await _load_recent_history_messages(
+                context=context,
+                limit=_history_inject_limit(),
+                current_user_text=latest_user_text,
+            )
             input_messages = _normalize_messages(command.content)
+            # content 为 [] 或无法解析时，避免只有历史且最后一条为 assistant → intend 误用 AIMessage
+            if not input_messages and latest_user_text:
+                input_messages = [HumanMessage(content=latest_user_text)]
+            combined_messages = history_messages + input_messages
+            if _trace_user_query_enabled():
+                raw_c = command.content
+                c_extra = "type=%s" % type(raw_c).__name__
+                if isinstance(raw_c, list):
+                    c_extra += " list_len=%d" % len(raw_c)
+                    if raw_c:
+                        first = raw_c[0]
+                        last = raw_c[-1]
+                        c_extra += " first=%s last=%s" % (
+                            list(first.keys()) if isinstance(first, dict) else type(first).__name__,
+                            list(last.keys()) if isinstance(last, dict) else type(last).__name__,
+                        )
+                logger.info(
+                    "[user_query_trace] worker graph_input.messages session=%s thread_id=%s "
+                    "command.content %s",
+                    context.session_id,
+                    thread_id,
+                    c_extra,
+                )
+                logger.info(
+                    "[user_query_trace] worker graph_input.messages latest_user_text_len=%d "
+                    "latest_preview=%r hist_n=%d input_n=%d combined_n=%d",
+                    len(latest_user_text),
+                    latest_user_text[:300] + ("..." if len(latest_user_text) > 300 else ""),
+                    len(history_messages),
+                    len(input_messages),
+                    len(combined_messages),
+                )
+                for i, m in enumerate(combined_messages):
+                    mt = type(m).__name__
+                    mc = getattr(m, "content", "")
+                    mp = mc[:200] + ("..." if isinstance(mc, str) and len(mc) > 200 else "") if isinstance(mc, str) else repr(mc)[:200]
+                    logger.info("[user_query_trace] worker combined[%d] %s preview=%r", i, mt, mp)
             graph_input = {
-                "messages": input_messages,
+                "messages": combined_messages,
                 "agent_id": by_agent_id,
                 "agent_name": by_agent_name,
                 "workspace_dir": workspace_dir,
@@ -1067,7 +1113,10 @@ class DataCloudWorker(GatewayWorker):
             metadata: dict[str, Any] | None = None,
         ) -> None:
             await context.emit_chunk(
-                StreamChunkEvent(content=content, metadata=metadata),
+                StreamChunkEvent(
+                    content=coerce_stream_chunk_text(content),
+                    metadata=metadata or {},
+                ),
                 event_type=event_type,
                 content_type=content_type,
             )
@@ -1295,6 +1344,80 @@ def _normalize_messages(
             messages.append(HumanMessage(content=str(item)))
 
     return messages
+
+
+def _trace_user_query_enabled() -> bool:
+    """Set DATACLOUD_TRACE_USER_QUERY=1 to log graph message injection + intend resolution."""
+    return os.environ.get("DATACLOUD_TRACE_USER_QUERY", "").strip().lower() in ("1", "true", "yes")
+
+
+def _history_inject_limit() -> int:
+    """How many recent DB history rows to merge into graph ``messages`` (Human/Assistant per row)."""
+    raw = os.environ.get("DATACLOUD_HISTORY_MESSAGE_LIMIT", "12")
+    try:
+        n = int(raw.strip())
+    except ValueError:
+        return 12
+    return max(1, min(n, 200))
+
+
+async def _load_recent_history_messages(
+    *,
+    context: AgentContext,
+    limit: int = 12,
+    current_user_text: str = "",
+) -> list[HumanMessage | AIMessage | SystemMessage]:
+    """Load recent business history and convert to LangChain messages."""
+    try:
+        raw_history = await context.agent_runtime_state.session_manager.history.get_history(limit=limit)
+    except Exception as exc:
+        logger.warning("_load_recent_history_messages failed: %s", exc)
+        return []
+
+    if not isinstance(raw_history, list):
+        return []
+
+    history_messages: list[HumanMessage | AIMessage | SystemMessage] = []
+    for item in raw_history:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "").strip().lower()
+        content = str(item.get("content") or "").strip()
+        if not content:
+            continue
+        if role == "user":
+            history_messages.append(HumanMessage(content=content))
+        elif role in {"assistant", "ai"}:
+            history_messages.append(AIMessage(content=content))
+        elif role == "system":
+            history_messages.append(SystemMessage(content=content))
+
+    popped_dup = False
+    if current_user_text and history_messages:
+        last_message = history_messages[-1]
+        if isinstance(last_message, HumanMessage) and str(last_message.content).strip() == current_user_text:
+            history_messages.pop()
+            popped_dup = True
+
+    if _trace_user_query_enabled():
+        roles_in = []
+        if isinstance(raw_history, list):
+            for item in raw_history:
+                if isinstance(item, dict):
+                    roles_in.append(str(item.get("role") or "?"))
+        logger.info(
+            "[user_query_trace] history_load session=%s limit=%d raw_rows=%s roles_order=%s "
+            "built_n=%d popped_dup_last_user=%s current_user_preview=%r",
+            getattr(context, "session_id", ""),
+            limit,
+            len(raw_history) if isinstance(raw_history, list) else -1,
+            roles_in,
+            len(history_messages),
+            popped_dup,
+            current_user_text[:200] + ("..." if len(current_user_text) > 200 else ""),
+        )
+
+    return history_messages
 
 
 def _latest_user_text_from_content(content: Any) -> str:

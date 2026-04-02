@@ -19,6 +19,12 @@ class IntentClassifier:
         return normalized in _CHITCHAT_TOKENS
 
     async def classify(self, user_query: str, state: Any) -> IntentLabel:
+        if os.environ.get("DATACLOUD_TRACE_USER_QUERY", "").strip().lower() in ("1", "true", "yes"):
+            logger.info(
+                "[user_query_trace] IntentClassifier.classify input_len=%d preview=%r",
+                len(user_query),
+                user_query[:400] + ("..." if len(user_query) > 400 else ""),
+            )
         if self._is_chitchat(user_query):
             return "chitchat"
         # 尝试用 llm_quick 分类，失败则 fallback react
