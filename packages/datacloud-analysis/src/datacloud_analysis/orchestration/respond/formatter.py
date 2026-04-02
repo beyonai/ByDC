@@ -28,6 +28,11 @@ async def format_result(
     workspace_dir: str | None = None,
 ) -> None:
     result_type = react_final.get("result_type", "text")
+    logger.info(
+        "[format_result] result_type=%s has_query_data=%s",
+        result_type,
+        bool(react_final.get("query_data")),
+    )
     if result_type == "query_result":
         # data_query 原始结构透传：{result_type, records, pagination, meta, file, notice_msg}
         # 如果同时有 answer（文字分析），先推文字再推 6001
