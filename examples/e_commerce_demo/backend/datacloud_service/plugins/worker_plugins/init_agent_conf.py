@@ -27,6 +27,16 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _datacloud_repo_root() -> Path:
+    """Resolve whale_datacloud repo root (contains ``packages/datacloud-data/``)."""
+
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "packages" / "datacloud-data").is_dir():
+            return parent
+    return here.parents[6]
+
+
 class InitDataCloudDigitalEmployeePlugin(Plugin):
     """Load digital employee configs and dynamically build tools."""
 
@@ -42,7 +52,7 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
         self.ai_factory_url = os.environ.get("AI_FACTORY_URL", "http://10.10.168.203:8569")
         self.ai_factory_token = os.environ.get("DATACLOUD_AI_FACTORY_TOKEN", "")
         self.loaded_agent_ids: list[str] = []
-        repo_root = Path(__file__).resolve().parents[5]
+        repo_root = _datacloud_repo_root()
         datacloud_data_env_path = repo_root / "packages" / "datacloud-data" / ".env"
         load_dotenv(datacloud_data_env_path)
         logger.info("[InitPlugin] Loaded datacloud-data env: path=%s", datacloud_data_env_path)
@@ -64,14 +74,12 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
         if not raw:
             raise ValueError(
                 "DATACLOUD_AI_FACTORY_AGENT_IDS is not set. "
-                "Set a JSON array such as [\"10000587\",\"10000582\"]."
+                'Set a JSON array such as ["10000587","10000582"].'
             )
         try:
             parsed = json.loads(raw)
         except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"DATACLOUD_AI_FACTORY_AGENT_IDS must be valid JSON: {exc}"
-            ) from exc
+            raise ValueError(f"DATACLOUD_AI_FACTORY_AGENT_IDS must be valid JSON: {exc}") from exc
         if not isinstance(parsed, list):
             raise TypeError("DATACLOUD_AI_FACTORY_AGENT_IDS must be a JSON array.")
 
@@ -297,7 +305,9 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
         if delegate_report["failed"]:
             reason_summary.append(f"delegate_build_failed:{len(delegate_report['failed'])}")
         if collisions:
-            reason_summary.append(f"tool_name_collision_overwritten_by_delegate:{','.join(collisions)}")
+            reason_summary.append(
+                f"tool_name_collision_overwritten_by_delegate:{','.join(collisions)}"
+            )
         if not merged_tools:
             reason_summary.append("final_dynamic_tools_empty")
 
@@ -336,7 +346,9 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             return tools, report
         if not (OntologyLoader and LangGraphPlanGenerator and TermLoader):
             report["skipped"].append({"reason": "ontology_sdk_unavailable"})
-            logger.warning("[InitPlugin][ToolLoad][Ontology] agent_id=%s skip: sdk unavailable", agent_id)
+            logger.warning(
+                "[InitPlugin][ToolLoad][Ontology] agent_id=%s skip: sdk unavailable", agent_id
+            )
             return tools, report
 
         for rel in rel_resource_list:
@@ -693,9 +705,7 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
                         exc_info=True,
                     )
             if not delegate_parent_message_id:
-                delegate_parent_message_id = str(
-                    getattr(_context, "message_id", "") or ""
-                ).strip()
+                delegate_parent_message_id = str(getattr(_context, "message_id", "") or "").strip()
 
             # 构造委托参数，传给 interrupt，由 worker 负责实际调用 call_agent
             # 这样恢复时不会重复调用 call_agent（LangGraph 恢复会重跑节点，
@@ -755,7 +765,7 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
     def _resolve_scene_path(self, rel: dict[str, Any]) -> str:
         """Resolve ontology scene path for local test mode."""
 
-        repo_root = Path(__file__).resolve().parents[5]
+        repo_root = _datacloud_repo_root()
         fixed_scene_dir = (
             repo_root
             / "examples"
