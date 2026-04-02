@@ -16,7 +16,7 @@ _DEFAULT_MAX_ROUNDS = 10
 async def finish_react(
     reason: str,
     answer: str,
-    result_type: Literal["text", "csv_file", "json", "json_file"] = "text",
+    result_type: Literal["text", "csv_file", "json", "json_file", "query_result"] = "text",
     csv_file_path: str = "",
     data: str = "",
 ) -> dict[str, Any]:
@@ -25,12 +25,15 @@ async def finish_react(
     Args:
         reason: 结束原因（用于审计）
         answer: 文字类结论（result_type=text 时必填）
-        result_type: 'text' | 'csv_file' | 'json' | 'json_file'
+        result_type: 'text' | 'csv_file' | 'json' | 'json_file' | 'query_result'
         csv_file_path: 文件路径（result_type=csv_file/json_file 时必填）
         data: JSON 字符串（result_type=json 时填写，工具返回的结构化数据）
 
-    注意：execute_code 执行后会将 _result 自动保存到同名 .json 文件（result_file 字段），
-    此时推荐使用 result_type=json_file，csv_file_path 填写 result_file 路径。
+    注意：
+    - 调用 data_query 类工具后，返回中含 _hint 字段，请使用 result_type=query_result，
+      系统会自动透传完整的 records/pagination/meta/file 结构，无需手动序列化。
+    - execute_code 执行后会将 _result 自动保存到同名 .json 文件（result_file 字段），
+      此时推荐使用 result_type=json_file，csv_file_path 填写 result_file 路径。
     """
     parsed_data: Any = None
     if result_type == "json" and data:
@@ -112,6 +115,10 @@ async def run_react_loop(
                 messages.append(HumanMessage(content=m.content))
                 break
 
+    # 缓存最近一次 data_query 类工具返回的完整 data block（records+meta+pagination+file）
+    # 供 result_type=query_result 时原样透传给 formatter，避免 LLM 二次序列化丢失结构
+    _last_query_data: dict[str, Any] | None = None
+
     for round_idx in range(max_rounds):
         logger.info("[react_loop] round=%d/%d", round_idx + 1, max_rounds)
         ai_msg: AIMessage = await llm_with_tools.ainvoke(messages)
@@ -132,11 +139,26 @@ async def run_react_loop(
         for tc in ai_msg.tool_calls:
             tool_id, result = await dispatch_tool(tc, tools_map, state, gateway_context=gateway_context)
 
+            # 缓存 data_query 结果：识别含 records+meta 的 data block
+            if isinstance(result, dict):
+                data_block = result.get("data") if isinstance(result.get("data"), dict) else result
+                if isinstance(data_block, dict) and "records" in data_block and "meta" in data_block:
+                    _last_query_data = data_block
+                    logger.info(
+                        "[react_loop] cached query_data: records=%d has_file=%s",
+                        len(data_block.get("records") or []),
+                        bool(data_block.get("file")),
+                    )
+
             # L1: finish_react 终止
             if isinstance(result, dict) and result.get("__finish__"):
                 logger.info("[react_loop] stop: finish_tool at round=%d", round_idx + 1)
+                final = {**result, "stop_reason": "finish_tool"}
+                # 如果 LLM 声明 query_result，注入缓存的 data block
+                if final.get("result_type") == "query_result" and _last_query_data is not None:
+                    final["query_data"] = _last_query_data
                 return {
-                    "react_final": {**result, "stop_reason": "finish_tool"},
+                    "react_final": final,
                     "react_rounds": round_idx + 1,
                 }
 
