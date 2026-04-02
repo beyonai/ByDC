@@ -218,8 +218,10 @@ _TABLE_FROM_JOIN_RE = re.compile(
 
 try:  # 运行环境未安装 sqlglot 时自动降级为纯 token 校验
     import sqlglot  # type: ignore[import]
+    from sqlglot.optimizer.scope import build_scope  # type: ignore[import]
 except Exception:  # pragma: no cover
     sqlglot = None
+    build_scope = None
 
 
 class SqlValidationError(TypedDict, total=False):
@@ -361,123 +363,182 @@ def _validate_sql_columns_by_ast(
     payload: ObjectViewPayload,
     step: PlanStep,
 ) -> list[SqlValidationError]:
-    """基于 AST 做表级字段校验。仅校验 SQL 中实际出现的表及其列。"""
+    """基于 AST + scope 做字段校验，正确处理 CTE/子查询/窗口函数作用域。"""
     errors: list[SqlValidationError] = []
 
-    # 从 AST 提取 tables_in_query、alias_to_table
-    tables_in_query: set[str] = set()
-    alias_to_table: dict[str, str] = {}
-    for t in expr.find_all(sqlglot.exp.Table):
-        table_name = (t.name or "").lower()
-        if table_name:
-            tables_in_query.add(table_name)
-            alias_obj = t.alias
-            if isinstance(alias_obj, str):
-                alias_name = alias_obj
-            elif alias_obj:
-                alias_name = (
-                    (alias_obj.this.name if hasattr(alias_obj, "this") and alias_obj.this else None)
-                    or getattr(alias_obj, "name", None)
-                    or table_name
-                )
-            else:
-                alias_name = table_name
-            alias_to_table[alias_name.lower()] = table_name
-
-    cross_errors = _validate_cross_source_join(expr, payload, step)
-    if cross_errors:
-        return cross_errors
-
-    # 获取当前 step 的 source
-    source = next(
-        (s for s in payload.sources if s.datasource_alias == step.datasource_alias),
-        None,
-    )
-    if source is None:
+    if build_scope is None:
         return errors
 
-    # 构建 table_columns（仅限 tables_in_query 中的表）
-    table_columns: dict[str, set[str]] = {}
+    payload_table_columns: dict[str, set[str]] = {}
     for obj in payload.objects:
-        if obj.source_id != source.source_id or not obj.table:
+        if not obj.table:
             continue
-        t = obj.table.lower()
-        if t not in tables_in_query:
-            continue
-        cols: set[str] = set()
-        for f in obj.fields:
-            # SQL 中引用列必须使用 source_column（物理列名）；若 field 有 source_column 则只允许 source_column，禁止使用 name
-            col_name = (f.source_column or f.name).lower()
-            cols.add(col_name)
-        table_columns.setdefault(t, set()).update(cols)
+        payload_table_columns.setdefault(obj.table.lower(), set()).update(
+            (f.source_column or f.name).lower() for f in obj.fields
+        )
 
-    # 提取 SELECT 列表中的别名（如 "SELECT col AS alias" 中的 alias）
-    select_aliases: set[str] = set()
-    for alias_node in expr.find_all(sqlglot.exp.Alias):
-        alias_name = (alias_node.alias or "").strip().lower()
-        if alias_name:
-            select_aliases.add(alias_name)
+    root_scope = build_scope(expr)
+    if root_scope is None:
+        return errors
 
-    # 遍历 Column 做表级校验
-    for col in expr.find_all(sqlglot.exp.Column):
-        col_name_orig = (getattr(col, "alias_or_name", None) or col.name or "").strip()
-        col_name = col_name_orig.lower()
-        if not col_name:
-            continue
+    errors.extend(_validate_sql_scope(root_scope, payload_table_columns, payload, step))
+    return errors
 
-        # 如果是 SELECT 列表中定义的别名，则跳过校验（ORDER BY 可引用 SELECT 别名）
-        if col_name in select_aliases:
-            continue
 
-        qualifier = (col.table or "").strip().lower() if col.table else ""
-        qualifier_orig = (col.table or "").strip() if col.table else ""
+def _iter_scopes(scope: Any) -> list[Any]:
+    scopes = [scope]
+    for child in (
+        list(getattr(scope, "cte_scopes", []))
+        + list(getattr(scope, "subquery_scopes", []))
+        + list(getattr(scope, "union_scopes", []))
+        + list(getattr(scope, "derived_table_scopes", []))
+    ):
+        scopes.extend(_iter_scopes(child))
+    return scopes
 
-        if qualifier:
-            # 带前缀列
-            if qualifier not in alias_to_table:
-                errors.append(
-                    {
-                        "code": "UNKNOWN_TABLE_ALIAS",
-                        "message": f"unknown table alias {qualifier_orig or qualifier!r} in column {(qualifier_orig or qualifier)}.{col_name_orig!r}",
-                        "detail": {"alias": qualifier, "identifier": col_name_orig, "step_id": step.step_id},
-                    }
-                )
+
+def _get_scope_output_columns(scope: Any) -> set[str]:
+    expression = getattr(scope, "expression", None)
+    if expression is None:
+        return set()
+
+    parent = getattr(expression, "parent", None)
+    alias_column_names = getattr(parent, "alias_column_names", None)
+    if alias_column_names:
+        return {
+            column.name.lower()
+            for column in alias_column_names
+            if getattr(column, "name", None)
+        }
+
+    output_columns: set[str] = set()
+    for select_expr in getattr(expression, "selects", []):
+        column_name = (getattr(select_expr, "alias_or_name", None) or "").strip().lower()
+        if column_name and column_name != "*":
+            output_columns.add(column_name)
+    return output_columns
+
+
+def _validate_sql_scope(
+    root_scope: Any,
+    payload_table_columns: dict[str, set[str]],
+    payload: ObjectViewPayload,
+    step: PlanStep,
+) -> list[SqlValidationError]:
+    errors: list[SqlValidationError] = []
+
+    for scope in _iter_scopes(root_scope):
+        selected_sources = getattr(scope, "selected_sources", {})
+        alias_to_source_name: dict[str, str] = {}
+        alias_to_columns: dict[str, set[str]] = {}
+        physical_tables_in_scope: set[str] = set()
+
+        for alias, selected in selected_sources.items():
+            if not isinstance(selected, tuple) or len(selected) != 2:
                 continue
-            table_name = alias_to_table[qualifier]
-            if table_name not in table_columns:
-                errors.append(
-                    {
-                        "code": "UNKNOWN_TABLE",
-                        "message": f"unknown table {table_name!r} for alias {qualifier_orig or qualifier!r} in column {(qualifier_orig or qualifier)}.{col_name_orig!r}",
-                        "detail": {
-                            "table": table_name,
-                            "alias": qualifier,
-                            "identifier": col_name_orig,
-                            "step_id": step.step_id,
-                        },
-                    }
-                )
+
+            node, resolved_source = selected
+            alias_lower = alias.lower()
+
+            if isinstance(resolved_source, sqlglot.exp.Table):
+                table_name = (resolved_source.name or "").lower()
+                if not table_name:
+                    continue
+                alias_to_source_name[alias_lower] = table_name
+                physical_tables_in_scope.add(table_name)
+                if table_name in payload_table_columns:
+                    alias_to_columns[alias_lower] = payload_table_columns[table_name]
                 continue
-            if col_name not in table_columns[table_name]:
-                errors.append(
-                    {
-                        "code": "UNKNOWN_COLUMN",
-                        "message": f"column {col_name_orig!r} does not exist on table {table_name!r} (alias {qualifier_orig or qualifier!r})",
-                        "detail": {
-                            "identifier": col_name_orig,
-                            "table": table_name,
-                            "alias": qualifier,
-                            "step_id": step.step_id,
-                        },
-                    }
+
+            if build_scope is not None and hasattr(resolved_source, "expression"):
+                source_name = (
+                    (getattr(node, "name", None) or alias).strip().lower()
+                    if node is not None
+                    else alias_lower
                 )
-        else:
-            # 无前缀列：必须唯一归属某表
-            candidate_tables: list[str] = []
-            for t in tables_in_query:
-                if t in table_columns and col_name in table_columns[t]:
-                    candidate_tables.append(t)
-            tables_str = ", ".join(sorted(tables_in_query))
+                alias_to_source_name[alias_lower] = source_name
+                alias_to_columns[alias_lower] = _get_scope_output_columns(resolved_source)
+
+        cross_errors = _validate_cross_source_join_from_tables(
+            physical_tables_in_scope, payload, step
+        )
+        if cross_errors:
+            errors.extend(cross_errors)
+            continue
+
+        select_aliases = {
+            (getattr(select_expr, "alias", None) or "").strip().lower()
+            for select_expr in getattr(getattr(scope, "expression", None), "selects", [])
+            if (getattr(select_expr, "alias", None) or "").strip()
+        }
+
+        for col in getattr(scope, "columns", []):
+            col_name_orig = (getattr(col, "alias_or_name", None) or col.name or "").strip()
+            col_name = col_name_orig.lower()
+            if not col_name:
+                continue
+
+            qualifier = (col.table or "").strip().lower() if col.table else ""
+            qualifier_orig = (col.table or "").strip() if col.table else ""
+
+            if not qualifier and col_name in select_aliases:
+                continue
+
+            if qualifier:
+                if qualifier not in alias_to_source_name:
+                    errors.append(
+                        {
+                            "code": "UNKNOWN_TABLE_ALIAS",
+                            "message": f"unknown table alias {qualifier_orig or qualifier!r} in column {(qualifier_orig or qualifier)}.{col_name_orig!r}",
+                            "detail": {
+                                "alias": qualifier,
+                                "identifier": col_name_orig,
+                                "step_id": step.step_id,
+                            },
+                        }
+                    )
+                    continue
+
+                source_name = alias_to_source_name[qualifier]
+                source_columns = alias_to_columns.get(qualifier)
+                if source_columns is None:
+                    errors.append(
+                        {
+                            "code": "UNKNOWN_TABLE",
+                            "message": f"unknown table {source_name!r} for alias {qualifier_orig or qualifier!r} in column {(qualifier_orig or qualifier)}.{col_name_orig!r}",
+                            "detail": {
+                                "table": source_name,
+                                "alias": qualifier,
+                                "identifier": col_name_orig,
+                                "step_id": step.step_id,
+                            },
+                        }
+                    )
+                    continue
+
+                if col_name not in source_columns:
+                    errors.append(
+                        {
+                            "code": "UNKNOWN_COLUMN",
+                            "message": f"column {col_name_orig!r} does not exist on table {source_name!r} (alias {qualifier_orig or qualifier!r})",
+                            "detail": {
+                                "identifier": col_name_orig,
+                                "table": source_name,
+                                "alias": qualifier,
+                                "step_id": step.step_id,
+                            },
+                        }
+                    )
+                continue
+
+            candidate_tables = sorted(
+                {
+                    source_name
+                    for alias_name, source_name in alias_to_source_name.items()
+                    if col_name in alias_to_columns.get(alias_name, set())
+                }
+            )
+            tables_str = ", ".join(sorted(alias_to_source_name.values()))
             if len(candidate_tables) == 0:
                 errors.append(
                     {
@@ -485,20 +546,20 @@ def _validate_sql_columns_by_ast(
                         "message": f"column {col_name_orig!r} does not exist in any table of current query (tables: {tables_str})",
                         "detail": {
                             "identifier": col_name_orig,
-                            "tables": sorted(tables_in_query),
+                            "tables": sorted(alias_to_source_name.values()),
                             "step_id": step.step_id,
                         },
                     }
                 )
             elif len(candidate_tables) > 1:
-                ambig_tables = ", ".join(sorted(candidate_tables))
+                ambig_tables = ", ".join(candidate_tables)
                 errors.append(
                     {
                         "code": "AMBIGUOUS_COLUMN",
                         "message": f"ambiguous column {col_name_orig!r} appears in multiple tables ({ambig_tables}), please qualify with table alias",
                         "detail": {
                             "identifier": col_name_orig,
-                            "tables": sorted(candidate_tables),
+                            "tables": candidate_tables,
                             "step_id": step.step_id,
                         },
                     }
