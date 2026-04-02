@@ -5,6 +5,7 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from datacloud_analysis.tool_hook_plugins import get_tool_hook_plugin_manager
 from datacloud_analysis.tool_hook_plugins.types import HookContext
+from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +195,11 @@ async def dispatch_tool(
             # 能通过 get_gateway_context() 获取到 context 并推送心跳日志
             try:
                 from datacloud_data_sdk.context import InvocationContext  # type: ignore
-                _inv_ctx: Any = InvocationContext(gateway_context=gateway_context)
+                workspace_root = resolve_shared_workspace_dir(ctx.get("workspace_dir"))
+                _inv_ctx: Any = InvocationContext(
+                    gateway_context=gateway_context,
+                    workspace_dir=str(workspace_root) if workspace_root is not None else "",
+                )
                 _inv_ctx.__enter__()
                 try:
                     output = await t.ainvoke(ctx["tool_params"])
