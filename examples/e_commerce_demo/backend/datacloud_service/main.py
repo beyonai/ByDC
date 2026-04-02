@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from by_framework import run_worker
+from by_framework.core.runtime.history import ByClawHistoryBackend
 from dotenv import load_dotenv
 
 from datacloud_service.plugins.recommended_question_plugins import (
@@ -42,6 +43,7 @@ class WorkerConfig:
     redis_username: str | None
     consumer_group: str
     workspace_dir: str
+    ai_factory_url: str
 
     @classmethod
     def from_environ(cls) -> WorkerConfig:
@@ -67,6 +69,7 @@ class WorkerConfig:
             redis_username=opt("DATACLOUD_GATEWAY_REDIS_USERNAME"),
             consumer_group=os.environ.get("DATACLOUD_GATEWAY_CONSUMER_GROUP", "datacloud"),
             workspace_dir=os.environ.get("DATACLOUD_GATEWAY_WORKSPACE_DIR", "/tmp/datacloud"),
+            ai_factory_url=os.environ.get("AI_FACTORY_URL", "http://10.10.168.203:8080"),
         )
 
     def run_worker_kwargs(self) -> dict[str, Any]:
@@ -101,6 +104,7 @@ def main() -> None:
             InitDataCloudDigitalEmployeePlugin(),
             RecommendedQuestionsPlugin(),
         ],
+        history_backend=ByClawHistoryBackend(base_url=cfg.ai_factory_url),
         **cfg.run_worker_kwargs(),
     )
 
