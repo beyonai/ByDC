@@ -1,9 +1,13 @@
 from __future__ import annotations
+
 import json
 import logging
 from contextlib import nullcontext
 from typing import Any
+
+from datacloud_data_sdk.stream_text import coerce_stream_chunk_text
 from langchain_core.tools import BaseTool
+
 from datacloud_analysis.tool_hook_plugins import get_tool_hook_plugin_manager
 from datacloud_analysis.tool_hook_plugins.types import HookContext
 from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
@@ -254,12 +258,21 @@ async def dispatch_tool(
 
     hook_manager = get_tool_hook_plugin_manager()
 
+    def _merge_ctx(base_ctx: HookContext, new_ctx: HookContext) -> HookContext:
+        """Merge hook-returned ctx with base ctx to avoid losing required fields."""
+        merged = dict(base_ctx)
+        merged.update({k: v for k, v in new_ctx.items() if v is not None})
+        return merged  # type: ignore[return-value]
+
+    # 工具名作为第一层 sub_step，包裹整个执行过程（含 SDK 内部的 sub_step 嵌套在其中）
     # 工具名作为当前层 sub_step，包裹整个执行过程（含 SDK 内部的 sub_step 嵌套在其中）
     async def _run_tool() -> None:
         nonlocal ctx
 
         # --- before hook ---
+        base_ctx = ctx
         ctx, before_decision = await hook_manager.run_before(ctx)
+        ctx = _merge_ctx(base_ctx, ctx)
         if before_decision:
             action = str(before_decision.get("action") or "")
             if action == "short_circuit":
@@ -310,7 +323,9 @@ async def dispatch_tool(
                 ctx["tool_error"] = {"error_type": type(exc).__name__, "message": str(exc)}
 
         # --- after hook ---
+        base_ctx = ctx
         ctx, after_decision = await hook_manager.run_after(ctx)
+        ctx = _merge_ctx(base_ctx, ctx)
         if after_decision:
             action = str(after_decision.get("action") or "")
             if action == "recover":
@@ -388,10 +403,23 @@ async def dispatch_tool(
 
                 if has_records_and_meta and "_hint" not in final_output:
                     final_output = dict(final_output)
+                    columns_raw = data_block.get("meta", {}).get("columns", []) if isinstance(data_block.get("meta"), dict) else []
+                    col_names: list[str] = []
+                    for col in columns_raw:
+                        if isinstance(col, dict):
+                            name = str(col.get("name") or col.get("label") or "")
+                            if name:
+                                col_names.append(name)
+                        elif isinstance(col, str):
+                            col_names.append(col)
+                    columns_hint = ""
+                    if col_names:
+                        columns_hint = f"\u5305\u542b\u5b57\u6bb5: {', '.join(col_names[:8])}"
                     if file_url:
                         final_output["file_url"] = file_url
                         final_output["_hint"] = (
                             f"\u6570\u636e\u91cf\u8f83\u5927\uff0c\u5df2\u5b58\u5165\u6587\u4ef6 {file_url}\u3002"
+                            f"{('\n' + columns_hint) if columns_hint else ''}"
                             "\u8bf7\u8c03\u7528 finish_react \u65f6\u4f7f\u7528 result_type=query_result\uff0c"
                             "\u7cfb\u7edf\u4f1a\u81ea\u52a8\u900f\u4f20\u5b8c\u6574\u7ed3\u6784\u3002"
                         )
@@ -399,6 +427,7 @@ async def dispatch_tool(
                     else:
                         final_output["_hint"] = (
                             f"\u6570\u636e\u5df2\u8fd4\u56de {len(records)} \u6761 records\u3002"
+                            f"{('\n' + columns_hint) if columns_hint else ''}"
                             "\u8bf7\u7acb\u5373\u8c03\u7528 finish_react\uff0c\u4f7f\u7528 result_type=query_result\uff0c"
                             "\u7cfb\u7edf\u4f1a\u81ea\u52a8\u900f\u4f20\u5b8c\u6574\u7684 records/pagination/meta \u7ed3\u6784\uff0c\u65e0\u9700\u624b\u52a8\u5e8f\u5217\u5316\u3002"
                         )

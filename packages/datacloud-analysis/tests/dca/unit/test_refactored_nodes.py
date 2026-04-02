@@ -64,6 +64,44 @@ class TestIntendNode:
         assert result["execution_status"] == "execution"
         assert result["intent"] == "react"
 
+    @pytest.mark.asyncio
+    async def test_intend_uses_last_human_not_trailing_ai(self) -> None:
+        """When messages end with AIMessage, user_query must be last HumanMessage."""
+        from langchain_core.messages import AIMessage, HumanMessage
+        from datacloud_analysis.orchestration.intend.node import intend_node
+
+        captured: list[str] = []
+
+        async def fake_classify(self: Any, user_query: str, state: Any) -> str:
+            captured.append(user_query)
+            return "react"
+
+        state: dict[str, Any] = {
+            "messages": [
+                HumanMessage(content="first question"),
+                AIMessage(content="long assistant answer"),
+                HumanMessage(content="second question"),
+                AIMessage(content="another ai tail"),
+            ],
+        }
+        config: dict[str, Any] = {"configurable": {}}
+
+        with patch(
+            "datacloud_analysis.orchestration.intend.command_router.CommandPluginManager.from_defaults"
+        ) as mock_factory:
+            mock_mgr = AsyncMock()
+            mock_mgr.handle_ext_command = AsyncMock(return_value=(False, None))
+            mock_factory.return_value = mock_mgr
+
+            with patch(
+                "datacloud_analysis.orchestration.intend.intent_classifier.IntentClassifier.classify",
+                new=fake_classify,
+            ):
+                result = await intend_node(state, config)
+
+        assert result["user_query"] == "second question"
+        assert captured == ["second question"]
+
 
 # ---------------------------------------------------------------------------
 # run_react_loop tests
@@ -127,6 +165,46 @@ class TestReactLoop:
 
         assert result["react_final"]["stop_reason"] == "no_tool_call"
         assert result["react_final"]["answer"] == "Direct answer here"
+
+    @pytest.mark.asyncio
+    async def test_multi_turn_state_messages_passed_to_llm(self) -> None:
+        """Prior Human+AIMessage in state.messages must reach the LLM (not only user_query)."""
+        from langchain_core.messages import AIMessage, HumanMessage
+        import datacloud_analysis.orchestration.execution.react_loop as rl_module
+        from datacloud_analysis.orchestration.execution.react_loop import run_react_loop
+
+        ai_msg = AIMessage(content="grid A,B,C (prior answer)", tool_calls=[])
+
+        mock_llm_with_tools = MagicMock()
+        mock_llm_with_tools.ainvoke = AsyncMock(return_value=ai_msg)
+
+        mock_llm = MagicMock()
+        mock_llm.bind_tools.return_value = mock_llm_with_tools
+
+        prior = [
+            HumanMessage(content="first question"),
+            AIMessage(content="10 grids: g1..g10"),
+            HumanMessage(content="list enterprises for first 3 grids"),
+        ]
+        with patch.object(rl_module, "_build_llm", return_value=mock_llm):
+            await run_react_loop(
+                state={
+                    "user_query": "list enterprises for first 3 grids",
+                    "messages": prior,
+                },
+                tools_list=[],
+                system_prompt="sys",
+                max_rounds=3,
+            )
+
+        call_args = mock_llm_with_tools.ainvoke.call_args
+        assert call_args is not None
+        passed = call_args[0][0]
+        joined = " ".join(
+            str(getattr(m, "content", m)) for m in passed if hasattr(m, "content")
+        )
+        assert "g1..g10" in joined
+        assert "first 3 grids" in joined
 
     @pytest.mark.asyncio
     async def test_stop_on_max_rounds(self) -> None:
