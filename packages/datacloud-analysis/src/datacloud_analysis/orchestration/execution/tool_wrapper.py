@@ -244,31 +244,32 @@ async def dispatch_tool(
 
         # --- data_query 结构识别：records+meta 或 file.file_url ---
         if isinstance(final_output, dict):
-            # 兼容两种包装：{data: {...}} 或直接 {records, meta, ...}
+            # 兼容两种包装：{data: {records, meta, ...}} 或直接 {records, meta, ...}
             data_block = final_output.get("data") if isinstance(final_output.get("data"), dict) else final_output
             if isinstance(data_block, dict):
                 records = data_block.get("records")
                 file_block = data_block.get("file") if isinstance(data_block.get("file"), dict) else None
                 file_url = str(file_block.get("file_url", "") if file_block else "").strip()
+                has_records_and_meta = (
+                    isinstance(records, list) and "meta" in data_block
+                )
 
-                if file_url and "file_url" not in final_output:
-                    # overflow 场景：有 CSV 文件，告知 LLM 用 result_type=query_result
+                if has_records_and_meta and "_hint" not in final_output:
                     final_output = dict(final_output)
-                    final_output["file_url"] = file_url
-                    final_output["_hint"] = (
-                        f"\u6570\u636e\u91cf\u8f83\u5927\uff0c\u5df2\u5b58\u5165\u6587\u4ef6 {file_url}\u3002"
-                        "\u8bf7\u8c03\u7528 finish_react \u65f6\u4f7f\u7528 result_type=query_result\uff0c"
-                        "\u7cfb\u7edf\u4f1a\u81ea\u52a8\u900f\u4f20\u5b8c\u6574\u7ed3\u6784\u3002"
-                    )
-                    logger.info("[tool_return] data_query file_url detected: %s", file_url)
-                elif isinstance(records, list) and records and "records" not in final_output:
-                    # 小数据场景：records 直接在内存里，告知 LLM 用 result_type=query_result
-                    final_output = dict(final_output)
-                    final_output["_hint"] = (
-                        "\u6570\u636e\u5df2\u8fd4\u56de records \u5b57\u6bb5\u3002"
-                        "\u8bf7\u8c03\u7528 finish_react \u65f6\u4f7f\u7528 result_type=query_result\uff0c"
-                        "\u7cfb\u7edf\u4f1a\u81ea\u52a8\u900f\u4f20\u5b8c\u6574\u7ed3\u6784\uff0c\u65e0\u9700\u624b\u52a8\u5e8f\u5217\u5316\u3002"
-                    )
-                    logger.info("[tool_return] data_query records detected: count=%d", len(records))
+                    if file_url:
+                        final_output["file_url"] = file_url
+                        final_output["_hint"] = (
+                            f"\u6570\u636e\u91cf\u8f83\u5927\uff0c\u5df2\u5b58\u5165\u6587\u4ef6 {file_url}\u3002"
+                            "\u8bf7\u8c03\u7528 finish_react \u65f6\u4f7f\u7528 result_type=query_result\uff0c"
+                            "\u7cfb\u7edf\u4f1a\u81ea\u52a8\u900f\u4f20\u5b8c\u6574\u7ed3\u6784\u3002"
+                        )
+                        logger.info("[tool_return] data_query file_url detected: %s", file_url)
+                    else:
+                        final_output["_hint"] = (
+                            f"\u6570\u636e\u5df2\u8fd4\u56de {len(records)} \u6761 records\u3002"
+                            "\u8bf7\u7acb\u5373\u8c03\u7528 finish_react\uff0c\u4f7f\u7528 result_type=query_result\uff0c"
+                            "\u7cfb\u7edf\u4f1a\u81ea\u52a8\u900f\u4f20\u5b8c\u6574\u7684 records/pagination/meta \u7ed3\u6784\uff0c\u65e0\u9700\u624b\u52a8\u5e8f\u5217\u5316\u3002"
+                        )
+                        logger.info("[tool_return] data_query records detected: count=%d", len(records))
 
     return tool_call_id, final_output
