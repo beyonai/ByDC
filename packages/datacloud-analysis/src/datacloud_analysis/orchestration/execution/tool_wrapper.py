@@ -252,22 +252,22 @@ async def dispatch_tool(
                 file_url = str(file_block.get("file_url", "") if file_block else "").strip()
 
                 if file_url and "file_url" not in final_output:
-                    # overflow 场景：有 CSV 文件，告知 LLM 用 result_type=csv_file
+                    # overflow 场景：有 CSV 文件，告知 LLM 用 result_type=query_result
                     final_output = dict(final_output)
                     final_output["file_url"] = file_url
                     final_output["_hint"] = (
                         f"\u6570\u636e\u91cf\u8f83\u5927\uff0c\u5df2\u5b58\u5165\u6587\u4ef6 {file_url}\u3002"
-                        "\u8bf7\u8c03\u7528 finish_react \u65f6\u4f7f\u7528 result_type=csv_file\uff0c"
-                        f"csv_file_path={file_url}\uff0c\u65e0\u9700\u518d\u8c03\u7528 write_file\u3002"
+                        "\u8bf7\u8c03\u7528 finish_react \u65f6\u4f7f\u7528 result_type=query_result\uff0c"
+                        "\u7cfb\u7edf\u4f1a\u81ea\u52a8\u900f\u4f20\u5b8c\u6574\u7ed3\u6784\u3002"
                     )
                     logger.info("[tool_return] data_query file_url detected: %s", file_url)
                 elif isinstance(records, list) and records and "records" not in final_output:
-                    # 小数据场景：records 直接在内存里，告知 LLM 用 result_type=json
+                    # 小数据场景：records 直接在内存里，告知 LLM 用 result_type=query_result
                     final_output = dict(final_output)
                     final_output["_hint"] = (
                         "\u6570\u636e\u5df2\u8fd4\u56de records \u5b57\u6bb5\u3002"
-                        "\u8bf7\u8c03\u7528 finish_react \u65f6\u4f7f\u7528 result_type=json\uff0c"
-                        "data \u586b\u5165 records \u5217\u8868\u7684 JSON \u5e8f\u5217\u5316\u5b57\u7b26\u4e32\u3002"
+                        "\u8bf7\u8c03\u7528 finish_react \u65f6\u4f7f\u7528 result_type=query_result\uff0c"
+                        "\u7cfb\u7edf\u4f1a\u81ea\u52a8\u900f\u4f20\u5b8c\u6574\u7ed3\u6784\uff0c\u65e0\u9700\u624b\u52a8\u5e8f\u5217\u5316\u3002"
                     )
                     logger.info("[tool_return] data_query records detected: count=%d", len(records))
 
