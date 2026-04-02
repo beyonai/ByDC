@@ -215,6 +215,11 @@ async def run_react_loop(
             # L2: 无 tool_calls，直接文字结束
             logger.info("[react_loop] stop: no_tool_call at round=%d", round_idx + 1)
             if _last_query_data is not None:
+                logger.info(
+                    "[react_loop] no_tool_call: force query_result with cached data (records=%d has_file=%s)",
+                    len(_last_query_data.get("records") or []),
+                    bool(_last_query_data.get("file")),
+                )
                 return {
                     "react_final": {
                         "result_type": "query_result",
@@ -253,6 +258,11 @@ async def run_react_loop(
                 final = {**result, "stop_reason": "finish_tool"}
                 # 如果 LLM 声明 query_result，注入缓存的 data block
                 if final.get("result_type") == "query_result" and _last_query_data is not None:
+                    logger.info(
+                        "[react_loop] finish_tool: inject query_data (records=%d has_file=%s)",
+                        len(_last_query_data.get("records") or []),
+                        bool(_last_query_data.get("file")),
+                    )
                     final["query_data"] = _last_query_data
                     # 如已返回结构化表格，避免文本与表格矛盾
                     answer = str(final.get("answer") or "")
@@ -283,6 +293,11 @@ async def run_react_loop(
     # L3: 超出最大轮数
     logger.warning("[react_loop] stop: max_rounds=%d reached", max_rounds)
     if _last_query_data is not None:
+        logger.info(
+            "[react_loop] max_rounds: force query_result with cached data (records=%d has_file=%s)",
+            len(_last_query_data.get("records") or []),
+            bool(_last_query_data.get("file")),
+        )
         return {
             "react_final": {
                 "result_type": "query_result",
