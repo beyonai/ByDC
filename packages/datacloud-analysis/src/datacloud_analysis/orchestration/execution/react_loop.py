@@ -208,7 +208,8 @@ async def run_react_loop(
 
     for round_idx in range(max_rounds):
         logger.info("[react_loop] round=%d/%d", round_idx + 1, max_rounds)
-        ai_msg: AIMessage = await llm_with_tools.ainvoke(_trim_messages_window(messages))
+        messages_window = _trim_messages_window(messages)
+        ai_msg: AIMessage = await llm_with_tools.ainvoke(messages_window)
         messages.append(ai_msg)
 
         if not getattr(ai_msg, "tool_calls", None):
