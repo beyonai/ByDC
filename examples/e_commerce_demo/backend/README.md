@@ -1,4 +1,4 @@
-﻿# e_commerce_demo — Backend
+# e_commerce_demo — Backend
 
 本文从 `datacloud_service/main.py` 入口出发，梳理 Gateway Worker 到 LangGraph 全链路，并说明 `workspace_api.py` 启动方式。
 
@@ -47,7 +47,7 @@ uv run uvicorn datacloud_service.workspace_api:app --host 0.0.0.0 --port 8081
 2. `WorkerConfig.from_environ()` 读取并组装运行参数（Redis、模型、workspace 等）。
 3. `run_worker(...)` 启动 `DataCloudWorker`，并注册插件 `InitDataCloudDigitalEmployeePlugin`。
 
-### B. 插件初始化层（`init_agent_conf.py`）
+### B. 插件初始化层（`datacloud_service/plugins/worker_plugins/init_agent_conf.py`）
 
 `InitDataCloudDigitalEmployeePlugin.register_agent_configs()` 在 Worker 启动阶段执行：
 
