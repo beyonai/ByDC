@@ -887,17 +887,13 @@ class DataCloudWorker(GatewayWorker):
         }
         context._langgraph_thread_id = thread_id
 
-        # 初始提示：先发阶段标题，再发阶段说明文本。
-        await context.emit_chunk(
-            StreamChunkEvent(content=_NODE_PHASE_TITLE["knowledge_enhance"]),
-            event_type=EventType.REASONING_LOG_START.value,
-            content_type=SseReasonMessageType.think_title.value,
-        )
-        await context.emit_chunk(
-            StreamChunkEvent(content="已接收到用户消息，开始处理\n\n"),
-            event_type=EventType.REASONING_LOG_START.value,
-            content_type=SseReasonMessageType.think_text.value,
-        )
+        # 初始提示：第一层 sub_step(阶段标题)，第二层 emit_chunk(说明文本，路由到思考区)
+        async with context.sub_step(_NODE_PHASE_TITLE["knowledge_enhance"]):
+            await context.emit_chunk(
+                StreamChunkEvent(content="已接收到用户消息，开始处理"),
+                event_type=EventType.REASONING_LOG_START.value,
+                content_type=SseReasonMessageType.think_text.value,
+            )
 
         #
         if isinstance(command, ResumeCommand):
@@ -1093,21 +1089,15 @@ class DataCloudWorker(GatewayWorker):
                     phase_title = _NODE_PHASE_TITLE.get(node_name)
                     if phase_title and phase_title not in phase_emitted:
                         phase_emitted.add(phase_title)
-                        await _emit(
-                            content=phase_title,
-                            event_type=EventType.REASONING_LOG_START.value,
-                            content_type=SseReasonMessageType.think_title.value,
-                        )
+                        async with context.sub_step(phase_title + "\n\n"):
+                            pass
 
                 elif kind == "on_chat_model_end":
                     node_name = str((event.get("metadata") or {}).get("langgraph_node") or "")
                     if node_name == "planning" and _PLANNING_PHASE_TITLE not in phase_emitted:
                         phase_emitted.add(_PLANNING_PHASE_TITLE)
-                        await _emit(
-                            content=_PLANNING_PHASE_TITLE,
-                            event_type=EventType.REASONING_LOG_START.value,
-                            content_type=SseReasonMessageType.think_title.value,
-                        )
+                        async with context.sub_step(_PLANNING_PHASE_TITLE):
+                            pass
 
                 elif kind == "on_chain_end" and event.get("name") == "agent_delegate":
                     is_agent_delegate = True
