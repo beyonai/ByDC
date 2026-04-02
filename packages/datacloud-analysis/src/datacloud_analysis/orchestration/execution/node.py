@@ -8,7 +8,10 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from datacloud_analysis.i18n.prompts import get_execution_prompt, get_system_prompt
 from datacloud_analysis.orchestration.execution.react_loop import run_react_loop
-from datacloud_analysis.orchestration.execution.tool_wrapper import inject_reason_field
+from datacloud_analysis.orchestration.execution.tool_wrapper import (
+    inject_reason_field,
+    is_delegate_wait_resume_command,
+)
 from datacloud_analysis.orchestration.state import AgentState
 from datacloud_analysis.tools.ask_user import ask_user
 from datacloud_analysis.tools.file_io import read_file, write_file
@@ -158,8 +161,17 @@ async def execution_node(
 
     gateway_context = (config.get("configurable") or {}).get("gateway_context")
     if gateway_context is not None:
-        async with gateway_context.sub_step(_EXECUTION_REASONING_TITLE):
-            pass
+        is_delegate_resume_replay = is_delegate_wait_resume_command(
+            getattr(gateway_context, "current_command", None)
+        )
+        setattr(
+            gateway_context,
+            "_datacloud_skip_delegate_resume_replay_output",
+            is_delegate_resume_replay,
+        )
+        if not is_delegate_resume_replay:
+            async with gateway_context.sub_step(_EXECUTION_REASONING_TITLE):
+                pass
     result = await run_react_loop(
         state=state,
         tools_list=tools_list,
