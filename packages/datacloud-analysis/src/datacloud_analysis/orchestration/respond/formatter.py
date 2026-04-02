@@ -1,14 +1,23 @@
 from __future__ import annotations
 import csv
-import io
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
+from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
+
 logger = logging.getLogger(__name__)
 _CHUNK_ROWS = 100  # 每个 6001 chunk 携带的行数
+
+
+def _resolve_result_path(path_str: str, workspace_dir: str | None) -> Path:
+    resolved = Path(path_str)
+    if not resolved.is_absolute() and workspace_dir:
+        workspace_root = resolve_shared_workspace_dir(workspace_dir)
+        if workspace_root is not None:
+            resolved = workspace_root / path_str
+    return resolved
 
 async def format_result(
     react_final: dict[str, Any],
@@ -33,9 +42,7 @@ async def format_result(
         if not csv_path:
             await _emit_text(gateway_context, "（CSV 路径为空，无法输出）")
             return
-        resolved = Path(csv_path)
-        if not resolved.is_absolute() and workspace_dir:
-            resolved = Path(workspace_dir) / csv_path
+        resolved = _resolve_result_path(csv_path, workspace_dir)
         if not resolved.exists():
             await _emit_text(gateway_context, f"（CSV 文件不存在: {csv_path}）")
             return
@@ -54,9 +61,7 @@ async def format_result(
         if not json_path:
             await _emit_text(gateway_context, "（JSON 文件路径为空）")
             return
-        resolved = Path(json_path)
-        if not resolved.is_absolute() and workspace_dir:
-            resolved = Path(workspace_dir) / json_path
+        resolved = _resolve_result_path(json_path, workspace_dir)
         if not resolved.exists():
             await _emit_text(gateway_context, f"（文件不存在: {json_path}）")
             return
