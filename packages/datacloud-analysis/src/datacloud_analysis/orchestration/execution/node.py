@@ -79,10 +79,26 @@ async def execution_node(
     state: AgentState,
     config: RunnableConfig,
     default_tools: dict[str, Any] | None = None,
+    prompts_overwrite: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Execute ReAct loop with tool dispatch and hook support."""
     locale = os.getenv("DATACLOUD_AGENT_LOCALE", "zh_CN")
-    system_prompt = get_system_prompt(locale) + "\n\n" + get_execution_prompt(locale)
+
+    # 基础 prompt：系统角色 + 执行规则
+    base_system = get_system_prompt(locale)
+    base_execution = get_execution_prompt(locale)
+
+    # 消费 prompts_overwrite：
+    # - system_prompt 替换基础系统角色描述
+    # - task_prompt   附加在执行规则之后（业务角色/流程说明等）
+    overwrite = prompts_overwrite or {}
+    custom_system = str(overwrite.get("system_prompt") or "").strip()
+    custom_task = str(overwrite.get("task_prompt") or "").strip()
+
+    system_parts = [custom_system if custom_system else base_system, base_execution]
+    if custom_task:
+        system_parts.append(custom_task)
+    system_prompt = "\n\n".join(p for p in system_parts if p)
 
     tools_list = _build_tools_list(default_tools)
     max_rounds = int(os.getenv("DATACLOUD_REACT_MAX_ROUNDS", "10"))
