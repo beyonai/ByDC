@@ -31,7 +31,7 @@ def build_analysis_graph(
         return await intend_node(state, config)
 
     async def _execution(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
-        return await execution_node(state, config, default_tools=tools)
+        return await execution_node(state, config, default_tools=tools, prompts_overwrite=prompts_overwrite)
 
     async def _respond(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         return await respond_node(state, config)
