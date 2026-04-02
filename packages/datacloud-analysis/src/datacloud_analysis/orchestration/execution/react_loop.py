@@ -24,7 +24,8 @@ async def finish_react(
 
     Args:
         reason: 结束原因（用于审计）
-        answer: 文字类结论（result_type=text 时必填）
+        answer: 文字类结论或分析。result_type=text 时为唯一输出；
+                result_type=query_result 时若填写，系统会先推文字分析再推结构化数据。
         result_type: 'text' | 'csv_file' | 'json' | 'json_file' | 'query_result'
         csv_file_path: 文件路径（result_type=csv_file/json_file 时必填）
         data: JSON 字符串（result_type=json 时填写，工具返回的结构化数据）
@@ -32,6 +33,7 @@ async def finish_react(
     注意：
     - 调用 data_query 类工具后，返回中含 _hint 字段，请使用 result_type=query_result，
       系统会自动透传完整的 records/pagination/meta/file 结构，无需手动序列化。
+      若需同时返回文字分析，填写 answer 字段即可（先推文字，后推结构化数据）。
     - execute_code 执行后会将 _result 自动保存到同名 .json 文件（result_file 字段），
       此时推荐使用 result_type=json_file，csv_file_path 填写 result_file 路径。
     """
