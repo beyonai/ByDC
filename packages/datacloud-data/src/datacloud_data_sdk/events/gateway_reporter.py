@@ -16,6 +16,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from datacloud_data_sdk.stream_text import coerce_stream_chunk_text
+
 logger = logging.getLogger(__name__)
 
 _THINK_EVENT_TYPE = "reasoningLogDelta"
@@ -169,7 +171,7 @@ class GatewayProgressReporter:
             ) from exc
 
         async with sub_step(title) as (fallback_m_id, fallback_p_m_id):
-            await self._ctx.emit_chunk(text)
+            await self._ctx.emit_chunk(coerce_stream_chunk_text(text))
         return str(fallback_m_id), str(fallback_p_m_id)
 
     async def _emit_state(
@@ -198,7 +200,7 @@ class GatewayProgressReporter:
         parent_message_id: str = "",
     ) -> None:
         await self._ctx.emit_chunk(
-            content,
+            coerce_stream_chunk_text(content),
             **self._reasoning_kwargs(
                 message_id=message_id,
                 parent_message_id=parent_message_id,
