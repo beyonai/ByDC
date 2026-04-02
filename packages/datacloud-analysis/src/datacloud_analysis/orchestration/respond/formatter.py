@@ -18,9 +18,14 @@ async def format_result(
     result_type = react_final.get("result_type", "text")
     if result_type == "query_result":
         # data_query 原始结构透传：{result_type, records, pagination, meta, file, notice_msg}
+        # 如果同时有 answer（文字分析），先推文字再推 6001
+        answer = react_final.get("answer", "")
+        if answer:
+            await _emit_text(gateway_context, answer)
         query_data = react_final.get("query_data")
         if not query_data:
-            await _emit_text(gateway_context, "（query_data 为空）")
+            if not answer:
+                await _emit_text(gateway_context, "（query_data 为空）")
             return
         await _emit_query_result_as_6001(gateway_context, query_data)
     elif result_type == "csv_file":
