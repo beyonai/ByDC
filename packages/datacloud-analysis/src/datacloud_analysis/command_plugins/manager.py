@@ -172,15 +172,6 @@ def _candidate_command_plugin_dirs() -> list[Path]:
             / "plugins"
             / "command_plugins"
         )
-        dirs.append(
-            repo_root
-            / "examples"
-            / "e_commerce_demo"
-            / "backend"
-            / "datacloud_service"
-            / "plugins"
-            / "comand_plugins"
-        )
     return dirs
 
 
