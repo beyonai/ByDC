@@ -706,6 +706,15 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
                     )
             if not delegate_parent_message_id:
                 delegate_parent_message_id = str(getattr(_context, "message_id", "") or "").strip()
+            if delegate_parent_message_id:
+                delegate_metadata.setdefault(
+                    "delegate_parent_message_id",
+                    delegate_parent_message_id,
+                )
+                parent_resume_target.setdefault(
+                    "delegate_parent_message_id",
+                    delegate_parent_message_id,
+                )
 
             # 构造委托参数，传给 interrupt，由 worker 负责实际调用 call_agent
             # 这样恢复时不会重复调用 call_agent（LangGraph 恢复会重跑节点，
