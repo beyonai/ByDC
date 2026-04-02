@@ -245,7 +245,7 @@ def _candidate_extension_dirs() -> list[Path]:
             / "backend"
             / "datacloud_service"
             / "plugins"
-            / "tool_plugins"
+            / "tool_hook_plugins"
         )
     return dirs
 

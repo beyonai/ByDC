@@ -1134,15 +1134,15 @@ class DataCloudWorker(GatewayWorker):
                             content_type=SseReasonMessageType.task_finished.value,
                         )
 
-                elif kind == "on_chat_model_start":
-                    metadata = event.get("metadata") or {}
-                    node_name = str(metadata.get("langgraph_node") or "").strip()
-                    desc = _NODE_THINKING_DESC.get(node_name, _DEFAULT_THINKING_DESC)
-                    await _emit(
-                        content=desc,
-                        event_type=EventType.REASONING_LOG_START.value,
-                        content_type=SseReasonMessageType.think_text.value,
-                    )
+                # elif kind == "on_chat_model_start":
+                #     metadata = event.get("metadata") or {}
+                #     node_name = str(metadata.get("langgraph_node") or "").strip()
+                #     desc = _NODE_THINKING_DESC.get(node_name, _DEFAULT_THINKING_DESC)
+                #     await _emit(
+                #         content=desc,
+                #         event_type=EventType.REASONING_LOG_START.value,
+                #         content_type=SseReasonMessageType.think_text.value,
+                #     )
 
             logger.info(
                 "_stream_graph: astream_events end session=%s event_count=%d",
