@@ -109,6 +109,8 @@ def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
                 tool = inject_reason_field(t)
                 if runtime_context_param:
                     setattr(tool, "_datacloud_runtime_context_param", runtime_context_param)
+                if getattr(callable_or_tool, "_is_agent_delegate", False):
+                    setattr(tool, "_is_agent_delegate", True)
                 tools.append(tool)
 
     return tools
