@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -103,6 +104,7 @@ class OwlParser:
     def __init__(self) -> None:
         self._objects: dict[str, ParsedObject] = {}
         self._fields: dict[str, ParsedField] = {}
+        self._object_fields: dict[str, dict[str, ParsedField]] = defaultdict(dict)
         self._actions: dict[str, ParsedAction] = {}
         self._relations: dict[str, ParsedRelation] = {}
         self._datasources: dict[str, ParsedDatasource] = {}
@@ -111,19 +113,35 @@ class OwlParser:
         self._current_entity_code: str | None = None
         self._mapping_datasource: dict[str, str] = {}
         self._mapping_table: dict[str, str] = {}
-        self._field_uri_to_code: dict[str, str] = {}  # URI -> property_code
+        self._field_uri_to_code: dict[tuple[str, str], str] = {}
+        self._request_params_by_uri: dict[str, ParsedField] = {}
+        self._response_params_by_uri: dict[str, ParsedField] = {}
 
     def parse_file(self, path: Path) -> None:
         if path.suffix.lower() != ".owl":
             return
 
         content = path.read_text(encoding="utf-8")
+        object_scope = _infer_scoped_entity_code(path, "_object.owl")
+        mapping_scope = _infer_scoped_entity_code(path, "_mapping.owl")
         try:
-            self._parse_owl_content(content, path)
+            self._parse_owl_content(
+                content,
+                path,
+                object_scope=object_scope,
+                mapping_scope=mapping_scope,
+            )
         except Exception as e:
             logger.warning(f"Failed to parse OWL file {path}: {e}")
 
-    def _parse_owl_content(self, content: str, path: Path) -> None:
+    def _parse_owl_content(
+        self,
+        content: str,
+        path: Path,
+        *,
+        object_scope: str | None,
+        mapping_scope: str | None,
+    ) -> None:
         try:
             from rdflib import Graph
             from rdflib.namespace import RDF
@@ -139,7 +157,7 @@ class OwlParser:
             if type_uri.endswith("EntityDefinition"):
                 self._parse_entity_definition(g, s)
             elif type_uri.endswith("EntityField"):
-                self._parse_entity_field(g, s)
+                self._parse_entity_field(g, s, object_scope)
             elif type_uri.endswith("ActionDefinition"):
                 self._parse_action_definition(g, s)
             elif type_uri.endswith("RequestParameter"):
@@ -155,7 +173,7 @@ class OwlParser:
             elif type_uri.endswith("EntityMapping"):
                 self._parse_entity_mapping(g, s)
             elif type_uri.endswith("Mapping"):
-                self._parse_mapping(g, s)
+                self._parse_mapping(g, s, mapping_scope)
 
     def _get_predicate_value(self, g: Any, subject: Any, predicate_suffix: str) -> str | None:
         for p, o in g.predicate_objects(subject):
@@ -240,13 +258,32 @@ class OwlParser:
         )
         self._objects[entity_code] = obj
 
-    def _parse_entity_field(self, g: Any, subject: Any) -> None:
+    def _register_field(
+        self,
+        *,
+        scope: str | None,
+        subject: Any,
+        field: ParsedField,
+    ) -> None:
+        subject_uri = str(subject)
+        if scope:
+            existing = self._object_fields[scope].get(field.field_code)
+            if existing is not None and field.source_column is None:
+                field.source_column = existing.source_column
+            self._object_fields[scope][field.field_code] = field
+            self._field_uri_to_code[(scope, subject_uri)] = field.field_code
+            return
+
+        existing = self._fields.get(field.field_code)
+        if existing is not None and field.source_column is None:
+            field.source_column = existing.source_column
+        self._fields[field.field_code] = field
+        self._field_uri_to_code[("", subject_uri)] = field.field_code
+
+    def _parse_entity_field(self, g: Any, subject: Any, object_scope: str | None) -> None:
         property_code = self._get_predicate_value(g, subject, "property_code")
         if not property_code:
             return
-
-        # Track URI -> property_code so EntityDefinition field_refs can resolve to fields
-        self._field_uri_to_code[str(subject)] = property_code
 
         property_name = self._get_predicate_value(g, subject, "property_name") or property_code
         data_type = self._get_predicate_value(g, subject, "data_type") or "STRING"
@@ -268,7 +305,7 @@ class OwlParser:
             rel_term_codeorname=rel_term_codeorname if rel_term_codeorname else None,
             term_data_type=term_data_type if term_data_type else None,
         )
-        self._fields[property_code] = fld
+        self._register_field(scope=object_scope, subject=subject, field=fld)
 
     def _parse_action_definition(self, g: Any, subject: Any) -> None:
         action_code = self._get_predicate_value(g, subject, "action_code")
@@ -332,7 +369,7 @@ class OwlParser:
             rel_term_codeorname=rel_term_codeorname if rel_term_codeorname else None,
             term_data_type=term_data_type if term_data_type else None,
         )
-        self._fields[param_code] = fld
+        self._request_params_by_uri[str(subject)] = fld
 
     def _parse_response_parameter(self, g: Any, subject: Any) -> None:
         field_code = self._get_predicate_value(g, subject, "fieldCode")
@@ -354,8 +391,7 @@ class OwlParser:
             rel_term_codeorname=rel_term_codeorname if rel_term_codeorname else None,
             term_data_type=term_data_type if term_data_type else None,
         )
-        if field_code not in self._fields:
-            self._fields[field_code] = fld
+        self._response_params_by_uri[str(subject)] = fld
 
     def _parse_term_relation(self, g: Any, subject: Any) -> None:
         source_code = self._get_predicate_value(g, subject, "source_code")
@@ -434,14 +470,24 @@ class OwlParser:
             "mappings": mapping_refs,
         }
 
-    def _parse_mapping(self, g: Any, subject: Any) -> None:
+    def _parse_mapping(self, g: Any, subject: Any, mapping_scope: str | None) -> None:
         property_code = self._get_predicate_value(g, subject, "property_code")
         source_column = self._get_predicate_value(g, subject, "source_column_code")
         datasource_code = self._get_predicate_value(g, subject, "source_datasource_code")
         source_table = self._get_predicate_value(g, subject, "source_table_code")
 
         if property_code:
-            if property_code in self._fields:
+            if mapping_scope:
+                scoped_fields = self._object_fields[mapping_scope]
+                if property_code in scoped_fields:
+                    scoped_fields[property_code].source_column = source_column
+                else:
+                    scoped_fields[property_code] = ParsedField(
+                        field_code=property_code,
+                        field_name=property_code,
+                        source_column=source_column,
+                    )
+            elif property_code in self._fields:
                 self._fields[property_code].source_column = source_column
             else:
                 fld = ParsedField(
@@ -451,11 +497,12 @@ class OwlParser:
                 )
                 self._fields[property_code] = fld
 
-            if self._current_entity_code:
+            entity_code = mapping_scope or self._current_entity_code
+            if entity_code:
                 if datasource_code:
-                    self._mapping_datasource[self._current_entity_code] = datasource_code
+                    self._mapping_datasource[entity_code] = datasource_code
                 if source_table:
-                    self._mapping_table[self._current_entity_code] = source_table
+                    self._mapping_table[entity_code] = source_table
 
     def _apply_mappings_to_objects(self) -> None:
         for entity_code, datasource_code in self._mapping_datasource.items():
@@ -499,6 +546,59 @@ class OwlParser:
 
         return term_meta if term_meta else None
 
+    def _resolve_object_field(self, object_code: str, field_code: str) -> ParsedField | None:
+        scoped_field = self._object_fields.get(object_code, {}).get(field_code)
+        if scoped_field is not None:
+            return scoped_field
+        return self._fields.get(field_code)
+
+    def _resolve_object_field_from_ref(self, object_code: str, field_uri: str) -> ParsedField | None:
+        field_code = self._field_uri_to_code.get((object_code, field_uri))
+        if field_code is None:
+            field_code = self._field_uri_to_code.get(("", field_uri))
+        if field_code is None:
+            return None
+        return self._resolve_object_field(object_code, field_code)
+
+    def _resolve_action_param_field(
+        self,
+        *,
+        object_code: str,
+        param_ref: str,
+        direction: str,
+    ) -> ParsedField | None:
+        if direction == "IN":
+            param_field = self._request_params_by_uri.get(param_ref)
+        else:
+            param_field = self._response_params_by_uri.get(param_ref)
+
+        if param_field is None:
+            return None
+
+        object_field = self._resolve_object_field(object_code, param_field.field_code)
+        if object_field is None:
+            return param_field
+
+        # 参数定义里的 required / type / 术语元信息优先，显示名称回退到对象字段名。
+        if param_field.field_name and param_field.field_name != param_field.field_code:
+            field_name = param_field.field_name
+        else:
+            field_name = object_field.field_name
+
+        return ParsedField(
+            field_code=param_field.field_code,
+            field_name=field_name,
+            field_type=param_field.field_type or object_field.field_type,
+            description=param_field.description or object_field.description,
+            source_column=object_field.source_column,
+            is_primary_key=object_field.is_primary_key,
+            required=param_field.required,
+            term_type_code_path=param_field.term_type_code_path or object_field.term_type_code_path,
+            library_code=param_field.library_code or object_field.library_code,
+            rel_term_codeorname=param_field.rel_term_codeorname or object_field.rel_term_codeorname,
+            term_data_type=param_field.term_data_type or object_field.term_data_type,
+        )
+
     def parse_directory(self, ontology_dir: Path, relations_dir: Path | None = None) -> dict[str, Any]:
         if ontology_dir.is_dir():
             for owl_file in ontology_dir.rglob("*.owl"):
@@ -515,10 +615,7 @@ class OwlParser:
             # Resolve field URIs (from <fields rdf:resource="..."/>) to ParsedField instances
             fields = []
             for field_uri in obj.field_refs:
-                field_code = self._field_uri_to_code.get(field_uri)
-                if not field_code:
-                    continue
-                fld = self._fields.get(field_code)
+                fld = self._resolve_object_field_from_ref(obj.object_code, field_uri)
                 if not fld:
                     continue
                 field_dict = {
@@ -544,38 +641,48 @@ class OwlParser:
                     params = []
 
                     for param_ref in action.request_param_refs:
-                        for f in self._fields.values():
-                            if param_ref.endswith(f.field_code) or f.field_code in param_ref:
-                                param_dict = {
-                                    "param_code": f.field_code,
-                                    "param_name": f.field_name,
-                                    "param_type": f.field_type,
-                                    "required": f.required,
-                                    "direction": "IN",
-                                }
-                                if f.term_type_code_path:
-                                    term_meta = self._build_term_meta(f)
-                                    if term_meta:
-                                        param_dict["termMeta"] = term_meta
-                                params.append(param_dict)
-                                break
+                        f = self._resolve_action_param_field(
+                            object_code=obj.object_code,
+                            param_ref=param_ref,
+                            direction="IN",
+                        )
+                        if f is None:
+                            continue
+
+                        param_dict = {
+                            "param_code": f.field_code,
+                            "param_name": f.field_name,
+                            "param_type": f.field_type,
+                            "required": f.required,
+                            "direction": "IN",
+                        }
+                        if f.term_type_code_path:
+                            term_meta = self._build_term_meta(f)
+                            if term_meta:
+                                param_dict["termMeta"] = term_meta
+                        params.append(param_dict)
 
                     for param_ref in action.response_param_refs:
-                        for f in self._fields.values():
-                            if param_ref.endswith(f.field_code) or f.field_code in param_ref:
-                                param_dict = {
-                                    "param_code": f.field_code,
-                                    "param_name": f.field_name,
-                                    "param_type": f.field_type,
-                                    "required": f.required,
-                                    "direction": "OUT",
-                                }
-                                if f.term_type_code_path:
-                                    term_meta = self._build_term_meta(f)
-                                    if term_meta:
-                                        param_dict["termMeta"] = term_meta
-                                params.append(param_dict)
-                                break
+                        f = self._resolve_action_param_field(
+                            object_code=obj.object_code,
+                            param_ref=param_ref,
+                            direction="OUT",
+                        )
+                        if f is None:
+                            continue
+
+                        param_dict = {
+                            "param_code": f.field_code,
+                            "param_name": f.field_name,
+                            "param_type": f.field_type,
+                            "required": f.required,
+                            "direction": "OUT",
+                        }
+                        if f.term_type_code_path:
+                            term_meta = self._build_term_meta(f)
+                            if term_meta:
+                                param_dict["termMeta"] = term_meta
+                        params.append(param_dict)
 
                     actions.append({
                         "action_code": action.action_code,
@@ -657,3 +764,9 @@ class OwlParser:
             "datasource_configs": datasource_configs,
             "views": views,
         }
+
+
+def _infer_scoped_entity_code(path: Path, suffix: str) -> str | None:
+    if not path.name.endswith(suffix):
+        return None
+    return path.name.removesuffix(suffix)
