@@ -748,6 +748,15 @@ class DataCloudWorker(GatewayWorker):
                 return {"status": "done"}
 
         if isinstance(command, AskAgentCommand):
+            # 初始提示：第一层 sub_step(阶段标题)，第二层 emit_chunk(说明文本，路由到思考区)
+            async with context.sub_step(_NODE_PHASE_TITLE["knowledge_enhance"]) as (m_id, p_id):
+                await context.emit_chunk(
+                    StreamChunkEvent(content="已接收到用户消息，开始处理"),
+                    event_type=EventType.REASONING_LOG_START.value,
+                    content_type=SseReasonMessageType.think_text.value,
+                    message_id=m_id,
+                    parent_message_id=p_id,
+                )
             user_text = _latest_user_text_from_content(command.content)
             if _is_light_chitchat(user_text):
                 await context.emit_chunk(
@@ -859,16 +868,6 @@ class DataCloudWorker(GatewayWorker):
             }
         }
         context._langgraph_thread_id = thread_id
-
-        # 初始提示：第一层 sub_step(阶段标题)，第二层 emit_chunk(说明文本，路由到思考区)
-        async with context.sub_step(_NODE_PHASE_TITLE["knowledge_enhance"]) as (m_id, p_id):
-            await context.emit_chunk(
-                StreamChunkEvent(content="已接收到用户消息，开始处理"),
-                event_type=EventType.REASONING_LOG_START.value,
-                content_type=SseReasonMessageType.think_text.value,
-                message_id=m_id,
-                parent_message_id=p_id,
-            )
 
         if isinstance(command, ResumeCommand):
             try:
@@ -1187,6 +1186,11 @@ class DataCloudWorker(GatewayWorker):
                     prompt,
                 )
                 if interrupt_reason == "AGENT_DELEGATE_WAIT":
+                    # 从 interrupt value 里取出 call_agent 参数，由 worker 负责发起委托
+                    # 这样避免 tool 里调 call_agent，防止 LangGraph 恢复时重复调用
+                    call_agent_kwargs = {}
+                    if isinstance(interrupt_value, dict):
+                        call_agent_kwargs = dict(interrupt_value.get("call_agent_kwargs") or {})
                     logger.info(
                         "_stream_graph: delegate wait interrupt stays internal session=%s "
                         "checkpoint_id=%s todo_active_id=%s pending_capability=%s",
@@ -1195,6 +1199,8 @@ class DataCloudWorker(GatewayWorker):
                         todo_active_id,
                         pending_capability,
                     )
+                    if call_agent_kwargs:
+                        await context.call_agent(**call_agent_kwargs)
                     return {"status": "waiting"}
                 await context.ask_user(
                     AskUserEvent(
