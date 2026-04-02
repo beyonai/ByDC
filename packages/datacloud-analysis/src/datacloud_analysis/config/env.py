@@ -21,9 +21,11 @@ EMBEDDING     Embedding model  (memory/knowledge vector search)
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -154,11 +156,84 @@ class KnowledgeSettings(BaseSettings):
         description="默认查询跳数",
     )
 
+    # --- 数据库连接配置 ---
+    db_host: str = Field(default="", description="知识库数据库主机")
+    db_port: int = Field(default=5432, description="知识库数据库端口")
+    db_user: str = Field(default="", description="知识库数据库用户名")
+    db_password: str = Field(default="", description="知识库数据库密码")
+    db_name: str = Field(default="", description="知识库数据库名称")
+    db_schema: str = Field(default="public", description="知识库数据库 schema")
+    db_type: str = Field(default="postgresql", description="知识库数据库类型")
+    knowledge_schema: str = Field(
+        default="",
+        validation_alias="DATACLOUD_KNOWLEDGE_SCHEMA",
+        description="知识 schema 标识（裸变量，无前缀）",
+    )
+
     @property
     def graph_files_list(self) -> list[str]:
         if not self.graph_files.strip():
             return []
         return [p.strip() for p in self.graph_files.split(",") if p.strip()]
+
+
+# ---------------------------------------------------------------------------
+# New Settings classes (P2)
+# ---------------------------------------------------------------------------
+
+class AgentSettings(BaseSettings):
+    """Agent-level settings."""
+
+    model_config = SettingsConfigDict(env_prefix="DATACLOUD_AGENT_", extra="ignore")
+
+    locale: str = Field(default="zh_CN", description="Agent locale, e.g. zh_CN or en_US")
+
+
+class GatewaySettings(BaseSettings):
+    """Gateway / worker layer settings (Redis + worker_id)."""
+
+    model_config = SettingsConfigDict(env_prefix="DATACLOUD_GATEWAY_", extra="ignore")
+
+    redis_host: str = Field(default="", description="Redis host")
+    redis_port: int = Field(default=6379, description="Redis port")
+    redis_username: str = Field(default="", description="Redis username")
+    redis_password: str = Field(default="", description="Redis password")
+    redis_db: int = Field(default=0, description="Redis database index")
+    worker_id: str = Field(default="", description="Worker node identifier")
+
+
+class AIFactorySettings(BaseSettings):
+    """AI Factory settings (token + agent_ids list)."""
+
+    model_config = SettingsConfigDict(env_prefix="DATACLOUD_AI_FACTORY_", extra="ignore")
+
+    token: str = Field(default="", description="AI Factory API token")
+    agent_ids: list[str] = Field(default_factory=list, description="AI Factory agent IDs (JSON array)")
+
+    @field_validator("agent_ids", mode="before")
+    @classmethod
+    def _parse_agent_ids(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return []
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return [str(item) for item in parsed]
+                return [str(parsed)]
+            except (json.JSONDecodeError, ValueError):
+                # Treat as comma-separated fallback
+                return [item.strip() for item in v.split(",") if item.strip()]
+        return v
+
+
+class ExecutionSettings(BaseSettings):
+    """Execution / ReAct loop settings."""
+
+    model_config = SettingsConfigDict(env_prefix="DATACLOUD_", extra="ignore")
+
+    react_max_rounds: int = Field(default=10, description="Maximum ReAct loop rounds")
 
 
 # ---------------------------------------------------------------------------
@@ -196,6 +271,12 @@ class Settings(BaseSettings):
     embedding: EmbeddingSettings | None = Field(default=None)
     knowledge: KnowledgeSettings | None = Field(default=None)
 
+    # New settings groups (P2)
+    agent: AgentSettings | None = Field(default=None)
+    gateway: GatewaySettings | None = Field(default=None)
+    ai_factory: AIFactorySettings | None = Field(default=None)
+    execution: ExecutionSettings | None = Field(default=None)
+
     @model_validator(mode="after")
     def _load_llm_roles(self) -> "Settings":
         """Populate LLM role settings from their env prefixes (soft-fail when missing)."""
@@ -218,6 +299,26 @@ class Settings(BaseSettings):
 
         try:
             object.__setattr__(self, "knowledge", KnowledgeSettings())
+        except Exception:  # noqa: BLE001
+            pass
+
+        try:
+            object.__setattr__(self, "agent", AgentSettings())
+        except Exception:  # noqa: BLE001
+            pass
+
+        try:
+            object.__setattr__(self, "gateway", GatewaySettings())
+        except Exception:  # noqa: BLE001
+            pass
+
+        try:
+            object.__setattr__(self, "ai_factory", AIFactorySettings())
+        except Exception:  # noqa: BLE001
+            pass
+
+        try:
+            object.__setattr__(self, "execution", ExecutionSettings())
         except Exception:  # noqa: BLE001
             pass
 

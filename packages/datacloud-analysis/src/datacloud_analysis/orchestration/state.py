@@ -75,6 +75,12 @@ class AgentState(MessagesState):
     results_map: dict[str, dict[str, Any]] | None
     final_summary: dict[str, Any] | None
 
+    # --- 重构新增字段 (P8) ---
+    intent_source: str | None          # "command" | "react" | "chitchat"
+    command_result: dict | None        # intend 节点命令结果
+    react_rounds: int | None           # 实际执行轮数
+    react_final: dict | None           # 停止时的结构化结果
+
 
 StateDict = MutableMapping[str, Any]
 
