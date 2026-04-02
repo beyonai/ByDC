@@ -25,6 +25,20 @@ _BUILTIN_TOOLS: list[BaseTool] = [
     execute_code,
 ]
 
+
+def _resolve_runtime_context_param(source: Any) -> str | None:
+    """Return the supported runtime context parameter name for a tool callable."""
+    try:
+        sig = inspect.signature(source)
+    except (TypeError, ValueError):
+        return None
+
+    for candidate in ("_context", "gateway_context"):
+        if candidate in sig.parameters:
+            return candidate
+    return None
+
+
 def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
     """Merge builtin tools with dynamically injected tools, inject reason field."""
     tools: list[BaseTool] = []
@@ -40,11 +54,19 @@ def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
     if default_tools:
         for name, callable_or_tool in default_tools.items():
             if isinstance(callable_or_tool, BaseTool):
-                tools.append(inject_reason_field(callable_or_tool))
+                runtime_context_param = (
+                    _resolve_runtime_context_param(getattr(callable_or_tool, "coroutine", None))
+                    or _resolve_runtime_context_param(getattr(callable_or_tool, "func", None))
+                )
+                tool = inject_reason_field(callable_or_tool)
+                if runtime_context_param:
+                    setattr(tool, "_datacloud_runtime_context_param", runtime_context_param)
+                tools.append(tool)
             elif callable(callable_or_tool):
                 import asyncio  # noqa: PLC0415
                 from langchain_core.tools import StructuredTool  # noqa: PLC0415
                 is_async = asyncio.iscoroutinefunction(callable_or_tool)
+                runtime_context_param = _resolve_runtime_context_param(callable_or_tool)
 
                 # 检查函数签名：如果是 **kwargs 或无明确参数，生成固定 schema
                 sig = inspect.signature(callable_or_tool)
@@ -72,7 +94,10 @@ def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
                         description=getattr(callable_or_tool, "__doc__", name) or name,
                         coroutine=callable_or_tool if is_async else None,
                     )
-                tools.append(inject_reason_field(t))
+                tool = inject_reason_field(t)
+                if runtime_context_param:
+                    setattr(tool, "_datacloud_runtime_context_param", runtime_context_param)
+                tools.append(tool)
 
     return tools
 
