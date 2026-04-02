@@ -226,16 +226,7 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
     @staticmethod
     def _compile_task_prompt(detail: dict[str, Any]) -> str:
         parts: list[str] = []
-        if detail.get("roleAttributes"):
-            parts.append(f"[Role]\n{detail['roleAttributes']}")
-        if detail.get("processingFlow"):
-            parts.append(f"[Processing Flow]\n{detail['processingFlow']}")
-        if detail.get("personalityDimensions"):
-            parts.append(f"[Personality]\n{detail['personalityDimensions']}")
-        if detail.get("wordPreferences"):
-            parts.append(f"[Word Preference]\n{detail['wordPreferences']}")
-        if detail.get("sentenceAndTone"):
-            parts.append(f"[Tone]\n{detail['sentenceAndTone']}")
+        parts.append(f"{detail['corePersonaDefinition']}")
         return "\n\n".join(parts)
 
     @staticmethod
