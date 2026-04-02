@@ -423,6 +423,11 @@ async def dispatch_tool(
                             "\u8bf7\u8c03\u7528 finish_react \u65f6\u4f7f\u7528 result_type=query_result\uff0c"
                             "\u7cfb\u7edf\u4f1a\u81ea\u52a8\u900f\u4f20\u5b8c\u6574\u7ed3\u6784\u3002"
                         )
+                        logger.info(
+                            "[tool_return] data_query hint columns=%s file_url=%s",
+                            ",".join(col_names[:8]),
+                            file_url,
+                        )
                         logger.info("[tool_return] data_query file_url detected: %s", file_url)
                     else:
                         final_output["_hint"] = (
@@ -430,6 +435,11 @@ async def dispatch_tool(
                             f"{('\n' + columns_hint) if columns_hint else ''}"
                             "\u8bf7\u7acb\u5373\u8c03\u7528 finish_react\uff0c\u4f7f\u7528 result_type=query_result\uff0c"
                             "\u7cfb\u7edf\u4f1a\u81ea\u52a8\u900f\u4f20\u5b8c\u6574\u7684 records/pagination/meta \u7ed3\u6784\uff0c\u65e0\u9700\u624b\u52a8\u5e8f\u5217\u5316\u3002"
+                        )
+                        logger.info(
+                            "[tool_return] data_query hint columns=%s records=%d",
+                            ",".join(col_names[:8]),
+                            len(records),
                         )
                         logger.info("[tool_return] data_query records detected: count=%d", len(records))
 
