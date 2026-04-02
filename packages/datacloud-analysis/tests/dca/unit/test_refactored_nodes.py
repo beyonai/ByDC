@@ -189,7 +189,6 @@ class TestDispatchTool:
     @pytest.mark.asyncio
     async def test_ask_user_path(self) -> None:
         """dispatch_tool should call ask_user directly without hooks."""
-        from langchain_core.tools import tool
         from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
 
         mock_tool = AsyncMock()
@@ -207,7 +206,6 @@ class TestDispatchTool:
     @pytest.mark.asyncio
     async def test_normal_tool_path(self) -> None:
         """dispatch_tool should call regular tools via hook pipeline."""
-        from langchain_core.tools import tool
         import datacloud_analysis.orchestration.execution.tool_wrapper as tw_module
         from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
 
@@ -237,6 +235,67 @@ class TestDispatchTool:
             )
 
         assert result == {"data": "result"}
+
+    @pytest.mark.asyncio
+    async def test_normal_tool_passes_workspace_dir_to_invocation_context(self) -> None:
+        import datacloud_analysis.orchestration.execution.tool_wrapper as tw_module
+        from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
+
+        mock_tool = AsyncMock()
+        mock_tool.name = "my_tool"
+        mock_tool.ainvoke = AsyncMock(return_value={"data": "result"})
+
+        tc = {
+            "name": "my_tool",
+            "args": {"reason": "because", "param": "val"},
+            "id": "id4",
+        }
+
+        mock_hook_manager = MagicMock()
+        mock_hook_manager.run_before = AsyncMock(
+            return_value=(
+                {"tool_name": "my_tool", "tool_params": {"param": "val"}, "tool_output": None, "tool_error": None},
+                None,
+            )
+        )
+        mock_hook_manager.run_after = AsyncMock(
+            return_value=(
+                {
+                    "tool_name": "my_tool",
+                    "tool_params": {"param": "val"},
+                    "tool_output": {"data": "result"},
+                    "tool_error": None,
+                },
+                None,
+            )
+        )
+
+        captured_kwargs: dict[str, object] = {}
+
+        class FakeInvocationContext:
+            def __init__(self, **kwargs: object) -> None:
+                captured_kwargs.update(kwargs)
+
+            def __enter__(self) -> FakeInvocationContext:
+                return self
+
+            def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+                return None
+
+        with patch.object(tw_module, "get_tool_hook_plugin_manager", return_value=mock_hook_manager):
+            with patch("datacloud_data_sdk.context.InvocationContext", FakeInvocationContext):
+                _, result = await dispatch_tool(
+                    tc,
+                    {"my_tool": mock_tool},
+                    state={
+                        "agent_id": "s1",
+                        "user_query": "q",
+                        "workspace_dir": "/tmp/datacloud/10011741/private/10011835",
+                    },
+                )
+
+        assert result == {"data": "result"}
+        assert captured_kwargs["workspace_dir"] == "/tmp/datacloud/10011741/private"
 
 
 # ---------------------------------------------------------------------------
