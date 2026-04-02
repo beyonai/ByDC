@@ -214,6 +214,16 @@ async def run_react_loop(
         if not getattr(ai_msg, "tool_calls", None):
             # L2: 无 tool_calls，直接文字结束
             logger.info("[react_loop] stop: no_tool_call at round=%d", round_idx + 1)
+            if _last_query_data is not None:
+                return {
+                    "react_final": {
+                        "result_type": "query_result",
+                        "answer": str(ai_msg.content or ""),
+                        "query_data": _last_query_data,
+                        "stop_reason": "no_tool_call_with_query_data",
+                    },
+                    "react_rounds": round_idx + 1,
+                }
             return {
                 "react_final": {
                     "result_type": "text",
@@ -272,6 +282,16 @@ async def run_react_loop(
 
     # L3: 超出最大轮数
     logger.warning("[react_loop] stop: max_rounds=%d reached", max_rounds)
+    if _last_query_data is not None:
+        return {
+            "react_final": {
+                "result_type": "query_result",
+                "answer": _summarize_last_output(messages),
+                "query_data": _last_query_data,
+                "stop_reason": "max_rounds_with_query_data",
+            },
+            "react_rounds": max_rounds,
+        }
     return {
         "react_final": {
             "result_type": "text",
