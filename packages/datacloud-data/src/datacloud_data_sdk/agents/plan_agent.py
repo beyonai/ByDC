@@ -96,6 +96,15 @@ SQL 方言必须匹配 datasourceAlias 对应的 dbType：
 - 排名、聚合、topN、bottomN、百分比截断都必须先作用在 A；
 - 最终 SELECT 再返回 B，必要时可同时带出 A 的标识字段；
 - 禁止把 B 当作排名主体，除非用户明确要求对 B 排名。
+10. 只要最终 SELECT / ORDER BY / GROUP BY / HAVING 所在层同时引用了两个或以上来源（表、子查询、CTE）且这些来源中存在同名列，就必须对这些列使用表别名限定，禁止写裸列名。
+11. 如果某一层 FROM/JOIN 中多个来源都包含 `phy_grid_id`、`manage_grid_id`、`enterprise_id`、`enterprise_name`、`stat_date`、`area_name` 等常见同名列，则该层必须写成 `er.phy_grid_id`、`tg.phy_grid_id` 这类带别名形式，不能只写 `phy_grid_id`。
+12. 即使某个列已经在上游 CTE 中出现过，只要当前 SELECT 层又 JOIN 了其他来源，并且该列名在多个来源中重复，当前层仍然必须重新加别名限定，不能依赖上游唯一性。
+13. 典型错误：
+- `SELECT enterprise_id, phy_grid_id, phy_grid_name, output_per_mu FROM enterprise_ranked er JOIN top3_grids tg ON er.phy_grid_id = tg.phy_grid_id`
+- 上述 SQL 中 `phy_grid_id`、`phy_grid_name` 可能来自 `er` 和 `tg` 两侧，属于歧义列，错误。
+14. 对应正确写法：
+- `SELECT er.enterprise_id AS enterprise_id, er.enterprise_name AS enterprise_name, er.total_revenue AS total_revenue, er.phy_grid_id AS phy_grid_id, er.phy_grid_name AS phy_grid_name, tg.output_per_mu AS output_per_mu ...`
+15. 原则：多来源查询时，最终输出列虽然仍然必须 `AS <字段名>`，但 `AS` 前面的真实取值表达式必须尽量写成 `表别名.sourceColumn`，尤其是 JOIN 后的最外层 SELECT 和 ORDER BY。
 
 NULL 与过滤：
 1. 只对真正参与筛选、排序、聚合、函数计算的字段补充必要的 NULL / 空串过滤。
@@ -137,6 +146,7 @@ RETRY_PROMPT_TEMPLATE = """上次生成的计划校验失败，错误如下：
 请逐项修正并重新输出完整的 QueryExecutionPlan JSON。
 若错误涉及同一数据源被拆成多步，请合并为 1 个 SQL step。
 若错误涉及引用上一步 outputRef / 临时表，请改写为单条 SQL，或仅在 aggregation.sqliteSql 中引用 outputRef。
+若错误涉及 ambiguous column / 列名歧义，请在出错层的 SELECT、JOIN、WHERE、ORDER BY 中为重复列补全表别名限定。
 如果无法同时满足全部校验要求，请直接改为输出 canAnswer:false 的 JSON。"""
 
 

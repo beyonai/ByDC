@@ -937,3 +937,78 @@ def test_same_source_join_passes() -> None:
     )
     result = PlanValidator().validate(plan, payload)
     assert not any("CROSS_SOURCE_JOIN" in e for e in result.errors)
+
+
+def test_sql_cte_window_function_scope_passes() -> None:
+    payload = ObjectViewPayload(
+        view_id="v1",
+        sources=[
+            ObjectViewSource(
+                source_id="SRC_DB",
+                source_type="DB",
+                datasource_alias="db1",
+                db_type="POSTGRESQL",
+            )
+        ],
+        objects=[
+            ObjectViewObject(
+                object_id="grid",
+                object_name="物理网格分析",
+                source_id="SRC_DB",
+                table="ads_grid_analysis",
+                fields=[
+                    ObjectViewField(name="phy_grid_id", type="string"),
+                    ObjectViewField(name="output_per_mu", type="number"),
+                ],
+            ),
+            ObjectViewObject(
+                object_id="enterprise",
+                object_name="企业分析",
+                source_id="SRC_DB",
+                table="ads_enterprise_analysis",
+                fields=[
+                    ObjectViewField(name="enterprise_id", type="string"),
+                    ObjectViewField(name="enterprise_name", type="string"),
+                    ObjectViewField(name="phy_grid_id", type="string"),
+                    ObjectViewField(name="total_revenue", type="number"),
+                ],
+            ),
+        ],
+        relations=[],
+    )
+    sql = (
+        "WITH top_grids AS ("
+        "SELECT phy_grid_id FROM ads_grid_analysis "
+        "WHERE output_per_mu IS NOT NULL "
+        "ORDER BY output_per_mu DESC LIMIT 10"
+        "), enterprise_with_rank AS ("
+        "SELECT e.enterprise_id, e.enterprise_name, e.phy_grid_id, "
+        "PERCENT_RANK() OVER (PARTITION BY e.phy_grid_id ORDER BY e.total_revenue ASC) "
+        "AS rev_percentile "
+        "FROM ads_enterprise_analysis e "
+        "INNER JOIN top_grids t ON e.phy_grid_id = t.phy_grid_id "
+        "WHERE e.total_revenue IS NOT NULL"
+        ") "
+        "SELECT e.enterprise_id, e.enterprise_name, e.phy_grid_id "
+        "FROM enterprise_with_rank e "
+        "WHERE e.rev_percentile >= 0.7"
+    )
+    plan = QueryExecutionPlan(
+        question="test",
+        can_answer=True,
+        steps=[
+            PlanStep(
+                step_id="s1",
+                type="SQL",
+                source_id="SRC_DB",
+                datasource_alias="db1",
+                sql_template=sql,
+                output_ref="out",
+            )
+        ],
+        aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
+    )
+
+    result = PlanValidator().validate(plan, payload)
+
+    assert result.valid, result.errors
