@@ -43,7 +43,7 @@ def inject_reason_field(t: BaseTool) -> BaseTool:
     避免原始函数因收到意外的 reason 关键字参数而抛出 TypeError。
     """
     try:
-        from pydantic import BaseModel, Field, create_model  # noqa: PLC0415
+        from pydantic import BaseModel, Field, create_model  # noqa: PLC0415, F401
 
         original_schema = t.args_schema
         if original_schema is None:
@@ -88,25 +88,62 @@ def inject_reason_field(t: BaseTool) -> BaseTool:
         logger.warning("inject_reason_field failed for tool=%s: %s", getattr(t, "name", "?"), exc)
     return t
 
+_THINK_EVENT_TYPE = "reasoningLogDelta"
+
+_THINK_CONTENT_TYPE = "1002"
+
+
 class ToolHookError(Exception):
     def __init__(self, decision: dict[str, Any]) -> None:
         self.decision = decision
         super().__init__(str(decision))
 
-async def _emit_thinking(gateway_context: Any, text: str) -> None:
-    """向前端推送工具调用思考日志。"""
-    if gateway_context is None:
-        return
+
+async def _emit_think(gateway_context: Any, text: str) -> None:
+    """在 sub_step 内推送 think_text 内容。"""
     try:
-        from by_framework import EventType, StreamChunkEvent  # type: ignore
-        from by_framework.core.protocol.content_type import SseReasonMessageType  # type: ignore
+        from by_framework import StreamChunkEvent  # type: ignore
+        chunk = StreamChunkEvent(content=text)
+    except ImportError:
+        chunk = text  # type: ignore[assignment]
+    try:
         await gateway_context.emit_chunk(
-            StreamChunkEvent(content=text),
-            event_type=EventType.REASONING_LOG_START.value,
-            content_type=SseReasonMessageType.think_text.value,
+            chunk,
+            event_type=_THINK_EVENT_TYPE,
+            content_type=_THINK_CONTENT_TYPE,
         )
     except Exception as exc:
-        logger.debug("_emit_thinking failed: %s", exc)
+        logger.debug("_emit_think failed: %s", exc)
+
+
+async def _invoke_tool_with_runtime_context(
+    tool: BaseTool,
+    tool_params: dict[str, Any],
+    *,
+    gateway_context: Any = None,
+) -> Any:
+    """Inject gateway runtime context into tools that explicitly declare it."""
+    runtime_context_param = str(
+        getattr(tool, "_datacloud_runtime_context_param", "") or ""
+    ).strip()
+    if runtime_context_param and gateway_context is not None:
+        invoke_params = dict(tool_params)
+        invoke_params[runtime_context_param] = gateway_context
+
+        coroutine = getattr(tool, "coroutine", None)
+        if coroutine is not None:
+            return await coroutine(**invoke_params)
+
+        func = getattr(tool, "func", None)
+        if func is not None:
+            return func(**invoke_params)
+
+        logger.debug(
+            "runtime-context tool has no direct callable; fallback to ainvoke: tool=%s",
+            getattr(tool, "name", "?"),
+        )
+
+    return await tool.ainvoke(tool_params)
 
 
 async def dispatch_tool(
@@ -121,6 +158,10 @@ async def dispatch_tool(
     特殊工具：
     - finish_react：直接返回终止标记，不走 hook
     - ask_user：直接调用，不走 hook（interrupt 会挂起进程）
+
+    输出层级（思考过程）：
+    - 第一层 sub_step：工具名称
+    - 第二层 emit_chunk：调用原因 + 工具返回内容（在同一个 sub_step 内）
     """
     tool_name = tool_call["name"]
     raw_params = dict(tool_call.get("args") or {})
@@ -154,12 +195,6 @@ async def dispatch_tool(
         tool_name, reason, _sanitize(raw_params),
     )
 
-    # --- 推送工具调用思考日志 ---
-    await _emit_thinking(
-        gateway_context,
-        f"\u6b63\u5728\u8c03\u7528\u5de5\u5177 {tool_name}\uff1a{reason}\n\n",
-    )
-
     # --- 构建 HookContext ---
     ctx: HookContext = {
         "tool_name": tool_name,
@@ -173,83 +208,112 @@ async def dispatch_tool(
 
     hook_manager = get_tool_hook_plugin_manager()
 
-    # --- before hook ---
-    ctx, before_decision = await hook_manager.run_before(ctx)
-    if before_decision:
-        action = str(before_decision.get("action") or "")
-        if action == "short_circuit":
-            result_payload = (before_decision.get("result") or {})
-            return tool_call_id, result_payload.get("tool_output", "（short_circuit）")
-        if action == "fail":
-            raise ToolHookError(before_decision)
+    # 工具名作为第一层 sub_step，包裹整个执行过程（含 SDK 内部的 sub_step 嵌套在其中）
+    async def _run_tool() -> None:
+        nonlocal ctx
 
-    # --- 实际工具调用 ---
-    t = tools_map.get(tool_name)
-    if t is None:
-        logger.warning("dispatch_tool: tool '%s' not found in tools_map", tool_name)
-        ctx["tool_output"] = None
-        ctx["tool_error"] = {"error_type": "ToolNotFound", "message": f"Tool '{tool_name}' not found"}
-    else:
-        try:
-            # 将 gateway_context 注入 InvocationContext，使 SDK 内的 GatewayProgressReporter
-            # 能通过 get_gateway_context() 获取到 context 并推送心跳日志
-            try:
-                from datacloud_data_sdk.context import InvocationContext  # type: ignore
-                workspace_root = resolve_shared_workspace_dir(ctx.get("workspace_dir"))
-                _inv_ctx: Any = InvocationContext(
-                    gateway_context=gateway_context,
-                    workspace_dir=str(workspace_root) if workspace_root is not None else "",
-                )
-                _inv_ctx.__enter__()
-                try:
-                    output = await t.ainvoke(ctx["tool_params"])
-                finally:
-                    _inv_ctx.__exit__(None, None, None)
-            except ImportError:
-                output = await t.ainvoke(ctx["tool_params"])
-            ctx["tool_output"] = output
-            ctx["tool_error"] = None
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("dispatch_tool: tool='%s' raised: %s", tool_name, exc)
+        # --- before hook ---
+        ctx, before_decision = await hook_manager.run_before(ctx)
+        if before_decision:
+            action = str(before_decision.get("action") or "")
+            if action == "short_circuit":
+                result_payload = (before_decision.get("result") or {})
+                ctx["tool_output"] = result_payload.get("tool_output", "（short_circuit）")
+                ctx["tool_error"] = None
+                return
+            if action == "fail":
+                raise ToolHookError(before_decision)
+
+        # --- 实际工具调用 ---
+        t = tools_map.get(tool_name)
+        if t is None:
+            logger.warning("dispatch_tool: tool '%s' not found in tools_map", tool_name)
             ctx["tool_output"] = None
-            ctx["tool_error"] = {"error_type": type(exc).__name__, "message": str(exc)}
+            ctx["tool_error"] = {"error_type": "ToolNotFound", "message": f"Tool '{tool_name}' not found"}
+        else:
+            try:
+                # 将 gateway_context 注入 InvocationContext，使 SDK 内的 GatewayProgressReporter
+                # 能通过 get_gateway_context() 获取到 context 并推送心跳日志（嵌套在当前 sub_step 下）
+                try:
+                    from datacloud_data_sdk.context import InvocationContext  # type: ignore
+                    workspace_root = resolve_shared_workspace_dir(ctx.get("workspace_dir"))
+                    _inv_ctx: Any = InvocationContext(
+                        gateway_context=gateway_context,
+                        workspace_dir=str(workspace_root) if workspace_root is not None else "",
+                    )
+                    _inv_ctx.__enter__()
+                    try:
+                        output = await _invoke_tool_with_runtime_context(
+                            t,
+                            ctx["tool_params"],
+                            gateway_context=gateway_context,
+                        )
+                    finally:
+                        _inv_ctx.__exit__(None, None, None)
+                except ImportError:
+                    output = await _invoke_tool_with_runtime_context(
+                        t,
+                        ctx["tool_params"],
+                        gateway_context=gateway_context,
+                    )
+                ctx["tool_output"] = output
+                ctx["tool_error"] = None
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("dispatch_tool: tool='%s' raised: %s", tool_name, exc)
+                ctx["tool_output"] = None
+                ctx["tool_error"] = {"error_type": type(exc).__name__, "message": str(exc)}
 
-    # --- after hook ---
-    ctx, after_decision = await hook_manager.run_after(ctx)
-    if after_decision:
-        action = str(after_decision.get("action") or "")
-        if action == "recover":
-            result_payload = (after_decision.get("result") or {})
-            ctx["tool_output"] = result_payload.get("tool_output", ctx.get("tool_output"))
-        if action == "fail":
-            raise ToolHookError(after_decision)
+        # --- after hook ---
+        ctx, after_decision = await hook_manager.run_after(ctx)
+        if after_decision:
+            action = str(after_decision.get("action") or "")
+            if action == "recover":
+                result_payload = (after_decision.get("result") or {})
+                ctx["tool_output"] = result_payload.get("tool_output", ctx.get("tool_output"))
+            if action == "fail":
+                raise ToolHookError(after_decision)
 
-    # --- 推送工具返回思考日志 ---
+    if gateway_context is not None:
+        try:
+            async with gateway_context.sub_step(tool_name):
+                # 第二层：调用原因
+                if reason:
+                    await _emit_think(gateway_context, reason)
+                # 执行工具（SDK 内部的 sub_step 自动嵌套在此层下）
+                await _run_tool()
+                # 第二层：返回摘要
+                if ctx.get("tool_error"):
+                    err_msg = ctx["tool_error"].get("message", "")
+                    await _emit_think(gateway_context, f"错误：{err_msg}")
+                else:
+                    # output_preview = _summarize_output(ctx.get("tool_output"))
+                    await _emit_think(gateway_context, "工具返回内容：")
+                    await _emit_think(gateway_context, ctx.get("tool_output"))
+        except ToolHookError:
+            raise
+        except Exception as exc:
+            logger.debug("dispatch_tool sub_step failed: %s", exc)
+            # sub_step 失败时兜底执行工具（不推送进度）
+            if not ctx.get("tool_output") and not ctx.get("tool_error"):
+                await _run_tool()
+    else:
+        await _run_tool()
+
     final_output = ctx.get("tool_output")
+
+    # --- 日志 ---
     if ctx.get("tool_error"):
         err_msg = ctx["tool_error"].get("message", "")
         logger.info("[tool_return] tool=%s error=%s", tool_name, err_msg)
-        await _emit_thinking(
-            gateway_context,
-            f"\u5de5\u5177 {tool_name} \u8fd4\u56de\u9519\u8bef\uff1a{err_msg}\n\n",
-        )
     else:
-        # 完整打印到 log，供日志检查
         try:
             full_output_str = json.dumps(final_output, ensure_ascii=False, default=str)
         except Exception:
             full_output_str = repr(final_output)
         logger.info("[tool_return] tool=%s output=%s", tool_name, full_output_str)
 
-        output_preview = _summarize_output(final_output)
-        await _emit_thinking(
-            gateway_context,
-            f"\u5de5\u5177 {tool_name} \u8fd4\u56de\uff1a{output_preview}\n\n",
-        )
-
         # --- data_query 结构识别：records+meta 或 file.file_url ---
         if isinstance(final_output, dict):
-            # 兼容两种包装：{data: {records, meta, ...}} 或直接 {records, meta, ...}
             data_block = final_output.get("data") if isinstance(final_output.get("data"), dict) else final_output
             if isinstance(data_block, dict):
                 records = data_block.get("records")
