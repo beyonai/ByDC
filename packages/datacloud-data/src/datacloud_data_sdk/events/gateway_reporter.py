@@ -16,6 +16,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from datacloud_data_sdk.stream_text import coerce_stream_chunk_text
+
 logger = logging.getLogger(__name__)
 
 _THINK_EVENT_TYPE = "reasoningLogDelta"
