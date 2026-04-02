@@ -1,1 +1,1 @@
-﻿# Plugin package: command_plugins
+# Plugin package: command_plugins

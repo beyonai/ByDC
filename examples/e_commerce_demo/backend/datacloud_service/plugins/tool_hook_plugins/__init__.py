@@ -1,1 +1,1 @@
-﻿# Plugin package: tool_plugins
+# Plugin package: tool_plugins
