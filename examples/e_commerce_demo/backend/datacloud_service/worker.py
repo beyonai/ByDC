@@ -39,7 +39,7 @@ from by_framework.core.extensions import PluginRegistry
 from by_framework.core.protocol.agent_state import AgentState as GatewayAgentState
 from by_framework.core.protocol.agent_state import AgentStateLiteral, is_terminal_state
 from by_framework.core.protocol.commands import AskAgentCommand
-from by_framework.core.protocol.content_type import SseMessageType
+from by_framework.core.protocol.content_type import SseMessageType, SseReasonMessageType
 from by_framework.core.protocol.events import StateChangeEvent
 from datacloud_analysis.agent import create_agent
 from datacloud_analysis.command_plugins import CommandPluginManager
@@ -82,6 +82,20 @@ _ANALYSIS_HINT_TOKENS = {
     "report",
     "query",
     "analy",
+}
+
+_NODE_THINKING_DESC: dict[str, str] = {
+    "knowledge_enhance": "正在理解问题并补充上下文...\n\n",
+    "planning": "正在生成任务计划...\n\n",
+    "execution": "正在执行任务...\n\n",
+    "end": "正在整理结果...",
+}
+_DEFAULT_THINKING_DESC = "正在处理，请稍候...\n\n"
+
+_NODE_PHASE_TITLE: dict[str, str] = {
+    "knowledge_enhance": "问题理解",
+    "execution": "任务执行",
+    "end": "结果生成",
 }
 
 _PLANNING_PHASE_TITLE = "任务生成"
@@ -839,11 +853,13 @@ class DataCloudWorker(GatewayWorker):
         context._langgraph_thread_id = thread_id
 
         # 初始提示：第一层 sub_step(阶段标题)，第二层 emit_chunk(说明文本，路由到思考区)
-        async with context.sub_step(_NODE_PHASE_TITLE["knowledge_enhance"]):
+        async with context.sub_step(_NODE_PHASE_TITLE["knowledge_enhance"]) as (m_id, p_id):
             await context.emit_chunk(
                 StreamChunkEvent(content="已接收到用户消息，开始处理"),
                 event_type=EventType.REASONING_LOG_START.value,
                 content_type=SseReasonMessageType.think_text.value,
+                message_id=m_id,
+                parent_message_id=p_id,
             )
 
         if isinstance(command, ResumeCommand):
