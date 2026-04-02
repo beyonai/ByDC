@@ -97,11 +97,94 @@ _THINK_EVENT_TYPE = "reasoningLogDelta"
 
 _THINK_CONTENT_TYPE = "1002"
 
+_DELEGATE_PARENT_MESSAGE_ID_KEY = "delegate_parent_message_id"
+
 
 class ToolHookError(Exception):
     def __init__(self, decision: dict[str, Any]) -> None:
         self.decision = decision
         super().__init__(str(decision))
+
+
+def is_delegate_wait_resume_command(command: Any) -> bool:
+    """Return True when current command is a ResumeCommand for AGENT_DELEGATE_WAIT."""
+    if command is None or command.__class__.__name__ != "ResumeCommand":
+        return False
+    header = getattr(command, "header", None)
+    metadata = getattr(header, "metadata", None)
+    if not isinstance(metadata, dict):
+        return False
+    if str(metadata.get("interrupt_reason") or "").strip() == "AGENT_DELEGATE_WAIT":
+        return True
+    parent_resume_target = metadata.get("parent_resume_target")
+    if isinstance(parent_resume_target, dict):
+        return (
+            str(parent_resume_target.get("interrupt_reason") or "").strip()
+            == "AGENT_DELEGATE_WAIT"
+        )
+    return False
+
+
+def _consume_delegate_resume_replay_suppression(gateway_context: Any) -> bool:
+    """Consume one-shot suppression flag for replayed delegate tool output."""
+    if gateway_context is None:
+        return False
+    should_skip = bool(
+        getattr(
+            gateway_context,
+            "_datacloud_skip_delegate_resume_replay_output",
+            False,
+        )
+    )
+    if should_skip:
+        setattr(gateway_context, "_datacloud_skip_delegate_resume_replay_output", False)
+    return should_skip
+
+
+def _reasoning_emit_kwargs(
+    *,
+    message_id: str = "",
+    parent_message_id: str = "",
+) -> dict[str, str]:
+    kwargs = {
+        "event_type": _THINK_EVENT_TYPE,
+        "content_type": _THINK_CONTENT_TYPE,
+    }
+    if message_id:
+        kwargs["message_id"] = message_id
+    if parent_message_id:
+        kwargs["parent_message_id"] = parent_message_id
+    return kwargs
+
+
+def _new_message_id(gateway_context: Any) -> str:
+    generate_message_id = getattr(gateway_context, "generate_message_id", None)
+    if callable(generate_message_id):
+        try:
+            return str(generate_message_id() or "")
+        except Exception:
+            logger.debug("generate_message_id failed in tool_wrapper", exc_info=True)
+    return ""
+
+
+def _current_command_metadata(gateway_context: Any) -> dict[str, Any]:
+    current_command = getattr(gateway_context, "current_command", None)
+    header = getattr(current_command, "header", None)
+    metadata = getattr(header, "metadata", None)
+    if isinstance(metadata, dict):
+        return metadata
+    return {}
+
+
+def _delegate_resume_parent_message_id(gateway_context: Any) -> str:
+    metadata = _current_command_metadata(gateway_context)
+    direct = str(metadata.get(_DELEGATE_PARENT_MESSAGE_ID_KEY) or "").strip()
+    if direct:
+        return direct
+    parent_resume_target = metadata.get("parent_resume_target")
+    if isinstance(parent_resume_target, dict):
+        return str(parent_resume_target.get(_DELEGATE_PARENT_MESSAGE_ID_KEY) or "").strip()
+    return ""
 
 
 async def _emit_think(gateway_context: Any, text: str) -> None:
@@ -124,17 +207,17 @@ async def _emit_think(gateway_context: Any, text: str) -> None:
 async def _emit_child_think(
     gateway_context: Any,
     text: Any,
+    *,
+    parent_message_id: str | None = None,
 ) -> None:
     """Emit a child reasoning chunk under the current reasoning node."""
-    child_message_id = ""
-    generate_message_id = getattr(gateway_context, "generate_message_id", None)
-    if callable(generate_message_id):
-        try:
-            child_message_id = str(generate_message_id() or "")
-        except Exception:
-            logger.debug("generate_message_id failed in _emit_child_think", exc_info=True)
-
-    child_parent_message_id = str(getattr(gateway_context, "message_id", "") or "")
+    child_message_id = _new_message_id(gateway_context)
+    child_parent_message_id = str(
+        parent_message_id
+        if parent_message_id is not None
+        else getattr(gateway_context, "message_id", "")
+        or ""
+    )
     # content = _summarize_output(text)
     content = text
     try:
@@ -144,23 +227,61 @@ async def _emit_child_think(
     except ImportError:
         child_chunk = content
 
-    emit_kwargs: dict[str, Any] = {
-        "event_type": _THINK_EVENT_TYPE,
-        "content_type": _THINK_CONTENT_TYPE,
-    }
-    if child_message_id:
-        emit_kwargs["message_id"] = child_message_id
-    if child_parent_message_id:
-        emit_kwargs["parent_message_id"] = child_parent_message_id
+    emit_kwargs: dict[str, Any] = _reasoning_emit_kwargs(
+        message_id=child_message_id,
+        parent_message_id=child_parent_message_id,
+    )
     await gateway_context.emit_chunk(child_chunk, **emit_kwargs)
+
+
+async def _emit_tool_detail_under_parent(
+    gateway_context: Any,
+    title: str,
+    detail: Any,
+    *,
+    parent_message_id: str,
+) -> bool:
+    """Emit a reasoning title + child content under an explicit parent node."""
+    emit_state = getattr(gateway_context, "emit_state", None)
+    if not callable(emit_state):
+        return False
+
+    title_message_id = _new_message_id(gateway_context)
+    if not title_message_id:
+        return False
+
+    await emit_state(
+        title,
+        **_reasoning_emit_kwargs(
+            message_id=title_message_id,
+            parent_message_id=parent_message_id,
+        ),
+    )
+    await _emit_child_think(
+        gateway_context,
+        detail,
+        parent_message_id=title_message_id,
+    )
+    return True
 
 
 async def _emit_tool_detail(
     gateway_context: Any,
     title: str,
     detail: Any,
+    *,
+    parent_message_id: str = "",
 ) -> None:
     """Emit a third-level reasoning node under the current tool step."""
+    if parent_message_id:
+        emitted = await _emit_tool_detail_under_parent(
+            gateway_context,
+            title,
+            detail,
+            parent_message_id=parent_message_id,
+        )
+        if emitted:
+            return
     async with gateway_context.sub_step(title):
         await _emit_child_think(gateway_context, detail)
 
@@ -236,6 +357,20 @@ async def dispatch_tool(
     # --- 特殊工具：agent_delegate（内部调用 interrupt，必须跳过 hook 的 try/except）---
     t_delegate = tools_map.get(tool_name)
     if t_delegate is not None and getattr(t_delegate, "_is_agent_delegate", False):
+        if _consume_delegate_resume_replay_suppression(gateway_context):
+            result = await _invoke_tool_with_runtime_context(
+                t_delegate,
+                raw_params,
+                gateway_context=gateway_context,
+            )
+            if gateway_context is not None:
+                await _emit_tool_detail(
+                    gateway_context,
+                    "工具返回",
+                    result,
+                    parent_message_id=_delegate_resume_parent_message_id(gateway_context),
+                )
+            return tool_call_id, result
         if gateway_context is not None:
             async with gateway_context.sub_step(tool_name):
                 if reason:
