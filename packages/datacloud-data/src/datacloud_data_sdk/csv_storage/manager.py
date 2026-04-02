@@ -73,12 +73,12 @@ class CsvStorageManager:
 
     @staticmethod
     def _shared_workspace_dir(workspace_dir: Path) -> Path:
-        """Drop only the dynamic request leaf; keep stable ``private/public`` roots."""
-        if workspace_dir.name in {"private", "public"}:
-            return workspace_dir
-        if workspace_dir.parent.name in {"private", "public"}:
-            return workspace_dir.parent
-        return workspace_dir
+        """Normalize to the nearest shared ``private/public`` workspace root."""
+        resolved = workspace_dir.resolve()
+        for candidate in (resolved, *resolved.parents):
+            if candidate.name in {"private", "public"}:
+                return candidate
+        return resolved
 
     def get_path(self, request_id: str, output_ref: str) -> Path:
         """
