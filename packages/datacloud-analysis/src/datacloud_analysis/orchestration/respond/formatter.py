@@ -1,9 +1,12 @@
 from __future__ import annotations
+
 import csv
 import json
 import logging
 from pathlib import Path
 from typing import Any
+
+from datacloud_data_sdk.stream_text import coerce_stream_chunk_text
 
 from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
 
@@ -87,7 +90,7 @@ async def _emit_text(gateway_context: Any, text: str) -> None:
         from by_framework import EventType, StreamChunkEvent  # type: ignore
         from by_framework.core.protocol.content_type import SseMessageType  # type: ignore
         await gateway_context.emit_chunk(
-            StreamChunkEvent(content=text),
+            StreamChunkEvent(content=coerce_stream_chunk_text(text)),
             event_type=EventType.ANSWER_DELTA.value,
             content_type=SseMessageType.text.value,
         )
@@ -114,7 +117,9 @@ async def _emit_json_as_6001(gateway_context: Any, data: Any) -> None:
     try:
         content_type_6001 = "6001"
         try:
-            from by_framework.core.protocol.content_type import SseMessageType as SMT  # type: ignore
+            from by_framework.core.protocol.content_type import (
+                SseMessageType as SMT,  # type: ignore
+            )
             ct = getattr(SMT, "data_table_json", None)
             if ct is not None:
                 content_type_6001 = ct.value
@@ -174,7 +179,9 @@ async def _stream_csv_as_6001(gateway_context: Any, csv_path: Path) -> None:
     try:
         content_type_6001 = "6001"
         try:
-            from by_framework.core.protocol.content_type import SseMessageType as SMT  # type: ignore
+            from by_framework.core.protocol.content_type import (
+                SseMessageType as SMT,  # type: ignore
+            )
             ct = getattr(SMT, "data_table_json", None)
             if ct is not None:
                 content_type_6001 = ct.value
@@ -227,7 +234,9 @@ async def _emit_query_result_as_6001(gateway_context: Any, query_data: dict[str,
     try:
         content_type_6001 = "6001"
         try:
-            from by_framework.core.protocol.content_type import SseMessageType as SMT  # type: ignore
+            from by_framework.core.protocol.content_type import (
+                SseMessageType as SMT,  # type: ignore
+            )
             ct = getattr(SMT, "data_table_json", None)
             if ct is not None:
                 content_type_6001 = ct.value
@@ -270,7 +279,7 @@ async def _emit_query_result_as_6001(gateway_context: Any, query_data: dict[str,
         logger.info("[query_result 6001] records=%d has_file=%s bytes=%d",
                     len(records), bool(payload.get("file")), len(text.encode("utf-8")))
         await gateway_context.emit_chunk(
-            StreamChunkEvent(content=text),
+            StreamChunkEvent(content=coerce_stream_chunk_text(text)),
             event_type=EventType.ANSWER_DELTA.value,
             content_type=content_type_6001,
         )
@@ -288,6 +297,6 @@ def _build_pagination(records: list, meta: dict) -> dict[str, Any]:
         "page_size": page_size,
         "total": total,
         "total_pages": total_pages,
-        "has_next": 1 < total_pages,
+        "has_next": total_pages > 1,
         "has_prev": False,
     }
