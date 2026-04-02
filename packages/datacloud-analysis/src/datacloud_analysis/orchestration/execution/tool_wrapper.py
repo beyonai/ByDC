@@ -207,6 +207,7 @@ async def dispatch_tool(
     特殊工具：
     - finish_react：直接返回终止标记，不走 hook
     - ask_user：直接调用，不走 hook（interrupt 会挂起进程）
+    - agent_delegate：直接调用，不走 hook（内部调用 interrupt，必须跳过 try/except）
 
     输出层级（思考过程）：
     - 节点输出与工具名称输出位于同一层
@@ -231,6 +232,41 @@ async def dispatch_tool(
 
     # --- 提取 reason 并记录 ---
     reason = raw_params.pop("reason", "")
+
+    # --- 特殊工具：agent_delegate（内部调用 interrupt，必须跳过 hook 的 try/except）---
+    t_delegate = tools_map.get(tool_name)
+    if t_delegate is not None and getattr(t_delegate, "_is_agent_delegate", False):
+        if gateway_context is not None:
+            async with gateway_context.sub_step(tool_name):
+                if reason:
+                    await _emit_child_think(gateway_context, reason)
+                delegate_parent_scope_factory = getattr(
+                    gateway_context,
+                    "delegate_parent_scope",
+                    None,
+                )
+                delegate_parent_scope = nullcontext()
+                if callable(delegate_parent_scope_factory):
+                    delegate_parent_scope = delegate_parent_scope_factory(
+                        gateway_context.message_id,
+                    )
+                with delegate_parent_scope:
+                    result = await _invoke_tool_with_runtime_context(
+                        t_delegate,
+                        raw_params,
+                        gateway_context=gateway_context,
+                    )
+                # interrupt 首次挂起时不会走到这里；恢复后若拿到子 agent 结果，则补发工具返回。
+                await _emit_tool_detail(
+                    gateway_context,
+                    "工具返回",
+                    result,
+                )
+                return tool_call_id, result
+        result = await _invoke_tool_with_runtime_context(
+            t_delegate, raw_params, gateway_context=gateway_context
+        )
+        return tool_call_id, result
 
     # --- 解包嵌套参数（兜底）：如果 LLM 产生了 {"params": {...}} 嵌套结构，展开它 ---
     if (
@@ -415,11 +451,12 @@ async def dispatch_tool(
                     columns_hint = ""
                     if col_names:
                         columns_hint = f"\u5305\u542b\u5b57\u6bb5: {', '.join(col_names[:8])}"
+                    columns_hint_suffix = f"\n{columns_hint}" if columns_hint else ""
                     if file_url:
                         final_output["file_url"] = file_url
                         final_output["_hint"] = (
                             f"\u6570\u636e\u91cf\u8f83\u5927\uff0c\u5df2\u5b58\u5165\u6587\u4ef6 {file_url}\u3002"
-                            f"{('\n' + columns_hint) if columns_hint else ''}"
+                            f"{columns_hint_suffix}"
                             "\u8bf7\u8c03\u7528 finish_react \u65f6\u4f7f\u7528 result_type=query_result\uff0c"
                             "\u7cfb\u7edf\u4f1a\u81ea\u52a8\u900f\u4f20\u5b8c\u6574\u7ed3\u6784\u3002"
                         )
@@ -432,7 +469,7 @@ async def dispatch_tool(
                     else:
                         final_output["_hint"] = (
                             f"\u6570\u636e\u5df2\u8fd4\u56de {len(records)} \u6761 records\u3002"
-                            f"{('\n' + columns_hint) if columns_hint else ''}"
+                            f"{columns_hint_suffix}"
                             "\u8bf7\u7acb\u5373\u8c03\u7528 finish_react\uff0c\u4f7f\u7528 result_type=query_result\uff0c"
                             "\u7cfb\u7edf\u4f1a\u81ea\u52a8\u900f\u4f20\u5b8c\u6574\u7684 records/pagination/meta \u7ed3\u6784\uff0c\u65e0\u9700\u624b\u52a8\u5e8f\u5217\u5316\u3002"
                         )
