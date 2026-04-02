@@ -9,6 +9,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
+
 _UUID_PATTERN = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     re.IGNORECASE,
@@ -145,7 +147,9 @@ def _make_6001_error(message: str, page: int = 1, page_size: int = 50) -> dict[s
 
 
 def _resolve_file_and_meta_paths(*, workspace_dir: str, file_id: str) -> tuple[Path, Path]:
-    workspace_root = _shared_workspace_dir(Path(workspace_dir).resolve())
+    workspace_root = resolve_shared_workspace_dir(workspace_dir)
+    if workspace_root is None:
+        raise FileNotFoundError("workspace_dir 不能为空")
     if not workspace_root.exists():
         raise FileNotFoundError(f"workspace_dir 不存在: {workspace_root}")
 
@@ -184,11 +188,10 @@ def _is_within(base: Path, candidate: Path) -> bool:
 
 
 def _shared_workspace_dir(workspace_dir: Path) -> Path:
-    if workspace_dir.name in {"private", "public"}:
-        return workspace_dir
-    if workspace_dir.parent.name in {"private", "public"}:
-        return workspace_dir.parent
-    return workspace_dir
+    resolved = resolve_shared_workspace_dir(workspace_dir)
+    if resolved is None:
+        return workspace_dir.resolve()
+    return resolved
 
 
 def _read_file_page(

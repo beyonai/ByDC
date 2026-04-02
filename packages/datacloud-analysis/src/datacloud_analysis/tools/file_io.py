@@ -5,16 +5,19 @@ from pathlib import Path
 from typing import Any
 from langchain_core.tools import tool
 
+from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
+
 logger = logging.getLogger(__name__)
 
 def _resolve_safe_path(path: str, workspace_dir: str | None) -> Path:
     """Resolve path within workspace_dir. Raises ValueError if escaping."""
+    workspace_root = resolve_shared_workspace_dir(workspace_dir)
     p = Path(path)
-    if not p.is_absolute() and workspace_dir:
-        p = Path(workspace_dir) / p
+    if not p.is_absolute() and workspace_root:
+        p = workspace_root / p
     p = p.resolve()
-    if workspace_dir:
-        ws = Path(workspace_dir).resolve()
+    if workspace_root:
+        ws = workspace_root.resolve()
         try:
             p.relative_to(ws)
         except ValueError:
