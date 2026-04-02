@@ -13,6 +13,7 @@ import httpx
 from by_framework import AgentConfig, EventType, Plugin, PluginManifest, StreamChunkEvent
 from by_framework.core.protocol.content_type import SseMessageType
 from dotenv import load_dotenv
+from langgraph.types import interrupt
 
 try:
     from datacloud_data_sdk.ontology.loader import OntologyLoader
@@ -601,11 +602,6 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
         """Build a tool that delegates to another agent via context.call_agent."""
 
         async def _tool(content: str | None = None, _context: Any = None, **params: Any) -> Any:
-            # 恢复路径：execution_node 将子 agent 结果注入 inputs["__delegate_result__"]
-            delegate_result = params.get("__delegate_result__")
-            if delegate_result is not None:
-                return delegate_result
-
             resolved_content = str(
                 content
                 or params.get("content")
@@ -711,10 +707,12 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             if not delegate_parent_message_id:
                 delegate_parent_message_id = str(getattr(_context, "message_id", "") or "").strip()
 
+            # 构造委托参数，传给 interrupt，由 worker 负责实际调用 call_agent
+            # 这样恢复时不会重复调用 call_agent（LangGraph 恢复会重跑节点，
+            # interrupt() 之前的代码会再执行一遍，所以副作用必须放到 worker 侧）
             call_agent_kwargs: dict[str, Any] = {
                 "target_agent_type": target_agent_type,
                 "content": resolved_content,
-                # wait_for_reply=True 只负责注册回调路由；父图是否继续由 interrupt 控制。
                 "wait_for_reply": True,
             }
             if delegate_message_id:
@@ -734,14 +732,17 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             )
 
             if sync_wait:
-                await _context.call_agent(**call_agent_kwargs)
-                # 不在 tool 内部 interrupt，返回标记让 execution_node 在顶层统一处理
-                return {
-                    "__delegate_wait__": True,
+                # 只调 interrupt，不在 tool 里调 call_agent
+                # worker 检测到 AGENT_DELEGATE_WAIT 后负责调 call_agent，然后静默等待
+                # 子 agent 完成后发 ResumeCommand，interrupt() 返回子 agent 的结果
+                child_result = interrupt({
+                    "reason_code": "AGENT_DELEGATE_WAIT",
                     "target_agent_type": target_agent_type,
                     "target_agent_name": agent_name,
                     "delegate_content": resolved_content,
-                }
+                    "call_agent_kwargs": call_agent_kwargs,
+                })
+                return child_result
 
             await _context.emit_chunk(
                 StreamChunkEvent(
