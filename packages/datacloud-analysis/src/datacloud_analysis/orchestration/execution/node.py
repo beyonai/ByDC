@@ -13,6 +13,7 @@ from datacloud_analysis.orchestration.state import AgentState
 from datacloud_analysis.tools.ask_user import ask_user
 from datacloud_analysis.tools.file_io import read_file, write_file
 from datacloud_analysis.tools.code_exec import write_code, execute_code
+from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +91,9 @@ async def execution_node(
     # 设置 workspace 环境变量供工具使用
     workspace_dir = state.get("workspace_dir")
     if workspace_dir:
-        os.environ["DATACLOUD_ACTIVE_WORKSPACE"] = str(workspace_dir)
+        workspace_root = resolve_shared_workspace_dir(workspace_dir)
+        if workspace_root is not None:
+            os.environ["DATACLOUD_ACTIVE_WORKSPACE"] = str(workspace_root)
 
     logger.info(
         "[execution_node] tools=%s max_rounds=%d",

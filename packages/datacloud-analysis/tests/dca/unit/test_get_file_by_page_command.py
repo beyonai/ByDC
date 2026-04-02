@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from datacloud_service.commands.ext_command_dispatcher import handle_ext_command
-from datacloud_service.commands.get_file_by_page_command import handle_get_file_by_page_command
+from datacloud_analysis.command_plugins.ext_command_dispatcher import handle_ext_command
+from datacloud_analysis.command_plugins.get_file_by_page_command import (
+    handle_get_file_by_page_command,
+)
 
 
 def test_get_file_by_page_command_ignored_when_command_not_match() -> None:
@@ -58,3 +60,26 @@ def test_ext_params_dispatches_get_file_by_page(tmp_path: Path) -> None:
     assert payload is not None
     assert payload["code"] == 0
     assert payload["data"]["records"] == [{"id": 10}]
+
+
+def test_get_file_by_page_command_uses_private_workspace_root(tmp_path: Path) -> None:
+    private_root = tmp_path / "10011741" / "private"
+    dynamic_workspace = private_root / "10011835"
+    dynamic_workspace.mkdir(parents=True, exist_ok=True)
+
+    exports_dir = private_root / "exports"
+    exports_dir.mkdir(parents=True, exist_ok=True)
+    export_file = exports_dir / "sample.csv"
+    export_file.write_text("id,name\n1,Alice\n2,Bob\n", encoding="utf-8")
+
+    handled, payload = handle_get_file_by_page_command(
+        ext_params={"command": "getFileByPage", "fileId": "sample.csv", "page": 1, "pagesize": 1},
+        session_id="s3",
+        workspace_dir=str(dynamic_workspace),
+    )
+
+    assert handled is True
+    assert payload is not None
+    assert payload["code"] == 0
+    assert payload["data"]["records"] == [{"id": "1", "name": "Alice"}]
+    assert payload["data"]["file"]["filePath"] == str(export_file)
