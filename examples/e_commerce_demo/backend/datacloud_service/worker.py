@@ -1,6 +1,4 @@
-"""DataCloud Gateway Worker.
-
-"""
+"""DataCloud Gateway Worker."""
 
 from __future__ import annotations
 
@@ -43,7 +41,6 @@ from by_framework.core.protocol.content_type import SseMessageType, SseReasonMes
 from by_framework.core.protocol.events import StateChangeEvent
 from datacloud_analysis.agent import create_agent
 from datacloud_analysis.command_plugins import CommandPluginManager
-from datacloud_data_sdk.stream_text import coerce_stream_chunk_text
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.types import Command
@@ -106,6 +103,7 @@ _HEARTBEAT_INTERVAL: float = 3.0
 def _now_monotonic() -> float:
     return asyncio.get_running_loop().time()
 
+
 async def _heartbeat_loop(
     context: AgentContext,
     stop_event: asyncio.Event,
@@ -147,9 +145,7 @@ _no_checkpointer_logged: bool = False
 
 
 class DataCloudWorker(GatewayWorker):
-    """Worker that drives the datacloud-analysis graph inside the Gateway worker protocol.
-
-    """
+    """Worker that drives the datacloud-analysis graph inside the Gateway worker protocol."""
 
     _GRAPH_CACHE_MAX: int = 32
     _RESUME_RESULT_CACHE_MAX: int = 256
@@ -181,7 +177,9 @@ class DataCloudWorker(GatewayWorker):
         resume_value: Any,
     ) -> str:
         try:
-            resume_payload = json.dumps(resume_value, ensure_ascii=False, sort_keys=True, default=str)
+            resume_payload = json.dumps(
+                resume_value, ensure_ascii=False, sort_keys=True, default=str
+            )
         except Exception:
             resume_payload = repr(resume_value)
         raw = json.dumps(
@@ -341,7 +339,9 @@ class DataCloudWorker(GatewayWorker):
                     },
                 )
 
-            logger.info("[%s] Setting up workspace for session: %s", self.worker_id, header.session_id)
+            logger.info(
+                "[%s] Setting up workspace for session: %s", self.worker_id, header.session_id
+            )
             paths = await self.workspace_manager.setup_workspace(
                 header.session_id, header.message_id
             )
@@ -465,8 +465,8 @@ class DataCloudWorker(GatewayWorker):
                 )
             await context.emit_state(StateChangeEvent(state=GatewayAgentState.CANCELLED.value))
 
-            should_emit_stream_end = (
-                not has_source_agent and not getattr(context, "_permission_transferred", False)
+            should_emit_stream_end = not has_source_agent and not getattr(
+                context, "_permission_transferred", False
             )
             if should_emit_stream_end and not getattr(context, "_is_stream_finished", False):
                 await context.emit_chunk("", event_type=EventType.APP_STREAM_RESPONSE.value)
@@ -490,8 +490,8 @@ class DataCloudWorker(GatewayWorker):
             logger.error(traceback.format_exc())
             await self.plugin_registry.on_task_error(context, e)
 
-            should_emit_stream_end = (
-                not has_source_agent and not getattr(context, "_permission_transferred", False)
+            should_emit_stream_end = not has_source_agent and not getattr(
+                context, "_permission_transferred", False
             )
             if should_emit_stream_end and not getattr(context, "_is_stream_finished", False):
                 await context.emit_chunk("", event_type=EventType.APP_STREAM_RESPONSE.value)
@@ -542,8 +542,12 @@ class DataCloudWorker(GatewayWorker):
             return maybe
 
         metadata = dict(skill_meta or {})
-        allowlist_tags = [str(tag).strip() for tag in metadata.get("allowlist_tags") or [] if str(tag).strip()]
-        blocklist_tags = [str(tag).strip() for tag in metadata.get("blocklist_tags") or [] if str(tag).strip()]
+        allowlist_tags = [
+            str(tag).strip() for tag in metadata.get("allowlist_tags") or [] if str(tag).strip()
+        ]
+        blocklist_tags = [
+            str(tag).strip() for tag in metadata.get("blocklist_tags") or [] if str(tag).strip()
+        ]
         risk_level = str(metadata.get("risk_level") or "medium").strip().lower() or "medium"
 
         _skill_tool.__name__ = f"skill_{skill_name}"
@@ -574,7 +578,9 @@ class DataCloudWorker(GatewayWorker):
             loader = SkillLoader(task_paths)
             registry = loader.load_all()
         except Exception as exc:
-            logger.warning("Failed to load skill capabilities user=%s task=%s error=%s", user_id, task_id, exc)
+            logger.warning(
+                "Failed to load skill capabilities user=%s task=%s error=%s", user_id, task_id, exc
+            )
             return {}
 
         skills: dict[str, Any] = {}
@@ -694,7 +700,9 @@ class DataCloudWorker(GatewayWorker):
 
         resume_cache_key: str | None = None
         if isinstance(command, ResumeCommand):
-            resume_value_probe = command.reply_data if command.reply_data is not None else command.content
+            resume_value_probe = (
+                command.reply_data if command.reply_data is not None else command.content
+            )
             checkpoint_id_probe, checkpoint_ns_probe = self._resolve_resume_checkpoint_target(
                 header_metadata=header_metadata
             )
@@ -934,7 +942,11 @@ class DataCloudWorker(GatewayWorker):
                 for i, m in enumerate(combined_messages):
                     mt = type(m).__name__
                     mc = getattr(m, "content", "")
-                    mp = mc[:200] + ("..." if isinstance(mc, str) and len(mc) > 200 else "") if isinstance(mc, str) else repr(mc)[:200]
+                    mp = (
+                        mc[:200] + ("..." if isinstance(mc, str) and len(mc) > 200 else "")
+                        if isinstance(mc, str)
+                        else repr(mc)[:200]
+                    )
                     logger.info("[user_query_trace] worker combined[%d] %s preview=%r", i, mt, mp)
             graph_input = {
                 "messages": combined_messages,
@@ -1011,6 +1023,19 @@ class DataCloudWorker(GatewayWorker):
             resume_inflight_future.add_done_callback(self._consume_future_exception)
             self._resume_inflight[resume_cache_key] = resume_inflight_future
 
+        reco_task: asyncio.Task[list[str]] | None = None
+        reco_plugin = (
+            self.plugin_registry.get_plugin("datacloud_recommended_questions")
+            if self.plugin_registry
+            else None
+        )
+        if reco_plugin is not None and bool(getattr(reco_plugin.manifest, "enabled", True)):
+            gen_fn = getattr(reco_plugin, "generate_recommended_questions", None)
+            if callable(gen_fn):
+                rq = _latest_user_text_from_content(command.content).strip()
+                if rq:
+                    reco_task = asyncio.create_task(gen_fn(rq))
+
         try:
             logger.info(
                 "鈶?_stream_graph invoke session=%s input_is_command_resume=%s",
@@ -1024,6 +1049,7 @@ class DataCloudWorker(GatewayWorker):
                 context=context,
                 by_agent_id=by_agent_id or "",
                 conf_hash=conf_hash,
+                reco_task=reco_task,
             )
             if isinstance(command, ResumeCommand) and resume_cache_key:
                 self._cache_resume_result(resume_cache_key, stream_result)
@@ -1055,6 +1081,7 @@ class DataCloudWorker(GatewayWorker):
         context: AgentContext,
         by_agent_id: str,
         conf_hash: str,
+        reco_task: asyncio.Task[list[str]] | None = None,
     ) -> dict:
         """Drive the graph stream and handle interrupt/done branches."""
         is_agent_delegate = False
@@ -1072,7 +1099,9 @@ class DataCloudWorker(GatewayWorker):
                 context.session_id,
                 conf_hash,
             )
-            async for event in target_graph.astream_events(graph_input, config=config, version="v2"):
+            async for event in target_graph.astream_events(
+                graph_input, config=config, version="v2"
+            ):
                 stream_event_count += 1
                 await context.check_cancelled()
                 kind: str = str(event["event"])
@@ -1186,7 +1215,9 @@ class DataCloudWorker(GatewayWorker):
                 await context.emit_chunk(
                     StreamChunkEvent(
                         content="回答完成",
-                        metadata={"relatedResources": ["推荐问题11"]},
+                        metadata={
+                            "relatedResources": _related_resources_from_reco_task(reco_task),
+                        },
                     ),
                     event_type=EventType.APP_STREAM_RESPONSE.value,
                     content_type=SseMessageType.text.value,
@@ -1198,7 +1229,9 @@ class DataCloudWorker(GatewayWorker):
                 await context.emit_chunk(
                     StreamChunkEvent(
                         content="回答完成",
-                        metadata={"relatedResources": ["推荐问题11"]},
+                        metadata={
+                            "relatedResources": _related_resources_from_reco_task(reco_task),
+                        },
                     ),
                     event_type=EventType.APP_STREAM_RESPONSE.value,
                     content_type=SseMessageType.text.value,
@@ -1217,6 +1250,12 @@ class DataCloudWorker(GatewayWorker):
                 await heartbeat_task
             except asyncio.CancelledError:
                 pass
+            if reco_task is not None and not reco_task.done():
+                reco_task.cancel()
+                try:
+                    await reco_task
+                except asyncio.CancelledError:
+                    pass
 
 
 # ------------------------------------------------------------------
@@ -1277,7 +1316,9 @@ async def _load_recent_history_messages(
 ) -> list[HumanMessage | AIMessage | SystemMessage]:
     """Load recent business history and convert to LangChain messages."""
     try:
-        raw_history = await context.agent_runtime_state.session_manager.history.get_history(limit=limit)
+        raw_history = await context.agent_runtime_state.session_manager.history.get_history(
+            limit=limit
+        )
     except Exception as exc:
         logger.warning("_load_recent_history_messages failed: %s", exc)
         return []
@@ -1303,7 +1344,10 @@ async def _load_recent_history_messages(
     popped_dup = False
     if current_user_text and history_messages:
         last_message = history_messages[-1]
-        if isinstance(last_message, HumanMessage) and str(last_message.content).strip() == current_user_text:
+        if (
+            isinstance(last_message, HumanMessage)
+            and str(last_message.content).strip() == current_user_text
+        ):
             history_messages.pop()
             popped_dup = True
 
@@ -1326,6 +1370,27 @@ async def _load_recent_history_messages(
         )
 
     return history_messages
+
+
+def _related_resources_from_reco_task(task: asyncio.Task[list[str]] | None) -> list[str]:
+    """Return LLM recommendations only if the background task already finished (no extra wait).
+
+    This keeps tail latency unchanged: we never await an in-flight recommendation task at
+    emit time; if the model finishes before the main graph, results are attached.
+    """
+
+    if task is None:
+        return []
+    if not task.done():
+        return []
+    try:
+        out = task.result()
+    except Exception as exc:
+        logger.debug("recommendation task failed: %s", exc)
+        return []
+    if not isinstance(out, list):
+        return []
+    return [str(x).strip() for x in out if str(x).strip()]
 
 
 def _latest_user_text_from_content(content: Any) -> str:

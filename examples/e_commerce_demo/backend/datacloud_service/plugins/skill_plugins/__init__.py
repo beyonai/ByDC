@@ -1,1 +1,1 @@
-﻿# Plugin package: skill_plugins
+# Plugin package: skill_plugins
