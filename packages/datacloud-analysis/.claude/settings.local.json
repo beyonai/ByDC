@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(python -m pytest tests/dca/unit/test_refactored_nodes.py tests/dca/unit/test_new_tools.py tests/dca/unit/test_config_new_settings.py -v)",
+      "Read(//usr/**)",
+      "Read(//usr/local/**)",
+      "Bash(py -3.12 --version)",
+      "Bash(py --list)",
+      "Bash(py -3.13 -m pytest --version)",
+      "Bash(py -3.11 -m pytest --version)",
+      "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" --version)",
+      "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" -m pytest --version)",
+      "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" -m pytest tests/dca/unit/test_refactored_nodes.py tests/dca/unit/test_new_tools.py tests/dca/unit/test_config_new_settings.py -v)",
+      "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" -m pytest tests/dca/unit/ -v --ignore=tests/dca/integration)",
+      "Bash(python -m pytest tests/dca/unit/ -x --tb=short -q)",
+      "Bash(pip install:*)",
+      "Bash(PYTHONPATH=\"src\" python -m pytest tests/dca/unit/ --tb=short -q)",
+      "Bash(python -c \"import sys; print\\(sys.version\\)\")",
+      "Bash(python -c \"import pydantic; print\\(pydantic.VERSION\\)\")",
+      "Bash(where python3:*)",
+      "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" -c \"import sys; print\\(sys.version\\)\")",
+      "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" -c \"import pydantic_settings; print\\('pydantic_settings ok'\\)\")",
+      "Bash(PYTHONPATH=\"packages/datacloud-analysis/src:src\" \"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" -m pytest packages/datacloud-analysis/tests/dca/unit/ --tb=short -q)",
+      "Bash(PYTHONPATH=\"packages/datacloud-analysis/src:src\" \"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" -m pytest packages/datacloud-analysis/tests/dca/unit/test_refactored_nodes.py -v --tb=short -q)",
+      "Bash(PYTHONPATH=\"packages/datacloud-analysis/src:src\" \"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" -c \"from datacloud_analysis.i18n.prompts import get_execution_prompt; p = get_execution_prompt\\('zh_CN'\\); print\\(p\\)\")",
+      "Bash(D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe:*)",
+      "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" /tmp/gen_prompts.py)",
+      "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" /tmp/gen_prompts2.py)",
+      "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" /tmp/gen_prompts3.py)",
+      "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" /tmp/gen_prompts4.py)",
+      "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" /tmp/gen_prompts5.py)",
+      "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" /tmp/gen_prompts6.py)",
+      "Bash(find \"D:\\\\data\\\\code\\\\baiying\\\\whale_datacloud_dev\\\\whale_datacloud\\\\packages\\\\datacloud-data\" -type f -name \"*.py\" -exec grep -l \"def.*query\\\\|class.*Query\" {} \\\\;)"
+    ]
+  }
+}
