@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import logging
+from contextlib import nullcontext
 from typing import Any
 from langchain_core.tools import BaseTool
 from datacloud_analysis.tool_hook_plugins import get_tool_hook_plugin_manager
@@ -107,13 +108,57 @@ async def _emit_think(gateway_context: Any, text: str) -> None:
     except ImportError:
         chunk = text  # type: ignore[assignment]
     try:
-        await gateway_context.emit_chunk(
-            chunk,
-            event_type=_THINK_EVENT_TYPE,
-            content_type=_THINK_CONTENT_TYPE,
-        )
+        emit_kwargs: dict[str, Any] = {
+            "event_type": _THINK_EVENT_TYPE,
+            "content_type": _THINK_CONTENT_TYPE,
+        }
+        await gateway_context.emit_chunk(chunk, **emit_kwargs)
     except Exception as exc:
         logger.debug("_emit_think failed: %s", exc)
+
+
+async def _emit_child_think(
+    gateway_context: Any,
+    text: Any,
+) -> None:
+    """Emit a child reasoning chunk under the current reasoning node."""
+    child_message_id = ""
+    generate_message_id = getattr(gateway_context, "generate_message_id", None)
+    if callable(generate_message_id):
+        try:
+            child_message_id = str(generate_message_id() or "")
+        except Exception:
+            logger.debug("generate_message_id failed in _emit_child_think", exc_info=True)
+
+    child_parent_message_id = str(getattr(gateway_context, "message_id", "") or "")
+    # content = _summarize_output(text)
+    content = text
+    try:
+        from by_framework import StreamChunkEvent  # type: ignore
+
+        child_chunk: Any = StreamChunkEvent(content=content)
+    except ImportError:
+        child_chunk = content
+
+    emit_kwargs: dict[str, Any] = {
+        "event_type": _THINK_EVENT_TYPE,
+        "content_type": _THINK_CONTENT_TYPE,
+    }
+    if child_message_id:
+        emit_kwargs["message_id"] = child_message_id
+    if child_parent_message_id:
+        emit_kwargs["parent_message_id"] = child_parent_message_id
+    await gateway_context.emit_chunk(child_chunk, **emit_kwargs)
+
+
+async def _emit_tool_detail(
+    gateway_context: Any,
+    title: str,
+    detail: Any,
+) -> None:
+    """Emit a third-level reasoning node under the current tool step."""
+    async with gateway_context.sub_step(title):
+        await _emit_child_think(gateway_context, detail)
 
 
 async def _invoke_tool_with_runtime_context(
@@ -160,8 +205,9 @@ async def dispatch_tool(
     - ask_user：直接调用，不走 hook（interrupt 会挂起进程）
 
     输出层级（思考过程）：
-    - 第一层 sub_step：工具名称
-    - 第二层 emit_chunk：调用原因 + 工具返回内容（在同一个 sub_step 内）
+    - 节点输出与工具名称输出位于同一层
+    - 工具名称为当前层的 sub_step
+    - 工具返回内容 / 错误摘要放在下一层 sub_step
     """
     tool_name = tool_call["name"]
     raw_params = dict(tool_call.get("args") or {})
@@ -208,7 +254,7 @@ async def dispatch_tool(
 
     hook_manager = get_tool_hook_plugin_manager()
 
-    # 工具名作为第一层 sub_step，包裹整个执行过程（含 SDK 内部的 sub_step 嵌套在其中）
+    # 工具名作为当前层 sub_step，包裹整个执行过程（含 SDK 内部的 sub_step 嵌套在其中）
     async def _run_tool() -> None:
         nonlocal ctx
 
@@ -276,19 +322,36 @@ async def dispatch_tool(
     if gateway_context is not None:
         try:
             async with gateway_context.sub_step(tool_name):
-                # 第二层：调用原因
+                # 工具名称下级：调用原因
                 if reason:
-                    await _emit_think(gateway_context, reason)
+                    await _emit_child_think(gateway_context, reason)
                 # 执行工具（SDK 内部的 sub_step 自动嵌套在此层下）
-                await _run_tool()
-                # 第二层：返回摘要
+                delegate_parent_scope_factory = getattr(
+                    gateway_context,
+                    "delegate_parent_scope",
+                    None,
+                )
+                delegate_parent_scope = nullcontext()
+                if callable(delegate_parent_scope_factory):
+                    delegate_parent_scope = delegate_parent_scope_factory(
+                        gateway_context.message_id,
+                    )
+                with delegate_parent_scope:
+                    await _run_tool()
+                # 第三层：返回内容 / 错误摘要
                 if ctx.get("tool_error"):
                     err_msg = ctx["tool_error"].get("message", "")
-                    await _emit_think(gateway_context, f"错误：{err_msg}")
+                    await _emit_tool_detail(
+                        gateway_context,
+                        "工具错误",
+                        f"错误：{err_msg}",
+                    )
                 else:
-                    # output_preview = _summarize_output(ctx.get("tool_output"))
-                    await _emit_think(gateway_context, "工具返回内容：")
-                    await _emit_think(gateway_context, ctx.get("tool_output"))
+                    await _emit_tool_detail(
+                        gateway_context,
+                        "工具返回",
+                        ctx.get("tool_output"),
+                    )
         except ToolHookError:
             raise
         except Exception as exc:

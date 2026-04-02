@@ -8,7 +8,7 @@ Gateway Progress Reporter
   - 里程碑方法（on_plan_generating / on_step_executing 等）：
       第一层 = emit_state(标题)，第二层 = emit_chunk(文本内容)
   - 流式 token（on_plan_generating_token）：
-      不新开层级，复用 on_plan_generating 创建的 message_id 持续追加
+      复用 on_plan_generating 创建的第二层 message_id，挂在标题节点下持续追加
 """
 
 from __future__ import annotations
@@ -36,19 +36,18 @@ class GatewayProgressReporter:
 
     def __init__(self, gateway_context: Any) -> None:
         self._ctx = gateway_context
-        # 流式 token 需要挂载到 on_plan_generating 创建的思考节点下
+        # 流式 token 需要挂载到 on_plan_generating 创建的标题节点下的第二层内容节点
         self._plan_gen_m_id: str = ""
         self._plan_gen_p_m_id: str = ""
 
     async def on_plan_generating(self, question: str) -> None:
-        """推送：开始生成查询计划（第一层），并记录消息 id 供后续流式 token 追加。"""
+        """推送：开始生成查询计划，并让后续 JSON token 挂在问题标题下。"""
         try:
-            m_id, p_m_id = await self._emit_reasoning_block(
-                "正在生成查询计划",
-                f"问题：{question}",
+            title_m_id, _ = await self._emit_reasoning_title(
+                f"正在生成查询计划问题：{question}",
             )
-            self._plan_gen_m_id = m_id
-            self._plan_gen_p_m_id = p_m_id
+            self._plan_gen_m_id = self._new_message_id()
+            self._plan_gen_p_m_id = title_m_id
         except Exception:
             logger.debug("on_plan_generating failed", exc_info=True)
 
@@ -140,7 +139,7 @@ class GatewayProgressReporter:
     def _root_message_id(self) -> str:
         return str(getattr(self._ctx, "message_id", "") or "")
 
-    async def _emit_reasoning_block(self, title: str, text: str) -> tuple[str, str]:
+    async def _emit_reasoning_title(self, title: str) -> tuple[str, str]:
         message_id = self._new_message_id()
         parent_message_id = self._root_message_id()
 
@@ -150,11 +149,43 @@ class GatewayProgressReporter:
                 message_id=message_id,
                 parent_message_id=parent_message_id,
             )
-            await self._emit_chunk(
-                text,
+            return message_id, parent_message_id
+        except Exception as exc:
+            logger.debug(
+                "emit reasoning title directly failed, fallback to sub_step",
+                exc_info=True,
+            )
+
+        sub_step = getattr(self._ctx, "sub_step", None)
+        if sub_step is None:
+            raise RuntimeError(
+                "gateway_context does not support reasoning emit or sub_step"
+            ) from exc
+
+        async with sub_step(title) as (fallback_m_id, fallback_p_m_id):
+            pass
+        return str(fallback_m_id), str(fallback_p_m_id)
+
+    async def _emit_reasoning_block(
+        self,
+        title: str,
+        text: str = "",
+    ) -> tuple[str, str]:
+        message_id = self._new_message_id()
+        parent_message_id = self._root_message_id()
+
+        try:
+            await self._emit_state(
+                title,
                 message_id=message_id,
                 parent_message_id=parent_message_id,
             )
+            if text:
+                await self._emit_chunk(
+                    text,
+                    message_id=message_id,
+                    parent_message_id=parent_message_id,
+                )
             return message_id, parent_message_id
         except Exception as exc:
             logger.debug(
@@ -169,7 +200,8 @@ class GatewayProgressReporter:
             ) from exc
 
         async with sub_step(title) as (fallback_m_id, fallback_p_m_id):
-            await self._ctx.emit_chunk(text)
+            if text:
+                await self._ctx.emit_chunk(text)
         return str(fallback_m_id), str(fallback_p_m_id)
 
     async def _emit_state(
