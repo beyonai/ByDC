@@ -17,6 +17,13 @@ from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
 
 logger = logging.getLogger(__name__)
 
+# Set to 1/true/yes to omit ask_user from the execution agent (e.g. local debugging).
+_DISABLE_ASK_USER_TOOL = os.environ.get("DATACLOUD_DISABLE_ASK_USER_TOOL", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
 _EXECUTION_REASONING_TITLE = "任务执行"
 
 _BUILTIN_TOOLS: list[BaseTool] = [
@@ -47,6 +54,9 @@ def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
 
     # Builtin tools: ask_user skips reason injection (already has it)
     for t in _BUILTIN_TOOLS:
+        if t.name == "ask_user" and _DISABLE_ASK_USER_TOOL:
+            logger.info("ask_user omitted from execution tools (DATACLOUD_DISABLE_ASK_USER_TOOL)")
+            continue
         if t.name == "ask_user":
             tools.append(t)
         else:

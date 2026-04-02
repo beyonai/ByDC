@@ -1,11 +1,14 @@
 from __future__ import annotations
+
 import json
 import logging
 import os
 from typing import Any, Literal
+
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool, tool
+
 from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
 
 logger = logging.getLogger(__name__)
@@ -65,6 +68,20 @@ def _summarize_last_output(messages: list) -> str:
             if content:
                 return content[:2000]
     return "任务已执行完成，但未能生成明确结论。"
+
+def _conversation_messages_for_llm(state: Any) -> list[HumanMessage | AIMessage]:
+    """Collect prior Human/AI turns from graph state for multi-turn ReAct.
+
+    Worker 会把业务历史 + 本轮用户消息写入 ``state["messages"]``；若此处仅用
+    ``user_query``（来自最后一条用户话），模型将看不到上一轮助手的回复（例如网格列表），
+    导致「前 3 个网格」等指代无法解析。
+    """
+    out: list[HumanMessage | AIMessage] = []
+    for m in state.get("messages") or []:
+        if isinstance(m, (HumanMessage, AIMessage)):
+            out.append(m)
+    return out
+
 
 def _build_llm(state: Any) -> Any:
     """从环境变量构建 LLM（优先 reasoning，其次 coding，最后 openai 默认）。"""
@@ -171,15 +188,19 @@ async def run_react_loop(
     llm_with_tools = llm.bind_tools(list(tools_map.values()))
 
     messages: list = [SystemMessage(content=system_prompt)]
-    user_query = str(state.get("user_query") or state.get("enriched_query") or "")
-    if user_query:
-        messages.append(HumanMessage(content=user_query))
+    conv = _conversation_messages_for_llm(state)
+    if conv:
+        messages.extend(conv)
+        logger.info("[react_loop] seeded from state.messages: %d human/ai message(s)", len(conv))
     else:
-        # 从 state.messages 中取最后一条用户消息
-        for m in reversed(state.get("messages") or []):
-            if isinstance(m, HumanMessage):
-                messages.append(HumanMessage(content=m.content))
-                break
+        user_query = str(state.get("user_query") or state.get("enriched_query") or "")
+        if user_query:
+            messages.append(HumanMessage(content=user_query))
+        else:
+            for m in reversed(state.get("messages") or []):
+                if isinstance(m, HumanMessage):
+                    messages.append(HumanMessage(content=m.content))
+                    break
 
     # 缓存最近一次 data_query 类工具返回的完整 data block（records+meta+pagination+file）
     # 供 result_type=query_result 时原样透传给 formatter，避免 LLM 二次序列化丢失结构
@@ -223,6 +244,23 @@ async def run_react_loop(
                 # 如果 LLM 声明 query_result，注入缓存的 data block
                 if final.get("result_type") == "query_result" and _last_query_data is not None:
                     final["query_data"] = _last_query_data
+                    # 如已返回结构化表格，避免文本与表格矛盾
+                    answer = str(final.get("answer") or "")
+                    if answer:
+                        meta = _last_query_data.get("meta") if isinstance(_last_query_data, dict) else {}
+                        columns_raw = meta.get("columns", []) if isinstance(meta, dict) else []
+                        col_names: list[str] = []
+                        for col in columns_raw:
+                            if isinstance(col, dict):
+                                name = str(col.get("name") or col.get("label") or "")
+                                if name:
+                                    col_names.append(name)
+                            elif isinstance(col, str):
+                                col_names.append(col)
+                        has_count_col = any("数量" in n for n in col_names)
+                        has_row_data = bool(_last_query_data.get("records"))
+                        if has_count_col and has_row_data and ("未" in answer and "数量" in answer):
+                            final["answer"] = "已返回结果表，详见下方数据。"
                 return {
                     "react_final": final,
                     "react_rounds": round_idx + 1,
