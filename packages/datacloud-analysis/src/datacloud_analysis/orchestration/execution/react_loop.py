@@ -221,10 +221,13 @@ async def run_react_loop(
                     len(_last_query_data.get("records") or []),
                     bool(_last_query_data.get("file")),
                 )
+                answer_text = str(ai_msg.content or "")
+                if any(token in answer_text for token in ("records", "result_type", "pagination")) or len(answer_text) > 800:
+                    answer_text = ""
                 return {
                     "react_final": {
                         "result_type": "query_result",
-                        "answer": str(ai_msg.content or ""),
+                        "answer": answer_text,
                         "query_data": _last_query_data,
                         "stop_reason": "no_tool_call_with_query_data",
                     },
@@ -271,6 +274,9 @@ async def run_react_loop(
                         # 如已返回结构化表格，避免文本与表格矛盾
                         answer = str(final.get("answer") or "")
                         if answer:
+                            if any(token in answer for token in ("records", "result_type", "pagination")) or len(answer) > 800:
+                                final["answer"] = ""
+                                answer = ""
                             meta = _last_query_data.get("meta") if isinstance(_last_query_data, dict) else {}
                             columns_raw = meta.get("columns", []) if isinstance(meta, dict) else []
                             col_names: list[str] = []
