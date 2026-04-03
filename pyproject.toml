@@ -80,7 +80,7 @@ datacloud-knowledge = { workspace = true }
 datacloud-memory = { workspace = true }
 datacloud-service = { workspace = true }
 # by-framework（原 gateway-sdk）来自 by-framework-python 仓库（可编辑安装）
-by-framework = { path = "D:/data/code/baiying/by-framework-python", editable = true }
+by-framework = { path = "../by-framework-python", editable = true }
 
 [tool.uv]
 default-groups = ["dev"]
