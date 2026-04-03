@@ -16,15 +16,16 @@ logger = logging.getLogger(__name__)
 
 _SENSITIVE_KEYS = frozenset({"password", "token", "secret", "api_key", "apikey"})
 
+
 def _sanitize(params: dict[str, Any]) -> str:
     sanitized = {
-        k: "***" if any(s in k.lower() for s in _SENSITIVE_KEYS) else v
-        for k, v in params.items()
+        k: "***" if any(s in k.lower() for s in _SENSITIVE_KEYS) else v for k, v in params.items()
     }
     try:
         return json.dumps(sanitized, ensure_ascii=False, default=str)[:500]
     except Exception:
         return repr(sanitized)[:500]
+
 
 def _summarize_output(output: Any) -> str:
     """将工具输出截断为可读的思考日志摘要（最多 200 字符）。"""
@@ -40,6 +41,7 @@ def _summarize_output(output: Any) -> str:
     if len(text) > 200:
         return text[:200] + "..."
     return text
+
 
 def inject_reason_field(t: BaseTool) -> BaseTool:
     """往工具的 args_schema 注入 reason: str 字段（可选，默认空字符串）。
@@ -93,6 +95,7 @@ def inject_reason_field(t: BaseTool) -> BaseTool:
         logger.warning("inject_reason_field failed for tool=%s: %s", getattr(t, "name", "?"), exc)
     return t
 
+
 _THINK_EVENT_TYPE = "reasoningLogDelta"
 
 _THINK_CONTENT_TYPE = "1002"
@@ -119,8 +122,7 @@ def is_delegate_wait_resume_command(command: Any) -> bool:
     parent_resume_target = metadata.get("parent_resume_target")
     if isinstance(parent_resume_target, dict):
         return (
-            str(parent_resume_target.get("interrupt_reason") or "").strip()
-            == "AGENT_DELEGATE_WAIT"
+            str(parent_resume_target.get("interrupt_reason") or "").strip() == "AGENT_DELEGATE_WAIT"
         )
     return False
 
@@ -191,7 +193,8 @@ async def _emit_think(gateway_context: Any, text: str) -> None:
     """在 sub_step 内推送 think_text 内容。"""
     try:
         from by_framework import StreamChunkEvent  # type: ignore
-        chunk = StreamChunkEvent(content=text)
+
+        chunk = StreamChunkEvent(content=coerce_stream_chunk_text(text))
     except ImportError:
         chunk = text  # type: ignore[assignment]
     try:
@@ -215,11 +218,10 @@ async def _emit_child_think(
     child_parent_message_id = str(
         parent_message_id
         if parent_message_id is not None
-        else getattr(gateway_context, "message_id", "")
-        or ""
+        else getattr(gateway_context, "message_id", "") or ""
     )
-    # content = _summarize_output(text)
-    content = text
+    # Gateway history join() requires str; tool outputs are often dict/list.
+    content = coerce_stream_chunk_text(text)
     try:
         from by_framework import StreamChunkEvent  # type: ignore
 
@@ -293,9 +295,7 @@ async def _invoke_tool_with_runtime_context(
     gateway_context: Any = None,
 ) -> Any:
     """Inject gateway runtime context into tools that explicitly declare it."""
-    runtime_context_param = str(
-        getattr(tool, "_datacloud_runtime_context_param", "") or ""
-    ).strip()
+    runtime_context_param = str(getattr(tool, "_datacloud_runtime_context_param", "") or "").strip()
     if runtime_context_param and gateway_context is not None:
         invoke_params = dict(tool_params)
         invoke_params[runtime_context_param] = gateway_context
@@ -404,16 +404,14 @@ async def dispatch_tool(
         return tool_call_id, result
 
     # --- 解包嵌套参数（兜底）：如果 LLM 产生了 {"params": {...}} 嵌套结构，展开它 ---
-    if (
-        len(raw_params) == 1
-        and "params" in raw_params
-        and isinstance(raw_params["params"], dict)
-    ):
+    if len(raw_params) == 1 and "params" in raw_params and isinstance(raw_params["params"], dict):
         raw_params = raw_params["params"]
 
     logger.info(
         "[tool_call] tool=%s reason=%s params=%s",
-        tool_name, reason, _sanitize(raw_params),
+        tool_name,
+        reason,
+        _sanitize(raw_params),
     )
 
     # --- 构建 HookContext ---
@@ -447,7 +445,7 @@ async def dispatch_tool(
         if before_decision:
             action = str(before_decision.get("action") or "")
             if action == "short_circuit":
-                result_payload = (before_decision.get("result") or {})
+                result_payload = before_decision.get("result") or {}
                 ctx["tool_output"] = result_payload.get("tool_output", "（short_circuit）")
                 ctx["tool_error"] = None
                 return
@@ -459,13 +457,17 @@ async def dispatch_tool(
         if t is None:
             logger.warning("dispatch_tool: tool '%s' not found in tools_map", tool_name)
             ctx["tool_output"] = None
-            ctx["tool_error"] = {"error_type": "ToolNotFound", "message": f"Tool '{tool_name}' not found"}
+            ctx["tool_error"] = {
+                "error_type": "ToolNotFound",
+                "message": f"Tool '{tool_name}' not found",
+            }
         else:
             try:
                 # 将 gateway_context 注入 InvocationContext，使 SDK 内的 GatewayProgressReporter
                 # 能通过 get_gateway_context() 获取到 context 并推送心跳日志（嵌套在当前 sub_step 下）
                 try:
                     from datacloud_data_sdk.context import InvocationContext  # type: ignore
+
                     workspace_root = resolve_shared_workspace_dir(ctx.get("workspace_dir"))
                     _inv_ctx: Any = InvocationContext(
                         gateway_context=gateway_context,
@@ -500,7 +502,7 @@ async def dispatch_tool(
         if after_decision:
             action = str(after_decision.get("action") or "")
             if action == "recover":
-                result_payload = (after_decision.get("result") or {})
+                result_payload = after_decision.get("result") or {}
                 ctx["tool_output"] = result_payload.get("tool_output", ctx.get("tool_output"))
             if action == "fail":
                 raise ToolHookError(after_decision)
@@ -563,18 +565,26 @@ async def dispatch_tool(
 
         # --- data_query 结构识别：records+meta 或 file.file_url ---
         if isinstance(final_output, dict):
-            data_block = final_output.get("data") if isinstance(final_output.get("data"), dict) else final_output
+            data_block = (
+                final_output.get("data")
+                if isinstance(final_output.get("data"), dict)
+                else final_output
+            )
             if isinstance(data_block, dict):
                 records = data_block.get("records")
-                file_block = data_block.get("file") if isinstance(data_block.get("file"), dict) else None
-                file_url = str(file_block.get("file_url", "") if file_block else "").strip()
-                has_records_and_meta = (
-                    isinstance(records, list) and "meta" in data_block
+                file_block = (
+                    data_block.get("file") if isinstance(data_block.get("file"), dict) else None
                 )
+                file_url = str(file_block.get("file_url", "") if file_block else "").strip()
+                has_records_and_meta = isinstance(records, list) and "meta" in data_block
 
                 if has_records_and_meta and "_hint" not in final_output:
                     final_output = dict(final_output)
-                    columns_raw = data_block.get("meta", {}).get("columns", []) if isinstance(data_block.get("meta"), dict) else []
+                    columns_raw = (
+                        data_block.get("meta", {}).get("columns", [])
+                        if isinstance(data_block.get("meta"), dict)
+                        else []
+                    )
                     col_names: list[str] = []
                     for col in columns_raw:
                         if isinstance(col, dict):
@@ -613,6 +623,8 @@ async def dispatch_tool(
                             ",".join(col_names[:8]),
                             len(records),
                         )
-                        logger.info("[tool_return] data_query records detected: count=%d", len(records))
+                        logger.info(
+                            "[tool_return] data_query records detected: count=%d", len(records)
+                        )
 
     return tool_call_id, final_output

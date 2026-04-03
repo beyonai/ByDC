@@ -21,7 +21,7 @@ from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
 logger = logging.getLogger(__name__)
 
 # Set to 1/true/yes to omit ask_user from the execution agent (e.g. local debugging).
-_DISABLE_ASK_USER_TOOL = os.environ.get("DATACLOUD_DISABLE_ASK_USER_TOOL", "").lower() in (
+_DISABLE_ASK_USER_TOOL = os.environ.get("DATACLOUD_DISABLE_ASK_USER_TOOL", "1").lower() in (
     "1",
     "true",
     "yes",
