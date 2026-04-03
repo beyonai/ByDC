@@ -611,7 +611,7 @@
     <owl:NamedIndividual rdf:about="#energy_efficiency_index_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">energy_efficiency_index</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业经济效益等级（高、中、低）</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业经济效益等级</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
@@ -626,7 +626,7 @@
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
-        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
     </owl:NamedIndividual>
 
     <owl:DatatypeProperty rdf:about="#entity_code"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
