@@ -35,11 +35,11 @@ async def format_result(
     )
     if result_type == "query_result":
         # data_query 原始结构透传：{result_type, records, pagination, meta, file, notice_msg}
-        # 如果同时有 answer（文字分析），先推文字再推 6001
+        # query_result 优先结构化输出；避免口述 JSON
         answer = react_final.get("answer", "")
-        if answer:
-            await _emit_text(gateway_context, answer)
         query_data = react_final.get("query_data")
+        if answer and not query_data:
+            await _emit_text(gateway_context, str(answer))
         if not query_data:
             if not answer:
                 await _emit_text(gateway_context, "（query_data 为空）")

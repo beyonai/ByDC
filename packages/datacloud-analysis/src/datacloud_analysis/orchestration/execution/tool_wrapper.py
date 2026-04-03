@@ -356,7 +356,9 @@ async def dispatch_tool(
 
     # --- 特殊工具：agent_delegate（内部调用 interrupt，必须跳过 hook 的 try/except）---
     t_delegate = tools_map.get(tool_name)
-    if t_delegate is not None and getattr(t_delegate, "_is_agent_delegate", False):
+    is_delegate_flag = getattr(t_delegate, "_is_agent_delegate", False) if t_delegate is not None else False
+    is_agent_delegate = isinstance(is_delegate_flag, bool) and is_delegate_flag
+    if t_delegate is not None and is_agent_delegate:
         if _consume_delegate_resume_replay_suppression(gateway_context):
             result = await _invoke_tool_with_runtime_context(
                 t_delegate,
@@ -467,27 +469,30 @@ async def dispatch_tool(
                 # 能通过 get_gateway_context() 获取到 context 并推送心跳日志（嵌套在当前 sub_step 下）
                 try:
                     from datacloud_data_sdk.context import InvocationContext  # type: ignore
+                except ImportError:  # pragma: no cover - fallback for tests/dev env
+                    import sys
+                    from pathlib import Path
 
-                    workspace_root = resolve_shared_workspace_dir(ctx.get("workspace_dir"))
-                    _inv_ctx: Any = InvocationContext(
-                        gateway_context=gateway_context,
-                        workspace_dir=str(workspace_root) if workspace_root is not None else "",
-                    )
-                    _inv_ctx.__enter__()
-                    try:
-                        output = await _invoke_tool_with_runtime_context(
-                            t,
-                            ctx["tool_params"],
-                            gateway_context=gateway_context,
-                        )
-                    finally:
-                        _inv_ctx.__exit__(None, None, None)
-                except ImportError:
+                    repo_root = Path(__file__).resolve().parents[6]
+                    sdk_src = repo_root / "packages" / "datacloud-data" / "src"
+                    if sdk_src.exists():
+                        sys.path.append(str(sdk_src))
+                    from datacloud_data_sdk.context import InvocationContext  # type: ignore
+
+                workspace_root = resolve_shared_workspace_dir(ctx.get("workspace_dir"))
+                _inv_ctx: Any = InvocationContext(
+                    gateway_context=gateway_context,
+                    workspace_dir=str(workspace_root) if workspace_root is not None else "",
+                )
+                _inv_ctx.__enter__()
+                try:
                     output = await _invoke_tool_with_runtime_context(
                         t,
                         ctx["tool_params"],
                         gateway_context=gateway_context,
                     )
+                finally:
+                    _inv_ctx.__exit__(None, None, None)
                 ctx["tool_output"] = output
                 ctx["tool_error"] = None
             except Exception as exc:  # noqa: BLE001
