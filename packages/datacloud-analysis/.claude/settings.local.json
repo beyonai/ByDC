@@ -31,7 +31,14 @@
       "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" /tmp/gen_prompts4.py)",
       "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" /tmp/gen_prompts5.py)",
       "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python.exe\" /tmp/gen_prompts6.py)",
-      "Bash(find \"D:\\\\data\\\\code\\\\baiying\\\\whale_datacloud_dev\\\\whale_datacloud\\\\packages\\\\datacloud-data\" -type f -name \"*.py\" -exec grep -l \"def.*query\\\\|class.*Query\" {} \\\\;)"
+      "Bash(find \"D:\\\\data\\\\code\\\\baiying\\\\whale_datacloud_dev\\\\whale_datacloud\\\\packages\\\\datacloud-data\" -type f -name \"*.py\" -exec grep -l \"def.*query\\\\|class.*Query\" {} \\\\;)",
+      "WebFetch(domain:docs.langchain.com)",
+      "Skill(update-config)",
+      "Bash(npx @anthropic-ai/claude-code mcp list)",
+      "WebFetch(domain:langchain-ai.github.io)",
+      "Bash(grep -E \"\\\\.py$\")",
+      "WebSearch",
+      "WebFetch(domain:blog.langchain.com)"
     ]
   }
 }
