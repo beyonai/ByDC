@@ -912,7 +912,7 @@ class DataCloudWorker(GatewayWorker):
 
         try:
             logger.info(
-                "鈶?_stream_graph invoke session=%s input_is_command_resume=%s",
+                "_stream_graph invoke session=%s input_is_command_resume=%s",
                 context.session_id,
                 isinstance(graph_input, Command),
             )
