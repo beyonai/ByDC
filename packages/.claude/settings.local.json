@@ -57,7 +57,8 @@
       "Bash(.venv/Scripts/python.exe -m pytest packages/datacloud-data/tests/datacloud_data/test_plan_agent.py packages/datacloud-data/tests/datacloud_data/test_view.py packages/datacloud-data/tests/datacloud_data/test_aggregator.py -v --tb=short)",
       "Bash(.venv/Scripts/python.exe -c ':*)",
       "Bash(.venv/Scripts/python.exe -m pytest \"packages/datacloud-data/tests/datacloud_data/test_ontology_loader.py::test_load_from_directory_loads_objects_and_functions\" \"packages/datacloud-data/tests/scripts/test_export_scene_json.py\" -v --tb=long)",
-      "Bash(.venv/Scripts/python.exe -m pytest packages/datacloud-analysis/tests/ -q --tb=short)"
+      "Bash(.venv/Scripts/python.exe -m pytest packages/datacloud-analysis/tests/ -q --tb=short)",
+      "Bash(.venv/Scripts/python.exe -m pytest packages/datacloud-analysis/tests/ packages/datacloud-data/tests/ -q --tb=short)"
     ]
   }
 }

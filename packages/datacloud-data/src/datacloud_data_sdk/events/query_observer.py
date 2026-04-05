@@ -37,7 +37,7 @@ class QueryObserver:
                 )
             )
         except Exception:
-            pass
+            logger.debug("observer/reporter callback failed", exc_info=True)
 
     async def on_view_built(self, request_id: str, payload: dict) -> None:
         try:
@@ -50,7 +50,7 @@ class QueryObserver:
                 )
             )
         except Exception:
-            pass
+            logger.debug("observer/reporter callback failed", exc_info=True)
 
     async def on_plan_generated(self, request_id: str, plan: dict) -> None:
         try:
@@ -62,7 +62,7 @@ class QueryObserver:
                 )
             )
         except Exception:
-            pass
+            logger.debug("observer/reporter callback failed", exc_info=True)
 
     async def on_steps_executed(self, request_id: str, step_results: dict) -> None:
         try:
@@ -74,7 +74,7 @@ class QueryObserver:
                 )
             )
         except Exception:
-            pass
+            logger.debug("observer/reporter callback failed", exc_info=True)
 
     async def on_aggregation_completed(self, request_id: str, records: list, columns: list) -> None:
         try:
@@ -87,7 +87,7 @@ class QueryObserver:
                 )
             )
         except Exception:
-            pass
+            logger.debug("observer/reporter callback failed", exc_info=True)
 
     async def on_plan_validated(
         self,
@@ -113,7 +113,7 @@ class QueryObserver:
                 )
             )
         except Exception:
-            pass
+            logger.debug("observer/reporter callback failed", exc_info=True)
 
     async def on_plan_rewritten(self, request_id: str, rewritten_plan: dict) -> None:
         try:
@@ -125,7 +125,7 @@ class QueryObserver:
                 )
             )
         except Exception:
-            pass
+            logger.debug("observer/reporter callback failed", exc_info=True)
 
     async def on_execution_tasks_ready(
         self, request_id: str, tasks: list[dict], aggregation: dict
@@ -140,7 +140,7 @@ class QueryObserver:
                 )
             )
         except Exception:
-            pass
+            logger.debug("observer/reporter callback failed", exc_info=True)
 
     async def on_plan_validation_failed(
         self, request_id: str, errors: list[str], last_plan: dict
@@ -155,4 +155,4 @@ class QueryObserver:
                 )
             )
         except Exception:
-            pass
+            logger.debug("observer/reporter callback failed", exc_info=True)

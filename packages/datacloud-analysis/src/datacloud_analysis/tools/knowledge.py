@@ -340,10 +340,7 @@ async def _llm_disambiguate(
     for mention, candidates in ambiguous_raw.items():
         if mention in confirmed_mentions:
             continue
-        if mention in still_ambiguous_words:
-            still_ambiguous[mention] = candidates
-        else:
-            still_ambiguous[mention] = candidates
+        still_ambiguous[mention] = candidates
 
     return llm_confirmed, still_ambiguous
 
