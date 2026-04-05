@@ -60,15 +60,26 @@ def get_action_service():
 
 
 def get_term_resolver():
-    """获取术语解析器实例"""
+    """获取术语解析器实例（可选依赖，未初始化时返回 None）。
+
+    OqlRouter 可在无 term_resolver 时正常工作（跳过术语解析步骤），
+    因此此函数不抛出异常，由 router 决定如何处理 None。
+    """
     return _term_resolver
 
 
 def get_executor():
-    """获取执行器实例"""
+    """获取执行器实例（可选依赖，未初始化时返回 None）。
+
+    OqlRouter 内部有默认执行器，此处注入可覆盖默认行为。
+    未初始化时返回 None，router 使用自身默认实现。
+    """
     return _executor
 
 
 def get_datasource_registry():
-    """获取数据源注册表实例"""
+    """获取数据源注册表实例（可选依赖，未初始化时返回 None）。
+
+    未初始化时返回 None，router 使用自身内置注册表。
+    """
     return _datasource_registry

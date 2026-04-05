@@ -217,7 +217,10 @@ def query_objects(
             offset=offset,
         )
 
-        # Decision 10.3：结果量 >= limit 时自动落文件，供前端 getFileByPage 翻页
+        # Decision 10.3：结果量 >= limit 时自动落文件，供前端 getFileByPage 翻页。
+        # 注意：total = len(records) ≤ limit（router 不会超额返回），因此 total > limit
+        # 永远不成立。用 >= 判断"是否达到上限"——当返回行数等于 limit 时，说明可能
+        # 还有更多数据，应落文件供前端分页翻阅。
         workspace_dir = (
             ((config or {}).get("configurable") or {}).get("workspace_dir", "")
             or os.environ.get("DATACLOUD_WORKSPACE_DIR", "")

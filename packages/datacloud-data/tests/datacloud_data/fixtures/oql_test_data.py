@@ -17,6 +17,7 @@ class MockField:
     data_type: str
     source_column: Optional[str] = None
     physical_mappings: dict = field(default_factory=dict)
+    term_set: Optional[str] = None
 
 
 @dataclass

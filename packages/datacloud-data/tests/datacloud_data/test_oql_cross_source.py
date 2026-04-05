@@ -7,7 +7,7 @@ from datacloud_data_sdk.oql.cross_source_executor import (
     classify_include_links, CrossSourceExecutor
 )
 from datacloud_data_sdk.oql.memory_merger import MemoryMerger
-from datacloud_data_sdk.models import OQLError, OQLErrorCode
+from datacloud_data_sdk.oql import OQLError, OQLErrorCode
 from tests.datacloud_data.fixtures.oql_test_data import (
     MockRegistry, MockTermResolver, TEST_FLIGHT_RECORDS, TEST_CREW_RECORDS
 )

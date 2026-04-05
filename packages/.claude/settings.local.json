@@ -47,7 +47,17 @@
       "Bash(D:/data/code/baiying/whale_datacloud/.venv/Scripts/python:*)",
       "Bash(PYTHONPATH=src \"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python\" -m pytest tests/dca/unit/test_worker_stream_graph.py -v --tb=short)",
       "Bash(PYTHONPATH=src \"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python\" -m pytest tests/dca/unit/test_worker_oql_e2e_flow.py -v --tb=short)",
-      "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python\" -m pytest tests/ -q --tb=short)"
+      "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python\" -m pytest tests/ -q --tb=short)",
+      "Bash([ -f \"D:\\\\data\\\\code\\\\baiying\\\\whale_datacloud\\\\packages\\\\datacloud-analysis\\\\src\\\\datacloud_analysis\\\\tools\\\\$file\" ])",
+      "Bash(\"D:/data/code/baiying/whale_datacloud/.venv/Scripts/python\" -m pytest tests/ -v --tb=short)",
+      "Read(//d D:/data/code/baiying/whale_datacloud/packages/**)",
+      "Bash(find . -type f -name \"*.py\" -exec grep -l \"deepagents\" {} \\\\;)",
+      "Bash(.venv/Scripts/python.exe -m pytest packages/datacloud-data/tests/ -q --tb=short)",
+      "Bash(.venv/Scripts/python.exe -m pytest packages/datacloud-data/tests/datacloud_data/test_oql_adapter.py::TestOqlAdapter::test_translate_db_object packages/datacloud-data/tests/datacloud_data/test_oql_router.py::TestOqlRouter::test_route_single_source_db packages/datacloud-data/tests/datacloud_data/test_oql_pipeline.py::TestRefResolver::test_resolve_invalid_ref packages/datacloud-data/tests/datacloud_data/test_execution_object_converter.py::test_script_step_converts_to_script_exec_task -v --tb=long)",
+      "Bash(.venv/Scripts/python.exe -m pytest packages/datacloud-data/tests/datacloud_data/test_plan_agent.py packages/datacloud-data/tests/datacloud_data/test_view.py packages/datacloud-data/tests/datacloud_data/test_aggregator.py -v --tb=short)",
+      "Bash(.venv/Scripts/python.exe -c ':*)",
+      "Bash(.venv/Scripts/python.exe -m pytest \"packages/datacloud-data/tests/datacloud_data/test_ontology_loader.py::test_load_from_directory_loads_objects_and_functions\" \"packages/datacloud-data/tests/scripts/test_export_scene_json.py\" -v --tb=long)",
+      "Bash(.venv/Scripts/python.exe -m pytest packages/datacloud-analysis/tests/ -q --tb=short)"
     ]
   }
 }

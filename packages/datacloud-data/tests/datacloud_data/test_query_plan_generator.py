@@ -13,8 +13,8 @@ from datacloud_data_sdk.plan.models import (
 from datacloud_data_sdk.plan.query_plan_generator import (
     BasePlanGenerator,
     MockPlanGenerator,
-    _serialize_payload,
 )
+from datacloud_data_sdk.agents.plan_agent import _serialize_payload
 from datacloud_data_sdk.utils.case_utils import camel_to_snake, camel_to_snake_keys
 
 PAYLOAD = ObjectViewPayload(view_id="v1", sources=[], objects=[], relations=[])

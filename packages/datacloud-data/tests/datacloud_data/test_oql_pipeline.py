@@ -4,7 +4,7 @@ OQL Pipeline 执行器测试
 
 import pytest
 from datacloud_data_sdk.oql.pipeline_executor import RefResolver, PipelineExecutor
-from datacloud_data_sdk.models import OQLError, OQLErrorCode
+from datacloud_data_sdk.oql import OQLError, OQLErrorCode
 
 
 class TestRefResolver:
@@ -88,12 +88,9 @@ class TestRefResolver:
         assert result["where"][0]["value"] == [1, 2]
 
     def test_resolve_invalid_ref(self):
-        """无效的 $ref 表达式"""
+        """不是 $ref 表达式，直接返回原值"""
         context = {}
-
-        with pytest.raises(OQLError) as exc_info:
-            RefResolver.resolve("{invalid_syntax", context)
-        # 不是 $ref 表达式，直接返回
+        # {invalid_syntax 不匹配 {step}.field 模式，直接返回原值
         assert "{invalid_syntax" == RefResolver.resolve("{invalid_syntax", context)
 
     def test_resolve_missing_step(self):
