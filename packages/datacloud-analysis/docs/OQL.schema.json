@@ -1,0 +1,496 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://datacloud.internal/oql/OQL.schema.json",
+  "title": "OQL - Ontology Query Language Schema",
+  "description": "datacloud-analysis 与 datacloud-data 之间的语义工具调用协议。LLM 输出符合此 Schema 的 JSON，datacloud-data 按唯一确定规则翻译为 SQL / API / 向量检索。",
+  "oneOf": [
+    { "$ref": "#/$defs/OQLCall",     "description": "单步工具调用" },
+    { "$ref": "#/$defs/OQLPipeline", "description": "多步链式 Pipeline" }
+  ],
+
+  "$defs": {
+
+    "OQLCall": {
+      "type": "object",
+      "required": ["tool", "parameters"],
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "type": "string",
+          "enum": ["QueryObjects", "AnalyzeData", "ExecuteAction", "SearchKnowledge"],
+          "description": "工具名，决定 parameters 的 Schema 和后端执行路径"
+        },
+        "parameters": {
+          "description": "工具参数，类型由 tool 字段决定"
+        }
+      },
+      "if":   { "properties": { "tool": { "const": "QueryObjects"    } } },
+      "then": { "properties": { "parameters": { "$ref": "#/$defs/QueryObjectsParams"  } } },
+      "else": {
+        "if":   { "properties": { "tool": { "const": "AnalyzeData"   } } },
+        "then": { "properties": { "parameters": { "$ref": "#/$defs/AnalyzeDataParams"   } } },
+        "else": {
+          "if":   { "properties": { "tool": { "const": "ExecuteAction" } } },
+          "then": { "properties": { "parameters": { "$ref": "#/$defs/ExecuteActionParams" } } },
+          "else": {
+            "if":   { "properties": { "tool": { "const": "SearchKnowledge" } } },
+            "then": { "properties": { "parameters": { "$ref": "#/$defs/SearchKnowledgeParams" } } }
+          }
+        }
+      }
+    },
+
+    "OQLPipeline": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/OQLPipelineStep" },
+      "description": "多步链式执行，后续步骤可通过 $ref 引用前序步骤结果"
+    },
+
+    "OQLPipelineStep": {
+      "type": "object",
+      "required": ["step_id", "tool", "parameters"],
+      "additionalProperties": false,
+      "properties": {
+        "step_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "步骤 ID，在 Pipeline 内唯一，供 $ref 引用，如 s1 / s2 / query_flights"
+        },
+        "tool": {
+          "type": "string",
+          "enum": ["QueryObjects", "AnalyzeData", "ExecuteAction", "SearchKnowledge"]
+        },
+        "parameters": {
+          "description": "同 OQLCall.parameters，参数值中可使用 $ref 对象引用前序步骤结果"
+        }
+      }
+    },
+
+    "QueryObjectsParams": {
+      "type": "object",
+      "required": ["object_type"],
+      "additionalProperties": false,
+      "description": "实体查询参数。适用场景：查询对象实例列表/详情/关系漫游。",
+      "properties": {
+        "object_type": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9_]*$",
+          "description": "目标主业务对象类型名（本体注册名，PascalCase）"
+        },
+        "select": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "description": "指定返回的属性列表（snake_case）；省略则返回全部非计算属性；含计算属性时后端追加调用绑定 Function"
+        },
+        "where": {
+          "$ref": "#/$defs/FilterExpression",
+          "description": "行级过滤条件"
+        },
+        "include_links": {
+          "$ref": "#/$defs/IncludeLinks",
+          "description": "关系漫游（隐式 JOIN），支持嵌套多跳"
+        },
+        "order_by": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/OrderByClause" },
+          "description": "排序规则列表，多个按数组顺序依次排序"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "default": 100,
+          "description": "返回行数上限"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "分页偏移量"
+        }
+      }
+    },
+
+    "AnalyzeDataParams": {
+      "type": "object",
+      "required": ["object_type", "metrics"],
+      "additionalProperties": false,
+      "description": "聚合分析参数。适用场景：统计、汇总、趋势分析（有多少/平均/趋势）。",
+      "properties": {
+        "object_type": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9_]*$",
+          "description": "统计的主对象类型（本体注册名，PascalCase）"
+        },
+        "dimensions": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "description": "分组维度列表（等价于 GROUP BY）；省略则全局聚合（无分组）"
+        },
+        "metrics": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/$defs/MetricDefinition" },
+          "description": "聚合指标定义，key 为结果列别名，value 为聚合函数定义"
+        },
+        "where": {
+          "$ref": "#/$defs/FilterExpression",
+          "description": "聚合前的行级过滤（等价于 WHERE）"
+        },
+        "having": {
+          "$ref": "#/$defs/FilterExpression",
+          "description": "聚合后过滤（等价于 HAVING），FilterExpression 中的字段名可使用 metrics 中的 key"
+        },
+        "time_dimension": {
+          "$ref": "#/$defs/TimeDimension",
+          "description": "时间维度配置，专门处理按时间过滤/分组的高频场景"
+        },
+        "order_by": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/OrderByClause" },
+          "description": "排序规则，field 可引用 metrics 中的 key 名"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "default": 1000,
+          "description": "返回分组行数上限"
+        }
+      }
+    },
+
+    "ExecuteActionParams": {
+      "type": "object",
+      "required": ["action_type"],
+      "additionalProperties": false,
+      "description": "动作执行参数。适用场景：有副作用的操作——数据库写操作、动作类外部 API（POST/PUT/DELETE）、内部业务函数、消息通知。【重要】只读的查询类 API（GET）不在此工具范围内，而是作为对象属性数据源由 QueryObjects 透明调用。LLM 禁止通过 QueryObjects/AnalyzeData 执行写操作。",
+      "properties": {
+        "action_type": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9_]*$",
+          "description": "本体注册的动作名（PascalCase），如 Reschedule_Flight、Submit_Approval"
+        },
+        "target_objects": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "实体主键 ID 列表（静态值）"
+            },
+            { "$ref": "#/$defs/RefExpression" }
+          ],
+          "description": "动作作用的实体主键 ID 列表；对象级动作必填，全局动作可省略；支持 $ref 引用 Pipeline 前序步骤结果"
+        },
+        "payload": {
+          "type": "object",
+          "description": "动作所需的业务参数，由本体动作注册表定义必填项和类型，后端进行强类型校验"
+        }
+      }
+    },
+
+    "SearchKnowledgeParams": {
+      "type": "object",
+      "required": ["query"],
+      "additionalProperties": false,
+      "description": "知识检索参数。适用场景：非结构化文档检索（操作手册、法规、知识库）。",
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "description": "语义检索词，用于生成查询向量"
+        },
+        "restrict_to_objects": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "对象实例主键 ID 列表（静态值）"
+            },
+            { "$ref": "#/$defs/RefExpression" }
+          ],
+          "description": "图过滤约束：仅检索与这些对象实例关联的文档；省略则全库检索；支持 $ref"
+        },
+        "restrict_to_doc_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["manual", "regulation", "report", "faq", "contract", "email", "other"]
+          },
+          "description": "文档类型过滤；省略则不限类型"
+        },
+        "top_k": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 3,
+          "description": "返回最相关的文档片段数"
+        },
+        "search_mode": {
+          "type": "string",
+          "enum": ["semantic", "fulltext", "hybrid"],
+          "default": "semantic",
+          "description": "semantic=纯向量检索；fulltext=纯关键词检索；hybrid=两路融合（RRF）"
+        }
+      }
+    },
+
+    "FilterExpression": {
+      "description": "过滤表达式，支持字段条件和逻辑组合。根级多个字段之间默认 AND。",
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          { "$ref": "#/$defs/FieldCondition" },
+          { "$ref": "#/$defs/LogicalAnd" },
+          { "$ref": "#/$defs/LogicalOr" },
+          { "$ref": "#/$defs/LogicalNot" }
+        ]
+      },
+      "examples": [
+        { "status": { "$eq": "Delayed" }, "delay_minutes": { "$gt": 30 } },
+        { "$or": [ { "airline": { "$eq": "CA" } }, { "airline": { "$eq": "MU" } } ] }
+      ]
+    },
+
+    "FieldCondition": {
+      "description": "单字段过滤条件，key 为操作符",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "$eq":          { "description": "等于",         "not": { "type": "null" } },
+        "$ne":          { "description": "不等于",       "not": { "type": "null" } },
+        "$gt":          { "description": "大于",         "type": ["number", "string"] },
+        "$gte":         { "description": "大于等于",     "type": ["number", "string"] },
+        "$lt":          { "description": "小于",         "type": ["number", "string"] },
+        "$lte":         { "description": "小于等于",     "type": ["number", "string"] },
+        "$in":          { "description": "在列表中",     "type": "array", "minItems": 1 },
+        "$nin":         { "description": "不在列表中",   "type": "array", "minItems": 1 },
+        "$like":        { "description": "模糊匹配（支持 % 通配符）", "type": "string" },
+        "$isNull":      { "description": "是否为空",     "type": "boolean" },
+        "$between":     { "description": "范围区间 [min, max]", "type": "array", "minItems": 2, "maxItems": 2 },
+        "$relativeDate":{ "description": "相对时间表达式", "type": "string",
+                          "enum": ["today", "this_week", "this_month", "this_quarter", "this_year",
+                                   "last_month", "last_quarter", "-1d", "-7d", "-14d", "-30d", "-90d", "-365d"] }
+      }
+    },
+
+    "LogicalAnd": {
+      "type": "object",
+      "required": ["$and"],
+      "additionalProperties": false,
+      "properties": {
+        "$and": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/FilterExpression" },
+          "description": "所有条件均满足（AND）"
+        }
+      }
+    },
+
+    "LogicalOr": {
+      "type": "object",
+      "required": ["$or"],
+      "additionalProperties": false,
+      "properties": {
+        "$or": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/FilterExpression" },
+          "description": "任一条件满足（OR）"
+        }
+      }
+    },
+
+    "LogicalNot": {
+      "type": "object",
+      "required": ["$not"],
+      "additionalProperties": false,
+      "properties": {
+        "$not": {
+          "$ref": "#/$defs/FilterExpression",
+          "description": "条件取反（NOT）"
+        }
+      }
+    },
+
+    "IncludeLinks": {
+      "type": "object",
+      "description": "关系漫游配置，key 为本体关系名（snake_case）",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "select": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+            "description": "只返回关联对象的这些属性；省略则返回全部非计算属性"
+          },
+          "where": {
+            "$ref": "#/$defs/FilterExpression",
+            "description": "关联对象的行级过滤"
+          },
+          "include_links": {
+            "$ref": "#/$defs/IncludeLinks",
+            "description": "嵌套关系漫游（多跳），递归结构"
+          }
+        }
+      }
+    },
+
+    "MetricDefinition": {
+      "type": "object",
+      "required": ["operator"],
+      "additionalProperties": false,
+      "description": "聚合指标定义",
+      "properties": {
+        "operator": {
+          "type": "string",
+          "enum": ["count", "count_distinct", "sum", "avg", "max", "min"],
+          "description": "聚合函数：count（行数）/ count_distinct（去重计数）/ sum（求和）/ avg（平均）/ max（最大）/ min（最小）"
+        },
+        "field": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "聚合字段（snake_case）；count 可省略；其余 operator 必填"
+        }
+      },
+      "if":   { "properties": { "operator": { "enum": ["count_distinct", "sum", "avg", "max", "min"] } } },
+      "then": { "required": ["operator", "field"] }
+    },
+
+    "TimeDimension": {
+      "type": "object",
+      "required": ["field", "range"],
+      "additionalProperties": false,
+      "description": "时间维度配置，用于 AnalyzeData 中按时间过滤和分组",
+      "properties": {
+        "field": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "时间属性名（DateTime 或 Date 类型）"
+        },
+        "range": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": ["today", "this_week", "this_month", "this_quarter", "this_year",
+                       "last_month", "last_quarter", "-7d", "-14d", "-30d", "-90d", "-365d"],
+              "description": "相对时间范围"
+            },
+            {
+              "type": "array",
+              "items": { "type": "string", "format": "date-time" },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "绝对时间区间 [start_iso8601, end_iso8601]"
+            }
+          ],
+          "description": "时间过滤范围"
+        },
+        "granularity": {
+          "type": "string",
+          "enum": ["day", "week", "month", "quarter", "year"],
+          "description": "按时间粒度分组；省略则不按时间分组，只过滤"
+        }
+      }
+    },
+
+    "OrderByClause": {
+      "type": "object",
+      "required": ["field"],
+      "additionalProperties": false,
+      "description": "单个排序规则",
+      "properties": {
+        "field": {
+          "type": "string",
+          "description": "排序字段（属性名或 metrics 中的 key 名）"
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["asc", "desc"],
+          "default": "asc",
+          "description": "排序方向：asc（升序）/ desc（降序）"
+        }
+      }
+    },
+
+    "RefExpression": {
+      "type": "object",
+      "required": ["$ref"],
+      "additionalProperties": false,
+      "description": "Pipeline 步骤间结果引用表达式",
+      "properties": {
+        "$ref": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*\\.result(\\[\\*\\]|\\[\\d+\\])(\\.[a-z][a-z0-9_]*)?$",
+          "description": "引用路径，格式：{step_id}.result[*].{field} 或 {step_id}.result[0].{field} 或 {step_id}.result[*]",
+          "examples": [
+            "s1.result[*].flight_id",
+            "s1.result[0].flight_id",
+            "s1.result[*]"
+          ]
+        }
+      }
+    },
+
+    "OQLResponse": {
+      "type": "object",
+      "required": ["status"],
+      "description": "OQL 执行结果统一响应格式（供 datacloud-data 实现参考）",
+      "oneOf": [
+        { "$ref": "#/$defs/OQLSuccessResponse" },
+        { "$ref": "#/$defs/OQLErrorResponse"   }
+      ]
+    },
+
+    "OQLSuccessResponse": {
+      "type": "object",
+      "required": ["status", "tool", "result"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "const": "success" },
+        "tool":   { "type": "string" },
+        "result": {
+          "type": "object",
+          "properties": {
+            "columns":  { "type": "array", "items": { "type": "string" } },
+            "rows":     { "type": "array", "items": { "type": "array" } },
+            "total":    { "type": "integer", "description": "满足条件的总行数（未分页）" },
+            "returned": { "type": "integer", "description": "本次实际返回行数" }
+          }
+        }
+      }
+    },
+
+    "OQLErrorResponse": {
+      "type": "object",
+      "required": ["status", "error_code", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "status":     { "const": "error" },
+        "error_code": {
+          "type": "string",
+          "enum": [
+            "OQL_ERR_UNKNOWN_OBJECT_TYPE",
+            "OQL_ERR_UNKNOWN_PROPERTY",
+            "OQL_ERR_UNKNOWN_LINK",
+            "OQL_ERR_INVALID_OPERATOR",
+            "OQL_ERR_TYPE_MISMATCH",
+            "OQL_ERR_UNSUPPORTED_FILTER",
+            "OQL_ERR_UNKNOWN_ACTION",
+            "OQL_ERR_ACTION_INVALID_PARAMS",
+            "OQL_ERR_PERMISSION_DENIED",
+            "OQL_ERR_LINK_TOO_DEEP",
+            "OQL_ERR_REF_RESOLUTION_FAILED",
+            "OQL_ERR_QUERY_API_UNAVAILABLE",
+            "OQL_ERR_INTERNAL"
+          ]
+        },
+        "message": { "type": "string", "description": "人类可读的错误描述，供 LLM 自我修正参考" },
+        "detail":  { "type": "object",  "description": "结构化错误详情，如 { object_type: 'Flightt' }" }
+      }
+    }
+  }
+}
