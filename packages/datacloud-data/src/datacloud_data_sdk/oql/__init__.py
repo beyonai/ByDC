@@ -9,6 +9,7 @@ from datacloud_data_sdk.oql.adapter import OqlAdapter
 from datacloud_data_sdk.oql.cross_source_executor import CrossSourceExecutor, classify_include_links
 from datacloud_data_sdk.oql.pipeline_executor import PipelineExecutor, RefResolver
 from datacloud_data_sdk.oql.memory_merger import MemoryMerger
+from datacloud_data_sdk.oql.response_formatter import format_oql_response, format_oql_error
 from datacloud_data_sdk.oql.models import (
     OQLError, OQLErrorCode, OQLRequest, OQLResponse, OQLPagination,
     OQLField, OQLObject, OQLRelation, OQLCondition, OQLIncludeLink,
@@ -23,6 +24,8 @@ __all__ = [
     "RefResolver",
     "MemoryMerger",
     "classify_include_links",
+    "format_oql_response",
+    "format_oql_error",
     "OQLError",
     "OQLErrorCode",
     "OQLRequest",
