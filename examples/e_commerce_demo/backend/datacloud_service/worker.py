@@ -10,12 +10,12 @@ import sys
 import traceback
 import uuid
 from collections import OrderedDict
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Mapping
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from typing import Any, cast
+from typing import Any
 
 from by_framework import (
     AgentContext,
@@ -529,85 +529,6 @@ class DataCloudWorker(GatewayWorker):
             tools=tools_dict,
         )
 
-    @staticmethod
-    def _wrap_skill_callable(
-        skill_name: str,
-        run_fn: Callable[..., Any],
-        skill_meta: Mapping[str, Any] | None = None,
-    ) -> Callable[..., Awaitable[Any]]:
-        async def _skill_tool(**params: Any) -> Any:
-            maybe = run_fn(**params)
-            if hasattr(maybe, "__await__"):
-                return await maybe
-            return maybe
-
-        metadata = dict(skill_meta or {})
-        allowlist_tags = [
-            str(tag).strip() for tag in metadata.get("allowlist_tags") or [] if str(tag).strip()
-        ]
-        blocklist_tags = [
-            str(tag).strip() for tag in metadata.get("blocklist_tags") or [] if str(tag).strip()
-        ]
-        risk_level = str(metadata.get("risk_level") or "medium").strip().lower() or "medium"
-
-        _skill_tool.__name__ = f"skill_{skill_name}"
-        _skill_tool.__doc__ = f"Skill capability: {skill_name}"
-        _skill_tool._is_skill_capability = True
-        _skill_tool._skill_name = skill_name
-        _skill_tool._skill_meta = metadata
-        _skill_tool._skill_risk_level = risk_level
-        _skill_tool._skill_allowlist_tags = allowlist_tags
-        _skill_tool._skill_blocklist_tags = blocklist_tags
-        return _skill_tool
-
-    def _load_skill_capabilities(
-        self,
-        *,
-        user_id: str,
-        task_id: str,
-    ) -> dict[str, Any]:
-        try:
-            from datacloud_analysis.workspace.paths import build_task_paths  # noqa: PLC0415
-            from datacloud_analysis.workspace.skills_loader import SkillLoader  # noqa: PLC0415
-        except ImportError as exc:
-            logger.warning("Skill capability loader unavailable: %s", exc)
-            return {}
-
-        try:
-            task_paths = build_task_paths(user_id=user_id, task_id=task_id)
-            loader = SkillLoader(task_paths)
-            registry = loader.load_all()
-        except Exception as exc:
-            logger.warning(
-                "Failed to load skill capabilities user=%s task=%s error=%s", user_id, task_id, exc
-            )
-            return {}
-
-        skills: dict[str, Any] = {}
-        source_counts: dict[str, int] = {}
-        for name, entry in registry.items():
-            run_fn = entry.get("run")
-            if not callable(run_fn):
-                continue
-            skill_name = str(name).strip()
-            if not skill_name:
-                continue
-            skills[skill_name] = self._wrap_skill_callable(
-                skill_name,
-                run_fn,
-                cast("Mapping[str, Any] | None", entry.get("meta")),
-            )
-            source = str(entry.get("source", "unknown"))
-            source_counts[source] = source_counts.get(source, 0) + 1
-        if skills:
-            logger.info(
-                "Loaded skill capabilities: count=%d names=%s sources=%s",
-                len(skills),
-                sorted(skills.keys()),
-                source_counts,
-            )
-        return skills
-
     async def start_heartbeat(self) -> None:
         await super().start_heartbeat()
 
@@ -793,30 +714,15 @@ class DataCloudWorker(GatewayWorker):
             sorted(str(key) for key in prompts_dict.keys()),
             sorted(str(key) for key in tools_dict.keys()),
         )
-        user_id = str(getattr(context, "user_id", "") or "anonymous")
-        skill_tools = self._load_skill_capabilities(user_id=user_id, task_id=context.session_id)
-        merged_tools = dict(tools_dict)
-        if skill_tools:
-            for skill_name, skill_tool in skill_tools.items():
-                if skill_name in merged_tools:
-                    alias = f"skill.{skill_name}"
-                    merged_tools[alias] = skill_tool
-                    logger.info(
-                        "Skill name conflict with tool: name=%s alias=%s",
-                        skill_name,
-                        alias,
-                    )
-                else:
-                    merged_tools[skill_name] = skill_tool
+        # 改动4: SkillsMiddleware 在运行时自动处理技能发现，无需在 worker 中手动加载
         logger.info(
-            "Agent runtime merged tools: agent_id=%s merged_tool_keys=%s skill_tool_count=%d",
+            "Agent runtime tools: agent_id=%s tool_keys=%s",
             by_agent_id,
-            sorted(str(key) for key in merged_tools),
-            len(skill_tools),
+            sorted(str(key) for key in tools_dict),
         )
 
         conf_payload = json.dumps(
-            {"prompts": prompts_dict, "tool_keys": sorted(merged_tools.keys())},
+            {"prompts": prompts_dict, "tool_keys": sorted(tools_dict.keys())},
             ensure_ascii=False,
             sort_keys=True,
         )
@@ -841,7 +747,7 @@ class DataCloudWorker(GatewayWorker):
             if config_for_this_call:
                 target_graph = self._build_graph(
                     prompts_dict=prompts_dict,
-                    tools_dict=merged_tools,
+                    tools_dict=tools_dict,
                 )
             else:
                 logger.warning("AgentConfig for %s not found, fallback to defaults.", by_agent_id)
@@ -864,7 +770,14 @@ class DataCloudWorker(GatewayWorker):
         config = {
             "configurable": {
                 "thread_id": thread_id,
-                "gateway_context": context,  # Bug 6 fix: AgentContext 放 config 而非 state
+                # DatacloudContext 字段平铺到 configurable（Deep Agents context_schema 要求）
+                "gateway_context": context,
+                "agent_id": str(by_agent_id or ""),
+                "agent_name": str(by_agent_name or ""),
+                "workspace_dir": workspace_dir,
+                "session_id": context.session_id,
+                "locale": str(getattr(context, "locale", "") or "zh_CN"),
+                "trace_id": str(getattr(command.header, "trace_id", "") or ""),
             }
         }
         context._langgraph_thread_id = thread_id
@@ -947,47 +860,9 @@ class DataCloudWorker(GatewayWorker):
                         else repr(mc)[:200]
                     )
                     logger.info("[user_query_trace] worker combined[%d] %s preview=%r", i, mt, mp)
+            # 改动3: Deep Agents 架构下只传 messages；所有运行时上下文通过 config["configurable"] 注入
             graph_input = {
                 "messages": combined_messages,
-                "agent_id": by_agent_id,
-                "agent_name": by_agent_name,
-                "workspace_dir": workspace_dir,
-                "user_query": "",
-                "enriched_query": "",
-                "plan": [],
-                "todos": [],
-                "todo_md": "",
-                "todo_md_path": "",
-                "results": [],
-                "execution_status": "",
-                "todo_active_id": "",
-                "todo_tool_plan": [],
-                "active_tools": [],
-                "execution_trace": [],
-                "invocation_dedup": [],
-                "final_answer": "",
-                "artifact_refs": [],
-                "execution_summary": None,
-                "execution_summary_persistence": None,
-                "resume_context": {},
-                "intent": "",
-                "clarify_needed": False,
-                "query_mode": "analysis",
-                "chitchat_reply": None,
-                "target_tool": "",
-                "tool_params": {},
-                "term_hints": [],
-                "knowledge_snippets": [],
-                "knowledge_payload": {},
-                "concept_terms": [],
-                "confirmed_terms": [],
-                "ambiguous_terms": [],
-                "session_alias_map": {},
-                "planned_tasks": [],
-                "task_queue": [],
-                "results_list": [],
-                "results_map": {},
-                "final_summary": {},
             }
 
         if isinstance(command, ResumeCommand):

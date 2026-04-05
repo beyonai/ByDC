@@ -6,7 +6,6 @@ import pytest
 from unittest.mock import Mock, patch
 from datacloud_analysis.tools.registry import (
     register_oql_tools,
-    register_core_tools,
     register_all_tools,
     get_tool_by_name,
 )
@@ -29,37 +28,15 @@ class TestToolRegistry:
             assert mock_qo in tools
             assert mock_ea in tools
 
-    def test_register_core_tools(self):
-        """测试注册核心工具"""
-        with patch("datacloud_analysis.tools.ask_user.ask_user") as mock_au, \
-             patch("datacloud_analysis.tools.code_exec.execute_code") as mock_ce, \
-             patch("datacloud_analysis.tools.file_io.read_file") as mock_rf, \
-             patch("datacloud_analysis.tools.file_io.write_file") as mock_wf:
-
-            mock_au.name = "ask_user"
-            mock_ce.name = "execute_code"
-            mock_rf.name = "read_file"
-            mock_wf.name = "write_file"
-
-            tools = register_core_tools()
-
-            assert len(tools) == 4
-            assert mock_au in tools
-            assert mock_ce in tools
-
-    def test_register_all_tools(self):
-        """测试注册所有工具"""
-        with patch("datacloud_analysis.tools.registry.register_oql_tools") as mock_oql, \
-             patch("datacloud_analysis.tools.registry.register_core_tools") as mock_core:
-
-            mock_oql.return_value = [Mock(name="tool1"), Mock(name="tool2")]
-            mock_core.return_value = [Mock(name="tool3"), Mock(name="tool4")]
+    def test_register_all_tools_returns_oql_tools(self):
+        """测试注册所有工具（仅 OQL 工具，SDK 内置工具由中间件提供）"""
+        with patch("datacloud_analysis.tools.registry.register_oql_tools") as mock_oql:
+            mock_oql.return_value = [Mock(name="query_objects"), Mock(name="execute_action")]
 
             tools = register_all_tools()
 
-            assert len(tools) == 4
+            assert len(tools) == 2
             mock_oql.assert_called_once()
-            mock_core.assert_called_once()
 
     def test_get_tool_by_name_success(self):
         """测试根据名称获取工具（成功）"""

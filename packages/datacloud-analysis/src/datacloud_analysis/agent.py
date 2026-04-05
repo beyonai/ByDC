@@ -1,8 +1,7 @@
 """DataCloud deep agent — Deep Agents Architecture v2.
 
 This module provides the agent factory using Deep Agents SDK.
-When deepagents is available, it uses create_deep_agent() with middleware stack.
-Otherwise, it falls back to the legacy StateGraph implementation.
+Uses create_deep_agent() with middleware stack.
 
 Persistence (checkpointing) is handled externally:
 - langgraph dev: injected by the platform via ``langgraph.json`` / ``checkpointer.py``
@@ -37,10 +36,7 @@ def create_agent(
     prompts_overwrite: dict[str, Any] | None = None,
     tools: dict[str, Any] | None = None,
 ) -> Any:
-    """Create a deep agent for DataCloud.
-
-    This function attempts to use Deep Agents SDK if available,
-    otherwise falls back to the legacy StateGraph implementation.
+    """Create a deep agent for DataCloud using Deep Agents SDK.
 
     Args:
         model: LLM model name
@@ -49,7 +45,7 @@ def create_agent(
         temperature: LLM temperature
         locale: Locale for agent (default: zh_CN)
         system_prompt: Custom system prompt
-        prompts_overwrite: Prompt overrides
+        prompts_overwrite: Prompt overrides (legacy, ignored by deep agent)
         tools: Additional tools to register
 
     Returns:
@@ -66,27 +62,15 @@ def create_agent(
         )
         resolved_locale = "zh_CN"
 
-    # Try to use Deep Agents SDK
-    try:
-        return _create_deep_agent(
-            model=model,
-            api_key=api_key,
-            base_url=base_url,
-            temperature=temperature,
-            locale=resolved_locale,
-            system_prompt=system_prompt,
-            prompts_overwrite=prompts_overwrite,
-            tools=tools,
-        )
-    except ImportError:
-        logger.warning(
-            "Deep Agents SDK not available, falling back to legacy StateGraph implementation"
-        )
-        return _create_legacy_agent(
-            locale=resolved_locale,
-            prompts_overwrite=prompts_overwrite,
-            tools=tools,
-        )
+    return _create_deep_agent(
+        model=model,
+        api_key=api_key,
+        base_url=base_url,
+        temperature=temperature,
+        locale=resolved_locale,
+        system_prompt=system_prompt,
+        tools=tools,
+    )
 
 
 def _create_deep_agent(
@@ -97,7 +81,6 @@ def _create_deep_agent(
     temperature: float = 0.7,
     locale: str = "zh_CN",
     system_prompt: str | None = None,
-    prompts_overwrite: dict[str, Any] | None = None,
     tools: dict[str, Any] | None = None,
 ) -> Any:
     """Create agent using Deep Agents SDK.
@@ -109,7 +92,6 @@ def _create_deep_agent(
         temperature: Temperature
         locale: Locale
         system_prompt: System prompt
-        prompts_overwrite: Prompt overrides
         tools: Additional tools
 
     Returns:
@@ -118,32 +100,46 @@ def _create_deep_agent(
     Raises:
         ImportError: If deepagents is not installed
     """
+    import pathlib  # noqa: PLC0415
+
     from deepagents import create_deep_agent  # noqa: PLC0415
 
+    from datacloud_analysis.backend import create_datacloud_backend  # noqa: PLC0415
+    from datacloud_analysis.context import DatacloudContext  # noqa: PLC0415
     from datacloud_analysis.middlewares import (  # noqa: PLC0415
         DatacloudOutputMiddleware,
         KnowledgeInjectionMiddleware,
         WorkspaceInitMiddleware,
     )
+    from datacloud_analysis.subagents import CODE_EXECUTOR_SUBAGENT  # noqa: PLC0415
     from datacloud_analysis.tools.registry import register_all_tools  # noqa: PLC0415
 
     logger.info("create_agent: Using Deep Agents SDK (locale=%s)", locale)
 
-    # Register all tools
+    # Register OQL tools (emit_result injected by DatacloudOutputMiddleware)
     all_tools = register_all_tools()
     if tools:
-        # Merge additional tools
         all_tools.extend(tools.values())
 
     # Build system prompt
     final_system_prompt = system_prompt or _build_default_system_prompt(locale)
 
-    # Create middleware stack
+    # Workspace dir for backend
+    workspace_dir = os.getcwd()
+
+    # DatacloudBackend — limits file operations to workspace_dir
+    backend = create_datacloud_backend(workspace_dir)
+
+    # Built-in skills directory (SKILL.md 格式，随包发布)
+    builtin_skills_dir = str(pathlib.Path(__file__).parent / "skills" / "builtin")
+    skill_sources = [builtin_skills_dir]
+
+    # Middleware stack (自定义中间件追加在 SDK 内置栈之后)
     middlewares = [
         KnowledgeInjectionMiddleware(),
         DatacloudOutputMiddleware(),
         WorkspaceInitMiddleware(
-            workspace_dir=os.getcwd(),
+            workspace_dir=workspace_dir,
             agent_name="DataCloud Agent",
         ),
     ]
@@ -167,73 +163,18 @@ def _create_deep_agent(
         tools=all_tools,
         system_prompt=final_system_prompt,
         middleware=middlewares,
+        context_schema=DatacloudContext,
+        backend=backend,
+        skills=skill_sources,
+        subagents=[CODE_EXECUTOR_SUBAGENT],
         checkpointer=checkpointer,
     )
 
     return compiled
 
 
-def _create_legacy_agent(
-    *,
-    locale: str = "zh_CN",
-    prompts_overwrite: dict[str, Any] | None = None,
-    tools: dict[str, Any] | None = None,
-) -> Any:
-    """Create agent using legacy StateGraph implementation.
-
-    Args:
-        locale: Locale
-        prompts_overwrite: Prompt overrides
-        tools: Additional tools
-
-    Returns:
-        Compiled agent
-    """
-    from datacloud_analysis.orchestration.graph_builder import build_analysis_graph  # noqa: PLC0415
-
-    logger.info("create_agent: Using legacy StateGraph (locale=%s)", locale)
-    logger.info(
-        "create_agent: injecting tools into graph closure count=%d keys=%s",
-        len(tools or {}),
-        sorted((tools or {}).keys()),
-    )
-
-    graph = build_analysis_graph(
-        prompts_overwrite=prompts_overwrite,
-        tools=tools,
-    )
-
-    # Inject checkpointer if available
-    try:
-        from datacloud_analysis.session.checkpointer import get_checkpointer  # noqa: PLC0415
-
-        compiled = graph.compile(checkpointer=get_checkpointer())
-        logger.info("create_agent: compiled with PG checkpointer")
-    except RuntimeError:
-        compiled = graph.compile()
-        logger.warning(
-            "create_agent: checkpointer not initialized — compiling without checkpointing. "
-            "Call `await bootstrap.setup()` before create_agent() to enable interrupt/resume."
-        )
-
-    try:
-        nodes = list(compiled.get_graph().nodes.keys())
-        logger.info("[dbg] compiled graph nodes: %s", nodes)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("[dbg] get_graph failed: %s", exc)
-
-    return compiled
-
-
 def _build_default_system_prompt(locale: str) -> str:
-    """Build default system prompt.
-
-    Args:
-        locale: Locale
-
-    Returns:
-        System prompt
-    """
+    """Build default system prompt."""
     if locale == "zh_CN":
         return """你是 DataCloud Agent，一个专业的数据分析助手。
 
