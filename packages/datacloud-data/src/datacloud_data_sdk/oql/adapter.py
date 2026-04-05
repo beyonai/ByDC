@@ -28,6 +28,30 @@ logger = logging.getLogger(__name__)
 # 原子翻译层函数
 # ============================================================================
 
+def route_by_source_type(cls: Any) -> str:
+    """
+    根据对象类型路由到对应的执行策略。
+
+    Args:
+        cls: OntologyClass 对象
+
+    Returns:
+        执行策略类型：'sql' 或 'api'
+
+    Raises:
+        OQLError: 不支持的对象类型
+    """
+    if cls.source_type == "DB":
+        return "sql"
+    elif cls.source_type == "API":
+        return "api"
+    else:
+        raise OQLError(
+            OQLErrorCode.OQL_ERR_UNSUPPORTED_OPERATION,
+            f"对象 '{cls.object_code}' 的类型 '{cls.source_type}' 不支持 QueryObjects"
+        )
+
+
 def resolve_object(object_code: str, registry) -> Any:
     """
     从本体注册表解析对象。
@@ -102,6 +126,40 @@ def resolve_column(field_code: str, cls: Any, db_type: str) -> str:
 
     # Level 3: field_code
     return field_code
+
+
+def find_primary_key(cls: Any, db_type: str) -> tuple[str, str]:
+    """
+    查找对象的主键。
+
+    返回 (field_code, physical_column)，优先取 is_primary_key=True 的字段。
+
+    Args:
+        cls: OntologyClass 对象
+        db_type: 数据库类型
+
+    Returns:
+        (字段代码, 物理列名) 元组
+
+    Raises:
+        OQLError: 对象未定义任何字段
+    """
+    # 优先查找标记为主键的字段
+    if hasattr(cls, 'fields'):
+        for f in cls.fields:
+            if hasattr(f, 'is_primary_key') and f.is_primary_key:
+                return f.field_code, resolve_column(f.field_code, cls, db_type)
+
+        # 如果没有标记的主键，使用第一个字段
+        if cls.fields:
+            f = cls.fields[0]
+            return f.field_code, resolve_column(f.field_code, cls, db_type)
+
+    raise OQLError(
+        OQLErrorCode.OQL_ERR_UNKNOWN_FIELD,
+        f"对象 '{cls.object_code}' 未定义任何字段"
+    )
+
 
 
 def build_field_map(cls: Any, field_codes: list[str], db_type: str) -> dict[str, str]:
@@ -434,23 +492,397 @@ def normalize_sql_params(sql: str, params: list, db_type: str) -> tuple[str, lis
     return (sql, params)
 
 
+def resolve_term_value(field: Any, raw_value: Any, term_resolver) -> Any:
+    """
+    将业务名称转换为物理值。
+
+    对于含 term_set 的字段，通过 term_resolver 将标签/别名解析为标准值。
+    无 term_set 时直接返回原始值。
+
+    Args:
+        field: OntologyField 对象
+        raw_value: 原始值（可能是标签/别名）
+        term_resolver: 术语解析器（TermResolver 实例）
+
+    Returns:
+        解析后的物理值
+
+    Raises:
+        OQLError: 术语解析失败
+    """
+    if not field.term_set:
+        return raw_value
+
+    if term_resolver is None:
+        logger.warning(
+            "字段 '%s' 配置了 term_set '%s' 但未提供 term_resolver，跳过术语解析",
+            field.field_code, field.term_set
+        )
+        return raw_value
+
+    try:
+        # 获取 term_loader
+        term_loader = getattr(term_resolver, 'term_loader', None) or getattr(term_resolver, '_term_loader', None)
+        if term_loader is None:
+            logger.warning(
+                "term_resolver 未配置 term_loader，字段 '%s' 跳过术语解析",
+                field.field_code
+            )
+            return raw_value
+
+        # 列表值：逐个解析
+        if isinstance(raw_value, list):
+            return [
+                term_loader.resolve_value(
+                    field.term_set,
+                    str(v),
+                    term_field=field.term_field,
+                    dataset_id=field.dataset_id,
+                    term_type_code=field.term_set.split(".")[0] if "." in (field.term_set or "") else None,
+                    param_name=field.field_name or field.field_code,
+                )
+                for v in raw_value
+            ]
+
+        # 单值解析
+        return term_loader.resolve_value(
+            field.term_set,
+            str(raw_value),
+            term_field=field.term_field,
+            dataset_id=field.dataset_id,
+            term_type_code=field.term_set.split(".")[0] if "." in (field.term_set or "") else None,
+            param_name=field.field_name or field.field_code,
+        )
+
+    except Exception as e:
+        # 术语解析失败时抛出 OQLError
+        raise OQLError(
+            OQLErrorCode.OQL_ERR_TERM_RESOLUTION_FAILED,
+            f"字段 '{field.field_code}' 术语解析失败: {e}"
+        )
+
+
 def preprocess_where_terms(where: list[dict], cls: Any, term_resolver) -> list[dict]:
     """
     预处理 WHERE 条件中的术语。
 
-    将术语（如 "今年" 等）展开为具体值。
+    对于含 term_set 的字段，将条件值中的标签/别名解析为物理存储值。
+    在条件翻译之前调用。
 
     Args:
         where: WHERE 条件列表
         cls: OntologyClass 对象
-        term_resolver: 术语解析器
+        term_resolver: 术语解析器（TermResolver 实例）
 
     Returns:
         处理后的 WHERE 条件列表
+
+    Raises:
+        OQLError: 术语解析失败
     """
-    # 当前实现：直接返回原条件
-    # 后续可集成 term_resolver 进行术语展开
-    return where
+    if not where:
+        return where
+
+    # 构建字段索引
+    field_index = {f.field_code: f for f in cls.fields}
+    result = []
+
+    for cond in where:
+        # 逻辑操作符（AND/OR）直接保留
+        if "logic" in cond:
+            result.append(cond)
+            continue
+
+        # 获取字段定义
+        field_code = cond.get("field")
+        if not field_code:
+            result.append(cond)
+            continue
+
+        field_obj = field_index.get(field_code)
+        if not field_obj:
+            # 字段不存在，保留原条件（后续翻译时会报错）
+            result.append(cond)
+            continue
+
+        # 无 term_set 或无 value 的条件直接保留
+        if not field_obj.term_set or "value" not in cond:
+            result.append(cond)
+            continue
+
+        # 对于 is_null/is_not_null 操作符，不需要解析 value
+        op = cond.get("op", "")
+        if op in ("is_null", "is_not_null"):
+            result.append(cond)
+            continue
+
+        # 解析术语值
+        try:
+            resolved_value = resolve_term_value(field_obj, cond["value"], term_resolver)
+            result.append({**cond, "value": resolved_value})
+        except OQLError:
+            # 术语解析失败，直接向上抛出
+            raise
+        except Exception as e:
+            # 其他异常，包装为 OQLError
+            raise OQLError(
+                OQLErrorCode.OQL_ERR_TERM_RESOLUTION_FAILED,
+                f"字段 '{field_code}' 术语解析时发生异常: {e}"
+            )
+
+    return result
+
+
+def resolve_include_links(include_links: list[dict], root_cls: Any, root_alias: str, registry, db_type: str) -> tuple[str, list[str]]:
+    """
+    将同源 include_links 翻译为 LEFT JOIN 片段和附加 SELECT 列。
+
+    返回 (join_sql, extra_select_cols)
+    列别名格式 "{path__field}"，与策略 B 内存合并的结果列名保持一致。
+
+    Args:
+        include_links: include_links 列表
+        root_cls: 根对象
+        root_alias: 根表别名
+        registry: 本体注册表
+        db_type: 数据库类型
+
+    Returns:
+        (JOIN SQL 片段, 附加 SELECT 列列表) 元组
+
+    Raises:
+        OQLError: 关系不存在或路径过深
+    """
+    join_parts = []
+    select_cols = []
+    generated_paths = {"": root_alias}
+    quoting = get_quoting(db_type)
+
+    for clause in include_links:
+        path = clause.get("path", "")
+        select_fields = clause.get("select", [])
+        path_segments = path.split(".")
+
+        if len(path_segments) > 5:
+            raise OQLError(
+                OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
+                f"关系路径过深：{path}（最多 5 层）"
+            )
+
+        current_prefix = ""
+        current_alias = root_alias
+        current_cls = root_cls
+
+        for segment in path_segments:
+            parent_prefix = current_prefix
+            current_prefix = f"{parent_prefix}.{segment}" if parent_prefix else segment
+
+            # 查找关系
+            rel = None
+            if hasattr(current_cls, 'relations'):
+                for r in current_cls.relations:
+                    if r.relation_code == segment:
+                        rel = r
+                        break
+
+            if rel is None:
+                raise OQLError(
+                    OQLErrorCode.OQL_ERR_UNKNOWN_RELATION,
+                    f"关系 '{segment}' 不存在于对象 '{current_cls.object_code}'"
+                )
+
+            target_cls = registry.get_class(rel.target_class)
+            if target_cls is None:
+                raise OQLError(
+                    OQLErrorCode.OQL_ERR_UNKNOWN_OBJECT,
+                    f"目标对象 '{rel.target_class}' 不存在"
+                )
+
+            # 如果路径已生成，跳过 JOIN
+            if current_prefix in generated_paths:
+                current_alias = generated_paths[current_prefix]
+                current_cls = target_cls
+                continue
+
+            # 生成新的 JOIN 别名
+            join_alias = f"_j{len(generated_paths)}"
+            generated_paths[current_prefix] = join_alias
+
+            # 构建 ON 条件
+            on_parts = []
+            join_keys = rel.join_keys if hasattr(rel, 'join_keys') else {}
+            for src_field, tgt_field in join_keys.items():
+                src_col = resolve_column(src_field, current_cls, db_type)
+                tgt_col = resolve_column(tgt_field, target_cls, db_type)
+                on_parts.append(
+                    f"{generated_paths[parent_prefix]}.{quoting}{src_col}{quoting} = {join_alias}.{quoting}{tgt_col}{quoting}"
+                )
+
+            join_parts.append(
+                f"LEFT JOIN {resolve_table(target_cls)} AS {join_alias} ON {' AND '.join(on_parts)}"
+            )
+
+            current_alias = join_alias
+            current_cls = target_cls
+
+        # 构建 SELECT 列
+        col_prefix = path.replace(".", "__")
+        fields_to_sel = select_fields or [f.field_code for f in current_cls.fields]
+        for field_name in fields_to_sel:
+            # 查找字段
+            field_obj = None
+            for f in current_cls.fields:
+                if f.field_code == field_name:
+                    field_obj = f
+                    break
+
+            if field_obj is None:
+                raise OQLError(
+                    OQLErrorCode.OQL_ERR_UNKNOWN_FIELD,
+                    f"字段 '{field_name}' 不存在于对象 '{current_cls.object_code}'"
+                )
+
+            col_name = resolve_column(field_name, current_cls, db_type)
+            select_cols.append(
+                f'{current_alias}.{quoting}{col_name}{quoting} AS {quoting}{col_prefix}__{field_name}{quoting}'
+            )
+
+    return "\n".join(join_parts), select_cols
+
+
+
+def build_metric_expr(alias: str, metric: dict, cls: Any, db_type: str, quoting: str = '"') -> str:
+    """
+    构建聚合指标表达式。
+
+    Args:
+        alias: 表别名
+        metric: 指标定义 {name, op, field?}
+        cls: OntologyClass 对象
+        db_type: 数据库类型
+        quoting: SQL 引号字符
+
+    Returns:
+        聚合表达式字符串
+
+    Raises:
+        OQLError: 不支持的聚合操作符
+    """
+    name = metric.get("name", "metric")
+    op = metric.get("op", "sum").lower()
+    field = metric.get("field")
+
+    name_q = f"{quoting}{name}{quoting}"
+
+    if op == "count":
+        return f"COUNT(*) AS {name_q}"
+
+    if not field:
+        raise OQLError(
+            OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
+            f"聚合操作 '{op}' 需要指定字段"
+        )
+
+    col_name = resolve_column(field, cls, db_type)
+    col_expr = f"{alias}.{quoting}{col_name}{quoting}"
+
+    mapping = {
+        "count_distinct": f"COUNT(DISTINCT {col_expr})",
+        "sum": f"SUM({col_expr})",
+        "avg": f"AVG({col_expr})",
+        "max": f"MAX({col_expr})",
+        "min": f"MIN({col_expr})",
+    }
+
+    if op not in mapping:
+        raise OQLError(
+            OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
+            f"不支持的聚合操作符：{op}"
+        )
+
+    return f"{mapping[op]} AS {name_q}"
+
+
+def time_trunc_expr(col_expr: str, granularity: str, db_type: str) -> str:
+    """
+    构建时间截断表达式。
+
+    Args:
+        col_expr: 列表达式（如 "t.created_at"）
+        granularity: 粒度（day/week/month/quarter/year）
+        db_type: 数据库类型
+
+    Returns:
+        时间截断表达式
+
+    Raises:
+        OQLError: 不支持的粒度或数据库类型
+    """
+    db_type_upper = db_type.upper()
+    granularity_lower = granularity.lower()
+
+    # MySQL / MariaDB
+    if db_type_upper in ("MYSQL", "MARIADB"):
+        mapping = {
+            "day": f"DATE({col_expr})",
+            "week": f"DATE_FORMAT({col_expr},'%Y-%u')",
+            "month": f"DATE_FORMAT({col_expr},'%Y-%m')",
+            "quarter": f"CONCAT(YEAR({col_expr}),'-Q',QUARTER({col_expr}))",
+            "year": f"YEAR({col_expr})",
+        }
+    # PostgreSQL / OpenGauss
+    elif db_type_upper in ("POSTGRESQL", "OPENGAUSS"):
+        mapping = {
+            "day": f"DATE_TRUNC('day',{col_expr})",
+            "week": f"DATE_TRUNC('week',{col_expr})",
+            "month": f"DATE_TRUNC('month',{col_expr})",
+            "quarter": f"DATE_TRUNC('quarter',{col_expr})",
+            "year": f"DATE_TRUNC('year',{col_expr})",
+        }
+    # Hive
+    elif db_type_upper == "HIVE":
+        mapping = {
+            "day": f"TO_DATE({col_expr})",
+            "week": f"DATE_FORMAT({col_expr},'yyyy-ww')",
+            "month": f"DATE_FORMAT({col_expr},'yyyy-MM')",
+            "quarter": f"CONCAT(YEAR({col_expr}),'-Q',CEIL(MONTH({col_expr})/3.0))",
+            "year": f"YEAR({col_expr})",
+        }
+    # ClickHouse
+    elif db_type_upper == "CLICKHOUSE":
+        mapping = {
+            "day": f"toDate({col_expr})",
+            "week": f"toStartOfWeek({col_expr})",
+            "month": f"toStartOfMonth({col_expr})",
+            "quarter": f"toStartOfQuarter({col_expr})",
+            "year": f"toStartOfYear({col_expr})",
+        }
+    # SQLite
+    elif db_type_upper == "SQLITE":
+        mapping = {
+            "day": f"DATE({col_expr})",
+            "week": f"strftime('%Y-%W',{col_expr})",
+            "month": f"strftime('%Y-%m',{col_expr})",
+            "quarter": f"strftime('%Y',{col_expr})||'-Q'||((CAST(strftime('%m',{col_expr}) AS INT)+2)/3)",
+            "year": f"strftime('%Y',{col_expr})",
+        }
+    else:
+        # 默认使用 MySQL 方言
+        mapping = {
+            "day": f"DATE({col_expr})",
+            "week": f"DATE_FORMAT({col_expr},'%Y-%u')",
+            "month": f"DATE_FORMAT({col_expr},'%Y-%m')",
+            "quarter": f"CONCAT(YEAR({col_expr}),'-Q',QUARTER({col_expr}))",
+            "year": f"YEAR({col_expr})",
+        }
+
+    if granularity_lower not in mapping:
+        raise OQLError(
+            OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
+            f"不支持的时间粒度：{granularity}"
+        )
+
+    return mapping[granularity_lower]
 
 
 def build_aggregate_sql(

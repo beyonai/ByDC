@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
@@ -24,6 +25,7 @@ class _FakeContext:
         self._configs = configs
         self.emitted: list[dict[str, Any]] = []
         self.flush_count = 0
+        self._sub_step_counter = 0
 
     def list_agent_configs(self) -> list[_AgentConfig]:
         return self._configs
@@ -45,6 +47,14 @@ class _FakeContext:
 
     async def ask_user(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
         return {"status": "waiting"}
+
+    @asynccontextmanager
+    async def sub_step(self, title: str, **_kwargs: Any):
+        """Fake sub_step context manager returning (message_id, parent_id)."""
+        self._sub_step_counter += 1
+        m_id = f"msg-{self._sub_step_counter}"
+        p_id = f"parent-{self._sub_step_counter}"
+        yield m_id, p_id
 
 
 @pytest.mark.asyncio
