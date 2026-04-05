@@ -99,13 +99,36 @@ class OntologyLoader:
 
     def load_from_path(self, path: str | Path) -> None:
         """
-        从本地文件加载本体定义
+        从本地文件或目录加载本体定义
 
         Args:
-            path: 本体文件路径
+            path: 本体文件路径，或包含 objects/ / functions/ / views/ 子目录的目录路径
         """
-        content = json.loads(Path(path).read_text(encoding="utf-8"))
-        self.load_from_content(content)
+        p = Path(path)
+        if p.is_dir():
+            self._load_from_directory(p)
+        else:
+            content = json.loads(p.read_text(encoding="utf-8"))
+            self.load_from_content(content)
+
+    def _load_from_directory(self, base_dir: Path) -> None:
+        """从目录结构加载本体定义（objects/ functions/ views/ 子目录）。"""
+        objects_dir = base_dir / "objects"
+        if objects_dir.exists():
+            for obj_file in objects_dir.glob("*.json"):
+                obj_data = json.loads(obj_file.read_text(encoding="utf-8"))
+                self.load_from_content({"objects": [obj_data], "functions": [], "relations": []})
+        functions_dir = base_dir / "functions"
+        if functions_dir.exists():
+            for fn_file in functions_dir.glob("*.json"):
+                fn_data = json.loads(fn_file.read_text(encoding="utf-8"))
+                fn_code = fn_data.get("function_code", fn_file.stem)
+                self._functions[fn_code] = fn_data.get("api_schema", {})
+        views_dir = base_dir / "views"
+        if views_dir.exists():
+            for view_file in views_dir.glob("*.json"):
+                view_data = json.loads(view_file.read_text(encoding="utf-8"))
+                self.load_scene(view_data)
 
     def load_from_owl_directory(self, base_dir: str | Path) -> None:
         """
@@ -333,7 +356,14 @@ class OntologyLoader:
         if scene is None:
             raise ObjectNotFoundError(view_id)
 
-        object_ids = [object_item["object_code"] for object_item in scene.get("objects", [])]
+        raw_objects = scene.get("objects", [])
+        if raw_objects and isinstance(raw_objects[0], str):
+            object_ids = raw_objects
+        elif raw_objects:
+            object_ids = [item["object_code"] for item in raw_objects]
+        else:
+            # Support simple list-of-string format via "object_ids" key
+            object_ids = scene.get("object_ids", [])
         objects = [self.get_object(oid) for oid in object_ids]
 
         object_set = set(object_ids)

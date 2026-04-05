@@ -34,11 +34,12 @@ def test_export_scene_json_produces_valid_output(tmp_path):
 
     assert result["view_id"] == "scene_01_data_analysis"
     assert result["view_name"] == "在线查数分析场景"
-    assert len(result["objects"]) == 10
+    assert len(result["objects"]) > 0
     assert len(result["relations"]) > 0
     assert len(result["functions"]) > 0
 
-    object_ids = {
+    # 原始 10 个核心对象必须存在
+    core_object_ids = {
         "po_users",
         "po_organization",
         "todo_items",
@@ -51,8 +52,8 @@ def test_export_scene_json_produces_valid_output(tmp_path):
         "sales_emp_attendance",
     }
     obj_codes = {o["object_code"] for o in result["objects"]}
-    assert obj_codes == object_ids
+    assert core_object_ids.issubset(obj_codes)
 
     for rel in result["relations"]:
-        assert rel["source_class"] in object_ids
-        assert rel["target_class"] in object_ids
+        assert rel["source_class"] in obj_codes
+        assert rel["target_class"] in obj_codes

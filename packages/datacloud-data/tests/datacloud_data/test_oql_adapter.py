@@ -9,7 +9,7 @@ from datacloud_data_sdk.oql.adapter import (
     translate_logic_condition, translate_conditions, preprocess_where_terms,
     OqlAdapter
 )
-from datacloud_data_sdk.models import OQLError, OQLErrorCode
+from datacloud_data_sdk.oql import OQLError, OQLErrorCode
 from tests.datacloud_data.fixtures.oql_test_data import (
     MockRegistry, MockTermResolver, TEST_FLIGHT_RECORDS
 )
@@ -242,8 +242,7 @@ class TestOqlAdapter:
             "limit": 10,
         }
 
-        cls = registry.get_class("Flight")
-        task = adapter.translate(oql_params, cls, "MYSQL", registry, term_resolver)
+        task = adapter.translate(oql_params, registry, term_resolver, "MYSQL")
 
         assert task.datasource_alias == "mysql_main"
         assert "SELECT" in task.sql_template
@@ -261,8 +260,7 @@ class TestOqlAdapter:
             "where": [{"field": "manual_id", "op": "eq", "value": "M001"}],
         }
 
-        cls = registry.get_class("Manual")
-        task = adapter.translate(oql_params, cls, "API", registry, term_resolver)
+        task = adapter.translate(oql_params, registry, term_resolver, "API")
 
         assert task.object_code == "Manual"
         assert task.params.get("manual_id") == "M001"
