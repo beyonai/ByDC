@@ -139,11 +139,15 @@ def _pagination_dict(page: int, page_size: int, total: int) -> dict[str, Any]:
 
 def _make_6001_error(message: str, page: int = 1, page_size: int = 50) -> dict[str, Any]:
     return {
+        "code": 1,
+        "message": message,
+        "data": {
             "records": [],
             "meta": {},
             "pagination": _pagination_dict(page, page_size, 0),
             "file": {},
-        }
+        },
+    }
 
 
 def _resolve_file_and_meta_paths(*, workspace_dir: str, file_id: str) -> tuple[Path, Path]:

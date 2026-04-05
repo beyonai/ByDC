@@ -239,7 +239,7 @@ class Object:
             if _gw_ctx is not None:
                 gw_reporter = GatewayProgressReporter(_gw_ctx)
         except Exception:
-            pass
+            logger.debug("observer/reporter callback failed", exc_info=True)
 
         try:
             object_ids = [self._cls.object_code]
@@ -247,14 +247,14 @@ class Object:
                 try:
                     await observer.on_query_start(request_id, question, object_ids)
                 except Exception:
-                    pass
+                    logger.debug("observer/reporter callback failed", exc_info=True)
             builder = ObjectViewBuilder(loader)
             payload = builder.build(object_ids=object_ids, view_id=request_id)
             if observer:
                 try:
                     await observer.on_view_built(request_id, asdict(payload))
                 except Exception:
-                    pass
+                    logger.debug("observer/reporter callback failed", exc_info=True)
 
             plan = await config.plan_generator.generate(
                 payload,
@@ -278,12 +278,12 @@ class Object:
                     )
                     await gw_reporter.on_plan_generated(f"共 {len(plan.steps)} 步：{_step_types}")
                 except Exception:
-                    pass
+                    logger.debug("observer/reporter callback failed", exc_info=True)
             if observer:
                 try:
                     await observer.on_plan_generated(request_id, plan_dict)
                 except Exception:
-                    pass
+                    logger.debug("observer/reporter callback failed", exc_info=True)
             try:
                 import json
 
@@ -291,7 +291,7 @@ class Object:
                     json.dumps(plan_dict, ensure_ascii=False)
                 )
             except Exception:
-                pass
+                logger.debug("observer/reporter callback failed", exc_info=True)
 
             if observer:
                 try:
@@ -305,13 +305,13 @@ class Object:
                         0,
                     )
                 except Exception:
-                    pass
+                    logger.debug("observer/reporter callback failed", exc_info=True)
 
             try:
                 ctx = get_current_context()
                 # plan = DataPermissionRewriter().rewrite(plan, ctx)
             except Exception:
-                pass
+                logger.debug("observer/reporter callback failed", exc_info=True)
             if observer:
                 try:
                     await observer.on_plan_rewritten(
@@ -322,7 +322,7 @@ class Object:
                         },
                     )
                 except Exception:
-                    pass
+                    logger.debug("observer/reporter callback failed", exc_info=True)
 
             term_resolver = None
             if getattr(config, "term_loader", None):
@@ -340,7 +340,7 @@ class Object:
                         request_id, tasks_dict, agg_dict
                     )
                 except Exception:
-                    pass
+                    logger.debug("observer/reporter callback failed", exc_info=True)
 
             from datacloud_data_sdk.sql_executor.sql_executor import SqlExecutor
             from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
@@ -372,7 +372,7 @@ class Object:
                         _sdesc = getattr(_s, "sql_template", None) or getattr(_s, "function_id", "")
                         await gw_reporter.on_step_executing(_s.step_id, _stype, str(_sdesc)[:60])
                 except Exception:
-                    pass
+                    logger.debug("observer/reporter callback failed", exc_info=True)
 
             step_results = await executor.run(
                 tasks, request_id, step_ids=[s.step_id for s in plan.steps]
@@ -383,19 +383,19 @@ class Object:
                     for _s in plan.steps:
                         await gw_reporter.on_step_completed(_s.step_id)
                 except Exception:
-                    pass
+                    logger.debug("observer/reporter callback failed", exc_info=True)
             if observer:
                 try:
                     await observer.on_steps_executed(request_id, step_results.to_legacy_dict())
                 except Exception:
-                    pass
+                    logger.debug("observer/reporter callback failed", exc_info=True)
 
             if plan.aggregation:
                 if gw_reporter:
                     try:
                         await gw_reporter.on_aggregating(plan.aggregation.strategy)
                     except Exception:
-                        pass
+                        logger.debug("observer/reporter callback failed", exc_info=True)
                 if plan.aggregation.strategy == "SQLITE_MEM":
                     records = await SqliteAggregator().aggregate(plan.aggregation, step_results)
                 else:
@@ -407,14 +407,14 @@ class Object:
                 try:
                     await gw_reporter.on_aggregation_completed(len(records))
                 except Exception:
-                    pass
+                    logger.debug("observer/reporter callback failed", exc_info=True)
             if observer:
                 try:
                     await observer.on_aggregation_completed(
                         request_id, records, columns
                     )
                 except Exception:
-                    pass
+                    logger.debug("observer/reporter callback failed", exc_info=True)
 
             from datacloud_data_sdk.result_formatter import build_query_response
 
@@ -483,7 +483,7 @@ class Object:
                         request_id, exc.errors, plan_dict
                     )
                 except Exception:
-                    pass
+                    logger.debug("observer/reporter callback failed", exc_info=True)
             raise
         except Exception as exc:
             from datacloud_data_sdk.events.trace_logger import log_exception_stack
