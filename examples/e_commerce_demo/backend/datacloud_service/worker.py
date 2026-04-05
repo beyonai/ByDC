@@ -99,6 +99,65 @@ _PLANNING_PHASE_TITLE = "任务生成"
 
 _HEARTBEAT_INTERVAL: float = 3.0
 
+_LOG_COMMAND_CONTENT_MAX_CHARS: int = 4000
+
+
+def _truncate_for_command_log(value: Any, max_chars: int) -> Any:
+    """Shorten long strings inside command dicts so a single log line stays usable."""
+
+    if isinstance(value, str) and len(value) > max_chars:
+        return "{0}...<truncated total_chars={1}".format(value[:max_chars], len(value))
+    if isinstance(value, list):
+        return [_truncate_for_command_log(item, max_chars) for item in value]
+    if isinstance(value, dict):
+        return {k: _truncate_for_command_log(v, max_chars) for k, v in value.items()}
+    return value
+
+
+def _json_line_for_console(obj: Any) -> str:
+    """Serialize to one line using ASCII escapes (Windows GBK consoles cannot print some Unicode)."""
+
+    try:
+        return json.dumps(obj, ensure_ascii=True, default=str, separators=(",", ":"))
+    except (TypeError, ValueError):
+        return json.dumps(str(obj), ensure_ascii=True)
+
+
+def _command_question_for_log(command: GatewayCommand) -> str:
+    """Return body ``content`` (user question) as a log-safe string, matching AskAgent JSON ``body.content``."""
+
+    raw = getattr(command, "content", None)
+    if raw is None:
+        return '""'
+    if isinstance(raw, str):
+        clipped = (
+            raw
+            if len(raw) <= _LOG_COMMAND_CONTENT_MAX_CHARS
+            else "{0}...<truncated total_chars={1}>".format(
+                raw[:_LOG_COMMAND_CONTENT_MAX_CHARS],
+                len(raw),
+            )
+        )
+        return json.dumps(clipped, ensure_ascii=True)
+    truncated = _truncate_for_command_log(raw, _LOG_COMMAND_CONTENT_MAX_CHARS)
+    return _json_line_for_console(truncated)
+
+
+def _format_gateway_command_for_log(command: GatewayCommand) -> str:
+    """Return one JSON line describing the gateway command (header + body)."""
+
+    to_dict = getattr(command, "to_dict", None)
+    if not callable(to_dict):
+        return _json_line_for_console({"command_type": type(command).__name__, "error": "no_to_dict"})
+    try:
+        payload = to_dict()
+    except Exception as exc:
+        return _json_line_for_console(
+            {"command_type": type(command).__name__, "to_dict_error": str(exc)}
+        )
+    truncated = _truncate_for_command_log(payload, _LOG_COMMAND_CONTENT_MAX_CHARS)
+    return _json_line_for_console(truncated)
+
 
 def _now_monotonic() -> float:
     return asyncio.get_running_loop().time()
@@ -576,19 +635,6 @@ class DataCloudWorker(GatewayWorker):
             {"status": "done"}    normal completion, flush_to_history called.
             {"status": "waiting"} graph interrupted, ask_user emitted, no flush.
         """
-        logger.info(
-            "DataCloudWorker.process_command: session=%s command=%s",
-            context.session_id,
-            type(command).__name__,
-        )
-
-        if self.api_key:
-            os.environ["OPENAI_API_KEY"] = self.api_key
-        if self.base_url:
-            os.environ["OPENAI_BASE_URL"] = self.base_url
-        if self.model_name:
-            os.environ["DATACLOUD_LLM_REASONING_MODEL"] = self.model_name
-
         extra_payload = getattr(command, "extra_payload", {}) or {}
         header_metadata = getattr(getattr(command, "header", None), "metadata", None) or {}
         if isinstance(command, ResumeCommand):
@@ -605,6 +651,30 @@ class DataCloudWorker(GatewayWorker):
         else:
             by_agent_id = extra_payload.get("agent_id") or header_metadata.get("agent_id")
             by_agent_name = extra_payload.get("agent_name") or header_metadata.get("agent_name")
+
+        by_agent_name_log = json.dumps(
+            "" if by_agent_name is None else str(by_agent_name),
+            ensure_ascii=True,
+        )
+
+        logger.info(
+            "DataCloudWorker.process_command: session=%s command_type=%s by_agent_id=%s "
+            "by_agent_name=%s question=%s command=%s",
+            context.session_id,
+            type(command).__name__,
+            by_agent_id,
+            by_agent_name_log,
+            _command_question_for_log(command),
+            _format_gateway_command_for_log(command),
+        )
+
+        if self.api_key:
+            os.environ["OPENAI_API_KEY"] = self.api_key
+        if self.base_url:
+            os.environ["OPENAI_BASE_URL"] = self.base_url
+        if self.model_name:
+            os.environ["DATACLOUD_LLM_REASONING_MODEL"] = self.model_name
+
         ext_params = extra_payload.get("ext_params")
         runtime_agent_key = self._resolve_runtime_agent_key(
             command=command,
