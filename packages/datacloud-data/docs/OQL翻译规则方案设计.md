@@ -1437,28 +1437,56 @@ def _handle_hive_offset(oql_params: dict, datasource_alias: str, datasource_regi
 
 ---
 
-## 2.6 HTTP 接入层（/oql/execute 端点）
+## 2.6 响应格式转换工具（供调用方使用）
 
-> **说明**：`OqlRouter.route()` 返回内部 `list[dict]`，对外暴露需封装为 §2.2.8（本体推理引擎重构方案.md）定义的标准响应格式。
+> **架构说明**：
+> - `datacloud-data` 不部署独立的 HTTP API 服务
+> - `datacloud-analysis` 通过**代码引用**方式调用 `OqlRouter.route()`，返回 `list[dict]`
+> - 本章节提供的格式转换工具函数供调用方（如 `datacloud-analysis`）使用，将内部格式转换为 §2.2.8（本体推理引擎重构方案.md）定义的标准响应格式
+> - 实际的 HTTP 接入由 `by-framework-python` 网关负责
 
-### 2.6.1 端点定义
+### 2.6.1 调用方式示例
 
+```python
+# 在 datacloud-analysis 中
+from datacloud_data_sdk.oql.router import OqlRouter
+from datacloud_data_sdk.oql.response_formatter import format_oql_response, format_oql_error
+
+try:
+    router = OqlRouter(registry, term_resolver, executor, datasource_registry)
+    records = router.route(oql_params)  # 返回 list[dict]
+    
+    # 使用格式转换工具
+    response = format_oql_response(
+        tool="QueryObjects",
+        records=records,
+        total=total,  # 需要调用方自行获取
+        limit=oql_params.get("limit", 100),
+        offset=oql_params.get("offset", 0)
+    )
+except OQLError as e:
+    response = format_oql_error(e)
 ```
-POST /oql/execute
-Content-Type: application/json
-X-Agent-Id: {agent_id}
-X-Trace-Id: {trace_id}
 
-Body: OQL JSON（单步 QueryObjects / ExecuteAction，或 Pipeline 数组）
-```
+### 2.6.2 响应格式转换（成功）
 
-### 2.6.2 响应封装（成功）
-
-`OqlRouter.route()` 返回 `list[dict]` 后，HTTP 层执行格式转换：
+`OqlRouter.route()` 返回 `list[dict]` 后，调用方使用此工具函数进行格式转换：
 
 ```python
 def format_oql_response(tool: str, records: list[dict], total: int, limit: int, offset: int = 0) -> dict:
-    """将 list[dict] 转换为 columns+rows 格式。"""
+    """
+    将 OqlRouter.route() 返回的 list[dict] 转换为标准响应格式。
+    
+    Args:
+        tool: 工具名称（"QueryObjects" 或 "ExecuteAction"）
+        records: OqlRouter.route() 返回的记录列表
+        total: 总记录数（需要调用方通过 COUNT 查询或 API 元数据获取）
+        limit: 分页大小
+        offset: 分页偏移量
+    
+    Returns:
+        符合 §2.2.8 标准的响应字典
+    """
     if not records:
         return {"status": "success", "tool": tool,
                 "result": {"columns": [], "rows": [], "total": total, "returned": 0}}
@@ -1470,7 +1498,7 @@ def format_oql_response(tool: str, records: list[dict], total: int, limit: int, 
         "result": {
             "columns": columns,
             "rows": rows,
-            "total": total,       # 来自单独 COUNT(*) 查询（DB 对象）或 API 响应元数据
+            "total": total,
             "returned": len(rows),
             "pagination": {
                 "limit": limit,
@@ -1481,25 +1509,37 @@ def format_oql_response(tool: str, records: list[dict], total: int, limit: int, 
     }
 ```
 
-> **`total` 的来源**：DB 对象通过附加 `SELECT COUNT(*) FROM ... WHERE ...`（复用同一 WHERE 条件，不含 LIMIT/OFFSET）获得；API 对象若响应中有 total 字段则直接使用，否则 `total = len(records)`。
+> **`total` 的获取方式**：
+> - **DB 对象**：调用方需执行附加的 `SELECT COUNT(*) FROM ... WHERE ...` 查询（复用同一 WHERE 条件，不含 LIMIT/OFFSET）
+> - **API 对象**：若 API 响应中有 total 字段则直接使用，否则 `total = len(records)`
 
-### 2.6.3 响应封装（错误）
+### 2.6.3 响应格式转换（错误）
 
 ```python
 def format_oql_error(error: OQLError) -> dict:
+    """
+    将 OQLError 异常转换为标准错误响应格式。
+    
+    Args:
+        error: OQLError 异常对象
+    
+    Returns:
+        符合 §2.2.8 标准的错误响应字典
+    """
     return {
         "status": "error",
         "error_code": error.code,
         "message": error.message,
-        "detail": error.detail,
+        "detail": error.details,
     }
 ```
 
-### 2.6.4 ExecuteAction 响应
+### 2.6.4 ExecuteAction 响应格式
 
-`ExecuteAction` 不返回 `list[dict]`，而是每个 target 的执行状态字典：
+`ExecuteAction` 不返回 `list[dict]`，而是每个 target 的执行状态字典。调用方可直接使用，无需额外转换：
 
 ```python
+# ExecuteAction 的返回格式已符合标准，可直接返回
 {
     "status": "success",
     "tool": "ExecuteAction",
@@ -1508,6 +1548,24 @@ def format_oql_error(error: OQLError) -> dict:
         "CA456": {"status": "failed", "reason": "..."}
     }
 }
+```
+
+### 2.6.5 工具函数实现位置
+
+建议在 `datacloud-data` 中创建 `oql/response_formatter.py` 模块，提供以下导出函数：
+
+```python
+# datacloud_data_sdk/oql/response_formatter.py
+
+from datacloud_data_sdk.oql.models import OQLError
+
+def format_oql_response(tool: str, records: list[dict], total: int, limit: int, offset: int = 0) -> dict:
+    """格式转换工具函数（见 §2.6.2）"""
+    ...
+
+def format_oql_error(error: OQLError) -> dict:
+    """错误格式转换工具函数（见 §2.6.3）"""
+    ...
 ```
 
 ---
