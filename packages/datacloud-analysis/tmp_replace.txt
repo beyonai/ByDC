@@ -1,0 +1,61 @@
+### 2.2 OQL 标准
+
+
+
+### 2.2 语言的表现形式
+这套“语言”在系统中以两种形态存在，分别作用于大模型的“输入边界”与“输出意图”：
+
+**1. DDL (Data Definition Language) - 注入给大模型的认知边界**
+由 `datacloud-knowledge` 引擎提供。在用户提问时，系统会动态检索相关的业务域基元定义，并以 JSON/YAML Schema 的形式注入到大模型的 System Prompt 中。
+*示例（知识引擎注入给大模型的规范）：*
+```json
+{
+  "object_type": "Flight",
+  "properties": {"flight_id": "string", "status": "string", "delay_minutes": "integer"},
+  "links": {"assigned_crew": "Crew"}
+}
+```
+
+**2. OQL (Ontology Query Language) - 大模型生成的执行指令**
+大模型进行意图规划后，将其推理结果转化为标准的 JSON 结构，通过 Tool Calling 发送给 `datacloud-data` 执行。核心指令集封装为以下几个原子工具：
+
+*   `QueryObjects`：条件查询与聚合（对应 Query Service 的读操作）。
+*   `TraverseLinks`：关系漫游与下钻（解决复杂关联查询问题）。
+*   `ExecuteAction`：触发业务动作（对应 Action Service 的写操作/副作用操作）。
+
+### 2.3 执行指令集示例 (Text-to-OQL)
+当用户输入：“*找出今天所有延误超过30分钟的航班，并给对应的机长发送提醒*”时，大模型生成的“本体分析语言”如下：
+
+```json
+// Step 1: 读操作 (大模型发送给 datacloud-data 的 Query Service)
+{
+  "tool": "QueryObjects",
+  "parameters": {
+    "object_type": "Flight",
+    "filter": {
+      "status": {"$eq": "Delayed"}, 
+      "delay_minutes": {"$gt": 30}
+    },
+    "include_links": ["assigned_crew"] // 自动隐式拉取机组人员信息
+  }
+}
+
+// Step 2: 写操作 (大模型发送给 datacloud-data 的 Action Service)
+// 大模型根据 Step 1 返回的表格结果，循环或批量触发动作
+{
+  "tool": "ExecuteAction",
+  "parameters": {
+    "action_type": "Send_Warning_To_Captain",
+    "target_objects": ["Flight_CA123", "Flight_MU456"],
+    "payload": {"message": "您的航班延误超过30分钟，请注意安排。"}
+  }
+}
+```
+
+### 2.4 设计优势：为什么不直接使用 Text-to-SQL？
+采用“自然语言 -> 本体分析语言 (OQL JSON) -> SQL/API”的三层架构，相比于直接的 Text-to-SQL，具有决定性的工程优势：
+1. **防幻觉（Hallucination-Free）**：大模型极容易凭空捏造 SQL 的表名或字段名。而本体语言是基于强类型 JSON Schema 的，如果大模型调用 `object_type="Fliight"`（拼写错误），`datacloud-data` 网关会直接通过 Schema 校验拦截报错，并强制要求大模型修正，绝不会将错误 SQL 砸向物理数据库。
+2. **业务语义对齐**：大模型不需要理解复杂的星型模型、雪花模型，只需要理解“航班”和“机组”的人类语义关联。底层的跨表 Join、Group By 分组计算，全部由 `datacloud-data` 根据底层的 Ontology Mapping 元数据自动编译生成。
+3. **读写分离与安全管控**：将只读查询（`QueryObjects`）与系统突变（`ExecuteAction`）在语言层面上严格隔离，确保大模型无法通过伪造 `DROP TABLE`、`DELETE` 或恶意的 `UPDATE` 语句破坏系统数据结构。
+
+
