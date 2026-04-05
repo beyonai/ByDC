@@ -4,7 +4,7 @@ OQL 路由层测试
 
 import pytest
 from datacloud_data_sdk.oql.router import OqlRouter
-from datacloud_data_sdk.models import OQLError, OQLErrorCode
+from datacloud_data_sdk.oql import OQLError, OQLErrorCode
 from tests.datacloud_data.fixtures.oql_test_data import (
     MockRegistry, MockTermResolver, MockDatasourceRegistry
 )

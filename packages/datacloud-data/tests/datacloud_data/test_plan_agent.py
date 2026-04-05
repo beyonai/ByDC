@@ -2,8 +2,16 @@
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+from typing import AsyncGenerator
 
 from datacloud_data_sdk.agents.plan_agent import PlanAgent
+
+
+def _make_astream(content: str):
+    """创建返回单个 chunk 的 async generator mock。"""
+    async def _astream(_messages) -> AsyncGenerator:
+        yield MagicMock(content=content)
+    return _astream
 from datacloud_data_sdk.plan.models import (
     ObjectViewPayload,
     ObjectViewSource,
@@ -35,12 +43,10 @@ MOCK_LLM_RESPONSE_JSON = """{"canAnswer":true,"question":"查商机","steps":[{"
 
 @pytest.mark.asyncio
 async def test_generate_node_returns_plan() -> None:
-    """Mock ChatOpenAI.ainvoke 返回固定 JSON，验证 _generate_node 返回正确的 plan。"""
+    """Mock ChatOpenAI.astream 返回固定 JSON，验证 _generate_node 返回正确的 plan。"""
     with patch("langchain_openai.ChatOpenAI") as mock_chat_cls:
         mock_instance = MagicMock()
-        mock_instance.ainvoke = AsyncMock(
-            return_value=MagicMock(content=MOCK_LLM_RESPONSE_JSON)
-        )
+        mock_instance.astream = _make_astream(MOCK_LLM_RESPONSE_JSON)
         mock_chat_cls.return_value = mock_instance
 
         agent = PlanAgent()
@@ -50,7 +56,7 @@ async def test_generate_node_returns_plan() -> None:
             "validation_errors": None,
         }
 
-        result = await agent._generate_node(state)
+        result = await agent._generate_node(state, {})
 
         assert "plan" in result
         plan = result["plan"]
@@ -71,13 +77,13 @@ async def test_generate_node_with_validation_errors_includes_retry_prompt() -> N
     """当 validation_errors 非空时，user message 应包含 RETRY_PROMPT_TEMPLATE 内容。"""
     captured_messages = []
 
-    async def capture_ainvoke(messages):
+    async def capture_astream(messages):
         captured_messages.append(messages)
-        return MagicMock(content=MOCK_LLM_RESPONSE_JSON)
+        yield MagicMock(content=MOCK_LLM_RESPONSE_JSON)
 
     with patch("langchain_openai.ChatOpenAI") as mock_chat_cls:
         mock_instance = MagicMock()
-        mock_instance.ainvoke = AsyncMock(side_effect=capture_ainvoke)
+        mock_instance.astream = capture_astream
         mock_chat_cls.return_value = mock_instance
 
         agent = PlanAgent()
@@ -87,7 +93,7 @@ async def test_generate_node_with_validation_errors_includes_retry_prompt() -> N
             "validation_errors": ["错误1：SQL 语法不正确", "错误2：缺少必要字段"],
         }
 
-        result = await agent._generate_node(state)
+        result = await agent._generate_node(state, {})
 
         assert "plan" in result
         assert len(captured_messages) == 1
@@ -242,9 +248,7 @@ async def test_run_can_answer_false_returns_plan_and_none() -> None:
     """Mock LLM 返回 canAnswer=false，验证 run 返回 (plan, None)，plan.can_answer=False。"""
     with patch("langchain_openai.ChatOpenAI") as mock_chat_cls:
         mock_instance = MagicMock()
-        mock_instance.ainvoke = AsyncMock(
-            return_value=MagicMock(content=MOCK_LLM_RESPONSE_CANNOT_ANSWER)
-        )
+        mock_instance.astream = _make_astream(MOCK_LLM_RESPONSE_CANNOT_ANSWER)
         mock_chat_cls.return_value = mock_instance
 
         agent = PlanAgent()
@@ -261,9 +265,7 @@ async def test_run_valid_returns_plan_and_valid_result() -> None:
     """Mock LLM 返回合法计划，验证 run 返回 (plan, vr)，vr.valid=True。"""
     with patch("langchain_openai.ChatOpenAI") as mock_chat_cls:
         mock_instance = MagicMock()
-        mock_instance.ainvoke = AsyncMock(
-            return_value=MagicMock(content=MOCK_LLM_RESPONSE_VALID)
-        )
+        mock_instance.astream = _make_astream(MOCK_LLM_RESPONSE_VALID)
         mock_chat_cls.return_value = mock_instance
 
         agent = PlanAgent()
@@ -281,9 +283,7 @@ async def test_run_invalid_returns_plan_and_invalid_result() -> None:
     """Mock LLM 返回非法计划，验证 run 返回 (plan, vr)，vr.valid=False。"""
     with patch("langchain_openai.ChatOpenAI") as mock_chat_cls:
         mock_instance = MagicMock()
-        mock_instance.ainvoke = AsyncMock(
-            return_value=MagicMock(content=MOCK_LLM_RESPONSE_INVALID)
-        )
+        mock_instance.astream = _make_astream(MOCK_LLM_RESPONSE_INVALID)
         mock_chat_cls.return_value = mock_instance
 
         agent = PlanAgent(max_retries=0)
@@ -305,12 +305,13 @@ async def test_run_retry_then_pass() -> None:
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            return MagicMock(content=MOCK_LLM_RESPONSE_INVALID)
-        return MagicMock(content=MOCK_LLM_RESPONSE_VALID)
+            yield MagicMock(content=MOCK_LLM_RESPONSE_INVALID)
+        else:
+            yield MagicMock(content=MOCK_LLM_RESPONSE_VALID)
 
     with patch("langchain_openai.ChatOpenAI") as mock_chat_cls:
         mock_instance = MagicMock()
-        mock_instance.ainvoke = AsyncMock(side_effect=side_effect)
+        mock_instance.astream = side_effect
         mock_chat_cls.return_value = mock_instance
 
         agent = PlanAgent(max_retries=2)
@@ -328,9 +329,7 @@ async def test_run_retry_exhausted() -> None:
     """Mock LLM 始终返回非法计划，max_retries=1，验证 run 返回 (plan, vr)，vr.valid=False。"""
     with patch("langchain_openai.ChatOpenAI") as mock_chat_cls:
         mock_instance = MagicMock()
-        mock_instance.ainvoke = AsyncMock(
-            return_value=MagicMock(content=MOCK_LLM_RESPONSE_INVALID)
-        )
+        mock_instance.astream = _make_astream(MOCK_LLM_RESPONSE_INVALID)
         mock_chat_cls.return_value = mock_instance
 
         agent = PlanAgent(max_retries=1)

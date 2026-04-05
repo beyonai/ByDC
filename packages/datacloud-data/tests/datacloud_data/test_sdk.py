@@ -151,4 +151,7 @@ async def main5() -> None:
         result = await obj.query("2026年北京亦庄经济技术开发区区域内单位亩产效益最低的10家企业", include_plan=True)
 
     print(result)
-asyncio.run(main5())
+
+
+if __name__ == "__main__":
+    asyncio.run(main5())
