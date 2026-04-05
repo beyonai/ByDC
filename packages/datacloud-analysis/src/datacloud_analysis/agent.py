@@ -157,9 +157,30 @@ def _create_deep_agent(
             "Call `await bootstrap.setup()` before create_agent() to enable interrupt/resume."
         )
 
+    # 当 base_url 非空时（自定义 endpoint，如 Qwen/私有模型），预先构造 ChatOpenAI 实例，
+    # 绕过 LangChain init_chat_model 的 provider 推断（不认识非标准模型名会报 ValueError）。
+    # 使用标准模型名（claude-*、gpt-* 等）时沿用字符串，由 deepagents SDK 自行推断。
+    resolved_model: Any
+    if base_url:
+        from langchain_openai import ChatOpenAI  # noqa: PLC0415
+
+        resolved_model = ChatOpenAI(
+            model=model or "gpt-4o",
+            base_url=base_url,
+            api_key=api_key or "sk-placeholder",
+            temperature=temperature,
+        )
+        logger.info(
+            "create_agent: using ChatOpenAI with custom base_url=%s model=%s",
+            base_url,
+            model,
+        )
+    else:
+        resolved_model = model or "claude-sonnet-4-6"
+
     # Create compiled agent with Deep Agents SDK
     compiled = create_deep_agent(
-        model=model or "claude-sonnet-4-6",
+        model=resolved_model,
         tools=all_tools,
         system_prompt=final_system_prompt,
         middleware=middlewares,
