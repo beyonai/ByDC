@@ -17,11 +17,14 @@ CSV 临时存储管理模块
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 import uuid
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
 
@@ -174,7 +177,8 @@ class CsvStorageManager:
         try:
             with open(meta_path, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception:
+        except Exception as exc:
+            logger.warning("get_export_meta: failed to read meta file %s: %s", meta_path, exc)
             return None
 
     def cleanup(self, request_id: str) -> None:
