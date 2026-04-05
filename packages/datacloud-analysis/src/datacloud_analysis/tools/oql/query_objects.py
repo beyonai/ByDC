@@ -1,24 +1,64 @@
-"""
-QueryObjects 工具实现
+"""QueryObjects 工具实现。
 
-提供本体对象查询功能，支持：
-- 列表查询
-- 详情查询
-- 聚合统计
-- 关系漫游
+提供本体对象查询功能，支持：列表查询、聚合统计、关系漫游。
+结果超出 limit 时自动落文件（workspace_dir 来自 RunnableConfig），
+返回 file_id 供前端通过 getFileByPage 命令翻页（不消耗 LLM）。
 """
 
 from __future__ import annotations
+
+import json
+import logging
+import os
+import uuid
+from pathlib import Path
 from typing import Any, Optional
+
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
-from datacloud_data_sdk.oql import OqlRouter, format_oql_response, format_oql_error, OQLError
 from datacloud_analysis.dependencies import (
+    get_datasource_registry,
+    get_executor,
     get_oql_router,
     get_term_resolver,
-    get_executor,
-    get_datasource_registry,
 )
+from datacloud_data_sdk.oql import OQLError, format_oql_error, format_oql_response
+
+logger = logging.getLogger(__name__)
+
+
+def _write_export_file(
+    records: list[dict[str, Any]],
+    columns: list[str],
+    meta: dict[str, Any],
+    workspace_dir: str,
+) -> str:
+    """将查询结果写入 workspace/exports/ 目录，返回 file_id。
+
+    同时写入 {file_id}.json（数据）和 {file_id}_meta.json（元数据）。
+    前端可通过 getFileByPage 命令按页读取，不需要重新调用 LLM。
+    """
+    exports_dir = Path(workspace_dir) / "exports"
+    exports_dir.mkdir(parents=True, exist_ok=True)
+
+    file_id = uuid.uuid4().hex[:12]
+    data_file = exports_dir / f"{file_id}.json"
+    meta_file = exports_dir / f"{file_id}_meta.json"
+
+    with open(data_file, "w", encoding="utf-8") as f:
+        json.dump({"columns": columns, "rows": records}, f, ensure_ascii=False, default=str)
+
+    with open(meta_file, "w", encoding="utf-8") as f:
+        json.dump({**meta, "file_id": file_id, "columns": columns}, f, ensure_ascii=False)
+
+    logger.info(
+        "query_objects: wrote export file_id=%s rows=%d dir=%s",
+        file_id,
+        len(records),
+        exports_dir,
+    )
+    return file_id
 
 
 @tool
@@ -33,80 +73,104 @@ def query_objects(
     order_by: Optional[list[dict[str, str]]] = None,
     limit: int = 100,
     offset: int = 0,
+    config: RunnableConfig = None,
 ) -> dict[str, Any]:
-    """
-    查询本体对象或视图的实例列表、详情、聚合统计。
+    """查询本体对象或视图的实例列表、详情、聚合统计。
 
     支持的查询模式：
-    1. 列表查询：返回对象实例列表
-    2. 详情查询：通过 where 条件查询单个对象详情
-    3. 聚合查询：使用 metrics + group_by 进行统计分析
-    4. 关系漫游：通过 include_links 获取关联对象数据
+    1. 列表查询：返回对象实例列表（select + where + include_links）
+    2. 聚合查询：有 metrics 字段时走聚合路径（GROUP BY），返回统计指标
+    3. 关系漫游：通过 include_links 获取关联对象数据（仅 DB 主对象支持）
+
+    **防幻觉规则**：object_type、属性名、关系名、action_type 必须来自本次注入的
+    <ontology_context>，不得自行捏造。收到 OQL_ERR_UNKNOWN_* 错误时根据 message
+    修正参数后重试。
 
     Args:
         object_type: 对象类型名或视图名（必须来自本体注册表）
         select: 返回属性列表，省略则返回全部非计算属性
-        where: 行级过滤条件数组，支持 eq/ne/gt/gte/lt/lte/in/nin/like/between/isNull/relativeDate
-        include_links: 关系漫游数组（仅DB主对象支持，聚合模式禁用）
-        metrics: 聚合指标数组，每项包含 field 和 aggregation (count/sum/avg/max/min/count_distinct)
-        group_by: 分组字段数组，每项包含 field 和可选的 time_bucket
-        having: 聚合后过滤条件（仅聚合模式支持）
-        order_by: 排序规则数组，每项包含 field 和 direction (asc/desc)
-        limit: 返回记录数上限（默认100，最大1000）
-        offset: 分页偏移量（默认0）
+        where: 行级过滤条件数组，每项格式：
+            {"field": "属性名", "op": "操作符", "value": 值}
+            支持操作符：eq / ne / gt / gte / lt / lte / in / nin /
+                       like / isNull / between / relativeDate
+            逻辑分组：{"logic": "or"|"not", "conditions": [...]}
+        include_links: 关系漫游路径数组（仅 DB 主对象支持，聚合模式禁用）
+            每项：{"path": "关系名或多跳路径(用.分隔)", "select": ["属性"]}
+        metrics: 聚合指标数组（有此字段则走聚合路径）
+            每项：{"name": "结果列名", "op": "count|sum|avg|max|min|count_distinct",
+                   "field": "属性名（count 可省略）"}
+        group_by: 分组维度数组（配合 metrics 使用）
+            每项：{"field": "属性名", "granularity": "day|week|month|quarter|year（时间字段可选）"}
+        having: 聚合后过滤，条件格式同 where，field 引用 metrics 中的 name
+        order_by: 排序数组，每项：{"field": "属性名或指标名", "direction": "asc|desc"}
+        limit: 返回记录数上限（默认 100，最大 1000）
+        offset: 分页偏移量（默认 0）
+        config: LangChain RunnableConfig（自动注入，LLM 不传此参数）
 
     Returns:
-        标准响应字典:
-        {
-            "status": "success" | "error",
-            "tool": "QueryObjects",
-            "result": {
-                "columns": list[str],
-                "rows": list[list[Any]],
-                "total": int,
-                "returned": int,
-                "pagination": {
-                    "limit": int,
-                    "offset": int,
-                    "has_next": bool
-                }
+        成功::
+
+            {
+              "status": "success",
+              "tool": "QueryObjects",
+              "result": {
+                "columns": ["列1", "列2"],
+                "rows": [["值1", "值2"], ...],
+                "total": 128,
+                "returned": 20,
+                "pagination": {"limit": 20, "offset": 0, "has_next": true},
+                "file_id": "abc123def456"  # 仅当 total > limit 时出现
+              }
             }
-        }
+
+        错误::
+
+            {"status": "error", "error_code": "OQL_ERR_UNKNOWN_OBJECT_TYPE", "message": "..."}
 
     Examples:
-        >>> # 列表查询
-        >>> query_objects(
-        ...     object_type="员工",
-        ...     select=["姓名", "部门", "薪资"],
-        ...     where=[{"field": "部门", "op": "eq", "value": "技术部"}],
-        ...     order_by=[{"field": "薪资", "direction": "desc"}],
-        ...     limit=20
-        ... )
+        列表查询（含 OR 条件）::
 
-        >>> # 聚合查询
-        >>> query_objects(
-        ...     object_type="订单",
-        ...     metrics=[
-        ...         {"field": "订单金额", "aggregation": "sum", "alias": "总金额"},
-        ...         {"field": "订单ID", "aggregation": "count", "alias": "订单数"}
-        ...     ],
-        ...     group_by=[{"field": "客户ID"}],
-        ...     having=[{"field": "总金额", "op": "gt", "value": 10000}]
-        ... )
+            query_objects(
+                object_type="航班",
+                select=["航班号", "状态", "延误时长"],
+                where=[
+                    {"field": "状态", "op": "in", "value": ["延误", "取消"]},
+                    {"field": "起飞时间", "op": "relativeDate", "value": "this_month"},
+                ],
+                order_by=[{"field": "延误时长", "direction": "desc"}],
+                limit=20,
+            )
 
-        >>> # 关系漫游
-        >>> query_objects(
-        ...     object_type="订单",
-        ...     select=["订单号", "金额"],
-        ...     include_links=[
-        ...         {"relation": "订单_客户", "fields": ["客户名称", "联系电话"]},
-        ...         {"relation": "订单_产品", "fields": ["产品名称", "单价"]}
-        ...     ]
-        ... )
+        聚合统计（按航空公司 + 周分组）::
+
+            query_objects(
+                object_type="航班",
+                where=[{"field": "状态", "op": "eq", "value": "延误"}],
+                metrics=[
+                    {"name": "航班总数", "op": "count"},
+                    {"name": "平均延误", "op": "avg", "field": "延误时长"},
+                ],
+                group_by=[
+                    {"field": "航空公司"},
+                    {"field": "起飞时间", "granularity": "week"},
+                ],
+                having=[{"field": "航班总数", "op": "gt", "value": 50}],
+            )
+
+        关系漫游（查询员工及归属组织）::
+
+            query_objects(
+                object_type="员工",
+                select=["姓名", "工号"],
+                include_links=[
+                    {"path": "归属组织", "select": ["组织名称", "级别"]},
+                    {"path": "归属组织.上级组织", "select": ["组织名称"]},
+                ],
+            )
     """
     try:
-        # 构建 OQL 参数
-        oql_params = {
+        # 构建 OQL 参数（内部 key 与 router SDK 保持一致）
+        oql_params: dict[str, Any] = {
             "object": object_type,
             "limit": limit,
             "offset": offset,
@@ -141,12 +205,11 @@ def query_objects(
             datasource_registry=datasource_registry,
         )
 
-        # 格式化响应
-        # TODO: total 需要通过 COUNT 查询获取，这里暂时使用 len(records)
-        # 在实际使用中，如果需要精确的 total，应该执行一次 COUNT 查询
+        # total：当前 SDK 返回 list[dict]，暂用 len(records) 作近似；
+        # 若 router 未来支持 total_count，可从响应元数据获取。
         total = len(records)
 
-        return format_oql_response(
+        response = format_oql_response(
             tool="QueryObjects",
             records=records,
             total=total,
@@ -154,13 +217,32 @@ def query_objects(
             offset=offset,
         )
 
+        # Decision 10.3：结果量 >= limit 时自动落文件，供前端 getFileByPage 翻页
+        workspace_dir = (
+            ((config or {}).get("configurable") or {}).get("workspace_dir", "")
+            or os.environ.get("DATACLOUD_WORKSPACE_DIR", "")
+        )
+        if workspace_dir and total >= limit and response.get("status") == "success":
+            columns = response["result"].get("columns", [])
+            try:
+                file_id = _write_export_file(
+                    records=records,
+                    columns=columns,
+                    meta={"object_type": object_type, "total": total, "limit": limit},
+                    workspace_dir=workspace_dir,
+                )
+                response["result"]["file_id"] = file_id
+            except Exception as exc:
+                logger.warning("query_objects: failed to write export file: %s", exc)
+
+        return response
+
     except OQLError as e:
         return format_oql_error(e)
     except Exception as e:
-        # 未预期的异常
         return {
             "status": "error",
             "error_code": "INTERNAL_ERROR",
-            "message": f"查询执行失败: {str(e)}",
+            "message": f"查询执行失败: {e!s}",
             "detail": {"exception_type": type(e).__name__},
         }
