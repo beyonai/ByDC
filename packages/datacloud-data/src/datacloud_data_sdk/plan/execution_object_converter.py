@@ -116,21 +116,14 @@ class ExecutionObjectConverter:
             params = self._term_resolver.resolve_params(params, in_params)
         physical_params = map_to_physical(params, in_params)
 
-        # if ontology_action.script:
-        #     return ScriptExecTask(
-        #         object_code=step.object_id,
-        #         action_code=step.function_id,
-        #         script=ontology_action.script,
-        #         params=physical_params,
-        #         output_ref=step.output_ref,
-        #     )
-
-        # if not ontology_action.function_refs:
-        #     from datacloud_data_sdk.exceptions import ActionNotConfiguredError
-
-        #     raise ActionNotConfiguredError(ontology_action.action_code)
-
-
+        if ontology_action.script:
+            return ScriptExecTask(
+                object_code=step.object_id,
+                action_code=step.function_id,
+                script=ontology_action.script,
+                params=physical_params,
+                output_ref=step.output_ref,
+            )
 
         return ApiExecTask(
             object_code=step.object_id,

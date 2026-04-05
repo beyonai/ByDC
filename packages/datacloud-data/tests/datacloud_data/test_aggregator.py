@@ -9,7 +9,7 @@ from datacloud_data_sdk.executor.step_results import StepResult, StepResults
 
 def make_csv(tmp_path: Path, filename: str, rows: list[dict]) -> str:
     p = tmp_path / filename
-    with p.open("w", newline="") as f:
+    with p.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)

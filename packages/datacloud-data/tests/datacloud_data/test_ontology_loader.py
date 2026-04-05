@@ -412,13 +412,13 @@ def test_load_from_directory_loads_objects_and_functions(tmp_path: Path) -> None
         "source_type": "DB",
         "fields": [],
         "actions": [],
-    }, ensure_ascii=False))
+    }, ensure_ascii=False), encoding="utf-8")
     (tmp_path / "functions" / "fn_x.json").write_text(json.dumps({
         "function_code": "fn_x",
         "function_name": "函数X",
         "function_type": "API",
         "api_schema": {},
-    }, ensure_ascii=False))
+    }, ensure_ascii=False), encoding="utf-8")
 
     loader = OntologyLoader()
     loader.load_from_path(tmp_path)

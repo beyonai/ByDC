@@ -93,11 +93,35 @@ def _build_6001_format(
 
 
 def _send_via_gateway(gateway_context: Any, output: dict[str, Any]) -> None:
-    """通过 gateway 发送输出。"""
+    """通过 gateway 发送输出（调用 gateway_context.emit_chunk）。
+
+    emit_result 工具为同步函数，而 emit_chunk 为异步方法。
+    Agent 执行时必定存在运行中的事件循环（astream_events），通过
+    create_task 将 emit_chunk 调用调度进当前循环（fire-and-forget）。
+    """
+    import asyncio  # noqa: PLC0415
+
     try:
-        logger.info("Sending via gateway: %s", json.dumps(output, ensure_ascii=False))
+        emit_chunk = getattr(gateway_context, "emit_chunk", None)
+        if emit_chunk is None:
+            logger.warning("_send_via_gateway: gateway_context has no emit_chunk method")
+            return
+
+        if asyncio.iscoroutinefunction(emit_chunk):
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(emit_chunk(output))
+            except RuntimeError:
+                # 没有运行中的事件循环（单元测试场景），直接跳过
+                logger.info(
+                    "_send_via_gateway: no running event loop; output=%s",
+                    json.dumps(output, ensure_ascii=False, default=str),
+                )
+        else:
+            emit_chunk(output)
+
     except Exception as exc:
-        logger.error("Failed to send via gateway: %s", exc)
+        logger.error("_send_via_gateway failed: %s", exc)
 
 
 class DatacloudOutputMiddleware(AgentMiddleware):
