@@ -245,6 +245,7 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             "resourceType": str(rel.get("resourceType") or ""),
             "resourceCode": str(rel.get("resourceCode") or ""),
             "resourceName": str(rel.get("resourceName") or ""),
+            "resourceDesc": str(rel.get("resourceDesc") or ""),
         }
 
     def _build_dynamic_tools_with_diagnostics(
