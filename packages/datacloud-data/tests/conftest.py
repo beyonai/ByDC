@@ -17,8 +17,12 @@ except ImportError:
 
 import pytest
 
-from datacloud_data_sdk.ontology.loader import OntologyLoader
-from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
+try:
+    from datacloud_data_sdk.ontology.loader import OntologyLoader
+    from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
+except ImportError:
+    OntologyLoader = None
+    DataSourceManager = None
 
 
 @pytest.fixture
