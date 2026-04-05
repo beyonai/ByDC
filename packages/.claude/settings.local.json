@@ -4,7 +4,12 @@
       "WebSearch",
       "WebFetch(domain:www.palantir.com)",
       "Bash(python3:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(find \"D:/data/code/baiying/whale_datacloud/packages/datacloud-data\" -name \"*.py\" -type f -exec grep -l \"query.*execute\\\\|execute.*query\" {} \\\\;)",
+      "Bash(xargs grep:*)",
+      "Bash(pip install:*)",
+      "Bash(xargs wc:*)",
+      "Bash(grep -n \"^def \\\\|^class \" *.py)"
     ]
   }
 }
