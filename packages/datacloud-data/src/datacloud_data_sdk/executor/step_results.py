@@ -73,18 +73,26 @@ class StepResults:
     def get_path(self, ref: str) -> str:
         """
         根据引用获取 CSV 文件路径
-        
+
         支持通过 step_id、output_ref 或 exec_key 查找。
-        
+
         Args:
             ref: 引用标识（step_id/output_ref/exec_key）
-        
+
         Returns:
             str: CSV 文件路径，未找到返回空字符串
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.debug("StepResults.get_path: looking for ref=%s", ref)
         for e in self._entries:
+            logger.debug("StepResults.get_path: checking entry step_id=%s output_ref=%s exec_key=%s csv_path=%s",
+                        e.step_id, e.output_ref, e.exec_key, e.csv_path)
             if ref in (e.step_id, e.output_ref, e.exec_key):
+                logger.info("StepResults.get_path: found csv_path=%s for ref=%s", e.csv_path, ref)
                 return e.csv_path
+        logger.warning("StepResults.get_path: no match found for ref=%s", ref)
         return ""
 
     def csv_entries_for_aggregate(

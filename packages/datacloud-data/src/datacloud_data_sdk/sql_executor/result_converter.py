@@ -29,3 +29,29 @@ class ResultConverter:
             writer.writeheader()
             writer.writerows(records)
         return len(records)
+
+    @staticmethod
+    def from_csv(path: str | Path) -> list[dict[str, Any]]:
+        """
+        从 CSV 文件读取记录
+
+        Args:
+            path: CSV 文件路径
+
+        Returns:
+            list[dict[str, Any]]: 记录列表
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        path = Path(path)
+        logger.info("ResultConverter.from_csv: reading from %s", path)
+        if not path.exists():
+            logger.warning("ResultConverter.from_csv: file does not exist: %s", path)
+            return []
+
+        with open(path, "r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            records = list(reader)
+            logger.info("ResultConverter.from_csv: loaded %d records", len(records))
+            return records

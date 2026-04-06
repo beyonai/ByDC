@@ -813,19 +813,27 @@ class DataCloudWorker(GatewayWorker):
             sorted(str(key) for key in tools_dict.keys()),
         )
 
-        # 🆕 从 tool_metadata 中提取 mounted_objects
+        # 🆕 从 extra 中提取 mounted_objects（优先），或从 tool_metadata 中提取（兼容旧逻辑）
         mounted_objects = []
-        for tool_key, metadata in tool_metadata.items():
-            resource_biz_type = metadata.get("resource_biz_type")
-            resource_code = metadata.get("resource_code")
-            if resource_biz_type in {"OBJECT", "VIEW"} and resource_code:
-                mounted_objects.append(resource_code)
-
-        logger.info(
-            "Agent config: agent_id=%s mounted_objects=%s (from tool_metadata)",
-            by_agent_id,
-            mounted_objects,
-        )
+        if "mounted_objects" in extra_dict:
+            mounted_objects = extra_dict.get("mounted_objects", [])
+            logger.info(
+                "Agent config: agent_id=%s mounted_objects=%s (from extra)",
+                by_agent_id,
+                mounted_objects,
+            )
+        else:
+            # 兼容旧逻辑：从 tool_metadata 中提取
+            for tool_key, metadata in tool_metadata.items():
+                resource_biz_type = metadata.get("resource_biz_type")
+                resource_code = metadata.get("resource_code")
+                if resource_biz_type in {"OBJECT", "VIEW"} and resource_code:
+                    mounted_objects.append(resource_code)
+            logger.info(
+                "Agent config: agent_id=%s mounted_objects=%s (from tool_metadata)",
+                by_agent_id,
+                mounted_objects,
+            )
         # 改动4: SkillsMiddleware 在运行时自动处理技能发现，无需在 worker 中手动加载
         logger.info(
             "Agent runtime tools: agent_id=%s tool_keys=%s",

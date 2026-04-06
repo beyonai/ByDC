@@ -141,8 +141,17 @@ class OqlRouter:
 
         # 执行任务
         step_results = await executor.run([task], request_id)
-        result = step_results.get_result(task.step_id)
-        return result if isinstance(result, list) else [result]
+        # 从 CSV 文件读取结果（使用 output_ref 或默认的 step_0）
+        ref = task.output_ref or "step_0"
+        csv_path = step_results.get_path(ref)
+        logger.info("OqlRouter: csv_path=%s for ref=%s", csv_path, ref)
+        if csv_path:
+            from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
+            result = ResultConverter.from_csv(csv_path)
+            logger.info("OqlRouter: loaded %d records from CSV", len(result))
+            return result
+        logger.warning("OqlRouter: csv_path not found for ref=%s", ref)
+        return []
 
     def _validate_oql_params(self, oql_params: dict) -> None:
         """

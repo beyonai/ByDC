@@ -95,10 +95,13 @@ class SqlExecutor:
         sql = quote_aliases(sql, connector.config.db_type)
         logger.info("[SQL] step=%s ds=%s\n%s", task.output_ref, task.datasource_alias, sql)
         records = await connector.execute(sql)
+        logger.info("[SQL] executed, got %d records", len(records))
 
         out_path = self._csv.get_path(request_id, task.output_ref)
+        logger.info("[SQL] writing to CSV: %s", out_path)
         columns = extract_select_columns(task.sql_template) if not records else None
         row_count = ResultConverter.to_csv(records, out_path, columns=columns)
+        logger.info("[SQL] wrote %d rows to CSV", row_count)
         return SqlExecResult(csv_path=str(out_path), row_count=row_count)
 
     def _read_bind_values(self, csv_path: str, key: str) -> list[str]:
