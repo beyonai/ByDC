@@ -1130,6 +1130,25 @@ class DataCloudWorker(GatewayWorker):
                 elif kind == "on_chain_end" and event.get("name") == "agent_delegate":
                     is_agent_delegate = True
 
+                elif kind == "on_tool_start":
+                    tool_name = event.get("name", "")
+                    tool_input = event.get("data", {}).get("input", {})
+                    if tool_name:
+                        step_title = f"调用工具: {tool_name}"
+                        if step_title not in phase_emitted:
+                            phase_emitted.add(step_title)
+                            async with context.sub_step(step_title):
+                                pass
+
+                elif kind == "on_tool_end":
+                    tool_name = event.get("name", "")
+                    if tool_name:
+                        step_title = f"工具执行完成: {tool_name}"
+                        if step_title not in phase_emitted:
+                            phase_emitted.add(step_title)
+                            async with context.sub_step(step_title):
+                                pass
+
             logger.info(
                 "_stream_graph: astream_events end session=%s event_count=%d",
                 context.session_id,
