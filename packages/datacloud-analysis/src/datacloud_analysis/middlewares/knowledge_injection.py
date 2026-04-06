@@ -59,7 +59,7 @@ class KnowledgeInjectionMiddleware(AgentMiddleware):
 
         if not self.mounted_objects:
             # 没有挂载对象，跳过
-            logger.warning("KnowledgeInjectionMiddleware: skipping (no mounted_objects)")
+            logger.info("KnowledgeInjectionMiddleware: skipping (no mounted_objects)")
             return await handler(request)
 
         try:
@@ -267,7 +267,10 @@ class KnowledgeInjectionMiddleware(AgentMiddleware):
             )
             if fixed_scene_dir.exists():
                 return str(fixed_scene_dir)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "KnowledgeInjectionMiddleware: failed to resolve scene path: %s",
+                e
+            )
 
         return ""

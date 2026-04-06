@@ -26,6 +26,10 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# 环境变量名称常量
+ENV_ONTOLOGY_SCENE_PATH = "DATACLOUD_ONTOLOGY_SCENE_PATH"
+ENV_DISABLE_SSL_VERIFY = "DATACLOUD_DISABLE_SSL_VERIFY"
+
 
 def _datacloud_repo_root() -> Path:
     """Resolve whale_datacloud repo root (contains ``packages/datacloud-data/``)."""
@@ -34,7 +38,15 @@ def _datacloud_repo_root() -> Path:
     for parent in here.parents:
         if (parent / "packages" / "datacloud-data").is_dir():
             return parent
-    return here.parents[6]
+
+    # 回退：查找 .git 或 pyproject.toml
+    for parent in here.parents:
+        if (parent / ".git").exists() or (parent / "pyproject.toml").exists():
+            return parent
+
+    # 最后回退：返回当前文件的根目录
+    logger.warning("Cannot find repo root, using file parent directory")
+    return here.parent
 
 
 class InitDataCloudDigitalEmployeePlugin(Plugin):
