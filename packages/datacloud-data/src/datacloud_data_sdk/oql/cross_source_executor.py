@@ -86,14 +86,15 @@ class CrossSourceExecutor:
 
     BATCH_SIZE = 1000
 
-    def execute(
+    async def execute(
         self,
         oql_params: dict,
         root_cls: Any,
         registry,
         term_resolver,
         executor,
-        datasource_registry
+        datasource_registry,
+        request_id: str
     ) -> list[dict]:
         """
         两阶段跨源执行。
@@ -108,6 +109,7 @@ class CrossSourceExecutor:
             term_resolver: 术语解析器
             executor: 执行器
             datasource_registry: 数据源注册表
+            request_id: 请求 ID
 
         Returns:
             合并后的结果列表
@@ -123,7 +125,8 @@ class CrossSourceExecutor:
         db_type = self._get_db_type(root_cls, datasource_registry)
         task = adapter.translate(phase1_params, root_cls, db_type, registry, term_resolver)
 
-        main_records = executor.run(task)
+        step_results = await executor.run([task], request_id)
+        main_records = step_results.get_result(task.step_id)
         if not isinstance(main_records, list):
             main_records = [main_records]
 
@@ -132,14 +135,14 @@ class CrossSourceExecutor:
             path = link.get("path", "")
             select_fields = link.get("select", [])
 
-            main_records = self._execute_cross_link(
+            main_records = await self._execute_cross_link(
                 main_records, path, select_fields, root_cls, registry,
-                term_resolver, executor, datasource_registry
+                term_resolver, executor, datasource_registry, request_id
             )
 
         return main_records
 
-    def _execute_cross_link(
+    async def _execute_cross_link(
         self,
         main_records: list[dict],
         path: str,
@@ -148,7 +151,8 @@ class CrossSourceExecutor:
         registry,
         term_resolver,
         executor,
-        datasource_registry
+        datasource_registry,
+        request_id: str
     ) -> list[dict]:
         """
         执行单条跨源关联。
@@ -162,6 +166,7 @@ class CrossSourceExecutor:
             term_resolver: 术语解析器
             executor: 执行器
             datasource_registry: 数据源注册表
+            request_id: 请求 ID
 
         Returns:
             合并后的记录
@@ -212,9 +217,9 @@ class CrossSourceExecutor:
                 return current_records
 
             # 查询关联对象（分批）
-            sub_records = self._fetch_sub_records_batched(
+            sub_records = await self._fetch_sub_records_batched(
                 key_values, target_key, {"select": select_fields},
-                target_cls, registry, term_resolver, executor, datasource_registry
+                target_cls, registry, term_resolver, executor, datasource_registry, request_id
             )
 
             # 内存合并
@@ -227,7 +232,7 @@ class CrossSourceExecutor:
 
         return current_records
 
-    def _fetch_sub_records_batched(
+    async def _fetch_sub_records_batched(
         self,
         key_values: list,
         tgt_field: str,
@@ -236,7 +241,8 @@ class CrossSourceExecutor:
         registry,
         term_resolver,
         executor,
-        datasource_registry
+        datasource_registry,
+        request_id: str
     ) -> list[dict]:
         """
         分批查询关联对象。
@@ -250,6 +256,7 @@ class CrossSourceExecutor:
             term_resolver: 术语解析器
             executor: 执行器
             datasource_registry: 数据源注册表
+            request_id: 请求 ID
 
         Returns:
             查询结果列表
@@ -268,7 +275,8 @@ class CrossSourceExecutor:
 
             db_type = self._get_db_type(target_cls, datasource_registry)
             task = adapter.translate(sub_oql, target_cls, db_type, registry, term_resolver)
-            result = executor.run(task)
+            step_results = await executor.run([task], request_id)
+            result = step_results.get_result(task.step_id)
 
             if isinstance(result, list):
                 all_sub.extend(result)

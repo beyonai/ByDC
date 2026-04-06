@@ -18,8 +18,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
+import tempfile
 import uuid
 from pathlib import Path
 from typing import Any
@@ -32,25 +34,28 @@ from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
 class CsvStorageManager:
     """
     CSV 存储管理器
-    
+
     管理 CSV 文件的存储、读取和清理。
-    
+
     Attributes:
         _base: 基础存储目录
-    
+
     Example:
         manager = CsvStorageManager("/tmp/datacloud_csv")
         path = manager.get_path("req_123", "step_1")
         manager.save_export(records, columns, meta)
     """
-    
-    def __init__(self, base_dir: str = "/tmp/datacloud_csv") -> None:
+
+    def __init__(self, base_dir: str | None = None) -> None:
         """
         初始化 CSV 存储管理器
-        
+
         Args:
-            base_dir: 基础存储目录
+            base_dir: 基础存储目录，None 则使用系统临时目录
         """
+        if base_dir is None:
+            # 使用系统临时目录，跨平台兼容
+            base_dir = os.path.join(tempfile.gettempdir(), "datacloud_csv")
         self._base = Path(base_dir)
 
     def _effective_base_dir(self) -> Path:
@@ -86,17 +91,19 @@ class CsvStorageManager:
     def get_path(self, request_id: str, output_ref: str) -> Path:
         """
         获取 CSV 文件路径
-        
+
         为指定请求和输出引用创建 CSV 文件路径。
-        
+
         Args:
             request_id: 请求 ID
             output_ref: 输出引用名称
-        
+
         Returns:
             Path: CSV 文件路径
         """
-        dir_path = self._effective_base_dir() / request_id
+        # 替换 Windows 非法字符（冒号、反斜杠等）
+        safe_request_id = request_id.replace(":", "_").replace("\\", "_").replace("/", "_")
+        dir_path = self._effective_base_dir() / safe_request_id
         dir_path.mkdir(parents=True, exist_ok=True)
         return dir_path / f"{output_ref}.csv"
 
@@ -184,12 +191,14 @@ class CsvStorageManager:
     def cleanup(self, request_id: str) -> None:
         """
         清理请求目录
-        
+
         删除指定请求的所有 CSV 文件。
-        
+
         Args:
             request_id: 请求 ID
         """
-        dir_path = self._effective_base_dir() / request_id
+        # 替换 Windows 非法字符（与 get_path 保持一致）
+        safe_request_id = request_id.replace(":", "_").replace("\\", "_").replace("/", "_")
+        dir_path = self._effective_base_dir() / safe_request_id
         if dir_path.exists():
             shutil.rmtree(dir_path, ignore_errors=True)

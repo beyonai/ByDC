@@ -34,12 +34,13 @@ class OqlRouter:
         self.cross_source_executor = CrossSourceExecutor()
         self.pipeline_executor = PipelineExecutor()
 
-    def route(
+    async def route(
         self,
         oql_params: dict | list,
         term_resolver,
         executor,
-        datasource_registry
+        datasource_registry,
+        request_id: str = None
     ) -> list[dict]:
         """
         路由 OQL 请求到对应的执行策略。
@@ -49,6 +50,7 @@ class OqlRouter:
             term_resolver: 术语解析器
             executor: 执行器
             datasource_registry: 数据源注册表
+            request_id: 请求 ID（用于追踪）
 
         Returns:
             查询结果列表
@@ -56,12 +58,17 @@ class OqlRouter:
         Raises:
             OQLError: 执行失败
         """
+        # 生成 request_id（如果未提供）
+        if request_id is None:
+            import uuid
+            request_id = uuid.uuid4().hex[:12]
+
         # 1. 类型判断：Pipeline vs 单步
         if isinstance(oql_params, list):
             # Pipeline 模式
             logger.debug("OQL 路由：Pipeline 模式，步骤数 %d", len(oql_params))
-            context = self.pipeline_executor.execute(
-                oql_params, self.registry, term_resolver, executor, datasource_registry
+            context = await self.pipeline_executor.execute(
+                oql_params, self.registry, term_resolver, executor, datasource_registry, request_id
             )
             # 返回最后一步的结果
             if context:
@@ -70,14 +77,15 @@ class OqlRouter:
             return []
 
         # 2. 单步模式：判断执行策略
-        return self.execute_single_step(oql_params, term_resolver, executor, datasource_registry)
+        return await self.execute_single_step(oql_params, term_resolver, executor, datasource_registry, request_id)
 
-    def execute_single_step(
+    async def execute_single_step(
         self,
         oql_params: dict,
         term_resolver,
         executor,
-        datasource_registry
+        datasource_registry,
+        request_id: str
     ) -> list[dict]:
         """
         执行单个 OQL 步骤。
@@ -87,6 +95,7 @@ class OqlRouter:
             term_resolver: 术语解析器
             executor: 执行器
             datasource_registry: 数据源注册表
+            request_id: 请求 ID
 
         Returns:
             查询结果列表
@@ -121,8 +130,8 @@ class OqlRouter:
             if cross_source:
                 # 策略 B：跨源执行
                 logger.debug("OQL 路由：策略 B（跨源执行）")
-                return self.cross_source_executor.execute(
-                    oql_params, cls, self.registry, term_resolver, executor, datasource_registry
+                return await self.cross_source_executor.execute(
+                    oql_params, cls, self.registry, term_resolver, executor, datasource_registry, request_id
                 )
 
         # 策略 A：单源执行
@@ -131,7 +140,8 @@ class OqlRouter:
         task = self.adapter.translate(oql_params, self.registry, term_resolver, db_type)
 
         # 执行任务
-        result = executor.run(task)
+        step_results = await executor.run([task], request_id)
+        result = step_results.get_result(task.step_id)
         return result if isinstance(result, list) else [result]
 
     def _validate_oql_params(self, oql_params: dict) -> None:
