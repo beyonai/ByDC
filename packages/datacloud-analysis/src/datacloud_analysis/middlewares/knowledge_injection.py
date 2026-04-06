@@ -197,6 +197,8 @@ class KnowledgeInjectionMiddleware(AgentMiddleware):
 
             schema_lines = ["<ontology_context>"]
             schema_lines.append("## 可用对象类型（object_type）\n")
+            schema_lines.append("**重要说明**：要查询以下对象的数据，请使用 `query_objects` 工具。")
+            schema_lines.append("调用方式：`query_objects(object_type=\"对象编码\", oql_params={...})`\n")
 
             for idx, object_code in enumerate(object_codes[:10], 1):  # 最多10个对象
                 try:

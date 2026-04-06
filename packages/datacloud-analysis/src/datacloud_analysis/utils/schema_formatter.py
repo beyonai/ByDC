@@ -39,6 +39,10 @@ def format_object_schema(
 
     if ontology_class.description:
         lines.append(f"**描述**: {ontology_class.description}")
+
+    # 🆕 添加工具使用说明
+    lines.append("")
+    lines.append(f"**如何查询**: 使用 `query_objects` 工具，参数 `object_type=\"{ontology_class.object_code}\"`")
     lines.append("")
 
     # 2. 属性列表（属性名称、属性编码、类型、说明、别名）
