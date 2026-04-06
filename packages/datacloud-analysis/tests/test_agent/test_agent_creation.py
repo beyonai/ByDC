@@ -67,3 +67,90 @@ class TestAgentCreation:
             assert call_kwargs["model"] == "claude-opus-4-6"
             assert call_kwargs["api_key"] == "test-key"
             assert call_kwargs["base_url"] == "http://test"
+
+    # ========== 阶段1：修复 system_prompt 测试 ==========
+
+    def test_prompts_overwrite_system_prompt(self):
+        """阶段1测试：prompts_overwrite 中的 system_prompt 能够覆盖默认 prompt"""
+        with patch("datacloud_analysis.agent._create_deep_agent") as mock_deep:
+            mock_deep.return_value = Mock()
+
+            custom_system = "我是亦庄产业大脑数字员工"
+            prompts_dict = {
+                "system_prompt": custom_system
+            }
+
+            create_agent(prompts_overwrite=prompts_dict)
+
+            call_kwargs = mock_deep.call_args[1]
+            # 验证传递给 _create_deep_agent 的 system_prompt 是从 prompts_overwrite 来的
+            assert call_kwargs["system_prompt"] == custom_system
+
+    def test_prompts_overwrite_task_prompt(self):
+        """阶段1测试：prompts_overwrite 中的 task_prompt 能够传递"""
+        with patch("datacloud_analysis.agent._create_deep_agent") as mock_deep:
+            mock_deep.return_value = Mock()
+
+            task_prompt_content = "请根据以下原则来处理问题。\n# 单一技能优先原则：..."
+            prompts_dict = {
+                "task_prompt": task_prompt_content
+            }
+
+            create_agent(prompts_overwrite=prompts_dict)
+
+            call_kwargs = mock_deep.call_args[1]
+            # 验证 task_prompt 被传递
+            assert call_kwargs["task_prompt"] == task_prompt_content
+
+    def test_prompts_overwrite_both_prompts(self):
+        """阶段1测试：同时设置 system_prompt 和 task_prompt"""
+        with patch("datacloud_analysis.agent._create_deep_agent") as mock_deep:
+            mock_deep.return_value = Mock()
+
+            custom_system = "我是数字员工"
+            task_prompt_content = "请遵循以下原则"
+            prompts_dict = {
+                "system_prompt": custom_system,
+                "task_prompt": task_prompt_content
+            }
+
+            create_agent(prompts_overwrite=prompts_dict)
+
+            call_kwargs = mock_deep.call_args[1]
+            assert call_kwargs["system_prompt"] == custom_system
+            assert call_kwargs["task_prompt"] == task_prompt_content
+
+    def test_prompts_overwrite_priority_over_system_prompt_param(self):
+        """阶段1测试：prompts_overwrite 优先级高于 system_prompt 参数"""
+        with patch("datacloud_analysis.agent._create_deep_agent") as mock_deep:
+            mock_deep.return_value = Mock()
+
+            direct_system = "直接传入的 system_prompt"
+            overwrite_system = "prompts_overwrite 中的 system_prompt"
+
+            prompts_dict = {
+                "system_prompt": overwrite_system
+            }
+
+            create_agent(
+                system_prompt=direct_system,
+                prompts_overwrite=prompts_dict
+            )
+
+            call_kwargs = mock_deep.call_args[1]
+            # 验证 prompts_overwrite 的优先级更高
+            assert call_kwargs["system_prompt"] == overwrite_system
+
+    def test_system_prompt_without_prompts_overwrite(self):
+        """阶段1测试：没有 prompts_overwrite 时，使用直接传入的 system_prompt"""
+        with patch("datacloud_analysis.agent._create_deep_agent") as mock_deep:
+            mock_deep.return_value = Mock()
+
+            direct_system = "直接传入的 system_prompt"
+
+            create_agent(system_prompt=direct_system)
+
+            call_kwargs = mock_deep.call_args[1]
+            assert call_kwargs["system_prompt"] == direct_system
+            assert call_kwargs["task_prompt"] is None
+
