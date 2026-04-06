@@ -33,18 +33,39 @@ class ToolCallLoggingMiddleware(AgentMiddleware):
         handler: Callable[[ToolCallRequest], Awaitable[Any]],
     ) -> Any:
         """在工具调用前后推送消息到前端。"""
+        logger.info("ToolCallLoggingMiddleware.awrap_tool_call: START")
+
         # 获取 gateway_context
         gateway_context = self._get_gateway_context(request)
+        logger.info(
+            "ToolCallLoggingMiddleware: gateway_context=%s",
+            "present" if gateway_context else "None"
+        )
+
         if gateway_context is None:
             # 没有 gateway_context，直接执行工具
+            logger.warning("ToolCallLoggingMiddleware: no gateway_context, skipping logging")
             return await handler(request)
 
         # 提取工具信息
         tool_name = request.tool_call.get("name", "unknown_tool")
         tool_args = request.tool_call.get("args", {})
+        logger.info(
+            "ToolCallLoggingMiddleware: tool_name=%s args_keys=%s",
+            tool_name,
+            list(tool_args.keys()) if tool_args else []
+        )
+        logger.info(
+            "ToolCallLoggingMiddleware: tool_args=%s",
+            tool_args
+        )
 
         # 检查是否是 AGENT 类型工具
         is_agent_delegate = self._is_agent_delegate_tool(request)
+        logger.info(
+            "ToolCallLoggingMiddleware: is_agent_delegate=%s",
+            is_agent_delegate
+        )
 
         try:
             # 层级1：创建工具调用节点
@@ -70,6 +91,11 @@ class ToolCallLoggingMiddleware(AgentMiddleware):
                 await self._emit_child_think(
                     gateway_context,
                     f"返回结果：{self._format_result(result)}"
+                )
+
+                logger.info(
+                    "ToolCallLoggingMiddleware: tool_result=%s",
+                    result
                 )
 
                 return result
@@ -127,6 +153,7 @@ class ToolCallLoggingMiddleware(AgentMiddleware):
     def _get_gateway_context(self, request: ToolCallRequest) -> Any | None:
         """从 request 中获取 gateway_context。"""
         try:
+            # ToolCallRequest.runtime 是 ToolRuntime，包含 config 属性
             return request.runtime.config.get("configurable", {}).get("gateway_context")
         except Exception:
             return None

@@ -578,7 +578,12 @@ class DataCloudWorker(GatewayWorker):
         except Exception:
             return
 
-    def _build_graph(self, prompts_dict: dict | None = None, tools_dict: dict | None = None) -> Any:
+    def _build_graph(
+        self,
+        prompts_dict: dict | None = None,
+        tools_dict: dict | None = None,
+        mounted_objects: list[str] | None = None,  # 🆕 新增参数
+    ) -> Any:
         """Instantiate the datacloud-analysis compiled graph with dynamic context."""
         return create_agent(
             model=self.model_name,
@@ -586,6 +591,7 @@ class DataCloudWorker(GatewayWorker):
             base_url=self.base_url,
             prompts_overwrite=prompts_dict,
             tools=tools_dict,
+            mounted_objects=mounted_objects,  # 🆕 传递 mounted_objects
         )
 
     async def start_heartbeat(self) -> None:
@@ -600,6 +606,25 @@ class DataCloudWorker(GatewayWorker):
             len(loaded_agent_ids),
             loaded_agent_ids,
         )
+
+        # Set ontology scene path for knowledge injection middleware
+        if not os.environ.get("DATACLOUD_ONTOLOGY_SCENE_PATH"):
+            from pathlib import Path
+            from datacloud_service.plugins.worker_plugins.init_agent_conf import _datacloud_repo_root
+
+            repo_root = _datacloud_repo_root()
+            scene_path = (
+                repo_root
+                / "examples"
+                / "e_commerce_demo"
+                / "mock_env"
+                / "resource"
+                / "knowledge"
+                / "import_package_owl_onto"
+            )
+            if scene_path.exists():
+                os.environ["DATACLOUD_ONTOLOGY_SCENE_PATH"] = str(scene_path)
+                logger.info("DataCloudWorker: Set DATACLOUD_ONTOLOGY_SCENE_PATH=%s", scene_path)
 
         from datacloud_analysis import bootstrap
 
@@ -778,11 +803,28 @@ class DataCloudWorker(GatewayWorker):
         )
         tools_dict = getattr(config_for_this_call, "tools", None) or {}
         prompts_dict = getattr(config_for_this_call, "prompts", None) or {}
+        config_extra = getattr(config_for_this_call, "extra", None) or {}
+        tool_metadata = config_extra.get("tool_metadata", {})
+
         logger.info(
             "Agent config payload: agent_id=%s prompt_keys=%s tool_keys=%s",
             by_agent_id,
             sorted(str(key) for key in prompts_dict.keys()),
             sorted(str(key) for key in tools_dict.keys()),
+        )
+
+        # 🆕 从 tool_metadata 中提取 mounted_objects
+        mounted_objects = []
+        for tool_key, metadata in tool_metadata.items():
+            resource_biz_type = metadata.get("resource_biz_type")
+            resource_code = metadata.get("resource_code")
+            if resource_biz_type in {"OBJECT", "VIEW"} and resource_code:
+                mounted_objects.append(resource_code)
+
+        logger.info(
+            "Agent config: agent_id=%s mounted_objects=%s (from tool_metadata)",
+            by_agent_id,
+            mounted_objects,
         )
         # 改动4: SkillsMiddleware 在运行时自动处理技能发现，无需在 worker 中手动加载
         logger.info(
@@ -790,6 +832,25 @@ class DataCloudWorker(GatewayWorker):
             by_agent_id,
             sorted(str(key) for key in tools_dict),
         )
+
+        # 🔍 打印工具的原始配置（用于诊断 mounted_objects 问题）
+        logger.info("=" * 80)
+        logger.info("WORKER: RAW TOOLS CONFIGURATION")
+        logger.info("=" * 80)
+        for tool_key, tool_value in tools_dict.items():
+            logger.info("WORKER: tool_key=%s", tool_key)
+            logger.info("WORKER:   type=%s", type(tool_value).__name__)
+            if isinstance(tool_value, dict):
+                logger.info("WORKER:   dict_keys=%s", list(tool_value.keys()))
+                for k, v in tool_value.items():
+                    if isinstance(v, str) and len(v) < 200:
+                        logger.info("WORKER:     %s: %s", k, v)
+                    else:
+                        logger.info("WORKER:     %s: <%s>", k, type(v).__name__)
+            elif hasattr(tool_value, "__dict__"):
+                logger.info("WORKER:   attributes=%s", list(vars(tool_value).keys())[:10])
+            logger.info("WORKER:   ---")
+        logger.info("=" * 80)
 
         conf_payload = json.dumps(
             {"prompts": prompts_dict, "tool_keys": sorted(tools_dict.keys())},
@@ -818,6 +879,7 @@ class DataCloudWorker(GatewayWorker):
                 target_graph = self._build_graph(
                     prompts_dict=prompts_dict,
                     tools_dict=tools_dict,
+                    mounted_objects=mounted_objects,  # 🆕 传递 mounted_objects
                 )
             else:
                 logger.warning("AgentConfig for %s not found, fallback to defaults.", by_agent_id)
