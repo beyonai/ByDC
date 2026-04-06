@@ -251,9 +251,13 @@ class OqlRouter:
 
         try:
             ds = datasource_registry.get(datasource_alias)
-            if ds and hasattr(ds, 'db_type'):
+            if ds is not None and hasattr(ds, 'db_type'):
                 return ds.db_type.upper()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "Failed to get datasource db_type for alias=%s: %s",
+                datasource_alias,
+                e
+            )
 
         return "MYSQL"  # 默认
