@@ -147,13 +147,14 @@ class PipelineExecutor:
 
     MAX_STEPS = 10
 
-    def execute(
+    async def execute(
         self,
         steps: list[dict],
         registry,
         term_resolver,
         executor,
-        datasource_registry
+        datasource_registry,
+        request_id: str
     ) -> dict[str, dict]:
         """
         顺序执行 Pipeline 步骤。
@@ -164,6 +165,7 @@ class PipelineExecutor:
             term_resolver: 术语解析器
             executor: 执行器
             datasource_registry: 数据源注册表
+            request_id: 请求 ID
 
         Returns:
             步骤执行结果字典 {step_id: {records: [...]}}
@@ -201,8 +203,8 @@ class PipelineExecutor:
 
             try:
                 # 执行步骤
-                records = router.execute_single_step(
-                    resolved_params, term_resolver, executor, datasource_registry
+                records = await router.execute_single_step(
+                    resolved_params, term_resolver, executor, datasource_registry, request_id
                 )
             except OQLError as e:
                 raise OQLError(
