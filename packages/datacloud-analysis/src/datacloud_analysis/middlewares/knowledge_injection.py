@@ -1,18 +1,16 @@
 """
 知识注入中间件
 
-在每次模型调用前自动检索并注入本体 Schema。
+在每次模型调用前（每个问题时）注入本体 Schema。
 """
 
 from __future__ import annotations
-from typing import Any, Callable, Optional, Awaitable
+from typing import Any, Callable, Awaitable
 import logging
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage
 from langchain.agents.middleware.types import AgentMiddleware, ModelRequest
 from deepagents.middleware._utils import append_to_system_message
-
-from datacloud_analysis.tools.knowledge import search_knowledge
 
 logger = logging.getLogger(__name__)
 
@@ -21,73 +19,161 @@ class KnowledgeInjectionMiddleware(AgentMiddleware):
     """
     知识注入中间件
 
-    在每次模型调用前自动检索相关本体 Schema 并注入到系统提示中。
-    对应重构方案 §3.1.4.4 自定义 Middleware 2
+    在每次 LLM 调用时（每个问题）注入本体 Schema，支持未来精细化过滤。
+    使用 LangGraph state 去重，避免重复注入。
     """
 
     tools: list = []
+
+    def __init__(self, mounted_objects: list[str] | None = None):
+        """
+        Args:
+            mounted_objects: 挂载的对象/视图列表（完整列表）
+        """
+        super().__init__()
+        self.mounted_objects = mounted_objects or []
 
     async def awrap_model_call(
         self,
         request: ModelRequest,
         handler: Callable[[ModelRequest], Awaitable[Any]],
     ) -> Any:
-        """在模型调用前注入本体知识。"""
-        # 提取最后一条用户消息作为查询
-        user_query = ""
-        for msg in reversed(request.messages):
-            if isinstance(msg, HumanMessage):
-                content = msg.content
-                if isinstance(content, str):
-                    user_query = content
-                break
+        """在 LLM 调用前注入本体 Schema。"""
+        # 去重检查：使用 LangGraph state（持久化到 checkpoint）
+        state = request.runtime.state
+        if state.get("_ontology_injected", False):
+            # 已注入，跳过
+            return await handler(request)
 
-        if user_query:
-            try:
-                schema_context = await self._retrieve_schema(user_query)
-                if schema_context:
-                    new_system = append_to_system_message(request.system_message, schema_context)
-                    request = request.override(system_message=new_system)
-                    logger.info("KnowledgeInjectionMiddleware: injected schema context")
-            except Exception as exc:
-                logger.warning("KnowledgeInjectionMiddleware: failed to inject schema: %s", exc)
+        if not self.mounted_objects:
+            # 没有挂载对象，跳过
+            return await handler(request)
+
+        try:
+            # 1. 提取用户问题
+            user_query = self._extract_user_query(request)
+
+            # 2. 精细化过滤（根据用户问题筛选相关对象）
+            #    TODO: 待罗彦卓实现，当前返回所有挂载对象
+            relevant_objects = self._filter_relevant_objects(user_query, self.mounted_objects)
+
+            # 3. 构建 Schema
+            ontology_schema = await self._build_ontology_schema(relevant_objects)
+
+            if ontology_schema:
+                # 4. 注入到 system_message
+                updated_request = request.override(
+                    system_message=append_to_system_message(
+                        request.system_message,
+                        ontology_schema
+                    )
+                )
+
+                # 5. 标记已注入（写入 state）
+                state["_ontology_injected"] = True
+
+                logger.info(
+                    "KnowledgeInjectionMiddleware: injected %d objects: %s",
+                    len(relevant_objects),
+                    relevant_objects
+                )
+
+                # 6. 调用下一个 handler
+                return await handler(updated_request)
+
+        except Exception as exc:
+            logger.warning("Failed to inject ontology schema: %s", exc)
 
         return await handler(request)
 
-    async def _retrieve_schema(self, query: str) -> Optional[str]:
-        """
-        检索相关的本体 Schema。
+    def _extract_user_query(self, request: ModelRequest) -> str:
+        """从 request 中提取用户问题。"""
+        try:
+            # 从 messages 中提取最新的用户消息
+            messages = request.runtime.state.get("messages", [])
+            for msg in reversed(messages):
+                if isinstance(msg, dict) and msg.get("role") == "user":
+                    return msg.get("content", "")
+                elif isinstance(msg, HumanMessage):
+                    content = msg.content
+                    if isinstance(content, str):
+                        return content
+            return ""
+        except Exception:
+            return ""
+
+    def _filter_relevant_objects(
+        self,
+        user_query: str,
+        all_objects: list[str]
+    ) -> list[str]:
+        """根据用户问题筛选相关对象（精细化过滤）。
+
+        TODO: 待罗彦卓实现
+
+        未来实现思路：
+        1. 使用 search_knowledge 或 LLM 分析用户问题的意图
+        2. 识别问题中涉及的对象类型（如"企业"、"订单"等）
+        3. 仅返回相关对象的编码列表
+        4. 优化场景：当挂载对象数量 > 10 或上下文压力大时启用
 
         Args:
-            query: 用户查询
+            user_query: 用户问题
+            all_objects: 所有挂载的对象编码列表
 
         Returns:
-            Schema 上下文字符串，如果没有找到则返回 None
+            相关对象编码列表（当前返回全部对象）
+        """
+        # 当前实现：返回所有挂载对象（不做过滤）
+        return all_objects
+
+    async def _build_ontology_schema(self, object_codes: list[str]) -> str | None:
+        """构建本体 Schema。
+
+        Args:
+            object_codes: 要注入的对象编码列表
+
+        Returns:
+            格式化的 Schema 字符串，或 None（如果失败）
         """
         try:
-            result = await search_knowledge.ainvoke({"query": query})
+            from datacloud_analysis.dependencies import get_oql_router
+            from datacloud_analysis.utils.schema_formatter import format_object_schema
 
-            if not result or not isinstance(result, dict):
+            router = get_oql_router()
+            ontology_loader = router.ontology_loader
+
+            if not object_codes:
                 return None
 
-            term_matches = result.get("term_matches", [])
-            if not term_matches:
-                return None
+            # 获取所有关系（一次性查询）
+            all_relations = ontology_loader.get_ontology_relations()
 
             schema_lines = ["<ontology_context>"]
-            schema_lines.append("相关本体术语：")
+            schema_lines.append("## 可用对象类型（object_type）\n")
 
-            for match in term_matches[:5]:
-                term_name = match.get("term_name", "")
-                term_type = match.get("term_type_code", "")
-                match_type = match.get("match_type", "")
+            for idx, object_code in enumerate(object_codes[:10], 1):  # 最多10个对象
+                try:
+                    # 1. 获取对象定义
+                    ontology_class = ontology_loader.get_ontology_class(object_code)
 
-                if term_name:
-                    schema_lines.append(f"- {term_name} ({term_type}) [匹配类型: {match_type}]")
+                    # 2. 格式化对象 Schema
+                    formatted = format_object_schema(
+                        ontology_class,
+                        all_relations,
+                        ontology_loader
+                    )
+                    schema_lines.append(formatted)
 
-            schema_lines.append("</ontology_context>")
+                    if idx < len(object_codes) and idx < 10:
+                        schema_lines.append("\n---\n")
+                except Exception as e:
+                    logger.warning("Failed to load object %s: %s", object_code, e)
+                    continue
+
+            schema_lines.append("\n</ontology_context>")
             return "\n".join(schema_lines)
 
-        except Exception as exc:
-            logger.warning("_retrieve_schema failed: %s", exc)
+        except Exception as e:
+            logger.warning("Failed to build ontology schema: %s", e)
             return None
