@@ -219,13 +219,28 @@ def query_objects(
         executor = get_executor()
         datasource_registry = get_datasource_registry()
 
-        # 调用 OqlRouter
-        records = router.route(
+        # 生成 request_id（从 config 获取 session_id 或生成新的）
+        import uuid
+        import asyncio
+        request_id = (
+            ((config or {}).get("configurable") or {}).get("thread_id")
+            or uuid.uuid4().hex[:12]
+        )
+
+        # 调用 OqlRouter（使用 get_event_loop 获取当前事件循环）
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        records = loop.run_until_complete(router.route(
             oql_params=oql_params,
             term_resolver=term_resolver,
             executor=executor,
             datasource_registry=datasource_registry,
-        )
+            request_id=request_id,
+        ))
 
         # total：当前 SDK 返回 list[dict]，暂用 len(records) 作近似；
         # 若 router 未来支持 total_count，可从响应元数据获取。

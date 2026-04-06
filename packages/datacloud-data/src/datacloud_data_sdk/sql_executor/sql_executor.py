@@ -48,14 +48,14 @@ class SqlExecutor:
     """
     
     def __init__(
-        self, ds_manager: DataSourceManager, csv_base_dir: str = "/tmp/datacloud_csv"
+        self, ds_manager: DataSourceManager, csv_base_dir: str | None = None
     ) -> None:
         """
         初始化 SQL 执行器
-        
+
         Args:
             ds_manager: 数据源管理器实例
-            csv_base_dir: CSV 文件存储目录
+            csv_base_dir: CSV 文件存储目录，None 则使用系统临时目录
         """
         self._ds = ds_manager
         self._csv = CsvStorageManager(csv_base_dir)

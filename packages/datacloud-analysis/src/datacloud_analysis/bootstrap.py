@@ -113,37 +113,30 @@ async def setup() -> None:
 
             logger.info("datacloud-analysis: Creating OntologyLoader...")
             # Create OntologyLoader (registry) - will be populated by knowledge injection middleware
-            # when it loads ontology from scene paths
+            # when it loads ontology from OWL files (including datasource definitions)
             ontology_loader = OntologyLoader()
-
-            # Configure loader with DB settings
-            datasource_config = {
-                "host": settings.db.host,
-                "port": settings.db.port,
-                "user": settings.db.user,
-                "password": settings.db.password,
-                "database": settings.db.name,
-                "schema": settings.db.db_schema,
-                "db_type": settings.db.type,
-            }
-            logger.info("datacloud-analysis: Configuring OntologyLoader with datasource...")
-            ontology_loader.configure(
-                datasource_configs={"default": datasource_config}
-            )
+            logger.info("datacloud-analysis: OntologyLoader created (datasources will be loaded from OWL files).")
 
             logger.info("datacloud-analysis: Creating DataSourceManager...")
-            # Create DataSourceConfig for default datasource
+            # Create DataSourceConfig for SqlExecutor (separate from OntologyLoader's datasources)
+            # Construct JDBC URL from environment settings
+            if settings.db.type.lower() in ("postgresql", "opengauss"):
+                jdbc_url = f"jdbc:postgresql://{settings.db.host}:{settings.db.port}/{settings.db.name}"
+            elif settings.db.type.lower() == "mysql":
+                jdbc_url = f"jdbc:mysql://{settings.db.host}:{settings.db.port}/{settings.db.name}"
+            else:
+                jdbc_url = f"jdbc:{settings.db.type}://{settings.db.host}:{settings.db.port}/{settings.db.name}"
+
             ds_config = DataSourceConfig(
-                db_type=settings.db.type,
-                host=settings.db.host,
-                port=settings.db.port,
+                alias="default",
+                db_type=settings.db.type.upper(),
+                jdbc_url=jdbc_url,
                 user=settings.db.user,
                 password=settings.db.password,
-                database=settings.db.name,
-                schema=settings.db.db_schema,
             )
-            # Create DataSourceManager
-            ds_manager = DataSourceManager(configs={"default": ds_config})
+            # Pass OntologyLoader as fallback_loader so DataSourceManager can access
+            # datasources loaded from OWL files (via _config.datasource_configs)
+            ds_manager = DataSourceManager(configs={"default": ds_config}, fallback_loader=ontology_loader)
 
             logger.info("datacloud-analysis: Creating SqlExecutor...")
             # Create SqlExecutor with DataSourceManager
