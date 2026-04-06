@@ -222,12 +222,36 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             )
             return False
 
+        # 🆕 构建 tool_metadata：保存每个工具的原始配置信息
+        tool_metadata = {}
+        for rel in rel_resource_list:
+            snapshot = self._rel_resource_snapshot(rel)
+            resource_code = snapshot["resourceCode"]
+            resource_biz_type = snapshot["resourceBizType"]
+
+            # 根据 biz_type 确定工具名称
+            if resource_biz_type in {"OBJECT", "VIEW"}:
+                tool_key = f"{resource_code}_query"
+                tool_metadata[tool_key] = {
+                    "resource_code": resource_code,
+                    "resource_biz_type": resource_biz_type,
+                    "resource_type": snapshot["resourceType"],
+                    "resource_name": snapshot["resourceName"],
+                }
+
+        logger.info(
+            "[InitPlugin] Agent tool_metadata: agent_id=%s tool_metadata=%s",
+            agent_id,
+            tool_metadata,
+        )
+
         current_map[agent_id] = AgentConfig(
             agent_id=agent_id,
             tools=dynamic_tools,
             prompts=dynamic_prompts,
             skills={},
             on_conflict="overwrite",
+            extra={"tool_metadata": tool_metadata},  # 🆕 保存工具元数据到 extra 字段
         )
         self._save_offline_cache(agent_id, detail_data)
         return True
@@ -455,6 +479,21 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
         resource_biz_type: str,
         resource_type: str,
     ) -> tuple[dict[str, Any], str | None]:
+        # 🔍 打印原始 rel 配置（用于诊断 mounted_objects 问题）
+        logger.info("=" * 80)
+        logger.info("INIT_PLUGIN: BUILDING ONTOLOGY RESOURCE TOOLS")
+        logger.info("=" * 80)
+        logger.info("INIT_PLUGIN: resource_code=%s", resource_code)
+        logger.info("INIT_PLUGIN: resource_biz_type=%s", resource_biz_type)
+        logger.info("INIT_PLUGIN: resource_type=%s", resource_type)
+        logger.info("INIT_PLUGIN: rel keys=%s", list(rel.keys()))
+        for k, v in rel.items():
+            if isinstance(v, str) and len(v) < 200:
+                logger.info("INIT_PLUGIN:   %s: %s", k, v)
+            else:
+                logger.info("INIT_PLUGIN:   %s: <%s>", k, type(v).__name__)
+        logger.info("=" * 80)
+
         if resource_biz_type == "OBJECT":
             return self._build_object_tools(
                 loader=loader,

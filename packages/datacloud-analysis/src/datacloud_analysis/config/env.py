@@ -142,6 +142,20 @@ class EmbeddingSettings(BaseSettings):
     model: str = Field(..., description="Embedding model identifier.")
 
 
+class DBSettings(BaseSettings):
+    """Database connection settings for OqlRouter."""
+
+    model_config = SettingsConfigDict(env_prefix="DB_", extra="ignore")
+
+    host: str = Field(default="", description="Database host")
+    port: int = Field(default=5432, description="Database port")
+    user: str = Field(default="", description="Database user")
+    password: str = Field(default="", description="Database password")
+    name: str = Field(default="", description="Database name")
+    db_schema: str = Field(default="public", description="Database schema", validation_alias="DB_SCHEMA")
+    type: str = Field(default="postgresql", description="Database type (postgresql/opengauss)")
+
+
 class KnowledgeSettings(BaseSettings):
     """知识图谱查询配置。未配置时 search_knowledge 返回空。"""
 
@@ -261,6 +275,7 @@ class Settings(BaseSettings):
     pg: PGSettings = Field(default_factory=PGSettings)
     workspace: WorkspaceSettings = Field(default_factory=WorkspaceSettings)
     data_service: DataServiceSettings = Field(default_factory=DataServiceSettings)
+    db: DBSettings = Field(default_factory=DBSettings)
 
     # LLM roles
     llm_quick: LLMGroupSettings | None = Field(default=None)

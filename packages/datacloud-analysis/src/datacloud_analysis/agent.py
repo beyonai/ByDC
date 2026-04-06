@@ -55,6 +55,44 @@ def create_agent(
     Returns:
         Compiled agent graph
     """
+    # 🔍 打印 Worker 端传递的所有参数
+    logger.info("=" * 80)
+    logger.info("create_agent: WORKER INPUT PARAMETERS")
+    logger.info("=" * 80)
+    logger.info("create_agent: model=%s", model)
+    logger.info("create_agent: api_key=%s", "***" if api_key else None)
+    logger.info("create_agent: base_url=%s", base_url)
+    logger.info("create_agent: temperature=%s", temperature)
+    logger.info("create_agent: locale=%s", locale)
+    logger.info("create_agent: system_prompt=%s",
+                f"<{len(system_prompt)} chars>" if system_prompt else None)
+
+    # 打印 prompts_overwrite 详情
+    if prompts_overwrite:
+        logger.info("create_agent: prompts_overwrite keys=%s", list(prompts_overwrite.keys()))
+        for key, value in prompts_overwrite.items():
+            if isinstance(value, str):
+                logger.info("create_agent:   - %s: <%d chars>", key, len(value))
+            else:
+                logger.info("create_agent:   - %s: %s", key, type(value).__name__)
+    else:
+        logger.info("create_agent: prompts_overwrite=None")
+
+    # 打印 tools 详情
+    if tools:
+        logger.info("create_agent: tools keys=%s", list(tools.keys()))
+        for tool_key, tool_value in tools.items():
+            if isinstance(tool_value, dict):
+                logger.info("create_agent:   - %s: %s", tool_key, tool_value)
+            else:
+                logger.info("create_agent:   - %s: %s", tool_key, type(tool_value).__name__)
+    else:
+        logger.info("create_agent: tools=None")
+
+    # 打印 mounted_objects 详情
+    logger.info("create_agent: mounted_objects=%s", mounted_objects)
+    logger.info("=" * 80)
+
     # Resolve locale
     resolved_locale = locale or os.getenv("DATACLOUD_AGENT_LOCALE", "zh_CN")
     supported = get_supported_locales()
@@ -164,6 +202,10 @@ def _create_deep_agent(
     skill_sources = [builtin_skills_dir]
 
     # Middleware stack (自定义中间件追加在 SDK 内置栈之后)
+    logger.info(
+        "create_agent: initializing middlewares with mounted_objects=%s",
+        mounted_objects
+    )
     middlewares = [
         KnowledgeInjectionMiddleware(mounted_objects=mounted_objects),  # 🆕 传递挂载对象
         ToolCallLoggingMiddleware(),  # 🆕 阶段4：工具调用推送
@@ -173,6 +215,7 @@ def _create_deep_agent(
             agent_name="DataCloud Agent",
         ),
     ]
+    logger.info("create_agent: middlewares initialized count=%d", len(middlewares))
 
     # Resolve checkpointer
     checkpointer: Any = None

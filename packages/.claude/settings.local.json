@@ -59,7 +59,10 @@
       "Bash(.venv/Scripts/python.exe -m pytest \"packages/datacloud-data/tests/datacloud_data/test_ontology_loader.py::test_load_from_directory_loads_objects_and_functions\" \"packages/datacloud-data/tests/scripts/test_export_scene_json.py\" -v --tb=long)",
       "Bash(.venv/Scripts/python.exe -m pytest packages/datacloud-analysis/tests/ -q --tb=short)",
       "Bash(.venv/Scripts/python.exe -m pytest packages/datacloud-analysis/tests/ packages/datacloud-data/tests/ -q --tb=short)",
-      "Bash(PYTHONPATH=/d/data/code/baiying/whale_datacloud/packages/datacloud-analysis/src python:*)"
+      "Bash(PYTHONPATH=/d/data/code/baiying/whale_datacloud/packages/datacloud-analysis/src python:*)",
+      "Bash(PYTHONPATH=src python -m pytest tests/test_agent/test_stage2_core_logic.py::TestSchemaFormatterLogic -v)",
+      "Bash(PYTHONPATH=src python -m pytest tests/test_agent/test_stage2_core_logic.py -v)",
+      "Bash(PYTHONPATH=src python -m pytest tests/test_agent/test_prompt_processing.py tests/test_agent/test_stage2_core_logic.py tests/test_agent/test_stage3_core_logic.py tests/test_agent/test_stage4_core_logic.py -v --tb=line)"
     ]
   }
 }

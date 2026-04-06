@@ -296,6 +296,10 @@ class OntologyLoader:
             raise ObjectNotFoundError(object_code)
         return self._classes[object_code]
 
+    def get_class(self, object_code: str) -> OntologyClass:
+        """别名方法，供 OqlRouter 调用。"""
+        return self.get_ontology_class(object_code)
+
     def get_ontology_classes(self, object_ids: list[str] | None = None) -> list[OntologyClass]:
         if object_ids is None:
             return list(self._classes.values())
