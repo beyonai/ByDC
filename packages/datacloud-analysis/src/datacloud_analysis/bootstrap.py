@@ -100,6 +100,78 @@ async def setup() -> None:
                 "datacloud-memory not installed or init_store not available – skipping."
             )
 
+        # 4. Initialize OqlRouter and dependencies for knowledge injection
+        try:
+            from datacloud_data_sdk.oql import OqlRouter  # noqa: PLC0415
+            from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
+            from datacloud_data_sdk.executor.executor import Executor  # noqa: PLC0415
+            from datacloud_data_sdk.sql_executor.sql_executor import SqlExecutor  # noqa: PLC0415
+            from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager  # noqa: PLC0415
+            from datacloud_data_sdk.sql_executor.models import DataSourceConfig  # noqa: PLC0415
+            from datacloud_data_sdk.sql_executor.connector_registry import ConnectorRegistry  # noqa: PLC0415
+            from datacloud_analysis.dependencies import init_dependencies  # noqa: PLC0415
+
+            logger.info("datacloud-analysis: Creating OntologyLoader...")
+            # Create OntologyLoader (registry) - will be populated by knowledge injection middleware
+            # when it loads ontology from scene paths
+            ontology_loader = OntologyLoader()
+
+            # Configure loader with DB settings
+            datasource_config = {
+                "host": settings.db.host,
+                "port": settings.db.port,
+                "user": settings.db.user,
+                "password": settings.db.password,
+                "database": settings.db.name,
+                "schema": settings.db.db_schema,
+                "db_type": settings.db.type,
+            }
+            logger.info("datacloud-analysis: Configuring OntologyLoader with datasource...")
+            ontology_loader.configure(
+                datasource_configs={"default": datasource_config}
+            )
+
+            logger.info("datacloud-analysis: Creating DataSourceManager...")
+            # Create DataSourceConfig for default datasource
+            ds_config = DataSourceConfig(
+                db_type=settings.db.type,
+                host=settings.db.host,
+                port=settings.db.port,
+                user=settings.db.user,
+                password=settings.db.password,
+                database=settings.db.name,
+                schema=settings.db.db_schema,
+            )
+            # Create DataSourceManager
+            ds_manager = DataSourceManager(configs={"default": ds_config})
+
+            logger.info("datacloud-analysis: Creating SqlExecutor...")
+            # Create SqlExecutor with DataSourceManager
+            sql_executor = SqlExecutor(ds_manager=ds_manager)
+
+            logger.info("datacloud-analysis: Creating Executor...")
+            # Create Executor
+            executor = Executor(sql_executor=sql_executor)
+
+            logger.info("datacloud-analysis: Creating OqlRouter...")
+            # Create OqlRouter with the loader as registry
+            oql_router = OqlRouter(registry=ontology_loader)
+
+            logger.info("datacloud-analysis: Initializing global dependencies...")
+            # Initialize global dependencies
+            init_dependencies(
+                oql_router=oql_router,
+                executor=executor,
+                datasource_registry=ConnectorRegistry,
+            )
+            logger.info("datacloud-analysis: OqlRouter initialized for knowledge injection.")
+        except Exception as exc:
+            logger.error(
+                "datacloud-analysis: Failed to initialize OqlRouter: %s",
+                exc,
+                exc_info=True,
+            )
+
         _initialized = True
         logger.info("datacloud-analysis: initialization complete.")
 
