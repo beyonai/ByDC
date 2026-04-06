@@ -61,7 +61,7 @@ class LoaderConfig:
     event_bus: Any = None
     datasource_configs: dict[str, Any] = field(default_factory=dict)
     kb_source_configs: dict[str, dict] | None = None
-    csv_base_dir: str = "/tmp/datacloud_csv"
+    csv_base_dir: str | None = None  # None 表示使用系统临时目录
     sql_execution_mode: str = "internal"
     term_loader: Any = None
     query_result_csv_threshold: int = 10   # 0 = 不启用溢出截断
