@@ -84,31 +84,39 @@ class Executor:
     ) -> StepResults:
         """
         执行任务列表
-        
+
         按顺序执行所有任务，支持步骤间的数据绑定。
         每个任务的执行结果会保存为 CSV 文件。
-        
+
         Args:
             tasks: 任务列表，支持 SQL、API、脚本、知识库任务
             request_id: 请求 ID，用于组织输出文件
             step_ids: 可选的步骤 ID 列表，用于标识每个任务
-        
+
         Returns:
             StepResults: 包含所有步骤执行结果的对象
-        
+
         Raises:
             RuntimeError: 当任务类型对应的执行器未配置时抛出
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info("Executor.run: starting with %d tasks, request_id=%s", len(tasks), request_id)
         step_results = StepResults()
         for i, task in enumerate(tasks):
             exec_key = f"step_{i}"
             step_id = step_ids[i] if step_ids and i < len(step_ids) else exec_key
             tbl = getattr(task, "output_ref", "") or step_id
+            logger.info("Executor.run: task %d: exec_key=%s step_id=%s output_ref=%s",
+                       i, exec_key, step_id, getattr(task, "output_ref", ""))
 
             if isinstance(task, SqlExecTask):
                 if self._sql is None:
                     raise RuntimeError("SqlExecutor not configured")
                 result = await self._sql.execute(task, request_id, step_results)
+                logger.info("Executor.run: SqlExecTask completed, csv_path=%s row_count=%s",
+                           result.csv_path, result.row_count)
                 step_results.add(
                     StepResult(step_id, exec_key, task.output_ref, result.csv_path, tbl)
                 )

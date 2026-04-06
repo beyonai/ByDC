@@ -195,12 +195,22 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
         tool_names = sorted(dynamic_tools.keys())
         reason_summary = list(build_diag.get("reason_summary") or [])
 
+        # 🆕 收集 mounted_objects（OBJECT/VIEW 类型的 resource_code）
+        mounted_objects = []
+        for rel in rel_resource_list:
+            snapshot = self._rel_resource_snapshot(rel)
+            resource_biz_type = snapshot["resourceBizType"]
+            resource_code = snapshot["resourceCode"]
+            if resource_biz_type in {"OBJECT", "VIEW"} and resource_code:
+                mounted_objects.append(resource_code)
+
         logger.info(
-            "[InitPlugin] Agent loaded: agent_id=%s prompt_keys=%s tool_count=%d tool_names=%s",
+            "[InitPlugin] Agent loaded: agent_id=%s prompt_keys=%s tool_count=%d tool_names=%s mounted_objects=%s",
             agent_id,
             sorted(dynamic_prompts.keys()),
             len(tool_names),
             tool_names,
+            mounted_objects,
         )
         logger.info(
             "[InitPlugin] Agent prompt preview: agent_id=%s prompts=%s",
@@ -213,10 +223,12 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
                 agent_id,
                 reason_summary,
             )
-        if not tool_names:
+
+        # 🆕 修改检查逻辑：如果有 mounted_objects，即使没有动态工具也不算错误
+        if not tool_names and not mounted_objects:
             empty_tool_agent_ids.append(agent_id)
             logger.error(
-                "[InitPlugin] Agent has no tools: agent_id=%s tool_count=0 reason_summary=%s",
+                "[InitPlugin] Agent has no tools and no mounted_objects: agent_id=%s tool_count=0 reason_summary=%s",
                 agent_id,
                 reason_summary,
             )
@@ -245,13 +257,17 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             tool_metadata,
         )
 
+        # 🆕 将 mounted_objects 传递给 AgentConfig
         current_map[agent_id] = AgentConfig(
             agent_id=agent_id,
             tools=dynamic_tools,
             prompts=dynamic_prompts,
             skills={},
             on_conflict="overwrite",
-            extra={"tool_metadata": tool_metadata},  # 🆕 保存工具元数据到 extra 字段
+            extra={
+                "tool_metadata": tool_metadata,
+                "mounted_objects": mounted_objects,  # 🆕 传递挂载对象列表
+            },
         )
         self._save_offline_cache(agent_id, detail_data)
         return True
@@ -377,6 +393,23 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             return tools, report
 
         for rel in rel_resource_list:
+            snapshot = self._rel_resource_snapshot(rel)
+            resource_biz_type = snapshot["resourceBizType"]
+
+            # 🆕 跳过 OBJECT/VIEW 类型，使用通用 query_objects 工具
+            if resource_biz_type in {"OBJECT", "VIEW"}:
+                report["skipped"].append({
+                    **snapshot,
+                    "reason": "object_view_use_generic_query_objects_tool"
+                })
+                logger.info(
+                    "[InitPlugin][ToolLoad][Ontology] agent_id=%s skip resource_code=%s: "
+                    "OBJECT/VIEW use generic query_objects tool",
+                    agent_id,
+                    snapshot["resourceCode"]
+                )
+                continue
+
             state, item, new_tools = self._build_single_ontology_resource(
                 agent_id=agent_id,
                 rel=rel,
@@ -525,10 +558,13 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
                 tools[act_code] = obj.get_action_schema(act_code)
         if resource_type == "DB_TABLE":
             tool_name = f"{resource_code}_query"
+            # 获取对象的完整描述（包含字段、关系等）
+            object_description = obj.get_description()
             tools[tool_name] = self._build_query_tool(
                 obj.query,
                 tool_name=tool_name,
                 tool_desc=f"{rel.get('resourceName', resource_code)} {rel.get('resourceDesc', '')}".strip(),
+                object_description=object_description,
             )
         return tools, None
 
@@ -544,11 +580,14 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             return {}, "view_not_found"
 
         tool_name = f"{resource_code}_query"
+        # 获取视图的完整描述（包含字段等）
+        view_description = view.get_description()
         return {
             tool_name: self._build_query_tool(
                 view.query,
                 tool_name=tool_name,
                 tool_desc=f"{rel.get('resourceName', resource_code)} {rel.get('resourceDesc', '')}".strip(),
+                object_description=view_description,
             )
         }, None
 
@@ -617,6 +656,7 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
         *,
         tool_name: str,
         tool_desc: str = "",
+        object_description: str = "",
     ) -> Any:
         """Wrap query(question=...) into a dispatcher-compatible async callable."""
 
@@ -626,10 +666,15 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             )
             return await query_func(question=str(question), include_plan=True)
 
-        _tool.__doc__ = (
-            f"Query tool: {tool_name}. {tool_desc}\n"
-            "Params: question/query/description (one of them)."
-        )
+        # 构建详细的工具描述，包含对象 Schema
+        doc_parts = [f"Query tool: {tool_name}"]
+        if tool_desc:
+            doc_parts.append(tool_desc)
+        if object_description:
+            doc_parts.append("\n" + object_description)
+        doc_parts.append("\nParams: question/query/description (one of them).")
+
+        _tool.__doc__ = "\n".join(doc_parts)
         return _tool
 
     def _build_agent_delegate_tool(
