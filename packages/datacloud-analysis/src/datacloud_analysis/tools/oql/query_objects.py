@@ -242,6 +242,8 @@ def query_objects(
             request_id=request_id,
         ))
 
+        logger.info("query_objects: router.route returned %d records", len(records))
+
         # total：当前 SDK 返回 list[dict]，暂用 len(records) 作近似；
         # 若 router 未来支持 total_count，可从响应元数据获取。
         total = len(records)
@@ -253,6 +255,8 @@ def query_objects(
             limit=limit,
             offset=offset,
         )
+
+        logger.info("query_objects: format_oql_response returned status=%s", response.get("status"))
 
         # Decision 10.3：结果量 >= limit 时自动落文件，供前端 getFileByPage 翻页。
         # 注意：total = len(records) ≤ limit（router 不会超额返回），因此 total > limit
