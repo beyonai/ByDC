@@ -6,25 +6,35 @@ Schema 格式化工具函数
 
 from __future__ import annotations
 import logging
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from datacloud_data_sdk.ontology.loader import OntologyClass, OntologyRelation, OntologyLoader
 
 logger = logging.getLogger(__name__)
+
+# 常量定义
+MAX_FIELDS_DISPLAY = 10
+MAX_RELATIONS_DISPLAY = 5
+MAX_ACTIONS_DISPLAY = 5
+MAX_ACTION_PARAMS_DISPLAY = 5
+MAX_FIELD_ALIASES_DISPLAY = 3
 
 
 def format_object_schema(
     ontology_class: Any,  # OntologyClass
     all_relations: list[Any],  # list[OntologyRelation]
-    ontology_loader: Any
+    ontology_loader: Any  # OntologyLoader
 ) -> str:
     """格式化单个对象的完整 Schema。
 
     Args:
-        ontology_class: OntologyClass 实例
-        all_relations: 所有关系列表
-        ontology_loader: OntologyLoader 实例
+        ontology_class: OntologyClass 实例，包含对象的元数据
+        all_relations: 所有关系列表，用于查找与当前对象相关的关系
+        ontology_loader: OntologyLoader 实例，用于查询其他对象信息
 
     Returns:
-        格式化的 Schema 字符串
+        格式化的 Schema 字符串，使用 Markdown 格式
     """
     lines = []
 
@@ -51,12 +61,12 @@ def format_object_schema(
         lines.append("| 属性名称 | 属性编码 | 类型 | 说明 | 别名 |")
         lines.append("|---------|---------|------|------|------|")
 
-        for field in ontology_class.fields[:10]:  # 最多显示10个属性
+        for field in ontology_class.fields[:MAX_FIELDS_DISPLAY]:
             field_name = field.field_name
             field_code = field.field_code
             field_type = field.field_type
             description = field.description or ""
-            aliases = ", ".join(field.aliases[:3]) if hasattr(field, 'aliases') and field.aliases else ""
+            aliases = ", ".join(field.aliases[:MAX_FIELD_ALIASES_DISPLAY]) if hasattr(field, 'aliases') and field.aliases else ""
 
             lines.append(f"| {field_name} | {field_code} | {field_type} | {description} | {aliases} |")
 
@@ -71,7 +81,7 @@ def format_object_schema(
         )
         if object_relations:
             lines.append("#### 关联关系")
-            for rel in object_relations[:5]:  # 最多显示5个关系
+            for rel in object_relations[:MAX_RELATIONS_DISPLAY]:
                 source_name = rel["source_name"]
                 target_name = rel["target_name"]
                 rel_type = rel["relation_type"]
@@ -83,7 +93,7 @@ def format_object_schema(
     # 4. 可用动作（动作名称、动作编码、参数列表）
     if hasattr(ontology_class, 'actions') and ontology_class.actions:
         lines.append("#### 可用动作")
-        for action in ontology_class.actions[:5]:  # 最多显示5个动作
+        for action in ontology_class.actions[:MAX_ACTIONS_DISPLAY]:
             action_name = action.action_name
             action_code = action.action_code
             description = action.description or ""
@@ -95,7 +105,7 @@ def format_object_schema(
             # 参数列表
             if hasattr(action, 'params') and action.params:
                 params_str = []
-                for param in action.params[:5]:  # 最多显示5个参数
+                for param in action.params[:MAX_ACTION_PARAMS_DISPLAY]:
                     param_code = param.param_code
                     param_type = param.param_type
                     required = "必填" if param.required else "可选"
@@ -112,17 +122,27 @@ def format_object_schema(
 def filter_object_relations(
     object_code: str,
     all_relations: list[Any],  # list[OntologyRelation]
-    ontology_loader: Any
+    ontology_loader: Any  # OntologyLoader
 ) -> list[dict]:
     """过滤与指定对象相关的关系。
 
+    遍历所有关系，找出源或目标为指定对象的关系，
+    并解析出源和目标对象的名称。
+
     Args:
-        object_code: 对象编码
-        all_relations: 所有关系列表
-        ontology_loader: OntologyLoader 实例
+        object_code: 对象编码，用于匹配关系的源或目标
+        all_relations: 所有关系列表，包含系统中定义的所有对象关系
+        ontology_loader: OntologyLoader 实例，用于查询对象名称
 
     Returns:
-        关系字典列表
+        关系字典列表，每个字典包含：
+        - source_class: 源对象编码
+        - source_name: 源对象名称
+        - target_class: 目标对象编码
+        - target_name: 目标对象名称
+        - relation_type: 关系类型
+        - relation_name: 关系名称
+        - description: 关系描述
     """
     relations = []
 
@@ -132,13 +152,15 @@ def filter_object_relations(
             try:
                 source_obj = ontology_loader.get_ontology_class(rel.source_class)
                 source_name = source_obj.object_name
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to get source object name for %s: %s", rel.source_class, e)
                 source_name = rel.source_class
 
             try:
                 target_obj = ontology_loader.get_ontology_class(rel.target_class)
                 target_name = target_obj.object_name
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to get target object name for %s: %s", rel.target_class, e)
                 target_name = rel.target_class
 
             relations.append({

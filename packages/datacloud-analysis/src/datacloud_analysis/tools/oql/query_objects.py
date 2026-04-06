@@ -39,15 +39,31 @@ def _write_export_file(
     同时写入 {file_id}.json（数据）和 {file_id}_meta.json（元数据）。
     前端可通过 getFileByPage 命令按页读取，不需要重新调用 LLM。
     """
+    # 定义常量
+    FILE_ID_LENGTH = 12
+
     exports_dir = Path(workspace_dir) / "exports"
     exports_dir.mkdir(parents=True, exist_ok=True)
 
-    file_id = uuid.uuid4().hex[:12]
+    file_id = uuid.uuid4().hex[:FILE_ID_LENGTH]
     data_file = exports_dir / f"{file_id}.json"
     meta_file = exports_dir / f"{file_id}_meta.json"
 
+    def json_serializer(obj):
+        """自定义JSON序列化器，处理特殊类型。"""
+        from datetime import datetime, date
+        from decimal import Decimal
+
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        elif isinstance(obj, Decimal):
+            return float(obj)
+        elif hasattr(obj, '__dict__'):
+            return str(obj)
+        return str(obj)
+
     with open(data_file, "w", encoding="utf-8") as f:
-        json.dump({"columns": columns, "rows": records}, f, ensure_ascii=False, default=str)
+        json.dump({"columns": columns, "rows": records}, f, ensure_ascii=False, default=json_serializer)
 
     with open(meta_file, "w", encoding="utf-8") as f:
         json.dump({**meta, "file_id": file_id, "columns": columns}, f, ensure_ascii=False)
