@@ -815,8 +815,8 @@ class DataCloudWorker(GatewayWorker):
 
         # 🆕 从 extra 中提取 mounted_objects（优先），或从 tool_metadata 中提取（兼容旧逻辑）
         mounted_objects = []
-        if "mounted_objects" in extra_dict:
-            mounted_objects = extra_dict.get("mounted_objects", [])
+        if "mounted_objects" in config_extra:
+            mounted_objects = config_extra.get("mounted_objects", [])
             logger.info(
                 "Agent config: agent_id=%s mounted_objects=%s (from extra)",
                 by_agent_id,
@@ -1247,6 +1247,30 @@ class DataCloudWorker(GatewayWorker):
                 return {"status": "waiting"}
 
             if not is_agent_delegate:
+                # 🆕 从 snapshot 中提取最终的 AI 回复
+                final_message = None
+                if snapshot and snapshot.values:
+                    messages = snapshot.values.get("messages", [])
+                    if messages:
+                        # 获取最后一条 AIMessage
+                        for msg in reversed(messages):
+                            if isinstance(msg, AIMessage) and msg.content:
+                                final_message = msg.content
+                                break
+
+                # 如果有最终回复，发送给前端
+                if final_message:
+                    logger.info(
+                        "_stream_graph: sending final AI message session=%s content_length=%d",
+                        context.session_id,
+                        len(final_message),
+                    )
+                    await context.emit_chunk(
+                        StreamChunkEvent(content=final_message),
+                        event_type=EventType.ANSWER_DELTA.value,  # 🆕 使用 ANSWER_DELTA
+                        content_type=SseMessageType.text.value,
+                    )
+
                 await context.emit_chunk(
                     StreamChunkEvent(
                         content="回答完成",
