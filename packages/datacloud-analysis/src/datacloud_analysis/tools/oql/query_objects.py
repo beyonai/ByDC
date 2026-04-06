@@ -12,7 +12,7 @@ import logging
 import os
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
@@ -61,16 +61,29 @@ def _write_export_file(
     return file_id
 
 
+def _parse_json_param(param: Any) -> Any:
+    """解析可能是 JSON 字符串的参数。
+
+    LLM 有时会将列表/字典参数序列化为 JSON 字符串，需要反序列化。
+    """
+    if isinstance(param, str):
+        try:
+            return json.loads(param)
+        except (json.JSONDecodeError, ValueError):
+            return param
+    return param
+
+
 @tool
 def query_objects(
     object_type: str,
-    select: Optional[list[str]] = None,
-    where: Optional[list[dict[str, Any]]] = None,
-    include_links: Optional[list[dict[str, Any]]] = None,
-    metrics: Optional[list[dict[str, Any]]] = None,
-    group_by: Optional[list[dict[str, Any]]] = None,
-    having: Optional[list[dict[str, Any]]] = None,
-    order_by: Optional[list[dict[str, str]]] = None,
+    select: Optional[Union[list[str], str]] = None,
+    where: Optional[Union[list[dict[str, Any]], str]] = None,
+    include_links: Optional[Union[list[dict[str, Any]], str]] = None,
+    metrics: Optional[Union[list[dict[str, Any]], str]] = None,
+    group_by: Optional[Union[list[dict[str, Any]], str]] = None,
+    having: Optional[Union[list[dict[str, Any]], str]] = None,
+    order_by: Optional[Union[list[dict[str, str]], str]] = None,
     limit: int = 100,
     offset: int = 0,
     config: RunnableConfig = None,
@@ -169,6 +182,15 @@ def query_objects(
             )
     """
     try:
+        # 解析可能被序列化为 JSON 字符串的参数
+        select = _parse_json_param(select)
+        where = _parse_json_param(where)
+        include_links = _parse_json_param(include_links)
+        metrics = _parse_json_param(metrics)
+        group_by = _parse_json_param(group_by)
+        having = _parse_json_param(having)
+        order_by = _parse_json_param(order_by)
+
         # 构建 OQL 参数（内部 key 与 router SDK 保持一致）
         oql_params: dict[str, Any] = {
             "object": object_type,
