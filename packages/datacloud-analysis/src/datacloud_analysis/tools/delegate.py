@@ -106,6 +106,7 @@ class DelegateToAgentTool(InterruptibleTool):
             or kwargs.get("question")
             or kwargs.get("query")
             or kwargs.get("description")
+            or kwargs.get("kwargs", {}).get("content")
             or ""
         ).strip()
         return resolved or f"Please handle request related to {self.agent_name}."
