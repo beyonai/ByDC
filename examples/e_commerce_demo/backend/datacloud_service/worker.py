@@ -1220,21 +1220,14 @@ class DataCloudWorker(GatewayWorker):
                     prompt,
                 )
                 if interrupt_reason == "AGENT_DELEGATE_WAIT":
-                    # 从 interrupt value 里取出 call_agent 参数，由 worker 负责发起委托
-                    # 这样避免 tool 里调 call_agent，防止 LangGraph 恢复时重复调用
-                    call_agent_kwargs = {}
-                    if isinstance(interrupt_value, dict):
-                        call_agent_kwargs = dict(interrupt_value.get("call_agent_kwargs") or {})
+                    # call_agent 已由 DelegateToAgentTool 基类（InterruptibleTool）在工具内部调用，
+                    # worker 无需再处理，直接静默等待子 Agent 的 ResumeCommand 回调。
                     logger.info(
-                        "_stream_graph: delegate wait interrupt stays internal session=%s "
-                        "checkpoint_id=%s todo_active_id=%s pending_capability=%s",
+                        "_stream_graph: delegate wait interrupt, waiting for child agent resume "
+                        "session=%s checkpoint_id=%s",
                         context.session_id,
                         checkpoint_id,
-                        todo_active_id,
-                        pending_capability,
                     )
-                    if call_agent_kwargs:
-                        await context.call_agent(**call_agent_kwargs)
                     return {"status": "waiting"}
                 await context.ask_user(
                     AskUserEvent(
@@ -1265,19 +1258,17 @@ class DataCloudWorker(GatewayWorker):
                 logger.info("_stream_graph: return session=%s status=waiting", context.session_id)
                 return {"status": "waiting"}
 
-            if not is_agent_delegate:
-                # 🆕 从 snapshot 中提取最终的 AI 回复
-                final_message = None
-                if snapshot and snapshot.values:
-                    messages = snapshot.values.get("messages", [])
-                    if messages:
-                        # 获取最后一条 AIMessage
-                        for msg in reversed(messages):
-                            if isinstance(msg, AIMessage) and msg.content:
-                                final_message = msg.content
-                                break
+            # 从 snapshot 中提取最终的 AI 回复
+            final_message = None
+            if snapshot and snapshot.values:
+                messages = snapshot.values.get("messages", [])
+                for msg in reversed(messages):
+                    if isinstance(msg, AIMessage) and msg.content:
+                        final_message = msg.content
+                        break
 
-                # 如果有最终回复，发送给前端
+            if not is_agent_delegate:
+                # 普通模式：直接向前端推流
                 if final_message:
                     logger.info(
                         "_stream_graph: sending final AI message session=%s content_length=%d",
@@ -1286,7 +1277,7 @@ class DataCloudWorker(GatewayWorker):
                     )
                     await context.emit_chunk(
                         StreamChunkEvent(content=final_message),
-                        event_type=EventType.ANSWER_DELTA.value,  # 🆕 使用 ANSWER_DELTA
+                        event_type=EventType.ANSWER_DELTA.value,
                         content_type=SseMessageType.text.value,
                     )
 
@@ -1303,10 +1294,12 @@ class DataCloudWorker(GatewayWorker):
 
             await context.flush_to_history()
             logger.info(
-                "_stream_graph: return session=%s status=done (flush_to_history ok)",
+                "_stream_graph: return session=%s status=done conclusion_len=%d",
                 context.session_id,
+                len(final_message) if final_message else 0,
             )
-            return {"status": "done"}
+            # conclusion 始终携带，父 Agent 恢复时可以从 reply_data 里取到结论文本
+            return {"status": "done", "conclusion": final_message or ""}
         finally:
             heartbeat_stop.set()
             heartbeat_task.cancel()
