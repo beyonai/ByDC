@@ -47,7 +47,7 @@
       "env": {
         "PYTHONPATH": "${workspaceFolder}/packages/datacloud-data/src;${workspaceFolder}/packages/datacloud-knowledge/src;${workspaceFolder}"
       },
-      "envFile": "${workspaceFolder}/packages/datacloud-data/.env",
+      "envFile": "${workspaceFolder}/../byclaw-all/byclaw-data/.env",
       "console": "integratedTerminal",
       "justMyCode": false
     }
