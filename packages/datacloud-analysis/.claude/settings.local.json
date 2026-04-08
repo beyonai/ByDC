@@ -38,7 +38,10 @@
       "WebFetch(domain:langchain-ai.github.io)",
       "Bash(grep -E \"\\\\.py$\")",
       "WebSearch",
-      "WebFetch(domain:blog.langchain.com)"
+      "WebFetch(domain:blog.langchain.com)",
+      "Bash(find:*)",
+      "Bash(cp:*)",
+      "Read(//tmp/**)"
     ]
   }
 }
