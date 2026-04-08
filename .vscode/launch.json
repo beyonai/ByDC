@@ -16,34 +16,17 @@
       "justMyCode": false
     },
     // ---------------------------------------------------------------
-    // sales-analysis-agent — 超级分析智能体（主入口）
-    // 使用 langgraph dev 启动，env vars 从同目录的 .env 文件加载
-    // （langgraph.json 中已声明 "env": ".env"）
-    // 访问地址：http://127.0.0.1:2024
+    // byclaw-data — Gateway Worker（跨目录启动）
+    // 依赖：先在 byclaw-data 根目录执行 `uv sync`
     // ---------------------------------------------------------------
     {
-      "name": "Sales Analysis Agent (langgraph dev)",
+      "name": "byclaw-data-worker",
       "type": "debugpy",
       "request": "launch",
-      "module": "langgraph_cli",
-      "args": ["dev", "--host", "127.0.0.1", "--port", "2024", "--no-reload", "--no-browser", "--allow-blocking"],
-      "cwd": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend",
-      // envFile 让 VSCode 在启动进程前也加载 .env，与 langgraph dev 的读取保持一致
-      "envFile": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend/.env",
-      "env": {},
-      "justMyCode": false
-    },
-    // ---------------------------------------------------------------
-    // sales-analysis-agent — 仅热重载（不带调试器，启动更快）
-    // ---------------------------------------------------------------
-    {
-      "name": "Sales Analysis Agent (langgraph dev, no-reload)",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "langgraph_cli",
-      "args": ["dev", "--host", "127.0.0.1", "--port", "2024", "--no-reload", "--no-browser", "--allow-blocking"],
-      "cwd": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend",
-      "envFile": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend/.env",
+      "python": "${workspaceFolder}/../byclaw-all/byclaw-data/.venv/Scripts/python.exe",
+      "program": "${workspaceFolder}/../byclaw-all/byclaw-data/src/byclaw_data/main.py",
+      "cwd": "${workspaceFolder}/../byclaw-all/byclaw-data",
+      "envFile": "${workspaceFolder}/../byclaw-all/byclaw-data/.env",
       "env": {},
       "justMyCode": false
     }
