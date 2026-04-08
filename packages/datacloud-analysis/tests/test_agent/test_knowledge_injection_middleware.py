@@ -14,6 +14,7 @@ def _make_request(system_content: str = "", messages=None) -> ModelRequest:
     req = Mock(spec=ModelRequest)
     req.system_message = SystemMessage(content=system_content) if system_content else None
     req.messages = messages or []
+    req.state = {}
     req.override = lambda **kw: Mock(
         system_message=kw.get("system_message", req.system_message),
         messages=req.messages,
@@ -34,6 +35,23 @@ class TestKnowledgeInjectionMiddleware:
         """测试不提供额外工具"""
         middleware = KnowledgeInjectionMiddleware()
         assert middleware.tools == []
+
+    @pytest.mark.asyncio
+    async def test_skips_schema_injection_when_not_unified_interface(self, monkeypatch):
+        """非 unified_interface 时不注入，直接透传 handler。"""
+        monkeypatch.setenv("ONTOLOGY_LOAD_MODE", "mcp")
+        middleware = KnowledgeInjectionMiddleware(mounted_objects=["obj_a"])
+        request = _make_request("你是一个助手", [HumanMessage(content="查询客户")])
+        called = []
+
+        async def mock_handler(req):
+            called.append(req)
+            return "ok"
+
+        result = await middleware.awrap_model_call(request, mock_handler)
+        assert result == "ok"
+        assert len(called) == 1
+        assert called[0] is request
 
     @pytest.mark.asyncio
     async def test_retrieve_schema_success(self):
