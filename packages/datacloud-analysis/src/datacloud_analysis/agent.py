@@ -165,6 +165,7 @@ def _create_deep_agent(
     from deepagents import create_deep_agent  # noqa: PLC0415
 
     from datacloud_analysis.backend import create_datacloud_backend  # noqa: PLC0415
+    from datacloud_analysis.config.env import Settings  # noqa: PLC0415
     from datacloud_analysis.context import DatacloudContext  # noqa: PLC0415
     from datacloud_analysis.middlewares import (  # noqa: PLC0415
         DatacloudOutputMiddleware,
@@ -173,15 +174,39 @@ def _create_deep_agent(
         WorkspaceInitMiddleware,
     )
     from datacloud_analysis.subagents import CODE_EXECUTOR_SUBAGENT  # noqa: PLC0415
-    from datacloud_analysis.tools.registry import register_all_tools  # noqa: PLC0415
+    from datacloud_analysis.tools.ontology_loader import create_ontology_loader  # noqa: PLC0415
 
     logger.info("create_agent: Using Deep Agents SDK (locale=%s)", locale)
 
-    # Register OQL tools (emit_result injected by DatacloudOutputMiddleware)
-    all_tools = register_all_tools()
+    # 🆕 根据环境变量选择本体加载模式
+    try:
+        settings = Settings()
+        ontology_config = settings.ontology
+        load_mode = ontology_config.load_mode if ontology_config else "unified_interface"
+        mcp_endpoint = ontology_config.mcp_endpoint if ontology_config else ""
+        scene_path = ontology_config.scene_path if ontology_config else ""
+        auto_register = ontology_config.auto_register if ontology_config else True
+    except Exception as e:
+        logger.warning("create_agent: failed to load ontology settings: %s, using defaults", e)
+        load_mode = "unified_interface"
+        mcp_endpoint = ""
+        scene_path = ""
+        auto_register = True
+
+    logger.info("create_agent: ontology load_mode=%s", load_mode)
+
+    # 使用本体加载器加载工具
+    ontology_loader = create_ontology_loader(
+        load_mode=load_mode,
+        mcp_endpoint=mcp_endpoint,
+        scene_path=scene_path,
+        auto_register=auto_register,
+    )
+    all_tools = ontology_loader.load_tools(mounted_objects=mounted_objects)
+
     if tools:
         # 阶段2后，tools 仅包含 other_tools (AGENT/FUNCTION等类型)
-        # OBJECT/VIEW 类型通过 mounted_objects 传递给 KnowledgeInjectionMiddleware
+        # OBJECT/VIEW 类型通过 mounted_objects 传递给本体加载器
         all_tools.extend(tools.values())
 
     # Build system prompt: default + custom + task_prompt
@@ -198,8 +223,29 @@ def _create_deep_agent(
     backend = create_datacloud_backend(workspace_dir)
 
     # Built-in skills directory (SKILL.md 格式，随包发布)
-    builtin_skills_dir = str(pathlib.Path(__file__).parent / "skills" / "builtin")
-    skill_sources = [builtin_skills_dir]
+    # 优先级：1. 工作目录内的skills/builtin  2. 包内的skills/builtin
+    skill_sources = []
+    workspace_path = pathlib.Path(workspace_dir).resolve()
+
+    # 优先尝试工作目录内的技能
+    workspace_skills_dir = workspace_path / "skills" / "builtin"
+    if workspace_skills_dir.exists() and workspace_skills_dir.is_dir():
+        skill_sources = [str(workspace_skills_dir)]
+        logger.info("create_agent: using skills from workspace: %s", workspace_skills_dir)
+    else:
+        # 回退到包内技能（仅当在工作目录内时）
+        builtin_skills_dir = pathlib.Path(__file__).parent / "skills" / "builtin"
+        try:
+            builtin_path = builtin_skills_dir.resolve()
+            # 尝试计算相对路径，如果成功说明在工作目录内
+            builtin_path.relative_to(workspace_path)
+            skill_sources = [str(builtin_skills_dir)]
+            logger.info("create_agent: using builtin skills from package: %s", builtin_skills_dir)
+        except (ValueError, OSError):
+            # 技能目录不在工作目录内，跳过
+            logger.info(
+                "create_agent: no skills directory found (checked workspace and package)"
+            )
 
     # Middleware stack (自定义中间件追加在 SDK 内置栈之后)
     logger.info(
