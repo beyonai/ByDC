@@ -250,6 +250,29 @@ class ExecutionSettings(BaseSettings):
     react_max_rounds: int = Field(default=10, description="Maximum ReAct loop rounds")
 
 
+class OntologySettings(BaseSettings):
+    """Ontology loading mode settings."""
+
+    model_config = SettingsConfigDict(env_prefix="ONTOLOGY_", extra="ignore")
+
+    load_mode: str = Field(
+        default="unified_interface",
+        description="Ontology loading mode: mcp | dynamic_tool | unified_interface",
+    )
+    mcp_endpoint: str = Field(
+        default="",
+        description="MCP service endpoint (for mcp mode), e.g. http://localhost:8080/api/v1/mcp/",
+    )
+    scene_path: str = Field(
+        default="",
+        description="OWL scene directory path (for dynamic_tool mode)",
+    )
+    auto_register: bool = Field(
+        default=True,
+        description="Auto-register tools on startup (for dynamic_tool mode)",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Aggregate Settings — single object for the whole SDK
 # ---------------------------------------------------------------------------
@@ -291,6 +314,7 @@ class Settings(BaseSettings):
     gateway: GatewaySettings | None = Field(default=None)
     ai_factory: AIFactorySettings | None = Field(default=None)
     execution: ExecutionSettings | None = Field(default=None)
+    ontology: OntologySettings | None = Field(default=None)
 
     @model_validator(mode="after")
     def _load_llm_roles(self) -> "Settings":
@@ -334,6 +358,11 @@ class Settings(BaseSettings):
 
         try:
             object.__setattr__(self, "execution", ExecutionSettings())
+        except Exception:  # noqa: BLE001
+            pass
+
+        try:
+            object.__setattr__(self, "ontology", OntologySettings())
         except Exception:  # noqa: BLE001
             pass
 

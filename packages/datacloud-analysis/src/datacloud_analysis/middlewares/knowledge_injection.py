@@ -1,12 +1,14 @@
 """
 知识注入中间件
 
-在每次模型调用前（每个问题时）注入本体 Schema。
+在 ``ONTOLOGY_LOAD_MODE=unified_interface`` 时，于每次模型调用前注入本体 Schema。
+MCP / dynamic_tool 模式下由工具与 MCP 侧承载本体能力，此处不注入。
 """
 
 from __future__ import annotations
 from typing import Any, Callable, Awaitable
 import logging
+import os
 
 from langchain_core.messages import HumanMessage
 from langchain.agents.middleware.types import AgentMiddleware, ModelRequest
@@ -19,7 +21,8 @@ class KnowledgeInjectionMiddleware(AgentMiddleware):
     """
     知识注入中间件
 
-    在每次 LLM 调用时（每个问题）注入本体 Schema，支持未来精细化过滤。
+    仅在 unified_interface 模式下注入：与 ``datacloud_analysis.config.env.OntologySettings``
+    的默认 ``load_mode`` 一致；未设置 ``ONTOLOGY_LOAD_MODE`` 时视为 unified_interface。
     使用 LangGraph state 去重，避免重复注入。
     """
 
@@ -38,7 +41,16 @@ class KnowledgeInjectionMiddleware(AgentMiddleware):
         request: ModelRequest,
         handler: Callable[[ModelRequest], Awaitable[Any]],
     ) -> Any:
-        """在 LLM 调用前注入本体 Schema。"""
+    
+        """在 LLM 调用前注入本体 Schema（仅 unified_interface 模式）。"""
+        load_mode = (os.environ.get("ONTOLOGY_LOAD_MODE", "") or "").strip() or "unified_interface"
+        if load_mode != "unified_interface":
+            logger.info(
+                "KnowledgeInjectionMiddleware: skipping schema injection (load_mode=%s)",
+                load_mode,
+            )
+            return await handler(request)
+
         logger.info(
             "KnowledgeInjectionMiddleware.awrap_model_call: START mounted_objects=%s",
             self.mounted_objects

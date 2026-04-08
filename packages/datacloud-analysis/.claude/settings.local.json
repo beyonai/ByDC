@@ -41,7 +41,23 @@
       "WebFetch(domain:blog.langchain.com)",
       "Bash(find:*)",
       "Bash(cp:*)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(.venv/Scripts/python.exe -c \"import langchain_mcp_adapters; print\\('langchain_mcp_adapters available'\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"import mcp; print\\('mcp version:', mcp.__version__\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"from langchain_mcp_adapters.tools import load_mcp_tools; print\\('load_mcp_tools OK'\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"import mcp; print\\(dir\\(mcp\\)\\)\")",
+      "Bash(.venv/Scripts/pip.exe show:*)",
+      "Bash(.venv/Scripts/python.exe -c \"import langgraph; print\\(langgraph.__version__\\)\")",
+      "Bash(.venv/Scripts/pip.exe index:*)",
+      "WebFetch(domain:pypi.org)",
+      "Bash(\"D:/data/code/baiying/by-datacloud/.venv/Scripts/pip.exe\" index:*)",
+      "Bash(/d/data/code/baiying/by-datacloud/.venv/Scripts/pip3.exe index:*)",
+      "Bash(where uv:*)",
+      "Bash(uv --version)",
+      "Bash(uv add:*)",
+      "Bash(uv pip:*)",
+      "Bash(/d/data/code/baiying/byclaw-all/byclaw-data/.venv/Scripts/python.exe:*)",
+      "Bash(python:*)"
     ]
   }
 }
