@@ -29,6 +29,27 @@
       "envFile": "${workspaceFolder}/../byclaw-all/byclaw-data/.env",
       "env": {},
       "justMyCode": false
+    },
+    {
+      "name": "启动 Data Service 亦庄",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "datacloud_data_service.api.routes:create_app",
+        "--factory",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8080"
+      ],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/packages/datacloud-data/src;${workspaceFolder}/packages/datacloud-knowledge/src;${workspaceFolder}"
+      },
+      "envFile": "${workspaceFolder}/packages/datacloud-data/.env",
+      "console": "integratedTerminal",
+      "justMyCode": false
     }
   ]
 }
