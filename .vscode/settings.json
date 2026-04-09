@@ -1,11 +1,11 @@
 {
-  "python.defaultInterpreterPath": "/Users/zouhaitian/miniconda3/envs/dc_datacloud_service/bin/python",
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": false,
-  "python.testing.cwd": "${workspaceFolder}/packages/datacloud-data",
+  "python.testing.cwd": "${workspaceFolder}",
   "python.testing.pytestArgs": [
     "tests",
     "-v"
   ],
-"python.envFile": "${workspaceFolder}/packages/datacloud-data/.env"
+  "python.envFile": "${workspaceFolder}/.vscode/.env.test"
 }

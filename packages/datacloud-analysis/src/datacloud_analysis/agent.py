@@ -24,6 +24,101 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ============================================================
+# 内置系统提示词（固定部分，用户不可覆盖）
+# ============================================================
+
+_BUILTIN_SYSTEM_PROMPT_ZH = """
+## 输出规则
+
+使用 `emit_result` 工具输出最终结果：
+- 完成分析或任务后，调用 `emit_result` 工具向用户展示最终结果
+- 纯文本回复不能替代 `emit_result`，最终答案必须通过工具输出
+
+## 任务追踪
+
+使用 `todo` 工具管理多步骤任务：
+- 当任务需要多个步骤时，先用 `todo` 分解任务，逐步执行并更新状态
+- 简单的单步查询无需创建 todo 记录
+
+## 文件读写规则
+
+- 所有文件操作须限定在工作空间目录内
+- 使用框架提供的文件工具进行读写，不要访问工作空间目录以外的路径
+
+## 数据完整性
+
+- 严禁编造数据，所有数据必须来自工具调用的真实返回结果
+- 若查询无结果，如实告知用户，不要凭空补充数据
+"""
+
+_BUILTIN_SYSTEM_PROMPT_EN = """
+## Output Rules
+
+Use `emit_result` tool to output final results:
+- After completing analysis or tasks, call `emit_result` to present the final result to the user
+- Plain text replies cannot replace `emit_result`; final answers must be delivered through the tool
+
+## Task Tracking
+
+Use `todo` tool for multi-step task management:
+- When tasks require multiple steps, use `todo` to break down tasks, execute step by step, and update status
+- Simple single-step queries do not require a todo record
+
+## File I/O Rules
+
+- All file operations must be confined to the workspace directory
+- Use the framework's file tools for reading/writing; do not access paths outside the workspace
+
+## Data Integrity
+
+- Never fabricate data; all data must come from real tool call results
+- If a query returns no results, inform the user truthfully without adding made-up data
+"""
+
+
+def _build_system_prompt(
+    agent_name: str,
+    agent_desc: str,
+    core_persona: str,
+    locale: str,
+) -> str:
+    """Build the full system prompt: user-configurable identity + built-in logic.
+
+    Args:
+        agent_name: Agent display name (from resourceName)
+        agent_desc: Agent description (from resourceDesc)
+        core_persona: Core persona / behavior guidelines (from corePersonaDefinition)
+        locale: Locale string, e.g. "zh_CN"
+
+    Returns:
+        Complete system prompt string
+    """
+    if locale == "zh_CN":
+        parts: list[str] = []
+        if agent_name:
+            parts.append(f"你是 **{agent_name}**。")
+        else:
+            parts.append("你是 DataCloud Agent，一个专业的数据分析助手。")
+        if agent_desc:
+            parts.append(f"\n## 角色描述\n\n{agent_desc}")
+        if core_persona:
+            parts.append(f"\n## 人格定义\n\n{core_persona}")
+        parts.append(_BUILTIN_SYSTEM_PROMPT_ZH)
+        return "".join(parts)
+    else:
+        parts_en: list[str] = []
+        if agent_name:
+            parts_en.append(f"You are **{agent_name}**.")
+        else:
+            parts_en.append("You are DataCloud Agent, a professional data analysis assistant.")
+        if agent_desc:
+            parts_en.append(f"\n## Role Description\n\n{agent_desc}")
+        if core_persona:
+            parts_en.append(f"\n## Persona Definition\n\n{core_persona}")
+        parts_en.append(_BUILTIN_SYSTEM_PROMPT_EN)
+        return "".join(parts_en)
+
 
 def create_agent(
     *,
@@ -104,17 +199,24 @@ def create_agent(
         )
         resolved_locale = "zh_CN"
 
-    # 优先级: prompts_overwrite['system_prompt'] > system_prompt > default
-    final_system_prompt = system_prompt
-    task_prompt = None
+    # 优先级: prompts_overwrite > system_prompt 参数 > 空字符串
+    # agent_name: 数字员工名称（resourceName）
+    # agent_desc: 角色描述（resourceDesc / system_prompt 参数）
+    # core_persona: 人格定义（corePersonaDefinition / task_prompt）
+    agent_name = ""
+    agent_desc = system_prompt or ""
+    core_persona = ""
 
     if prompts_overwrite:
+        if "agent_name" in prompts_overwrite:
+            agent_name = prompts_overwrite["agent_name"] or ""
+            logger.info("create_agent: using agent_name from prompts_overwrite")
         if "system_prompt" in prompts_overwrite:
-            final_system_prompt = prompts_overwrite["system_prompt"]
-            logger.info("create_agent: using system_prompt from prompts_overwrite")
+            agent_desc = prompts_overwrite["system_prompt"] or ""
+            logger.info("create_agent: using agent_desc (system_prompt) from prompts_overwrite")
         if "task_prompt" in prompts_overwrite:
-            task_prompt = prompts_overwrite["task_prompt"]
-            logger.info("create_agent: using task_prompt from prompts_overwrite")
+            core_persona = prompts_overwrite["task_prompt"] or ""
+            logger.info("create_agent: using core_persona (task_prompt) from prompts_overwrite")
 
     return _create_deep_agent(
         model=model,
@@ -122,10 +224,11 @@ def create_agent(
         base_url=base_url,
         temperature=temperature,
         locale=resolved_locale,
-        system_prompt=final_system_prompt,  # 传递解析后的 system_prompt
-        task_prompt=task_prompt,  # 新增参数
+        agent_name=agent_name,
+        agent_desc=agent_desc,
+        core_persona=core_persona,
         tools=tools,
-        mounted_objects=mounted_objects,  # 🆕 阶段2传递挂载对象
+        mounted_objects=mounted_objects,
     )
 
 
@@ -136,10 +239,11 @@ def _create_deep_agent(
     base_url: str | None = None,
     temperature: float = 0.7,
     locale: str = "zh_CN",
-    system_prompt: str | None = None,
-    task_prompt: str | None = None,  # 新增
+    agent_name: str = "",
+    agent_desc: str = "",
+    core_persona: str = "",
     tools: dict[str, Any] | None = None,
-    mounted_objects: list[str] | None = None,  # 🆕 阶段2新增参数
+    mounted_objects: list[str] | None = None,
 ) -> Any:
     """Create agent using Deep Agents SDK.
 
@@ -149,8 +253,9 @@ def _create_deep_agent(
         base_url: Base URL
         temperature: Temperature
         locale: Locale
-        system_prompt: System prompt (优先使用此参数)
-        task_prompt: Additional task guidance (追加到 system_prompt)
+        agent_name: Agent display name (from resourceName)
+        agent_desc: Agent description (from resourceDesc)
+        core_persona: Core persona / behavior guidelines (from corePersonaDefinition)
         tools: Additional tools (阶段2后为 other_tools，不包含 OBJECT/VIEW)
         mounted_objects: 挂载的对象/视图列表（🆕 阶段2新增）
 
@@ -165,6 +270,7 @@ def _create_deep_agent(
     from deepagents import create_deep_agent  # noqa: PLC0415
 
     from datacloud_analysis.backend import create_datacloud_backend  # noqa: PLC0415
+    from datacloud_analysis.config.env import Settings  # noqa: PLC0415
     from datacloud_analysis.context import DatacloudContext  # noqa: PLC0415
     from datacloud_analysis.middlewares import (  # noqa: PLC0415
         DatacloudOutputMiddleware,
@@ -173,23 +279,53 @@ def _create_deep_agent(
         WorkspaceInitMiddleware,
     )
     from datacloud_analysis.subagents import CODE_EXECUTOR_SUBAGENT  # noqa: PLC0415
-    from datacloud_analysis.tools.registry import register_all_tools  # noqa: PLC0415
+    from datacloud_analysis.tools.ontology_loader import create_ontology_loader  # noqa: PLC0415
 
     logger.info("create_agent: Using Deep Agents SDK (locale=%s)", locale)
 
-    # Register OQL tools (emit_result injected by DatacloudOutputMiddleware)
-    all_tools = register_all_tools()
+    # 🆕 根据环境变量选择本体加载模式
+    try:
+        settings = Settings()
+        ontology_config = settings.ontology
+        load_mode = ontology_config.load_mode if ontology_config else "unified_interface"
+        mcp_endpoint = ontology_config.mcp_endpoint if ontology_config else ""
+        scene_path = ontology_config.scene_path if ontology_config else ""
+        auto_register = ontology_config.auto_register if ontology_config else True
+    except Exception as e:
+        logger.warning("create_agent: failed to load ontology settings: %s, using defaults", e)
+        load_mode = "unified_interface"
+        mcp_endpoint = ""
+        scene_path = ""
+        auto_register = True
+
+    logger.info("create_agent: ontology load_mode=%s", load_mode)
+
+    # 使用本体加载器加载工具
+    ontology_loader = create_ontology_loader(
+        load_mode=load_mode,
+        mcp_endpoint=mcp_endpoint,
+        scene_path=scene_path,
+        auto_register=auto_register,
+    )
+    all_tools = ontology_loader.load_tools(mounted_objects=mounted_objects)
+
     if tools:
         # 阶段2后，tools 仅包含 other_tools (AGENT/FUNCTION等类型)
-        # OBJECT/VIEW 类型通过 mounted_objects 传递给 KnowledgeInjectionMiddleware
+        # OBJECT/VIEW 类型通过 mounted_objects 传递给本体加载器
         all_tools.extend(tools.values())
 
-    # Build system prompt: default + custom + task_prompt
-    final_system_prompt = system_prompt or _build_default_system_prompt(locale)
-
-    if task_prompt:
-        final_system_prompt = f"{final_system_prompt}\n\n# 任务处理指导\n{task_prompt}"
-        logger.info("create_agent: appended task_prompt to system_prompt")
+    # Build system prompt: user-configurable identity + built-in logic
+    final_system_prompt = _build_system_prompt(
+        agent_name=agent_name,
+        agent_desc=agent_desc,
+        core_persona=core_persona,
+        locale=locale,
+    )
+    logger.info(
+        "create_agent: built system_prompt <%d chars> (agent_name=%r)",
+        len(final_system_prompt),
+        agent_name,
+    )
 
     # Workspace dir for backend
     workspace_dir = os.getcwd()
@@ -198,8 +334,29 @@ def _create_deep_agent(
     backend = create_datacloud_backend(workspace_dir)
 
     # Built-in skills directory (SKILL.md 格式，随包发布)
-    builtin_skills_dir = str(pathlib.Path(__file__).parent / "skills" / "builtin")
-    skill_sources = [builtin_skills_dir]
+    # 优先级：1. 工作目录内的skills/builtin  2. 包内的skills/builtin
+    skill_sources = []
+    workspace_path = pathlib.Path(workspace_dir).resolve()
+
+    # 优先尝试工作目录内的技能
+    workspace_skills_dir = workspace_path / "skills" / "builtin"
+    if workspace_skills_dir.exists() and workspace_skills_dir.is_dir():
+        skill_sources = [str(workspace_skills_dir)]
+        logger.info("create_agent: using skills from workspace: %s", workspace_skills_dir)
+    else:
+        # 回退到包内技能（仅当在工作目录内时）
+        builtin_skills_dir = pathlib.Path(__file__).parent / "skills" / "builtin"
+        try:
+            builtin_path = builtin_skills_dir.resolve()
+            # 尝试计算相对路径，如果成功说明在工作目录内
+            builtin_path.relative_to(workspace_path)
+            skill_sources = [str(builtin_skills_dir)]
+            logger.info("create_agent: using builtin skills from package: %s", builtin_skills_dir)
+        except (ValueError, OSError):
+            # 技能目录不在工作目录内，跳过
+            logger.info(
+                "create_agent: no skills directory found (checked workspace and package)"
+            )
 
     # Middleware stack (自定义中间件追加在 SDK 内置栈之后)
     logger.info(
@@ -212,7 +369,7 @@ def _create_deep_agent(
         DatacloudOutputMiddleware(),
         WorkspaceInitMiddleware(
             workspace_dir=workspace_dir,
-            agent_name="DataCloud Agent",
+            agent_name=agent_name or "DataCloud Agent",
         ),
     ]
     logger.info("create_agent: middlewares initialized count=%d", len(middlewares))
@@ -267,35 +424,5 @@ def _create_deep_agent(
     return compiled
 
 
-def _build_default_system_prompt(locale: str) -> str:
-    """Build default system prompt."""
-    if locale == "zh_CN":
-        return """你是 DataCloud Agent，一个专业的数据分析助手。
 
-你的职责：
-1. 理解用户的数据分析需求
-2. 使用 query_objects 工具查询本体对象数据
-3. 使用 execute_action 工具执行业务动作
-4. 提供清晰、准确的分析结果
 
-重要规则：
-- 所有数据查询必须通过 query_objects 工具
-- 所有写操作必须通过 execute_action 工具
-- 不要编造数据，只使用工具返回的真实数据
-- 使用 emit_result 工具输出最终结果
-"""
-    else:
-        return """You are DataCloud Agent, a professional data analysis assistant.
-
-Your responsibilities:
-1. Understand user's data analysis requirements
-2. Use query_objects tool to query ontology object data
-3. Use execute_action tool to execute business actions
-4. Provide clear and accurate analysis results
-
-Important rules:
-- All data queries must go through query_objects tool
-- All write operations must go through execute_action tool
-- Don't fabricate data, only use real data returned by tools
-- Use emit_result tool to output final results
-"""

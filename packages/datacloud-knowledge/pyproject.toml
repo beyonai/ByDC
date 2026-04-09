@@ -135,3 +135,4 @@ asyncio_mode = "auto"
 markers = [
     "db_integration: requires reachable PostgreSQL/openGauss database",
 ]
+

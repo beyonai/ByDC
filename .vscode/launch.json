@@ -1,25 +1,33 @@
 {
   "version": "0.2.0",
   "configurations": [
+    // ---------------------------------------------------------------
+    // e_commerce_demo — DataCloud Gateway Worker
+    // 依赖：先在仓库根目录执行 `uv sync --group dev`
+    // ---------------------------------------------------------------
     {
-      "name": "启动 Data Service",
+      "name": "DataCloud Worker (e_commerce_demo)",
       "type": "debugpy",
       "request": "launch",
-      "module": "uvicorn",
-      "args": [
-        "datacloud_data_service.api.routes:create_app",
-        "--factory",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8080"
-      ],
-      "cwd": "${workspaceFolder}/examples/sales_analysis_demo/backend",
-      "env": {
-        "PYTHONPATH": "${workspaceFolder}/packages/datacloud-data/src:${workspaceFolder}"
-      },
-      "envFile": "${workspaceFolder}/datacloud-data-service/.env",
-      "console": "integratedTerminal",
+      "program": "${workspaceFolder}/examples/e_commerce_demo/backend/datacloud_service/main.py",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/examples/e_commerce_demo/backend/.env",
+      "env": {},
+      "justMyCode": false
+    },
+    // ---------------------------------------------------------------
+    // byclaw-data — Gateway Worker（跨目录启动）
+    // 依赖：先在 byclaw-data 根目录执行 `uv sync`
+    // ---------------------------------------------------------------
+    {
+      "name": "byclaw-data-worker",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/../byclaw-all/byclaw-data/.venv/Scripts/python.exe",
+      "program": "${workspaceFolder}/../byclaw-all/byclaw-data/src/byclaw_data/main.py",
+      "cwd": "${workspaceFolder}/../byclaw-all/byclaw-data",
+      "envFile": "${workspaceFolder}/../byclaw-all/byclaw-data/.env",
+      "env": {},
       "justMyCode": false
     },
     {
@@ -35,121 +43,12 @@
         "--port",
         "8080"
       ],
-      "cwd": "${workspaceFolder}/packages/datacloud-data/src/datacloud_data_service",
-      "env": {
-        "PYTHONPATH": "${workspaceFolder}/packages/datacloud-data/src:${workspaceFolder}/packages/datacloud-knowledge/src:${workspaceFolder}"
-      },
-      "envFile": "${workspaceFolder}/packages/datacloud-data/.env",
-      "console": "integratedTerminal",
-      "justMyCode": false
-    },
-    {
-      "name": "启动 datacloud-mock",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "uvicorn",
-      "args": [
-        "sales_analysis_demo.main:app",
-        "--reload",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8001"
-      ],
-      "cwd": "${workspaceFolder}/examples/sales_analysis_demo/mock_env",
-      "env": {
-        "PYTHONPATH": "${workspaceFolder}/examples/sales_analysis_demo/mock_env/src"
-      },
-      "envFile": "${workspaceFolder}/datacloud-mock/.env",
-      "console": "integratedTerminal",
-      "justMyCode": false
-    }, {
-      "name": "DataCloud Worker (e_commerce_demo)",
-      "type": "debugpy",
-      "request": "launch",
-      "env": {
-        "PYTHONPATH": "${workspaceFolder}/packages/datacloud-data/src:${workspaceFolder}/packages/datacloud-knowledge/src:${workspaceFolder}/examples/e_commerce_demo/backend:${workspaceFolder}/packages/datacloud-analysis/src"
-      },
-      "program": "${workspaceFolder}/examples/e_commerce_demo/backend/datacloud_service/main.py",
-      "cwd": "${workspaceFolder}",
-      "envFile": "${workspaceFolder}/examples/e_commerce_demo/backend/.env",
-      "justMyCode": false
-    },
-    {
-      "name": "e_commerce_demo Workspace API",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "uvicorn",
-      "args": [
-        "datacloud_service.workspace_api:app",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8081"
-      ],
-      "cwd": "${workspaceFolder}/examples/e_commerce_demo/backend",
-      "env": {
-        "PYTHONPATH": "${workspaceFolder}/packages/datacloud-data/src:${workspaceFolder}/packages/datacloud-knowledge/src:${workspaceFolder}/examples/e_commerce_demo/backend"
-      },
-      "envFile": "${workspaceFolder}/examples/e_commerce_demo/backend/.env",
-      "console": "integratedTerminal",
-      "justMyCode": false
-    },
-    // ---------------------------------------------------------------
-    // sales-analysis-agent — 超级分析智能体（主入口）
-    // 使用 langgraph dev 启动，env vars 从同目录的 .env 文件加载
-    // （langgraph.json 中已声明 "env": ".env"）
-    // 访问地址：http://127.0.0.1:2024
-    // ---------------------------------------------------------------
-    {
-      "name": "Sales Analysis Agent (langgraph dev)",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "langgraph_cli",
-      "args": ["dev", "--host", "127.0.0.1", "--port", "2024", "--no-reload", "--no-browser", "--allow-blocking"],
-      "cwd": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend",
-      // envFile 让 VSCode 在启动进程前也加载 .env，与 langgraph dev 的读取保持一致
-      "envFile": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend/.env",
-      "env": {},
-      "justMyCode": false
-    },
-    // ---------------------------------------------------------------
-    // sales-analysis-agent — 仅热重载（不带调试器，启动更快）
-    // ---------------------------------------------------------------
-    {
-      "name": "Sales Analysis Agent (langgraph dev, no-reload)",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "langgraph_cli",
-      "args": ["dev", "--host", "127.0.0.1", "--port", "2024", "--no-reload", "--no-browser", "--allow-blocking"],
-      "cwd": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend",
-      "envFile": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend/.env",
-      "env": {},
-      "justMyCode": false
-    },
-    {
-      "name": "Python: 运行当前文件",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${file}",
-      "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "env": {
-        "PYTHONPATH": "${workspaceFolder}/packages/datacloud-data/src:${workspaceFolder}"
+        "PYTHONPATH": "${workspaceFolder}/packages/datacloud-data/src;${workspaceFolder}/packages/datacloud-knowledge/src;${workspaceFolder}"
       },
-      "justMyCode": false
-    },
-    {
-      "name": "Debug datacloud-data test_sdk.py",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/packages/datacloud-data/tests/datacloud_data/test_sdk.py",
+      "envFile": "${workspaceFolder}/../byclaw-all/byclaw-data/.env",
       "console": "integratedTerminal",
-      "cwd": "${workspaceFolder}/packages/datacloud-data",
-      "envFile": "${workspaceFolder}/packages/datacloud-data/.env",
-      "env": {
-        "PYTHONPATH": "${workspaceFolder}/packages/datacloud-data/src:${workspaceFolder}"
-      },
       "justMyCode": false
     }
   ]

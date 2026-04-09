@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "DataCloud Data Service & SDK - 本体驱动的数据查询与执行框架"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 authors = [
     { name = "Whale DataCloud Team" }
 ]
@@ -17,7 +17,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
 ]
 
 [project.urls]
