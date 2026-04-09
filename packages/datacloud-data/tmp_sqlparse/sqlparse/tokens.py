@@ -16,11 +16,11 @@ class _TokenType(tuple):
     parent = None
 
     def __contains__(self, item):
-        return item is not None and (self is item or item[:len(self)] == self)
+        return item is not None and (self is item or item[: len(self)] == self)
 
     def __getattr__(self, name):
         # don't mess with dunder
-        if name.startswith('__'):
+        if name.startswith("__"):
             return super().__getattr__(self, name)
         new = _TokenType(self + (name,))
         setattr(self, name, new)
@@ -29,7 +29,7 @@ class _TokenType(tuple):
 
     def __repr__(self):
         # self can be False only if its the `root` i.e. Token itself
-        return 'Token' + ('.' if self else '') + '.'.join(self)
+        return "Token" + ("." if self else "") + ".".join(self)
 
 
 Token = _TokenType()

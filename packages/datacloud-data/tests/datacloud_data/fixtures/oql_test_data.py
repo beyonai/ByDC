@@ -12,6 +12,7 @@ from typing import Any, Optional
 @dataclass
 class MockField:
     """Mock 字段"""
+
     field_code: str
     field_name: str
     data_type: str
@@ -23,6 +24,7 @@ class MockField:
 @dataclass
 class MockRelation:
     """Mock 关系"""
+
     relation_code: str
     target_class: str
     join_keys: dict = field(default_factory=dict)
@@ -31,6 +33,7 @@ class MockRelation:
 @dataclass
 class MockAction:
     """Mock 动作"""
+
     action_code: str
     action_name: str
     params: list = field(default_factory=list)
@@ -39,6 +42,7 @@ class MockAction:
 @dataclass
 class MockClass:
     """Mock 本体类"""
+
     object_code: str
     object_name: str
     source_type: str  # "DB" or "API"
@@ -75,7 +79,7 @@ class MockRegistry:
             ],
             relations=[
                 MockRelation("crew", "Crew", {"crew_id": "crew_id"}),
-            ]
+            ],
         )
         self.classes["Flight"] = flight_cls
 
@@ -94,7 +98,7 @@ class MockRegistry:
             ],
             relations=[
                 MockRelation("manual", "Manual", {"manual_id": "manual_id"}),
-            ]
+            ],
         )
         self.classes["Crew"] = crew_cls
 
@@ -112,7 +116,7 @@ class MockRegistry:
             ],
             actions=[
                 MockAction("query", "查询", []),
-            ]
+            ],
         )
         self.classes["Manual"] = manual_cls
 
@@ -138,6 +142,7 @@ class MockDatasourceRegistry:
 @dataclass
 class MockDatasource:
     """Mock 数据源"""
+
     alias: str
     db_type: str
 

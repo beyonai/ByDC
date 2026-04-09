@@ -15,6 +15,7 @@ class TestStage3QueryObjectsUnification:
 
         # 验证函数签名包含 object_type 参数
         import inspect
+
         sig = inspect.signature(query_objects.func)
         params = list(sig.parameters.keys())
 
@@ -26,6 +27,7 @@ class TestStage3QueryObjectsUnification:
         from datacloud_analysis.tools.oql.query_objects import query_objects
 
         import inspect
+
         sig = inspect.signature(query_objects.func)
         object_type_param = sig.parameters["object_type"]
 
@@ -115,9 +117,7 @@ class TestStage3UnifiedBehavior:
 
         # Mock router
         mock_router_instance = Mock()
-        mock_router_instance.route.return_value = [
-            {"id": "1", "name": "测试数据"}
-        ]
+        mock_router_instance.route.return_value = [{"id": "1", "name": "测试数据"}]
         mock_router.return_value = mock_router_instance
 
         mock_resolver.return_value = Mock()

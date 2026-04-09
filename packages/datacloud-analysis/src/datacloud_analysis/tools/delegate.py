@@ -139,9 +139,7 @@ class DelegateToAgentTool(InterruptibleTool):
         )
 
         parent_agent_id = str(
-            current_extra_payload.get("agent_id")
-            or current_header_metadata.get("agent_id")
-            or ""
+            current_extra_payload.get("agent_id") or current_header_metadata.get("agent_id") or ""
         ).strip()
         parent_agent_name = str(
             current_extra_payload.get("agent_name")
@@ -239,4 +237,3 @@ def build_delegate_tool(
         target_agent_type=target_agent_type,
         agent_name=agent_name,
     )
-

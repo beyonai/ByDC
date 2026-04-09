@@ -1,4 +1,5 @@
 """Pytest configuration. Ensures sqlparse is available for tests."""
+
 from __future__ import annotations
 
 import sys
@@ -49,15 +50,9 @@ async def scenario_db_linked_with_data(load_scenario_db_linked: OntologyLoader):
     loader = load_scenario_db_linked
     ds_manager = DataSourceManager(loader._config.datasource_configs)
     connector = ds_manager.get_connector("test_db")
-    await connector.execute(
-        "CREATE TABLE customer (id INTEGER, name TEXT, customer_id TEXT)"
-    )
-    await connector.execute(
-        "CREATE TABLE opportunity (id INTEGER, amount REAL, customer_id TEXT)"
-    )
-    await connector.execute(
-        "INSERT INTO customer VALUES (1, 'c1', 'c1'), (2, 'c2', 'c2')"
-    )
+    await connector.execute("CREATE TABLE customer (id INTEGER, name TEXT, customer_id TEXT)")
+    await connector.execute("CREATE TABLE opportunity (id INTEGER, amount REAL, customer_id TEXT)")
+    await connector.execute("INSERT INTO customer VALUES (1, 'c1', 'c1'), (2, 'c2', 'c2')")
     await connector.execute(
         "INSERT INTO opportunity VALUES (1, 100, 'c1'), (2, 200, 'c1'), (3, 150, 'c2')"
     )

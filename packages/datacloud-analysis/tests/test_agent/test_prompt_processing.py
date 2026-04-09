@@ -26,7 +26,9 @@ class TestPromptProcessing:
         assert "# 任务处理指导" in final_system_prompt
         assert task_prompt in final_system_prompt
         # 验证顺序
-        assert final_system_prompt.index(system_prompt) < final_system_prompt.index("# 任务处理指导")
+        assert final_system_prompt.index(system_prompt) < final_system_prompt.index(
+            "# 任务处理指导"
+        )
         assert final_system_prompt.index("# 任务处理指导") < final_system_prompt.index(task_prompt)
 
     def test_without_task_prompt(self):
@@ -52,9 +54,7 @@ class TestPromptProcessing:
 
         # 模拟 create_agent 中的逻辑
         system_prompt_param = direct_system
-        prompts_overwrite = {
-            "system_prompt": overwrite_system
-        }
+        prompts_overwrite = {"system_prompt": overwrite_system}
 
         # 优先级处理
         final_system_prompt = system_prompt_param
@@ -72,10 +72,7 @@ class TestPromptProcessing:
 
     def test_extract_both_from_prompts_overwrite(self):
         """测试从 prompts_overwrite 提取 system_prompt 和 task_prompt"""
-        prompts_overwrite = {
-            "system_prompt": "我是数字员工",
-            "task_prompt": "请遵循原则"
-        }
+        prompts_overwrite = {"system_prompt": "我是数字员工", "task_prompt": "请遵循原则"}
 
         # 模拟逻辑
         final_system_prompt = None
@@ -107,7 +104,7 @@ class TestPromptProcessing:
         # Step 1: create_agent 处理 prompts_overwrite
         prompts_overwrite = {
             "system_prompt": "我是亦庄产业大脑数字员工",
-            "task_prompt": "请根据以下原则来处理问题。\n# 单一技能优先原则：..."
+            "task_prompt": "请根据以下原则来处理问题。\n# 单一技能优先原则：...",
         }
 
         system_prompt_param = "这个会被覆盖"

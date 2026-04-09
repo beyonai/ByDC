@@ -16,9 +16,10 @@ class TestToolRegistry:
 
     def test_register_oql_tools(self):
         """测试注册 OQL 工具"""
-        with patch("datacloud_analysis.tools.oql.query_objects") as mock_qo, \
-             patch("datacloud_analysis.tools.oql.execute_action") as mock_ea:
-
+        with (
+            patch("datacloud_analysis.tools.oql.query_objects") as mock_qo,
+            patch("datacloud_analysis.tools.oql.execute_action") as mock_ea,
+        ):
             mock_qo.name = "query_objects"
             mock_ea.name = "execute_action"
 

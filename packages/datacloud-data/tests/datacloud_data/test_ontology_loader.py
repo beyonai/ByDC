@@ -361,27 +361,53 @@ def test_load_from_content_parses_property_kind_and_relation_resolve() -> None:
     """load_from_content 能解析 property_kind、derived_config、relation_ref、resolve_action_code、resolve_param_binding。"""
     content = {
         "functions": [],
-        "objects": [{
-            "object_code": "test_obj",
-            "object_name": "测试对象",
-            "source_type": "DB",
-            "fields": [
-                {"field_code": "amount", "field_name": "金额", "field_type": "NUMBER", "source_column": "amount"},
-                {"field_code": "discount_amount", "field_name": "折后金额", "field_type": "NUMBER",
-                 "property_kind": "derived", "derived_config": {"mode": "expression", "expression": "amount * 0.9", "depends_on": ["amount"]}},
-                {"field_code": "opportunities", "field_name": "商机列表", "field_type": "ARRAY",
-                 "property_kind": "linked", "relation_ref": "cust_opp"}
-            ],
-            "actions": []
-        }],
-        "relations": [{
-            "relation_code": "cust_opp",
-            "source_class": "test_obj",
-            "target_class": "opp",
-            "relation_type": "ONE_TO_MANY",
-            "resolve_action_code": "query_opp_by_cust",
-            "resolve_param_binding": {"source_field": "customer_id", "action_param": "customerId"}
-        }]
+        "objects": [
+            {
+                "object_code": "test_obj",
+                "object_name": "测试对象",
+                "source_type": "DB",
+                "fields": [
+                    {
+                        "field_code": "amount",
+                        "field_name": "金额",
+                        "field_type": "NUMBER",
+                        "source_column": "amount",
+                    },
+                    {
+                        "field_code": "discount_amount",
+                        "field_name": "折后金额",
+                        "field_type": "NUMBER",
+                        "property_kind": "derived",
+                        "derived_config": {
+                            "mode": "expression",
+                            "expression": "amount * 0.9",
+                            "depends_on": ["amount"],
+                        },
+                    },
+                    {
+                        "field_code": "opportunities",
+                        "field_name": "商机列表",
+                        "field_type": "ARRAY",
+                        "property_kind": "linked",
+                        "relation_ref": "cust_opp",
+                    },
+                ],
+                "actions": [],
+            }
+        ],
+        "relations": [
+            {
+                "relation_code": "cust_opp",
+                "source_class": "test_obj",
+                "target_class": "opp",
+                "relation_type": "ONE_TO_MANY",
+                "resolve_action_code": "query_opp_by_cust",
+                "resolve_param_binding": {
+                    "source_field": "customer_id",
+                    "action_param": "customerId",
+                },
+            }
+        ],
     }
     loader = OntologyLoader()
     loader.load_from_content(content)
@@ -406,19 +432,31 @@ def test_load_from_directory_loads_objects_and_functions(tmp_path: Path) -> None
     (tmp_path / "functions").mkdir()
     (tmp_path / "views").mkdir()
 
-    (tmp_path / "objects" / "obj_a.json").write_text(json.dumps({
-        "object_code": "obj_a",
-        "object_name": "对象A",
-        "source_type": "DB",
-        "fields": [],
-        "actions": [],
-    }, ensure_ascii=False), encoding="utf-8")
-    (tmp_path / "functions" / "fn_x.json").write_text(json.dumps({
-        "function_code": "fn_x",
-        "function_name": "函数X",
-        "function_type": "API",
-        "api_schema": {},
-    }, ensure_ascii=False), encoding="utf-8")
+    (tmp_path / "objects" / "obj_a.json").write_text(
+        json.dumps(
+            {
+                "object_code": "obj_a",
+                "object_name": "对象A",
+                "source_type": "DB",
+                "fields": [],
+                "actions": [],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "functions" / "fn_x.json").write_text(
+        json.dumps(
+            {
+                "function_code": "fn_x",
+                "function_name": "函数X",
+                "function_type": "API",
+                "api_schema": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
 
     loader = OntologyLoader()
     loader.load_from_path(tmp_path)

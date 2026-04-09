@@ -1,4 +1,4 @@
-﻿"""BM25 搜索实现。
+"""BM25 搜索实现。
 
 使用 PostgreSQL 的 tsvector + ts_rank_cd 实现 BM25 风格的全文搜索。
 术语名称使用单字分词，存储在 name_keywords 字段中。
@@ -185,4 +185,3 @@ def bm25_search_with_or(
         top_k=top_k,
         min_score=min_score,
     )
-

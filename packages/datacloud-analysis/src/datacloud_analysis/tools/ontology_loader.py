@@ -156,13 +156,17 @@ def create_ontology_loader(
 
     if load_mode == "mcp":
         if not mcp_endpoint:
-            logger.warning("create_ontology_loader: mcp mode requires mcp_endpoint, falling back to unified_interface")
+            logger.warning(
+                "create_ontology_loader: mcp mode requires mcp_endpoint, falling back to unified_interface"
+            )
             return UnifiedInterfaceLoader()
         return MCPLoader(mcp_endpoint=mcp_endpoint)
 
     elif load_mode == "dynamic_tool":
         if not scene_path:
-            logger.warning("create_ontology_loader: dynamic_tool mode requires scene_path, falling back to unified_interface")
+            logger.warning(
+                "create_ontology_loader: dynamic_tool mode requires scene_path, falling back to unified_interface"
+            )
             return UnifiedInterfaceLoader()
         return DynamicToolLoader(scene_path=scene_path, auto_register=auto_register)
 

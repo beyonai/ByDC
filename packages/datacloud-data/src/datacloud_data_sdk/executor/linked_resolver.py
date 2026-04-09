@@ -18,15 +18,19 @@ def _action_supports_batch(loader: OntologyLoader, source_class: str, action_cod
         return False
     if action.input_schema:
         props = action.input_schema.get("properties", {})
-        for p in (action.params or []):
+        for p in action.params or []:
             if p.direction not in ("IN", "INOUT"):
                 continue
-            schema_type = props.get(p.param_code, {}).get("type") if isinstance(props.get(p.param_code), dict) else None
+            schema_type = (
+                props.get(p.param_code, {}).get("type")
+                if isinstance(props.get(p.param_code), dict)
+                else None
+            )
             if schema_type == "array":
                 return True
             if (p.param_type or "").upper() in ("ARRAY", "LIST"):
                 return True
-    for p in (action.params or []):
+    for p in action.params or []:
         if p.direction in ("IN", "INOUT") and (p.param_type or "").upper() in ("ARRAY", "LIST"):
             return True
     return False
@@ -128,7 +132,9 @@ async def resolve_db_linked_batch(
     if target_cls.source_config and isinstance(target_cls.source_config, dict):
         db_type = target_cls.source_config.get("db_type", "SQLITE")
 
-    where_sql, params = build_where_clause({to_field: {"op": "in", "value": unique_values}}, field_to_col)
+    where_sql, params = build_where_clause(
+        {to_field: {"op": "in", "value": unique_values}}, field_to_col
+    )
     if not where_sql:
         return [[] for _ in parents]
 
@@ -136,7 +142,7 @@ async def resolve_db_linked_batch(
     _q = lambda x: f'"{x}"' if db_type.upper() in _dq else f"`{x}`"
     cols = [f.source_column or f.field_code for f in target_cls.fields]
     select_list = ", ".join(_q(c) for c in cols)
-    sql = f'SELECT {select_list} FROM {_q(table_name)} WHERE {where_sql}'
+    sql = f"SELECT {select_list} FROM {_q(table_name)} WHERE {where_sql}"
 
     rows = await connector.execute(sql, params)
 

@@ -9,8 +9,10 @@ from unittest.mock import Mock
 try:
     from unittest.mock import AsyncMock
 except ImportError:
+
     class AsyncMock(Mock):
         """简单的 AsyncMock 实现（Python 3.7 兼容）"""
+
         async def __call__(self, *args, **kwargs):
             return super().__call__(*args, **kwargs)
 
@@ -21,6 +23,7 @@ class TestStage4CoreLogic:
     @pytest.mark.asyncio
     async def test_tool_call_logging_basic_flow(self):
         """测试工具调用日志的基本流程"""
+
         # 模拟 awrap_tool_call 的核心逻辑
         async def mock_awrap_tool_call(request, handler, gateway_context):
             """模拟工具调用包装逻辑"""
@@ -32,11 +35,7 @@ class TestStage4CoreLogic:
             tool_args = request.get("args", {})
 
             # 记录调用信息
-            call_log = {
-                "tool_name": tool_name,
-                "args": tool_args,
-                "steps": []
-            }
+            call_log = {"tool_name": tool_name, "args": tool_args, "steps": []}
 
             # 层级1：工具名称
             call_log["steps"].append(f"调用工具: {tool_name}")
@@ -69,6 +68,7 @@ class TestStage4CoreLogic:
 
     def test_is_agent_delegate_detection(self):
         """测试 AGENT 类型工具检测逻辑"""
+
         # 模拟检测逻辑
         def is_agent_delegate(tool):
             """检查工具是否是 AGENT 类型"""
@@ -151,10 +151,7 @@ class TestStage4CoreLogic:
                 return str(result)[:500]
 
         # 成功结果
-        result1 = {
-            "status": "success",
-            "result": {"records": [{"id": "1"}, {"id": "2"}]}
-        }
+        result1 = {"status": "success", "result": {"records": [{"id": "1"}, {"id": "2"}]}}
         formatted1 = format_result(result1)
         assert "success" in formatted1
         assert "2" in formatted1
@@ -166,6 +163,7 @@ class TestStage4CoreLogic:
 
     def test_get_gateway_context_logic(self):
         """测试获取 gateway_context 逻辑"""
+
         def get_gateway_context(request):
             """从 request 中获取 gateway_context"""
             try:
@@ -175,9 +173,7 @@ class TestStage4CoreLogic:
 
         # Mock request with gateway_context
         mock_request1 = Mock()
-        mock_request1.runtime.config = {
-            "configurable": {"gateway_context": "context_obj"}
-        }
+        mock_request1.runtime.config = {"configurable": {"gateway_context": "context_obj"}}
         assert get_gateway_context(mock_request1) == "context_obj"
 
         # Mock request without gateway_context
@@ -192,6 +188,7 @@ class TestStage4CoreLogic:
 
     def test_new_message_id_logic(self):
         """测试 message_id 生成逻辑"""
+
         def new_message_id(gateway_context):
             """生成新的 message_id"""
             generate_message_id = getattr(gateway_context, "generate_message_id", None)
@@ -306,6 +303,7 @@ class TestStage4EmitChildThink:
     @pytest.mark.asyncio
     async def test_emit_child_think_logic(self):
         """测试推送子节点思考内容的逻辑"""
+
         # 模拟 emit_child_think 逻辑
         async def mock_emit_child_think(gateway_context, text):
             """推送子节点思考内容"""

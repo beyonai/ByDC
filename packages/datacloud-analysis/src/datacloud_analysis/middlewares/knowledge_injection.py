@@ -41,7 +41,6 @@ class KnowledgeInjectionMiddleware(AgentMiddleware):
         request: ModelRequest,
         handler: Callable[[ModelRequest], Awaitable[Any]],
     ) -> Any:
-
         """在 LLM 调用前注入本体 Schema（仅 unified_interface 模式）。"""
         load_mode = (os.environ.get("ONTOLOGY_LOAD_MODE", "") or "").strip() or "unified_interface"
         if load_mode != "unified_interface":
@@ -53,16 +52,13 @@ class KnowledgeInjectionMiddleware(AgentMiddleware):
 
         logger.info(
             "KnowledgeInjectionMiddleware.awrap_model_call: START mounted_objects=%s",
-            self.mounted_objects
+            self.mounted_objects,
         )
 
         # 去重检查：使用 request.state（而不是 request.runtime.state）
         state = request.state
         already_injected = state.get("_ontology_injected", False)
-        logger.info(
-            "KnowledgeInjectionMiddleware: already_injected=%s",
-            already_injected
-        )
+        logger.info("KnowledgeInjectionMiddleware: already_injected=%s", already_injected)
 
         if already_injected:
             # 已注入，跳过
@@ -79,31 +75,27 @@ class KnowledgeInjectionMiddleware(AgentMiddleware):
             user_query = self._extract_user_query(request)
             logger.info(
                 "KnowledgeInjectionMiddleware: extracted user_query=%s",
-                user_query[:100] if user_query else None
+                user_query[:100] if user_query else None,
             )
 
             # 2. 精细化过滤（根据用户问题筛选相关对象）
             #    TODO: 待罗彦卓实现，当前返回所有挂载对象
             relevant_objects = self._filter_relevant_objects(user_query, self.mounted_objects)
             logger.info(
-                "KnowledgeInjectionMiddleware: filtered relevant_objects=%s",
-                relevant_objects
+                "KnowledgeInjectionMiddleware: filtered relevant_objects=%s", relevant_objects
             )
 
             # 3. 构建 Schema
             ontology_schema = await self._build_ontology_schema(relevant_objects)
             logger.info(
                 "KnowledgeInjectionMiddleware: built schema length=%d",
-                len(ontology_schema) if ontology_schema else 0
+                len(ontology_schema) if ontology_schema else 0,
             )
 
             if ontology_schema:
                 # 4. 注入到 system_message
                 updated_request = request.override(
-                    system_message=append_to_system_message(
-                        request.system_message,
-                        ontology_schema
-                    )
+                    system_message=append_to_system_message(request.system_message, ontology_schema)
                 )
 
                 # 5. 标记已注入（写入 state）
@@ -112,7 +104,7 @@ class KnowledgeInjectionMiddleware(AgentMiddleware):
                 logger.info(
                     "KnowledgeInjectionMiddleware: injected %d objects: %s",
                     len(relevant_objects),
-                    relevant_objects
+                    relevant_objects,
                 )
 
                 # 6. 调用下一个 handler
@@ -121,7 +113,11 @@ class KnowledgeInjectionMiddleware(AgentMiddleware):
                 logger.warning("KnowledgeInjectionMiddleware: schema is empty, skipping injection")
 
         except Exception as exc:
-            logger.warning("KnowledgeInjectionMiddleware: Failed to inject ontology schema: %s", exc, exc_info=True)
+            logger.warning(
+                "KnowledgeInjectionMiddleware: Failed to inject ontology schema: %s",
+                exc,
+                exc_info=True,
+            )
 
         return await handler(request)
 
@@ -141,11 +137,7 @@ class KnowledgeInjectionMiddleware(AgentMiddleware):
         except Exception:
             return ""
 
-    def _filter_relevant_objects(
-        self,
-        user_query: str,
-        all_objects: list[str]
-    ) -> list[str]:
+    def _filter_relevant_objects(self, user_query: str, all_objects: list[str]) -> list[str]:
         """根据用户问题筛选相关对象（精细化过滤）。
 
         TODO: 待罗彦卓实现
@@ -195,7 +187,7 @@ class KnowledgeInjectionMiddleware(AgentMiddleware):
                 if scene_path and Path(scene_path).exists():
                     logger.info(
                         "KnowledgeInjectionMiddleware: loading ontology from scene_path=%s",
-                        scene_path
+                        scene_path,
                     )
                     ontology_loader.load_from_owl_directory(scene_path)
                 else:
@@ -210,7 +202,9 @@ class KnowledgeInjectionMiddleware(AgentMiddleware):
             schema_lines = ["<ontology_context>"]
             schema_lines.append("## 可用对象类型（object_type）\n")
             schema_lines.append("**重要说明**：要查询以下对象的数据，请使用 `query_objects` 工具。")
-            schema_lines.append("调用方式：`query_objects(object_type=\"对象编码\", oql_params={...})`\n")
+            schema_lines.append(
+                '调用方式：`query_objects(object_type="对象编码", oql_params={...})`\n'
+            )
 
             for idx, object_code in enumerate(object_codes[:10], 1):  # 最多10个对象
                 try:
@@ -218,11 +212,7 @@ class KnowledgeInjectionMiddleware(AgentMiddleware):
                     ontology_class = ontology_loader.get_ontology_class(object_code)
 
                     # 2. 格式化对象 Schema
-                    formatted = format_object_schema(
-                        ontology_class,
-                        all_relations,
-                        ontology_loader
-                    )
+                    formatted = format_object_schema(ontology_class, all_relations, ontology_loader)
                     schema_lines.append(formatted)
 
                     if idx < len(object_codes) and idx < 10:
@@ -280,9 +270,6 @@ class KnowledgeInjectionMiddleware(AgentMiddleware):
             if fixed_scene_dir.exists():
                 return str(fixed_scene_dir)
         except Exception as e:
-            logger.warning(
-                "KnowledgeInjectionMiddleware: failed to resolve scene path: %s",
-                e
-            )
+            logger.warning("KnowledgeInjectionMiddleware: failed to resolve scene path: %s", e)
 
         return ""

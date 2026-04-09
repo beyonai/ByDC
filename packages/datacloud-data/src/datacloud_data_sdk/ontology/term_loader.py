@@ -210,11 +210,13 @@ class ApiTermLoader(TermLoader):
         matches: list[dict[str, str]] = []
         for entry in self._sets.get(term_set, []):
             if value in (entry.code, entry.label, *entry.aliases):
-                matches.append({
-                    "code": entry.code,
-                    "label": entry.label,
-                    "aliases": entry.aliases,
-                })
+                matches.append(
+                    {
+                        "code": entry.code,
+                        "label": entry.label,
+                        "aliases": entry.aliases,
+                    }
+                )
         if len(matches) == 1:
             return matches[0]["code"]
         if len(matches) > 1:
@@ -225,11 +227,13 @@ class ApiTermLoader(TermLoader):
             api_matches: list[dict[str, str]] = []
             for entry in entries:
                 if value in (entry.code, entry.label, *entry.aliases):
-                    api_matches.append({
-                        "code": entry.code,
-                        "label": entry.label,
-                        "aliases": entry.aliases,
-                    })
+                    api_matches.append(
+                        {
+                            "code": entry.code,
+                            "label": entry.label,
+                            "aliases": entry.aliases,
+                        }
+                    )
             if len(api_matches) == 1:
                 return api_matches[0]["code"]
             if len(api_matches) > 1:
@@ -254,11 +258,13 @@ class ApiTermLoader(TermLoader):
             matches: list[dict[str, str]] = []
             for entry in self._sets.get(term_set, []):
                 if value in (entry.code, entry.label, *entry.aliases):
-                    matches.append({
-                        "code": entry.code,
-                        "label": entry.label,
-                        "aliases": entry.aliases,
-                    })
+                    matches.append(
+                        {
+                            "code": entry.code,
+                            "label": entry.label,
+                            "aliases": entry.aliases,
+                        }
+                    )
             if len(matches) == 1:
                 return matches[0]["label"]
             if len(matches) > 1:
@@ -269,11 +275,13 @@ class ApiTermLoader(TermLoader):
                 api_matches: list[dict[str, str]] = []
                 for entry in entries:
                     if value in (entry.code, entry.label, *entry.aliases):
-                        api_matches.append({
-                            "code": entry.code,
-                            "label": entry.label,
-                            "aliases": entry.aliases,
-                        })
+                        api_matches.append(
+                            {
+                                "code": entry.code,
+                                "label": entry.label,
+                                "aliases": entry.aliases,
+                            }
+                        )
                 if len(api_matches) == 1:
                     return api_matches[0]["label"]
                 if len(api_matches) > 1:
@@ -282,9 +290,7 @@ class ApiTermLoader(TermLoader):
                 term_set, dataset_id=dataset_id, term_type_code=term_type_code
             )
             raise TermNotFoundError(term_set, value, None, param_name, available_entries)
-        return self.resolve_code(
-            term_set, value, dataset_id, term_type_code, keyword, param_name
-        )
+        return self.resolve_code(term_set, value, dataset_id, term_type_code, keyword, param_name)
 
     def get_available_values(
         self,
@@ -371,11 +377,13 @@ class KbTermLoader(TermLoader):
                 syn = tags.get("synonyms", "")
                 if syn:
                     aliases = [s.strip() for s in str(syn).split(",") if s.strip()]
-            entries.append(TermEntry(
-                code=item.term_code,
-                label=item.term_name,
-                aliases=aliases,
-            ))
+            entries.append(
+                TermEntry(
+                    code=item.term_code,
+                    label=item.term_name,
+                    aliases=aliases,
+                )
+            )
         return entries
 
     def _get_cached_entries(self, term_type_code: str, keyword: str) -> list[TermEntry]:
@@ -408,11 +416,13 @@ class KbTermLoader(TermLoader):
         matches: list[dict[str, str]] = []
         for entry in cached:
             if value in (entry.code, entry.label, *entry.aliases):
-                matches.append({
-                    "code": entry.code,
-                    "label": entry.label,
-                    "aliases": entry.aliases,
-                })
+                matches.append(
+                    {
+                        "code": entry.code,
+                        "label": entry.label,
+                        "aliases": entry.aliases,
+                    }
+                )
         if len(matches) == 1:
             return matches[0]["code"]
         if len(matches) > 1:
@@ -438,20 +448,20 @@ class KbTermLoader(TermLoader):
             matches: list[dict[str, str]] = []
             for entry in cached:
                 if value in (entry.code, entry.label, *entry.aliases):
-                    matches.append({
-                        "code": entry.code,
-                        "label": entry.label,
-                        "aliases": entry.aliases,
-                    })
+                    matches.append(
+                        {
+                            "code": entry.code,
+                            "label": entry.label,
+                            "aliases": entry.aliases,
+                        }
+                    )
             if len(matches) == 1:
                 return matches[0]["label"]
             if len(matches) > 1:
                 raise TermAmbiguousError(term_set, value, matches, param_name)
             available_entries = self.get_entries(term_set, dataset_id, term_type_code, keyword)
             raise TermNotFoundError(term_set, value, None, param_name, available_entries)
-        return self.resolve_code(
-            term_set, value, dataset_id, term_type_code, keyword, param_name
-        )
+        return self.resolve_code(term_set, value, dataset_id, term_type_code, keyword, param_name)
 
     def get_available_values(
         self,

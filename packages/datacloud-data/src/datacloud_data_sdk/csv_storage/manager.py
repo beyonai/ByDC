@@ -115,14 +115,14 @@ class CsvStorageManager:
     ) -> tuple[str, Path]:
         """
         保存导出文件
-        
+
         将记录保存到导出目录，返回文件 ID 和路径。
-        
+
         Args:
             records: 记录列表
             columns: 列名列表（可选）
             meta: 元数据（可选）
-        
+
         Returns:
             tuple: (file_id, 文件路径)
         """
@@ -142,12 +142,12 @@ class CsvStorageManager:
     def get_export_path(self, file_id: str) -> Path | None:
         """
         获取导出文件路径
-        
+
         根据 file_id 获取导出文件路径，包含路径穿越防护校验。
-        
+
         Args:
             file_id: 文件 ID（UUID 格式）
-        
+
         Returns:
             Path | None: 文件路径，校验失败返回 None
         """
@@ -167,12 +167,12 @@ class CsvStorageManager:
     def get_export_meta(self, file_id: str) -> dict[str, Any] | None:
         """
         获取导出文件元数据
-        
+
         根据 file_id 获取导出文件的元数据信息。
-        
+
         Args:
             file_id: 文件 ID（UUID 格式）
-        
+
         Returns:
             dict | None: 元数据字典，不存在则返回 None
         """

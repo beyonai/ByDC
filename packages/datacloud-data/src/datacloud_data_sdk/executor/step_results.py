@@ -22,9 +22,9 @@ from dataclasses import dataclass
 class StepResult:
     """
     单步执行结果
-    
+
     存储单个执行步骤的结果信息，包括步骤标识和输出文件路径。
-    
+
     Attributes:
         step_id: 步骤唯一标识
         exec_key: 执行键，用于内部索引
@@ -32,7 +32,7 @@ class StepResult:
         csv_path: 结果 CSV 文件路径
         table_name: 表名，用于聚合时的表别名
     """
-    
+
     step_id: str
     exec_key: str
     output_ref: str = ""
@@ -43,19 +43,19 @@ class StepResult:
 class StepResults:
     """
     步骤结果集合
-    
+
     管理多个步骤的执行结果，支持添加、查询和导出。
-    
+
     Example:
         results = StepResults()
         results.add(StepResult("step_0", "exec_0", "output", "/tmp/data.csv"))
         path = results.get_path("output")
     """
-    
+
     def __init__(self, entries: list[StepResult] | None = None) -> None:
         """
         初始化步骤结果集合
-        
+
         Args:
             entries: 初始结果列表，可选
         """
@@ -64,7 +64,7 @@ class StepResults:
     def add(self, entry: StepResult) -> None:
         """
         添加步骤结果
-        
+
         Args:
             entry: 要添加的步骤结果
         """
@@ -83,12 +83,18 @@ class StepResults:
             str: CSV 文件路径，未找到返回空字符串
         """
         import logging
+
         logger = logging.getLogger(__name__)
 
         logger.debug("StepResults.get_path: looking for ref=%s", ref)
         for e in self._entries:
-            logger.debug("StepResults.get_path: checking entry step_id=%s output_ref=%s exec_key=%s csv_path=%s",
-                        e.step_id, e.output_ref, e.exec_key, e.csv_path)
+            logger.debug(
+                "StepResults.get_path: checking entry step_id=%s output_ref=%s exec_key=%s csv_path=%s",
+                e.step_id,
+                e.output_ref,
+                e.exec_key,
+                e.csv_path,
+            )
             if ref in (e.step_id, e.output_ref, e.exec_key):
                 logger.info("StepResults.get_path: found csv_path=%s for ref=%s", e.csv_path, ref)
                 return e.csv_path
@@ -100,13 +106,13 @@ class StepResults:
     ) -> list[tuple[str, str]]:
         """
         获取用于聚合的 CSV 条目列表
-        
+
         返回 (table_name, csv_path) 元组列表，按路径去重。
         可通过 csv_table_names 参数覆盖表名。
-        
+
         Args:
             csv_table_names: 表名覆盖映射，key 为 step_id
-        
+
         Returns:
             list[tuple[str, str]]: (表名, CSV路径) 元组列表
         """
@@ -124,10 +130,10 @@ class StepResults:
     def to_legacy_dict(self) -> dict[str, str]:
         """
         转换为旧版字典格式
-        
+
         将所有结果转换为 {ref: csv_path} 格式的字典，
         兼容旧版 API。
-        
+
         Returns:
             dict[str, str]: 引用到路径的映射字典
         """

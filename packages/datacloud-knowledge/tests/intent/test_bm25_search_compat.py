@@ -1,4 +1,4 @@
-﻿# ruff: noqa: S101
+# ruff: noqa: S101
 from __future__ import annotations
 
 from importlib import import_module
@@ -76,4 +76,3 @@ def test_bm25_search_rolls_back_session_on_error() -> None:
         bm25_search(session, "浼佷笟", top_k=3)
 
     assert session.rollback_called is True
-

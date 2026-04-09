@@ -26,11 +26,17 @@ class TestStage2ToolSeparation:
     def test_mounted_objects_passed_to_middleware(self, mock_human_msg):
         """测试 mounted_objects 传递给 KnowledgeInjectionMiddleware"""
         with patch("datacloud_analysis.agent.pathlib.Path") as mock_path:
-            with patch("datacloud_analysis.session.checkpointer.get_checkpointer") as mock_checkpointer:
+            with patch(
+                "datacloud_analysis.session.checkpointer.get_checkpointer"
+            ) as mock_checkpointer:
                 with patch("deepagents.create_deep_agent") as mock_create:
                     with patch("datacloud_analysis.backend.create_datacloud_backend"):
-                        with patch("datacloud_analysis.tools.registry.register_all_tools") as mock_reg:
-                            with patch("datacloud_analysis.middlewares.KnowledgeInjectionMiddleware") as mock_mid:
+                        with patch(
+                            "datacloud_analysis.tools.registry.register_all_tools"
+                        ) as mock_reg:
+                            with patch(
+                                "datacloud_analysis.middlewares.KnowledgeInjectionMiddleware"
+                            ) as mock_mid:
                                 mock_reg.return_value = []
                                 mock_checkpointer.return_value = Mock()
                                 mock_create.return_value = Mock()
@@ -43,10 +49,7 @@ class TestStage2ToolSeparation:
                                 from datacloud_analysis.agent import _create_deep_agent
 
                                 mounted_objects = ["company_bo", "order_bo"]
-                                _create_deep_agent(
-                                    mounted_objects=mounted_objects,
-                                    locale="zh_CN"
-                                )
+                                _create_deep_agent(mounted_objects=mounted_objects, locale="zh_CN")
 
                                 # 验证 KnowledgeInjectionMiddleware 被调用，并传入 mounted_objects
                                 mock_mid.assert_called_once_with(mounted_objects=mounted_objects)
@@ -170,7 +173,9 @@ class TestSchemaFormatter:
         mock_target = Mock()
         mock_target.object_name = "订单"
 
-        mock_loader.get_ontology_class = Mock(side_effect=lambda x: mock_source if x == "company_bo" else mock_target)
+        mock_loader.get_ontology_class = Mock(
+            side_effect=lambda x: mock_source if x == "company_bo" else mock_target
+        )
 
         result = filter_object_relations("company_bo", all_relations, mock_loader)
 
@@ -198,13 +203,13 @@ class TestToolTypeLogic:
             "agent_delegate": {
                 "tool_code": "delegate_agent",
                 "tool_attributes": {"type": "AGENT"},
-                "tool_func": lambda: "agent_call"
+                "tool_func": lambda: "agent_call",
             },
             "custom_function": {
                 "tool_code": "custom_func",
                 "tool_attributes": {"type": "FUNCTION"},
-                "tool_func": lambda: "custom_result"
-            }
+                "tool_func": lambda: "custom_result",
+            },
         }
 
         # 分离逻辑（模拟 worker.py 中的代码）

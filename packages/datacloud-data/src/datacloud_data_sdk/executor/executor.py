@@ -35,23 +35,23 @@ from datacloud_data_sdk.sql_executor.sql_executor import SqlExecutor
 class Executor:
     """
     统一任务执行器
-    
+
     协调多种类型的执行器，按顺序执行任务列表。
     支持步骤间的数据绑定，将结果统一输出为 CSV 格式。
-    
+
     Attributes:
         _sql: SQL 执行器
         _api: API 执行器
         _script: 脚本执行器
         _kb: 知识库执行器
         _csv_base_dir: CSV 文件存储目录
-    
+
     Example:
         executor = Executor(sql_executor=sql_exec)
         results = await executor.run([sql_task], "req_001")
         csv_path = results.get_path("step_0")
     """
-    
+
     def __init__(
         self,
         sql_executor: SqlExecutor | None = None,
@@ -62,7 +62,7 @@ class Executor:
     ) -> None:
         """
         初始化执行器
-        
+
         Args:
             sql_executor: SQL 执行器实例
             api_executor: API 执行器实例
@@ -104,25 +104,36 @@ class Executor:
         """
         import logging
         import asyncio
+
         logger = logging.getLogger(__name__)
 
         async def _run_tasks():
-            logger.info("Executor.run: starting with %d tasks, request_id=%s", len(tasks), request_id)
+            logger.info(
+                "Executor.run: starting with %d tasks, request_id=%s", len(tasks), request_id
+            )
             step_results = StepResults()
             for i, task in enumerate(tasks):
                 exec_key = f"step_{i}"
                 step_id = step_ids[i] if step_ids and i < len(step_ids) else exec_key
                 # tbl 用于标识输出表，优先使用 output_ref，否则使用 step_id
                 tbl = getattr(task, "output_ref", "") or step_id
-                logger.info("Executor.run: task %d: exec_key=%s step_id=%s output_ref=%s",
-                           i, exec_key, step_id, getattr(task, "output_ref", ""))
+                logger.info(
+                    "Executor.run: task %d: exec_key=%s step_id=%s output_ref=%s",
+                    i,
+                    exec_key,
+                    step_id,
+                    getattr(task, "output_ref", ""),
+                )
 
                 if isinstance(task, SqlExecTask):
                     if self._sql is None:
                         raise RuntimeError("SqlExecutor not configured")
                     result = await self._sql.execute(task, request_id, step_results)
-                    logger.info("Executor.run: SqlExecTask completed, csv_path=%s row_count=%s",
-                               result.csv_path, result.row_count)
+                    logger.info(
+                        "Executor.run: SqlExecTask completed, csv_path=%s row_count=%s",
+                        result.csv_path,
+                        result.row_count,
+                    )
                     step_results.add(
                         StepResult(step_id, exec_key, task.output_ref, result.csv_path, tbl)
                     )
@@ -139,25 +150,27 @@ class Executor:
                     script_result = await self._script.execute(
                         task.script, task.params, action_code=task.action_code
                     )
-                    records = script_result.get("records") if isinstance(script_result, dict) else None
+                    records = (
+                        script_result.get("records") if isinstance(script_result, dict) else None
+                    )
                     if isinstance(records, list) and records and isinstance(records[0], dict):
                         pass
                     else:
-                        records = [script_result] if isinstance(script_result, dict) else [{"value": str(script_result)}]
+                        records = (
+                            [script_result]
+                            if isinstance(script_result, dict)
+                            else [{"value": str(script_result)}]
+                        )
                     csv_mgr = CsvStorageManager(self._csv_base_dir)
                     out_path = csv_mgr.get_path(request_id, task.output_ref or step_id)
                     ResultConverter.to_csv(records, out_path)
                     csv_path = str(out_path)
-                    step_results.add(
-                        StepResult(step_id, exec_key, task.output_ref, csv_path, tbl)
-                    )
+                    step_results.add(StepResult(step_id, exec_key, task.output_ref, csv_path, tbl))
                 elif isinstance(task, KbExecTask):
                     if self._kb is None:
                         raise RuntimeError("KbExecutor not configured")
                     csv_path = await self._kb.execute(task, request_id, step_results)
-                    step_results.add(
-                        StepResult(step_id, exec_key, task.output_ref, csv_path, tbl)
-                    )
+                    step_results.add(StepResult(step_id, exec_key, task.output_ref, csv_path, tbl))
             return step_results
 
         # 如果指定了超时，使用 asyncio.wait_for

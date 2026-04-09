@@ -141,22 +141,16 @@ class LookupExecutor:
 
         # 过滤出物理字段（排除 derived/linked）
         physical_fields = [
-            f for f in cls.fields
+            f
+            for f in cls.fields
             if getattr(f, "property_kind", "physical") not in ("derived", "linked")
         ]
-        field_to_col = {
-            f.field_code: _resolve_source_column(f, alias)
-            for f in physical_fields
-        }
+        field_to_col = {f.field_code: _resolve_source_column(f, alias) for f in physical_fields}
         field_map = {f.field_code: f for f in cls.fields}
 
         # select 字段
         select_codes = arguments.get("select") or [f.field_code for f in physical_fields]
-        select_pairs = [
-            (fc, field_to_col[fc])
-            for fc in select_codes
-            if fc in field_to_col
-        ]
+        select_pairs = [(fc, field_to_col[fc]) for fc in select_codes if fc in field_to_col]
         if not select_pairs:
             select_pairs = [(f.field_code, col) for f.field_code, col in field_to_col.items()]
 
@@ -198,8 +192,7 @@ class LookupExecutor:
 
         col_keys = [fc for fc, _ in select_pairs]
         records = [
-            dict(zip(col_keys, row)) if isinstance(row, (list, tuple)) else row
-            for row in rows
+            dict(zip(col_keys, row)) if isinstance(row, (list, tuple)) else row for row in rows
         ]
 
         # meta.columns

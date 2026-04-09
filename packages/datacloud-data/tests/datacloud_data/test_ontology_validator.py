@@ -127,13 +127,22 @@ def test_valid_derived_and_linked_passes() -> None:
                 "object_name": "测试对象",
                 "source_type": "DB",
                 "fields": [
-                    {"field_code": "amount", "field_name": "金额", "field_type": "NUMBER", "source_column": "amount"},
+                    {
+                        "field_code": "amount",
+                        "field_name": "金额",
+                        "field_type": "NUMBER",
+                        "source_column": "amount",
+                    },
                     {
                         "field_code": "discount_amount",
                         "field_name": "折后金额",
                         "field_type": "NUMBER",
                         "property_kind": "derived",
-                        "derived_config": {"mode": "expression", "expression": "amount * 0.9", "depends_on": ["amount"]},
+                        "derived_config": {
+                            "mode": "expression",
+                            "expression": "amount * 0.9",
+                            "depends_on": ["amount"],
+                        },
                     },
                     {
                         "field_code": "opportunities",
@@ -180,11 +189,29 @@ def test_api_linked_with_resolve_action_code_passes() -> None:
                     },
                 ],
                 "actions": [
-                    {"action_code": "query_customers", "action_name": "查客户", "action_type": "query", "params": [], "function_refs": []},
-                    {"action_code": "query_opp_by_cust", "action_name": "按客户查商机", "action_type": "query", "params": [], "function_refs": []},
+                    {
+                        "action_code": "query_customers",
+                        "action_name": "查客户",
+                        "action_type": "query",
+                        "params": [],
+                        "function_refs": [],
+                    },
+                    {
+                        "action_code": "query_opp_by_cust",
+                        "action_name": "按客户查商机",
+                        "action_type": "query",
+                        "params": [],
+                        "function_refs": [],
+                    },
                 ],
             },
-            {"object_code": "sales_opportunity", "object_name": "商机", "source_type": "API", "fields": [], "actions": []},
+            {
+                "object_code": "sales_opportunity",
+                "object_name": "商机",
+                "source_type": "API",
+                "fields": [],
+                "actions": [],
+            },
         ],
         "relations": [
             {
@@ -193,7 +220,10 @@ def test_api_linked_with_resolve_action_code_passes() -> None:
                 "target_class": "sales_opportunity",
                 "relation_type": "ONE_TO_MANY",
                 "resolve_action_code": "query_opp_by_cust",
-                "resolve_param_binding": {"source_field": "customer_id", "action_param": "customerId"},
+                "resolve_param_binding": {
+                    "source_field": "customer_id",
+                    "action_param": "customerId",
+                },
             },
         ],
     }

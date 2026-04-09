@@ -83,9 +83,9 @@ class DataSourceManager:
         # 如果本地配置中没有，尝试从 fallback_loader 获取
         if config is None and self._fallback_loader is not None:
             try:
-                fallback_configs = getattr(self._fallback_loader, '_config', None)
+                fallback_configs = getattr(self._fallback_loader, "_config", None)
                 if fallback_configs is not None:
-                    datasource_configs = getattr(fallback_configs, 'datasource_configs', {})
+                    datasource_configs = getattr(fallback_configs, "datasource_configs", {})
                     config = datasource_configs.get(alias)
                     if config is not None:
                         # 缓存到本地配置中，避免重复查找
@@ -104,7 +104,7 @@ class DataSourceManager:
     async def close_all(self) -> None:
         """
         关闭所有连接器
-        
+
         清理所有缓存的连接器，释放数据库连接资源。
         """
         for conn in self._connectors.values():

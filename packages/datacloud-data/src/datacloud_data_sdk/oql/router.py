@@ -40,7 +40,7 @@ class OqlRouter:
         term_resolver,
         executor,
         datasource_registry,
-        request_id: str = None
+        request_id: str = None,
     ) -> list[dict]:
         """
         路由 OQL 请求到对应的执行策略。
@@ -61,6 +61,7 @@ class OqlRouter:
         # 生成 request_id（如果未提供）
         if request_id is None:
             import uuid
+
             request_id = uuid.uuid4().hex[:12]
 
         # 1. 类型判断：Pipeline vs 单步
@@ -77,15 +78,12 @@ class OqlRouter:
             return []
 
         # 2. 单步模式：判断执行策略
-        return await self.execute_single_step(oql_params, term_resolver, executor, datasource_registry, request_id)
+        return await self.execute_single_step(
+            oql_params, term_resolver, executor, datasource_registry, request_id
+        )
 
     async def execute_single_step(
-        self,
-        oql_params: dict,
-        term_resolver,
-        executor,
-        datasource_registry,
-        request_id: str
+        self, oql_params: dict, term_resolver, executor, datasource_registry, request_id: str
     ) -> list[dict]:
         """
         执行单个 OQL 步骤。
@@ -112,26 +110,31 @@ class OqlRouter:
             if oql_params.get("metrics"):
                 raise OQLError(
                     OQLErrorCode.OQL_ERR_UNSUPPORTED_OPERATION,
-                    f"API 对象 '{object_code}' 不支持 metrics 聚合"
+                    f"API 对象 '{object_code}' 不支持 metrics 聚合",
                 )
             if oql_params.get("include_links"):
                 raise OQLError(
                     OQLErrorCode.OQL_ERR_UNSUPPORTED_OPERATION,
-                    f"API 对象 '{object_code}' 不支持 include_links 关联"
+                    f"API 对象 '{object_code}' 不支持 include_links 关联",
                 )
 
         # 3. 路由判断：跨源 vs 单源
         include_links = oql_params.get("include_links", [])
         if include_links and cls.source_type == "DB":
             from datacloud_data_sdk.oql.cross_source_executor import classify_include_links
-            same_source, cross_source = classify_include_links(
-                include_links, cls, self.registry
-            )
+
+            same_source, cross_source = classify_include_links(include_links, cls, self.registry)
             if cross_source:
                 # 策略 B：跨源执行
                 logger.debug("OQL 路由：策略 B（跨源执行）")
                 return await self.cross_source_executor.execute(
-                    oql_params, cls, self.registry, term_resolver, executor, datasource_registry, request_id
+                    oql_params,
+                    cls,
+                    self.registry,
+                    term_resolver,
+                    executor,
+                    datasource_registry,
+                    request_id,
                 )
 
         # 策略 A：单源执行
@@ -147,6 +150,7 @@ class OqlRouter:
         logger.info("OqlRouter: csv_path=%s for ref=%s", csv_path, ref)
         if csv_path:
             from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
+
             result = ResultConverter.from_csv(csv_path)
             logger.info("OqlRouter: loaded %d records from CSV", len(result))
             return result
@@ -165,80 +169,55 @@ class OqlRouter:
         """
         # 必需字段
         if "object" not in oql_params:
-            raise OQLError(
-                OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
-                "缺少必需字段：object"
-            )
+            raise OQLError(OQLErrorCode.OQL_ERR_INVALID_OPERATOR, "缺少必需字段：object")
 
         # fields 校验
         if "fields" in oql_params:
             fields = oql_params["fields"]
             if not isinstance(fields, list):
-                raise OQLError(
-                    OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
-                    "fields 必须是数组"
-                )
+                raise OQLError(OQLErrorCode.OQL_ERR_INVALID_OPERATOR, "fields 必须是数组")
 
         # where 校验
         if "where" in oql_params:
             where = oql_params["where"]
             if not isinstance(where, list):
-                raise OQLError(
-                    OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
-                    "where 必须是数组"
-                )
+                raise OQLError(OQLErrorCode.OQL_ERR_INVALID_OPERATOR, "where 必须是数组")
 
         # include_links 校验
         if "include_links" in oql_params:
             include_links = oql_params["include_links"]
             if not isinstance(include_links, list):
-                raise OQLError(
-                    OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
-                    "include_links 必须是数组"
-                )
+                raise OQLError(OQLErrorCode.OQL_ERR_INVALID_OPERATOR, "include_links 必须是数组")
             for link in include_links:
                 if "path" not in link:
                     raise OQLError(
                         OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
-                        "include_links 中每个元素必须包含 path 字段"
+                        "include_links 中每个元素必须包含 path 字段",
                     )
 
         # metrics 校验
         if "metrics" in oql_params:
             metrics = oql_params["metrics"]
             if not isinstance(metrics, list):
-                raise OQLError(
-                    OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
-                    "metrics 必须是数组"
-                )
+                raise OQLError(OQLErrorCode.OQL_ERR_INVALID_OPERATOR, "metrics 必须是数组")
 
         # group_by 校验
         if "group_by" in oql_params:
             group_by = oql_params["group_by"]
             if not isinstance(group_by, list):
-                raise OQLError(
-                    OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
-                    "group_by 必须是数组"
-                )
+                raise OQLError(OQLErrorCode.OQL_ERR_INVALID_OPERATOR, "group_by 必须是数组")
 
         # limit 校验
         if "limit" in oql_params:
             limit = oql_params["limit"]
             if not isinstance(limit, int) or limit <= 0:
-                raise OQLError(
-                    OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
-                    "limit 必须是正整数"
-                )
+                raise OQLError(OQLErrorCode.OQL_ERR_INVALID_OPERATOR, "limit 必须是正整数")
 
         # offset 校验
         if "offset" in oql_params:
             offset = oql_params["offset"]
             if not isinstance(offset, int) or offset < 0:
-                raise OQLError(
-                    OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
-                    "offset 必须是非负整数"
-                )
-
+                raise OQLError(OQLErrorCode.OQL_ERR_INVALID_OPERATOR, "offset 必须是非负整数")
 
     def _get_db_type(self, cls: Any, datasource_registry) -> str:
         """获取数据库类型。"""
@@ -251,13 +230,9 @@ class OqlRouter:
 
         try:
             ds = datasource_registry.get(datasource_alias)
-            if ds is not None and hasattr(ds, 'db_type'):
+            if ds is not None and hasattr(ds, "db_type"):
                 return ds.db_type.upper()
         except Exception as e:
-            logger.warning(
-                "Failed to get datasource db_type for alias=%s: %s",
-                datasource_alias,
-                e
-            )
+            logger.warning("Failed to get datasource db_type for alias=%s: %s", datasource_alias, e)
 
         return "MYSQL"  # 默认

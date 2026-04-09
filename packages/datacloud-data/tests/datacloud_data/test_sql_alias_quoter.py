@@ -1,4 +1,5 @@
 """tests/datacloud_data_sdk/test_sql_alias_quoter.py"""
+
 import pytest
 from datacloud_data_sdk.sql_executor.sql_alias_quoter import quote_aliases
 

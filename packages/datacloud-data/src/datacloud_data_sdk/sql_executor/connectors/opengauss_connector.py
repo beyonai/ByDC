@@ -1,4 +1,5 @@
 """openGauss 连接器，基于 opengauss-sqlalchemy + asyncpg。"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -37,9 +38,7 @@ class OpenGaussConnector(BaseSourceConnector):
         try:
             from sqlalchemy.ext.asyncio import create_async_engine
         except ImportError as e:
-            raise ImportError(
-                "asyncpg not installed. Install with: pip install asyncpg"
-            ) from e
+            raise ImportError("asyncpg not installed. Install with: pip install asyncpg") from e
 
         try:
             import opengauss_sqlalchemy  # noqa: F401
@@ -72,9 +71,7 @@ class OpenGaussConnector(BaseSourceConnector):
     def supported_type(cls) -> str:
         return "OPENGAUSS"
 
-    async def execute(
-        self, sql: str, params: dict[str, Any] | None = None
-    ) -> list[dict[str, Any]]:
+    async def execute(self, sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         from sqlalchemy import text
 
         try:
@@ -84,9 +81,7 @@ class OpenGaussConnector(BaseSourceConnector):
                 columns = result.keys()
                 return [dict(zip(columns, row)) for row in rows]
         except Exception as e:
-            raise SqlExecutionError(
-                self.config.alias, sql, str(e)
-            ) from e
+            raise SqlExecutionError(self.config.alias, sql, str(e)) from e
 
     async def test_connection(self) -> bool:
         try:

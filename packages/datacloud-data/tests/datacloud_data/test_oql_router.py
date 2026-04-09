@@ -6,7 +6,9 @@ import pytest
 from datacloud_data_sdk.oql.router import OqlRouter
 from datacloud_data_sdk.oql import OQLError, OQLErrorCode
 from tests.datacloud_data.fixtures.oql_test_data import (
-    MockRegistry, MockTermResolver, MockDatasourceRegistry
+    MockRegistry,
+    MockTermResolver,
+    MockDatasourceRegistry,
 )
 
 
@@ -41,7 +43,7 @@ class TestOqlRouter:
             },
             term_resolver,
             executor,
-            datasource_registry
+            datasource_registry,
         )
 
         assert len(result) == 1
@@ -62,7 +64,7 @@ class TestOqlRouter:
             },
             term_resolver,
             executor,
-            datasource_registry
+            datasource_registry,
         )
 
         assert len(result) == 1
@@ -86,7 +88,7 @@ class TestOqlRouter:
                 },
                 term_resolver,
                 executor,
-                datasource_registry
+                datasource_registry,
             )
         assert exc_info.value.code == OQLErrorCode.OQL_ERR_UNSUPPORTED_OPERATION
 
@@ -108,7 +110,7 @@ class TestOqlRouter:
                 },
                 term_resolver,
                 executor,
-                datasource_registry
+                datasource_registry,
             )
         assert exc_info.value.code == OQLErrorCode.OQL_ERR_UNSUPPORTED_OPERATION
 
@@ -127,12 +129,12 @@ class TestOqlRouter:
                     "parameters": {
                         "object": "Flight",
                         "fields": ["flight_id"],
-                    }
+                    },
                 }
             ],
             term_resolver,
             executor,
-            datasource_registry
+            datasource_registry,
         )
 
         assert len(result) == 1
@@ -155,6 +157,6 @@ class TestOqlRouter:
                 },
                 term_resolver,
                 executor,
-                datasource_registry
+                datasource_registry,
             )
         assert exc_info.value.code == OQLErrorCode.OQL_ERR_UNKNOWN_OBJECT

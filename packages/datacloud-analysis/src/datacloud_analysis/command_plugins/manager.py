@@ -32,7 +32,9 @@ def _awaitable(value: Any) -> bool:
     return hasattr(value, "__await__")
 
 
-async def _invoke_handler(handler: CommandCallable, context: CommandExecutionContext) -> CommandResult:
+async def _invoke_handler(
+    handler: CommandCallable, context: CommandExecutionContext
+) -> CommandResult:
     try:
         result = handler(
             ext_params=context["ext_params"],
@@ -64,6 +66,7 @@ class CommandPluginManager:
 
         builtin = ExtCommandDispatcherPlugin()
         if builtin.enabled:
+
             def _builtin_handler(
                 *,
                 ext_params: dict[str, Any],
@@ -178,7 +181,9 @@ def _candidate_command_plugin_dirs() -> list[Path]:
 def _find_repo_root() -> Path | None:
     current = Path(__file__).resolve()
     for parent in current.parents:
-        marker = parent / "examples" / "e_commerce_demo" / "backend" / "datacloud_service" / "plugins"
+        marker = (
+            parent / "examples" / "e_commerce_demo" / "backend" / "datacloud_service" / "plugins"
+        )
         if marker.exists():
             return parent
     return None
@@ -216,9 +221,10 @@ def _load_one_extension_plugin(path: Path) -> _LoadedCommandPlugin | None:
         return None
 
     priority = int(getattr(plugin_obj, "priority", getattr(module, "PRIORITY", 500)))
-    plugin_id = str(
-        getattr(plugin_obj, "plugin_id", getattr(module, "PLUGIN_ID", path.stem))
-    ).strip() or path.stem
+    plugin_id = (
+        str(getattr(plugin_obj, "plugin_id", getattr(module, "PLUGIN_ID", path.stem))).strip()
+        or path.stem
+    )
     handler = _resolve_handler(plugin_obj)
     if handler is None:
         logger.warning("Command plugin ignored (no callable handler): %s", path)
@@ -236,6 +242,7 @@ def _resolve_handler(plugin_obj: Any) -> CommandCallable | None:
         return cast(CommandCallable, plugin_obj)
     handle = getattr(plugin_obj, "handle", None)
     if callable(handle):
+
         def _wrapped_handle(
             *,
             ext_params: dict[str, Any],

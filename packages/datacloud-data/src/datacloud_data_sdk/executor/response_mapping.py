@@ -1,4 +1,5 @@
 """按 mapping_path 从 API 响应提取 records。"""
+
 from __future__ import annotations
 
 from typing import Any

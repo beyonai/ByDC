@@ -20,11 +20,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 
-[project.urls]
-Homepage = "https://github.com/beyonai/by-datacloud"
-Repository = "https://github.com/beyonai/by-datacloud"
-Issues = "https://github.com/beyonai/by-datacloud/issues"
-
 dependencies = [
     "redis>=5.0",
     "pydantic>=2.0",
@@ -36,6 +31,11 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
 ]
+
+[project.urls]
+Homepage = "https://github.com/beyonai/by-datacloud"
+Repository = "https://github.com/beyonai/by-datacloud"
+Issues = "https://github.com/beyonai/by-datacloud/issues"
 
 [build-system]
 requires = ["hatchling"]

@@ -139,7 +139,7 @@ def match_mentions_with_search(
     result: dict[str, tuple[MatchCandidate, ...]] = {}
 
     for mention in mentions:
-        if search_mode == 'strict':
+        if search_mode == "strict":
             user_name_index: dict[str, list[tuple[str, str, str, float]]] | None = None
             if user_id is not None and user_cache is not None:
                 user_name_index = user_cache.get(user_id)

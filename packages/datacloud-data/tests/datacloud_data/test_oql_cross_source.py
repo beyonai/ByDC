@@ -3,13 +3,14 @@ OQL 跨源执行器测试
 """
 
 import pytest
-from datacloud_data_sdk.oql.cross_source_executor import (
-    classify_include_links, CrossSourceExecutor
-)
+from datacloud_data_sdk.oql.cross_source_executor import classify_include_links, CrossSourceExecutor
 from datacloud_data_sdk.oql.memory_merger import MemoryMerger
 from datacloud_data_sdk.oql import OQLError, OQLErrorCode
 from tests.datacloud_data.fixtures.oql_test_data import (
-    MockRegistry, MockTermResolver, TEST_FLIGHT_RECORDS, TEST_CREW_RECORDS
+    MockRegistry,
+    MockTermResolver,
+    TEST_FLIGHT_RECORDS,
+    TEST_CREW_RECORDS,
 )
 
 
@@ -22,8 +23,7 @@ class TestClassifyIncludeLinks:
         root_cls = registry.get_class("Flight")
 
         same_source, cross_source = classify_include_links(
-            [{"path": "crew", "select": ["crew_name"]}],
-            root_cls, registry
+            [{"path": "crew", "select": ["crew_name"]}], root_cls, registry
         )
 
         assert len(same_source) == 1
@@ -35,8 +35,7 @@ class TestClassifyIncludeLinks:
         root_cls = registry.get_class("Flight")
 
         same_source, cross_source = classify_include_links(
-            [{"path": "crew.manual", "select": ["manual_name"]}],
-            root_cls, registry
+            [{"path": "crew.manual", "select": ["manual_name"]}], root_cls, registry
         )
 
         assert len(same_source) == 0
@@ -48,10 +47,7 @@ class TestClassifyIncludeLinks:
         root_cls = registry.get_class("Flight")
 
         with pytest.raises(OQLError) as exc_info:
-            classify_include_links(
-                [{"path": "unknown_rel", "select": []}],
-                root_cls, registry
-            )
+            classify_include_links([{"path": "unknown_rel", "select": []}], root_cls, registry)
         assert exc_info.value.code == OQLErrorCode.OQL_ERR_UNKNOWN_RELATION
 
 

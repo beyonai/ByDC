@@ -93,7 +93,14 @@ def test_build_select_sql_with_derived_aggregation() -> None:
         fields=[("id", "id"), ("customer_id", "customer_id")],
         derived_expressions=None,
         derived_aggregations=[
-            {"alias": "opportunity_count", "target_table": "opportunity", "target_field": "id", "func": "count", "join_from": "customer_id", "join_to": "customer_id"}
+            {
+                "alias": "opportunity_count",
+                "target_table": "opportunity",
+                "target_field": "id",
+                "func": "count",
+                "join_from": "customer_id",
+                "join_to": "customer_id",
+            }
         ],
         aggregates=None,
         group_by=None,

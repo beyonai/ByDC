@@ -39,7 +39,7 @@ class ToolCallLoggingMiddleware(AgentMiddleware):
         gateway_context = self._get_gateway_context(request)
         logger.info(
             "ToolCallLoggingMiddleware: gateway_context=%s",
-            "present" if gateway_context else "None"
+            "present" if gateway_context else "None",
         )
 
         if gateway_context is None:
@@ -53,27 +53,20 @@ class ToolCallLoggingMiddleware(AgentMiddleware):
         logger.info(
             "ToolCallLoggingMiddleware: tool_name=%s args_keys=%s",
             tool_name,
-            list(tool_args.keys()) if tool_args else []
+            list(tool_args.keys()) if tool_args else [],
         )
-        logger.info(
-            "ToolCallLoggingMiddleware: tool_args=%s",
-            tool_args
-        )
+        logger.info("ToolCallLoggingMiddleware: tool_args=%s", tool_args)
 
         # 检查是否是 AGENT 类型工具
         is_agent_delegate = self._is_agent_delegate_tool(request)
-        logger.info(
-            "ToolCallLoggingMiddleware: is_agent_delegate=%s",
-            is_agent_delegate
-        )
+        logger.info("ToolCallLoggingMiddleware: is_agent_delegate=%s", is_agent_delegate)
 
         try:
             # 层级1：创建工具调用节点
             async with gateway_context.sub_step(tool_name):
                 # 层级2：推送入参
                 await self._emit_child_think(
-                    gateway_context,
-                    f"调用参数：{self._format_args(tool_args)}"
+                    gateway_context, f"调用参数：{self._format_args(tool_args)}"
                 )
 
                 if is_agent_delegate:
@@ -89,23 +82,16 @@ class ToolCallLoggingMiddleware(AgentMiddleware):
 
                 # 层级3：推送出参
                 await self._emit_child_think(
-                    gateway_context,
-                    f"返回结果：{self._format_result(result)}"
+                    gateway_context, f"返回结果：{self._format_result(result)}"
                 )
 
-                logger.info(
-                    "ToolCallLoggingMiddleware: tool_result=%s",
-                    result
-                )
+                logger.info("ToolCallLoggingMiddleware: tool_result=%s", result)
 
                 return result
 
         except Exception as exc:
             # 推送错误信息
-            await self._emit_child_think(
-                gateway_context,
-                f"执行失败：{str(exc)}"
-            )
+            await self._emit_child_think(gateway_context, f"执行失败：{str(exc)}")
             raise
 
     def _is_agent_delegate_tool(self, request: ToolCallRequest) -> bool:
@@ -207,6 +193,7 @@ class ToolCallLoggingMiddleware(AgentMiddleware):
 
         # 简化展示，避免过长
         import json
+
         try:
             formatted = json.dumps(args, ensure_ascii=False, indent=2)
             # 限制长度
@@ -232,6 +219,7 @@ class ToolCallLoggingMiddleware(AgentMiddleware):
 
         # 通用格式化
         import json
+
         try:
             formatted = json.dumps(result, ensure_ascii=False, indent=2)
             if len(formatted) > 500:

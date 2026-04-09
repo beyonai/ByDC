@@ -11,8 +11,9 @@ from dataclasses import dataclass
 @dataclass
 class ActionRoute:
     """工具名称对应的路由信息。"""
-    scope_type: str   # "object" | "view"
-    scope_code: str   # 对象编码或视图编码
+
+    scope_type: str  # "object" | "view"
+    scope_code: str  # 对象编码或视图编码
     action_family: str | None = None  # "lookup" | "analyze" | "search"
 
 

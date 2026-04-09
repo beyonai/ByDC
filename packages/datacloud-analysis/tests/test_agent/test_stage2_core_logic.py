@@ -40,13 +40,13 @@ class TestStage2CoreLogic:
             "agent_delegate": {
                 "tool_code": "delegate_agent",
                 "tool_attributes": {"type": "AGENT"},
-                "tool_func": lambda: "agent_call"
+                "tool_func": lambda: "agent_call",
             },
             "custom_function": {
                 "tool_code": "custom_func",
                 "tool_attributes": {"type": "FUNCTION"},
-                "tool_func": lambda: "custom_result"
-            }
+                "tool_func": lambda: "custom_result",
+            },
         }
 
         # 执行分离逻辑（模拟 worker.py）
@@ -170,6 +170,7 @@ class TestMiddlewareLogic:
 
     def test_filter_relevant_objects_logic(self):
         """测试精细化过滤逻辑（当前实现）"""
+
         # 模拟 _filter_relevant_objects 方法的逻辑
         def filter_relevant_objects(user_query, all_objects):
             # TODO: 待罗彦卓实现精细化过滤

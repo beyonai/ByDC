@@ -84,24 +84,18 @@ class RefResolver:
         expr = ref_expr
         if expr.startswith("{") and "}" in expr:
             end_brace = expr.index("}")
-            expr = expr[1:end_brace] + expr[end_brace+1:]
+            expr = expr[1:end_brace] + expr[end_brace + 1 :]
 
         # 解析格式：step_id.result[index].field 或 step_id.result[index]
         match = re.match(r"(\w+)\.result\[([*\d]+)\](?:\.(\w+))?", expr)
         if not match:
-            raise OQLError(
-                OQLErrorCode.OQL_ERR_INVALID_REF,
-                f"无效的 $ref 表达式：{ref_expr}"
-            )
+            raise OQLError(OQLErrorCode.OQL_ERR_INVALID_REF, f"无效的 $ref 表达式：{ref_expr}")
 
         step_id, index_str, field = match.groups()
 
         # 获取步骤结果
         if step_id not in context:
-            raise OQLError(
-                OQLErrorCode.OQL_ERR_INVALID_REF,
-                f"步骤 '{step_id}' 不存在或未执行"
-            )
+            raise OQLError(OQLErrorCode.OQL_ERR_INVALID_REF, f"步骤 '{step_id}' 不存在或未执行")
 
         records = context[step_id].get("records", [])
 
@@ -128,7 +122,7 @@ class RefResolver:
                 if idx >= len(records):
                     raise OQLError(
                         OQLErrorCode.OQL_ERR_INVALID_REF,
-                        f"索引 {idx} 超出范围（共 {len(records)} 条记录）"
+                        f"索引 {idx} 超出范围（共 {len(records)} 条记录）",
                     )
                 record = records[idx]
                 if field:
@@ -136,10 +130,7 @@ class RefResolver:
                 else:
                     return record
             except ValueError:
-                raise OQLError(
-                    OQLErrorCode.OQL_ERR_INVALID_REF,
-                    f"无效的索引：{index_str}"
-                )
+                raise OQLError(OQLErrorCode.OQL_ERR_INVALID_REF, f"无效的索引：{index_str}")
 
 
 class PipelineExecutor:
@@ -154,7 +145,7 @@ class PipelineExecutor:
         term_resolver,
         executor,
         datasource_registry,
-        request_id: str
+        request_id: str,
     ) -> dict[str, dict]:
         """
         顺序执行 Pipeline 步骤。
@@ -176,13 +167,14 @@ class PipelineExecutor:
         if len(steps) > self.MAX_STEPS:
             raise OQLError(
                 OQLErrorCode.OQL_ERR_STEP_LIMIT_EXCEEDED,
-                f"Pipeline 最多支持 {self.MAX_STEPS} 步，当前 {len(steps)} 步"
+                f"Pipeline 最多支持 {self.MAX_STEPS} 步，当前 {len(steps)} 步",
             )
 
         context: dict[str, dict] = {}
 
         # 延迟导入以避免循环依赖
         from datacloud_data_sdk.oql.router import OqlRouter
+
         router = OqlRouter(registry)
 
         for step in steps:
@@ -196,9 +188,7 @@ class PipelineExecutor:
                 resolved_params = RefResolver.resolve(parameters, context)
             except OQLError as e:
                 raise OQLError(
-                    e.code,
-                    f"步骤 '{step_id}' 的 $ref 解析失败：{e.message}",
-                    details=e.details
+                    e.code, f"步骤 '{step_id}' 的 $ref 解析失败：{e.message}", details=e.details
                 )
 
             try:
@@ -207,11 +197,7 @@ class PipelineExecutor:
                     resolved_params, term_resolver, executor, datasource_registry, request_id
                 )
             except OQLError as e:
-                raise OQLError(
-                    e.code,
-                    f"步骤 '{step_id}' 执行失败：{e.message}",
-                    details=e.details
-                )
+                raise OQLError(e.code, f"步骤 '{step_id}' 执行失败：{e.message}", details=e.details)
 
             # 保存步骤结果
             context[step_id] = {"records": records}

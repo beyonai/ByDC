@@ -42,8 +42,5 @@ def get_checkpointer() -> BaseCheckpointSaver:
         If ``bootstrap.setup()`` has not registered a checkpointer yet.
     """
     if _checkpointer is None:
-        raise RuntimeError(
-            "Checkpointer is not initialized. "
-            "Call `await bootstrap.setup()` first."
-        )
+        raise RuntimeError("Checkpointer is not initialized. Call `await bootstrap.setup()` first.")
     return _checkpointer
