@@ -21,15 +21,15 @@ from typing import Any
 class FieldPhysicalMapping:
     """
     字段物理映射
-    
+
     定义字段到物理存储的映射关系。
-    
+
     Attributes:
         source_type: 数据源类型（DB/API）
         source_ref: 物理引用（DB 列名或 JSONPath）
         datasource_alias: 数据源别名
     """
-    
+
     source_type: str
     source_ref: str
     datasource_alias: str
@@ -102,9 +102,9 @@ class OntologyField:
 class OntologyActionParam:
     """
     本体动作参数
-    
+
     定义动作的输入/输出参数。
-    
+
     Attributes:
         param_code: 参数代码
         param_name: 参数名称
@@ -118,7 +118,7 @@ class OntologyActionParam:
         term_field: 术语字段（code/name）
         dataset_id: 数据集 ID
     """
-    
+
     param_code: str
     param_name: str
     direction: str
@@ -189,9 +189,9 @@ class OntologyAction:
 class OntologyRelation:
     """
     本体关联关系
-    
+
     定义对象间的关联关系。
-    
+
     Attributes:
         relation_code: 关联代码
         relation_name: 关联名称
@@ -203,7 +203,7 @@ class OntologyRelation:
         resolve_action_code: 解析动作代码
         resolve_param_binding: 解析参数绑定
     """
-    
+
     relation_code: str
     relation_name: str = ""
     source_class: str = ""
@@ -219,9 +219,9 @@ class OntologyRelation:
 class OntologyClass:
     """
     本体对象/类定义
-    
+
     定义数据服务中的核心对象模型。
-    
+
     Attributes:
         object_code: 对象代码
         object_name: 对象名称
@@ -234,7 +234,7 @@ class OntologyClass:
         fields: 字段列表
         actions: 动作列表
     """
-    
+
     object_code: str
     object_name: str
     description: str

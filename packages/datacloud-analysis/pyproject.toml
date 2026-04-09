@@ -40,6 +40,7 @@ dependencies = [
     "pyyaml>=6.0.3",
     "deepagents>=0.4.7",
     "by-framework>=0.1.2",
+    "langchain-mcp-adapters>=0.2.2",
 ]
 
 [dependency-groups]
@@ -49,6 +50,9 @@ dev = [
     "pytest-mock>=3.14",
     "pytest-cov>=5.0",
 ]
+
+[project.scripts]
+datacloud-analysis = "datacloud_analysis.cli:main"
 
 [build-system]
 requires = ["hatchling"]

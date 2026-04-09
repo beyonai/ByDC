@@ -295,9 +295,15 @@ class Action:
 
         Returns:
             dict: 包含 records 和 total 的原始结果
+
+        Raises:
+            ActionNotConfiguredError: 未配置 loader 时抛出
         """
+        from datacloud_data_sdk.executor.dynamic_query_executor import DynamicQueryExecutor
+
         if not self._loader:
             from datacloud_data_sdk.exceptions import ActionNotConfiguredError
+
             raise ActionNotConfiguredError(self._action.action_code)
 
         scope_code = (
