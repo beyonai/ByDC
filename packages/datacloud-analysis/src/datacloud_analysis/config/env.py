@@ -33,6 +33,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Sub-groups (composable, testable in isolation)
 # ---------------------------------------------------------------------------
 
+
 class PGSettings(BaseSettings):
     """PostgreSQL connection used by LangGraph AsyncPostgresSaver & PostgresStore."""
 
@@ -152,7 +153,9 @@ class DBSettings(BaseSettings):
     user: str = Field(default="", description="Database user")
     password: str = Field(default="", description="Database password")
     name: str = Field(default="", description="Database name")
-    db_schema: str = Field(default="public", description="Database schema", validation_alias="DB_SCHEMA")
+    db_schema: str = Field(
+        default="public", description="Database schema", validation_alias="DB_SCHEMA"
+    )
     type: str = Field(default="postgresql", description="Database type (postgresql/opengauss)")
 
 
@@ -195,6 +198,7 @@ class KnowledgeSettings(BaseSettings):
 # New Settings classes (P2)
 # ---------------------------------------------------------------------------
 
+
 class AgentSettings(BaseSettings):
     """Agent-level settings."""
 
@@ -222,7 +226,9 @@ class AIFactorySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DATACLOUD_AI_FACTORY_", extra="ignore")
 
     token: str = Field(default="", description="AI Factory API token")
-    agent_ids: list[str] = Field(default_factory=list, description="AI Factory agent IDs (JSON array)")
+    agent_ids: list[str] = Field(
+        default_factory=list, description="AI Factory agent IDs (JSON array)"
+    )
 
     @field_validator("agent_ids", mode="before")
     @classmethod
@@ -276,6 +282,7 @@ class OntologySettings(BaseSettings):
 # ---------------------------------------------------------------------------
 # Aggregate Settings — single object for the whole SDK
 # ---------------------------------------------------------------------------
+
 
 class Settings(BaseSettings):
     """Aggregate all environment variables for the SDK.

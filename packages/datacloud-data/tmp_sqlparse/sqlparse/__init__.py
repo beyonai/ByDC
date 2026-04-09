@@ -22,9 +22,7 @@ __version__ = "0.5.5"
 __all__ = ["engine", "filters", "formatter", "sql", "tokens", "cli"]
 
 
-def parse(
-    sql: str, encoding: Optional[str] = None
-) -> Tuple[sql.Statement, ...]:
+def parse(sql: str, encoding: Optional[str] = None) -> Tuple[sql.Statement, ...]:
     """Parse sql and return a list of statements.
 
     :param sql: A string containing one or more SQL statements.
@@ -65,9 +63,7 @@ def format(sql: str, encoding: Optional[str] = None, **options: Any) -> str:
     return "".join(stack.run(sql, encoding))
 
 
-def split(
-    sql: str, encoding: Optional[str] = None, strip_semicolon: bool = False
-) -> List[str]:
+def split(sql: str, encoding: Optional[str] = None, strip_semicolon: bool = False) -> List[str]:
     """Split *sql* into single statements.
 
     :param sql: A string containing one or more SQL statements.

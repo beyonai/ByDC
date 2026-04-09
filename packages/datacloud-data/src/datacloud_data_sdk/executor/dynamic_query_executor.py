@@ -33,14 +33,14 @@ from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManage
 def _resolve_source_column(field: Any, datasource_alias: str) -> str:
     """
     解析字段的物理列名
-    
+
     优先使用 source_column，其次查找 physical_mappings 中的映射，
     最后使用 field_code 作为默认值。
-    
+
     Args:
         field: 字段定义对象
         datasource_alias: 数据源别名
-    
+
     Returns:
         str: 物理列名
     """
@@ -61,17 +61,17 @@ def _group_linked_records(
 ) -> list[dict[str, Any]]:
     """
     将 LEFT JOIN 产生的扁平行按主表键分组
-    
+
     当查询包含关联对象时，SQL 使用 LEFT JOIN 产生扁平化的行，
     此函数将同一主表记录的关联数据聚合成列表。
-    
+
     Args:
         flat_records: 扁平化的记录列表
         col_keys: 列名列表
         physical_fields: 物理字段列表
         linked_joins: 关联连接配置
         cls: 本体类定义
-    
+
     Returns:
         list[dict]: 分组后的记录列表，关联字段为嵌套列表
     """
@@ -85,9 +85,7 @@ def _group_linked_records(
     linked_field_map: dict[str, dict[str, str]] = {}
     for lj in linked_joins:
         lf = lj.get("linked_field", "")
-        linked_field_map[lf] = {
-            f"{lf}_{fc}": fc for fc, _ in lj.get("target_fields", [])
-        }
+        linked_field_map[lf] = {f"{lf}_{fc}": fc for fc, _ in lj.get("target_fields", [])}
 
     groups: dict[Any, dict[str, Any]] = {}
     for row in flat_records:
@@ -118,19 +116,23 @@ def _build_meta_columns(
     if not aggregates:
         for key in col_keys:
             f = field_map.get(key)
-            columns.append({
-                "name": key,
-                "label": f.field_name if f else key,
-                "type": (f.field_type or "string").lower(),
-            })
+            columns.append(
+                {
+                    "name": key,
+                    "label": f.field_name if f else key,
+                    "type": (f.field_type or "string").lower(),
+                }
+            )
     elif group_by:
         for key in group_by:
             f = field_map.get(key)
-            columns.append({
-                "name": key,
-                "label": f.field_name if f else key,
-                "type": (f.field_type or "string").lower(),
-            })
+            columns.append(
+                {
+                    "name": key,
+                    "label": f.field_name if f else key,
+                    "type": (f.field_type or "string").lower(),
+                }
+            )
         for agg in aggregates or []:
             alias = agg.get("as") or f"{agg.get('func', 'count').lower()}_{agg.get('field', '')}"
             columns.append({"name": alias, "label": alias, "type": "number"})
@@ -186,10 +188,13 @@ class DynamicQueryExecutor:
         datasource_alias = alias or ""
         # 仅 physical 字段参与 field_to_col 与 fields；derived、linked 不参与
         physical_fields = [
-            f for f in cls.fields
+            f
+            for f in cls.fields
             if getattr(f, "property_kind", "physical") not in ("derived", "linked")
         ]
-        field_to_col = {f.field_code: _resolve_source_column(f, datasource_alias) for f in physical_fields}
+        field_to_col = {
+            f.field_code: _resolve_source_column(f, datasource_alias) for f in physical_fields
+        }
 
         filters = arguments.get("filters") or {}
         aggregates = arguments.get("aggregates")
@@ -203,7 +208,9 @@ class DynamicQueryExecutor:
         if cls.source_config and isinstance(cls.source_config, dict):
             db_type = cls.source_config.get("db_type", "SQLITE")
 
-        fields: list[tuple[str, str]] = [(f.field_code, field_to_col[f.field_code]) for f in physical_fields]
+        fields: list[tuple[str, str]] = [
+            (f.field_code, field_to_col[f.field_code]) for f in physical_fields
+        ]
 
         # 收集 derived 字段：expression 与 aggregation
         derived_expressions: list[tuple[str, str]] = []
@@ -222,7 +229,11 @@ class DynamicQueryExecutor:
                 if not relation_ref:
                     continue
                 rel = next(
-                    (r for r in self._loader.get_ontology_relations() if r.relation_code == relation_ref),
+                    (
+                        r
+                        for r in self._loader.get_ontology_relations()
+                        if r.relation_code == relation_ref
+                    ),
                     None,
                 )
                 if not rel or not rel.join_keys:
@@ -233,14 +244,16 @@ class DynamicQueryExecutor:
                     continue
                 target_table = target_cls.table_name or rel.target_class
                 jk = rel.join_keys[0]
-                derived_aggregations.append({
-                    "alias": f.field_code,
-                    "target_table": target_table,
-                    "target_field": dc.get("target_field", "id"),
-                    "func": dc.get("func", "count"),
-                    "join_from": jk.get("from_field", ""),
-                    "join_to": jk.get("to_field", ""),
-                })
+                derived_aggregations.append(
+                    {
+                        "alias": f.field_code,
+                        "target_table": target_table,
+                        "target_field": dc.get("target_field", "id"),
+                        "func": dc.get("func", "count"),
+                        "join_from": jk.get("from_field", ""),
+                        "join_to": jk.get("to_field", ""),
+                    }
+                )
 
         # 收集同源 linked 字段，构建 linked_joins
         linked_joins: list[dict[str, Any]] = []
@@ -251,7 +264,11 @@ class DynamicQueryExecutor:
             if not relation_ref:
                 continue
             rel = next(
-                (r for r in self._loader.get_ontology_relations() if r.relation_code == relation_ref),
+                (
+                    r
+                    for r in self._loader.get_ontology_relations()
+                    if r.relation_code == relation_ref
+                ),
                 None,
             )
             if not rel or not rel.join_keys:
@@ -269,13 +286,15 @@ class DynamicQueryExecutor:
                 if getattr(tf, "property_kind", "physical") not in ("derived", "linked")
             }
             target_fields = [(fc, target_field_to_col[fc]) for fc in target_field_to_col]
-            linked_joins.append({
-                "linked_field": f.field_code,
-                "target_table": target_table,
-                "join_from": join_from,
-                "join_to": join_to,
-                "target_fields": target_fields,
-            })
+            linked_joins.append(
+                {
+                    "linked_field": f.field_code,
+                    "target_table": target_table,
+                    "join_from": join_from,
+                    "join_to": join_to,
+                    "target_fields": target_fields,
+                }
+            )
 
         sql, col_keys = build_select_sql(
             table=cls.table_name,
@@ -304,8 +323,14 @@ class DynamicQueryExecutor:
                 cls,
             )
             # 分组后 col_keys 需排除 prefixed 列，追加 linked 字段名
-            linked_prefixes = {f"{lj.get('linked_field', '')}_{fc}" for lj in linked_joins for fc, _ in lj.get("target_fields", [])}
-            col_keys = [k for k in col_keys if k not in linked_prefixes] + [lj.get("linked_field", "") for lj in linked_joins]
+            linked_prefixes = {
+                f"{lj.get('linked_field', '')}_{fc}"
+                for lj in linked_joins
+                for fc, _ in lj.get("target_fields", [])
+            }
+            col_keys = [k for k in col_keys if k not in linked_prefixes] + [
+                lj.get("linked_field", "") for lj in linked_joins
+            ]
 
         total = len(records)
         columns = _build_meta_columns(col_keys, cls, aggregates, group_by)

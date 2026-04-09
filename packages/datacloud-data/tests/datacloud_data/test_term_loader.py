@@ -46,10 +46,12 @@ def test_get_available_values() -> None:
 
 
 def test_api_term_loader_from_config() -> None:
-    loader = TermLoader.from_config({
-        "type": "api",
-        "api": {"base_url": "http://example.com", "mapping": {}},
-    })
+    loader = TermLoader.from_config(
+        {
+            "type": "api",
+            "api": {"base_url": "http://example.com", "mapping": {}},
+        }
+    )
     assert isinstance(loader, ApiTermLoader)
 
 
@@ -71,7 +73,9 @@ def test_kb_term_loader_resolve_by_label() -> None:
         code = loader.resolve_code("bo_stage", "已签约")
         assert code == "SIGNED"
         mock_search.assert_called_once_with(
-            term_type_code="bo_stage", keyword="已签约", limit=100,
+            term_type_code="bo_stage",
+            keyword="已签约",
+            limit=100,
         )
 
 
@@ -144,7 +148,9 @@ def test_kb_term_loader_resolve_code_explicit_type() -> None:
         code = loader.resolve_code("region.province", "华北", term_type_code="region")
         assert code == "REGION_CODE"
         mock_search.assert_called_once_with(
-            term_type_code="region", keyword="华北", limit=100,
+            term_type_code="region",
+            keyword="华北",
+            limit=100,
         )
 
 

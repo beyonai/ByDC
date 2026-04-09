@@ -265,6 +265,7 @@ class InterruptibleTool(BaseTool, abc.ABC):
         try:
             from langgraph._internal._constants import CONFIG_KEY_SCRATCHPAD  # noqa: PLC0415
             from langgraph.config import get_config  # noqa: PLC0415
+
             scratchpad = get_config()["configurable"][CONFIG_KEY_SCRATCHPAD]
             return bool(scratchpad.resume) or scratchpad.get_null_resume(False) is not None
         except Exception:
@@ -272,4 +273,3 @@ class InterruptibleTool(BaseTool, abc.ABC):
 
     def _run(self, **kwargs: Any) -> Any:
         raise NotImplementedError("InterruptibleTool requires async invocation via _arun")
-

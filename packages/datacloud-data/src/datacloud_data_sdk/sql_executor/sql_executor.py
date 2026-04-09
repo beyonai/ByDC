@@ -35,21 +35,19 @@ logger = logging.getLogger(__name__)
 class SqlExecutor:
     """
     SQL 执行器
-    
+
     执行 SQL 查询任务，支持参数绑定和结果 CSV 输出。
-    
+
     Attributes:
         _ds: 数据源管理器
         _csv: CSV 存储管理器
-    
+
     Example:
         executor = SqlExecutor(ds_manager)
         result = await executor.execute(sql_task, "req_001", step_results)
     """
-    
-    def __init__(
-        self, ds_manager: DataSourceManager, csv_base_dir: str | None = None
-    ) -> None:
+
+    def __init__(self, ds_manager: DataSourceManager, csv_base_dir: str | None = None) -> None:
         """
         初始化 SQL 执行器
 
@@ -68,18 +66,18 @@ class SqlExecutor:
     ) -> SqlExecResult:
         """
         执行 SQL 任务
-        
+
         执行流程：
         1. 处理步骤绑定，替换 SQL 中的占位符
         2. 获取对应数据源的连接器
         3. 执行 SQL 查询
         4. 将结果写入 CSV 文件
-        
+
         Args:
             task: SQL 执行任务
             request_id: 请求 ID
             step_results: 步骤结果集合，用于获取绑定值
-        
+
         Returns:
             SqlExecResult: 执行结果，包含 CSV 路径和行数
         """

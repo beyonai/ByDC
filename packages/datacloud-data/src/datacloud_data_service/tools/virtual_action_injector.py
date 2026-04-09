@@ -61,6 +61,7 @@ def inject_virtual_actions(loader: object) -> None:
 
 # ── 内部辅助 ──────────────────────────────────────────────────────────────────
 
+
 def _ensure_analytic_meta(fields: list) -> None:
     """若字段 analytic_role 未设置，尝试从旧字段类型兼容推断（降级规则）。"""
     from datacloud_data_sdk.virtual_action.rules import derive_field_ops, infer_secondary_role
@@ -155,8 +156,10 @@ def _make_action(
 def _inject_db_object_actions(cls, existing_codes: set, registry) -> None:
     """为 DB 对象注入 lookup_* 及可选的 analyze_* 动作。"""
     from datacloud_data_sdk.virtual_action.generator import (
-        build_analyze_schema, build_lookup_schema,
-        build_lookup_description, build_analyze_description,
+        build_analyze_schema,
+        build_lookup_schema,
+        build_lookup_description,
+        build_analyze_description,
     )
     from datacloud_data_sdk.virtual_action.registry import ActionRoute
 
@@ -194,7 +197,9 @@ def _inject_db_object_actions(cls, existing_codes: set, registry) -> None:
             action = _make_action(
                 action_code=analyze_code,
                 action_name=f"统计{obj_name}",
-                description=build_analyze_description(obj_name, obj_desc, fields, req_groups, "object"),
+                description=build_analyze_description(
+                    obj_name, obj_desc, fields, req_groups, "object"
+                ),
                 belong_class=obj_code,
                 action_family="analyze",
                 virtual_backend="db_analyze",
@@ -214,7 +219,10 @@ def _inject_db_object_actions(cls, existing_codes: set, registry) -> None:
 
 def _inject_kb_object_actions(cls, existing_codes: set, registry) -> None:
     """为 KB 对象注入 search_* 动作。"""
-    from datacloud_data_sdk.virtual_action.generator import build_search_schema, build_search_description
+    from datacloud_data_sdk.virtual_action.generator import (
+        build_search_schema,
+        build_search_description,
+    )
     from datacloud_data_sdk.virtual_action.registry import ActionRoute
 
     obj_code = cls.object_code
@@ -247,21 +255,24 @@ def _inject_kb_object_actions(cls, existing_codes: set, registry) -> None:
 def _inject_view_actions(loader, registry) -> None:
     """为所有 DB 视图注入 lookup_* + analyze_* 动作，挂载到 View.actions。"""
     from datacloud_data_sdk.virtual_action.generator import (
-        build_analyze_schema, build_lookup_schema,
-        build_lookup_description, build_analyze_description,
+        build_analyze_schema,
+        build_lookup_schema,
+        build_lookup_description,
+        build_analyze_description,
     )
     from datacloud_data_sdk.virtual_action.registry import ActionRoute
 
     scenes = getattr(loader, "_scenes", {})
     for view_id, scene in scenes.items():
         # 只处理 DB 视图（有对象列表的场景）
-        raw_objects = scene.get("object_codes") or scene.get("objects") or scene.get("object_ids") or []
+        raw_objects = (
+            scene.get("object_codes") or scene.get("objects") or scene.get("object_ids") or []
+        )
         if not raw_objects:
             continue
         # 归一化：支持 ["code"] 和 [{"object_code": "code"}] 两种格式
         object_codes = [
-            oc if isinstance(oc, str) else oc.get("object_code", "")
-            for oc in raw_objects
+            oc if isinstance(oc, str) else oc.get("object_code", "") for oc in raw_objects
         ]
         object_codes = [oc for oc in object_codes if oc]
         if not object_codes:
@@ -269,8 +280,7 @@ def _inject_view_actions(loader, registry) -> None:
 
         # 检查是否所有对象都是 DB 类型
         all_db = all(
-            loader._classes.get(oc, None) is not None
-            and loader._classes[oc].source_type == "DB"
+            loader._classes.get(oc, None) is not None and loader._classes[oc].source_type == "DB"
             for oc in object_codes
         )
         if not all_db:
@@ -303,7 +313,9 @@ def _inject_view_actions(loader, registry) -> None:
             action = _make_action(
                 action_code=lookup_code,
                 action_name=f"查询{view_name}明细",
-                description=build_lookup_description(view_name, view_desc, view_fields, req_groups, "view"),
+                description=build_lookup_description(
+                    view_name, view_desc, view_fields, req_groups, "view"
+                ),
                 belong_class=view_id,
                 action_family="lookup",
                 virtual_backend="db_lookup",
@@ -323,7 +335,9 @@ def _inject_view_actions(loader, registry) -> None:
                 action = _make_action(
                     action_code=analyze_code,
                     action_name=f"统计{view_name}",
-                    description=build_analyze_description(view_name, view_desc, view_fields, req_groups, "view"),
+                    description=build_analyze_description(
+                        view_name, view_desc, view_fields, req_groups, "view"
+                    ),
                     belong_class=view_id,
                     action_family="analyze",
                     virtual_backend="db_analyze",
@@ -336,7 +350,9 @@ def _inject_view_actions(loader, registry) -> None:
                 logger.debug("注入视图 %s", analyze_code)
 
 
-def _resolve_source_field_type(loader: Any, source_object_code: str, source_column_code: str) -> str | None:
+def _resolve_source_field_type(
+    loader: Any, source_object_code: str, source_column_code: str
+) -> str | None:
     """根据视图映射回查源对象字段类型。"""
     if not source_object_code or not source_column_code:
         return None
@@ -346,7 +362,10 @@ def _resolve_source_field_type(loader: Any, source_object_code: str, source_colu
         return None
 
     for field in getattr(cls, "fields", []):
-        if field.field_code == source_column_code or getattr(field, "source_column", None) == source_column_code:
+        if (
+            field.field_code == source_column_code
+            or getattr(field, "source_column", None) == source_column_code
+        ):
             return field.field_type
     return None
 

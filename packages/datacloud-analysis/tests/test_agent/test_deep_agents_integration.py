@@ -46,6 +46,7 @@ class TestDeepAgentsRealImport:
         """测试 deepagents 可以导入"""
         try:
             from deepagents import create_deep_agent
+
             assert callable(create_deep_agent)
         except ImportError:
             pytest.skip("deepagents not installed")
@@ -54,6 +55,7 @@ class TestDeepAgentsRealImport:
         """测试真实创建 agent（不执行）"""
         try:
             from datacloud_analysis.agent import _create_deep_agent
+
             # 只测试函数存在，不实际创建 agent（需要 API key）
             assert callable(_create_deep_agent)
         except ImportError:

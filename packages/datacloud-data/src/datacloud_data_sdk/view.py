@@ -181,6 +181,7 @@ class View:
         try:
             from datacloud_data_sdk.context import get_gateway_context
             from datacloud_data_sdk.events.gateway_reporter import GatewayProgressReporter
+
             _gw_ctx = get_gateway_context()
             if _gw_ctx is not None:
                 gw_reporter = GatewayProgressReporter(_gw_ctx)
@@ -219,8 +220,7 @@ class View:
             if gw_reporter:
                 try:
                     _step_types = " → ".join(
-                        f"{s.step_id}({getattr(s, 'step_type', 'SQL')})"
-                        for s in plan.steps
+                        f"{s.step_id}({getattr(s, 'step_type', 'SQL')})" for s in plan.steps
                     )
                     await gw_reporter.on_plan_generated(f"共 {len(plan.steps)} 步：{_step_types}")
                 except Exception:
@@ -273,25 +273,21 @@ class View:
                 from datacloud_data_sdk.plan.term_resolver import TermResolver
 
                 term_resolver = TermResolver(config.term_loader)
-            tasks = ExecutionObjectConverter(
-                term_resolver=term_resolver, loader=loader
-            ).convert(plan, payload)
+            tasks = ExecutionObjectConverter(term_resolver=term_resolver, loader=loader).convert(
+                plan, payload
+            )
             if observer:
                 try:
                     tasks_dict = []
                     for t in tasks:
                         tasks_dict.append(asdict(t))
                     agg_dict = asdict(plan.aggregation) if plan.aggregation else {}
-                    await observer.on_execution_tasks_ready(
-                        request_id, tasks_dict, agg_dict
-                    )
+                    await observer.on_execution_tasks_ready(request_id, tasks_dict, agg_dict)
                 except Exception:
                     logger.debug("observer/reporter callback failed", exc_info=True)
 
             ds_manager = (
-                DataSourceManager(config.datasource_configs)
-                if config.datasource_configs
-                else None
+                DataSourceManager(config.datasource_configs) if config.datasource_configs else None
             )
             sql_exec = SqlExecutor(ds_manager, config.csv_base_dir) if ds_manager else None
             api_exec = ApiExecutor(loader, config.csv_base_dir) if loader else None
@@ -346,11 +342,7 @@ class View:
                     records = await DirectAggregator().aggregate(plan.aggregation, step_results)
             else:
                 records = []
-            columns = (
-                plan.aggregation.columns
-                if plan.aggregation
-                else []
-            )
+            columns = plan.aggregation.columns if plan.aggregation else []
             if gw_reporter:
                 try:
                     await gw_reporter.on_aggregation_completed(len(records))
@@ -358,9 +350,7 @@ class View:
                     logger.debug("observer/reporter callback failed", exc_info=True)
             if observer:
                 try:
-                    await observer.on_aggregation_completed(
-                        request_id, records, list(columns)
-                    )
+                    await observer.on_aggregation_completed(request_id, records, list(columns))
                 except Exception:
                     logger.debug("observer/reporter callback failed", exc_info=True)
 
@@ -395,14 +385,18 @@ class View:
             )
         except CannotAnswerError as exc:
             from datacloud_data_sdk.result_formatter import build_error_data
+
             return build_error_data(
-                str(exc), result_type="rejected",
+                str(exc),
+                result_type="rejected",
                 trace={"request_id": request_id, "question": question, "view_id": self.view_id},
             )
         except (TermNotFoundError, TermAmbiguousError) as exc:
             from datacloud_data_sdk.result_formatter import build_error_data
+
             return build_error_data(
-                str(exc), result_type="ask_user",
+                str(exc),
+                result_type="ask_user",
                 trace={"request_id": request_id, "question": question, "view_id": self.view_id},
             )
         except PlanValidationError as exc:
@@ -413,14 +407,10 @@ class View:
                         plan_dict = {
                             "steps": [asdict(s) for s in exc.plan.steps],
                             "aggregation": (
-                                asdict(exc.plan.aggregation)
-                                if exc.plan.aggregation
-                                else None
+                                asdict(exc.plan.aggregation) if exc.plan.aggregation else None
                             ),
                         }
-                    await observer.on_plan_validation_failed(
-                        request_id, exc.errors, plan_dict
-                    )
+                    await observer.on_plan_validation_failed(request_id, exc.errors, plan_dict)
                 except Exception:
                     logger.debug("observer/reporter callback failed", exc_info=True)
             raise
@@ -461,9 +451,7 @@ class View:
         """返回视图所有虚拟动作的编码列表。"""
         return [a.action_code for a in self.actions]
 
-    async def invoke_action(
-        self, action_code: str, params: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def invoke_action(self, action_code: str, params: dict[str, Any]) -> dict[str, Any]:
         """
         执行视图级虚拟动作。
 

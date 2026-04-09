@@ -117,13 +117,21 @@ class ToolHookPluginManager:
             return await _invoke_callback(callback, context)
         except Exception as exc:  # noqa: BLE001
             if _strict_mode():
-                logger.error("Tool hook callback failed in strict mode: plugin_id=%s error=%s", plugin_id, exc)
+                logger.error(
+                    "Tool hook callback failed in strict mode: plugin_id=%s error=%s",
+                    plugin_id,
+                    exc,
+                )
                 return {
                     "action": "fail",
-                    "result": {"tool_error": {"error_type": type(exc).__name__, "message": str(exc)}},
+                    "result": {
+                        "tool_error": {"error_type": type(exc).__name__, "message": str(exc)}
+                    },
                     "audit": {"plugin_id": plugin_id, "message": "strict mode callback exception"},
                 }
-            logger.warning("Tool hook callback failed, ignored: plugin_id=%s error=%s", plugin_id, exc)
+            logger.warning(
+                "Tool hook callback failed, ignored: plugin_id=%s error=%s", plugin_id, exc
+            )
             return None
 
     def _iter_matched_plugins(
@@ -220,7 +228,9 @@ def _normalize_decision(decision: HookDecision, *, phase: str) -> HookDecision:
 
 
 def _load_builtin_plugins() -> list[_LoadedToolHookPlugin]:
-    return _load_plugins_from_dir(Path(__file__).resolve().parent / "builtin", source_prefix="builtin")
+    return _load_plugins_from_dir(
+        Path(__file__).resolve().parent / "builtin", source_prefix="builtin"
+    )
 
 
 def _load_extension_plugins() -> list[_LoadedToolHookPlugin]:
@@ -253,7 +263,9 @@ def _candidate_extension_dirs() -> list[Path]:
 def _find_repo_root() -> Path | None:
     current = Path(__file__).resolve()
     for parent in current.parents:
-        marker = parent / "examples" / "e_commerce_demo" / "backend" / "datacloud_service" / "plugins"
+        marker = (
+            parent / "examples" / "e_commerce_demo" / "backend" / "datacloud_service" / "plugins"
+        )
         if marker.exists():
             return parent
     return None
@@ -296,18 +308,23 @@ def _load_one_plugin(path: Path, *, source_prefix: str) -> _LoadedToolHookPlugin
     else:
         plugin_obj = module
 
-    plugin_id = str(
-        getattr(plugin_obj, "plugin_id", getattr(module, "PLUGIN_ID", path.stem))
-    ).strip() or path.stem
+    plugin_id = (
+        str(getattr(plugin_obj, "plugin_id", getattr(module, "PLUGIN_ID", path.stem))).strip()
+        or path.stem
+    )
     priority = int(getattr(plugin_obj, "priority", getattr(module, "PRIORITY", 500)))
     enabled = bool(getattr(plugin_obj, "enabled", getattr(module, "ENABLED", True)))
     allowlist = tuple(
         str(item)
-        for item in (getattr(plugin_obj, "tool_allowlist", getattr(module, "TOOL_ALLOWLIST", ())) or ())
+        for item in (
+            getattr(plugin_obj, "tool_allowlist", getattr(module, "TOOL_ALLOWLIST", ())) or ()
+        )
     )
     blocklist = tuple(
         str(item)
-        for item in (getattr(plugin_obj, "tool_blocklist", getattr(module, "TOOL_BLOCKLIST", ())) or ())
+        for item in (
+            getattr(plugin_obj, "tool_blocklist", getattr(module, "TOOL_BLOCKLIST", ())) or ()
+        )
     )
     before = getattr(plugin_obj, "before_call_back", None)
     after = getattr(plugin_obj, "after_call_back", None)

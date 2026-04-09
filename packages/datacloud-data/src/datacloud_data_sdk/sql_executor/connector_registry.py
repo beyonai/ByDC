@@ -19,7 +19,7 @@
 使用示例：
     # 注册自定义连接器
     ConnectorRegistry.register("MYDB", MyDBConnector)
-    
+
     # 获取连接器类
     ConnectorClass = ConnectorRegistry.get("MYSQL")
 """
@@ -33,26 +33,26 @@ from datacloud_data_sdk.sql_executor.base_connector import BaseSourceConnector
 class ConnectorRegistry:
     """
     连接器注册表
-    
+
     管理数据库连接器类的注册和查找。
     使用类方法实现全局注册表模式。
-    
+
     Example:
         # 注册连接器
         ConnectorRegistry.register("MYSQL", MySQLConnector)
-        
+
         # 获取连接器类
         cls = ConnectorRegistry.get("MYSQL")
         connector = cls(config)
     """
-    
+
     _registry: dict[str, Type[BaseSourceConnector]] = {}
 
     @classmethod
     def register(cls, db_type: str, connector_cls: Type[BaseSourceConnector]) -> None:
         """
         注册数据库连接器类
-        
+
         Args:
             db_type: 数据库类型标识（不区分大小写）
             connector_cls: 连接器类
@@ -63,13 +63,13 @@ class ConnectorRegistry:
     def get(cls, db_type: str) -> Type[BaseSourceConnector]:
         """
         获取数据库连接器类
-        
+
         Args:
             db_type: 数据库类型标识（不区分大小写）
-        
+
         Returns:
             Type[BaseSourceConnector]: 连接器类
-        
+
         Raises:
             DataSourceUnavailableError: 未找到对应连接器时抛出
         """

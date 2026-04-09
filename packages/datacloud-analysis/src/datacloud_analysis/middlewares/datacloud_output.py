@@ -112,9 +112,11 @@ def _send_via_gateway(gateway_context: Any, output: dict[str, Any]) -> None:
                 loop = asyncio.get_running_loop()
                 task = loop.create_task(emit_chunk(output))
                 task.add_done_callback(
-                    lambda t: logger.error("_send_via_gateway emit_chunk failed: %s", t.exception())
-                    if not t.cancelled() and t.exception() is not None
-                    else None
+                    lambda t: (
+                        logger.error("_send_via_gateway emit_chunk failed: %s", t.exception())
+                        if not t.cancelled() and t.exception() is not None
+                        else None
+                    )
                 )
             except RuntimeError:
                 # 没有运行中的事件循环（单元测试场景），直接跳过

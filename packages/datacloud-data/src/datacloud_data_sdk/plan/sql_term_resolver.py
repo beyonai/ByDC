@@ -1,4 +1,5 @@
 """SQL 字面量术语解析：将 WHERE 中的标签/名称替换为标准 code。"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -100,9 +101,8 @@ def _resolve_with_sqlparse(
                 k = _next_non_ws(tokens, j + 1)
                 if j < len(tokens) and k < len(tokens):
                     kw, paren = tokens[j], tokens[k]
-                    if (
-                        getattr(kw, "value", "").upper() == "IN"
-                        and isinstance(paren, sql_ast.Parenthesis)
+                    if getattr(kw, "value", "").upper() == "IN" and isinstance(
+                        paren, sql_ast.Parenthesis
                     ):
                         if _replace_in_list(t, paren, _resolve_field, term_loader):
                             modified = True
@@ -133,7 +133,14 @@ def _extract_alias_to_table(stmt: object) -> dict[str, str]:
             i += 1
             continue
         if in_from:
-            if getattr(t, "value", "").upper() in ("WHERE", "GROUP", "ORDER", "LIMIT", "HAVING", "UNION"):
+            if getattr(t, "value", "").upper() in (
+                "WHERE",
+                "GROUP",
+                "ORDER",
+                "LIMIT",
+                "HAVING",
+                "UNION",
+            ):
                 break
             if getattr(t, "value", "").upper() == "JOIN":
                 i += 1
@@ -160,7 +167,7 @@ def _parse_table_aliases(token: object) -> list[tuple[str, str | None]]:
         try:
             real = token.get_real_name()
             alias = token.get_alias()
-            name = real or (token.get_name() or "").strip('"\'')
+            name = real or (token.get_name() or "").strip("\"'")
             if name:
                 out.append((name, alias))
         except Exception:
@@ -185,7 +192,7 @@ def _get_qualified_column(ident: object) -> tuple[str | None, str]:
         name = ident.get_name()  # type: ignore[union-attr]
         if not name:
             return None, ""
-        s = name.strip('"\'')
+        s = name.strip("\"'")
         if "." in s:
             parts = s.split(".")
             return parts[0], parts[-1]
@@ -230,7 +237,9 @@ def _replace_comparison(
             raw,
             term_field=field.term_field,
             dataset_id=field.dataset_id,
-            term_type_code=field.term_set.split(".")[0] if field.term_set and "." in field.term_set else None,
+            term_type_code=field.term_set.split(".")[0]
+            if field.term_set and "." in field.term_set
+            else None,
         )
         quote = "'" if str(right).startswith("'") else '"'
         right.value = f"{quote}{resolved}{quote}"  # type: ignore[union-attr]
@@ -263,7 +272,9 @@ def _replace_in_list(
                 raw,
                 term_field=field.term_field,
                 dataset_id=field.dataset_id,
-                term_type_code=field.term_set.split(".")[0] if field.term_set and "." in field.term_set else None,
+                term_type_code=field.term_set.split(".")[0]
+                if field.term_set and "." in field.term_set
+                else None,
             )
             quote = "'" if str(t).startswith("'") else '"'
             t.value = f"{quote}{resolved}{quote}"  # type: ignore[union-attr]

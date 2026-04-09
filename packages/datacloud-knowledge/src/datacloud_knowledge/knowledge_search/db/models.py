@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 from datetime import datetime
@@ -85,4 +85,3 @@ class TermKnowledge(Base):
     sort_order: Mapped[int] = mapped_column(nullable=False, default=0)
     created_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-

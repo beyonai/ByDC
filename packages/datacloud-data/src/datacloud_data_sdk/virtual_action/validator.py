@@ -59,9 +59,7 @@ class VirtualActionValidator:
                 "VIRTUAL_ACTION_ERR_UNSUPPORTED_OP",
             )
 
-    def _check_required_filters(
-        self, filters: list[dict], required_groups: list[str]
-    ) -> None:
+    def _check_required_filters(self, filters: list[dict], required_groups: list[str]) -> None:
         """校验强制过滤字段是否出现在 filters 中。"""
         if "period_required" not in required_groups:
             return
@@ -96,9 +94,7 @@ class VirtualActionValidator:
             self._get_field(fc)
         # 强制过滤
         if required_filter_groups:
-            self._check_required_filters(
-                arguments.get("filters", []), required_filter_groups
-            )
+            self._check_required_filters(arguments.get("filters", []), required_filter_groups)
 
     def validate_analyze(
         self,
@@ -175,6 +171,4 @@ class VirtualActionValidator:
 
         # 强制过滤
         if required_filter_groups:
-            self._check_required_filters(
-                arguments.get("filters", []), required_filter_groups
-            )
+            self._check_required_filters(arguments.get("filters", []), required_filter_groups)

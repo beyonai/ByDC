@@ -223,15 +223,10 @@ class OpenGaussSaver:
         checkpoint_ns = config["configurable"].get("checkpoint_ns", "")
 
         if checkpoint_id:
-            where = (
-                "WHERE thread_id=%s AND checkpoint_ns=%s AND checkpoint_id=%s"
-            )
+            where = "WHERE thread_id=%s AND checkpoint_ns=%s AND checkpoint_id=%s"
             args: tuple = (thread_id, checkpoint_ns, checkpoint_id)
         else:
-            where = (
-                "WHERE thread_id=%s AND checkpoint_ns=%s "
-                "ORDER BY checkpoint_id DESC LIMIT 1"
-            )
+            where = "WHERE thread_id=%s AND checkpoint_ns=%s ORDER BY checkpoint_id DESC LIMIT 1"
             args = (thread_id, checkpoint_ns)
 
         with self._cursor() as cur:  # type: ignore[attr-defined]
@@ -306,9 +301,7 @@ class OpenGaussSaver:
 
         with self._cursor() as cur:  # type: ignore[attr-defined]
             # blobs: INSERT, ignore duplicate (simulate ON CONFLICT DO NOTHING)
-            if blob_versions := {
-                k: v for k, v in new_versions.items() if k in blob_values
-            }:
+            if blob_versions := {k: v for k, v in new_versions.items() if k in blob_values}:
                 for blob_row in self._dump_blobs(  # type: ignore[attr-defined]
                     thread_id, checkpoint_ns, blob_values, blob_versions
                 ):
@@ -340,9 +333,7 @@ class OpenGaussSaver:
 
     # ── put_writes override (replaces ON CONFLICT DO UPDATE / DO NOTHING) ──
 
-    def put_writes(
-        self, config: Any, writes: Any, task_id: str, task_path: str = ""
-    ) -> None:
+    def put_writes(self, config: Any, writes: Any, task_id: str, task_path: str = "") -> None:
         """OpenGauss-compatible put_writes — no ON CONFLICT."""
         from psycopg import errors as pge  # noqa: PLC0415
         from langgraph.checkpoint.base import WRITES_IDX_MAP  # noqa: PLC0415
@@ -359,7 +350,12 @@ class OpenGaussSaver:
         with self._cursor() as cur:  # type: ignore[attr-defined]
             for row in rows:
                 th, ns, chk_id, t_id, _t_path, idx = (
-                    row[0], row[1], row[2], row[3], row[4], row[5]
+                    row[0],
+                    row[1],
+                    row[2],
+                    row[3],
+                    row[4],
+                    row[5],
                 )
                 if is_upsert:
                     # Simulate ON CONFLICT DO UPDATE: delete + re-insert
@@ -376,6 +372,7 @@ class OpenGaussSaver:
 # ---------------------------------------------------------------------------
 # Factory helpers
 # ---------------------------------------------------------------------------
+
 
 def make_opengauss_saver(conn: Any) -> Any:
     """Create an OpenGauss-compatible PostgresSaver instance.
@@ -446,9 +443,7 @@ class SyncPGCheckpointer(BaseCheckpointSaver):
                 None, self._inner.put_writes, config, writes, task_id, task_path
             )
         else:
-            await loop.run_in_executor(
-                None, self._inner.put_writes, config, writes, task_id
-            )
+            await loop.run_in_executor(None, self._inner.put_writes, config, writes, task_id)
 
     async def alist(  # type: ignore[override]
         self,
@@ -461,9 +456,7 @@ class SyncPGCheckpointer(BaseCheckpointSaver):
         loop = asyncio.get_running_loop()
         items = await loop.run_in_executor(
             None,
-            lambda: list(
-                self._inner.list(config, filter=filter, before=before, limit=limit)
-            ),
+            lambda: list(self._inner.list(config, filter=filter, before=before, limit=limit)),
         )
         for item in items:
             yield item
@@ -491,6 +484,7 @@ class SyncPGCheckpointer(BaseCheckpointSaver):
 # ---------------------------------------------------------------------------
 # DDL helpers
 # ---------------------------------------------------------------------------
+
 
 def ensure_tables_opengauss(conn: Any, schema: str) -> None:
     """Create checkpoint tables using OpenGauss-compatible DDL (sync conn).
@@ -560,6 +554,7 @@ def ensure_tables_opengauss(conn: Any, schema: str) -> None:
 # ---------------------------------------------------------------------------
 # langgraph dev factory (asynccontextmanager)
 # ---------------------------------------------------------------------------
+
 
 def _ensure_tables_from_pool(pool: Any, schema: str) -> None:
     """Run OpenGauss DDL fallback using one checkout from the checkpoint pool."""
@@ -664,15 +659,12 @@ async def get_checkpointer(
             logger.info("Checkpoint tables ready (standard sync setup).")
         except (errors.SyntaxError, errors.UndefinedObject) as exc:
             logger.warning(
-                "saver.setup() failed (%s: %s); "
-                "falling back to OpenGauss-compatible DDL.",
+                "saver.setup() failed (%s: %s); falling back to OpenGauss-compatible DDL.",
                 type(exc).__name__,
                 exc,
             )
             loop = asyncio.get_running_loop()
-            await loop.run_in_executor(
-                None, _ensure_tables_from_pool, pool, checkpoint_schema
-            )
+            await loop.run_in_executor(None, _ensure_tables_from_pool, pool, checkpoint_schema)
 
         wrapped = SyncPGCheckpointer(saver)
         logger.info(

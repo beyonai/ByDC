@@ -14,11 +14,7 @@ class MemoryMerger:
 
     @staticmethod
     def left_join(
-        main: list[dict],
-        sub: list[dict],
-        main_key: str,
-        sub_key: str,
-        col_prefix: str
+        main: list[dict], sub: list[dict], main_key: str, sub_key: str, col_prefix: str
     ) -> list[dict]:
         """
         内存 LEFT JOIN。

@@ -37,9 +37,7 @@ class WorkspaceInitMiddleware(AgentMiddleware):
         """在第一次模型调用时注入工作区信息。"""
         if not self._injected:
             workspace_info = (
-                f"工作区信息：\n"
-                f"- Agent 名称: {self.agent_name}\n"
-                f"- 工作目录: {self.workspace_dir}"
+                f"工作区信息：\n- Agent 名称: {self.agent_name}\n- 工作目录: {self.workspace_dir}"
             )
             new_system = append_to_system_message(request.system_message, workspace_info)
             request = request.override(system_message=new_system)
@@ -60,9 +58,7 @@ class WorkspaceInitMiddleware(AgentMiddleware):
         """异步版本：在第一次模型调用时注入工作区信息。"""
         if not self._injected:
             workspace_info = (
-                f"工作区信息：\n"
-                f"- Agent 名称: {self.agent_name}\n"
-                f"- 工作目录: {self.workspace_dir}"
+                f"工作区信息：\n- Agent 名称: {self.agent_name}\n- 工作目录: {self.workspace_dir}"
             )
             new_system = append_to_system_message(request.system_message, workspace_info)
             request = request.override(system_message=new_system)

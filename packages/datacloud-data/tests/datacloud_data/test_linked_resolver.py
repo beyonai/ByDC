@@ -16,14 +16,21 @@ from datacloud_data_sdk.ontology.models import OntologyField, OntologyRelation
 
 
 def _load_scenario_api_linked() -> OntologyLoader:
-    path = Path(__file__).resolve().parent.parent / "fixtures" / "ontology" / "scenario_api_linked.json"
+    path = (
+        Path(__file__).resolve().parent.parent
+        / "fixtures"
+        / "ontology"
+        / "scenario_api_linked.json"
+    )
     loader = OntologyLoader()
     loader.load_from_path(path)
     return loader
 
 
 def _load_scenario_db_linked() -> OntologyLoader:
-    path = Path(__file__).resolve().parent.parent / "fixtures" / "ontology" / "scenario_db_linked.json"
+    path = (
+        Path(__file__).resolve().parent.parent / "fixtures" / "ontology" / "scenario_db_linked.json"
+    )
     loader = OntologyLoader()
     loader.load_from_path(path)
     return loader
@@ -68,13 +75,17 @@ async def test_resolve_api_linked_single() -> None:
     parents = [{"customer_id": "c1"}]
 
     mock_obj = AsyncMock()
-    mock_obj.invoke_action = AsyncMock(return_value={"records": [{"id": 1}], "total": 1, "meta": {}})
+    mock_obj.invoke_action = AsyncMock(
+        return_value={"records": [{"id": 1}], "total": 1, "meta": {}}
+    )
 
     with patch.object(loader, "get_object", return_value=mock_obj):
         result = await resolve_api_linked_batch(loader, parents, field, relation)
 
     assert result == [[{"id": 1}]]
-    mock_obj.invoke_action.assert_called_once_with("query_opportunities_by_customer", {"customerId": "c1"})
+    mock_obj.invoke_action.assert_called_once_with(
+        "query_opportunities_by_customer", {"customerId": "c1"}
+    )
 
 
 @pytest.mark.asyncio
@@ -85,8 +96,12 @@ async def test_resolve_db_linked_batch() -> None:
     loader = _load_scenario_db_linked()
     ds_manager = DataSourceManager(loader._config.datasource_configs)
     connector = ds_manager.get_connector("test_db")
-    await connector.execute("CREATE TABLE IF NOT EXISTS customer (id INTEGER, name TEXT, customer_id TEXT)")
-    await connector.execute("CREATE TABLE IF NOT EXISTS opportunity (id INTEGER, amount REAL, customer_id TEXT)")
+    await connector.execute(
+        "CREATE TABLE IF NOT EXISTS customer (id INTEGER, name TEXT, customer_id TEXT)"
+    )
+    await connector.execute(
+        "CREATE TABLE IF NOT EXISTS opportunity (id INTEGER, amount REAL, customer_id TEXT)"
+    )
     await connector.execute("DELETE FROM opportunity")
     await connector.execute("DELETE FROM customer")
     await connector.execute("INSERT INTO customer VALUES (1, 'c1', 'c1'), (2, 'c2', 'c2')")

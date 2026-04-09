@@ -78,11 +78,7 @@ class TestRefResolver:
             }
         }
 
-        params = {
-            "where": [
-                {"field": "id", "op": "in", "value": "{step1}.result[*].id"}
-            ]
-        }
+        params = {"where": [{"field": "id", "op": "in", "value": "{step1}.result[*].id"}]}
 
         result = RefResolver.resolve(params, context)
         assert result["where"][0]["value"] == [1, 2]

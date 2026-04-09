@@ -24,9 +24,9 @@ class VirtualActionProfile:
         description: 动作描述
     """
 
-    action_family: str              # "lookup" | "analyze" | "search"
-    scope_type: str                 # "object" | "view"
-    scope_code: str                 # 对象编码或视图编码
+    action_family: str  # "lookup" | "analyze" | "search"
+    scope_type: str  # "object" | "view"
+    scope_code: str  # 对象编码或视图编码
     exposure_policy: str = "direct"
     default_limit: int = 100
     max_limit: int = 1000

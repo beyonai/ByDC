@@ -37,8 +37,18 @@ REGISTRY_API = {
                     "action_type": "query",
                     "params": [
                         {"param_code": "names", "direction": "IN", "param_type": "ARRAY"},
-                        {"param_code": "userId", "direction": "OUT", "param_type": "STRING", "mapping_path": "$.users[].userId"},
-                        {"param_code": "userName", "direction": "OUT", "param_type": "STRING", "mapping_path": "$.users[].userName"},
+                        {
+                            "param_code": "userId",
+                            "direction": "OUT",
+                            "param_type": "STRING",
+                            "mapping_path": "$.users[].userId",
+                        },
+                        {
+                            "param_code": "userName",
+                            "direction": "OUT",
+                            "param_type": "STRING",
+                            "mapping_path": "$.users[].userName",
+                        },
                     ],
                     "function_refs": ["fn_get_emp"],
                 }
@@ -75,52 +85,67 @@ REGISTRY_SCRIPT = {
 PLAN_WITH_SQL = QueryExecutionPlan(
     question="查商机",
     can_answer=True,
-    steps=[PlanStep(
-        step_id="s1", type="SQL", source_id="SRC_CRM",
-        datasource_alias="crm_db",
-        sql_template="SELECT bo_id FROM sales_bo",
-        output_ref="bo_list",
-    )],
+    steps=[
+        PlanStep(
+            step_id="s1",
+            type="SQL",
+            source_id="SRC_CRM",
+            datasource_alias="crm_db",
+            sql_template="SELECT bo_id FROM sales_bo",
+            output_ref="bo_list",
+        )
+    ],
     aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1", columns=[]),
 )
 
 PLAN_WITH_API = QueryExecutionPlan(
     question="查员工",
     can_answer=True,
-    steps=[PlanStep(
-        step_id="s1", type="API", source_id="SRC_EMP",
-        object_id="sales_emp",
-        function_id="query_emp",
-        params={"names": ["邹海天"]},
-        output_ref="api_emp",
-    )],
-    aggregation=PlanAggregation(strategy="SQLITE_MEM", sqlite_sql="SELECT * FROM api_emp", columns=[]),
+    steps=[
+        PlanStep(
+            step_id="s1",
+            type="API",
+            source_id="SRC_EMP",
+            object_id="sales_emp",
+            function_id="query_emp",
+            params={"names": ["邹海天"]},
+            output_ref="api_emp",
+        )
+    ],
+    aggregation=PlanAggregation(
+        strategy="SQLITE_MEM", sqlite_sql="SELECT * FROM api_emp", columns=[]
+    ),
 )
 
 PLAN_WITH_SCRIPT = QueryExecutionPlan(
     question="计算评分",
     can_answer=True,
-    steps=[PlanStep(
-        step_id="s1", type="API",
-        object_id="sales_bo",
-        function_id="calc_score",
-        params={"bo_id": "123"},
-        output_ref="score_result",
-    )],
+    steps=[
+        PlanStep(
+            step_id="s1",
+            type="API",
+            object_id="sales_bo",
+            function_id="calc_score",
+            params={"bo_id": "123"},
+            output_ref="score_result",
+        )
+    ],
     aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1", columns=[]),
 )
 
 PLAN_WITH_KB = QueryExecutionPlan(
     question="检索知识库",
     can_answer=True,
-    steps=[PlanStep(
-        step_id="s1",
-        type="KB",
-        datasource_alias="kb_docs",
-        query="如何配置数据源",
-        tags={"category": "config", "version": "v2"},
-        output_ref="kb_result",
-    )],
+    steps=[
+        PlanStep(
+            step_id="s1",
+            type="KB",
+            datasource_alias="kb_docs",
+            query="如何配置数据源",
+            tags={"category": "config", "version": "v2"},
+            output_ref="kb_result",
+        )
+    ],
     aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1", columns=[]),
 )
 
@@ -134,13 +159,17 @@ def test_sql_step_converts_to_sql_exec_task() -> None:
 
 def test_sql_step_resolves_term_bound_literals() -> None:
     """SQL 步骤中绑定术语字段的字面量会被解析为 code。"""
-    loader = TermLoader.from_mapping({
-        "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
-    })
+    loader = TermLoader.from_mapping(
+        {
+            "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
+        }
+    )
     term_resolver = TermResolver(term_loader=loader)
     payload = ObjectViewPayload(
         view_id="v1",
-        sources=[ObjectViewSource(source_id="SRC_CRM", source_type="DB", datasource_alias="crm_db")],
+        sources=[
+            ObjectViewSource(source_id="SRC_CRM", source_type="DB", datasource_alias="crm_db")
+        ],
         objects=[
             ObjectViewObject(
                 object_id="sales_bo",
@@ -148,7 +177,12 @@ def test_sql_step_resolves_term_bound_literals() -> None:
                 source_id="SRC_CRM",
                 table="sales_bo",
                 fields=[
-                    ObjectViewField(name="status", type="string", term_set="status.code", source_column="status_code"),
+                    ObjectViewField(
+                        name="status",
+                        type="string",
+                        term_set="status.code",
+                        source_column="status_code",
+                    ),
                 ],
             )
         ],
@@ -188,19 +222,20 @@ def test_api_step_converts_to_api_exec_task() -> None:
 
 def test_api_step_converts_params_with_mapping_path() -> None:
     loader = OntologyLoader()
-    loader.load_from_content({
-        "functions": [{"function_code": "fn_get_emp", "api_schema": {}}],
-        "objects": [
-            {
-                "object_code": "obj1",
-                "object_name": "员工",
-                "source_type": "API",
-                "fields": [],
-                "actions": [
-                    {
-                        "action_code": "get_emp",
-                        "action_type": "query",
-                        "params": [
+    loader.load_from_content(
+        {
+            "functions": [{"function_code": "fn_get_emp", "api_schema": {}}],
+            "objects": [
+                {
+                    "object_code": "obj1",
+                    "object_name": "员工",
+                    "source_type": "API",
+                    "fields": [],
+                    "actions": [
+                        {
+                            "action_code": "get_emp",
+                            "action_type": "query",
+                            "params": [
                                 {
                                     "param_code": "emp_no",
                                     "direction": "IN",
@@ -214,13 +249,14 @@ def test_api_step_converts_params_with_mapping_path() -> None:
                                     "mapping_path": "$.response.emp[].emp_id",
                                 },
                             ],
-                        "function_refs": ["fn_get_emp"],
-                    }
-                ],
-            }
-        ],
-        "relations": [],
-    })
+                            "function_refs": ["fn_get_emp"],
+                        }
+                    ],
+                }
+            ],
+            "relations": [],
+        }
+    )
     plan = QueryExecutionPlan(
         question="查员工",
         can_answer=True,
@@ -264,13 +300,19 @@ def test_kb_step_converts_to_kb_exec_task() -> None:
 
 def test_kb_step_resolves_term_bound_tags() -> None:
     """KB 步骤的 tags 中，绑定术语的 field 值会被解析为 code。"""
-    loader = TermLoader.from_mapping({
-        "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
-    })
+    loader = TermLoader.from_mapping(
+        {
+            "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
+        }
+    )
     term_resolver = TermResolver(term_loader=loader)
     payload = ObjectViewPayload(
         view_id="v1",
-        sources=[ObjectViewSource(source_id="SRC_KB", source_type="KNOWLEDGE_BASE", datasource_alias="kb_docs")],
+        sources=[
+            ObjectViewSource(
+                source_id="SRC_KB", source_type="KNOWLEDGE_BASE", datasource_alias="kb_docs"
+            )
+        ],
         objects=[
             ObjectViewObject(
                 object_id="kb_doc",

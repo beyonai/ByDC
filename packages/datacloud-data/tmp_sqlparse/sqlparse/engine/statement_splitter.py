@@ -30,9 +30,9 @@ class StatementSplitter:
         """Get the new split level (increase, decrease or remain equal)"""
 
         # parenthesis increase/decrease a level
-        if ttype is T.Punctuation and value == '(':
+        if ttype is T.Punctuation and value == "(":
             return 1
-        elif ttype is T.Punctuation and value == ')':
+        elif ttype is T.Punctuation and value == ")":
             return -1
         elif ttype not in T.Keyword:  # if normal token return
             return 0
@@ -44,16 +44,16 @@ class StatementSplitter:
 
         # three keywords begin with CREATE, but only one of them is DDL
         # DDL Create though can contain more words such as "or replace"
-        if ttype is T.Keyword.DDL and unified.startswith('CREATE'):
+        if ttype is T.Keyword.DDL and unified.startswith("CREATE"):
             self._is_create = True
             return 0
 
         # can have nested declare inside of being...
-        if unified == 'DECLARE' and self._is_create and self._begin_depth == 0:
+        if unified == "DECLARE" and self._is_create and self._begin_depth == 0:
             self._in_declare = True
             return 1
 
-        if unified == 'BEGIN':
+        if unified == "BEGIN":
             self._begin_depth += 1
             self._seen_begin = True
             if self._is_create:
@@ -63,30 +63,30 @@ class StatementSplitter:
 
         # Issue826: If we see a transaction keyword after BEGIN,
         # it's a transaction statement, not a block.
-        if self._seen_begin and \
-                (ttype is T.Keyword or ttype is T.Name) and \
-                unified in ('TRANSACTION', 'WORK', 'TRAN',
-                            'DISTRIBUTED', 'DEFERRED',
-                            'IMMEDIATE', 'EXCLUSIVE'):
+        if (
+            self._seen_begin
+            and (ttype is T.Keyword or ttype is T.Name)
+            and unified
+            in ("TRANSACTION", "WORK", "TRAN", "DISTRIBUTED", "DEFERRED", "IMMEDIATE", "EXCLUSIVE")
+        ):
             self._begin_depth = max(0, self._begin_depth - 1)
             self._seen_begin = False
             return 0
 
         # BEGIN and CASE/WHEN both end with END
-        if unified == 'END':
+        if unified == "END":
             if not self._in_case:
                 self._begin_depth = max(0, self._begin_depth - 1)
             else:
                 self._in_case = False
             return -1
 
-        if (unified in ('IF', 'FOR', 'WHILE', 'CASE')
-                and self._is_create and self._begin_depth > 0):
-            if unified == 'CASE':
+        if unified in ("IF", "FOR", "WHILE", "CASE") and self._is_create and self._begin_depth > 0:
+            if unified == "CASE":
                 self._in_case = True
             return 1
 
-        if unified in ('END IF', 'END FOR', 'END WHILE'):
+        if unified in ("END IF", "END FOR", "END WHILE"):
             return -1
 
         # Default
@@ -121,7 +121,7 @@ class StatementSplitter:
             # rule.
             # Issue809: Ignore semicolons inside BEGIN...END blocks, but handle
             # standalone BEGIN; as a transaction statement
-            if ttype is T.Punctuation and value == ';':
+            if ttype is T.Punctuation and value == ";":
                 # If we just saw BEGIN; then this is a transaction BEGIN,
                 # not a BEGIN...END block, so decrement depth
                 if self._seen_begin:
@@ -130,11 +130,14 @@ class StatementSplitter:
                 # Split on semicolon if not inside a BEGIN...END block
                 if self.level <= 0 and self._begin_depth == 0:
                     self.consume_ws = True
-            elif ttype is T.Keyword and value.split()[0] == 'GO':
+            elif ttype is T.Keyword and value.split()[0] == "GO":
                 self.consume_ws = True
-            elif (ttype not in (T.Whitespace, T.Newline, T.Comment.Single,
-                                T.Comment.Multiline)
-                  and not (ttype is T.Keyword and value.upper() == 'BEGIN')):
+            elif ttype not in (
+                T.Whitespace,
+                T.Newline,
+                T.Comment.Single,
+                T.Comment.Multiline,
+            ) and not (ttype is T.Keyword and value.upper() == "BEGIN"):
                 # Reset _seen_begin if we see a non-whitespace, non-comment
                 # token but not for BEGIN itself (which just set the flag)
                 self._seen_begin = False

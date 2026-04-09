@@ -52,9 +52,7 @@ def _build_exec_zh() -> str:
         "- 工具返回中包含 _hint 字段时，必须立即按照 _hint 指示调用 finish_react，禁止将数据整理为文字回复。\n",
     ]
     if not no_ask:
-        parts.append(
-            "- 仅当问题含义不清或工具明确要求追问时，才使用 ask_user（详见下方规则）。\n"
-        )
+        parts.append("- 仅当问题含义不清或工具明确要求追问时，才使用 ask_user（详见下方规则）。\n")
     else:
         parts.append(
             "- 当前未挂载 ask_user 工具：禁止试图调用 ask_user。"
@@ -79,9 +77,7 @@ def _build_exec_zh() -> str:
             ]
         )
     else:
-        parts.append(
-            "- 查询工具成功返回数据后，应直接调用 finish_react，不得再试图追问用户。\n"
-        )
+        parts.append("- 查询工具成功返回数据后，应直接调用 finish_react，不得再试图追问用户。\n")
 
     ask_user_result_line = (
         "- 如果 result_type=ask_user，需要向用户追问，使用 ask_user 工具。\n"

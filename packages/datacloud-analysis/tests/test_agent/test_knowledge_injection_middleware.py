@@ -65,7 +65,9 @@ class TestKnowledgeInjectionMiddleware:
             ]
         }
 
-        with patch("datacloud_analysis.middlewares.knowledge_injection.search_knowledge") as mock_tool:
+        with patch(
+            "datacloud_analysis.middlewares.knowledge_injection.search_knowledge"
+        ) as mock_tool:
             mock_tool.ainvoke = AsyncMock(return_value=mock_result)
 
             schema = await middleware._retrieve_schema("查询客户订单")
@@ -81,7 +83,9 @@ class TestKnowledgeInjectionMiddleware:
         """测试没有匹配的 Schema"""
         middleware = KnowledgeInjectionMiddleware()
 
-        with patch("datacloud_analysis.middlewares.knowledge_injection.search_knowledge") as mock_tool:
+        with patch(
+            "datacloud_analysis.middlewares.knowledge_injection.search_knowledge"
+        ) as mock_tool:
             mock_tool.ainvoke = AsyncMock(return_value={"term_matches": []})
 
             schema = await middleware._retrieve_schema("随机查询")
@@ -105,7 +109,9 @@ class TestKnowledgeInjectionMiddleware:
             handler_called_with.append(req)
             return "response"
 
-        with patch("datacloud_analysis.middlewares.knowledge_injection.search_knowledge") as mock_tool:
+        with patch(
+            "datacloud_analysis.middlewares.knowledge_injection.search_knowledge"
+        ) as mock_tool:
             mock_tool.ainvoke = AsyncMock(return_value=mock_result)
 
             result = await middleware.awrap_model_call(request, mock_handler)
@@ -148,7 +154,9 @@ class TestKnowledgeInjectionMiddleware:
             handler_results.append(req)
             return "response"
 
-        with patch("datacloud_analysis.middlewares.knowledge_injection.search_knowledge") as mock_tool:
+        with patch(
+            "datacloud_analysis.middlewares.knowledge_injection.search_knowledge"
+        ) as mock_tool:
             mock_tool.ainvoke = AsyncMock(side_effect=RuntimeError("连接失败"))
 
             result = await middleware.awrap_model_call(request, mock_handler)

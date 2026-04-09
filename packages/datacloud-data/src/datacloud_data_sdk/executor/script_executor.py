@@ -31,12 +31,12 @@ from datacloud_data_sdk.exceptions import ScriptExecutionError
 class ScriptExecutor:
     """
     脚本执行器
-    
+
     执行预定义的 Python 脚本代码，支持超时控制和错误处理。
-    
+
     Attributes:
         _loader: 本体加载器引用，可注入到脚本环境中
-    
+
     Example:
         executor = ScriptExecutor(loader)
         result = await executor.execute(
@@ -48,7 +48,7 @@ class ScriptExecutor:
     def __init__(self, ontology_loader: Any = None) -> None:
         """
         初始化脚本执行器
-        
+
         Args:
             ontology_loader: 本体加载器实例，可选注入到脚本环境
         """
@@ -63,22 +63,22 @@ class ScriptExecutor:
     ) -> dict[str, Any]:
         """
         编译并执行脚本
-        
+
         执行流程：
         1. 获取当前请求上下文
         2. 构建脚本命名空间，注入依赖
         3. 编译并执行脚本
         4. 调用 execute 函数获取结果
-        
+
         Args:
             script: Python 脚本代码
             params: 传递给 execute 函数的参数
             action_code: 动作代码，用于错误信息
             timeout: 执行超时时间（秒）
-        
+
         Returns:
             dict: execute 函数返回的结果字典
-        
+
         Raises:
             ScriptExecutionError: 脚本语法错误、执行错误或超时时抛出
         """

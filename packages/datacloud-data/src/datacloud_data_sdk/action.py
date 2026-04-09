@@ -214,11 +214,7 @@ class Action:
         from datacloud_data_sdk.exceptions import ActionNotConfiguredError
 
         params = dict(params)
-        term_loader = (
-            getattr(self._loader._config, "term_loader", None)
-            if self._loader
-            else None
-        )
+        term_loader = getattr(self._loader._config, "term_loader", None) if self._loader else None
 
         from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
         from datacloud_data_sdk.result_formatter import build_query_response
@@ -347,18 +343,22 @@ class Action:
         # 对象级虚拟动作：按 action_family 路由
         if action_family == "lookup":
             from datacloud_data_sdk.executor.lookup_executor import LookupExecutor
+
             return await LookupExecutor(self._loader).execute(object_code, params)
 
         if action_family == "analyze":
             from datacloud_data_sdk.executor.analyze_executor import AnalyzeExecutor
+
             return await AnalyzeExecutor(self._loader).execute(object_code, params)
 
         if action_family == "search":
             from datacloud_data_sdk.executor.kb_search_executor import KbSearchExecutor
+
             return await KbSearchExecutor(self._loader).execute(object_code, params)
 
         # 兼容旧协议（query_* 动作 / 无 action_family）
         from datacloud_data_sdk.executor.dynamic_query_executor import DynamicQueryExecutor
+
         return await DynamicQueryExecutor(self._loader).execute(object_code, params)
 
     async def _execute_virtual_view(
@@ -564,7 +564,11 @@ class Action:
             action_code=self._action.action_code,
         )
         if not isinstance(result, dict):
-            return {"records": [], "total": 0, "meta": {"viewId": "auto_view", "columns": [], "total": 0}}
+            return {
+                "records": [],
+                "total": 0,
+                "meta": {"viewId": "auto_view", "columns": [], "total": 0},
+            }
         out_params = [
             (p.param_code, p.mapping_path)
             for p in self._action.params

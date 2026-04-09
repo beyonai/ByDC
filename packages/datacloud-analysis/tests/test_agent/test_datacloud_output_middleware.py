@@ -41,10 +41,12 @@ class TestDatacloudOutputMiddleware:
         middleware = DatacloudOutputMiddleware()
         emit_result = middleware.tools[0]
 
-        result = emit_result.invoke({
-            "result_type": "text",
-            "answer": "操作已完成",
-        })
+        result = emit_result.invoke(
+            {
+                "result_type": "text",
+                "answer": "操作已完成",
+            }
+        )
 
         assert "已输出结果" in result
 
@@ -53,14 +55,16 @@ class TestDatacloudOutputMiddleware:
         middleware = DatacloudOutputMiddleware()
         emit_result = middleware.tools[0]
 
-        result = emit_result.invoke({
-            "result_type": "query_result",
-            "answer": "找到3个客户",
-            "data": {
-                "columns": ["id", "name"],
-                "rows": [[1, "张三"], [2, "李四"], [3, "王五"]],
-            },
-        })
+        result = emit_result.invoke(
+            {
+                "result_type": "query_result",
+                "answer": "找到3个客户",
+                "data": {
+                    "columns": ["id", "name"],
+                    "rows": [[1, "张三"], [2, "李四"], [3, "王五"]],
+                },
+            }
+        )
 
         assert "已输出结果" in result
 
@@ -69,11 +73,13 @@ class TestDatacloudOutputMiddleware:
         middleware = DatacloudOutputMiddleware()
         emit_result = middleware.tools[0]
 
-        result = emit_result.invoke({
-            "result_type": "csv_file",
-            "answer": "已导出数据",
-            "file_path": "/tmp/export.csv",
-        })
+        result = emit_result.invoke(
+            {
+                "result_type": "csv_file",
+                "answer": "已导出数据",
+                "file_path": "/tmp/export.csv",
+            }
+        )
 
         assert "已输出结果" in result
 
@@ -82,11 +88,13 @@ class TestDatacloudOutputMiddleware:
         middleware = DatacloudOutputMiddleware()
         emit_result = middleware.tools[0]
 
-        result = emit_result.invoke({
-            "result_type": "json",
-            "answer": "数据已准备",
-            "data": {"key": "value", "count": 42},
-        })
+        result = emit_result.invoke(
+            {
+                "result_type": "json",
+                "answer": "数据已准备",
+                "data": {"key": "value", "count": 42},
+            }
+        )
 
         assert "已输出结果" in result
 

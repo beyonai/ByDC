@@ -45,7 +45,9 @@ async def test_api_executor_raises_on_http_error(tmp_path: Path) -> None:
         output_ref="x",
     )
     mock_obj = MagicMock()
-    mock_obj.invoke_action = AsyncMock(side_effect=ApiExecutionError("fn_get_emp", 500, "Internal Error"))
+    mock_obj.invoke_action = AsyncMock(
+        side_effect=ApiExecutionError("fn_get_emp", 500, "Internal Error")
+    )
 
     mock_loader = MagicMock()
     mock_loader.get_object = MagicMock(return_value=mock_obj)

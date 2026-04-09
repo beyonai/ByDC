@@ -62,13 +62,8 @@ class TestStage4ToolLoggingMiddleware:
 
         # Mock request with gateway_context
         mock_request = Mock()
-        mock_request.runtime.config = {
-            "configurable": {"gateway_context": mock_gateway_context}
-        }
-        mock_request.tool_call = {
-            "name": "query_objects",
-            "args": {"object_type": "company_bo"}
-        }
+        mock_request.runtime.config = {"configurable": {"gateway_context": mock_gateway_context}}
+        mock_request.tool_call = {"name": "query_objects", "args": {"object_type": "company_bo"}}
         mock_request.tool = Mock()
         mock_request.tool._is_agent_delegate = False
 
@@ -145,10 +140,7 @@ class TestStage4ToolLoggingLogic:
         middleware = ToolCallLoggingMiddleware()
 
         # 成功结果
-        result = {
-            "status": "success",
-            "result": {"records": [{"id": "1"}, {"id": "2"}]}
-        }
+        result = {"status": "success", "result": {"records": [{"id": "1"}, {"id": "2"}]}}
         formatted = middleware._format_result(result)
         assert "success" in formatted
         assert "2" in formatted  # 记录数
@@ -206,6 +198,7 @@ class TestStage4MiddlewareRegistration:
 
         # 验证包含 ToolCallLoggingMiddleware
         from datacloud_analysis.middlewares import ToolCallLoggingMiddleware
+
         middleware_types = [type(m).__name__ for m in middlewares]
         assert "ToolCallLoggingMiddleware" in middleware_types
 

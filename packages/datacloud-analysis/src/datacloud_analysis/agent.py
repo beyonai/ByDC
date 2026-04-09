@@ -159,8 +159,9 @@ def create_agent(
     logger.info("create_agent: base_url=%s", base_url)
     logger.info("create_agent: temperature=%s", temperature)
     logger.info("create_agent: locale=%s", locale)
-    logger.info("create_agent: system_prompt=%s",
-                f"<{len(system_prompt)} chars>" if system_prompt else None)
+    logger.info(
+        "create_agent: system_prompt=%s", f"<{len(system_prompt)} chars>" if system_prompt else None
+    )
 
     # 打印 prompts_overwrite 详情
     if prompts_overwrite:
@@ -354,15 +355,10 @@ def _create_deep_agent(
             logger.info("create_agent: using builtin skills from package: %s", builtin_skills_dir)
         except (ValueError, OSError):
             # 技能目录不在工作目录内，跳过
-            logger.info(
-                "create_agent: no skills directory found (checked workspace and package)"
-            )
+            logger.info("create_agent: no skills directory found (checked workspace and package)")
 
     # Middleware stack (自定义中间件追加在 SDK 内置栈之后)
-    logger.info(
-        "create_agent: initializing middlewares with mounted_objects=%s",
-        mounted_objects
-    )
+    logger.info("create_agent: initializing middlewares with mounted_objects=%s", mounted_objects)
     middlewares = [
         KnowledgeInjectionMiddleware(mounted_objects=mounted_objects),  # 🆕 传递挂载对象
         ToolCallLoggingMiddleware(),  # 🆕 阶段4：工具调用推送
@@ -422,7 +418,3 @@ def _create_deep_agent(
     )
 
     return compiled
-
-
-
-

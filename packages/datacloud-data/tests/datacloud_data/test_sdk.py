@@ -1,4 +1,5 @@
 import sys
+
 sys.path.insert(0, "src")
 
 import asyncio
@@ -13,15 +14,21 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(Path("/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/packages/datacloud-data/.env"))
-
-
+load_dotenv(
+    Path(
+        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/packages/datacloud-data/.env"
+    )
+)
 
 
 async def main1() -> None:
     loader = OntologyLoader()
-    loader.load_from_path("/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json")
-    loader.load_scene_from_path("/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json")
+    loader.load_from_path(
+        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json"
+    )
+    loader.load_scene_from_path(
+        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json"
+    )
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
@@ -37,7 +44,9 @@ async def main1() -> None:
 
     obj = loader.get_object("dws_enterprise_wide")
     with InvocationContext(tenant_id="t1", user_id="u1"):
-        result = await obj.query("2026年北京亦庄经济技术开发区区域内单位亩产效益最低的10家企业", include_plan=True)
+        result = await obj.query(
+            "2026年北京亦庄经济技术开发区区域内单位亩产效益最低的10家企业", include_plan=True
+        )
 
     print(result)
 
@@ -45,8 +54,12 @@ async def main1() -> None:
 async def main2() -> None:
     loader = OntologyLoader()
 
-    loader.load_from_path("/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json")
-    loader.load_scene_from_path("/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json")
+    loader.load_from_path(
+        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json"
+    )
+    loader.load_scene_from_path(
+        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json"
+    )
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
@@ -62,16 +75,21 @@ async def main2() -> None:
 
     view = loader.get_view("scene_01_data_analysis")
     with InvocationContext(tenant_id="t1", user_id="u1"):
-        result = await view.query("026年北京亦庄经济技术开发区区域内单位亩产效益最低的10家企业", include_plan=True)
+        result = await view.query(
+            "026年北京亦庄经济技术开发区区域内单位亩产效益最低的10家企业", include_plan=True
+        )
 
     print(result)
 
 
-
 async def main3() -> None:
     loader = OntologyLoader()
-    loader.load_scene_from_path("/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json")
-    loader.load_from_path("/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json")
+    loader.load_scene_from_path(
+        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json"
+    )
+    loader.load_from_path(
+        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json"
+    )
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
@@ -103,8 +121,12 @@ async def main3() -> None:
 
 async def main4() -> None:
     loader = OntologyLoader()
-    loader.load_scene_from_path("/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json")
-    loader.load_from_path("/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json")
+    loader.load_scene_from_path(
+        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json"
+    )
+    loader.load_from_path(
+        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json"
+    )
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
@@ -130,9 +152,12 @@ async def main4() -> None:
         )
     print(result)
 
+
 async def main5() -> None:
     loader = OntologyLoader()
-    loader.load_from_owl_directory("/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package_owl/")
+    loader.load_from_owl_directory(
+        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package_owl/"
+    )
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
@@ -148,7 +173,9 @@ async def main5() -> None:
 
     obj = loader.get_object("dws_enterprise_wide")
     with InvocationContext(tenant_id="t1", user_id="u1"):
-        result = await obj.query("2026年北京亦庄经济技术开发区区域内单位亩产效益最低的10家企业", include_plan=True)
+        result = await obj.query(
+            "2026年北京亦庄经济技术开发区区域内单位亩产效益最低的10家企业", include_plan=True
+        )
 
     print(result)
 

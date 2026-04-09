@@ -76,9 +76,7 @@ class TestAgentCreation:
             mock_deep.return_value = Mock()
 
             custom_system = "我是亦庄产业大脑数字员工"
-            prompts_dict = {
-                "system_prompt": custom_system
-            }
+            prompts_dict = {"system_prompt": custom_system}
 
             create_agent(prompts_overwrite=prompts_dict)
 
@@ -92,9 +90,7 @@ class TestAgentCreation:
             mock_deep.return_value = Mock()
 
             task_prompt_content = "请根据以下原则来处理问题。\n# 单一技能优先原则：..."
-            prompts_dict = {
-                "task_prompt": task_prompt_content
-            }
+            prompts_dict = {"task_prompt": task_prompt_content}
 
             create_agent(prompts_overwrite=prompts_dict)
 
@@ -109,10 +105,7 @@ class TestAgentCreation:
 
             custom_system = "我是数字员工"
             task_prompt_content = "请遵循以下原则"
-            prompts_dict = {
-                "system_prompt": custom_system,
-                "task_prompt": task_prompt_content
-            }
+            prompts_dict = {"system_prompt": custom_system, "task_prompt": task_prompt_content}
 
             create_agent(prompts_overwrite=prompts_dict)
 
@@ -128,14 +121,9 @@ class TestAgentCreation:
             direct_system = "直接传入的 system_prompt"
             overwrite_system = "prompts_overwrite 中的 system_prompt"
 
-            prompts_dict = {
-                "system_prompt": overwrite_system
-            }
+            prompts_dict = {"system_prompt": overwrite_system}
 
-            create_agent(
-                system_prompt=direct_system,
-                prompts_overwrite=prompts_dict
-            )
+            create_agent(system_prompt=direct_system, prompts_overwrite=prompts_dict)
 
             call_kwargs = mock_deep.call_args[1]
             # 验证 prompts_overwrite 的优先级更高
@@ -153,4 +141,3 @@ class TestAgentCreation:
             call_kwargs = mock_deep.call_args[1]
             assert call_kwargs["system_prompt"] == direct_system
             assert call_kwargs["task_prompt"] is None
-

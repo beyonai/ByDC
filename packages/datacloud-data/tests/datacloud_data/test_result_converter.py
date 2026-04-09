@@ -1,4 +1,5 @@
 """Tests for ResultConverter."""
+
 from pathlib import Path
 
 from datacloud_data_sdk.sql_executor.result_converter import ResultConverter

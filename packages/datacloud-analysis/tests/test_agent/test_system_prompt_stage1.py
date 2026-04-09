@@ -23,7 +23,7 @@ class TestSystemPromptStage1:
         mock_backend,
         mock_create_deep_agent,
         mock_checkpointer,
-        mock_pathlib
+        mock_pathlib,
     ):
         """测试 task_prompt 正确追加到 system_prompt"""
         # Setup mocks
@@ -44,9 +44,7 @@ class TestSystemPromptStage1:
 
         # 调用 _create_deep_agent
         result = _create_deep_agent(
-            system_prompt=custom_system,
-            task_prompt=task_prompt_content,
-            locale="zh_CN"
+            system_prompt=custom_system, task_prompt=task_prompt_content, locale="zh_CN"
         )
 
         # 验证 create_deep_agent 被调用
@@ -77,7 +75,7 @@ class TestSystemPromptStage1:
         mock_backend,
         mock_create_deep_agent,
         mock_checkpointer,
-        mock_pathlib
+        mock_pathlib,
     ):
         """测试没有 task_prompt 时，只使用 system_prompt"""
         # Setup mocks
@@ -96,11 +94,7 @@ class TestSystemPromptStage1:
         custom_system = "你是数字员工"
 
         # 调用 _create_deep_agent，不传 task_prompt
-        result = _create_deep_agent(
-            system_prompt=custom_system,
-            task_prompt=None,
-            locale="zh_CN"
-        )
+        result = _create_deep_agent(system_prompt=custom_system, task_prompt=None, locale="zh_CN")
 
         # 验证 system_prompt 参数
         call_kwargs = mock_create_deep_agent.call_args[1]
@@ -121,7 +115,7 @@ class TestSystemPromptStage1:
         mock_backend,
         mock_create_deep_agent,
         mock_checkpointer,
-        mock_pathlib
+        mock_pathlib,
     ):
         """测试当 system_prompt=None 时，使用默认 prompt"""
         # Setup mocks
@@ -138,11 +132,7 @@ class TestSystemPromptStage1:
         mock_pathlib.Path.return_value = mock_path
 
         # 调用 _create_deep_agent，不传 system_prompt
-        result = _create_deep_agent(
-            system_prompt=None,
-            task_prompt=None,
-            locale="zh_CN"
-        )
+        result = _create_deep_agent(system_prompt=None, task_prompt=None, locale="zh_CN")
 
         # 验证使用了默认 prompt
         call_kwargs = mock_create_deep_agent.call_args[1]
@@ -164,7 +154,7 @@ class TestSystemPromptStage1:
         mock_backend,
         mock_create_deep_agent,
         mock_checkpointer,
-        mock_pathlib
+        mock_pathlib,
     ):
         """测试默认 prompt + task_prompt 的组合"""
         # Setup mocks
@@ -186,7 +176,7 @@ class TestSystemPromptStage1:
         result = _create_deep_agent(
             system_prompt=None,  # 使用默认
             task_prompt=task_prompt_content,
-            locale="zh_CN"
+            locale="zh_CN",
         )
 
         # 验证
@@ -197,4 +187,3 @@ class TestSystemPromptStage1:
         assert "DataCloud Agent" in final_prompt
         assert "# 任务处理指导" in final_prompt
         assert task_prompt_content in final_prompt
-

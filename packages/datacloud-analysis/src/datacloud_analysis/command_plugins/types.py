@@ -26,6 +26,7 @@ class CommandPluginProtocol(Protocol):
     priority: int
     enabled: bool
 
-    def handle(self, *, context: CommandExecutionContext) -> CommandResult | Awaitable[CommandResult]:
+    def handle(
+        self, *, context: CommandExecutionContext
+    ) -> CommandResult | Awaitable[CommandResult]:
         """Handle one ext command payload."""
-

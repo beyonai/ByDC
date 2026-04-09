@@ -64,8 +64,8 @@ class LoaderConfig:
     csv_base_dir: str | None = None  # None 表示使用系统临时目录
     sql_execution_mode: str = "internal"
     term_loader: Any = None
-    query_result_csv_threshold: int = 10   # 0 = 不启用溢出截断
-    query_result_preview_rows: int = 10    # 溢出时返回的预览行数
+    query_result_csv_threshold: int = 10  # 0 = 不启用溢出截断
+    query_result_preview_rows: int = 10  # 溢出时返回的预览行数
 
 
 class OntologyLoader:
@@ -201,6 +201,7 @@ class OntologyLoader:
         for ds_alias, ds_config in content.get("datasource_configs", {}).items():
             if ds_alias not in self._config.datasource_configs:
                 from datacloud_data_sdk.sql_executor.config_loader import _dict_to_config
+
                 self._config.datasource_configs[ds_alias] = _dict_to_config(ds_alias, ds_config)
 
         for view in content.get("views", []):
@@ -392,7 +393,7 @@ class OntologyLoader:
             description=scene.get("description", ""),
             objects=objects,
             relations=rels,
-            loader=self
+            loader=self,
         )
         self._populate_view_virtual_actions(view, scene)
         return view
@@ -409,6 +410,7 @@ class OntologyLoader:
             view.actions = list(virtual_actions)
         # 填充视图字段元数据
         from datacloud_data_sdk.virtual_action.models import ViewFieldMeta
+
         fields = scene.get("fields", [])
         if fields:
             view.fields = [f for f in fields if isinstance(f, ViewFieldMeta)]
@@ -416,7 +418,9 @@ class OntologyLoader:
     # --- 内部解析 ---
 
     @staticmethod
-    def _parse_term_meta(raw: dict[str, Any]) -> tuple[str | None, str | None, str | None, int | None]:
+    def _parse_term_meta(
+        raw: dict[str, Any],
+    ) -> tuple[str | None, str | None, str | None, int | None]:
         """从 termMeta 或 term_set 解析，返回 (term_set, term_type, term_field, dataset_id)。"""
         tm = raw.get("termMeta") or raw.get("term_meta")
         if tm and isinstance(tm, dict):

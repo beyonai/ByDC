@@ -24,7 +24,7 @@ MAX_FIELD_ALIASES_DISPLAY = 3
 def format_object_schema(
     ontology_class: Any,  # OntologyClass
     all_relations: list[Any],  # list[OntologyRelation]
-    ontology_loader: Any  # OntologyLoader
+    ontology_loader: Any,  # OntologyLoader
 ) -> str:
     """格式化单个对象的完整 Schema。
 
@@ -52,11 +52,13 @@ def format_object_schema(
 
     # 🆕 添加工具使用说明
     lines.append("")
-    lines.append(f"**如何查询**: 使用 `query_objects` 工具，参数 `object_type=\"{ontology_class.object_code}\"`")
+    lines.append(
+        f'**如何查询**: 使用 `query_objects` 工具，参数 `object_type="{ontology_class.object_code}"`'
+    )
     lines.append("")
 
     # 2. 属性列表（属性名称、属性编码、类型、说明、别名）
-    if hasattr(ontology_class, 'fields') and ontology_class.fields:
+    if hasattr(ontology_class, "fields") and ontology_class.fields:
         lines.append("#### 属性列表")
         lines.append("| 属性名称 | 属性编码 | 类型 | 说明 | 别名 |")
         lines.append("|---------|---------|------|------|------|")
@@ -66,18 +68,22 @@ def format_object_schema(
             field_code = field.field_code
             field_type = field.field_type
             description = field.description or ""
-            aliases = ", ".join(field.aliases[:MAX_FIELD_ALIASES_DISPLAY]) if hasattr(field, 'aliases') and field.aliases else ""
+            aliases = (
+                ", ".join(field.aliases[:MAX_FIELD_ALIASES_DISPLAY])
+                if hasattr(field, "aliases") and field.aliases
+                else ""
+            )
 
-            lines.append(f"| {field_name} | {field_code} | {field_type} | {description} | {aliases} |")
+            lines.append(
+                f"| {field_name} | {field_code} | {field_type} | {description} | {aliases} |"
+            )
 
         lines.append("")
 
     # 3. 关联关系（仅对象，视图不显示关系）
     if not is_view:
         object_relations = filter_object_relations(
-            ontology_class.object_code,
-            all_relations,
-            ontology_loader
+            ontology_class.object_code, all_relations, ontology_loader
         )
         if object_relations:
             lines.append("#### 关联关系")
@@ -91,7 +97,7 @@ def format_object_schema(
             lines.append("")
 
     # 4. 可用动作（动作名称、动作编码、参数列表）
-    if hasattr(ontology_class, 'actions') and ontology_class.actions:
+    if hasattr(ontology_class, "actions") and ontology_class.actions:
         lines.append("#### 可用动作")
         for action in ontology_class.actions[:MAX_ACTIONS_DISPLAY]:
             action_name = action.action_name
@@ -103,7 +109,7 @@ def format_object_schema(
                 lines.append(f"  - 描述: {description}")
 
             # 参数列表
-            if hasattr(action, 'params') and action.params:
+            if hasattr(action, "params") and action.params:
                 params_str = []
                 for param in action.params[:MAX_ACTION_PARAMS_DISPLAY]:
                     param_code = param.param_code
@@ -122,7 +128,7 @@ def format_object_schema(
 def filter_object_relations(
     object_code: str,
     all_relations: list[Any],  # list[OntologyRelation]
-    ontology_loader: Any  # OntologyLoader
+    ontology_loader: Any,  # OntologyLoader
 ) -> list[dict]:
     """过滤与指定对象相关的关系。
 
@@ -163,14 +169,16 @@ def filter_object_relations(
                 logger.debug("Failed to get target object name for %s: %s", rel.target_class, e)
                 target_name = rel.target_class
 
-            relations.append({
-                "source_class": rel.source_class,
-                "source_name": source_name,
-                "target_class": rel.target_class,
-                "target_name": target_name,
-                "relation_type": rel.relation_type,
-                "relation_name": rel.relation_name,
-                "description": rel.description,
-            })
+            relations.append(
+                {
+                    "source_class": rel.source_class,
+                    "source_name": source_name,
+                    "target_class": rel.target_class,
+                    "target_name": target_name,
+                    "relation_type": rel.relation_type,
+                    "relation_name": rel.relation_name,
+                    "description": rel.description,
+                }
+            )
 
     return relations

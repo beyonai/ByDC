@@ -32,13 +32,13 @@ from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
 class KbExecutor:
     """
     知识库 RAG 检索执行器
-    
+
     通过 HTTP POST 调用 RAG 服务的 /retrieve 接口执行知识库检索。
-    
+
     Attributes:
         _configs: 知识库配置字典，key 为数据源别名，value 包含 endpoint
         _csv: CSV 存储管理器
-    
+
     Example:
         kb_configs = {"kb_main": {"endpoint": "http://localhost:8000"}}
         executor = KbExecutor(kb_configs)
@@ -52,7 +52,7 @@ class KbExecutor:
     ) -> None:
         """
         初始化知识库执行器
-        
+
         Args:
             kb_configs: 知识库配置字典
                 key: 数据源别名
@@ -70,21 +70,21 @@ class KbExecutor:
     ) -> str:
         """
         执行知识库检索
-        
+
         执行流程：
         1. 验证数据源配置
         2. 构建 RAG 请求体
         3. 调用 RAG 服务 /retrieve 接口
         4. 将检索结果写入 CSV 文件
-        
+
         Args:
             task: 知识库执行任务
             request_id: 请求 ID
             step_results: 前置步骤结果（预留用于参数绑定）
-        
+
         Returns:
             str: 写入的 CSV 文件路径
-        
+
         Raises:
             DataSourceUnavailableError: 数据源未配置时抛出
             KbExecutionError: RAG 调用失败时抛出

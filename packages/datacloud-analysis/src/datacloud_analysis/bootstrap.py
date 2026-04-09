@@ -96,9 +96,7 @@ async def setup() -> None:
             await init_store(settings.pg.checkpoint_uri)
             logger.info("datacloud-analysis: datacloud-memory store initialized.")
         except ImportError:
-            logger.warning(
-                "datacloud-memory not installed or init_store not available – skipping."
-            )
+            logger.warning("datacloud-memory not installed or init_store not available – skipping.")
 
         # 4. Initialize OqlRouter and dependencies for knowledge injection
         try:
@@ -115,13 +113,17 @@ async def setup() -> None:
             # Create OntologyLoader (registry) - will be populated by knowledge injection middleware
             # when it loads ontology from OWL files (including datasource definitions)
             ontology_loader = OntologyLoader()
-            logger.info("datacloud-analysis: OntologyLoader created (datasources will be loaded from OWL files).")
+            logger.info(
+                "datacloud-analysis: OntologyLoader created (datasources will be loaded from OWL files)."
+            )
 
             logger.info("datacloud-analysis: Creating DataSourceManager...")
             # Create DataSourceConfig for SqlExecutor (separate from OntologyLoader's datasources)
             # Construct JDBC URL from environment settings
             if settings.db.type.lower() in ("postgresql", "opengauss"):
-                jdbc_url = f"jdbc:postgresql://{settings.db.host}:{settings.db.port}/{settings.db.name}"
+                jdbc_url = (
+                    f"jdbc:postgresql://{settings.db.host}:{settings.db.port}/{settings.db.name}"
+                )
             elif settings.db.type.lower() == "mysql":
                 jdbc_url = f"jdbc:mysql://{settings.db.host}:{settings.db.port}/{settings.db.name}"
             else:
@@ -136,7 +138,9 @@ async def setup() -> None:
             )
             # Pass OntologyLoader as fallback_loader so DataSourceManager can access
             # datasources loaded from OWL files (via _config.datasource_configs)
-            ds_manager = DataSourceManager(configs={"default": ds_config}, fallback_loader=ontology_loader)
+            ds_manager = DataSourceManager(
+                configs={"default": ds_config}, fallback_loader=ontology_loader
+            )
 
             logger.info("datacloud-analysis: Creating SqlExecutor...")
             # Create SqlExecutor with DataSourceManager

@@ -17,9 +17,9 @@ from typing import Any
 class DataSourceConfig:
     """
     数据源配置
-    
+
     定义数据库连接的所有参数，支持多种数据库类型。
-    
+
     Attributes:
         alias: 数据源别名，用于在查询中引用
         db_type: 数据库类型，支持 SQLITE/MYSQL/POSTGRESQL/OPENGAUSS/CLICKHOUSE
@@ -30,7 +30,7 @@ class DataSourceConfig:
         pool_max: 连接池最大连接数
         pool_timeout: 连接池超时时间（秒）
         open_gauss_compat: 是否启用 openGauss 兼容模式
-    
+
     Example:
         config = DataSourceConfig(
             alias="main_db",
@@ -40,7 +40,7 @@ class DataSourceConfig:
             password="secret"
         )
     """
-    
+
     alias: str
     db_type: str
     jdbc_url: str = ""
@@ -56,13 +56,13 @@ class DataSourceConfig:
 class SqlExecResult:
     """
     SQL 执行结果
-    
+
     存储 SQL 查询执行的结果信息。
-    
+
     Attributes:
         csv_path: 结果 CSV 文件路径
         row_count: 返回的记录行数
     """
-    
+
     csv_path: str
     row_count: int = 0

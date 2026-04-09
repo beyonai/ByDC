@@ -9,9 +9,13 @@ from datacloud_data_sdk.agents.plan_agent import PlanAgent
 
 def _make_astream(content: str):
     """创建返回单个 chunk 的 async generator mock。"""
+
     async def _astream(_messages) -> AsyncGenerator:
         yield MagicMock(content=content)
+
     return _astream
+
+
 from datacloud_data_sdk.plan.models import (
     ObjectViewPayload,
     ObjectViewSource,
@@ -192,9 +196,7 @@ def test_route_after_validate_valid_returns_end() -> None:
     from datacloud_data_sdk.plan.plan_validator import ValidationResult
 
     agent = PlanAgent()
-    plan = QueryExecutionPlan(
-        question="x", can_answer=True, steps=[], aggregation=None
-    )
+    plan = QueryExecutionPlan(question="x", can_answer=True, steps=[], aggregation=None)
     state = {"plan": plan, "validation_result": ValidationResult(valid=True, errors=[])}
     assert agent._route_after_validate(state) == "__end__"
 
@@ -204,9 +206,7 @@ def test_route_after_validate_invalid_with_retries_returns_generate() -> None:
     from datacloud_data_sdk.plan.plan_validator import ValidationResult
 
     agent = PlanAgent(max_retries=2)
-    plan = QueryExecutionPlan(
-        question="x", can_answer=True, steps=[], aggregation=None
-    )
+    plan = QueryExecutionPlan(question="x", can_answer=True, steps=[], aggregation=None)
     state = {
         "plan": plan,
         "validation_result": ValidationResult(valid=False, errors=["err"]),
@@ -220,9 +220,7 @@ def test_route_after_validate_invalid_exhausted_returns_end() -> None:
     from datacloud_data_sdk.plan.plan_validator import ValidationResult
 
     agent = PlanAgent(max_retries=2)
-    plan = QueryExecutionPlan(
-        question="x", can_answer=True, steps=[], aggregation=None
-    )
+    plan = QueryExecutionPlan(question="x", can_answer=True, steps=[], aggregation=None)
     state = {
         "plan": plan,
         "validation_result": ValidationResult(valid=False, errors=["err"]),

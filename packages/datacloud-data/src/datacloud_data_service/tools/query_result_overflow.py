@@ -19,7 +19,7 @@ def apply_query_result_overflow(
     """若 records 超过阈值，则存 CSV、返回元数据+下载地址+前 N 行预览。
 
     返回结构包含明确提示：数据不全，仅前 N 行预览，全量需通过下载地址获取。
-    
+
     Args:
         result: 查询结果字典
         threshold: 溢出阈值
@@ -29,7 +29,7 @@ def apply_query_result_overflow(
         result_type: 结果类型（normal/rejected/ask_user）
     """
     result["result_type"] = result_type
-    
+
     if result_type in ("rejected", "ask_user"):
         notice = result.get("overflow_notice", "")
         if notice:
@@ -39,7 +39,7 @@ def apply_query_result_overflow(
                 **{k: v for k, v in result.items() if k not in ("result_type", "overflow_notice")},
             }
         return result
-    
+
     records = result.get("records")
     if not isinstance(records, list) or len(records) <= threshold:
         return result
@@ -58,7 +58,9 @@ def apply_query_result_overflow(
     )
 
     base = (api_base_url or "").rstrip("/")
-    download_url = f"{base}/api/v1/download/csv/{file_id}" if base else f"/api/v1/download/csv/{file_id}"
+    download_url = (
+        f"{base}/api/v1/download/csv/{file_id}" if base else f"/api/v1/download/csv/{file_id}"
+    )
 
     return {
         "result_type": "normal",

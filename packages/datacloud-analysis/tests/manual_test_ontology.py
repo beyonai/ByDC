@@ -26,11 +26,12 @@ try:
 
     print("SUCCESS: Loaded {} tools".format(len(tools)))
     for tool in tools:
-        desc = tool.description[:50] if hasattr(tool, 'description') else 'N/A'
+        desc = tool.description[:50] if hasattr(tool, "description") else "N/A"
         print("  - {}: {}...".format(tool.name, desc))
 except Exception as e:
     print("FAILED: {}".format(e))
     import traceback
+
     traceback.print_exc()
 
 # 测试2：动态Tool加载模式（无OWL文件，应回退）
@@ -48,6 +49,7 @@ try:
 except Exception as e:
     print("FAILED: {}".format(e))
     import traceback
+
     traceback.print_exc()
 
 # 测试3：MCP模式（无端点，应回退）
@@ -65,6 +67,7 @@ try:
 except Exception as e:
     print("FAILED: {}".format(e))
     import traceback
+
     traceback.print_exc()
 
 # 测试4：创建本体加载器工厂
@@ -94,6 +97,7 @@ try:
 except Exception as e:
     print("FAILED: {}".format(e))
     import traceback
+
     traceback.print_exc()
 
 # 测试5：OWL解析器
@@ -119,14 +123,18 @@ try:
         owl_file.write_text(owl_content, encoding="utf-8")
 
         ontology = parse_owl_files(tmppath)
-        print("SUCCESS: Parsed {} objects".format(len(ontology['objects'])))
+        print("SUCCESS: Parsed {} objects".format(len(ontology["objects"])))
         for obj_name, obj_def in ontology["objects"].items():
-            print("  - {}: {} properties, {} actions".format(
-                obj_name, len(obj_def['properties']), len(obj_def['actions'])))
+            print(
+                "  - {}: {} properties, {} actions".format(
+                    obj_name, len(obj_def["properties"]), len(obj_def["actions"])
+                )
+            )
 
 except Exception as e:
     print("FAILED: {}".format(e))
     import traceback
+
     traceback.print_exc()
 
 # 测试6：MCP客户端
@@ -147,6 +155,7 @@ try:
 except Exception as e:
     print("FAILED: {}".format(e))
     import traceback
+
     traceback.print_exc()
 
 # 测试7：环境变量配置
@@ -171,6 +180,7 @@ try:
 except Exception as e:
     print("FAILED: {}".format(e))
     import traceback
+
     traceback.print_exc()
 
 print("\n" + "=" * 80)

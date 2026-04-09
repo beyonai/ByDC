@@ -42,6 +42,7 @@ class ResultConverter:
             list[dict[str, Any]]: 记录列表
         """
         import logging
+
         logger = logging.getLogger(__name__)
 
         path = Path(path)

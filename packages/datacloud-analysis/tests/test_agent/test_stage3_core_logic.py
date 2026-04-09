@@ -11,6 +11,7 @@ class TestStage3CoreLogic:
 
     def test_query_objects_parameter_structure(self):
         """测试 query_objects 参数结构"""
+
         # 模拟 query_objects 的参数结构
         def mock_query_objects(
             object_type: str,
@@ -44,6 +45,7 @@ class TestStage3CoreLogic:
 
     def test_oql_params_construction(self):
         """测试 OQL 参数构造逻辑"""
+
         # 模拟 query_objects 内部的参数构造逻辑
         def build_oql_params(object_type, select=None, where=None, limit=100, offset=0):
             oql_params = {
@@ -59,9 +61,7 @@ class TestStage3CoreLogic:
 
         # 测试对象查询参数
         params1 = build_oql_params(
-            object_type="company_bo",
-            select=["company_name", "credit_code"],
-            limit=10
+            object_type="company_bo", select=["company_name", "credit_code"], limit=10
         )
         assert params1["object"] == "company_bo"
         assert params1["fields"] == ["company_name", "credit_code"]
@@ -71,7 +71,7 @@ class TestStage3CoreLogic:
         params2 = build_oql_params(
             object_type="ads_analysis_view",
             where=[{"field": "status", "op": "eq", "value": "active"}],
-            limit=20
+            limit=20,
         )
         assert params2["object"] == "ads_analysis_view"
         assert params2["where"] == [{"field": "status", "op": "eq", "value": "active"}]
@@ -79,6 +79,7 @@ class TestStage3CoreLogic:
 
     def test_router_object_resolution_logic(self):
         """测试 router 对象解析逻辑"""
+
         # 模拟 resolve_object 逻辑
         def mock_resolve_object(object_code, registry):
             """模拟对象解析"""
@@ -101,6 +102,7 @@ class TestStage3CoreLogic:
 
     def test_router_unknown_object_error(self):
         """测试 router 未知对象错误处理"""
+
         # 模拟 resolve_object 逻辑
         def mock_resolve_object(object_code, registry):
             cls = registry.get_class(object_code)
@@ -120,6 +122,7 @@ class TestStage3CoreLogic:
 
     def test_unified_parameter_handling(self):
         """测试统一参数处理"""
+
         # 模拟完整的查询流程
         def mock_query_flow(object_type, filters=None, limit=100):
             """模拟查询流程"""
@@ -145,7 +148,7 @@ class TestStage3CoreLogic:
         result1 = mock_query_flow(
             object_type="company_bo",
             filters=[{"field": "status", "op": "eq", "value": "active"}],
-            limit=10
+            limit=10,
         )
         assert result1["status"] == "success"
         assert result1["oql_params"]["object"] == "company_bo"
@@ -154,7 +157,7 @@ class TestStage3CoreLogic:
         result2 = mock_query_flow(
             object_type="ads_analysis_view",
             filters=[{"field": "grid_name", "op": "eq", "value": "某网格"}],
-            limit=20
+            limit=20,
         )
         assert result2["status"] == "success"
         assert result2["oql_params"]["object"] == "ads_analysis_view"
@@ -169,6 +172,7 @@ class TestStage3ParameterValidation:
 
     def test_object_type_required(self):
         """测试 object_type 参数必填"""
+
         # 模拟参数校验逻辑
         def validate_oql_params(oql_params):
             if "object" not in oql_params:
@@ -185,6 +189,7 @@ class TestStage3ParameterValidation:
 
     def test_fields_validation(self):
         """测试 fields 参数校验"""
+
         # 模拟 fields 校验逻辑
         def validate_fields(oql_params):
             if "fields" in oql_params:
@@ -203,6 +208,7 @@ class TestStage3ParameterValidation:
 
     def test_where_validation(self):
         """测试 where 参数校验"""
+
         # 模拟 where 校验逻辑
         def validate_where(oql_params):
             if "where" in oql_params:
@@ -211,10 +217,9 @@ class TestStage3ParameterValidation:
                     raise ValueError("where 必须是数组")
 
         # 测试有效的 where
-        validate_where({
-            "object": "company_bo",
-            "where": [{"field": "status", "op": "eq", "value": "active"}]
-        })
+        validate_where(
+            {"object": "company_bo", "where": [{"field": "status", "op": "eq", "value": "active"}]}
+        )
 
         # 测试无效的 where
         with pytest.raises(ValueError) as exc_info:

@@ -77,7 +77,9 @@ async def test_graphql_api_action_returns_records(load_scenario_api_linked: Onto
 
         resp2 = client.post(
             "/graphql/",
-            json={"query": 'query { queryOpportunitiesByCustomer(customerId: "c1") { id amount customerId } }'},
+            json={
+                "query": 'query { queryOpportunitiesByCustomer(customerId: "c1") { id amount customerId } }'
+            },
         )
         assert resp2.status_code == 200
         data2 = resp2.json()

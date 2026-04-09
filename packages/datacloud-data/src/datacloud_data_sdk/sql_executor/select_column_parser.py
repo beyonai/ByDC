@@ -1,4 +1,5 @@
 """从 SQL SELECT 子句解析列名（含 AS 别名）。"""
+
 from __future__ import annotations
 
 import re
@@ -79,12 +80,12 @@ def _get_ident_name(ident: object) -> str | None:
     try:
         name = ident.get_name()  # type: ignore[union-attr]
         if name:
-            return name.strip('"\'')
+            return name.strip("\"'")
     except Exception:
         pass
     # sqlparse 对部分关键字（如 type）可能解析为 Token 而非 Identifier，无 get_name
     if hasattr(ident, "value") and ident.value:  # type: ignore[union-attr]
-        val = str(ident.value).strip('"\'')
+        val = str(ident.value).strip("\"'")
         if val.upper() not in ("DISTINCT", "ALL"):
             return val
     return None
@@ -124,9 +125,9 @@ def _extract_with_regex(sql: str) -> list[str]:
         part = part.strip()
         as_match = re.search(r"\bAS\s+([^\s,]+)\s*$", part, re.IGNORECASE)
         if as_match:
-            columns.append(as_match.group(1).strip('"\''))
+            columns.append(as_match.group(1).strip("\"'"))
         else:
-            last = part.split()[-1].split(".")[-1].strip('"\'')
+            last = part.split()[-1].split(".")[-1].strip("\"'")
             if last and last.upper() not in ("AS", "DISTINCT", "ALL"):
                 columns.append(last)
     return columns

@@ -15,7 +15,9 @@ from datacloud_data_sdk.plan.plan_validator import PlanValidator
 PAYLOAD = ObjectViewPayload(
     view_id="v1",
     sources=[
-        ObjectViewSource(source_id="SRC_CRM", source_type="DB", datasource_alias="crm_db", db_type="POSTGRESQL")
+        ObjectViewSource(
+            source_id="SRC_CRM", source_type="DB", datasource_alias="crm_db", db_type="POSTGRESQL"
+        )
     ],
     objects=[
         ObjectViewObject(
@@ -59,6 +61,7 @@ def test_valid_direct_plan() -> None:
     assert result.valid is True
     assert result.errors == []
 
+
 def test_custom() -> None:
     result = PlanValidator().validate(VALID_PLAN, PAYLOAD)
     assert result.valid is True
@@ -69,9 +72,7 @@ def test_invalid_source_id_fails() -> None:
     bad_plan = QueryExecutionPlan(
         question="查商机",
         can_answer=True,
-        steps=[
-            PlanStep(step_id="s1", type="SQL", source_id="NONEXISTENT", output_ref="x")
-        ],
+        steps=[PlanStep(step_id="s1", type="SQL", source_id="NONEXISTENT", output_ref="x")],
         aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1", columns=[]),
     )
     result = PlanValidator().validate(bad_plan, PAYLOAD)
@@ -105,9 +106,7 @@ def test_direct_plan_missing_final_step_id_fails() -> None:
     bad_plan = QueryExecutionPlan(
         question="查商机",
         can_answer=True,
-        steps=[
-            PlanStep(step_id="s1", type="SQL", source_id="SRC_CRM", output_ref="x")
-        ],
+        steps=[PlanStep(step_id="s1", type="SQL", source_id="SRC_CRM", output_ref="x")],
         aggregation=PlanAggregation(strategy="DIRECT", final_step_id=None, columns=[]),
     )
     result = PlanValidator().validate(bad_plan, PAYLOAD)
@@ -117,10 +116,16 @@ def test_direct_plan_missing_final_step_id_fails() -> None:
 def test_sql_field_ref_not_in_object_view_fails() -> None:
     payload = ObjectViewPayload(
         view_id="v1",
-        sources=[ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="POSTGRESQL")],
+        sources=[
+            ObjectViewSource(
+                source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="POSTGRESQL"
+            )
+        ],
         objects=[
             ObjectViewObject(
-                object_id="obj1", object_name="测试对象", source_id="SRC_DB",
+                object_id="obj1",
+                object_name="测试对象",
+                source_id="SRC_DB",
                 table="t_test",
                 fields=[
                     ObjectViewField(name="id", type="string"),
@@ -130,12 +135,17 @@ def test_sql_field_ref_not_in_object_view_fails() -> None:
         ],
     )
     plan = QueryExecutionPlan(
-        question="test", can_answer=True,
+        question="test",
+        can_answer=True,
         steps=[
-            PlanStep(step_id="s1", type="SQL", source_id="SRC_DB",
-                     datasource_alias="db1",
-                     sql_template="SELECT id, name, nonexistent_field FROM t_test",
-                     output_ref="out")
+            PlanStep(
+                step_id="s1",
+                type="SQL",
+                source_id="SRC_DB",
+                datasource_alias="db1",
+                sql_template="SELECT id, name, nonexistent_field FROM t_test",
+                output_ref="out",
+            )
         ],
         aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
     )
@@ -147,10 +157,16 @@ def test_sql_field_ref_not_in_object_view_fails() -> None:
 def test_sql_field_ref_valid_passes() -> None:
     payload = ObjectViewPayload(
         view_id="v1",
-        sources=[ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="POSTGRESQL")],
+        sources=[
+            ObjectViewSource(
+                source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="POSTGRESQL"
+            )
+        ],
         objects=[
             ObjectViewObject(
-                object_id="obj1", object_name="测试对象", source_id="SRC_DB",
+                object_id="obj1",
+                object_name="测试对象",
+                source_id="SRC_DB",
                 table="t_test",
                 fields=[
                     ObjectViewField(name="id", type="string"),
@@ -160,12 +176,17 @@ def test_sql_field_ref_valid_passes() -> None:
         ],
     )
     plan = QueryExecutionPlan(
-        question="test", can_answer=True,
+        question="test",
+        can_answer=True,
         steps=[
-            PlanStep(step_id="s1", type="SQL", source_id="SRC_DB",
-                     datasource_alias="db1",
-                     sql_template="SELECT id, name FROM t_test WHERE id = '1'",
-                     output_ref="out")
+            PlanStep(
+                step_id="s1",
+                type="SQL",
+                source_id="SRC_DB",
+                datasource_alias="db1",
+                sql_template="SELECT id, name FROM t_test WHERE id = '1'",
+                output_ref="out",
+            )
         ],
         aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
     )
@@ -179,16 +200,26 @@ def test_api_step_missing_object_id_fails() -> None:
         sources=[ObjectViewSource(source_id="SRC_API", source_type="API")],
         objects=[
             ObjectViewObject(
-                object_id="obj1", object_name="测试对象", source_id="SRC_API",
-                fields=[], functions=[], actions=[ObjectViewAction(action_code="fn_real", implementation_type="API")],
+                object_id="obj1",
+                object_name="测试对象",
+                source_id="SRC_API",
+                fields=[],
+                functions=[],
+                actions=[ObjectViewAction(action_code="fn_real", implementation_type="API")],
             )
         ],
     )
     plan = QueryExecutionPlan(
-        question="test", can_answer=True,
+        question="test",
+        can_answer=True,
         steps=[
-            PlanStep(step_id="s1", type="API", source_id="SRC_API",
-                     function_id="fn_real", output_ref="out")
+            PlanStep(
+                step_id="s1",
+                type="API",
+                source_id="SRC_API",
+                function_id="fn_real",
+                output_ref="out",
+            )
         ],
         aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
     )
@@ -203,7 +234,9 @@ def test_api_step_unknown_function_id_fails() -> None:
         sources=[ObjectViewSource(source_id="SRC_API", source_type="API")],
         objects=[
             ObjectViewObject(
-                object_id="obj1", object_name="测试对象", source_id="SRC_API",
+                object_id="obj1",
+                object_name="测试对象",
+                source_id="SRC_API",
                 fields=[ObjectViewField(name="id", type="string")],
                 functions=[ObjectViewFunction(function_code="fn_real")],
                 actions=[ObjectViewAction(action_code="fn_real", implementation_type="API")],
@@ -211,10 +244,17 @@ def test_api_step_unknown_function_id_fails() -> None:
         ],
     )
     plan = QueryExecutionPlan(
-        question="test", can_answer=True,
+        question="test",
+        can_answer=True,
         steps=[
-            PlanStep(step_id="s1", type="API", source_id="SRC_API",
-                     object_id="obj1", function_id="fn_nonexistent", output_ref="out")
+            PlanStep(
+                step_id="s1",
+                type="API",
+                source_id="SRC_API",
+                object_id="obj1",
+                function_id="fn_nonexistent",
+                output_ref="out",
+            )
         ],
         aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
     )
@@ -229,7 +269,9 @@ def test_api_step_missing_required_param_fails() -> None:
         sources=[ObjectViewSource(source_id="SRC_API", source_type="API")],
         objects=[
             ObjectViewObject(
-                object_id="obj1", object_name="测试对象", source_id="SRC_API",
+                object_id="obj1",
+                object_name="测试对象",
+                source_id="SRC_API",
                 fields=[ObjectViewField(name="id", type="string")],
                 functions=[
                     ObjectViewFunction(
@@ -264,10 +306,18 @@ def test_api_step_missing_required_param_fails() -> None:
         ],
     )
     plan = QueryExecutionPlan(
-        question="test", can_answer=True,
+        question="test",
+        can_answer=True,
         steps=[
-            PlanStep(step_id="s1", type="API", source_id="SRC_API",
-                     object_id="obj1", function_id="fn_real", params={}, output_ref="out")
+            PlanStep(
+                step_id="s1",
+                type="API",
+                source_id="SRC_API",
+                object_id="obj1",
+                function_id="fn_real",
+                params={},
+                output_ref="out",
+            )
         ],
         aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
     )
@@ -282,7 +332,9 @@ def test_api_step_unknown_param_fails() -> None:
         sources=[ObjectViewSource(source_id="SRC_API", source_type="API")],
         objects=[
             ObjectViewObject(
-                object_id="obj1", object_name="测试对象", source_id="SRC_API",
+                object_id="obj1",
+                object_name="测试对象",
+                source_id="SRC_API",
                 fields=[ObjectViewField(name="id", type="string")],
                 functions=[
                     ObjectViewFunction(
@@ -317,12 +369,18 @@ def test_api_step_unknown_param_fails() -> None:
         ],
     )
     plan = QueryExecutionPlan(
-        question="test", can_answer=True,
+        question="test",
+        can_answer=True,
         steps=[
-            PlanStep(step_id="s1", type="API", source_id="SRC_API",
-                     object_id="obj1", function_id="fn_real",
-                     params={"userIds": ["x"], "invalid_key": 1},
-                     output_ref="out")
+            PlanStep(
+                step_id="s1",
+                type="API",
+                source_id="SRC_API",
+                object_id="obj1",
+                function_id="fn_real",
+                params={"userIds": ["x"], "invalid_key": 1},
+                output_ref="out",
+            )
         ],
         aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
     )
@@ -337,7 +395,9 @@ def test_api_step_valid_params_passes() -> None:
         sources=[ObjectViewSource(source_id="SRC_API", source_type="API")],
         objects=[
             ObjectViewObject(
-                object_id="obj1", object_name="测试对象", source_id="SRC_API",
+                object_id="obj1",
+                object_name="测试对象",
+                source_id="SRC_API",
                 fields=[ObjectViewField(name="id", type="string")],
                 functions=[
                     ObjectViewFunction(
@@ -372,11 +432,18 @@ def test_api_step_valid_params_passes() -> None:
         ],
     )
     plan = QueryExecutionPlan(
-        question="test", can_answer=True,
+        question="test",
+        can_answer=True,
         steps=[
-            PlanStep(step_id="s1", type="API", source_id="SRC_API",
-                     object_id="obj1", function_id="fn_real", params={"userIds": ["u1"]},
-                     output_ref="out")
+            PlanStep(
+                step_id="s1",
+                type="API",
+                source_id="SRC_API",
+                object_id="obj1",
+                function_id="fn_real",
+                params={"userIds": ["u1"]},
+                output_ref="out",
+            )
         ],
         aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1"),
     )
@@ -442,7 +509,11 @@ def test_sql_field_ref_source_column_passes() -> None:
     """SQL 使用 source_column（物理列名）时，校验通过。"""
     payload = ObjectViewPayload(
         view_id="v1",
-        sources=[ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="POSTGRESQL")],
+        sources=[
+            ObjectViewSource(
+                source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="POSTGRESQL"
+            )
+        ],
         objects=[
             ObjectViewObject(
                 object_id="obj1",
@@ -485,17 +556,29 @@ def test_sql_step_db_source_missing_db_type_fails() -> None:
     payload = ObjectViewPayload(
         view_id="v1",
         sources=[
-            ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="")
+            ObjectViewSource(
+                source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type=""
+            )
         ],
         objects=[
-            ObjectViewObject(object_id="o1", object_name="测试", source_id="SRC_DB", table="t1", fields=[])
+            ObjectViewObject(
+                object_id="o1", object_name="测试", source_id="SRC_DB", table="t1", fields=[]
+            )
         ],
         relations=[],
     )
     plan = QueryExecutionPlan(
-        question="test", can_answer=True,
+        question="test",
+        can_answer=True,
         steps=[
-            PlanStep(step_id="s1", type="SQL", source_id="SRC_DB", datasource_alias="db1", sql_template="SELECT 1", output_ref="out")
+            PlanStep(
+                step_id="s1",
+                type="SQL",
+                source_id="SRC_DB",
+                datasource_alias="db1",
+                sql_template="SELECT 1",
+                output_ref="out",
+            )
         ],
         aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1", columns=[]),
     )
@@ -509,17 +592,29 @@ def test_sql_step_db_source_invalid_db_type_fails() -> None:
     payload = ObjectViewPayload(
         view_id="v1",
         sources=[
-            ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="ORACLE")
+            ObjectViewSource(
+                source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="ORACLE"
+            )
         ],
         objects=[
-            ObjectViewObject(object_id="o1", object_name="测试", source_id="SRC_DB", table="t1", fields=[])
+            ObjectViewObject(
+                object_id="o1", object_name="测试", source_id="SRC_DB", table="t1", fields=[]
+            )
         ],
         relations=[],
     )
     plan = QueryExecutionPlan(
-        question="test", can_answer=True,
+        question="test",
+        can_answer=True,
         steps=[
-            PlanStep(step_id="s1", type="SQL", source_id="SRC_DB", datasource_alias="db1", sql_template="SELECT 1", output_ref="out")
+            PlanStep(
+                step_id="s1",
+                type="SQL",
+                source_id="SRC_DB",
+                datasource_alias="db1",
+                sql_template="SELECT 1",
+                output_ref="out",
+            )
         ],
         aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1", columns=[]),
     )
@@ -533,7 +628,12 @@ def test_sql_postgresql_type_cast_passes() -> None:
     payload = ObjectViewPayload(
         view_id="v1",
         sources=[
-            ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="ds_crm", db_type="POSTGRESQL")
+            ObjectViewSource(
+                source_id="SRC_DB",
+                source_type="DB",
+                datasource_alias="ds_crm",
+                db_type="POSTGRESQL",
+            )
         ],
         objects=[
             ObjectViewObject(
@@ -572,17 +672,29 @@ def test_sql_step_db_source_valid_db_type_passes() -> None:
     payload = ObjectViewPayload(
         view_id="v1",
         sources=[
-            ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="POSTGRESQL")
+            ObjectViewSource(
+                source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="POSTGRESQL"
+            )
         ],
         objects=[
-            ObjectViewObject(object_id="o1", object_name="测试", source_id="SRC_DB", table="t1", fields=[])
+            ObjectViewObject(
+                object_id="o1", object_name="测试", source_id="SRC_DB", table="t1", fields=[]
+            )
         ],
         relations=[],
     )
     plan = QueryExecutionPlan(
-        question="test", can_answer=True,
+        question="test",
+        can_answer=True,
         steps=[
-            PlanStep(step_id="s1", type="SQL", source_id="SRC_DB", datasource_alias="db1", sql_template="SELECT 1", output_ref="out")
+            PlanStep(
+                step_id="s1",
+                type="SQL",
+                source_id="SRC_DB",
+                datasource_alias="db1",
+                sql_template="SELECT 1",
+                output_ref="out",
+            )
         ],
         aggregation=PlanAggregation(strategy="DIRECT", final_step_id="s1", columns=[]),
     )
@@ -600,7 +712,7 @@ def test_crm_opportunity_no_change_over_month_sql_passes() -> None:
                 source_id="SRC_DS_CRM",
                 source_type="DB",
                 datasource_alias="ds_crm",
-                db_type="OPENGAUSS"
+                db_type="OPENGAUSS",
             ),
             ObjectViewSource(
                 source_id="SRC_DS_ATTENDANCE",
@@ -740,7 +852,9 @@ def test_sql_column_in_function_invalid_fails() -> None:
     payload = ObjectViewPayload(
         view_id="v1",
         sources=[
-            ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="POSTGRESQL")
+            ObjectViewSource(
+                source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="POSTGRESQL"
+            )
         ],
         objects=[
             ObjectViewObject(
@@ -781,7 +895,9 @@ def test_sql_ambiguous_column_fails() -> None:
     payload = ObjectViewPayload(
         view_id="v1",
         sources=[
-            ObjectViewSource(source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="POSTGRESQL")
+            ObjectViewSource(
+                source_id="SRC_DB", source_type="DB", datasource_alias="db1", db_type="POSTGRESQL"
+            )
         ],
         objects=[
             ObjectViewObject(
@@ -832,8 +948,15 @@ def test_cross_source_join_fails() -> None:
     payload = ObjectViewPayload(
         view_id="v1",
         sources=[
-            ObjectViewSource(source_id="SRC_CRM", source_type="DB", datasource_alias="ds_crm", db_type="POSTGRESQL"),
-            ObjectViewSource(source_id="SRC_ONTO", source_type="DB", datasource_alias="onto_crm", db_type="MYSQL"),
+            ObjectViewSource(
+                source_id="SRC_CRM",
+                source_type="DB",
+                datasource_alias="ds_crm",
+                db_type="POSTGRESQL",
+            ),
+            ObjectViewSource(
+                source_id="SRC_ONTO", source_type="DB", datasource_alias="onto_crm", db_type="MYSQL"
+            ),
         ],
         objects=[
             ObjectViewObject(
@@ -843,7 +966,9 @@ def test_cross_source_join_fails() -> None:
                 table="sales_business_opportunity",
                 fields=[
                     ObjectViewField(name="id", type="string", source_column="id"),
-                    ObjectViewField(name="customer_name", type="string", source_column="customer_name"),
+                    ObjectViewField(
+                        name="customer_name", type="string", source_column="customer_name"
+                    ),
                 ],
             ),
             ObjectViewObject(
@@ -853,8 +978,12 @@ def test_cross_source_join_fails() -> None:
                 table="sales_customer",
                 fields=[
                     ObjectViewField(name="id", type="string", source_column="id"),
-                    ObjectViewField(name="customer_name", type="string", source_column="customer_name"),
-                    ObjectViewField(name="belong_industry", type="string", source_column="belong_industry"),
+                    ObjectViewField(
+                        name="customer_name", type="string", source_column="customer_name"
+                    ),
+                    ObjectViewField(
+                        name="belong_industry", type="string", source_column="belong_industry"
+                    ),
                 ],
             ),
         ],
@@ -890,7 +1019,12 @@ def test_same_source_join_passes() -> None:
     payload = ObjectViewPayload(
         view_id="v1",
         sources=[
-            ObjectViewSource(source_id="SRC_CRM", source_type="DB", datasource_alias="ds_crm", db_type="POSTGRESQL"),
+            ObjectViewSource(
+                source_id="SRC_CRM",
+                source_type="DB",
+                datasource_alias="ds_crm",
+                db_type="POSTGRESQL",
+            ),
         ],
         objects=[
             ObjectViewObject(
@@ -900,7 +1034,9 @@ def test_same_source_join_passes() -> None:
                 table="sales_business_opportunity",
                 fields=[
                     ObjectViewField(name="id", type="string", source_column="id"),
-                    ObjectViewField(name="customer_name", type="string", source_column="customer_name"),
+                    ObjectViewField(
+                        name="customer_name", type="string", source_column="customer_name"
+                    ),
                 ],
             ),
             ObjectViewObject(
@@ -910,7 +1046,9 @@ def test_same_source_join_passes() -> None:
                 table="sales_customer",
                 fields=[
                     ObjectViewField(name="id", type="string", source_column="id"),
-                    ObjectViewField(name="customer_name", type="string", source_column="customer_name"),
+                    ObjectViewField(
+                        name="customer_name", type="string", source_column="customer_name"
+                    ),
                 ],
             ),
         ],

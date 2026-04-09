@@ -1,4 +1,5 @@
 """ExecutionObjectConverter: PlanStep -> ExecTask 对象。"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -95,22 +96,16 @@ class ExecutionObjectConverter:
         payload: ObjectViewPayload | None,
     ) -> ApiExecTask | ScriptExecTask:
         if not step.object_id:
-            raise ValueError(
-                f"Step {step.step_id}: object_id required for API step"
-            )
+            raise ValueError(f"Step {step.step_id}: object_id required for API step")
         if not self._loader:
-            raise ValueError(
-                "ExecutionObjectConverter requires loader for API steps"
-            )
+            raise ValueError("ExecutionObjectConverter requires loader for API steps")
 
         action = self._loader.get_action(step.object_id, step.function_id)
         ontology_action = action._action
         params: dict[str, Any] = dict(step.params)
 
         in_params = [
-            _to_function_param(p)
-            for p in ontology_action.params
-            if p.direction in ("IN", "INOUT")
+            _to_function_param(p) for p in ontology_action.params if p.direction in ("IN", "INOUT")
         ]
         if self._term_resolver and in_params:
             params = self._term_resolver.resolve_params(params, in_params)
