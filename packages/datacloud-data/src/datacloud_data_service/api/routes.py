@@ -138,13 +138,13 @@ def create_app(
             loader = OntologyLoader()
             ontology_path = Path(settings.ontology_path)
             if ontology_path.exists():
-                loader.load_from_path(ontology_path)
+                loader.load_from_owl_directory(ontology_path)
                 logger.info("Loaded ontology from %s", ontology_path)
 
-            scene_path = Path(settings.scene_path)
-            if scene_path.exists():
-                loader.load_scene_from_path(scene_path)
-                logger.info("Loaded scene from %s", scene_path)
+            # scene_path = Path(settings.scene_path)
+            # if scene_path.exists():
+            #     loader.load_scene_from_path(scene_path)
+            #     logger.info("Loaded scene from %s", scene_path)
 
         from datacloud_data_service.tools.virtual_action_injector import (
             inject_virtual_actions,

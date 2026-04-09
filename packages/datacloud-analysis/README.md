@@ -2,6 +2,20 @@
 
 超级分析智能体（Super Analysis Agent）是 dataCloud 2.0 的核心智能体服务，基于 LangGraph 实现轻量可扩展的分析主链路。
 
+## 安装
+
+```bash
+pip install datacloud-analysis
+```
+
+如需使用 SQL 执行与知识检索能力，请一并安装公网依赖：
+
+```bash
+pip install "datacloud-data[sql]" datacloud-knowledge by-framework
+```
+
+`datacloud-memory` 当前不是发布前置依赖；未安装时，记忆相关能力会自动降级为空实现。
+
 ## 核心定位
 
 **中枢大脑**：调度知识增强、规划与执行能力，实现从自然语言问题到数据洞察的闭环。

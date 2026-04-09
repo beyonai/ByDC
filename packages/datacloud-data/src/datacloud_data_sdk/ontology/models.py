@@ -39,9 +39,9 @@ class FieldPhysicalMapping:
 class OntologyField:
     """
     本体字段定义
-    
+
     定义对象中的字段属性，包括类型、描述、术语映射等。
-    
+
     Attributes:
         field_code: 字段代码
         field_name: 字段名称
@@ -61,8 +61,15 @@ class OntologyField:
         relation_ref: 关联引用
         resolve_action_code: 解析动作代码
         resolve_param_binding: 解析参数绑定
+        analytic_role: 分析角色（dimension/measure），来自 OWL ext_property.property_role_rule
+        analytic_kind: 分析细分类（id/name/time/period/number/indicator），来自 OWL rule_type 映射
+        secondary_role: 附加角色（由规则引擎推断，非 OWL 配置）
+        filter_ops: 允许的过滤操作符列表（由规则引擎派生）
+        group_ops: 允许的分组方式列表（由规则引擎派生）
+        aggregate_ops: 允许的聚合函数列表（由规则引擎派生）
+        required_filter_group: 强制过滤组（如 period_required）
     """
-    
+
     field_code: str
     field_name: str
     field_type: str
@@ -81,6 +88,14 @@ class OntologyField:
     relation_ref: str | None = None
     resolve_action_code: str | None = None
     resolve_param_binding: dict | None = None
+    # 分析语义字段（来自 OWL ext_property.property_role_rule，规则引擎派生）
+    analytic_role: str | None = None        # "dimension" | "measure"
+    analytic_kind: str | None = None        # "id" | "name" | "time" | "period" | "number" | "indicator"
+    secondary_role: str | None = None       # 规则推断的附加能力角色
+    filter_ops: list[str] = field(default_factory=list)
+    group_ops: list[str] = field(default_factory=list)
+    aggregate_ops: list[str] = field(default_factory=list)
+    required_filter_group: str | None = None
 
 
 @dataclass
@@ -121,11 +136,11 @@ class OntologyActionParam:
 class OntologyAction:
     """
     本体动作定义
-    
+
     定义对象上可执行的动作，支持 API 调用或 Python 脚本执行。
-    
+
     执行优先级：script（非空）> function_refs > 抛 ActionNotConfiguredError
-    
+
     Attributes:
         action_code: 动作代码
         action_name: 动作名称
@@ -135,10 +150,17 @@ class OntologyAction:
         function_refs: 关联函数列表
         action_type: 动作类型（query/operation）
         script: Python 脚本内容
-        is_virtual: 是否虚拟动作
+        is_virtual: 是否虚拟动作（兼容位）
         input_schema: 输入 JSON Schema
         output_schema: 输出 JSON Schema
         _schema_cache: Schema 缓存
+        action_family: 动作族（lookup/analyze/search/operation）
+        virtual_backend: 虚拟动作后端（db_lookup/db_analyze/kb_search/api_proxy）
+        exposure_policy: 暴露策略（direct/skill_only/hidden）
+        scope_type: 动作范围类型（object/view）
+        scope_code: 动作所属对象编码或视图编码
+        planner_visible: 是否对规划器可见
+        legacy_aliases: 兼容旧动作名列表
     """
 
     action_code: str
@@ -153,6 +175,14 @@ class OntologyAction:
     input_schema: dict | None = None
     output_schema: dict | None = None
     _schema_cache: dict | None = field(default=None, repr=False)
+    # 虚拟动作新增字段
+    action_family: str | None = None        # "lookup" | "analyze" | "search" | "operation"
+    virtual_backend: str | None = None      # "db_lookup" | "db_analyze" | "kb_search" | "api_proxy"
+    exposure_policy: str = "direct"         # "direct" | "skill_only" | "hidden"
+    scope_type: str = "object"              # "object" | "view"
+    scope_code: str = ""                    # 对象编码或视图编码
+    planner_visible: bool = True
+    legacy_aliases: list[str] = field(default_factory=list)
 
 
 @dataclass

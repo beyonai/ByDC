@@ -63,6 +63,7 @@ def build_query_response(
     data: dict[str, Any] = {
         "result_type": "normal",
         "records": records,
+        "total": total,
         "meta": meta,
         "trace": trace,
     }

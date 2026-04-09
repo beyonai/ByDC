@@ -202,7 +202,7 @@ class ApiTermLoader(TermLoader):
         param_name: str | None = None,
     ) -> str:
         """将标签/别名/code 解析为标准 code。lookup 时可用 keyword=value 搜索。
-        
+
         Raises:
             TermAmbiguousError: 匹配到多个术语，需要用户选择
             TermNotFoundError: 术语不存在
@@ -341,7 +341,7 @@ class KbTermLoader(TermLoader):
     """基于 knowledge_search 的术语加载器。"""
 
     def __init__(self) -> None:
-        self._cache: dict[str, list[TermEntry]] = {}
+        self._cache: dict[tuple[str, str], list[TermEntry]] = {}
 
     @classmethod
     def from_config(cls, config: dict) -> KbTermLoader:
@@ -378,6 +378,15 @@ class KbTermLoader(TermLoader):
             ))
         return entries
 
+    def _get_cached_entries(self, term_type_code: str, keyword: str) -> list[TermEntry]:
+        """按 term_type_code + keyword 获取缓存的术语搜索结果。"""
+        cache_key = (term_type_code, keyword)
+        cached = self._cache.get(cache_key)
+        if cached is None:
+            cached = self._search(term_type_code, keyword=keyword)
+            self._cache[cache_key] = cached
+        return cached
+
     def resolve_code(
         self,
         term_set: str,
@@ -388,16 +397,14 @@ class KbTermLoader(TermLoader):
         param_name: str | None = None,
     ) -> str:
         """将标签/别名/code 解析为标准 code。lookup 时可用 keyword=value 搜索。
-        
+
         Raises:
             TermAmbiguousError: 匹配到多个术语，需要用户选择
             TermNotFoundError: 术语不存在
         """
         tc = self._resolve_term_type_code(term_set, term_type_code)
-        cached = self._cache.get(tc)
-        if cached is None:
-            cached = self._search(tc, keyword=value)
-            self._cache[tc] = cached
+        search_keyword = keyword or value
+        cached = self._get_cached_entries(tc, search_keyword)
         matches: list[dict[str, str]] = []
         for entry in cached:
             if value in (entry.code, entry.label, *entry.aliases):
@@ -426,10 +433,8 @@ class KbTermLoader(TermLoader):
         """根据 term_field 解析为 code 或 label。term_field 为 'code' 时返回 code，为 'name' 时返回 label。"""
         if term_field == "name":
             tc = self._resolve_term_type_code(term_set, term_type_code)
-            cached = self._cache.get(tc)
-            if cached is None:
-                cached = self._search(tc, keyword=value)
-                self._cache[tc] = cached
+            search_keyword = keyword or value
+            cached = self._get_cached_entries(tc, search_keyword)
             matches: list[dict[str, str]] = []
             for entry in cached:
                 if value in (entry.code, entry.label, *entry.aliases):

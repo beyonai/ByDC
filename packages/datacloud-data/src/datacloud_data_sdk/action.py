@@ -27,9 +27,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from datacloud_data_sdk.ontology.models import OntologyAction, OntologyActionParam
+from datacloud_data_sdk.ontology.models import OntologyAction, OntologyActionParam, OntologyField
 
 logger = logging.getLogger(__name__)
+
 
 def _default_query_output_schema() -> dict[str, object]:
     """
@@ -219,8 +220,8 @@ class Action:
             else None
         )
 
-        from datacloud_data_sdk.result_formatter import build_query_response
         from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
+        from datacloud_data_sdk.result_formatter import build_query_response
 
         cfg = self._loader._config if self._loader else None
         threshold = cfg.query_result_csv_threshold if cfg else 0
@@ -228,18 +229,7 @@ class Action:
         csv_manager = CsvStorageManager(cfg.csv_base_dir if cfg else "/tmp/datacloud_csv")
 
         if getattr(self._action, "is_virtual", False):
-            if term_loader and "filters" in params and isinstance(params.get("filters"), dict):
-                cls = self._loader.get_ontology_class(
-                    getattr(self._action, "belong_class", "") or ""
-                )
-                if cls and cls.fields:
-                    from datacloud_data_sdk.plan.term_resolver import TermResolver
-
-                    tr = TermResolver(term_loader)
-                    params["filters"] = tr.resolve_filter_values(
-                        params["filters"], cls.fields
-                    )
-            result = await self._execute_virtual(params)
+            result = await self._execute_virtual(params, term_loader=term_loader)
             normalized = self._normalize_to_unified_format(result)
             return build_query_response(
                 normalized,
@@ -285,32 +275,266 @@ class Action:
             )
         raise ActionNotConfiguredError(self._action.action_code)
 
-    async def _execute_virtual(self, params: dict[str, Any]) -> dict[str, Any]:
+    async def _execute_virtual(
+        self,
+        params: dict[str, Any],
+        *,
+        term_loader: Any = None,
+    ) -> dict[str, Any]:
         """
         执行虚拟查询动作
 
-        虚拟动作不预定义 SQL，而是根据参数动态构建查询。
-        通常用于对象的基础查询操作。
+        根据 action_family 路由到对应执行器：
+        - lookup → LookupExecutor（新协议）
+        - analyze → AnalyzeExecutor（新协议）
+        - search → KbSearchExecutor（新协议）
+        - 无 action_family 或旧 query_* → DynamicQueryExecutor（兼容旧协议）
 
         Args:
-            params: 查询参数，包含 filters, page, page_size 等
+            params: 查询参数
 
         Returns:
             dict: 包含 records 和 total 的原始结果
-
-        Raises:
-            ActionNotConfiguredError: 未配置 loader 时抛出
         """
-        from datacloud_data_sdk.executor.dynamic_query_executor import DynamicQueryExecutor
-
         if not self._loader:
             from datacloud_data_sdk.exceptions import ActionNotConfiguredError
-
             raise ActionNotConfiguredError(self._action.action_code)
 
-        object_code = getattr(self._action, "belong_class", "") or ""
-        executor = DynamicQueryExecutor(self._loader)
-        return await executor.execute(object_code, params)
+        scope_code = (
+            getattr(self._action, "scope_code", "")
+            or getattr(self._action, "belong_class", "")
+            or ""
+        )
+        action_family = getattr(self._action, "action_family", None)
+        scope_type = getattr(self._action, "scope_type", "object")
+        required_filter_groups = self._get_virtual_required_filter_groups()
+
+        # 视图级虚拟动作：路由到 ViewLookupExecutor / ViewAnalyzeExecutor
+        if scope_type == "view":
+            try:
+                view = self._loader.get_view(scope_code)
+            except Exception:
+                return {
+                    "records": [],
+                    "total": 0,
+                    "meta": {"view_id": scope_code, "note": "view not found"},
+                }
+            params = self._prepare_virtual_params(
+                params,
+                self._build_view_runtime_fields(view),
+                action_family,
+                required_filter_groups,
+                term_loader=term_loader,
+            )
+            return await self._execute_virtual_view(view, action_family, params)
+
+        object_code = scope_code
+        cls = self._loader.get_ontology_class(object_code)
+        params = self._prepare_virtual_params(
+            params,
+            list(getattr(cls, "fields", [])),
+            action_family,
+            required_filter_groups,
+            term_loader=term_loader,
+        )
+
+        # 对象级虚拟动作：按 action_family 路由
+        if action_family == "lookup":
+            from datacloud_data_sdk.executor.lookup_executor import LookupExecutor
+            return await LookupExecutor(self._loader).execute(object_code, params)
+
+        if action_family == "analyze":
+            from datacloud_data_sdk.executor.analyze_executor import AnalyzeExecutor
+            return await AnalyzeExecutor(self._loader).execute(object_code, params)
+
+        if action_family == "search":
+            from datacloud_data_sdk.executor.kb_search_executor import KbSearchExecutor
+            return await KbSearchExecutor(self._loader).execute(object_code, params)
+
+        # 兼容旧协议（query_* 动作 / 无 action_family）
+        from datacloud_data_sdk.executor.dynamic_query_executor import DynamicQueryExecutor
+        return await DynamicQueryExecutor(self._loader).execute(object_code, params)
+
+    async def _execute_virtual_view(
+        self, view: Any, action_family: str | None, params: dict[str, Any]
+    ) -> dict[str, Any]:
+        """执行视图级虚拟动作（路由到 ViewLookupExecutor / ViewAnalyzeExecutor）。"""
+        try:
+            from datacloud_data_sdk.executor.view_analyze_executor import ViewAnalyzeExecutor
+            from datacloud_data_sdk.executor.view_lookup_executor import ViewLookupExecutor
+        except ImportError:
+            # 视图执行器未实现时降级
+            return {
+                "records": [],
+                "total": 0,
+                "meta": {"view_id": view.view_id, "note": "view executor not available"},
+            }
+
+        if action_family == "lookup":
+            return await ViewLookupExecutor(self._loader).execute(view, params)
+        if action_family == "analyze":
+            return await ViewAnalyzeExecutor(self._loader).execute(view, params)
+        return {"records": [], "total": 0, "meta": {"view_id": view.view_id}}
+
+    def _prepare_virtual_params(
+        self,
+        params: dict[str, Any],
+        fields: list[Any],
+        action_family: str | None,
+        required_filter_groups: list[str],
+        *,
+        term_loader: Any = None,
+    ) -> dict[str, Any]:
+        """执行前统一处理虚拟动作参数。"""
+        prepared = dict(params)
+        if term_loader and "filters" in prepared:
+            from datacloud_data_sdk.plan.term_resolver import TermResolver
+
+            prepared["filters"] = TermResolver(term_loader).resolve_filter_values(
+                prepared["filters"], fields
+            )
+
+        if action_family in ("lookup", "analyze"):
+            from datacloud_data_sdk.virtual_action.validator import VirtualActionValidator
+
+            validator = VirtualActionValidator(fields)
+            if action_family == "lookup":
+                validator.validate_lookup(prepared, required_filter_groups)
+            else:
+                validator.validate_analyze(prepared, required_filter_groups)
+        return prepared
+
+    def _get_virtual_required_filter_groups(self) -> list[str]:
+        """获取虚拟动作的强制过滤组列表。"""
+        schema = getattr(self._action, "input_schema", None) or {}
+        groups = schema.get("x-dc-required-filter-group", [])
+        if isinstance(groups, list):
+            return [str(item) for item in groups]
+        return []
+
+    def _build_view_runtime_fields(self, view: Any) -> list[OntologyField]:
+        """基于视图字段和源对象字段构建可用于校验/术语解析的运行时字段。"""
+        runtime_fields: list[OntologyField] = []
+        source_field_cache: dict[str, Any] = {}
+
+        for view_field in getattr(view, "fields", []):
+            property_code = getattr(view_field, "property_code", "")
+            if not property_code:
+                continue
+            source_key = (
+                f"{getattr(view_field, 'source_object_code', '')}"
+                f":{getattr(view_field, 'source_object_column_code', '')}"
+            )
+            if source_key not in source_field_cache:
+                source_field_cache[source_key] = self._find_source_field(
+                    getattr(view_field, "source_object_code", ""),
+                    getattr(view_field, "source_object_column_code", ""),
+                )
+            source_field = source_field_cache[source_key]
+            runtime_fields.append(
+                OntologyField(
+                    field_code=property_code,
+                    field_name=getattr(view_field, "property_name", property_code),
+                    field_type=(
+                        getattr(view_field, "field_type", None)
+                        or getattr(source_field, "field_type", None)
+                        or "STRING"
+                    ),
+                    description=getattr(source_field, "description", ""),
+                    aliases=list(getattr(source_field, "aliases", [])),
+                    required=getattr(source_field, "required", False),
+                    is_primary_key=getattr(source_field, "is_primary_key", False),
+                    source_column=(
+                        getattr(view_field, "source_object_column_code", None)
+                        or getattr(source_field, "source_column", None)
+                    ),
+                    term_set=getattr(source_field, "term_set", None),
+                    term_type=getattr(source_field, "term_type", None),
+                    term_field=getattr(source_field, "term_field", None),
+                    dataset_id=getattr(source_field, "dataset_id", None),
+                    physical_mappings=list(getattr(source_field, "physical_mappings", [])),
+                    property_kind=getattr(source_field, "property_kind", "physical"),
+                    derived_config=getattr(source_field, "derived_config", None),
+                    relation_ref=getattr(source_field, "relation_ref", None),
+                    resolve_action_code=getattr(source_field, "resolve_action_code", None),
+                    resolve_param_binding=getattr(source_field, "resolve_param_binding", None),
+                    analytic_role=(
+                        getattr(view_field, "analytic_role", None)
+                        or getattr(source_field, "analytic_role", None)
+                    ),
+                    analytic_kind=(
+                        getattr(view_field, "analytic_kind", None)
+                        or getattr(source_field, "analytic_kind", None)
+                    ),
+                    secondary_role=getattr(source_field, "secondary_role", None),
+                    filter_ops=list(
+                        getattr(view_field, "filter_ops", None)
+                        or getattr(source_field, "filter_ops", [])
+                    ),
+                    group_ops=list(
+                        getattr(view_field, "group_ops", None)
+                        or getattr(source_field, "group_ops", [])
+                    ),
+                    aggregate_ops=list(
+                        getattr(view_field, "aggregate_ops", None)
+                        or getattr(source_field, "aggregate_ops", [])
+                    ),
+                    required_filter_group=(
+                        getattr(view_field, "required_filter_group", None)
+                        or getattr(source_field, "required_filter_group", None)
+                    ),
+                )
+            )
+
+        if runtime_fields:
+            return runtime_fields
+
+        runtime_fields.extend(
+            OntologyField(
+                field_code=field.field_code,
+                field_name=field.field_name,
+                field_type=field.field_type,
+                description=field.description,
+                aliases=list(field.aliases),
+                required=field.required,
+                is_primary_key=field.is_primary_key,
+                source_column=field.source_column,
+                term_set=field.term_set,
+                term_type=field.term_type,
+                term_field=field.term_field,
+                dataset_id=field.dataset_id,
+                physical_mappings=list(field.physical_mappings),
+                property_kind=field.property_kind,
+                derived_config=field.derived_config,
+                relation_ref=field.relation_ref,
+                resolve_action_code=field.resolve_action_code,
+                resolve_param_binding=field.resolve_param_binding,
+                analytic_role=field.analytic_role,
+                analytic_kind=field.analytic_kind,
+                secondary_role=field.secondary_role,
+                filter_ops=list(field.filter_ops),
+                group_ops=list(field.group_ops),
+                aggregate_ops=list(field.aggregate_ops),
+                required_filter_group=field.required_filter_group,
+            )
+            for obj in getattr(view, "objects", [])
+            for field in getattr(obj._cls, "fields", [])
+        )
+        return runtime_fields
+
+    def _find_source_field(self, object_code: str, source_column_code: str) -> Any | None:
+        """从源对象中查找视图字段映射对应的字段定义。"""
+        if not object_code or not source_column_code:
+            return None
+        try:
+            cls = self._loader.get_ontology_class(object_code)
+        except Exception:
+            return None
+
+        for field in getattr(cls, "fields", []):
+            if field.field_code == source_column_code or field.source_column == source_column_code:
+                return field
+        return None
 
     async def _execute_script(self, params: dict[str, Any]) -> dict[str, Any]:
         """

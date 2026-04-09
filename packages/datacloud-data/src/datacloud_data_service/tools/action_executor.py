@@ -16,10 +16,10 @@ SDK 层（Action.execute）已负责结果格式化（{code, message, data}）�
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.utils.json_utils import dump_json
 
 
 class ActionExecutor:
@@ -88,7 +88,7 @@ class ActionExecutor:
             }
             return {
                 "content": [
-                    {"type": "text", "text": json.dumps(error_payload, ensure_ascii=False, default=str)}
+                    {"type": "text", "text": dump_json(error_payload)}
                 ],
                 "isError": False,
             }
@@ -104,7 +104,7 @@ class ActionExecutor:
         payload = {"code": code, "message": message, "data": result}
         return {
             "content": [
-                {"type": "text", "text": json.dumps(payload, ensure_ascii=False, default=str)}
+                {"type": "text", "text": dump_json(payload)}
             ],
             "isError": False,
         }

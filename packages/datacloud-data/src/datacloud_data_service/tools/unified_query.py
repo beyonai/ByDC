@@ -15,12 +15,12 @@ SDK 层已负责结果格式化（{code, message, data}）与溢出处理，
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.result_formatter import build_error_data
+from datacloud_data_sdk.utils.json_utils import dump_json
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ class UnifiedQuery:
             payload = {"code": code, "message": message, "data": data}
             return {
                 "content": [
-                    {"type": "text", "text": json.dumps(payload, ensure_ascii=False, default=str)}
+                    {"type": "text", "text": dump_json(payload)}
                 ],
                 "isError": False,
             }

@@ -8,12 +8,22 @@ license = { text = "MIT" }
 authors = [
     { name = "Whale DataCloud Team" }
 ]
+maintainers = [
+    { name = "Whale DataCloud Team" }
+]
 keywords = ["memory", "session", "storage", "retrieval"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
 ]
+
+[project.urls]
+Homepage = "https://github.com/beyonai/by-datacloud"
+Repository = "https://github.com/beyonai/by-datacloud"
+Issues = "https://github.com/beyonai/by-datacloud/issues"
 
 dependencies = [
     "redis>=5.0",
@@ -26,9 +36,6 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
 ]
-
-[project.scripts]
-datacloud-memory = "datacloud_memory.cli:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -6,6 +6,12 @@
 ## 安装
 
 ```bash
+pip install datacloud-knowledge
+```
+
+或使用 `uv`：
+
+```bash
 uv add datacloud-knowledge
 ```
 

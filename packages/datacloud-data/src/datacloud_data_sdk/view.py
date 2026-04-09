@@ -73,6 +73,10 @@ class View:
         self.objects = objects
         self.relations = relations
         self._loader = loader
+        # 虚拟动作列表（由 VirtualActionInjector 在服务启动时填充）
+        self.actions: list[Any] = []
+        # 视图字段元数据（来自 mapping OWL，由 loader 填充）
+        self.fields: list[Any] = []
 
     def get_description(self) -> str:
         """
@@ -445,3 +449,44 @@ class View:
             if obj.object_code == object_code:
                 return await obj.invoke_action(action_code, params)
         raise ValueError(f"Object {object_code!r} not in view {self.view_id!r}")
+
+    def _find_action(self, action_code: str) -> Any | None:
+        """在视图的虚拟动作列表中查找动作定义。"""
+        for action in self.actions:
+            if getattr(action, "action_code", None) == action_code:
+                return action
+        return None
+
+    def list_action_codes(self) -> list[str]:
+        """返回视图所有虚拟动作的编码列表。"""
+        return [a.action_code for a in self.actions]
+
+    async def invoke_action(
+        self, action_code: str, params: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        执行视图级虚拟动作。
+
+        共享 Action.execute() 主执行路径，并在其中路由到
+        ViewLookupExecutor 或 ViewAnalyzeExecutor。
+
+        Args:
+            action_code: 虚拟动作编码（如 lookup_{view_id} / analyze_{view_id}）
+            params: 动作输入参数
+
+        Returns:
+            dict: {"records": [...], "total": int, "meta": {...}}
+
+        Raises:
+            ValueError: 动作不存在时抛出
+        """
+        from datacloud_data_sdk.action import Action
+        from datacloud_data_sdk.exceptions import ActionNotFoundError
+
+        action = self._find_action(action_code)
+        if action is None:
+            raise ActionNotFoundError(action_code)
+
+        loader = self._get_loader()
+        a = Action(action, loader)
+        return await a.execute(params)

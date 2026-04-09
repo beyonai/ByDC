@@ -50,8 +50,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/whalecloud/whale-datacloud"
-Repository = "https://github.com/whalecloud/whale-datacloud"
+Homepage = "https://github.com/beyonai/by-datacloud"
+Repository = "https://github.com/beyonai/by-datacloud"
 
 [build-system]
 requires = ["hatchling"]
@@ -68,7 +68,6 @@ members = [
     "packages/datacloud-analysis",
     "packages/datacloud-data",
     "packages/datacloud-knowledge",
-    "packages/datacloud-memory",
     "examples/e_commerce_demo/backend",
 ]
 
@@ -77,10 +76,7 @@ members = [
 datacloud-analysis = { workspace = true }
 datacloud-data = { workspace = true }
 datacloud-knowledge = { workspace = true }
-datacloud-memory = { workspace = true }
 datacloud-service = { workspace = true }
-# by-framework（原 gateway-sdk）来自 by-framework-python 仓库（可编辑安装）
-by-framework = { path = "../by-framework-python", editable = true }
 
 [tool.uv]
 default-groups = ["dev"]
