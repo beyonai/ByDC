@@ -46,7 +46,9 @@ class Object:
         result = await obj.query("查询部门为研发的用户")
     """
 
-    def __init__(self, ontology_class: OntologyClass, relations: list[Relation], loader: Any = None) -> None:
+    def __init__(
+        self, ontology_class: OntologyClass, relations: list[Relation], loader: Any = None
+    ) -> None:
         """
         初始化对象实体
 
@@ -213,8 +215,10 @@ class Object:
             TermNotFoundError,
         )
 
-        if not hasattr(self, '_loader') or self._loader is None:
-            raise NotImplementedError("Object.query requires OntologyLoader with configured plan_generator")
+        if not hasattr(self, "_loader") or self._loader is None:
+            raise NotImplementedError(
+                "Object.query requires OntologyLoader with configured plan_generator"
+            )
 
         loader = self._loader
         config = loader._config
@@ -235,6 +239,7 @@ class Object:
         try:
             from datacloud_data_sdk.context import get_gateway_context
             from datacloud_data_sdk.events.gateway_reporter import GatewayProgressReporter
+
             _gw_ctx = get_gateway_context()
             if _gw_ctx is not None:
                 gw_reporter = GatewayProgressReporter(_gw_ctx)
@@ -273,8 +278,7 @@ class Object:
             if gw_reporter:
                 try:
                     _step_types = " → ".join(
-                        f"{s.step_id}({getattr(s, 'step_type', 'SQL')})"
-                        for s in plan.steps
+                        f"{s.step_id}({getattr(s, 'step_type', 'SQL')})" for s in plan.steps
                     )
                     await gw_reporter.on_plan_generated(f"共 {len(plan.steps)} 步：{_step_types}")
                 except Exception:
@@ -329,16 +333,14 @@ class Object:
                 from datacloud_data_sdk.plan.term_resolver import TermResolver
 
                 term_resolver = TermResolver(config.term_loader)
-            tasks = ExecutionObjectConverter(
-                term_resolver=term_resolver, loader=loader
-            ).convert(plan, payload)
+            tasks = ExecutionObjectConverter(term_resolver=term_resolver, loader=loader).convert(
+                plan, payload
+            )
             if observer:
                 try:
                     tasks_dict = [asdict(t) for t in tasks]
                     agg_dict = asdict(plan.aggregation) if plan.aggregation else {}
-                    await observer.on_execution_tasks_ready(
-                        request_id, tasks_dict, agg_dict
-                    )
+                    await observer.on_execution_tasks_ready(request_id, tasks_dict, agg_dict)
                 except Exception:
                     logger.debug("observer/reporter callback failed", exc_info=True)
 
@@ -347,7 +349,9 @@ class Object:
             from datacloud_data_sdk.executor.api_executor import ApiExecutor
             from datacloud_data_sdk.executor.script_executor import ScriptExecutor
 
-            ds_manager = DataSourceManager(config.datasource_configs) if config.datasource_configs else None
+            ds_manager = (
+                DataSourceManager(config.datasource_configs) if config.datasource_configs else None
+            )
             sql_exec = SqlExecutor(ds_manager, config.csv_base_dir) if ds_manager else None
             api_exec = ApiExecutor(loader, config.csv_base_dir) if loader else None
             script_exec = ScriptExecutor(loader)
@@ -410,9 +414,7 @@ class Object:
                     logger.debug("observer/reporter callback failed", exc_info=True)
             if observer:
                 try:
-                    await observer.on_aggregation_completed(
-                        request_id, records, columns
-                    )
+                    await observer.on_aggregation_completed(request_id, records, columns)
                 except Exception:
                     logger.debug("observer/reporter callback failed", exc_info=True)
 
@@ -456,15 +458,27 @@ class Object:
 
         except CannotAnswerError as exc:
             from datacloud_data_sdk.result_formatter import build_error_data
+
             return build_error_data(
-                str(exc), result_type="rejected",
-                trace={"request_id": request_id, "question": question, "object_id": self._cls.object_code},
+                str(exc),
+                result_type="rejected",
+                trace={
+                    "request_id": request_id,
+                    "question": question,
+                    "object_id": self._cls.object_code,
+                },
             )
         except (TermNotFoundError, TermAmbiguousError) as exc:
             from datacloud_data_sdk.result_formatter import build_error_data
+
             return build_error_data(
-                str(exc), result_type="ask_user",
-                trace={"request_id": request_id, "question": question, "object_id": self._cls.object_code},
+                str(exc),
+                result_type="ask_user",
+                trace={
+                    "request_id": request_id,
+                    "question": question,
+                    "object_id": self._cls.object_code,
+                },
             )
         except PlanValidationError as exc:
             if observer:
@@ -474,14 +488,10 @@ class Object:
                         plan_dict = {
                             "steps": [asdict(s) for s in exc.plan.steps],
                             "aggregation": (
-                                asdict(exc.plan.aggregation)
-                                if exc.plan.aggregation
-                                else None
+                                asdict(exc.plan.aggregation) if exc.plan.aggregation else None
                             ),
                         }
-                    await observer.on_plan_validation_failed(
-                        request_id, exc.errors, plan_dict
-                    )
+                    await observer.on_plan_validation_failed(request_id, exc.errors, plan_dict)
                 except Exception:
                     logger.debug("observer/reporter callback failed", exc_info=True)
             raise
@@ -493,9 +503,7 @@ class Object:
         finally:
             csv_manager.cleanup(request_id)
 
-    async def invoke_action(
-        self, action_code: str, params: dict[str, object]
-    ) -> dict[str, object]:
+    async def invoke_action(self, action_code: str, params: dict[str, object]) -> dict[str, object]:
         """执行动作，异常向上抛出。"""
         action = self._find_action(action_code)
         return await Action(action, loader=self._loader).execute(params)

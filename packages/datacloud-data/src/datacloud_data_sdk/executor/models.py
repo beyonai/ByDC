@@ -23,9 +23,9 @@ from typing import Any
 class ApiExecTask:
     """
     API 执行任务
-    
+
     调用对象上的动作执行 API 请求。
-    
+
     Attributes:
         object_code: 对象代码
         action_code: 动作代码
@@ -34,7 +34,7 @@ class ApiExecTask:
         bind_from_step: 绑定的前置步骤 ID
         bind_key: 绑定的键名，用于从前置步骤获取值
     """
-    
+
     object_code: str
     action_code: str
     params: dict[str, Any] = field(default_factory=dict)
@@ -47,9 +47,9 @@ class ApiExecTask:
 class SqlExecTask:
     """
     SQL 执行任务
-    
+
     在指定数据源上执行 SQL 查询。
-    
+
     Attributes:
         datasource_alias: 数据源别名
         sql_template: SQL 模板，支持参数占位符
@@ -57,7 +57,7 @@ class SqlExecTask:
         bind_from_step: 绑定的前置步骤 ID
         bind_key: 绑定的键名
     """
-    
+
     datasource_alias: str
     sql_template: str
     output_ref: str = ""
@@ -69,9 +69,9 @@ class SqlExecTask:
 class ScriptExecTask:
     """
     脚本执行任务
-    
+
     执行 Python 脚本代码。
-    
+
     Attributes:
         object_code: 对象代码
         action_code: 动作代码
@@ -79,7 +79,7 @@ class ScriptExecTask:
         params: 执行参数字典
         output_ref: 输出引用名称
     """
-    
+
     object_code: str
     action_code: str
     script: str
@@ -91,16 +91,16 @@ class ScriptExecTask:
 class KbExecTask:
     """
     知识库执行任务
-    
+
     在知识库中执行检索查询。
-    
+
     Attributes:
         datasource_alias: 数据源别名
         query: 查询文本
         tags: 标签过滤条件
         output_ref: 输出引用名称
     """
-    
+
     datasource_alias: str
     query: str
     tags: dict[str, Any] = field(default_factory=dict)

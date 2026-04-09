@@ -58,12 +58,14 @@ def _write_export_file(
             return obj.isoformat()
         elif isinstance(obj, Decimal):
             return float(obj)
-        elif hasattr(obj, '__dict__'):
+        elif hasattr(obj, "__dict__"):
             return str(obj)
         return str(obj)
 
     with open(data_file, "w", encoding="utf-8") as f:
-        json.dump({"columns": columns, "rows": records}, f, ensure_ascii=False, default=json_serializer)
+        json.dump(
+            {"columns": columns, "rows": records}, f, ensure_ascii=False, default=json_serializer
+        )
 
     with open(meta_file, "w", encoding="utf-8") as f:
         json.dump({**meta, "file_id": file_id, "columns": columns}, f, ensure_ascii=False)
@@ -238,10 +240,10 @@ def query_objects(
         # 生成 request_id（从 config 获取 session_id 或生成新的）
         import uuid
         import asyncio
-        request_id = (
-            ((config or {}).get("configurable") or {}).get("thread_id")
-            or uuid.uuid4().hex[:12]
-        )
+
+        request_id = ((config or {}).get("configurable") or {}).get(
+            "thread_id"
+        ) or uuid.uuid4().hex[:12]
 
         # 调用 OqlRouter（使用 get_event_loop 获取当前事件循环）
         try:
@@ -250,13 +252,15 @@ def query_objects(
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
-        records = loop.run_until_complete(router.route(
-            oql_params=oql_params,
-            term_resolver=term_resolver,
-            executor=executor,
-            datasource_registry=datasource_registry,
-            request_id=request_id,
-        ))
+        records = loop.run_until_complete(
+            router.route(
+                oql_params=oql_params,
+                term_resolver=term_resolver,
+                executor=executor,
+                datasource_registry=datasource_registry,
+                request_id=request_id,
+            )
+        )
 
         logger.info("query_objects: router.route returned %d records", len(records))
 
@@ -278,10 +282,9 @@ def query_objects(
         # 注意：total = len(records) ≤ limit（router 不会超额返回），因此 total > limit
         # 永远不成立。用 >= 判断"是否达到上限"——当返回行数等于 limit 时，说明可能
         # 还有更多数据，应落文件供前端分页翻阅。
-        workspace_dir = (
-            ((config or {}).get("configurable") or {}).get("workspace_dir", "")
-            or os.environ.get("DATACLOUD_WORKSPACE_DIR", "")
-        )
+        workspace_dir = ((config or {}).get("configurable") or {}).get(
+            "workspace_dir", ""
+        ) or os.environ.get("DATACLOUD_WORKSPACE_DIR", "")
         if workspace_dir and total >= limit and response.get("status") == "success":
             columns = response["result"].get("columns", [])
             try:

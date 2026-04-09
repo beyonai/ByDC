@@ -80,9 +80,7 @@ class ViewAnalyzeExecutor:
                 time_expr = _time_group_expr(col_expr, group_op, db_type)
                 alias_name = f"{fc}_{group_op}"
                 dim_aliases[fc] = alias_name
-                select_parts.append(
-                    f"{time_expr} AS {quote_identifier(alias_name, db_type)}"
-                )
+                select_parts.append(f"{time_expr} AS {quote_identifier(alias_name, db_type)}")
                 group_by_parts.append(time_expr)
                 col_keys.append(alias_name)
             else:
@@ -143,15 +141,11 @@ class ViewAnalyzeExecutor:
                 resolved = field_to_alias_col.get(ob_field)
                 if resolved:
                     ta, col = resolved
-                    order_clauses.append(
-                        f"{ta}.{quote_identifier(col, db_type)} {direction}"
-                    )
+                    order_clauses.append(f"{ta}.{quote_identifier(col, db_type)} {direction}")
 
         required_fields = {item.get("field", "") for item in dimensions}
         required_fields.update(
-            metric.get("field", "")
-            for metric in metrics
-            if metric.get("agg") != "count_all"
+            metric.get("field", "") for metric in metrics if metric.get("agg") != "count_all"
         )
         required_fields.update(item.get("field", "") for item in filters)
         required_fields.update(
@@ -190,9 +184,7 @@ class ViewAnalyzeExecutor:
             raise RuntimeError(f"view analyze query failed: {exc}") from exc
 
         records = [
-            dict(zip(col_keys, row, strict=False))
-            if isinstance(row, (list, tuple))
-            else row
+            dict(zip(col_keys, row, strict=False)) if isinstance(row, (list, tuple)) else row
             for row in rows
         ]
         return {

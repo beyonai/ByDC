@@ -73,6 +73,7 @@ class UnifiedQuery:
         Returns:
             dict: MCP 格式的查询结果
         """
+
         def _wrap(data: dict[str, Any]) -> dict[str, Any]:
             result_type = data.get("result_type", "normal")
             if result_type in ("rejected", "ask_user"):
@@ -83,9 +84,7 @@ class UnifiedQuery:
                 message = "success"
             payload = {"code": code, "message": message, "data": data}
             return {
-                "content": [
-                    {"type": "text", "text": dump_json(payload)}
-                ],
+                "content": [{"type": "text", "text": dump_json(payload)}],
                 "isError": False,
             }
 

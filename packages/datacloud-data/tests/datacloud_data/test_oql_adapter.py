@@ -4,14 +4,23 @@ OQL 原子翻译层和策略 A 测试
 
 import pytest
 from datacloud_data_sdk.oql.adapter import (
-    resolve_object, resolve_column, build_field_map, get_quoting,
-    inline_value, expand_relative_date, translate_simple_condition,
-    translate_logic_condition, translate_conditions, preprocess_where_terms,
-    OqlAdapter
+    resolve_object,
+    resolve_column,
+    build_field_map,
+    get_quoting,
+    inline_value,
+    expand_relative_date,
+    translate_simple_condition,
+    translate_logic_condition,
+    translate_conditions,
+    preprocess_where_terms,
+    OqlAdapter,
 )
 from datacloud_data_sdk.oql import OQLError, OQLErrorCode
 from tests.datacloud_data.fixtures.oql_test_data import (
-    MockRegistry, MockTermResolver, TEST_FLIGHT_RECORDS
+    MockRegistry,
+    MockTermResolver,
+    TEST_FLIGHT_RECORDS,
 )
 
 
@@ -135,8 +144,7 @@ class TestTranslateSimpleCondition:
         params = []
 
         sql = translate_simple_condition(
-            {"field": "status", "op": "eq", "value": "completed"},
-            field_map, "MYSQL", params, "`"
+            {"field": "status", "op": "eq", "value": "completed"}, field_map, "MYSQL", params, "`"
         )
         assert "=" in sql
         assert len(params) == 1
@@ -148,8 +156,7 @@ class TestTranslateSimpleCondition:
         params = []
 
         sql = translate_simple_condition(
-            {"field": "status", "op": "in", "value": []},
-            field_map, "MYSQL", params, "`"
+            {"field": "status", "op": "in", "value": []}, field_map, "MYSQL", params, "`"
         )
         assert sql == "1=0"
 
@@ -161,7 +168,10 @@ class TestTranslateSimpleCondition:
 
         sql = translate_simple_condition(
             {"field": "status", "op": "in", "value": ["completed", "pending"]},
-            field_map, "MYSQL", params, "`"
+            field_map,
+            "MYSQL",
+            params,
+            "`",
         )
         assert "IN" in sql
         assert len(params) == 2
@@ -174,7 +184,10 @@ class TestTranslateSimpleCondition:
 
         sql = translate_simple_condition(
             {"field": "departure_time", "op": "between", "value": ["2024-01-01", "2024-01-31"]},
-            field_map, "MYSQL", params, "`"
+            field_map,
+            "MYSQL",
+            params,
+            "`",
         )
         assert "BETWEEN" in sql
         assert len(params) == 2
@@ -188,7 +201,10 @@ class TestTranslateSimpleCondition:
         with pytest.raises(OQLError) as exc_info:
             translate_simple_condition(
                 {"field": "status", "op": "invalid_op", "value": "test"},
-                field_map, "MYSQL", params, "`"
+                field_map,
+                "MYSQL",
+                params,
+                "`",
             )
         assert exc_info.value.code == OQLErrorCode.OQL_ERR_INVALID_OPERATOR
 
@@ -203,8 +219,7 @@ class TestTranslateConditions:
         params = []
 
         sql = translate_conditions(
-            [{"field": "status", "op": "eq", "value": "completed"}],
-            field_map, "MYSQL", params, "`"
+            [{"field": "status", "op": "eq", "value": "completed"}], field_map, "MYSQL", params, "`"
         )
         assert "=" in sql
         assert len(params) == 1
@@ -220,7 +235,10 @@ class TestTranslateConditions:
                 {"field": "status", "op": "eq", "value": "completed"},
                 {"field": "crew_id", "op": "eq", "value": "C001"},
             ],
-            field_map, "MYSQL", params, "`"
+            field_map,
+            "MYSQL",
+            params,
+            "`",
         )
         assert "AND" in sql
         assert len(params) == 2
@@ -276,8 +294,7 @@ class TestTranslateConditions:
         params = []
 
         sql = translate_conditions(
-            [{"field": "status", "op": "eq", "value": "completed"}],
-            field_map, "MYSQL", params, "`"
+            [{"field": "status", "op": "eq", "value": "completed"}], field_map, "MYSQL", params, "`"
         )
         assert "=" in sql
         assert len(params) == 1
@@ -293,7 +310,10 @@ class TestTranslateConditions:
                 {"field": "status", "op": "eq", "value": "completed"},
                 {"field": "crew_id", "op": "eq", "value": "C001"},
             ],
-            field_map, "MYSQL", params, "`"
+            field_map,
+            "MYSQL",
+            params,
+            "`",
         )
         assert "AND" in sql
         assert len(params) == 2

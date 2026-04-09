@@ -213,6 +213,7 @@ class OwlParser:
         if not inner:
             return []
         if "{" in inner:
+
             def fix_obj(m: re.Match) -> str:
                 pairs = []
                 for pair in m.group(1).split(","):
@@ -220,7 +221,8 @@ class OwlParser:
                         k, v = pair.split(":", 1)
                         pairs.append(f'"{k.strip()}": "{v.strip()}"')
                 return "{" + ", ".join(pairs) + "}"
-            fixed = "[" + re.sub(r'\{([^}]+)\}', fix_obj, inner) + "]"
+
+            fixed = "[" + re.sub(r"\{([^}]+)\}", fix_obj, inner) + "]"
             try:
                 return json.loads(fixed)
             except json.JSONDecodeError:
@@ -348,7 +350,10 @@ class OwlParser:
         self._actions[action_code] = action
 
         for entity_code in belong_entities:
-            if entity_code in self._objects and action_code not in self._objects[entity_code].actions:
+            if (
+                entity_code in self._objects
+                and action_code not in self._objects[entity_code].actions
+            ):
                 self._objects[entity_code].actions.append(action_code)
 
     def _parse_request_parameter(self, g: Any, subject: Any) -> None:
@@ -483,7 +488,9 @@ class OwlParser:
 
         # 视图字段映射（来自 *_mapping.owl 中的 Mapping 个体）
         source_object_code = self._get_predicate_value(g, subject, "source_object_code")
-        source_object_column_code = self._get_predicate_value(g, subject, "source_object_column_code")
+        source_object_column_code = self._get_predicate_value(
+            g, subject, "source_object_column_code"
+        )
         property_name = self._get_predicate_value(g, subject, "property_name")
         ext_property = self._get_predicate_value(g, subject, "ext_property")
 
@@ -517,13 +524,15 @@ class OwlParser:
 
                 # 存储视图字段映射信息（source_object_code + source_object_column_code + ext_property）
                 if source_object_code and source_object_column_code:
-                    self._view_field_mappings.setdefault(entity_code, []).append({
-                        "property_code": property_code,
-                        "property_name": property_name or property_code,
-                        "source_object_code": source_object_code,
-                        "source_object_column_code": source_object_column_code,
-                        "ext_property": ext_property,
-                    })
+                    self._view_field_mappings.setdefault(entity_code, []).append(
+                        {
+                            "property_code": property_code,
+                            "property_name": property_name or property_code,
+                            "source_object_code": source_object_code,
+                            "source_object_column_code": source_object_column_code,
+                            "ext_property": ext_property,
+                        }
+                    )
 
     def _apply_mappings_to_objects(self) -> None:
         for entity_code, datasource_code in self._mapping_datasource.items():
@@ -563,7 +572,7 @@ class OwlParser:
                 term_meta["termMasterType"] = "dict"
                 term_meta["termTypeCode"] = parts[1]
         if fld.rel_term_codeorname:
-                term_meta["termField"] = fld.rel_term_codeorname
+            term_meta["termField"] = fld.rel_term_codeorname
 
         return term_meta if term_meta else None
 
@@ -573,7 +582,9 @@ class OwlParser:
             return scoped_field
         return self._fields.get(field_code)
 
-    def _resolve_object_field_from_ref(self, object_code: str, field_uri: str) -> ParsedField | None:
+    def _resolve_object_field_from_ref(
+        self, object_code: str, field_uri: str
+    ) -> ParsedField | None:
         field_code = self._field_uri_to_code.get((object_code, field_uri))
         if field_code is None:
             field_code = self._field_uri_to_code.get(("", field_uri))
@@ -620,7 +631,9 @@ class OwlParser:
             term_data_type=param_field.term_data_type or object_field.term_data_type,
         )
 
-    def parse_directory(self, ontology_dir: Path, relations_dir: Path | None = None) -> dict[str, Any]:
+    def parse_directory(
+        self, ontology_dir: Path, relations_dir: Path | None = None
+    ) -> dict[str, Any]:
         if ontology_dir.is_dir():
             for owl_file in ontology_dir.rglob("*.owl"):
                 self.parse_file(owl_file)
@@ -708,14 +721,16 @@ class OwlParser:
                                 param_dict["termMeta"] = term_meta
                         params.append(param_dict)
 
-                    actions.append({
-                        "action_code": action.action_code,
-                        "action_name": action.action_name,
-                        "description": action.description,
-                        "action_type": action.action_type,
-                        "function_refs": action.function_refs,
-                        "params": params,
-                    })
+                    actions.append(
+                        {
+                            "action_code": action.action_code,
+                            "action_name": action.action_name,
+                            "description": action.description,
+                            "action_type": action.action_type,
+                            "function_refs": action.function_refs,
+                            "params": params,
+                        }
+                    )
 
             source_config = None
             if obj.datasource_alias and obj.datasource_alias in self._datasources:
@@ -726,29 +741,33 @@ class OwlParser:
                     **ds.config,
                 }
 
-            objects.append({
-                "object_code": obj.object_code,
-                "object_name": obj.object_name,
-                "description": obj.description,
-                "source_type": obj.source_type,
-                "datasource_alias": obj.datasource_alias,
-                "table_name": obj.table_name,
-                "source_config": source_config,
-                "fields": fields,
-                "actions": actions,
-            })
+            objects.append(
+                {
+                    "object_code": obj.object_code,
+                    "object_name": obj.object_name,
+                    "description": obj.description,
+                    "source_type": obj.source_type,
+                    "datasource_alias": obj.datasource_alias,
+                    "table_name": obj.table_name,
+                    "source_config": source_config,
+                    "fields": fields,
+                    "actions": actions,
+                }
+            )
 
         relations = []
         for rel_code, rel in self._relations.items():
-            relations.append({
-                "relation_code": rel_code,
-                "relation_name": rel.relation_name,
-                "source_class": rel.source_class,
-                "target_class": rel.target_class,
-                "relation_type": rel.relation_type,
-                "join_keys": rel.join_keys,
-                "description": rel.description,
-            })
+            relations.append(
+                {
+                    "relation_code": rel_code,
+                    "relation_name": rel.relation_name,
+                    "source_class": rel.source_class,
+                    "target_class": rel.target_class,
+                    "relation_type": rel.relation_type,
+                    "join_keys": rel.join_keys,
+                    "description": rel.description,
+                }
+            )
 
         datasource_configs = {}
         for ds_code, ds in self._datasources.items():
@@ -765,24 +784,28 @@ class OwlParser:
             for rel_code in view.relations:
                 if rel_code in self._relations:
                     rel = self._relations[rel_code]
-                    view_relations.append({
-                        "relation_code": rel_code,
-                        "relation_name": rel.relation_name,
-                        "source_class": rel.source_class,
-                        "target_class": rel.target_class,
-                        "relation_type": rel.relation_type,
-                        "join_keys": rel.join_keys,
-                        "description": rel.description,
-                    })
+                    view_relations.append(
+                        {
+                            "relation_code": rel_code,
+                            "relation_name": rel.relation_name,
+                            "source_class": rel.source_class,
+                            "target_class": rel.target_class,
+                            "relation_type": rel.relation_type,
+                            "join_keys": rel.join_keys,
+                            "description": rel.description,
+                        }
+                    )
             view_field_mappings = getattr(self, "_view_field_mappings", {}).get(view.view_id, [])
-            views.append({
-                "view_id": view.view_id,
-                "view_name": view.view_name,
-                "description": view.description,
-                "objects": view_objects,
-                "relations": view_relations,
-                "mappings": view_field_mappings,  # 视图字段映射（含 ext_property）
-            })
+            views.append(
+                {
+                    "view_id": view.view_id,
+                    "view_name": view.view_name,
+                    "description": view.description,
+                    "objects": view_objects,
+                    "relations": view_relations,
+                    "mappings": view_field_mappings,  # 视图字段映射（含 ext_property）
+                }
+            )
 
         return {
             "objects": objects,

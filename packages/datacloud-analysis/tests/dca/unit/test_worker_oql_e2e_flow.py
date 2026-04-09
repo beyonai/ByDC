@@ -109,9 +109,7 @@ def _no_checkpointer_graph(events: list[dict[str, Any]]) -> Any:
     return _Graph()
 
 
-def _checkpointed_graph(
-    events: list[dict[str, Any]], snapshot: _FakeSnapshot
-) -> Any:
+def _checkpointed_graph(events: list[dict[str, Any]], snapshot: _FakeSnapshot) -> Any:
     """Graph with a fake checkpointer that returns the given snapshot."""
 
     class _Graph:

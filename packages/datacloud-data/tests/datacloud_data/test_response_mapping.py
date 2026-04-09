@@ -1,4 +1,5 @@
 """Tests for response_mapping."""
+
 from datacloud_data_sdk.executor.response_mapping import extract_by_mapping_path
 
 

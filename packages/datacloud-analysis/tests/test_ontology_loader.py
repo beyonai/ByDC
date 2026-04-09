@@ -73,6 +73,7 @@ class TestOntologyLoader:
 
         # 应该返回MCPLoader实例
         from datacloud_analysis.tools.ontology_loader import MCPLoader
+
         assert isinstance(loader, MCPLoader)
 
     def test_create_ontology_loader_dynamic_mode(self):
@@ -86,6 +87,7 @@ class TestOntologyLoader:
 
         # 应该返回DynamicToolLoader实例
         from datacloud_analysis.tools.ontology_loader import DynamicToolLoader
+
         assert isinstance(loader, DynamicToolLoader)
 
 

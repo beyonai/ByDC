@@ -66,25 +66,25 @@ _ctx_var: contextvars.ContextVar[RequestContext | None] = contextvars.ContextVar
 class InvocationContext:
     """
     请求上下文管理器
-    
+
     实现 Python 上下文管理器协议，在 with 块内自动设置请求上下文，
     退出 with 块时自动清理，确保上下文不会泄漏到其他请求。
-    
+
     使用 contextvars 实现线程和协程安全，支持异步环境。
-    
+
     Args:
         **kwargs: 上下文字段，支持 tenant_id, user_id, session_id, token, system_code,
             tool_list_mode, view_id, object_ids
-    
+
     Example:
         基本用法::
-        
+
             with InvocationContext(tenant_id="t1", token="xxx"):
                 ctx = get_current_context()
                 print(ctx.tenant_id)  # 输出: "t1"
-        
+
         异步环境使用::
-        
+
             async def handle_request():
                 with InvocationContext(tenant_id="t1", user_id="u1"):
                     # 在异步函数中也能正确获取上下文
@@ -129,17 +129,17 @@ class InvocationContext:
 def get_current_context() -> RequestContext:
     """
     获取当前请求上下文
-    
+
     从 contextvars 中获取当前请求的上下文信息。
     必须在 InvocationContext 上下文管理器内部调用，
     否则抛出 DatacloudError 异常。
-    
+
     Returns:
         RequestContext: 当前请求的上下文对象
-    
+
     Raises:
         DatacloudError: 未设置上下文时抛出
-    
+
     Example:
         with InvocationContext(tenant_id="t1"):
             ctx = get_current_context()

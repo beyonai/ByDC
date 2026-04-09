@@ -124,7 +124,9 @@ def _create_strawberry_type_from_class(
                 )
 
             raw_list = batches[0] if batches else []
-            return [_record_to_strawberry(r, target_strawberry_type, type_map, loader) for r in raw_list]
+            return [
+                _record_to_strawberry(r, target_strawberry_type, type_map, loader) for r in raw_list
+            ]
 
         return strawberry.field(resolver=_resolver)
 
@@ -179,7 +181,9 @@ def _create_strawberry_type_from_class(
                 ds_ctx = info.context.get("ds_manager")
 
                 if rel.resolve_action_code:
-                    batches = await resolve_api_linked_batch(loader_ctx, [parent_dict], agg_field, rel)
+                    batches = await resolve_api_linked_batch(
+                        loader_ctx, [parent_dict], agg_field, rel
+                    )
                 else:
                     if not ds_ctx:
                         return 0
@@ -328,8 +332,7 @@ def _create_query_type(
             result = await executor.execute(object_code, arguments)
             records = result.get("records", [])
             return [
-                _record_to_strawberry(r, strawberry_type, type_map, loader_ctx)
-                for r in records
+                _record_to_strawberry(r, strawberry_type, type_map, loader_ctx) for r in records
             ]
 
         return strawberry.field(resolver=_resolver)
@@ -352,18 +355,24 @@ def _create_query_type(
             result = await obj.invoke_action(action_code, params)
             records = result.get("records", []) if isinstance(result, dict) else []
             return [
-                _record_to_strawberry(r, strawberry_type, type_map, loader_ctx)
-                for r in records
+                _record_to_strawberry(r, strawberry_type, type_map, loader_ctx) for r in records
             ]
 
         sig_params = [
             inspect.Parameter("root", inspect.Parameter.POSITIONAL_OR_KEYWORD),
-            inspect.Parameter("info", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=strawberry.Info),
+            inspect.Parameter(
+                "info", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=strawberry.Info
+            ),
         ]
-        for (name, py_type, required) in in_params:
+        for name, py_type, required in in_params:
             default = inspect.Parameter.empty if required else None
             sig_params.append(
-                inspect.Parameter(name, inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=py_type, default=default)
+                inspect.Parameter(
+                    name,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    annotation=py_type,
+                    default=default,
+                )
             )
         _resolver.__signature__ = inspect.Signature(sig_params)
         return strawberry.field(resolver=_resolver)

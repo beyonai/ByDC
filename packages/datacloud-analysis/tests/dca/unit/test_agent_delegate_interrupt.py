@@ -164,5 +164,9 @@ async def test_side_effect_kwargs_not_in_interrupt_payload() -> None:
     assert "call_agent_kwargs" not in captured_payload
     # payload 只含规定字段
     assert set(captured_payload.keys()) <= {
-        "reason_code", "display", "resume_schema", "correlation_id", "timeout_seconds"
+        "reason_code",
+        "display",
+        "resume_schema",
+        "correlation_id",
+        "timeout_seconds",
     }

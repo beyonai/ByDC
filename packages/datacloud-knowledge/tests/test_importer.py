@@ -167,7 +167,9 @@ def generate_embeddings(batch_size: int = 50) -> dict:
     try:
         # 统计总数
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM whale_datacloud.term_name WHERE name_embedding IS NULL")
+            cur.execute(
+                "SELECT COUNT(*) FROM whale_datacloud.term_name WHERE name_embedding IS NULL"
+            )
             total = cur.fetchone()[0]
 
         if total == 0:

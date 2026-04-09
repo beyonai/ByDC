@@ -10,6 +10,7 @@ from typing import Any
 
 # ── 描述文档生成（§6 / §7 模板）────────────────────────────────────────────────
 
+
 def _field_table_row(f: Any) -> str:
     """生成字段能力表的单行 Markdown。"""
     fc = f.field_code if hasattr(f, "field_code") else f.property_code
@@ -53,7 +54,9 @@ def build_lookup_description(
         f"不支持聚合统计。仅允许使用配置中声明的字段和操作符。{req_hint}"
     )
     lines.append("")
-    lines.append("**何时使用**：查看具体记录列表时使用；不适用于统计汇总，如需统计请用 analyze 动作。")
+    lines.append(
+        "**何时使用**：查看具体记录列表时使用；不适用于统计汇总，如需统计请用 analyze 动作。"
+    )
 
     restrictions = _required_restrictions(req_groups)
     if restrictions:
@@ -168,6 +171,7 @@ def build_search_description(
 
 # ── 通用工具 ──────────────────────────────────────────────────────────────────
 
+
 def _infer_value_type(f: Any) -> str:
     """推断 filters.value 的基础类型，兼容视图字段缺失 field_type 的情况。"""
     ft = (getattr(f, "field_type", "") or "").upper()
@@ -255,6 +259,7 @@ def _build_filters_schema(fields: list[Any]) -> dict[str, Any]:
 
 # ── lookup schema 生成 ────────────────────────────────────────────────────────
 
+
 def build_lookup_schema(
     scope_name: str,
     fields: list[Any],
@@ -268,13 +273,11 @@ def build_lookup_schema(
         fields: OntologyField 或 ViewFieldMeta 列表
         required_filter_groups: 强制过滤组列表
     """
-    all_codes = [
-        f.field_code if hasattr(f, "field_code") else f.property_code
-        for f in fields
-    ]
+    all_codes = [f.field_code if hasattr(f, "field_code") else f.property_code for f in fields]
     all_names = {
-        (f.field_code if hasattr(f, "field_code") else f.property_code):
-        (f.field_name if hasattr(f, "field_name") else f.property_name)
+        (f.field_code if hasattr(f, "field_code") else f.property_code): (
+            f.field_name if hasattr(f, "field_name") else f.property_name
+        )
         for f in fields
     }
     filters_schema = _build_filters_schema(fields)
@@ -293,8 +296,10 @@ def build_lookup_schema(
                 "items": {"type": "string", "enum": all_codes},
                 "description": f"指定返回字段，为空时返回全部。可选字段：{', '.join(f'{c}({all_names[c]})' for c in all_codes[:10])}{'...' if len(all_codes) > 10 else ''}",
                 "x-dc-field-catalog": [
-                    {"code": f.field_code if hasattr(f, "field_code") else f.property_code,
-                     "name": f.field_name if hasattr(f, "field_name") else f.property_name}
+                    {
+                        "code": f.field_code if hasattr(f, "field_code") else f.property_code,
+                        "name": f.field_name if hasattr(f, "field_name") else f.property_name,
+                    }
                     for f in fields
                 ],
             },
@@ -322,6 +327,7 @@ def build_lookup_schema(
 
 # ── analyze schema 生成 ───────────────────────────────────────────────────────
 
+
 def build_analyze_schema(
     scope_name: str,
     fields: list[Any],
@@ -335,13 +341,12 @@ def build_analyze_schema(
         fields: OntologyField 或 ViewFieldMeta 列表
         required_filter_groups: 强制过滤组列表
     """
-    dim_fields = [
-        f for f in fields
-        if getattr(f, "group_ops", [])
-    ]
+    dim_fields = [f for f in fields if getattr(f, "group_ops", [])]
     msr_fields = [
-        f for f in fields
-        if getattr(f, "analytic_role", None) == "measure" and getattr(f, "aggregate_ops", [])
+        f
+        for f in fields
+        if getattr(f, "analytic_role", None) == "measure"
+        and getattr(f, "aggregate_ops", [])
         or getattr(f, "secondary_role", None) == "measure"  # 双角色字段
     ]
     filters_schema = _build_filters_schema(fields)
@@ -367,8 +372,14 @@ def build_analyze_schema(
                 "items": {
                     "type": "object",
                     "properties": {
-                        "from": {"type": ["number", "null"], "description": "区间起始（含），null 表示无下限"},
-                        "to": {"type": ["number", "null"], "description": "区间终止（不含），null 表示无上限"},
+                        "from": {
+                            "type": ["number", "null"],
+                            "description": "区间起始（含），null 表示无下限",
+                        },
+                        "to": {
+                            "type": ["number", "null"],
+                            "description": "区间终止（不含），null 表示无上限",
+                        },
                         "label": {"type": "string", "description": "桶标签"},
                     },
                     "required": ["label"],
@@ -414,11 +425,15 @@ def build_analyze_schema(
             "dimensions": {
                 "type": "array",
                 "description": "分组维度列表（至少一个；时间类须指定粒度；range 须带 buckets）",
-                "items": {"oneOf": [_dim_item(f) for f in dim_fields]} if dim_fields else {"type": "object"},
+                "items": {"oneOf": [_dim_item(f) for f in dim_fields]}
+                if dim_fields
+                else {"type": "object"},
                 "x-dc-dimension-fields": [
-                    {"field": f.field_code if hasattr(f, "field_code") else f.property_code,
-                     "group_ops": getattr(f, "group_ops", []),
-                     "kind": getattr(f, "analytic_kind", None)}
+                    {
+                        "field": f.field_code if hasattr(f, "field_code") else f.property_code,
+                        "group_ops": getattr(f, "group_ops", []),
+                        "kind": getattr(f, "analytic_kind", None),
+                    }
                     for f in dim_fields
                 ],
             },
@@ -428,9 +443,11 @@ def build_analyze_schema(
                 "items": {"oneOf": metrics_items},
                 "minItems": 1,
                 "x-dc-measure-fields": [
-                    {"field": f.field_code if hasattr(f, "field_code") else f.property_code,
-                     "agg_ops": getattr(f, "aggregate_ops", []),
-                     "kind": getattr(f, "analytic_kind", None)}
+                    {
+                        "field": f.field_code if hasattr(f, "field_code") else f.property_code,
+                        "agg_ops": getattr(f, "aggregate_ops", []),
+                        "kind": getattr(f, "analytic_kind", None),
+                    }
                     for f in msr_fields
                 ],
             },
@@ -442,11 +459,19 @@ def build_analyze_schema(
                     "type": "object",
                     "properties": {
                         "field": {"type": "string", "description": "metrics.as 别名"},
-                        "op": {"type": "string", "enum": ["eq", "gt", "gte", "lt", "lte", "between"]},
+                        "op": {
+                            "type": "string",
+                            "enum": ["eq", "gt", "gte", "lt", "lte", "between"],
+                        },
                         "value": {
                             "oneOf": [
                                 {"type": "number"},
-                                {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+                                {
+                                    "type": "array",
+                                    "items": {"type": "number"},
+                                    "minItems": 2,
+                                    "maxItems": 2,
+                                },
                             ]
                         },
                     },
@@ -475,6 +500,7 @@ def build_analyze_schema(
 
 
 # ── search schema 生成 ────────────────────────────────────────────────────────
+
 
 def build_search_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
     """生成 search 动作 inputSchema（知识库检索）。"""

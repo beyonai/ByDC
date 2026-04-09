@@ -38,10 +38,7 @@ class TestWorkspaceInitMiddleware:
 
     def test_middleware_initialization(self):
         """测试中间件初始化"""
-        middleware = WorkspaceInitMiddleware(
-            workspace_dir="/tmp/workspace",
-            agent_name="TestAgent"
-        )
+        middleware = WorkspaceInitMiddleware(workspace_dir="/tmp/workspace", agent_name="TestAgent")
         assert middleware.workspace_dir == "/tmp/workspace"
         assert middleware.agent_name == "TestAgent"
 
@@ -57,10 +54,7 @@ class TestWorkspaceInitMiddleware:
 
     def test_wrap_model_call_injects_workspace_info(self):
         """测试 wrap_model_call 注入工作区信息"""
-        middleware = WorkspaceInitMiddleware(
-            workspace_dir="/tmp/workspace",
-            agent_name="TestAgent"
-        )
+        middleware = WorkspaceInitMiddleware(workspace_dir="/tmp/workspace", agent_name="TestAgent")
 
         request = _make_request("你是一个助手")
         handler_called_with = []
@@ -105,10 +99,7 @@ class TestWorkspaceInitMiddleware:
     @pytest.mark.asyncio
     async def test_awrap_model_call_injects_workspace_info(self):
         """测试异步版本注入工作区信息"""
-        middleware = WorkspaceInitMiddleware(
-            workspace_dir="/tmp/workspace",
-            agent_name="TestAgent"
-        )
+        middleware = WorkspaceInitMiddleware(workspace_dir="/tmp/workspace", agent_name="TestAgent")
 
         request = _make_request("你是一个助手")
         handler_called_with = []

@@ -11,11 +11,7 @@ from datacloud_data_sdk.oql.models import OQLError
 
 
 def format_oql_response(
-    tool: str,
-    records: list[dict],
-    total: int,
-    limit: int,
-    offset: int = 0
+    tool: str, records: list[dict], total: int, limit: int, offset: int = 0
 ) -> dict[str, Any]:
     """
     将 OqlRouter.route() 返回的 list[dict] 转换为标准响应格式。
@@ -68,8 +64,8 @@ def format_oql_response(
                     "limit": limit,
                     "offset": offset,
                     "has_next": False,
-                }
-            }
+                },
+            },
         }
 
     # 提取列名（使用第一条记录的键）

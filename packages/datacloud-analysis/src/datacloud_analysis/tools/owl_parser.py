@@ -90,6 +90,7 @@ def _extract_properties_from_owl(content: str) -> list[str]:
 
     # 查找DataProperty定义
     import re
+
     data_props = re.findall(r'<owl:DatatypeProperty[^>]*rdf:about="[^"]*#([^"]+)"', content)
     properties.extend(data_props)
 
@@ -108,6 +109,7 @@ def _extract_actions_from_owl(content: str) -> list[str]:
 
     # 查找动作定义（通常在注释或特定标签中）
     import re
+
     action_matches = re.findall(r'action["\s:]+([a-zA-Z_]+)', content, re.IGNORECASE)
     actions.extend(action_matches)
 

@@ -22,9 +22,16 @@ PAYLOAD = ObjectViewPayload(view_id="v1", sources=[], objects=[], relations=[])
 MOCK_PLAN = {
     "question": "查商机",
     "can_answer": True,
-    "steps": [{"step_id": "s1", "type": "SQL", "source_id": "SRC_CRM",
-               "datasource_alias": "crm_db", "sql_template": "SELECT 1",
-               "output_ref": "result"}],
+    "steps": [
+        {
+            "step_id": "s1",
+            "type": "SQL",
+            "source_id": "SRC_CRM",
+            "datasource_alias": "crm_db",
+            "sql_template": "SELECT 1",
+            "output_ref": "result",
+        }
+    ],
     "aggregation": {"strategy": "DIRECT", "final_step_id": "s1", "columns": []},
 }
 
@@ -39,8 +46,9 @@ async def test_mock_plan_generator_returns_plan() -> None:
 
 @pytest.mark.asyncio
 async def test_mock_plan_generator_cannot_answer() -> None:
-    gen = MockPlanGenerator(fixed_plan={"question": "？", "can_answer": False,
-                                         "clarification": "无法回答"})
+    gen = MockPlanGenerator(
+        fixed_plan={"question": "？", "can_answer": False, "clarification": "无法回答"}
+    )
     plan = await gen.generate(PAYLOAD, "？")
     assert plan.can_answer is False
     assert plan.clarification == "无法回答"
@@ -66,9 +74,16 @@ async def test_camel_case_plan_parsed_correctly() -> None:
     camel_plan = {
         "question": "test",
         "canAnswer": True,
-        "steps": [{"stepId": "s1", "type": "SQL", "sourceId": "SRC",
-                    "datasourceAlias": "db", "sqlTemplate": "SELECT 1",
-                    "outputRef": "r"}],
+        "steps": [
+            {
+                "stepId": "s1",
+                "type": "SQL",
+                "sourceId": "SRC",
+                "datasourceAlias": "db",
+                "sqlTemplate": "SELECT 1",
+                "outputRef": "r",
+            }
+        ],
         "aggregation": {"strategy": "DIRECT", "finalStepId": "s1", "columns": []},
     }
     gen = MockPlanGenerator(fixed_plan=camel_plan)
@@ -186,9 +201,11 @@ def test_serialize_payload_fields_include_source_column_when_present() -> None:
 
 def test_serialize_payload_injects_term_labels_with_loader() -> None:
     """有 term_loader 且 term_set 有数据时，对 action 的 inputParams 注入 termType 和 termLabels。"""
-    loader = TermLoader.from_mapping({
-        "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
-    })
+    loader = TermLoader.from_mapping(
+        {
+            "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
+        }
+    )
     payload = ObjectViewPayload(
         view_id="v1",
         sources=[],
@@ -221,9 +238,11 @@ def test_serialize_payload_injects_term_labels_with_loader() -> None:
 
 def test_serialize_payload_injects_term_labels_for_fields() -> None:
     """有 term_loader 且 field 有 term_set 时，fields 注入 termType 和 termLabels。"""
-    loader = TermLoader.from_mapping({
-        "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
-    })
+    loader = TermLoader.from_mapping(
+        {
+            "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
+        }
+    )
     payload = ObjectViewPayload(
         view_id="v1",
         sources=[],

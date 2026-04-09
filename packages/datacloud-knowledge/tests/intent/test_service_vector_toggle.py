@@ -80,7 +80,9 @@ def test_search_candidates_runs_vector_when_enabled(monkeypatch: pytest.MonkeyPa
         score=0.0,
     )
 
-    def _fake_convert_hits(*, word: str, hits: tuple[Any, ...], user_id: str | None) -> list[dict[str, Any]]:
+    def _fake_convert_hits(
+        *, word: str, hits: tuple[Any, ...], user_id: str | None
+    ) -> list[dict[str, Any]]:
         del user_id
         return [
             {

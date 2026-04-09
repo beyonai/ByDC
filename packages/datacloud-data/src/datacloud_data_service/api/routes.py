@@ -298,7 +298,13 @@ def create_app(
     app.include_router(skills_router, prefix="/api/v1/skills")
 
     # GraphQL 端点：从 crm_demo_graphql 加载独立 loader（与主 loader 分离）
-    graphql_registry = Path(__file__).resolve().parents[3] / "resources" / "ontology" / "crm_demo_graphql" / "objects_registry.json"
+    graphql_registry = (
+        Path(__file__).resolve().parents[3]
+        / "resources"
+        / "ontology"
+        / "crm_demo_graphql"
+        / "objects_registry.json"
+    )
     if graphql_registry.exists():
         from datacloud_data_sdk.ontology.loader import OntologyLoader
         from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
@@ -312,6 +318,8 @@ def create_app(
         app.include_router(graphql_router, prefix="/graphql")
         logger.info("GraphQL endpoint mounted at /graphql from %s", graphql_registry)
     else:
-        logger.warning("GraphQL ontology not found at %s, GraphQL endpoint disabled", graphql_registry)
+        logger.warning(
+            "GraphQL ontology not found at %s, GraphQL endpoint disabled", graphql_registry
+        )
 
     return app

@@ -1,4 +1,5 @@
 """PlanValidator: 校验 QueryExecutionPlan 合法性。"""
+
 from __future__ import annotations
 
 import re
@@ -406,9 +407,7 @@ def _get_scope_output_columns(scope: Any) -> set[str]:
     alias_column_names = getattr(parent, "alias_column_names", None)
     if alias_column_names:
         return {
-            column.name.lower()
-            for column in alias_column_names
-            if getattr(column, "name", None)
+            column.name.lower() for column in alias_column_names if getattr(column, "name", None)
         }
 
     output_columns: set[str] = set()
@@ -616,22 +615,16 @@ class ValidationResult:
 
 
 class PlanValidator:
-    def validate(
-        self, plan: QueryExecutionPlan, payload: ObjectViewPayload
-    ) -> ValidationResult:
+    def validate(self, plan: QueryExecutionPlan, payload: ObjectViewPayload) -> ValidationResult:
         errors: list[str] = []
         source_ids = {s.source_id for s in payload.sources}
         step_ids = {s.step_id for s in plan.steps}
 
         for step in plan.steps:
             if not (step.output_ref or "").strip():
-                errors.append(
-                    f"Step {step.step_id}: output_ref is required and must be non-empty"
-                )
+                errors.append(f"Step {step.step_id}: output_ref is required and must be non-empty")
             if step.source_id and step.source_id not in source_ids:
-                errors.append(
-                    f"Step {step.step_id}: unknown source_id {step.source_id!r}"
-                )
+                errors.append(f"Step {step.step_id}: unknown source_id {step.source_id!r}")
             if step.bind_from_step and step.bind_from_step not in step_ids:
                 errors.append(
                     f"Step {step.step_id}: bind_from_step {step.bind_from_step!r} not in plan"
@@ -646,9 +639,7 @@ class PlanValidator:
             if agg.strategy == "DIRECT" and agg.final_step_id is None:
                 errors.append("DIRECT aggregation requires final_step_id")
             if agg.final_step_id and agg.final_step_id not in step_ids:
-                errors.append(
-                    f"Aggregation final_step_id {agg.final_step_id!r} not in plan steps"
-                )
+                errors.append(f"Aggregation final_step_id {agg.final_step_id!r} not in plan steps")
 
         return ValidationResult(valid=len(errors) == 0, errors=errors)
 
@@ -656,9 +647,7 @@ class PlanValidator:
     # SQL step db_type validation
     # ------------------------------------------------------------------
 
-    def _validate_sql_step_db_type(
-        self, step: PlanStep, payload: ObjectViewPayload
-    ) -> list[str]:
+    def _validate_sql_step_db_type(self, step: PlanStep, payload: ObjectViewPayload) -> list[str]:
         """校验 SQL 步骤对应数据源的 db_type 存在且合法。"""
         if step.type != "SQL" or not step.datasource_alias:
             return []
@@ -674,9 +663,7 @@ class PlanValidator:
 
         db_type = (source.db_type or "").strip().upper()
         if not db_type:
-            return [
-                f"Step {step.step_id}: DB source {step.datasource_alias!r} missing db_type"
-            ]
+            return [f"Step {step.step_id}: DB source {step.datasource_alias!r} missing db_type"]
         if db_type not in _SUPPORTED_DB_TYPES:
             return [
                 f"Step {step.step_id}: unsupported db_type {source.db_type!r} for source {step.datasource_alias!r}"
@@ -703,9 +690,7 @@ class PlanValidator:
         # 无 datasource_alias 或非 DB 源时，退化为通用 token 校验
         if not step.datasource_alias:
             internal_errors = _GENERIC_SQL_VALIDATOR(sql, payload, step)
-            return [
-                self._format_sql_error(step.step_id, err) for err in internal_errors
-            ]
+            return [self._format_sql_error(step.step_id, err) for err in internal_errors]
 
         source = next(
             (s for s in payload.sources if s.datasource_alias == step.datasource_alias),
@@ -713,22 +698,16 @@ class PlanValidator:
         )
         if source is None or source.source_type != "DB":
             internal_errors = _GENERIC_SQL_VALIDATOR(sql, payload, step)
-            return [
-                self._format_sql_error(step.step_id, err) for err in internal_errors
-            ]
+            return [self._format_sql_error(step.step_id, err) for err in internal_errors]
 
         db_type = (source.db_type or "").strip().upper()
         if not db_type:
             internal_errors = _GENERIC_SQL_VALIDATOR(sql, payload, step)
-            return [
-                self._format_sql_error(step.step_id, err) for err in internal_errors
-            ]
+            return [self._format_sql_error(step.step_id, err) for err in internal_errors]
 
         validator = _SQL_DIALECT_VALIDATORS.get(db_type, _GENERIC_SQL_VALIDATOR)
         internal_errors = validator(sql, payload, step)
-        return [
-            self._format_sql_error(step.step_id, err) for err in internal_errors
-        ]
+        return [self._format_sql_error(step.step_id, err) for err in internal_errors]
 
     def _format_sql_error(self, step_id: str, err: SqlValidationError) -> str:
         code = err.get("code")
@@ -738,22 +717,16 @@ class PlanValidator:
         return f"Step {step_id}: {message}"
 
     # 兼容旧的 _validate_sql_field_refs 接口：内部委托到通用 token 校验
-    def _validate_sql_field_refs(
-        self, step: PlanStep, payload: ObjectViewPayload
-    ) -> list[str]:
+    def _validate_sql_field_refs(self, step: PlanStep, payload: ObjectViewPayload) -> list[str]:
         sql = step.sql_template or ""
         internal_errors = _GENERIC_SQL_VALIDATOR(sql, payload, step)
-        return [
-            self._format_sql_error(step.step_id, err) for err in internal_errors
-        ]
+        return [self._format_sql_error(step.step_id, err) for err in internal_errors]
 
     # ------------------------------------------------------------------
     # API step validation (object_id, function_id=actionCode, params)
     # ------------------------------------------------------------------
 
-    def _validate_function_ids(
-        self, step: PlanStep, payload: ObjectViewPayload
-    ) -> list[str]:
+    def _validate_function_ids(self, step: PlanStep, payload: ObjectViewPayload) -> list[str]:
         if step.type != "API":
             return []
 
@@ -775,9 +748,7 @@ class PlanValidator:
             ]
         return []
 
-    def _validate_api_step_params(
-        self, step: PlanStep, payload: ObjectViewPayload
-    ) -> list[str]:
+    def _validate_api_step_params(self, step: PlanStep, payload: ObjectViewPayload) -> list[str]:
         if step.type != "API" or not step.object_id or not step.function_id:
             return []
 
@@ -785,9 +756,7 @@ class PlanValidator:
         if obj is None:
             return []
 
-        action = next(
-            (a for a in obj.actions if a.action_code == step.function_id), None
-        )
+        action = next((a for a in obj.actions if a.action_code == step.function_id), None)
         if action is None:
             return []
 

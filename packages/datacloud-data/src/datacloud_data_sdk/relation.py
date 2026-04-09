@@ -28,16 +28,16 @@ from dataclasses import dataclass
 class Relation:
     """
     对象间关联关系数据类
-    
+
     描述两个对象之间的关联关系，包括连接方式和基数。
-    
+
     Attributes:
         from_object: 源对象代码
         to_object: 目标对象代码
         cardinality: 关联基数，如 "one_to_one", "one_to_many", "many_to_one", "many_to_many"
         join_keys: 连接键映射列表，每个元素包含 from 和 to 字段
         description: 关联关系描述
-    
+
     Example:
         Relation(
             from_object="sales_order",

@@ -1,4 +1,5 @@
 """SQL 别名自动加引号，使 PostgreSQL/OpenGauss/MySQL 等保留 camelCase。"""
+
 from __future__ import annotations
 
 _DOUBLE_QUOTE_DBS = {"POSTGRESQL", "OPENGAUSS", "SQLITE"}
@@ -41,9 +42,7 @@ def _quote_select_aliases(sql: str, quote_char: str) -> str:
         tok_val = getattr(token, "value", "")
         is_select = token.ttype == T.DML and tok_val.upper() == "SELECT"
         is_from = (
-            token.ttype is not None
-            and "Keyword" in str(token.ttype)
-            and tok_val.upper() == "FROM"
+            token.ttype is not None and "Keyword" in str(token.ttype) and tok_val.upper() == "FROM"
         )
 
         if is_select:
@@ -97,9 +96,7 @@ def _is_quoted(alias: str, token: object) -> bool:
     return False
 
 
-def _emit_with_quoted_alias(
-    token: object, alias: str, quote_char: str, parts: list[str]
-) -> None:
+def _emit_with_quoted_alias(token: object, alias: str, quote_char: str, parts: list[str]) -> None:
     """遍历 token 直接子节点，对 AS 后的标识符加引号。"""
     tokens = getattr(token, "tokens", [])
     if not tokens:

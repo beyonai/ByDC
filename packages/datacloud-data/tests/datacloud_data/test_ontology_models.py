@@ -89,12 +89,17 @@ def test_ontology_relation_has_join_keys() -> None:
 
 def test_ontology_field_has_property_kind_and_derived_config() -> None:
     from datacloud_data_sdk.ontology.models import OntologyField
+
     f = OntologyField(
         field_code="discount_amount",
         field_name="折后金额",
         field_type="NUMBER",
         property_kind="derived",
-        derived_config={"mode": "expression", "expression": "amount * 0.9", "depends_on": ["amount"]},
+        derived_config={
+            "mode": "expression",
+            "expression": "amount * 0.9",
+            "depends_on": ["amount"],
+        },
     )
     assert f.property_kind == "derived"
     assert f.derived_config["mode"] == "expression"
@@ -102,6 +107,7 @@ def test_ontology_field_has_property_kind_and_derived_config() -> None:
 
 def test_ontology_relation_has_resolve_action() -> None:
     from datacloud_data_sdk.ontology.models import OntologyRelation
+
     r = OntologyRelation(
         relation_code="cust_opp",
         source_class="customer",

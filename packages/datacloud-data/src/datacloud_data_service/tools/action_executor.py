@@ -87,9 +87,7 @@ class ActionExecutor:
                 "data": {"result_type": "rejected", "overflow_notice": str(exc)},
             }
             return {
-                "content": [
-                    {"type": "text", "text": dump_json(error_payload)}
-                ],
+                "content": [{"type": "text", "text": dump_json(error_payload)}],
                 "isError": False,
             }
 
@@ -103,8 +101,6 @@ class ActionExecutor:
 
         payload = {"code": code, "message": message, "data": result}
         return {
-            "content": [
-                {"type": "text", "text": dump_json(payload)}
-            ],
+            "content": [{"type": "text", "text": dump_json(payload)}],
             "isError": False,
         }

@@ -48,4 +48,4 @@ class FilterStack:
 
                 yield stmt
         except RecursionError as err:
-            raise SQLParseError('Maximum recursion depth exceeded') from err
+            raise SQLParseError("Maximum recursion depth exceeded") from err

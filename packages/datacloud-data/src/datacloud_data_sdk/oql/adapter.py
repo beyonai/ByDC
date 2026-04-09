@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 # 原子翻译层函数
 # ============================================================================
 
+
 def route_by_source_type(cls: Any) -> str:
     """
     根据对象类型路由到对应的执行策略。
@@ -48,7 +49,7 @@ def route_by_source_type(cls: Any) -> str:
     else:
         raise OQLError(
             OQLErrorCode.OQL_ERR_UNSUPPORTED_OPERATION,
-            f"对象 '{cls.object_code}' 的类型 '{cls.source_type}' 不支持 QueryObjects"
+            f"对象 '{cls.object_code}' 的类型 '{cls.source_type}' 不支持 QueryObjects",
         )
 
 
@@ -69,17 +70,13 @@ def resolve_object(object_code: str, registry) -> Any:
     try:
         cls = registry.get_class(object_code)
         if cls is None:
-            raise OQLError(
-                OQLErrorCode.OQL_ERR_UNKNOWN_OBJECT,
-                f"对象 '{object_code}' 不存在"
-            )
+            raise OQLError(OQLErrorCode.OQL_ERR_UNKNOWN_OBJECT, f"对象 '{object_code}' 不存在")
         return cls
     except Exception as e:
         if isinstance(e, OQLError):
             raise
         raise OQLError(
-            OQLErrorCode.OQL_ERR_UNKNOWN_OBJECT,
-            f"对象 '{object_code}' 解析失败：{str(e)}"
+            OQLErrorCode.OQL_ERR_UNKNOWN_OBJECT, f"对象 '{object_code}' 解析失败：{str(e)}"
         )
 
 
@@ -111,17 +108,17 @@ def resolve_column(field_code: str, cls: Any, db_type: str) -> str:
     if field is None:
         raise OQLError(
             OQLErrorCode.OQL_ERR_UNKNOWN_FIELD,
-            f"对象 '{cls.object_code}' 中字段 '{field_code}' 不存在"
+            f"对象 '{cls.object_code}' 中字段 '{field_code}' 不存在",
         )
 
     # Level 1: physical_mappings
-    if hasattr(field, 'physical_mappings') and field.physical_mappings:
+    if hasattr(field, "physical_mappings") and field.physical_mappings:
         mapping = field.physical_mappings.get(db_type.upper())
-        if mapping and mapping.get('source_ref'):
-            return mapping['source_ref']
+        if mapping and mapping.get("source_ref"):
+            return mapping["source_ref"]
 
     # Level 2: source_column
-    if hasattr(field, 'source_column') and field.source_column:
+    if hasattr(field, "source_column") and field.source_column:
         return field.source_column
 
     # Level 3: field_code
@@ -145,9 +142,9 @@ def find_primary_key(cls: Any, db_type: str) -> tuple[str, str]:
         OQLError: 对象未定义任何字段
     """
     # 优先查找标记为主键的字段
-    if hasattr(cls, 'fields'):
+    if hasattr(cls, "fields"):
         for f in cls.fields:
-            if hasattr(f, 'is_primary_key') and f.is_primary_key:
+            if hasattr(f, "is_primary_key") and f.is_primary_key:
                 return f.field_code, resolve_column(f.field_code, cls, db_type)
 
         # 如果没有标记的主键，使用第一个字段
@@ -155,11 +152,7 @@ def find_primary_key(cls: Any, db_type: str) -> tuple[str, str]:
             f = cls.fields[0]
             return f.field_code, resolve_column(f.field_code, cls, db_type)
 
-    raise OQLError(
-        OQLErrorCode.OQL_ERR_UNKNOWN_FIELD,
-        f"对象 '{cls.object_code}' 未定义任何字段"
-    )
-
+    raise OQLError(OQLErrorCode.OQL_ERR_UNKNOWN_FIELD, f"对象 '{cls.object_code}' 未定义任何字段")
 
 
 def build_field_map(cls: Any, field_codes: list[str], db_type: str) -> dict[str, str]:
@@ -271,10 +264,7 @@ def expand_relative_date(expr: str) -> tuple[str, str]:
         start = today - timedelta(days=30)
         end = today.replace(hour=23, minute=59, second=59)
     else:
-        raise OQLError(
-            OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
-            f"不支持的相对日期表达式：{expr}"
-        )
+        raise OQLError(OQLErrorCode.OQL_ERR_INVALID_OPERATOR, f"不支持的相对日期表达式：{expr}")
 
     return (start.isoformat(), end.isoformat())
 
@@ -285,7 +275,7 @@ def translate_simple_condition(
     db_type: str,
     params: list,
     quoting: str = '"',
-    is_having: bool = False
+    is_having: bool = False,
 ) -> str:
     """
     翻译单个条件为 SQL 片段。
@@ -306,10 +296,7 @@ def translate_simple_condition(
     value = cond.get("value")
 
     if field not in field_map and not is_having:
-        raise OQLError(
-            OQLErrorCode.OQL_ERR_UNKNOWN_FIELD,
-            f"字段 '{field}' 不存在"
-        )
+        raise OQLError(OQLErrorCode.OQL_ERR_UNKNOWN_FIELD, f"字段 '{field}' 不存在")
 
     col_expr = field if is_having else f"{quoting}{field_map[field]}{quoting}"
     ph = "?" if db_type.upper() != "HIVE" else None
@@ -356,10 +343,7 @@ def translate_simple_condition(
             return f"{col_expr} BETWEEN ? AND ?"
         return f"{col_expr} BETWEEN {inline_value(start)} AND {inline_value(end)}"
     else:
-        raise OQLError(
-            OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
-            f"不支持的操作符：{op}"
-        )
+        raise OQLError(OQLErrorCode.OQL_ERR_INVALID_OPERATOR, f"不支持的操作符：{op}")
 
 
 def translate_logic_condition(
@@ -368,7 +352,7 @@ def translate_logic_condition(
     db_type: str,
     params: list,
     quoting: str = '"',
-    is_having: bool = False
+    is_having: bool = False,
 ) -> str:
     """
     翻译逻辑条件（OR / NOT）为 SQL 片段。
@@ -391,22 +375,27 @@ def translate_logic_condition(
         parts = []
         for c in conditions:
             if "logic" in c:
-                parts.append(translate_logic_condition(c, field_map, db_type, params, quoting, is_having))
+                parts.append(
+                    translate_logic_condition(c, field_map, db_type, params, quoting, is_having)
+                )
             else:
-                parts.append(translate_simple_condition(c, field_map, db_type, params, quoting, is_having))
+                parts.append(
+                    translate_simple_condition(c, field_map, db_type, params, quoting, is_having)
+                )
         return " OR ".join(f"({p})" for p in parts)
     elif logic == "not":
         inner_cond = cond.get("condition")
         if "logic" in inner_cond:
-            inner_sql = translate_logic_condition(inner_cond, field_map, db_type, params, quoting, is_having)
+            inner_sql = translate_logic_condition(
+                inner_cond, field_map, db_type, params, quoting, is_having
+            )
         else:
-            inner_sql = translate_simple_condition(inner_cond, field_map, db_type, params, quoting, is_having)
+            inner_sql = translate_simple_condition(
+                inner_cond, field_map, db_type, params, quoting, is_having
+            )
         return f"NOT ({inner_sql})"
     else:
-        raise OQLError(
-            OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
-            f"不支持的逻辑操作符：{logic}"
-        )
+        raise OQLError(OQLErrorCode.OQL_ERR_INVALID_OPERATOR, f"不支持的逻辑操作符：{logic}")
 
 
 def translate_conditions(
@@ -415,7 +404,7 @@ def translate_conditions(
     db_type: str,
     params: list,
     quoting: str = '"',
-    is_having: bool = False
+    is_having: bool = False,
 ) -> str:
     """
     翻译条件数组为 SQL 片段（不含 WHERE 关键字）。
@@ -436,15 +425,19 @@ def translate_conditions(
     parts = []
     for cond in conditions:
         if "logic" in cond:
-            parts.append(translate_logic_condition(cond, field_map, db_type, params, quoting, is_having))
+            parts.append(
+                translate_logic_condition(cond, field_map, db_type, params, quoting, is_having)
+            )
         else:
-            parts.append(translate_simple_condition(cond, field_map, db_type, params, quoting, is_having))
+            parts.append(
+                translate_simple_condition(cond, field_map, db_type, params, quoting, is_having)
+            )
     return " AND ".join(f"({p})" for p in parts)
 
 
 def resolve_table(cls: Any) -> str:
     """获取对象对应的表名。"""
-    if hasattr(cls, 'table_name') and cls.table_name:
+    if hasattr(cls, "table_name") and cls.table_name:
         return cls.table_name
     return cls.object_code
 
@@ -516,17 +509,19 @@ def resolve_term_value(field: Any, raw_value: Any, term_resolver) -> Any:
     if term_resolver is None:
         logger.warning(
             "字段 '%s' 配置了 term_set '%s' 但未提供 term_resolver，跳过术语解析",
-            field.field_code, field.term_set
+            field.field_code,
+            field.term_set,
         )
         return raw_value
 
     try:
         # 获取 term_loader
-        term_loader = getattr(term_resolver, 'term_loader', None) or getattr(term_resolver, '_term_loader', None)
+        term_loader = getattr(term_resolver, "term_loader", None) or getattr(
+            term_resolver, "_term_loader", None
+        )
         if term_loader is None:
             logger.warning(
-                "term_resolver 未配置 term_loader，字段 '%s' 跳过术语解析",
-                field.field_code
+                "term_resolver 未配置 term_loader，字段 '%s' 跳过术语解析", field.field_code
             )
             return raw_value
 
@@ -538,7 +533,9 @@ def resolve_term_value(field: Any, raw_value: Any, term_resolver) -> Any:
                     str(v),
                     term_field=field.term_field,
                     dataset_id=field.dataset_id,
-                    term_type_code=field.term_set.split(".")[0] if "." in (field.term_set or "") else None,
+                    term_type_code=field.term_set.split(".")[0]
+                    if "." in (field.term_set or "")
+                    else None,
                     param_name=field.field_name or field.field_code,
                 )
                 for v in raw_value
@@ -558,7 +555,7 @@ def resolve_term_value(field: Any, raw_value: Any, term_resolver) -> Any:
         # 术语解析失败时抛出 OQLError
         raise OQLError(
             OQLErrorCode.OQL_ERR_TERM_RESOLUTION_FAILED,
-            f"字段 '{field.field_code}' 术语解析失败: {e}"
+            f"字段 '{field.field_code}' 术语解析失败: {e}",
         )
 
 
@@ -627,13 +624,15 @@ def preprocess_where_terms(where: list[dict], cls: Any, term_resolver) -> list[d
             # 其他异常，包装为 OQLError
             raise OQLError(
                 OQLErrorCode.OQL_ERR_TERM_RESOLUTION_FAILED,
-                f"字段 '{field_code}' 术语解析时发生异常: {e}"
+                f"字段 '{field_code}' 术语解析时发生异常: {e}",
             )
 
     return result
 
 
-def resolve_include_links(include_links: list[dict], root_cls: Any, root_alias: str, registry, db_type: str) -> tuple[str, list[str]]:
+def resolve_include_links(
+    include_links: list[dict], root_cls: Any, root_alias: str, registry, db_type: str
+) -> tuple[str, list[str]]:
     """
     将同源 include_links 翻译为 LEFT JOIN 片段和附加 SELECT 列。
 
@@ -665,8 +664,7 @@ def resolve_include_links(include_links: list[dict], root_cls: Any, root_alias: 
 
         if len(path_segments) > 5:
             raise OQLError(
-                OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
-                f"关系路径过深：{path}（最多 5 层）"
+                OQLErrorCode.OQL_ERR_INVALID_OPERATOR, f"关系路径过深：{path}（最多 5 层）"
             )
 
         current_prefix = ""
@@ -679,7 +677,7 @@ def resolve_include_links(include_links: list[dict], root_cls: Any, root_alias: 
 
             # 查找关系
             rel = None
-            if hasattr(current_cls, 'relations'):
+            if hasattr(current_cls, "relations"):
                 for r in current_cls.relations:
                     if r.relation_code == segment:
                         rel = r
@@ -688,14 +686,13 @@ def resolve_include_links(include_links: list[dict], root_cls: Any, root_alias: 
             if rel is None:
                 raise OQLError(
                     OQLErrorCode.OQL_ERR_UNKNOWN_RELATION,
-                    f"关系 '{segment}' 不存在于对象 '{current_cls.object_code}'"
+                    f"关系 '{segment}' 不存在于对象 '{current_cls.object_code}'",
                 )
 
             target_cls = registry.get_class(rel.target_class)
             if target_cls is None:
                 raise OQLError(
-                    OQLErrorCode.OQL_ERR_UNKNOWN_OBJECT,
-                    f"目标对象 '{rel.target_class}' 不存在"
+                    OQLErrorCode.OQL_ERR_UNKNOWN_OBJECT, f"目标对象 '{rel.target_class}' 不存在"
                 )
 
             # 如果路径已生成，跳过 JOIN
@@ -710,7 +707,7 @@ def resolve_include_links(include_links: list[dict], root_cls: Any, root_alias: 
 
             # 构建 ON 条件
             on_parts = []
-            join_keys = rel.join_keys if hasattr(rel, 'join_keys') else {}
+            join_keys = rel.join_keys if hasattr(rel, "join_keys") else {}
             for src_field, tgt_field in join_keys.items():
                 src_col = resolve_column(src_field, current_cls, db_type)
                 tgt_col = resolve_column(tgt_field, target_cls, db_type)
@@ -739,16 +736,15 @@ def resolve_include_links(include_links: list[dict], root_cls: Any, root_alias: 
             if field_obj is None:
                 raise OQLError(
                     OQLErrorCode.OQL_ERR_UNKNOWN_FIELD,
-                    f"字段 '{field_name}' 不存在于对象 '{current_cls.object_code}'"
+                    f"字段 '{field_name}' 不存在于对象 '{current_cls.object_code}'",
                 )
 
             col_name = resolve_column(field_name, current_cls, db_type)
             select_cols.append(
-                f'{current_alias}.{quoting}{col_name}{quoting} AS {quoting}{col_prefix}__{field_name}{quoting}'
+                f"{current_alias}.{quoting}{col_name}{quoting} AS {quoting}{col_prefix}__{field_name}{quoting}"
             )
 
     return "\n".join(join_parts), select_cols
-
 
 
 def build_metric_expr(alias: str, metric: dict, cls: Any, db_type: str, quoting: str = '"') -> str:
@@ -778,10 +774,7 @@ def build_metric_expr(alias: str, metric: dict, cls: Any, db_type: str, quoting:
         return f"COUNT(*) AS {name_q}"
 
     if not field:
-        raise OQLError(
-            OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
-            f"聚合操作 '{op}' 需要指定字段"
-        )
+        raise OQLError(OQLErrorCode.OQL_ERR_INVALID_OPERATOR, f"聚合操作 '{op}' 需要指定字段")
 
     col_name = resolve_column(field, cls, db_type)
     col_expr = f"{alias}.{quoting}{col_name}{quoting}"
@@ -795,10 +788,7 @@ def build_metric_expr(alias: str, metric: dict, cls: Any, db_type: str, quoting:
     }
 
     if op not in mapping:
-        raise OQLError(
-            OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
-            f"不支持的聚合操作符：{op}"
-        )
+        raise OQLError(OQLErrorCode.OQL_ERR_INVALID_OPERATOR, f"不支持的聚合操作符：{op}")
 
     return f"{mapping[op]} AS {name_q}"
 
@@ -877,20 +867,12 @@ def time_trunc_expr(col_expr: str, granularity: str, db_type: str) -> str:
         }
 
     if granularity_lower not in mapping:
-        raise OQLError(
-            OQLErrorCode.OQL_ERR_INVALID_OPERATOR,
-            f"不支持的时间粒度：{granularity}"
-        )
+        raise OQLError(OQLErrorCode.OQL_ERR_INVALID_OPERATOR, f"不支持的时间粒度：{granularity}")
 
     return mapping[granularity_lower]
 
 
-def build_aggregate_sql(
-    oql_params: dict,
-    cls: Any,
-    db_type: str,
-    registry
-) -> tuple[str, list]:
+def build_aggregate_sql(oql_params: dict, cls: Any, db_type: str, registry) -> tuple[str, list]:
     """
     构建聚合查询 SQL。
 
@@ -916,7 +898,9 @@ def build_aggregate_sql(
     for gb in group_by_fields:
         field_code = gb.get("field")
         col_name = resolve_column(field_code, cls, db_type)
-        select_parts.append(f"{alias}.{quoting}{col_name}{quoting} AS {quoting}{field_code}{quoting}")
+        select_parts.append(
+            f"{alias}.{quoting}{col_name}{quoting} AS {quoting}{field_code}{quoting}"
+        )
 
     # 聚合指标
     metrics = oql_params.get("metrics", [])
@@ -924,11 +908,15 @@ def build_aggregate_sql(
         field_code = metric.get("field")
         agg_func = metric.get("aggregation", "sum").upper()
         col_name = resolve_column(field_code, cls, db_type)
-        select_parts.append(f"{agg_func}({alias}.{quoting}{col_name}{quoting}) AS {quoting}{field_code}_{agg_func.lower()}{quoting}")
+        select_parts.append(
+            f"{agg_func}({alias}.{quoting}{col_name}{quoting}) AS {quoting}{field_code}_{agg_func.lower()}{quoting}"
+        )
 
     # 构建 WHERE 子句
     where = oql_params.get("where", [])
-    field_map = build_field_map(cls, [gb["field"] for gb in group_by_fields] + [m["field"] for m in metrics], db_type)
+    field_map = build_field_map(
+        cls, [gb["field"] for gb in group_by_fields] + [m["field"] for m in metrics], db_type
+    )
     where_clause = ""
     if where:
         where_clause = f"WHERE {translate_conditions(where, field_map, db_type, params, quoting)}"
@@ -936,14 +924,19 @@ def build_aggregate_sql(
     # 构建 GROUP BY 子句
     group_by_clause = ""
     if group_by_fields:
-        gb_parts = [f"{alias}.{quoting}{resolve_column(gb['field'], cls, db_type)}{quoting}" for gb in group_by_fields]
+        gb_parts = [
+            f"{alias}.{quoting}{resolve_column(gb['field'], cls, db_type)}{quoting}"
+            for gb in group_by_fields
+        ]
         group_by_clause = f"GROUP BY {', '.join(gb_parts)}"
 
     # 构建 HAVING 子句
     having_clause = ""
     having = oql_params.get("having", [])
     if having:
-        having_clause = f"HAVING {translate_conditions(having, {}, db_type, params, quoting, is_having=True)}"
+        having_clause = (
+            f"HAVING {translate_conditions(having, {}, db_type, params, quoting, is_having=True)}"
+        )
 
     # 组装 SQL
     clauses = [
@@ -963,15 +956,12 @@ def build_aggregate_sql(
 # 策略 A：单源执行器
 # ============================================================================
 
+
 class OqlAdapter:
     """OQL 单源执行适配器"""
 
     def translate(
-        self,
-        oql_params: dict,
-        registry,
-        term_resolver,
-        db_type: str
+        self, oql_params: dict, registry, term_resolver, db_type: str
     ) -> SqlExecTask | ApiExecTask:
         """
         翻译 OQL 参数为执行任务。
@@ -993,23 +983,20 @@ class OqlAdapter:
             return self.translate_db(oql_params, cls, db_type, registry, term_resolver)
 
     def translate_db(
-        self,
-        oql_params: dict,
-        cls: Any,
-        db_type: str,
-        registry,
-        term_resolver
+        self, oql_params: dict, cls: Any, db_type: str, registry, term_resolver
     ) -> SqlExecTask:
         """翻译 DB 对象查询为 SqlExecTask。"""
         where = preprocess_where_terms(oql_params.get("where", []), cls, term_resolver)
 
         # 收集所有涉及的字段
-        all_fields = list({
-            *oql_params.get("fields", []),
-            *[c["field"] for c in where if "logic" not in c],
-            *[gb["field"] for gb in oql_params.get("group_by", [])],
-            *[ob["field"] for ob in oql_params.get("order_by", [])],
-        })
+        all_fields = list(
+            {
+                *oql_params.get("fields", []),
+                *[c["field"] for c in where if "logic" not in c],
+                *[gb["field"] for gb in oql_params.get("group_by", [])],
+                *[ob["field"] for ob in oql_params.get("order_by", [])],
+            }
+        )
 
         field_map = build_field_map(cls, all_fields, db_type)
 
@@ -1020,10 +1007,7 @@ class OqlAdapter:
 
         sql, params = normalize_sql_params(sql, params, db_type)
 
-        return SqlExecTask(
-            datasource_alias=cls.datasource_alias,
-            sql_template=sql
-        )
+        return SqlExecTask(datasource_alias=cls.datasource_alias, sql_template=sql)
 
     def _build_list_sql(
         self,
@@ -1032,7 +1016,7 @@ class OqlAdapter:
         db_type: str,
         registry,
         field_map: dict[str, str],
-        where: list[dict]
+        where: list[dict],
     ) -> tuple[str, list]:
         """构建列表查询 SQL。"""
         quoting = get_quoting(db_type)
@@ -1053,7 +1037,9 @@ class OqlAdapter:
         # WHERE 子句
         where_clause = ""
         if where:
-            where_clause = f"WHERE {translate_conditions(where, field_map, db_type, params, quoting)}"
+            where_clause = (
+                f"WHERE {translate_conditions(where, field_map, db_type, params, quoting)}"
+            )
 
         # ORDER BY 子句
         ob_parts = []
@@ -1069,9 +1055,7 @@ class OqlAdapter:
 
         # LIMIT 子句
         limit_clause = build_limit_clause(
-            oql_params.get("limit", 100),
-            oql_params.get("offset", 0),
-            db_type
+            oql_params.get("limit", 100), oql_params.get("offset", 0), db_type
         )
 
         # 组装 SQL
@@ -1086,11 +1070,7 @@ class OqlAdapter:
         sql = "\n".join(c for c in clauses if c)
         return (sql, params)
 
-    def translate_api(
-        self,
-        oql_params: dict,
-        cls: Any
-    ) -> ApiExecTask:
+    def translate_api(self, oql_params: dict, cls: Any) -> ApiExecTask:
         """翻译 API 对象查询为 ApiExecTask。"""
         # 选择查询 action
         action = self._select_query_action(cls)
@@ -1112,21 +1092,20 @@ class OqlAdapter:
             logger.warning(
                 "OQL translate_api: 对象 %s 的 WHERE 条件含不支持的操作符 %s，已跳过。"
                 "API 对象 WHERE 仅支持 eq/in。",
-                cls.object_code, unsupported_ops,
+                cls.object_code,
+                unsupported_ops,
             )
 
         return ApiExecTask(
-            object_code=cls.object_code,
-            action_code=action.action_code,
-            params=params
+            object_code=cls.object_code, action_code=action.action_code, params=params
         )
 
     def _select_query_action(self, cls: Any) -> Any:
         """选择查询 action（当前简化实现）。"""
         # 简化实现：返回第一个 action
-        if hasattr(cls, 'actions') and cls.actions:
+        if hasattr(cls, "actions") and cls.actions:
             return cls.actions[0]
         raise OQLError(
             OQLErrorCode.OQL_ERR_UNSUPPORTED_OPERATION,
-            f"对象 '{cls.object_code}' 没有可用的 action"
+            f"对象 '{cls.object_code}' 没有可用的 action",
         )

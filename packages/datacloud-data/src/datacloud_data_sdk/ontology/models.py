@@ -89,9 +89,9 @@ class OntologyField:
     resolve_action_code: str | None = None
     resolve_param_binding: dict | None = None
     # 分析语义字段（来自 OWL ext_property.property_role_rule，规则引擎派生）
-    analytic_role: str | None = None        # "dimension" | "measure"
-    analytic_kind: str | None = None        # "id" | "name" | "time" | "period" | "number" | "indicator"
-    secondary_role: str | None = None       # 规则推断的附加能力角色
+    analytic_role: str | None = None  # "dimension" | "measure"
+    analytic_kind: str | None = None  # "id" | "name" | "time" | "period" | "number" | "indicator"
+    secondary_role: str | None = None  # 规则推断的附加能力角色
     filter_ops: list[str] = field(default_factory=list)
     group_ops: list[str] = field(default_factory=list)
     aggregate_ops: list[str] = field(default_factory=list)
@@ -176,11 +176,11 @@ class OntologyAction:
     output_schema: dict | None = None
     _schema_cache: dict | None = field(default=None, repr=False)
     # 虚拟动作新增字段
-    action_family: str | None = None        # "lookup" | "analyze" | "search" | "operation"
-    virtual_backend: str | None = None      # "db_lookup" | "db_analyze" | "kb_search" | "api_proxy"
-    exposure_policy: str = "direct"         # "direct" | "skill_only" | "hidden"
-    scope_type: str = "object"              # "object" | "view"
-    scope_code: str = ""                    # 对象编码或视图编码
+    action_family: str | None = None  # "lookup" | "analyze" | "search" | "operation"
+    virtual_backend: str | None = None  # "db_lookup" | "db_analyze" | "kb_search" | "api_proxy"
+    exposure_policy: str = "direct"  # "direct" | "skill_only" | "hidden"
+    scope_type: str = "object"  # "object" | "view"
+    scope_code: str = ""  # 对象编码或视图编码
     planner_visible: bool = True
     legacy_aliases: list[str] = field(default_factory=list)
 

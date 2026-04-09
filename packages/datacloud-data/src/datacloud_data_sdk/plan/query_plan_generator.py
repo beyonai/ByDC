@@ -41,10 +41,10 @@ from datacloud_data_sdk.utils.case_utils import camel_to_snake_keys, snake_to_ca
 class BasePlanGenerator(ABC):
     """
     计划生成器抽象基类
-    
+
     定义了所有计划生成器必须实现的接口。
     """
-    
+
     @abstractmethod
     async def generate(
         self,
@@ -55,13 +55,13 @@ class BasePlanGenerator(ABC):
     ) -> QueryExecutionPlan:
         """
         生成查询执行计划
-        
+
         Args:
             payload: 对象视图载荷
             question: 自然语言问题
             validation_errors: 验证错误列表（用于重试）
             term_loader: 术语加载器
-        
+
         Returns:
             QueryExecutionPlan: 生成的执行计划
         """
@@ -71,9 +71,9 @@ class BasePlanGenerator(ABC):
 class MockPlanGenerator(BasePlanGenerator):
     """
     Mock 计划生成器
-    
+
     直接返回固定计划，用于测试和开发环境。
-    
+
     Example:
         generator = MockPlanGenerator({"steps": [...], "aggregation": {...}})
         plan = await generator.generate(payload, "test question")
@@ -82,7 +82,7 @@ class MockPlanGenerator(BasePlanGenerator):
     def __init__(self, fixed_plan: dict[str, Any]) -> None:
         """
         初始化 Mock 生成器
-        
+
         Args:
             fixed_plan: 固定的计划数据
         """
@@ -97,13 +97,13 @@ class MockPlanGenerator(BasePlanGenerator):
     ) -> QueryExecutionPlan:
         """
         返回固定计划
-        
+
         Args:
             payload: 对象视图载荷（忽略）
             question: 问题（忽略）
             validation_errors: 验证错误（忽略）
             term_loader: 术语加载器（忽略）
-        
+
         Returns:
             QueryExecutionPlan: 固定的执行计划
         """
@@ -114,13 +114,13 @@ class MockPlanGenerator(BasePlanGenerator):
 class LangGraphPlanGenerator(BasePlanGenerator):
     """
     基于 LangGraph 的查询计划生成器
-    
+
     使用 PlanAgent（LangGraph 编排）完成 LLM 调用、Prompt 构造、
     JSON 解析与校验重试。根据返回值抛出相应异常或返回计划。
-    
+
     Attributes:
         _agent: PlanAgent 实例
-    
+
     Example:
         generator = LangGraphPlanGenerator(
             model="gpt-4o",
@@ -140,7 +140,7 @@ class LangGraphPlanGenerator(BasePlanGenerator):
     ) -> None:
         """
         初始化 LangGraph 计划生成器
-        
+
         Args:
             model: LLM 模型名称
             base_url: API 基础 URL
@@ -167,21 +167,21 @@ class LangGraphPlanGenerator(BasePlanGenerator):
     ) -> QueryExecutionPlan:
         """
         调用 PlanAgent 生成并校验计划
-        
+
         执行流程：
         1. 调用 PlanAgent.run() 生成计划
         2. 检查是否可回答，否则抛出 CannotAnswerError
         3. 检查验证结果，失败则抛出 PlanValidationError
-        
+
         Args:
             payload: 对象视图载荷
             question: 自然语言问题
             validation_errors: 验证错误列表（用于重试）
             term_loader: 术语加载器
-        
+
         Returns:
             QueryExecutionPlan: 生成的执行计划
-        
+
         Raises:
             CannotAnswerError: 无法回答问题时抛出
             PlanValidationError: 计划验证失败时抛出
@@ -192,5 +192,3 @@ class LangGraphPlanGenerator(BasePlanGenerator):
         if vr and not vr.valid:
             raise PlanValidationError(vr.errors, plan=plan)
         return plan
-
-

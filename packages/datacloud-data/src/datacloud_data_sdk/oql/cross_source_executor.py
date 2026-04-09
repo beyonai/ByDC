@@ -13,8 +13,12 @@ import logging
 from typing import Any
 
 from datacloud_data_sdk.oql.adapter import (
-    OqlAdapter, resolve_object, resolve_column, build_field_map,
-    translate_conditions, preprocess_where_terms
+    OqlAdapter,
+    resolve_object,
+    resolve_column,
+    build_field_map,
+    translate_conditions,
+    preprocess_where_terms,
 )
 from datacloud_data_sdk.oql.memory_merger import MemoryMerger
 from datacloud_data_sdk.oql.models import OQLError, OQLErrorCode
@@ -47,7 +51,7 @@ def classify_include_links(include_links: list[dict], root_cls: Any, registry) -
         for segment in path_segments:
             # 查找关系
             rel = None
-            if hasattr(current_cls, 'relations'):
+            if hasattr(current_cls, "relations"):
                 for r in current_cls.relations:
                     if r.relation_code == segment:
                         rel = r
@@ -56,18 +60,20 @@ def classify_include_links(include_links: list[dict], root_cls: Any, registry) -
             if rel is None:
                 raise OQLError(
                     OQLErrorCode.OQL_ERR_UNKNOWN_RELATION,
-                    f"关系 '{segment}' 不存在于对象 '{current_cls.object_code}'"
+                    f"关系 '{segment}' 不存在于对象 '{current_cls.object_code}'",
                 )
 
             target_cls = registry.get_class(rel.target_class)
             if target_cls is None:
                 raise OQLError(
-                    OQLErrorCode.OQL_ERR_UNKNOWN_OBJECT,
-                    f"目标对象 '{rel.target_class}' 不存在"
+                    OQLErrorCode.OQL_ERR_UNKNOWN_OBJECT, f"目标对象 '{rel.target_class}' 不存在"
                 )
 
             # 判断是否同源
-            if target_cls.source_type != "DB" or target_cls.datasource_alias != root_cls.datasource_alias:
+            if (
+                target_cls.source_type != "DB"
+                or target_cls.datasource_alias != root_cls.datasource_alias
+            ):
                 is_same_source = False
                 break
 
@@ -94,7 +100,7 @@ class CrossSourceExecutor:
         term_resolver,
         executor,
         datasource_registry,
-        request_id: str
+        request_id: str,
     ) -> list[dict]:
         """
         两阶段跨源执行。
@@ -131,6 +137,7 @@ class CrossSourceExecutor:
         csv_path = step_results.get_path(ref)
         if csv_path:
             from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
+
             main_records = ResultConverter.from_csv(csv_path)
         else:
             main_records = []
@@ -144,8 +151,15 @@ class CrossSourceExecutor:
             select_fields = link.get("select", [])
 
             main_records = await self._execute_cross_link(
-                main_records, path, select_fields, root_cls, registry,
-                term_resolver, executor, datasource_registry, request_id
+                main_records,
+                path,
+                select_fields,
+                root_cls,
+                registry,
+                term_resolver,
+                executor,
+                datasource_registry,
+                request_id,
             )
 
         return main_records
@@ -160,7 +174,7 @@ class CrossSourceExecutor:
         term_resolver,
         executor,
         datasource_registry,
-        request_id: str
+        request_id: str,
     ) -> list[dict]:
         """
         执行单条跨源关联。
@@ -189,27 +203,23 @@ class CrossSourceExecutor:
         for i, segment in enumerate(path_segments):
             # 查找关系
             rel = None
-            if hasattr(current_cls, 'relations'):
+            if hasattr(current_cls, "relations"):
                 for r in current_cls.relations:
                     if r.relation_code == segment:
                         rel = r
                         break
 
             if rel is None:
-                raise OQLError(
-                    OQLErrorCode.OQL_ERR_UNKNOWN_RELATION,
-                    f"关系 '{segment}' 不存在"
-                )
+                raise OQLError(OQLErrorCode.OQL_ERR_UNKNOWN_RELATION, f"关系 '{segment}' 不存在")
 
             target_cls = registry.get_class(rel.target_class)
             if target_cls is None:
                 raise OQLError(
-                    OQLErrorCode.OQL_ERR_UNKNOWN_OBJECT,
-                    f"目标对象 '{rel.target_class}' 不存在"
+                    OQLErrorCode.OQL_ERR_UNKNOWN_OBJECT, f"目标对象 '{rel.target_class}' 不存在"
                 )
 
             # 获取关联键
-            join_keys = rel.join_keys if hasattr(rel, 'join_keys') else {}
+            join_keys = rel.join_keys if hasattr(rel, "join_keys") else {}
             source_key = list(join_keys.keys())[0] if join_keys else "id"
             target_key = list(join_keys.values())[0] if join_keys else "id"
 
@@ -226,12 +236,19 @@ class CrossSourceExecutor:
 
             # 查询关联对象（分批）
             sub_records = await self._fetch_sub_records_batched(
-                key_values, target_key, {"select": select_fields},
-                target_cls, registry, term_resolver, executor, datasource_registry, request_id
+                key_values,
+                target_key,
+                {"select": select_fields},
+                target_cls,
+                registry,
+                term_resolver,
+                executor,
+                datasource_registry,
+                request_id,
             )
 
             # 内存合并
-            col_prefix = path[:path.rfind(".")] if "." in path else segment
+            col_prefix = path[: path.rfind(".")] if "." in path else segment
             current_records = MemoryMerger.left_join(
                 current_records, sub_records, source_key, target_key, col_prefix
             )
@@ -250,7 +267,7 @@ class CrossSourceExecutor:
         term_resolver,
         executor,
         datasource_registry,
-        request_id: str
+        request_id: str,
     ) -> list[dict]:
         """
         分批查询关联对象。
@@ -289,6 +306,7 @@ class CrossSourceExecutor:
             csv_path = step_results.get_path(ref)
             if csv_path:
                 from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
+
                 result = ResultConverter.from_csv(csv_path)
             else:
                 result = []
@@ -311,7 +329,7 @@ class CrossSourceExecutor:
 
         try:
             ds = datasource_registry.get(datasource_alias)
-            if ds and hasattr(ds, 'db_type'):
+            if ds and hasattr(ds, "db_type"):
                 return ds.db_type.upper()
         except Exception:
             pass

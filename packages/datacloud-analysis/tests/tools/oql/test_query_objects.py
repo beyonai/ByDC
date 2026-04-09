@@ -13,11 +13,12 @@ from datacloud_data_sdk.oql import OQLError, OQLErrorCode
 @pytest.fixture
 def mock_dependencies():
     """Mock 依赖注入"""
-    with patch("datacloud_analysis.tools.oql.query_objects.get_oql_router") as mock_router, \
-         patch("datacloud_analysis.tools.oql.query_objects.get_term_resolver") as mock_term, \
-         patch("datacloud_analysis.tools.oql.query_objects.get_executor") as mock_exec, \
-         patch("datacloud_analysis.tools.oql.query_objects.get_datasource_registry") as mock_ds:
-
+    with (
+        patch("datacloud_analysis.tools.oql.query_objects.get_oql_router") as mock_router,
+        patch("datacloud_analysis.tools.oql.query_objects.get_term_resolver") as mock_term,
+        patch("datacloud_analysis.tools.oql.query_objects.get_executor") as mock_exec,
+        patch("datacloud_analysis.tools.oql.query_objects.get_datasource_registry") as mock_ds,
+    ):
         router = Mock()
         mock_router.return_value = router
         mock_term.return_value = Mock()
@@ -37,12 +38,14 @@ class TestQueryObjects:
             {"姓名": "李四", "部门": "技术部", "薪资": 12000},
         ]
 
-        result = query_objects.invoke({
-            "object_type": "员工",
-            "select": ["姓名", "部门", "薪资"],
-            "where": [{"field": "部门", "op": "eq", "value": "技术部"}],
-            "limit": 20,
-        })
+        result = query_objects.invoke(
+            {
+                "object_type": "员工",
+                "select": ["姓名", "部门", "薪资"],
+                "where": [{"field": "部门", "op": "eq", "value": "技术部"}],
+                "limit": 20,
+            }
+        )
 
         assert result["status"] == "success"
         assert result["tool"] == "QueryObjects"
@@ -67,14 +70,16 @@ class TestQueryObjects:
         ]
 
         # OQL 协议规范格式：{name, op, field}
-        result = query_objects.invoke({
-            "object_type": "员工",
-            "metrics": [
-                {"name": "总薪资", "op": "sum", "field": "薪资"},
-                {"name": "人数", "op": "count"},
-            ],
-            "group_by": [{"field": "部门"}],
-        })
+        result = query_objects.invoke(
+            {
+                "object_type": "员工",
+                "metrics": [
+                    {"name": "总薪资", "op": "sum", "field": "薪资"},
+                    {"name": "人数", "op": "count"},
+                ],
+                "group_by": [{"field": "部门"}],
+            }
+        )
 
         assert result["status"] == "success"
         assert result["result"]["columns"] == ["部门", "总薪资", "人数"]
@@ -86,19 +91,21 @@ class TestQueryObjects:
             {"航空公司": "CA", "起飞时间": "2026-W14", "航班总数": 120, "平均延误": 35.5},
         ]
 
-        result = query_objects.invoke({
-            "object_type": "航班",
-            "where": [{"field": "状态", "op": "eq", "value": "延误"}],
-            "metrics": [
-                {"name": "航班总数", "op": "count"},
-                {"name": "平均延误", "op": "avg", "field": "延误时长"},
-            ],
-            "group_by": [
-                {"field": "航空公司"},
-                {"field": "起飞时间", "granularity": "week"},
-            ],
-            "having": [{"field": "航班总数", "op": "gt", "value": 50}],
-        })
+        result = query_objects.invoke(
+            {
+                "object_type": "航班",
+                "where": [{"field": "状态", "op": "eq", "value": "延误"}],
+                "metrics": [
+                    {"name": "航班总数", "op": "count"},
+                    {"name": "平均延误", "op": "avg", "field": "延误时长"},
+                ],
+                "group_by": [
+                    {"field": "航空公司"},
+                    {"field": "起飞时间", "granularity": "week"},
+                ],
+                "having": [{"field": "航班总数", "op": "gt", "value": 50}],
+            }
+        )
 
         assert result["status"] == "success"
         call_args = mock_dependencies.route.call_args[1]["oql_params"]
@@ -118,13 +125,13 @@ class TestQueryObjects:
             }
         ]
 
-        result = query_objects.invoke({
-            "object_type": "订单",
-            "select": ["订单号", "金额"],
-            "include_links": [
-                {"path": "归属客户", "select": ["客户名称", "联系电话"]}
-            ],
-        })
+        result = query_objects.invoke(
+            {
+                "object_type": "订单",
+                "select": ["订单号", "金额"],
+                "include_links": [{"path": "归属客户", "select": ["客户名称", "联系电话"]}],
+            }
+        )
 
         assert result["status"] == "success"
         assert "客户__客户名称" in result["result"]["columns"]
@@ -133,10 +140,12 @@ class TestQueryObjects:
         """测试空结果"""
         mock_dependencies.route.return_value = []
 
-        result = query_objects.invoke({
-            "object_type": "员工",
-            "where": [{"field": "部门", "op": "eq", "value": "不存在的部门"}],
-        })
+        result = query_objects.invoke(
+            {
+                "object_type": "员工",
+                "where": [{"field": "部门", "op": "eq", "value": "不存在的部门"}],
+            }
+        )
 
         assert result["status"] == "success"
         assert result["result"]["columns"] == []
@@ -170,15 +179,15 @@ class TestQueryObjects:
 
     def test_pagination(self, mock_dependencies):
         """测试分页"""
-        mock_dependencies.route.return_value = [
-            {"id": i, "name": f"Item{i}"} for i in range(20)
-        ]
+        mock_dependencies.route.return_value = [{"id": i, "name": f"Item{i}"} for i in range(20)]
 
-        result = query_objects.invoke({
-            "object_type": "测试对象",
-            "limit": 20,
-            "offset": 0,
-        })
+        result = query_objects.invoke(
+            {
+                "object_type": "测试对象",
+                "limit": 20,
+                "offset": 0,
+            }
+        )
 
         assert result["result"]["pagination"]["limit"] == 20
         assert result["result"]["pagination"]["offset"] == 0
@@ -188,18 +197,20 @@ class TestQueryObjects:
         """测试所有参数均正确传递给 router"""
         mock_dependencies.route.return_value = [{"field1": "value1"}]
 
-        result = query_objects.invoke({
-            "object_type": "测试对象",
-            "select": ["field1"],
-            "where": [{"field": "field2", "op": "eq", "value": "value2"}],
-            "include_links": [{"path": "rel1", "select": ["field3"]}],
-            "metrics": [{"name": "总计", "op": "sum", "field": "field4"}],
-            "group_by": [{"field": "field5"}],
-            "having": [{"field": "总计", "op": "gt", "value": 100}],
-            "order_by": [{"field": "field7", "direction": "desc"}],
-            "limit": 50,
-            "offset": 10,
-        })
+        result = query_objects.invoke(
+            {
+                "object_type": "测试对象",
+                "select": ["field1"],
+                "where": [{"field": "field2", "op": "eq", "value": "value2"}],
+                "include_links": [{"path": "rel1", "select": ["field3"]}],
+                "metrics": [{"name": "总计", "op": "sum", "field": "field4"}],
+                "group_by": [{"field": "field5"}],
+                "having": [{"field": "总计", "op": "gt", "value": 100}],
+                "order_by": [{"field": "field7", "direction": "desc"}],
+                "limit": 50,
+                "offset": 10,
+            }
+        )
 
         assert result["status"] == "success"
 
@@ -224,13 +235,16 @@ class TestQueryObjects:
         ]
 
         import os
+
         old_env = os.environ.get("DATACLOUD_WORKSPACE_DIR")
         os.environ["DATACLOUD_WORKSPACE_DIR"] = str(tmp_path)
         try:
-            result = query_objects.invoke({
-                "object_type": "合同",
-                "limit": 100,
-            })
+            result = query_objects.invoke(
+                {
+                    "object_type": "合同",
+                    "limit": 100,
+                }
+            )
         finally:
             if old_env is None:
                 os.environ.pop("DATACLOUD_WORKSPACE_DIR", None)
@@ -248,17 +262,18 @@ class TestQueryObjects:
 
     def test_no_file_export_when_total_lt_limit(self, mock_dependencies, tmp_path):
         """total < limit 时不落文件，结果不含 file_id。"""
-        mock_dependencies.route.return_value = [
-            {"id": i} for i in range(5)
-        ]
+        mock_dependencies.route.return_value = [{"id": i} for i in range(5)]
 
         import os
+
         os.environ["DATACLOUD_WORKSPACE_DIR"] = str(tmp_path)
         try:
-            result = query_objects.invoke({
-                "object_type": "测试",
-                "limit": 100,
-            })
+            result = query_objects.invoke(
+                {
+                    "object_type": "测试",
+                    "limit": 100,
+                }
+            )
         finally:
             os.environ.pop("DATACLOUD_WORKSPACE_DIR", None)
 
@@ -269,14 +284,16 @@ class TestQueryObjects:
         """测试 relativeDate 操作符传递"""
         mock_dependencies.route.return_value = [{"航班号": "CA123", "延误时长": 45}]
 
-        result = query_objects.invoke({
-            "object_type": "航班",
-            "where": [
-                {"field": "起飞时间", "op": "relativeDate", "value": "this_month"},
-                {"field": "状态", "op": "in", "value": ["延误", "取消"]},
-            ],
-            "order_by": [{"field": "延误时长", "direction": "desc"}],
-        })
+        result = query_objects.invoke(
+            {
+                "object_type": "航班",
+                "where": [
+                    {"field": "起飞时间", "op": "relativeDate", "value": "this_month"},
+                    {"field": "状态", "op": "in", "value": ["延误", "取消"]},
+                ],
+                "order_by": [{"field": "延误时长", "direction": "desc"}],
+            }
+        )
 
         assert result["status"] == "success"
         call_args = mock_dependencies.route.call_args[1]["oql_params"]

@@ -51,7 +51,7 @@ class MySQLConnector(BaseSourceConnector):
             pool_size=pool_min,
             max_overflow=max(0, pool_max - pool_min),
             pool_timeout=pool_timeout,
-            pool_pre_ping=True,   # 连接前自动 ping，过滤掉已断开的连接
+            pool_pre_ping=True,  # 连接前自动 ping，过滤掉已断开的连接
             pool_recycle=pool_recycle,  # 默认 30 分钟回收，早于 MySQL wait_timeout
         )
 

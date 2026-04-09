@@ -28,14 +28,16 @@ class TestExecuteAction:
             "details": {"created_id": "EMP001"},
         }
 
-        result = execute_action.invoke({
-            "action_type": "创建员工",
-            "payload": {
-                "姓名": "张三",
-                "部门": "技术部",
-                "职位": "工程师",
-            },
-        })
+        result = execute_action.invoke(
+            {
+                "action_type": "创建员工",
+                "payload": {
+                    "姓名": "张三",
+                    "部门": "技术部",
+                    "职位": "工程师",
+                },
+            }
+        )
 
         assert result["status"] == "success"
         assert result["tool"] == "ExecuteAction"
@@ -57,11 +59,13 @@ class TestExecuteAction:
             "details": {},
         }
 
-        result = execute_action.invoke({
-            "action_type": "更新员工信息",
-            "target_objects": ["EMP001", "EMP002"],
-            "payload": {"部门": "产品部"},
-        })
+        result = execute_action.invoke(
+            {
+                "action_type": "更新员工信息",
+                "target_objects": ["EMP001", "EMP002"],
+                "payload": {"部门": "产品部"},
+            }
+        )
 
         assert result["status"] == "success"
         assert result["result"]["affected_count"] == 2
@@ -75,10 +79,12 @@ class TestExecuteAction:
             "details": {},
         }
 
-        result = execute_action.invoke({
-            "action_type": "删除员工",
-            "target_objects": ["EMP003"],
-        })
+        result = execute_action.invoke(
+            {
+                "action_type": "删除员工",
+                "target_objects": ["EMP003"],
+            }
+        )
 
         assert result["status"] == "success"
         assert result["result"]["affected_count"] == 1
@@ -94,14 +100,16 @@ class TestExecuteAction:
             },
         }
 
-        result = execute_action.invoke({
-            "action_type": "发送延误通知",
-            "target_objects": ["FL001", "FL002"],
-            "payload": {
-                "通知类型": "短信",
-                "模板": "延误致歉",
-            },
-        })
+        result = execute_action.invoke(
+            {
+                "action_type": "发送延误通知",
+                "target_objects": ["FL001", "FL002"],
+                "payload": {
+                    "通知类型": "短信",
+                    "模板": "延误致歉",
+                },
+            }
+        )
 
         assert result["status"] == "success"
         assert result["result"]["details"]["notification_sent"] is True
@@ -114,10 +122,12 @@ class TestExecuteAction:
             "details": {"task_id": "TASK001"},
         }
 
-        result = execute_action.invoke({
-            "action_type": "触发批量任务",
-            "payload": {"task_type": "数据同步"},
-        })
+        result = execute_action.invoke(
+            {
+                "action_type": "触发批量任务",
+                "payload": {"task_type": "数据同步"},
+            }
+        )
 
         assert result["status"] == "success"
         call_args = mock_action_service.execute.call_args[0][0]
@@ -131,10 +141,12 @@ class TestExecuteAction:
             "details": {},
         }
 
-        result = execute_action.invoke({
-            "action_type": "激活员工",
-            "target_objects": ["EMP001"],
-        })
+        result = execute_action.invoke(
+            {
+                "action_type": "激活员工",
+                "target_objects": ["EMP001"],
+            }
+        )
 
         assert result["status"] == "success"
         call_args = mock_action_service.execute.call_args[0][0]
@@ -158,10 +170,12 @@ class TestExecuteAction:
         """测试未预期异常处理"""
         mock_action_service.execute.side_effect = RuntimeError("数据库连接失败")
 
-        result = execute_action.invoke({
-            "action_type": "创建员工",
-            "payload": {"姓名": "张三"},
-        })
+        result = execute_action.invoke(
+            {
+                "action_type": "创建员工",
+                "payload": {"姓名": "张三"},
+            }
+        )
 
         assert result["status"] == "error"
         assert result["error_code"] == "INTERNAL_ERROR"
@@ -176,11 +190,13 @@ class TestExecuteAction:
             "details": {"reason": "条件不匹配"},
         }
 
-        result = execute_action.invoke({
-            "action_type": "批量更新",
-            "target_objects": [],
-            "payload": {"status": "active"},
-        })
+        result = execute_action.invoke(
+            {
+                "action_type": "批量更新",
+                "target_objects": [],
+                "payload": {"status": "active"},
+            }
+        )
 
         assert result["status"] == "success"
         assert result["result"]["affected_count"] == 0

@@ -35,7 +35,9 @@ for file_path in files_to_check:
 print("\n[Check 2] OntologySettings Class")
 print("-" * 80)
 try:
-    with open(Path(__file__).parent.parent / "src/datacloud_analysis/config/env.py", "r", encoding="utf-8") as f:
+    with open(
+        Path(__file__).parent.parent / "src/datacloud_analysis/config/env.py", "r", encoding="utf-8"
+    ) as f:
         content = f.read()
         if "class OntologySettings" in content:
             print("  [OK] OntologySettings class defined")
@@ -56,7 +58,11 @@ except Exception as e:
 print("\n[Check 3] Ontology Loader Classes")
 print("-" * 80)
 try:
-    with open(Path(__file__).parent.parent / "src/datacloud_analysis/tools/ontology_loader.py", "r", encoding="utf-8") as f:
+    with open(
+        Path(__file__).parent.parent / "src/datacloud_analysis/tools/ontology_loader.py",
+        "r",
+        encoding="utf-8",
+    ) as f:
         content = f.read()
         classes = ["OntologyLoader", "UnifiedInterfaceLoader", "MCPLoader", "DynamicToolLoader"]
         for cls in classes:
@@ -76,7 +82,11 @@ except Exception as e:
 print("\n[Check 4] MCP Client")
 print("-" * 80)
 try:
-    with open(Path(__file__).parent.parent / "src/datacloud_analysis/tools/mcp_client.py", "r", encoding="utf-8") as f:
+    with open(
+        Path(__file__).parent.parent / "src/datacloud_analysis/tools/mcp_client.py",
+        "r",
+        encoding="utf-8",
+    ) as f:
         content = f.read()
         if "class MCPClient" in content:
             print("  [OK] MCPClient class defined")
@@ -93,7 +103,11 @@ except Exception as e:
 print("\n[Check 5] OWL Parser")
 print("-" * 80)
 try:
-    with open(Path(__file__).parent.parent / "src/datacloud_analysis/tools/owl_parser.py", "r", encoding="utf-8") as f:
+    with open(
+        Path(__file__).parent.parent / "src/datacloud_analysis/tools/owl_parser.py",
+        "r",
+        encoding="utf-8",
+    ) as f:
         content = f.read()
         if "def parse_owl_files" in content:
             print("  [OK] parse_owl_files function defined")
@@ -110,7 +124,9 @@ except Exception as e:
 print("\n[Check 6] Agent Integration")
 print("-" * 80)
 try:
-    with open(Path(__file__).parent.parent / "src/datacloud_analysis/agent.py", "r", encoding="utf-8") as f:
+    with open(
+        Path(__file__).parent.parent / "src/datacloud_analysis/agent.py", "r", encoding="utf-8"
+    ) as f:
         content = f.read()
         if "from datacloud_analysis.tools.ontology_loader import create_ontology_loader" in content:
             print("  [OK] ontology_loader imported in agent.py")
@@ -129,7 +145,9 @@ except Exception as e:
 print("\n[Check 7] Settings Integration")
 print("-" * 80)
 try:
-    with open(Path(__file__).parent.parent / "src/datacloud_analysis/config/env.py", "r", encoding="utf-8") as f:
+    with open(
+        Path(__file__).parent.parent / "src/datacloud_analysis/config/env.py", "r", encoding="utf-8"
+    ) as f:
         content = f.read()
         if "ontology: OntologySettings" in content:
             print("  [OK] ontology field added to Settings class")

@@ -11,6 +11,7 @@ try:
     from datacloud_knowledge.intent import ScoreUpdateRecord
     from datacloud_knowledge.intent import batch_update_scores_with_session
 except ModuleNotFoundError:
+
     @dataclass(frozen=True)
     class ScoreUpdateRecord:
         """Fallback record type used when datacloud_knowledge is unavailable."""

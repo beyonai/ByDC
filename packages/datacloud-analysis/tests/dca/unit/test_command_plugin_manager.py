@@ -26,9 +26,7 @@ async def test_command_plugin_manager_builtin_get_file_by_page(tmp_path: Path) -
     assert payload["data"]["records"] == [{"id": 1}]
 
 
-async def test_command_plugin_manager_loads_extension_from_env(
-    tmp_path: Path, monkeypatch
-) -> None:
+async def test_command_plugin_manager_loads_extension_from_env(tmp_path: Path, monkeypatch) -> None:
     plugin_dir = tmp_path / "plugins"
     plugin_dir.mkdir(parents=True, exist_ok=True)
     plugin_file = plugin_dir / "my_command_plugin.py"
@@ -58,4 +56,3 @@ async def test_command_plugin_manager_loads_extension_from_env(
     assert payload is not None
     assert payload["message"] == "handled-by-extension"
     assert payload["data"]["session"] == "s-ext"
-
