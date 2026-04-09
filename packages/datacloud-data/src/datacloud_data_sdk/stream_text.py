@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
+
+from datacloud_data_sdk.utils.json_utils import dump_json
 
 
 def coerce_stream_chunk_text(value: Any) -> str:
@@ -18,7 +19,7 @@ def coerce_stream_chunk_text(value: Any) -> str:
         return value
     if isinstance(value, (dict, list)):
         try:
-            return json.dumps(value, ensure_ascii=False, default=str)
+            return dump_json(value)
         except (TypeError, ValueError):
             return str(value)
     return str(value)

@@ -4,6 +4,20 @@
 
 **datacloud-data** 同时包含 SDK（面向开发者的Python包）和 Service（面向部署的 FastAPI 服务），支持自然语言转 SQL、DSL 查询、异构数据源适配和权限控制。
 
+## 从 PyPI 安装
+
+```bash
+pip install datacloud-data
+```
+
+按需安装扩展依赖：
+
+```bash
+pip install "datacloud-data[sql]"
+pip install "datacloud-data[service]"
+pip install "datacloud-data[all]"
+```
+
 ## 环境要求
 
 - **Python**: >= 3.12（**注意**：Python 3.11 不支持，请使用 3.12 及以上版本）

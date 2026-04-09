@@ -68,9 +68,11 @@ def test_resolve_params_skips_non_term_params() -> None:
 
 def test_resolve_fields_resolves_term_bound_values() -> None:
     """resolve_fields 对含 term_set 的 field 做标签→code 解析。"""
-    loader = TermLoader.from_mapping({
-        "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
-    })
+    loader = TermLoader.from_mapping(
+        {
+            "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
+        }
+    )
     resolver = TermResolver(term_loader=loader)
     field_specs = [
         ObjectViewField(name="status", type="string", term_set="status.code"),
@@ -103,9 +105,14 @@ def test_resolve_fields_resolves_term_bound_values_list() -> None:
 
 def test_resolve_filter_values_resolves_term_bound_value() -> None:
     """resolve_filter_values 对 filters 中绑定术语的字段 value 做标签→code 解析。"""
-    loader = TermLoader.from_mapping({
-        "staffName.code": [{"code": "E001", "label": "张三"}, {"code": "E002", "label": "李四"}],
-    })
+    loader = TermLoader.from_mapping(
+        {
+            "staffName.code": [
+                {"code": "E001", "label": "张三"},
+                {"code": "E002", "label": "李四"},
+            ],
+        }
+    )
     resolver = TermResolver(term_loader=loader)
     fields = [
         OntologyField("empNo", "员工工号", "STRING", term_set="staffName.code"),
@@ -122,9 +129,11 @@ def test_resolve_filter_values_resolves_term_bound_value() -> None:
 
 def test_resolve_filter_values_in_array() -> None:
     """resolve_filter_values 对 in 操作的数组逐项解析。"""
-    loader = TermLoader.from_mapping({
-        "status.code": [{"code": "A", "label": "状态A"}, {"code": "B", "label": "状态B"}],
-    })
+    loader = TermLoader.from_mapping(
+        {
+            "status.code": [{"code": "A", "label": "状态A"}, {"code": "B", "label": "状态B"}],
+        }
+    )
     resolver = TermResolver(term_loader=loader)
     fields = [OntologyField("status", "状态", "STRING", term_set="status.code")]
     filters = {"status": {"op": "in", "value": ["状态A", "状态B"]}}
@@ -140,3 +149,47 @@ def test_resolve_filter_values_skips_is_null() -> None:
     filters = {"status": {"op": "is_null"}}
     result = resolver.resolve_filter_values(filters, fields)
     assert "value" not in result["status"] or result["status"].get("value") is None
+
+
+def test_resolve_filter_values_supports_list_protocol() -> None:
+    """resolve_filter_values 支持新的 filters 数组协议。"""
+    loader = TermLoader.from_mapping(
+        {
+            "staff.code": [
+                {"code": "E001", "label": "张三"},
+                {"code": "E002", "label": "李四"},
+            ],
+        }
+    )
+    resolver = TermResolver(term_loader=loader)
+    fields = [OntologyField("employee", "员工", "STRING", term_set="staff.code")]
+    filters = [{"field": "employee", "op": "eq", "value": "张三"}]
+
+    result = resolver.resolve_filter_values(filters, fields)
+
+    assert result[0]["value"] == "E001"
+
+
+def test_resolve_filter_values_only_resolves_eq_or_in() -> None:
+    """只有 eq/in 才做术语转换，其余操作保留原值。"""
+    loader = TermLoader.from_mapping(
+        {
+            "staff.code": [
+                {"code": "E001", "label": "张三"},
+                {"code": "E002", "label": "李四"},
+            ],
+        }
+    )
+    resolver = TermResolver(term_loader=loader)
+    fields = [OntologyField("employee", "员工", "STRING", term_set="staff.code")]
+    filters = [
+        {"field": "employee", "op": "eq", "value": "张三"},
+        {"field": "employee", "op": "in", "value": ["张三", "李四"]},
+        {"field": "employee", "op": "like", "value": "张三"},
+    ]
+
+    result = resolver.resolve_filter_values(filters, fields)
+
+    assert result[0]["value"] == "E001"
+    assert result[1]["value"] == ["E001", "E002"]
+    assert result[2]["value"] == "张三"

@@ -52,6 +52,7 @@ class ParsedField:
     library_code: str | None = None
     rel_term_codeorname: str | None = None
     term_data_type: str | None = None
+    ext_property: str | None = None  # OWL ext_property JSON 字符串（含 property_role_rule）
 
 
 @dataclass
@@ -116,6 +117,7 @@ class OwlParser:
         self._field_uri_to_code: dict[tuple[str, str], str] = {}
         self._request_params_by_uri: dict[str, ParsedField] = {}
         self._response_params_by_uri: dict[str, ParsedField] = {}
+        self._view_field_mappings: dict[str, list[dict]] = {}  # view_id → 字段映射列表
 
     def parse_file(self, path: Path) -> None:
         if path.suffix.lower() != ".owl":
@@ -293,6 +295,8 @@ class OwlParser:
         library_code = self._get_predicate_value(g, subject, "library_code")
         rel_term_codeorname = self._get_predicate_value(g, subject, "rel_term_codeorname")
         term_data_type = self._get_predicate_value(g, subject, "term_data_type")
+        # 新增：读取 ext_property 用于后续 analytic_role 解析
+        ext_property = self._get_predicate_value(g, subject, "ext_property")
 
         fld = ParsedField(
             field_code=property_code,
@@ -304,6 +308,7 @@ class OwlParser:
             library_code=library_code if library_code else None,
             rel_term_codeorname=rel_term_codeorname if rel_term_codeorname else None,
             term_data_type=term_data_type if term_data_type else None,
+            ext_property=ext_property if ext_property else None,
         )
         self._register_field(scope=object_scope, subject=subject, field=fld)
 
@@ -476,6 +481,12 @@ class OwlParser:
         datasource_code = self._get_predicate_value(g, subject, "source_datasource_code")
         source_table = self._get_predicate_value(g, subject, "source_table_code")
 
+        # 视图字段映射（来自 *_mapping.owl 中的 Mapping 个体）
+        source_object_code = self._get_predicate_value(g, subject, "source_object_code")
+        source_object_column_code = self._get_predicate_value(g, subject, "source_object_column_code")
+        property_name = self._get_predicate_value(g, subject, "property_name")
+        ext_property = self._get_predicate_value(g, subject, "ext_property")
+
         if property_code:
             if mapping_scope:
                 scoped_fields = self._object_fields[mapping_scope]
@@ -503,6 +514,16 @@ class OwlParser:
                     self._mapping_datasource[entity_code] = datasource_code
                 if source_table:
                     self._mapping_table[entity_code] = source_table
+
+                # 存储视图字段映射信息（source_object_code + source_object_column_code + ext_property）
+                if source_object_code and source_object_column_code:
+                    self._view_field_mappings.setdefault(entity_code, []).append({
+                        "property_code": property_code,
+                        "property_name": property_name or property_code,
+                        "source_object_code": source_object_code,
+                        "source_object_column_code": source_object_column_code,
+                        "ext_property": ext_property,
+                    })
 
     def _apply_mappings_to_objects(self) -> None:
         for entity_code, datasource_code in self._mapping_datasource.items():
@@ -626,6 +647,9 @@ class OwlParser:
                     "is_primary_key": fld.is_primary_key,
                     "required": fld.required,
                 }
+                # 传递 ext_property 供 loader 解析 analytic_role
+                if fld.ext_property:
+                    field_dict["ext_property"] = fld.ext_property
 
                 if fld.term_type_code_path:
                     term_meta = self._build_term_meta(fld)
@@ -750,12 +774,14 @@ class OwlParser:
                         "join_keys": rel.join_keys,
                         "description": rel.description,
                     })
+            view_field_mappings = getattr(self, "_view_field_mappings", {}).get(view.view_id, [])
             views.append({
                 "view_id": view.view_id,
                 "view_name": view.view_name,
                 "description": view.description,
                 "objects": view_objects,
                 "relations": view_relations,
+                "mappings": view_field_mappings,  # 视图字段映射（含 ext_property）
             })
 
         return {

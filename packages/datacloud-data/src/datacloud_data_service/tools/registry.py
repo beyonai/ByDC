@@ -21,15 +21,22 @@ class ToolRegistry:
         object_ids: list[str] | None = None,
         tool_list_mode: str = "unified",
     ) -> list[dict[str, Any]]:
-        tools: list[dict[str, Any]] = [self._unified_query_tool()]
+        tools: list[dict[str, Any]] = []
+        if tool_list_mode == "unified":
+            tools.extend([self._unified_query_tool()])
 
+        target_views: list[Any] = []
         if view_id:
-            view = self._loader.get_view(view_id)
-            target_ids = [obj.object_code for obj in view.objects]
+            target_views = [self._loader.get_view(view_id)]
+            target_ids = [obj.object_code for obj in target_views[0].objects]
         elif object_ids:
             target_ids = object_ids
         else:
             target_ids = [c.object_code for c in self._loader.get_ontology_classes()]
+            target_views = self._loader.get_views()
+
+        for view in target_views:
+            self._append_view_tools(tools, view, tool_list_mode)
 
         for oid in target_ids:
             for t in self._action_gen.generate_tools(oid):
@@ -40,6 +47,33 @@ class ToolRegistry:
                     tools.append(t)
 
         return tools
+
+    def _append_view_tools(
+        self,
+        tools: list[dict[str, Any]],
+        view: Any,
+        tool_list_mode: str,
+    ) -> None:
+        for action in view.actions:
+            exposure = getattr(action, "exposure_policy", "direct")
+            if tool_list_mode == "unified" and exposure == "skill_only":
+                continue
+            if exposure == "hidden":
+                continue
+            if action.input_schema:
+                tools.append(
+                    {
+                        "name": action.action_code,
+                        "title": action.action_name,
+                        "description": action.description,
+                        "inputSchema": action.input_schema,
+                        "_meta": {
+                            "scope_type": "view",
+                            "scope_code": view.view_id,
+                            "action_family": getattr(action, "action_family", None),
+                        },
+                    }
+                )
 
     def _unified_query_tool(self) -> dict[str, Any]:
         return {

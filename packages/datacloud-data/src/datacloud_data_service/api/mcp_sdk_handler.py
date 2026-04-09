@@ -3,16 +3,19 @@
 参考 datacloud_mcp_server 使用 StreamableHTTPSessionManager + Server。
 采用 stateless + SSE 格式（json_response=False），符合 MCP Streamable HTTP 规范。
 """
+
 from __future__ import annotations
 
 import json
 import logging
 from typing import Any
 
-from mcp.types import Resource, TextContent, Tool
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from mcp.types import Resource, TextContent, Tool
 from starlette.types import Receive, Scope, Send
+
+from datacloud_data_sdk.utils.json_utils import dump_json
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,39 @@ def _get_loader():
 
 def _parse_csv_header(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _extract_content_text(payload: dict[str, Any]) -> str:
+    content = payload.get("content", [])
+    return content[0].get("text", "{}") if content else "{}"
+
+
+def _unwrap_sdk_payload_text(payload: dict[str, Any]) -> str:
+    """MCP 层对 SDK 的 {code, message, data} envelope 做一次拆包。"""
+    text = _extract_content_text(payload)
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return text
+
+    if isinstance(parsed, dict) and {"code", "message", "data"} <= parsed.keys():
+        return dump_json(parsed["data"])
+
+    return text
+
+
+def _log_tool_call(name: str, arguments: dict[str, Any]) -> None:
+    """记录 MCP tools/call 的入参与工具名。"""
+    logger.info(
+        "%s",
+        dump_json(
+            {
+                "event": "mcp_tool_call",
+                "tool_name": name,
+                "arguments": arguments,
+            }
+        ),
+    )
 
 
 def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
@@ -76,34 +112,67 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         """执行工具调用。"""
         try:
+            tool_arguments = arguments or {}
+            _log_tool_call(name, tool_arguments)
             loader = _get_loader()
             if loader is None:
-                return [TextContent(type="text", text=json.dumps({"error": "OntologyLoader not initialized"}, ensure_ascii=False))]
+                return [
+                    TextContent(
+                        type="text",
+                        text=json.dumps(
+                            {"error": "OntologyLoader not initialized"}, ensure_ascii=False
+                        ),
+                    )
+                ]
 
             if name == "unified_data_query":
                 from datacloud_data_service.tools.unified_query import UnifiedQuery
 
                 query = UnifiedQuery(loader)
                 result = await query.execute(
-                    question=arguments.get("question", ""),
-                    view_id=arguments.get("view_id", ""),
-                    object_ids=arguments.get("object_ids"),
+                    question=tool_arguments.get("question", ""),
+                    view_id=tool_arguments.get("view_id", ""),
+                    object_ids=tool_arguments.get("object_ids"),
                 )
-                text = result["content"][0]["text"] if result.get("content") else "{}"
+                text = _unwrap_sdk_payload_text(result)
                 return [TextContent(type="text", text=text)]
 
-            object_code = _find_action_object(loader, name)
-            if object_code is None:
-                return [TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}, ensure_ascii=False))]
-            from datacloud_data_service.tools.action_executor import ActionExecutor
+            scope = _find_action_scope(loader, name)
+            if scope is None:
+                return [
+                    TextContent(
+                        type="text",
+                        text=json.dumps({"error": f"Unknown tool: {name}"}, ensure_ascii=False),
+                    )
+                ]
 
-            executor = ActionExecutor(loader)
-            result = await executor.execute(object_code, name, arguments)
-            text = result.get("content", [{}])[0].get("text", "{}") if result.get("content") else "{}"
-            return [TextContent(type="text", text=text)]
+            scope_type, scope_code = scope
+            if scope_type == "view":
+                # 视图级动作：通过 View.invoke_action() 执行
+                try:
+                    view = loader.get_view(scope_code)
+                    raw = await view.invoke_action(name, tool_arguments)
+                except Exception as exc:
+                    return [
+                        TextContent(
+                            type="text", text=json.dumps({"error": str(exc)}, ensure_ascii=False)
+                        )
+                    ]
+                text = dump_json(raw)
+                return [TextContent(type="text", text=text)]
+            else:
+                # 对象级动作：走原有 ActionExecutor
+                from datacloud_data_service.tools.action_executor import ActionExecutor
+
+                executor = ActionExecutor(loader)
+                result = await executor.execute(scope_code, name, tool_arguments)
+                text = _unwrap_sdk_payload_text(result)
+                return [TextContent(type="text", text=text)]
         except Exception as e:
             logger.exception("call_tool failed: %s", e)
-            return [TextContent(type="text", text=json.dumps({"error": str(e)}, ensure_ascii=False))]
+            return [
+                TextContent(type="text", text=json.dumps({"error": str(e)}, ensure_ascii=False))
+            ]
 
     @server.list_resources()
     async def list_resources() -> list[Resource]:
@@ -129,7 +198,11 @@ def _unified_query_tool_fallback() -> Tool:
             "properties": {
                 "question": {"type": "string", "description": "自然语言查询问题"},
                 "view_id": {"type": "string", "description": "视图ID"},
-                "object_ids": {"type": "array", "items": {"type": "string"}, "description": "对象ID列表"},
+                "object_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "对象ID列表",
+                },
             },
             "required": ["question"],
         },
@@ -141,6 +214,40 @@ def _find_action_object(loader: Any, action_code: str) -> str | None:
         for action in cls.actions:
             if action.action_code == action_code:
                 return cls.object_code
+    return None
+
+
+def _find_action_scope(loader: Any, action_code: str) -> tuple[str, str] | None:
+    """
+    查找 action_code 对应的 (scope_type, scope_code)。
+
+    查找顺序：
+    1. 全局 VirtualActionRegistry（优先，O(1)）
+    2. 对象动作遍历（兼容非虚拟动作）
+    3. 视图动作遍历
+    """
+    # 1. 优先查 VirtualActionRegistry
+    try:
+        from datacloud_data_sdk.virtual_action.registry import get_registry
+
+        route = get_registry().get(action_code)
+        if route:
+            return route.scope_type, route.scope_code
+    except Exception:
+        pass
+
+    # 2. 对象动作遍历
+    for cls in loader.get_ontology_classes():
+        for action in cls.actions:
+            if action.action_code == action_code:
+                return "object", cls.object_code
+
+    # 3. 视图动作遍历
+    for view_id, scene in getattr(loader, "_scenes", {}).items():
+        for action in scene.get("_virtual_actions", []):
+            if getattr(action, "action_code", None) == action_code:
+                return "view", view_id
+
     return None
 
 

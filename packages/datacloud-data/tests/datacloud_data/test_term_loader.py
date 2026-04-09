@@ -206,3 +206,51 @@ def test_kb_resolve_value_to_name() -> None:
         loader = KbTermLoader()
         result = loader.resolve_value("staffName", "EMP001", term_field="name")
         assert result == "张三"
+
+
+def test_kb_term_loader_cache_isolated_by_keyword_for_resolve_code() -> None:
+    first_result = MagicMock()
+    first_result.items = [
+        MagicMock(term_code="EMP001", term_name="张三", term_tags={"synonyms": "小张"}),
+    ]
+    second_result = MagicMock()
+    second_result.items = [
+        MagicMock(term_code="EMP002", term_name="李四", term_tags={"synonyms": "小李"}),
+    ]
+
+    with patch(
+        "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
+        side_effect=[first_result, second_result],
+    ) as mock_search:
+        loader = KbTermLoader()
+
+        assert loader.resolve_code("staffName", "张三") == "EMP001"
+        assert loader.resolve_code("staffName", "李四") == "EMP002"
+
+        assert mock_search.call_count == 2
+        mock_search.assert_any_call(term_type_code="staffName", keyword="张三", limit=100)
+        mock_search.assert_any_call(term_type_code="staffName", keyword="李四", limit=100)
+
+
+def test_kb_term_loader_cache_isolated_by_keyword_for_resolve_value() -> None:
+    first_result = MagicMock()
+    first_result.items = [
+        MagicMock(term_code="EMP001", term_name="张三", term_tags={"synonyms": "小张"}),
+    ]
+    second_result = MagicMock()
+    second_result.items = [
+        MagicMock(term_code="EMP002", term_name="李四", term_tags={"synonyms": "小李"}),
+    ]
+
+    with patch(
+        "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
+        side_effect=[first_result, second_result],
+    ) as mock_search:
+        loader = KbTermLoader()
+
+        assert loader.resolve_value("staffName", "EMP001", term_field="name") == "张三"
+        assert loader.resolve_value("staffName", "EMP002", term_field="name") == "李四"
+
+        assert mock_search.call_count == 2
+        mock_search.assert_any_call(term_type_code="staffName", keyword="EMP001", limit=100)
+        mock_search.assert_any_call(term_type_code="staffName", keyword="EMP002", limit=100)

@@ -264,6 +264,9 @@ class OntologyLoader:
                 **extracted,
             }
 
+        for view in content.get("views", []):
+            self._scenes[view["view_id"]] = view
+
     def configure(self, **kwargs: Any) -> None:
         """设置运行时配置（plan_generator、datasource_configs、csv_base_dir）。"""
         for k, v in kwargs.items():
@@ -383,7 +386,7 @@ class OntologyLoader:
             if r.source_class in object_set and r.target_class in object_set
         ]
 
-        return View(
+        view = View(
             view_id=view_id,
             view_name=scene.get("view_name", view_id),
             description=scene.get("description", ""),
@@ -391,6 +394,24 @@ class OntologyLoader:
             relations=rels,
             loader=self
         )
+        self._populate_view_virtual_actions(view, scene)
+        return view
+
+    def get_views(self, view_ids: list[str] | None = None) -> list[View]:
+        """获取全部或指定的 View 实体列表。"""
+        target_view_ids = view_ids if view_ids is not None else list(self._scenes)
+        return [self.get_view(view_id) for view_id in target_view_ids]
+
+    def _populate_view_virtual_actions(self, view: Any, scene: dict) -> None:
+        """将 scene 中注入的虚拟动作填充到 View 实例。"""
+        virtual_actions = scene.get("_virtual_actions", [])
+        if virtual_actions:
+            view.actions = list(virtual_actions)
+        # 填充视图字段元数据
+        from datacloud_data_sdk.virtual_action.models import ViewFieldMeta
+        fields = scene.get("fields", [])
+        if fields:
+            view.fields = [f for f in fields if isinstance(f, ViewFieldMeta)]
 
     # --- 内部解析 ---
 
@@ -431,34 +452,39 @@ class OntologyLoader:
         )
 
     def _parse_fields(self, raw_fields: list[dict[str, Any]]) -> list[OntologyField]:
+        from datacloud_data_sdk.virtual_action.rules import apply_analytic_metadata
+
         result = []
         for f in raw_fields:
             ts, tt, tf, did = self._parse_term_meta(f)
             term_set = ts if ts is not None else f.get("term_set")
-            result.append(
-                OntologyField(
-                    field_code=f["field_code"],
-                    field_name=f.get("field_name", f["field_code"]),
-                    field_type=f.get("field_type", "STRING"),
-                    description=f.get("description", ""),
-                    aliases=f.get("aliases", []),
-                    required=f.get("required", False),
-                    is_primary_key=f.get("is_primary_key", False),
-                    source_column=f.get("source_column"),
-                    term_set=term_set,
-                    term_type=tt,
-                    term_field=tf,
-                    dataset_id=did,
-                    physical_mappings=[
-                        FieldPhysicalMapping(**m) for m in f.get("physical_mappings", [])
-                    ],
-                    property_kind=f.get("property_kind", "physical"),
-                    derived_config=f.get("derived_config"),
-                    relation_ref=f.get("relation_ref"),
-                    resolve_action_code=f.get("resolve_action_code"),
-                    resolve_param_binding=f.get("resolve_param_binding"),
-                )
+            ont_field = OntologyField(
+                field_code=f["field_code"],
+                field_name=f.get("field_name", f["field_code"]),
+                field_type=f.get("field_type", "STRING"),
+                description=f.get("description", ""),
+                aliases=f.get("aliases", []),
+                required=f.get("required", False),
+                is_primary_key=f.get("is_primary_key", False),
+                source_column=f.get("source_column"),
+                term_set=term_set,
+                term_type=tt,
+                term_field=tf,
+                dataset_id=did,
+                physical_mappings=[
+                    FieldPhysicalMapping(**m) for m in f.get("physical_mappings", [])
+                ],
+                property_kind=f.get("property_kind", "physical"),
+                derived_config=f.get("derived_config"),
+                relation_ref=f.get("relation_ref"),
+                resolve_action_code=f.get("resolve_action_code"),
+                resolve_param_binding=f.get("resolve_param_binding"),
             )
+            # 从 ext_property 解析 analytic_role/kind 及派生操作符
+            ext_property = f.get("ext_property")
+            if ext_property:
+                apply_analytic_metadata(ont_field, ext_property)
+            result.append(ont_field)
         return result
 
     def _parse_actions(

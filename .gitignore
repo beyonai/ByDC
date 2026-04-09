@@ -184,3 +184,5 @@ tmp/*
 whale_datacloud.code-workspace
 
 pyrefly.toml
+
+.claude/

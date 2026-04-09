@@ -425,3 +425,47 @@ def test_load_from_directory_loads_objects_and_functions(tmp_path: Path) -> None
 
     assert loader.get_ontology_class("obj_a").object_name == "对象A"
     assert loader.get_function_config("fn_x") == {}
+
+
+def test_get_views_returns_all_loaded_views() -> None:
+    loader = OntologyLoader()
+    loader.load_from_content(
+        {
+            "objects": [
+                {
+                    "object_code": "obj_a",
+                    "object_name": "对象A",
+                    "source_type": "DB",
+                    "fields": [],
+                    "actions": [],
+                },
+                {
+                    "object_code": "obj_b",
+                    "object_name": "对象B",
+                    "source_type": "DB",
+                    "fields": [],
+                    "actions": [],
+                },
+            ],
+            "relations": [],
+        }
+    )
+    loader.load_scene(
+        {
+            "view_id": "view_a",
+            "view_name": "视图A",
+            "objects": ["obj_a"],
+        }
+    )
+    loader.load_scene(
+        {
+            "view_id": "view_b",
+            "view_name": "视图B",
+            "objects": ["obj_b"],
+        }
+    )
+
+    views = loader.get_views()
+
+    assert [view.view_id for view in views] == ["view_a", "view_b"]
+    assert [view.view_name for view in views] == ["视图A", "视图B"]

@@ -1,0 +1,74 @@
+name: Publish PyPI
+
+on:
+  push:
+    tags:
+      - "datacloud-analysis-v*"
+      - "datacloud-data-v*"
+      - "datacloud-knowledge-v*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      package_name: ${{ steps.resolve.outputs.package_name }}
+      package_dir: ${{ steps.resolve.outputs.package_dir }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v4
+
+      - id: resolve
+        shell: bash
+        run: |
+          tag_name="${GITHUB_REF_NAME}"
+          case "${tag_name}" in
+            datacloud-analysis-v*)
+              echo "package_name=datacloud-analysis" >> "${GITHUB_OUTPUT}"
+              echo "package_dir=packages/datacloud-analysis" >> "${GITHUB_OUTPUT}"
+              ;;
+            datacloud-data-v*)
+              echo "package_name=datacloud-data" >> "${GITHUB_OUTPUT}"
+              echo "package_dir=packages/datacloud-data" >> "${GITHUB_OUTPUT}"
+              ;;
+            datacloud-knowledge-v*)
+              echo "package_name=datacloud-knowledge" >> "${GITHUB_OUTPUT}"
+              echo "package_dir=packages/datacloud-knowledge" >> "${GITHUB_OUTPUT}"
+              ;;
+            *)
+              echo "Unsupported tag: ${tag_name}" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Build distributions
+        working-directory: ${{ steps.resolve.outputs.package_dir }}
+        run: uv build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.resolve.outputs.package_name }}-dist
+          path: ${{ steps.resolve.outputs.package_dir }}/dist/*
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/project/${{ needs.build.outputs.package_name }}/
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.package_name }}-dist
+          path: dist
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

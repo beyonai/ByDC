@@ -1,5 +1,7 @@
 """MCP tools/call 操作类工具测试。"""
 
+import json
+
 from fastapi.testclient import TestClient
 
 from tests.datacloud_data_service.mcp_test_utils import parse_sse_response
@@ -75,9 +77,16 @@ def _create_app():
 def test_tools_list_includes_action_tools():
     with TestClient(_create_app()) as client:
         headers = {**HEADERS, "X-Tool-List-Mode": "per_object"}
-        resp = client.post("/api/v1/mcp", json={
-            "jsonrpc": "2.0", "id": "1", "method": "tools/list", "params": {},
-        }, headers=headers)
+        resp = client.post(
+            "/api/v1/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": "1",
+                "method": "tools/list",
+                "params": {},
+            },
+            headers=headers,
+        )
         data = parse_sse_response(resp)
         tools = data["result"]["tools"]
         names = [t["name"] for t in tools]
@@ -88,21 +97,35 @@ def test_tools_list_includes_action_tools():
 
 def test_tools_call_script_action():
     with TestClient(_create_app()) as client:
-        resp = client.post("/api/v1/mcp", json={
-        "jsonrpc": "2.0", "id": "2", "method": "tools/call",
-            "params": {"name": "calc_score", "arguments": {"bo_id": "B001"}},
-        }, headers=HEADERS)
+        resp = client.post(
+            "/api/v1/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": "2",
+                "method": "tools/call",
+                "params": {"name": "calc_score", "arguments": {"bo_id": "B001"}},
+            },
+            headers=HEADERS,
+        )
         result = parse_sse_response(resp)["result"]
         assert result["isError"] is False
-        assert "100" in result["content"][0]["text"]
+        payload = json.loads(result["content"][0]["text"])
+        assert payload["records"] == [{"score": 100}]
+        assert payload["total"] == 1
 
 
 def test_tools_call_unknown_action_returns_error():
     with TestClient(_create_app()) as client:
-        resp = client.post("/api/v1/mcp", json={
-        "jsonrpc": "2.0", "id": "3", "method": "tools/call",
-            "params": {"name": "nonexistent_tool", "arguments": {}},
-        }, headers=HEADERS)
+        resp = client.post(
+            "/api/v1/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": "3",
+                "method": "tools/call",
+                "params": {"name": "nonexistent_tool", "arguments": {}},
+            },
+            headers=HEADERS,
+        )
         result = parse_sse_response(resp)["result"]
         content = result.get("content", [])
         text = content[0].get("text", "") if content else ""
