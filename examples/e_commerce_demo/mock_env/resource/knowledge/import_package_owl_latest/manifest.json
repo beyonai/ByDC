@@ -1,8 +1,8 @@
 {
   "version": "1.0",
-  "package_id": "latest_md_ads_owl_20260329",
-  "description": "根据 最新owl版本.md 生成的 ADS 分析表 OWL 导入包",
-  "created_at": "2026-03-29",
+  "package_id": "ads_owl_20260410",
+  "description": "业务库表 → OWL 导入包（脚本自动生成）",
+  "created_at": "2026-04-10",
   "import_steps": [
     {
       "type": "meta",
@@ -18,43 +18,224 @@
       "type": "term_types",
       "file": "term_types/term_types.owl",
       "description": "术语类型定义",
-      "count": 16
+      "count": 21
     },
     {
       "type": "terms",
-      "file": "terms/terms.owl",
-      "description": "术语定义",
-      "count": 62577
+      "file": "terms/terms_ontology.owl",
+      "description": "术语定义 (terms_ontology.owl)",
+      "count": 59
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_enterprise_name.owl",
+      "description": "术语定义 (terms_enterprise_name.owl)",
+      "count": 15550
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_industry_name.owl",
+      "description": "术语定义 (terms_industry_name.owl)",
+      "count": 72
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_business_status_name.owl",
+      "description": "术语定义 (terms_business_status_name.owl)",
+      "count": 3
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_address.owl",
+      "description": "术语定义 (terms_address.owl)",
+      "count": 11916
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_foot_active_level_name.owl",
+      "description": "术语定义 (terms_foot_active_level_name.owl)",
+      "count": 4
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_vehicle_active_level_name.owl",
+      "description": "术语定义 (terms_vehicle_active_level_name.owl)",
+      "count": 4
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_light_active_level_name.owl",
+      "description": "术语定义 (terms_light_active_level_name.owl)",
+      "count": 3
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_chain_name.owl",
+      "description": "术语定义 (terms_chain_name.owl)",
+      "count": 36
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_manage_grid_name.owl",
+      "description": "术语定义 (terms_manage_grid_name.owl)",
+      "count": 10
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_enterprise_level_name.owl",
+      "description": "术语定义 (terms_enterprise_level_name.owl)",
+      "count": 5
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_risk_level_name.owl",
+      "description": "术语定义 (terms_risk_level_name.owl)",
+      "count": 3
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_phy_grid_name.owl",
+      "description": "术语定义 (terms_phy_grid_name.owl)",
+      "count": 8766
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_energy_efficiency_Index.owl",
+      "description": "术语定义 (terms_energy_efficiency_Index.owl)",
+      "count": 6
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_chain_type_name.owl",
+      "description": "术语定义 (terms_chain_type_name.owl)",
+      "count": 2
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_chain_item_name.owl",
+      "description": "术语定义 (terms_chain_item_name.owl)",
+      "count": 26
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_item_type.owl",
+      "description": "术语定义 (terms_item_type.owl)",
+      "count": 3
+    },
+    {
+      "type": "terms",
+      "file": "terms/terms_industrial_chain_efficiency.owl",
+      "description": "术语定义 (terms_industrial_chain_efficiency.owl)",
+      "count": 3
     },
     {
       "type": "relations",
       "file": "relations/relation_view.owl",
       "description": "视图关系定义",
-      "count": 3
+      "count": 6
     },
     {
       "type": "relations",
       "file": "relations/relation_object.owl",
       "description": "对象关系定义",
-      "count": 3
+      "count": 4
     },
     {
       "type": "relations",
       "file": "relations/relation_attribute.owl",
       "description": "对象属性关系定义",
-      "count": 72
+      "count": 93
     },
     {
       "type": "relations",
       "file": "relations/relation_action.owl",
       "description": "对象动作关系定义",
-      "count": 3
+      "count": 4
     },
     {
       "type": "relations",
-      "file": "relations/relation_term.owl",
-      "description": "术语值关系定义",
-      "count": 62570
+      "file": "relations/relation_term_enterprise_name.owl",
+      "description": "术语值关系 (relation_term_enterprise_name.owl)"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation_term_industry_name.owl",
+      "description": "术语值关系 (relation_term_industry_name.owl)"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation_term_business_status_name.owl",
+      "description": "术语值关系 (relation_term_business_status_name.owl)"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation_term_address.owl",
+      "description": "术语值关系 (relation_term_address.owl)"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation_term_foot_active_level_name.owl",
+      "description": "术语值关系 (relation_term_foot_active_level_name.owl)"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation_term_vehicle_active_level_name.owl",
+      "description": "术语值关系 (relation_term_vehicle_active_level_name.owl)"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation_term_light_active_level_name.owl",
+      "description": "术语值关系 (relation_term_light_active_level_name.owl)"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation_term_chain_name.owl",
+      "description": "术语值关系 (relation_term_chain_name.owl)"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation_term_manage_grid_name.owl",
+      "description": "术语值关系 (relation_term_manage_grid_name.owl)"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation_term_enterprise_level_name.owl",
+      "description": "术语值关系 (relation_term_enterprise_level_name.owl)"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation_term_risk_level_name.owl",
+      "description": "术语值关系 (relation_term_risk_level_name.owl)"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation_term_phy_grid_name.owl",
+      "description": "术语值关系 (relation_term_phy_grid_name.owl)"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation_term_energy_efficiency_Index.owl",
+      "description": "术语值关系 (relation_term_energy_efficiency_Index.owl)"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation_term_chain_type_name.owl",
+      "description": "术语值关系 (relation_term_chain_type_name.owl)"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation_term_chain_item_name.owl",
+      "description": "术语值关系 (relation_term_chain_item_name.owl)"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation_term_item_type.owl",
+      "description": "术语值关系 (relation_term_item_type.owl)"
+    },
+    {
+      "type": "relations",
+      "file": "relations/relation_term_industrial_chain_efficiency.owl",
+      "description": "术语值关系 (relation_term_industrial_chain_efficiency.owl)"
     },
     {
       "type": "ontology",
@@ -66,49 +247,79 @@
       "type": "ontology",
       "file": "ontology/actions/action.owl",
       "description": "动作定义",
-      "count": 3
+      "count": 4
     },
     {
       "type": "ontology",
-      "file": "ontology/views/views.owl",
-      "description": "视图定义",
+      "file": "ontology/views/scene_enterprise_analysis/scene_enterprise_analysis_view.owl",
+      "description": "企业综合分析视图定义",
       "count": 1
+    },
+    {
+      "type": "ontology",
+      "file": "ontology/views/scene_enterprise_analysis/scene_enterprise_analysis_mapping.owl",
+      "description": "企业综合分析视图映射定义",
+      "count": 15
+    },
+    {
+      "type": "ontology",
+      "file": "ontology/views/scene_grid_analysis/scene_grid_analysis_view.owl",
+      "description": "物理网格综合分析视图定义",
+      "count": 1
+    },
+    {
+      "type": "ontology",
+      "file": "ontology/views/scene_grid_analysis/scene_grid_analysis_mapping.owl",
+      "description": "物理网格综合分析视图映射定义",
+      "count": 14
     },
     {
       "type": "ontology",
       "file": "ontology/objects/ads_enterprise_analysis/ads_enterprise_analysis_object.owl",
       "description": "企业综合分析表对象定义",
-      "count": 30
+      "count": 31
     },
     {
       "type": "ontology",
       "file": "ontology/objects/ads_enterprise_analysis/ads_enterprise_analysis_mapping.owl",
       "description": "企业综合分析表对象映射",
-      "count": 30
+      "count": 31
     },
     {
       "type": "ontology",
       "file": "ontology/objects/ads_grid_analysis/ads_grid_analysis_object.owl",
       "description": "物理网格综合分析表对象定义",
-      "count": 23
+      "count": 22
     },
     {
       "type": "ontology",
       "file": "ontology/objects/ads_grid_analysis/ads_grid_analysis_mapping.owl",
       "description": "物理网格综合分析表对象映射",
-      "count": 23
+      "count": 22
     },
     {
       "type": "ontology",
       "file": "ontology/objects/ads_manage_grid_analysis/ads_manage_grid_analysis_object.owl",
       "description": "管理网格综合分析表对象定义",
-      "count": 22
+      "count": 23
     },
     {
       "type": "ontology",
       "file": "ontology/objects/ads_manage_grid_analysis/ads_manage_grid_analysis_mapping.owl",
       "description": "管理网格综合分析表对象映射",
-      "count": 22
+      "count": 23
+    },
+    {
+      "type": "ontology",
+      "file": "ontology/objects/ads_chain_analysis/ads_chain_analysis_object.owl",
+      "description": "产业链分析表对象定义",
+      "count": 17
+    },
+    {
+      "type": "ontology",
+      "file": "ontology/objects/ads_chain_analysis/ads_chain_analysis_mapping.owl",
+      "description": "产业链分析表对象映射",
+      "count": 17
     }
   ]
 }

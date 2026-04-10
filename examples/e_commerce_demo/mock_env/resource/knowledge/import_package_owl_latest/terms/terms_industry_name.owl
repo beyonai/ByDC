@@ -1,0 +1,1175 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/term/ontology#">
+
+    <owl:Class rdf:about="#TermDefinition"><rdfs:label>术语定义</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_专用设备制造业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#专用设备制造业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">专用设备制造业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">专用设备制造业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：专用设备制造业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_交通运输_其他交通运输业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#交通运输、其他交通运输业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">交通运输、其他交通运输业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">交通运输、其他交通运输业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：交通运输、其他交通运输业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_交通运输_物流及仓储业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#交通运输、物流及仓储业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">交通运输、物流及仓储业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">交通运输、物流及仓储业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：交通运输、物流及仓储业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_交通运输_道路运输业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#交通运输、道路运输业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">交通运输、道路运输业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">交通运输、道路运输业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：交通运输、道路运输业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_仪器仪表制造业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#仪器仪表制造业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">仪器仪表制造业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">仪器仪表制造业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：仪器仪表制造业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_信息技术_新兴信息技术">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#信息技术、新兴信息技术</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">信息技术、新兴信息技术</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">信息技术、新兴信息技术</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：信息技术、新兴信息技术</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_信息技术_电子">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#信息技术、电子</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">信息技术、电子</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">信息技术、电子</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：信息技术、电子</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_信息技术_计算机">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#信息技术、计算机</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">信息技术、计算机</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">信息技术、计算机</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：信息技术、计算机</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_信息技术_通信">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#信息技术、通信</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">信息技术、通信</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">信息技术、通信</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：信息技术、通信</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_公用事业_电力_热力生产及供应业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#公用事业、电力、热力生产及供应业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">公用事业、电力、热力生产及供应业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">公用事业、电力、热力生产及供应业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：公用事业、电力、热力生产及供应业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_农林牧渔_林业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#农林牧渔、林业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">农林牧渔、林业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">农林牧渔、林业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：农林牧渔、林业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_农林牧渔_畜牧业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#农林牧渔、畜牧业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">农林牧渔、畜牧业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">农林牧渔、畜牧业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：农林牧渔、畜牧业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_化学原料和化学制品制造业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#化学原料和化学制品制造业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">化学原料和化学制品制造业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">化学原料和化学制品制造业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：化学原料和化学制品制造业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_医药制造业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#医药制造业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">医药制造业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">医药制造业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：医药制造业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_医药生物_医疗器械制造">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#医药生物、医疗器械制造</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">医药生物、医疗器械制造</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">医药生物、医疗器械制造</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：医药生物、医疗器械制造</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_医药生物_医疗服务">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#医药生物、医疗服务</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">医药生物、医疗服务</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">医药生物、医疗服务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：医药生物、医疗服务</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_医药生物_医药制造">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#医药生物、医药制造</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">医药生物、医药制造</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">医药生物、医药制造</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：医药生物、医药制造</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_医药生物_医药商业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#医药生物、医药商业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">医药生物、医药商业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">医药生物、医药商业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：医药生物、医药商业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_商业服务__">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#商业服务、-</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商业服务、-</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商业服务、-</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：商业服务、-</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_商业服务_专业服务业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#商业服务、专业服务业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商业服务、专业服务业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商业服务、专业服务业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：商业服务、专业服务业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_商业服务_其他商业服务业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#商业服务、其他商业服务业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商业服务、其他商业服务业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商业服务、其他商业服务业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：商业服务、其他商业服务业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_商业服务_科学研究和技术服务业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#商业服务、科学研究和技术服务业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商业服务、科学研究和技术服务业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商业服务、科学研究和技术服务业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：商业服务、科学研究和技术服务业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_商业服务_租赁业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#商业服务、租赁业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商业服务、租赁业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商业服务、租赁业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：商业服务、租赁业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_商务服务业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#商务服务业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商务服务业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商务服务业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：商务服务业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_商贸零售_商品批发">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#商贸零售、商品批发</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商贸零售、商品批发</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商贸零售、商品批发</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：商贸零售、商品批发</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_商贸零售_商品零售">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#商贸零售、商品零售</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商贸零售、商品零售</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商贸零售、商品零售</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：商贸零售、商品零售</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_商贸零售_电子商务">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#商贸零售、电子商务</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商贸零售、电子商务</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商贸零售、电子商务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：商贸零售、电子商务</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_土木工程建筑业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#土木工程建筑业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">土木工程建筑业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">土木工程建筑业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：土木工程建筑业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_基础化工_化学制品制造">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#基础化工、化学制品制造</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">基础化工、化学制品制造</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">基础化工、化学制品制造</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：基础化工、化学制品制造</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_建材及非金属_建筑材料">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#建材及非金属、建筑材料</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">建材及非金属、建筑材料</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">建材及非金属、建筑材料</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：建材及非金属、建筑材料</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_建筑业_建筑工程">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#建筑业、建筑工程</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">建筑业、建筑工程</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">建筑业、建筑工程</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：建筑业、建筑工程</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_建筑业_建筑设计与服务">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#建筑业、建筑设计与服务</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">建筑业、建筑设计与服务</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">建筑业、建筑设计与服务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：建筑业、建筑设计与服务</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_建筑装饰_装修和其他建筑业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#建筑装饰、装修和其他建筑业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">建筑装饰、装修和其他建筑业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">建筑装饰、装修和其他建筑业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：建筑装饰、装修和其他建筑业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_房地产_房地产开发">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#房地产、房地产开发</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">房地产、房地产开发</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">房地产、房地产开发</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：房地产、房地产开发</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_房地产_房地产服务">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#房地产、房地产服务</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">房地产、房地产服务</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">房地产、房地产服务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：房地产、房地产服务</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_房地产_房地产租赁">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#房地产、房地产租赁</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">房地产、房地产租赁</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">房地产、房地产租赁</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：房地产、房地产租赁</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_房屋建筑业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#房屋建筑业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">房屋建筑业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">房屋建筑业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：房屋建筑业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_批发业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#批发业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">批发业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">批发业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：批发业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_文化传媒_其他文化传媒">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#文化传媒、其他文化传媒</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">文化传媒、其他文化传媒</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">文化传媒、其他文化传媒</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：文化传媒、其他文化传媒</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_文化传媒_广播电视">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#文化传媒、广播电视</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">文化传媒、广播电视</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">文化传媒、广播电视</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：文化传媒、广播电视</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_文化传媒_文化娱乐">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#文化传媒、文化娱乐</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">文化传媒、文化娱乐</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">文化传媒、文化娱乐</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：文化传媒、文化娱乐</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_文化传媒_新闻出版">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#文化传媒、新闻出版</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">文化传媒、新闻出版</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">文化传媒、新闻出版</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：文化传媒、新闻出版</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_机械设备__">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#机械设备、-</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">机械设备、-</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">机械设备、-</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：机械设备、-</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_机械设备_专用设备制造">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#机械设备、专用设备制造</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">机械设备、专用设备制造</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">机械设备、专用设备制造</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：机械设备、专用设备制造</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_机械设备_通用设备制造">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#机械设备、通用设备制造</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">机械设备、通用设备制造</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">机械设备、通用设备制造</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：机械设备、通用设备制造</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_汽车_汽车服务">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#汽车、汽车服务</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">汽车、汽车服务</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">汽车、汽车服务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：汽车、汽车服务</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_汽车_汽车零部件制造">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#汽车、汽车零部件制造</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">汽车、汽车零部件制造</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">汽车、汽车零部件制造</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：汽车、汽车零部件制造</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_汽车制造业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#汽车制造业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">汽车制造业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">汽车制造业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：汽车制造业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_环保_环保设备制造">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#环保、环保设备制造</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">环保、环保设备制造</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">环保、环保设备制造</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：环保、环保设备制造</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_环保_环境保护服务">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#环保、环境保护服务</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">环保、环境保护服务</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">环保、环境保护服务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：环保、环境保护服务</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_电力_热力生产和供应业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#电力、热力生产和供应业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">电力、热力生产和供应业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">电力、热力生产和供应业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：电力、热力生产和供应业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_石油石化_油气开采">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#石油石化、油气开采</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">石油石化、油气开采</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">石油石化、油气开采</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：石油石化、油气开采</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_社会服务_住宿和餐饮业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#社会服务、住宿和餐饮业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">社会服务、住宿和餐饮业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">社会服务、住宿和餐饮业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：社会服务、住宿和餐饮业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_社会服务_体育">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#社会服务、体育</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">社会服务、体育</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">社会服务、体育</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：社会服务、体育</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_社会服务_其他社会服务">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#社会服务、其他社会服务</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">社会服务、其他社会服务</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">社会服务、其他社会服务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：社会服务、其他社会服务</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_社会服务_居民服务">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#社会服务、居民服务</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">社会服务、居民服务</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">社会服务、居民服务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：社会服务、居民服务</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_社会服务_教育">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#社会服务、教育</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">社会服务、教育</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">社会服务、教育</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：社会服务、教育</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_社会服务_旅游业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#社会服务、旅游业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">社会服务、旅游业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">社会服务、旅游业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：社会服务、旅游业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_社会服务_社会工作服务">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#社会服务、社会工作服务</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">社会服务、社会工作服务</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">社会服务、社会工作服务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：社会服务、社会工作服务</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_纺织服装_服装服饰制造">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#纺织服装、服装服饰制造</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">纺织服装、服装服饰制造</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">纺织服装、服装服饰制造</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：纺织服装、服装服饰制造</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_装卸搬运和仓储业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#装卸搬运和仓储业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">装卸搬运和仓储业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">装卸搬运和仓储业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：装卸搬运和仓储业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_计算机_通信和其他电子设备制造业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#计算机、通信和其他电子设备制造业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">计算机、通信和其他电子设备制造业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">计算机、通信和其他电子设备制造业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：计算机、通信和其他电子设备制造业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_软件和信息技术服务业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#软件和信息技术服务业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">软件和信息技术服务业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">软件和信息技术服务业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：软件和信息技术服务业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_轻工制造_工艺美术及礼仪用品制造">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#轻工制造、工艺美术及礼仪用品制造</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">轻工制造、工艺美术及礼仪用品制造</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">轻工制造、工艺美术及礼仪用品制造</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：轻工制造、工艺美术及礼仪用品制造</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_轻工制造_文教体育用品制造">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#轻工制造、文教体育用品制造</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">轻工制造、文教体育用品制造</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">轻工制造、文教体育用品制造</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：轻工制造、文教体育用品制造</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_通用设备制造业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#通用设备制造业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">通用设备制造业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">通用设备制造业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：通用设备制造业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_金融业_其他金融业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#金融业、其他金融业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">金融业、其他金融业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">金融业、其他金融业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：金融业、其他金融业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_零售业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#零售业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">零售业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">零售业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：零售业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_非金属矿物制品业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#非金属矿物制品业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">非金属矿物制品业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">非金属矿物制品业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：非金属矿物制品业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_食品制造业">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#食品制造业</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">食品制造业</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">食品制造业</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：食品制造业</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_食品饮料__">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#食品饮料、-</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">食品饮料、-</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">食品饮料、-</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：食品饮料、-</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_industry_name_食品饮料_食品加工">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name#食品饮料、食品加工</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">食品饮料、食品加工</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">食品饮料、食品加工</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型术语：食品饮料、食品加工</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#term_code_path"/>
+    <owl:DatatypeProperty rdf:about="#term_code"/>
+    <owl:DatatypeProperty rdf:about="#term_name"/>
+    <owl:DatatypeProperty rdf:about="#library_code"/>
+    <owl:DatatypeProperty rdf:about="#term_type_code"/>
+    <owl:DatatypeProperty rdf:about="#term_desc"/>
+    <owl:DatatypeProperty rdf:about="#synonyms"/>
+    <owl:DatatypeProperty rdf:about="#terms_knowledge"/>
+    <owl:DatatypeProperty rdf:about="#domain_code"/>
+    <owl:DatatypeProperty rdf:about="#owl_doc_file"/>
+    <owl:DatatypeProperty rdf:about="#ext_field"/>
+    <owl:DatatypeProperty rdf:about="#version"/>
+</rdf:RDF>
