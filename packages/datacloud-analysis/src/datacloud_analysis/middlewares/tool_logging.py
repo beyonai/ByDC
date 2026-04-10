@@ -4,6 +4,8 @@ from __future__ import annotations
 from typing import Any, Callable, Awaitable
 import logging
 
+from by_framework.core.protocol.content_type import SseReasonMessageType
+from by_framework.core.protocol.event_type import EventType
 from langchain.agents.middleware.types import AgentMiddleware
 from langgraph.prebuilt.tool_node import ToolCallRequest
 
@@ -151,30 +153,24 @@ class ToolCallLoggingMiddleware(AgentMiddleware):
     ) -> None:
         """推送子节点思考内容（与老版本实现一致）。"""
         try:
-            from datacloud_data_sdk.stream_text import coerce_stream_chunk_text
-            from by_framework import StreamChunkEvent
-
             # 生成子节点 message_id
             child_message_id = self._new_message_id(gateway_context)
             parent_message_id = str(getattr(gateway_context, "message_id", "") or "")
 
-            # 创建消息块
-            chunk = StreamChunkEvent(content=coerce_stream_chunk_text(text))
-
-            # 推送参数
-            emit_kwargs = {
-                "event_type": "1001",  # 思考过程事件类型
-                "content_type": "1002",  # 思考内容类型
+            # 推送参数（与 Gateway 协议枚举一致，见 by_framework.core.protocol）
+            emit_kwargs: dict[str, Any] = {
+                "event_type": EventType.REASONING_LOG_DELTA.value,
+                "content_type": SseReasonMessageType.think_text.value,
             }
             if child_message_id:
                 emit_kwargs["message_id"] = child_message_id
             if parent_message_id:
                 emit_kwargs["parent_message_id"] = parent_message_id
 
-            await gateway_context.emit_chunk(chunk, **emit_kwargs)
+            await gateway_context.emit_chunk(text, **emit_kwargs)
 
         except Exception as exc:
-            logger.debug("_emit_child_think failed: %s", exc)
+            logger.warning("_emit_child_think failed: %s", exc, exc_info=True)
 
     def _new_message_id(self, gateway_context: Any) -> str:
         """生成新的 message_id（与老版本实现一致）。"""
