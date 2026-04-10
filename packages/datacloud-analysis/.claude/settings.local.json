@@ -57,7 +57,14 @@
       "Bash(uv add:*)",
       "Bash(uv pip:*)",
       "Bash(/d/data/code/baiying/byclaw-all/byclaw-data/.venv/Scripts/python.exe:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(uv run:*)",
+      "Bash(grep:*)",
+      "Bash(pip show:*)",
+      "Bash(PYTHONPATH=src python -m pytest tests/datacloud_data/test_compute_executor.py -x -q)",
+      "Bash(PYTHONPATH=src python -m pytest tests/datacloud_data/test_compute_executor.py -x -v)",
+      "Bash(PYTHONPATH=src python -m pytest tests/datacloud_data/test_compute_executor.py -v -q)"
     ]
   }
 }

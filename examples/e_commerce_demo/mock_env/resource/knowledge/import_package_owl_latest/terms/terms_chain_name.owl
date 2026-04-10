@@ -1,0 +1,599 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/term/ontology#">
+
+    <owl:Class rdf:about="#TermDefinition"><rdfs:label>术语定义</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_医疗与服务">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#医疗与服务</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">医疗与服务</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">医疗与服务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：医疗与服务</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_卫星火箭制造与空天系统运营">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#卫星火箭制造与空天系统运营</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">卫星火箭制造与空天系统运营</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">卫星火箭制造与空天系统运营</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：卫星火箭制造与空天系统运营</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_场景应用">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#场景应用</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">场景应用</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">场景应用</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：场景应用</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_基础支撑">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#基础支撑</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">基础支撑</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">基础支撑</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：基础支撑</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_应用服务">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#应用服务</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">应用服务</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">应用服务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：应用服务</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_整机制造">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#整机制造</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">整机制造</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">整机制造</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：整机制造</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_新型能源材料及核心装备部件">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#新型能源材料及核心装备部件</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">新型能源材料及核心装备部件</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">新型能源材料及核心装备部件</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：新型能源材料及核心装备部件</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_智慧场景与行业智能应用服务">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#智慧场景与行业智能应用服务</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">智慧场景与行业智能应用服务</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">智慧场景与行业智能应用服务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：智慧场景与行业智能应用服务</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_智能算力与信息通信系统集成">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#智能算力与信息通信系统集成</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">智能算力与信息通信系统集成</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">智能算力与信息通信系统集成</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：智能算力与信息通信系统集成</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_核心制造">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#核心制造</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">核心制造</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">核心制造</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：核心制造</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_核心零部件">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#核心零部件</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">核心零部件</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">核心零部件</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：核心零部件</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_生产与临床">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#生产与临床</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">生产与临床</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">生产与临床</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：生产与临床</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_生物医药创新研发及核心原料">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#生物医药创新研发及核心原料</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">生物医药创新研发及核心原料</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">生物医药创新研发及核心原料</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：生物医药创新研发及核心原料</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_生物合成元件与生物基原料">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#生物合成元件与生物基原料</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">生物合成元件与生物基原料</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">生物合成元件与生物基原料</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：生物合成元件与生物基原料</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_研发与原料">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#研发与原料</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">研发与原料</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">研发与原料</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：研发与原料</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_空天信息应用与空间数据服务">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#空天信息应用与空间数据服务</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">空天信息应用与空间数据服务</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">空天信息应用与空间数据服务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：空天信息应用与空间数据服务</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_空天装备核心部件与专用材料">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#空天装备核心部件与专用材料</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">空天装备核心部件与专用材料</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">空天装备核心部件与专用材料</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：空天装备核心部件与专用材料</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_精准医疗与健康管理综合服务">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#精准医疗与健康管理综合服务</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">精准医疗与健康管理综合服务</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">精准医疗与健康管理综合服务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：精准医疗与健康管理综合服务</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_精密器件与先进制造装备生产">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#精密器件与先进制造装备生产</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">精密器件与先进制造装备生产</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">精密器件与先进制造装备生产</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：精密器件与先进制造装备生产</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_终端应用">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#终端应用</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">终端应用</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">终端应用</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：终端应用</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_绿电储能与氢能系统集成">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#绿电储能与氢能系统集成</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">绿电储能与氢能系统集成</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">绿电储能与氢能系统集成</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：绿电储能与氢能系统集成</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_绿色低碳场景应用与能源服务">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#绿色低碳场景应用与能源服务</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">绿色低碳场景应用与能源服务</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">绿色低碳场景应用与能源服务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：绿色低碳场景应用与能源服务</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_绿色生物应用与产业场景落地">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#绿色生物应用与产业场景落地</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">绿色生物应用与产业场景落地</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">绿色生物应用与产业场景落地</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：绿色生物应用与产业场景落地</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_重点领域高端装备配套应用">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#重点领域高端装备配套应用</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">重点领域高端装备配套应用</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">重点领域高端装备配套应用</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：重点领域高端装备配套应用</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_高端功能材料及关键基础元器件">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#高端功能材料及关键基础元器件</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">高端功能材料及关键基础元器件</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">高端功能材料及关键基础元器件</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：高端功能材料及关键基础元器件</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_高端生物药与精准诊疗器械制造">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#高端生物药与精准诊疗器械制造</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">高端生物药与精准诊疗器械制造</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">高端生物药与精准诊疗器械制造</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：高端生物药与精准诊疗器械制造</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_合成生物与生物制造产业链">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#合成生物与生物制造产业链</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">合成生物与生物制造产业链</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">合成生物与生物制造产业链</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：合成生物与生物制造产业链</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_商业航天与空天信息产业链">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#商业航天与空天信息产业链</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商业航天与空天信息产业链</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商业航天与空天信息产业链</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：商业航天与空天信息产业链</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_新一代信息技术产业链">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#新一代信息技术产业链</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">新一代信息技术产业链</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">新一代信息技术产业链</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：新一代信息技术产业链</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_未来信息与人工智能产业链">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#未来信息与人工智能产业链</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">未来信息与人工智能产业链</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">未来信息与人工智能产业链</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：未来信息与人工智能产业链</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_未来健康与生物医药产业链">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#未来健康与生物医药产业链</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">未来健康与生物医药产业链</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">未来健康与生物医药产业链</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：未来健康与生物医药产业链</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_未来材料与先进制造产业链">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#未来材料与先进制造产业链</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">未来材料与先进制造产业链</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">未来材料与先进制造产业链</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：未来材料与先进制造产业链</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_未来能源与绿色低碳产业链">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#未来能源与绿色低碳产业链</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">未来能源与绿色低碳产业链</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">未来能源与绿色低碳产业链</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：未来能源与绿色低碳产业链</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_机器人与智能制造产业链">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#机器人与智能制造产业链</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">机器人与智能制造产业链</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">机器人与智能制造产业链</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：机器人与智能制造产业链</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_生物技术与大健康产业链">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#生物技术与大健康产业链</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">生物技术与大健康产业链</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">生物技术与大健康产业链</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：生物技术与大健康产业链</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_chain_name_高端汽车与新能源智能汽车产业链">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name#高端汽车与新能源智能汽车产业链</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">高端汽车与新能源智能汽车产业链</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">高端汽车与新能源智能汽车产业链</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称术语：高端汽车与新能源智能汽车产业链</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#term_code_path"/>
+    <owl:DatatypeProperty rdf:about="#term_code"/>
+    <owl:DatatypeProperty rdf:about="#term_name"/>
+    <owl:DatatypeProperty rdf:about="#library_code"/>
+    <owl:DatatypeProperty rdf:about="#term_type_code"/>
+    <owl:DatatypeProperty rdf:about="#term_desc"/>
+    <owl:DatatypeProperty rdf:about="#synonyms"/>
+    <owl:DatatypeProperty rdf:about="#terms_knowledge"/>
+    <owl:DatatypeProperty rdf:about="#domain_code"/>
+    <owl:DatatypeProperty rdf:about="#owl_doc_file"/>
+    <owl:DatatypeProperty rdf:about="#ext_field"/>
+    <owl:DatatypeProperty rdf:about="#version"/>
+</rdf:RDF>

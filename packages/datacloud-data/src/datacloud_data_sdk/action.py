@@ -32,6 +32,69 @@ from datacloud_data_sdk.ontology.models import OntologyAction, OntologyActionPar
 logger = logging.getLogger(__name__)
 
 
+def _translate_view_params(view: Any, params: dict[str, Any]) -> dict[str, Any]:
+    """将 query/compute 视图动作参数中的字段中文名翻译为 property_code。
+
+    视图字段 property_name（中文名）→ property_code，供 ViewLookupExecutor /
+    ViewAnalyzeExecutor 消费（它们使用 property_code 作字段标识）。
+    """
+    from typing import Any as _Any
+
+    name_to_code: dict[str, str] = {}
+    for vf in getattr(view, "fields", []):
+        pname = getattr(vf, "property_name", "")
+        pcode = getattr(vf, "property_code", "")
+        if pname and pcode:
+            name_to_code[pname] = pcode
+
+    if not name_to_code:
+        return params
+
+    translated: dict[str, _Any] = dict(params)
+
+    if "select" in params:
+        translated["select"] = [name_to_code.get(n, n) for n in (params["select"] or [])]
+
+    if "filters" in params:
+        new_filters = []
+        for item in params["filters"] or []:
+            new_item = dict(item)
+            fname = item.get("field", "")
+            new_item["field"] = name_to_code.get(fname, fname)
+            new_filters.append(new_item)
+        translated["filters"] = new_filters
+
+    if "order_by" in params:
+        new_order = []
+        for ob in params["order_by"] or []:
+            new_ob = dict(ob)
+            fname = ob.get("field", "")
+            new_ob["field"] = name_to_code.get(fname, fname)
+            new_order.append(new_ob)
+        translated["order_by"] = new_order
+
+    if "dimensions" in params:
+        new_dims = []
+        for dim in params["dimensions"] or []:
+            new_dim = dict(dim)
+            fname = dim.get("field", "")
+            new_dim["field"] = name_to_code.get(fname, fname)
+            new_dims.append(new_dim)
+        translated["dimensions"] = new_dims
+
+    if "metrics" in params:
+        new_metrics = []
+        for mtr in params["metrics"] or []:
+            new_mtr = dict(mtr)
+            if "field" in mtr:
+                fname = mtr.get("field", "")
+                new_mtr["field"] = name_to_code.get(fname, fname)
+            new_metrics.append(new_mtr)
+        translated["metrics"] = new_metrics
+
+    return translated
+
+
 def _default_query_output_schema() -> dict[str, object]:
     """
     生成虚拟动作的默认输出 schema
@@ -341,6 +404,16 @@ class Action:
         )
 
         # 对象级虚拟动作：按 action_family 路由
+        if action_family == "query":
+            from datacloud_data_sdk.executor.query_executor import QueryExecutor
+
+            return await QueryExecutor(self._loader).execute(object_code, params)
+
+        if action_family == "compute":
+            from datacloud_data_sdk.executor.compute_executor import ComputeExecutor
+
+            return await ComputeExecutor(self._loader).execute(object_code, params)
+
         if action_family == "lookup":
             from datacloud_data_sdk.executor.lookup_executor import LookupExecutor
 
@@ -364,22 +437,30 @@ class Action:
     async def _execute_virtual_view(
         self, view: Any, action_family: str | None, params: dict[str, Any]
     ) -> dict[str, Any]:
-        """执行视图级虚拟动作（路由到 ViewLookupExecutor / ViewAnalyzeExecutor）。"""
+        """执行视图级虚拟动作（路由到 ViewLookupExecutor / ViewAnalyzeExecutor）。
+
+        query/compute 动作的 params 使用中文名，进入 View 执行器前先翻译成 property_code。
+        """
         try:
             from datacloud_data_sdk.executor.view_analyze_executor import ViewAnalyzeExecutor
             from datacloud_data_sdk.executor.view_lookup_executor import ViewLookupExecutor
         except ImportError:
-            # 视图执行器未实现时降级
             return {
                 "records": [],
                 "total": 0,
                 "meta": {"view_id": view.view_id, "note": "view executor not available"},
             }
 
-        if action_family == "lookup":
+        if action_family in ("query", "lookup"):
+            if action_family == "query":
+                params = _translate_view_params(view, params)
             return await ViewLookupExecutor(self._loader).execute(view, params)
-        if action_family == "analyze":
+
+        if action_family in ("compute", "analyze"):
+            if action_family == "compute":
+                params = _translate_view_params(view, params)
             return await ViewAnalyzeExecutor(self._loader).execute(view, params)
+
         return {"records": [], "total": 0, "meta": {"view_id": view.view_id}}
 
     def _prepare_virtual_params(

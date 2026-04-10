@@ -2,6 +2,27 @@
 
 dataCloud 是一个数智引擎，通过智能构建企业级知识网络，面向大模型、智能应用和业务人员输出业务化组件能力，提升企业数据获取效率与推理准确性。
 
+## 安装总包
+
+```bash
+pip install by-datacloud
+```
+
+总包会直接打入以下源码模块：
+
+- `datacloud-analysis`
+- `datacloud-data[all]`
+- `datacloud-knowledge`
+
+安装后可直接导入：
+
+```python
+import by_datacloud
+import datacloud_analysis
+import datacloud_data_sdk
+import datacloud_knowledge
+```
+
 ## 项目结构与核心模块
 
 当前仓库采用 Monorepo，目录分为两层：
@@ -64,7 +85,7 @@ uv run pytest
 ### Monorepo 结构
 
 ```text
-whale_datacloud/
+by_datacloud/
 ├── pyproject.toml
 ├── uv.lock
 ├── README.md

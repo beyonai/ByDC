@@ -1,25 +1,26 @@
 # PyPI 发布说明
 
-本文档适用于当前仓库内已准备对外发布的三个包：
+本文档适用于当前仓库对外发布的单一总包：
 
-- `datacloud-knowledge`
-- `datacloud-data`
-- `datacloud-analysis`
+- `by-datacloud`
 
-`datacloud-memory` 当前已从公开发布链路中移除，不作为 `datacloud-analysis` 的强依赖。
+总包在构建时会直接打入以下源码模块：
+
+- `datacloud_analysis`
+- `datacloud_data_sdk`
+- `datacloud_data_service`
+- `datacloud_knowledge`
 
 ## 发布前提
 
 1. 确认 PyPI 包名未被占用。
 2. 确认 `by-framework` 已经可以从公网 PyPI 安装。
 3. 在 GitHub 仓库 Settings 中创建名为 `pypi` 的 Environment。
-4. 在 PyPI 为每个项目配置 Trusted Publisher。
+4. 在 PyPI 为 `by-datacloud` 配置 Trusted Publisher。
 
-推荐为以下三个项目分别配置：
+推荐配置：
 
-- PyPI project name: `datacloud-knowledge`
-- PyPI project name: `datacloud-data`
-- PyPI project name: `datacloud-analysis`
+- PyPI project name: `by-datacloud`
 
 GitHub 侧配置保持一致：
 
@@ -30,7 +31,7 @@ GitHub 侧配置保持一致：
 
 ## 本地发布前检查
 
-分别进入目标包目录执行：
+在仓库根目录执行：
 
 ```bash
 uv sync
@@ -46,38 +47,19 @@ uv build
 uv tool run twine check dist/*
 ```
 
-## 推荐发布顺序
-
-按依赖顺序发布：
-
-1. `datacloud-knowledge`
-2. `datacloud-data`
-3. `datacloud-analysis`
-
 ## 自动发布方式
 
-为目标包更新版本号后，创建并推送对应 tag：
+为总包更新版本号后，创建并推送 tag：
 
 ```bash
-git tag datacloud-knowledge-v0.1.0
-git push origin datacloud-knowledge-v0.1.0
-```
-
-```bash
-git tag datacloud-data-v0.1.0
-git push origin datacloud-data-v0.1.0
-```
-
-```bash
-git tag datacloud-analysis-v0.1.0
-git push origin datacloud-analysis-v0.1.0
+git tag by-datacloud-v0.1.0
+git push origin by-datacloud-v0.1.0
 ```
 
 tag 推送后，GitHub Actions 会自动：
 
-1. 识别要发布的包目录
-2. 执行 `uv build`
-3. 通过 Trusted Publishing 上传到 PyPI
+1. 在仓库根目录执行 `uv build`
+2. 通过 Trusted Publishing 上传到 PyPI
 
 ## 发布后验证
 
@@ -87,26 +69,17 @@ tag 推送后，GitHub Actions 会自动：
 python3 -m venv .venv-release-check
 source .venv-release-check/bin/activate
 pip install -U pip
-pip install datacloud-knowledge
-pip install "datacloud-data[sql]"
-pip install datacloud-analysis
-python -c "import datacloud_knowledge, datacloud_data_sdk, datacloud_analysis"
-```
-
-如果需要校验 `by-framework`：
-
-```bash
-pip install by-framework
-python -c "import by_framework"
+pip install by-datacloud
+python -c "import by_datacloud, datacloud_knowledge, datacloud_data_sdk, datacloud_analysis"
 ```
 
 ## 手工发布方式
 
-如果临时不走 GitHub Actions，也可以在包目录手工执行：
+如果临时不走 GitHub Actions，也可以在仓库根目录手工执行：
 
 ```bash
 uv build
-uv publish
+uv publish dist/*
 ```
 
 手工发布更适合首个版本试发；稳定后建议统一使用 GitHub tag 发布。

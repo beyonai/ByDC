@@ -20,65 +20,75 @@ _ROLE_MAP: dict[str, str] = {
 _KIND_MAP: dict[str, str] = {
     "id": "id",
     "name": "name",
-    "time": "time",
+    "description": "description",       # 新增
+    "time": "datetime",                  # 改名（旧 "time" → "datetime"）
     "period": "period",
-    "numerical": "number",  # OWL numerical → 运行时 number
-    "index_numerical": "number",  # OWL index_numerical → 运行时 number
-    "indicator": "indicator",
+    "numerical": "numeric",              # 改名（旧 "number"）
+    "index_numerical": "raw_number",     # 改名（旧 "number"）
+    "indicator": "basic_metric",         # 改名（旧 "indicator"）
+    "snapshot_metric": "snapshot_metric",  # 新增
+    "derived_metric": "derived_metric",    # 新增
+    "formula_metric": "formula_metric",    # 新增
+    "virtual_tag": "virtual_tag",          # 新增
+    "primary_key": "primary_key",          # 新增
 }
 
 # ── 默认操作符映射 (analytic_role, analytic_kind) → ops ───────────────────────
 _FILTER_OPS: dict[tuple[str, str], list[str]] = {
-    ("dimension", "id"): ["eq", "in", "is_null", "is_not_null"],
-    ("dimension", "name"): ["eq", "in", "like", "is_null", "is_not_null"],
-    ("dimension", "time"): [
-        "eq",
-        "in",
-        "gt",
-        "gte",
-        "lt",
-        "lte",
-        "between",
-        "is_null",
-        "is_not_null",
+    # DIMENSION
+    ("dimension", "id"):          ["eq", "in", "is_null", "is_not_null"],
+    ("dimension", "name"):        ["eq", "in", "like", "is_null", "is_not_null"],
+    ("dimension", "description"): ["eq", "in", "like", "is_null", "is_not_null"],
+    ("dimension", "datetime"): [
+        "eq", "in", "gt", "gte", "lt", "lte", "between", "is_null", "is_not_null",
     ],
     ("dimension", "period"): [
-        "eq",
-        "in",
-        "gt",
-        "gte",
-        "lt",
-        "lte",
-        "between",
-        "is_null",
-        "is_not_null",
+        "eq", "in", "gt", "gte", "lt", "lte", "between", "is_null", "is_not_null",
     ],
-    ("dimension", "number"): ["eq", "in", "gt", "gte", "lt", "lte", "is_null", "is_not_null"],
-    ("measure", "id"): ["eq", "in", "is_null", "is_not_null"],
-    ("measure", "number"): ["eq", "in", "gt", "gte", "lt", "lte", "is_null", "is_not_null"],
-    ("measure", "indicator"): ["eq", "in", "gt", "gte", "lt", "lte", "is_null", "is_not_null"],
+    ("dimension", "numeric"):     ["eq", "in", "gt", "gte", "lt", "lte", "is_null", "is_not_null"],
+    ("dimension", "virtual_tag"): ["eq", "in", "is_null", "is_not_null"],
+    # MEASURE
+    ("measure", "primary_key"):      ["eq", "in", "is_null", "is_not_null"],
+    ("measure", "raw_number"):       ["eq", "in", "gt", "gte", "lt", "lte", "is_null", "is_not_null"],
+    ("measure", "basic_metric"):     ["eq", "in", "gt", "gte", "lt", "lte", "is_null", "is_not_null"],
+    ("measure", "snapshot_metric"):  ["eq", "in", "gt", "gte", "lt", "lte", "is_null", "is_not_null"],
+    ("measure", "derived_metric"):   [
+        "eq", "in", "gt", "gte", "lt", "lte", "between", "is_null", "is_not_null",
+    ],
+    ("measure", "formula_metric"):   [
+        "eq", "in", "gt", "gte", "lt", "lte", "between", "is_null", "is_not_null",
+    ],
 }
 
 _GROUP_OPS: dict[tuple[str, str], list[str]] = {
-    ("dimension", "id"): ["self"],
-    ("dimension", "name"): ["self"],
-    ("dimension", "time"): ["day", "month", "quarter", "year"],
-    ("dimension", "period"): ["month", "quarter", "year"],
-    ("dimension", "number"): [],  # 数值维度不允许分组
-    ("measure", "id"): ["self"],
-    ("measure", "number"): ["range"],
-    ("measure", "indicator"): ["range"],
+    ("dimension", "id"):         ["self"],
+    ("dimension", "name"):       ["self"],
+    ("dimension", "datetime"):   ["day", "month", "quarter", "year"],
+    ("dimension", "period"):     ["month", "quarter", "year"],
+    ("dimension", "numeric"):    [],  # 数值维度不允许分组
+    ("dimension", "virtual_tag"): ["self"],
+    ("measure", "primary_key"):  ["self"],
+    ("measure", "raw_number"):   ["range"],
+    ("measure", "basic_metric"): ["range"],
+    ("measure", "snapshot_metric"): ["range"],
+    ("measure", "derived_metric"):  ["range"],
+    ("measure", "formula_metric"):  ["range"],
 }
 
 _AGG_OPS: dict[tuple[str, str], list[str]] = {
-    ("dimension", "id"): ["count", "count_distinct"],
-    ("dimension", "name"): [],
-    ("dimension", "time"): [],
-    ("dimension", "period"): [],
-    ("dimension", "number"): ["sum", "avg", "min", "max"],
-    ("measure", "id"): ["count", "count_distinct"],
-    ("measure", "number"): ["sum", "avg", "min", "max"],
-    ("measure", "indicator"): ["sum", "count", "count_distinct", "avg", "min", "max"],
+    ("dimension", "id"):         ["count", "count_distinct"],
+    ("dimension", "name"):       [],
+    ("dimension", "description"): [],
+    ("dimension", "datetime"):   [],
+    ("dimension", "period"):     [],
+    ("dimension", "numeric"):    ["sum", "avg", "min", "max"],
+    ("dimension", "virtual_tag"): [],
+    ("measure", "primary_key"):  ["count", "count_distinct"],
+    ("measure", "raw_number"):   ["sum", "avg", "min", "max"],
+    ("measure", "basic_metric"): ["sum", "avg", "min", "max"],
+    ("measure", "snapshot_metric"): ["max", "min", "sum"],  # cross-period sum 由 ComputeExecutor 动态检测
+    ("measure", "derived_metric"):  ["max", "min"],          # sum/avg 均禁止；比率/增量率类指标跨维聚合无业务意义
+    ("measure", "formula_metric"):  ["sum", "count", "count_distinct", "avg", "min", "max"],
 }
 
 # ── 强制过滤组 ────────────────────────────────────────────────────────────────
@@ -117,7 +127,9 @@ def derive_field_ops(
 
     Args:
         analytic_role: "dimension" | "measure"
-        analytic_kind: "id" | "name" | "time" | "period" | "number" | "indicator"
+        analytic_kind: "id" | "name" | "datetime" | "period" | "numeric" | "raw_number" |
+                       "basic_metric" | "snapshot_metric" | "derived_metric" |
+                       "formula_metric" | "virtual_tag" | "primary_key"
         has_term: 是否绑定术语词库（已废弃，由 term_type 替代，保留向后兼容）
         term_type: "enum" | "lookup" | None — 只有 enum 型才收敛 filter_ops
 
@@ -146,10 +158,10 @@ def derive_field_ops(
 def infer_secondary_role(analytic_role: str | None, analytic_kind: str | None) -> str | None:
     """
     规则引擎推断附加角色：
-    - DIMENSION_ATTR + id → 附加 measure 能力（count/count_distinct）
-    - DIMENSION_ATTR + number → 附加 measure 能力（sum/avg/max/min）
+    - DIMENSION_ATTR + id    → 附加 measure 能力（count/count_distinct）
+    - DIMENSION_ATTR + numeric → 附加 measure 能力（sum/avg/max/min）
     """
-    if analytic_role == "dimension" and analytic_kind in ("id", "number"):
+    if analytic_role == "dimension" and analytic_kind in ("id", "numeric"):
         return "measure"
     return None
 
@@ -170,3 +182,13 @@ def apply_analytic_metadata(f: Any, ext_property_json: str | None = None) -> Non
     f.filter_ops, f.group_ops, f.aggregate_ops, f.required_filter_group = derive_field_ops(
         role, kind, term_type=term_type
     )
+
+    # 提取 formula 表达式（derived_metric / formula_metric / virtual_tag 专用）
+    if ext_property_json:
+        try:
+            data = json.loads(html.unescape(ext_property_json))
+            formula = data.get("formula")
+            if formula and hasattr(f, "formula"):
+                f.formula = formula
+        except (ValueError, TypeError):
+            pass

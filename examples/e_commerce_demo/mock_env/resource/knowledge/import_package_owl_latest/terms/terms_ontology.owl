@@ -1,0 +1,967 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/term/ontology#">
+
+    <owl:Class rdf:about="#TermDefinition"><rdfs:label>术语定义</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#term_object_ads_enterprise_analysis">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_enterprise_analysis</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析宽表，整合企业经营、税收、利润、网格活力、产业环节、企业等级、风险等级等信息，主键为 enterprise_id。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ontology/objects/ads_enterprise_analysis/ads_enterprise_analysis_object.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_object_ads_grid_analysis">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_grid_analysis</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_grid_analysis</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格综合分析表</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格综合分析宽表，聚合物理网格面积、经营指标、IoT 活跃度、灯光、POI 密度，并关联所属管理网格信息，主键为 phy_grid_id。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ontology/objects/ads_grid_analysis/ads_grid_analysis_object.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_object_ads_manage_grid_analysis">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_manage_grid_analysis</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_manage_grid_analysis</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格综合分析表</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格综合分析宽表，聚合管理网格面积、经营指标、IoT 活跃度、灯光、POI 密度等信息，主键为 manage_grid_id。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ontology/objects/ads_manage_grid_analysis/ads_manage_grid_analysis_object.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_object_ads_chain_analysis">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#ads_chain_analysis</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_chain_analysis</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链分析表</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链分析表，记录产业环节信息、环节企业数量、营收、税收、利润等指标，用于分析产业链效益。主键为 city_name+chain_item_code。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ontology/objects/ads_chain_analysis/ads_chain_analysis_object.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_action_query_ads_enterprise_analysis">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#query_ads_enterprise_analysis</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">query_ads_enterprise_analysis</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">查询企业综合分析表</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表查询动作</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ontology/actions/action.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_action_query_ads_grid_analysis">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#query_ads_grid_analysis</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">query_ads_grid_analysis</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">查询物理网格综合分析表</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格综合分析表查询动作</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ontology/actions/action.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_action_query_ads_manage_grid_analysis">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#query_ads_manage_grid_analysis</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">query_ads_manage_grid_analysis</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">查询管理网格综合分析表</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格综合分析表查询动作</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ontology/actions/action.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_action_query_ads_chain_analysis">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#query_ads_chain_analysis</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">query_ads_chain_analysis</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">查询产业链分析表</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链分析表查询动作</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ontology/actions/action.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_view_scene_enterprise_analysis">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">VIEW#scene_enterprise_analysis</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_enterprise_analysis</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析视图</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">以企业为 anchor，整合经营、税收、风险、网格活力、产业链等指标的联合分析视图。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ontology/views/scene_enterprise_analysis/scene_enterprise_analysis_view.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_view_scene_grid_analysis">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">VIEW#scene_grid_analysis</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_grid_analysis</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格综合分析视图</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">以物理网格为 anchor，聚合网格经营指标、IoT 活力、亩产效益，关联所属管理网格。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ontology/views/scene_grid_analysis/scene_grid_analysis_view.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_enterprise_id">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#enterprise_id</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_id</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业唯一 ID</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业唯一 ID</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_enterprise_name">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#enterprise_name</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_name</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业全称</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业全称</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_stat_date">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#stat_date</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">stat_date</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">统计日期</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：统计日期</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_industry_name">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#industry_name</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业类型</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：行业类型</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_business_status_name">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#business_status_name</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">business_status_name</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业经营状态</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业经营状态</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_lng_lat">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#lng_lat</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">lng_lat</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业经纬度(lng,lat)</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业经纬度(lng,lat)</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_height">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#height</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">height</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">地理高度(米)</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：地理高度(米)</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_address">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#address</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">address</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业详细地址</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业详细地址</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_total_revenue">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#total_revenue</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_revenue</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业总营收（万元）</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业总营收（万元）</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_total_tax">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#total_tax</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_tax</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业总缴税（万元）</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业总缴税（万元）</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_total_profit">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#total_profit</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_profit</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业总利润（万元）</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业总利润（万元）</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_tax_rate">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#tax_rate</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">tax_rate</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业实际税负率（%）</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业实际税负率（%）</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_avg_foot_traffic">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#avg_foot_traffic</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_foot_traffic</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格人流量(人次)</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业所属物理网格人流量(人次)</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_foot_active_level_name">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#foot_active_level_name</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">foot_active_level_name</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格人流活跃等级</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业所属物理网格人流活跃等级</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_avg_vehicle_flow">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#avg_vehicle_flow</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_vehicle_flow</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格车流量(辆次)</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业所属物理网格车流量(辆次)</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_vehicle_active_level_name">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#vehicle_active_level_name</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">vehicle_active_level_name</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格车流活跃等级</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业所属物理网格车流活跃等级</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_avg_light_intensity">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#avg_light_intensity</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_light_intensity</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业灯光强度</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业灯光强度</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_light_active_level_name">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#light_active_level_name</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">light_active_level_name</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业灯光活跃等级</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业灯光活跃等级</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_chain_code">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#chain_code</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_code</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节编码</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：所属产业环节编码</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_chain_name">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#chain_name</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属产业环节名称</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：所属产业环节名称</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_manage_grid_id">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#manage_grid_id</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_id</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属管理网格编码</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：所属管理网格编码</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_manage_grid_name">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#manage_grid_name</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属管理网格名称</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：所属管理网格名称</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_enterprise_level_name">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#enterprise_level_name</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_level_name</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业等级</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业等级</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_risk_level_name">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#risk_level_name</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">risk_level_name</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合风险等级</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业综合风险等级</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_update_time">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#update_time</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_time</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">分析表更新时间</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：分析表更新时间</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_etl_create_time">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#etl_create_time</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">etl_create_time</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">分析表创建时间</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：分析表创建时间</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_phy_grid_id">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#phy_grid_id</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格编码</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业所属物理网格编码</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_phy_grid_name">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#phy_grid_name</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业所属物理网格名称</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业所属物理网格名称</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_data_source">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#data_source</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data_source</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">数据来源</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：数据来源</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_energy_efficiency_Index">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#energy_efficiency_Index</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">energy_efficiency_Index</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业经济效益等级（高、中、低）</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：企业经济效益等级（高、中、低）</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_revenur_rule">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#revenur_rule</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">revenur_rule</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">营收规则</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表的字段：营收规则</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_grid_lnt_lat">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#grid_lnt_lat</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_lnt_lat</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格中心点经纬度(lng,lat)</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格综合分析表的字段：物理网格中心点经纬度(lng,lat)</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_wkt">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#wkt</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">wkt</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格边界组(左下、右下、右上、左上)</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格综合分析表的字段：物理网格边界组(左下、右下、右上、左上)</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_area_sqm">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#area_sqm</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">area_sqm</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格面积（平方米）</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格综合分析表的字段：物理网格面积（平方米）</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_output_per_mu">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#output_per_mu</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">output_per_mu</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格亩产效益（万元/亩）</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格综合分析表的字段：物理网格亩产效益（万元/亩）</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_poi_density">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#poi_density</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">poi_density</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格POI密度（个 / 平方公里）</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">物理网格综合分析表的字段：物理网格POI密度（个 / 平方公里）</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_manage_wkt">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#manage_wkt</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_wkt</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格边界组(左下、右下、右上、左上)</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格综合分析表的字段：管理网格边界组(左下、右下、右上、左上)</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_com_num">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#com_num</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">com_num</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业数量</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格综合分析表的字段：企业数量</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_grid_num">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#grid_num</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_num</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">网格数量</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">管理网格综合分析表的字段：网格数量</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_city_name">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#city_name</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">city_name</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">城市名称</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链分析表的字段：城市名称</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_chain_type_code">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#chain_type_code</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_type_code</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业大类编码</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链分析表的字段：产业大类编码</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_chain_type_name">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#chain_type_name</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_type_name</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业大类名称</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链分析表的字段：产业大类名称</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_chain_item_code">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#chain_item_code</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_item_code</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链环节编码</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链分析表的字段：产业链环节编码</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_item_type">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#item_type</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">item_type</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链环节名称</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链分析表的字段：产业链环节名称</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_chain_item_name">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#chain_item_name</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_item_name</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链环节名称</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链分析表的字段：产业链环节名称</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_ENTERPRISE_NUM">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#ENTERPRISE_NUM</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ENTERPRISE_NUM</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链环节企业数量</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链分析表的字段：产业链环节企业数量</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_item_strengths">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#item_strengths</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">item_strengths</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链环节优势</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链分析表的字段：产业链环节优势</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_item_weaknesses">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#item_weaknesses</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">item_weaknesses</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链环节劣势</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链分析表的字段：产业链环节劣势</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_industrial_chain_efficiency">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#industrial_chain_efficiency</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industrial_chain_efficiency</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链效益级别（高、中、低）</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产业链分析表的字段：产业链效益级别（高、中、低）</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_002</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#term_code_path"/>
+    <owl:DatatypeProperty rdf:about="#term_code"/>
+    <owl:DatatypeProperty rdf:about="#term_name"/>
+    <owl:DatatypeProperty rdf:about="#library_code"/>
+    <owl:DatatypeProperty rdf:about="#term_type_code"/>
+    <owl:DatatypeProperty rdf:about="#term_desc"/>
+    <owl:DatatypeProperty rdf:about="#synonyms"/>
+    <owl:DatatypeProperty rdf:about="#terms_knowledge"/>
+    <owl:DatatypeProperty rdf:about="#domain_code"/>
+    <owl:DatatypeProperty rdf:about="#owl_doc_file"/>
+    <owl:DatatypeProperty rdf:about="#ext_field"/>
+    <owl:DatatypeProperty rdf:about="#version"/>
+</rdf:RDF>

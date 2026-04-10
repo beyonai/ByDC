@@ -77,6 +77,60 @@ class VirtualActionValidator:
                 "VIRTUAL_ACTION_ERR_REQUIRED_FILTER_MISSING",
             )
 
+    def _check_linked(self, field_code: str) -> None:
+        """若字段为 linked 类型则报错。"""
+        f = self._get_field(field_code)
+        if getattr(f, "property_kind", "physical") == "linked":
+            fname = getattr(f, "field_name", None) or field_code
+            raise VirtualActionValidationError(
+                f"字段 '{fname}' 为跨表关联字段，暂不支持，请使用对应的视图对象查询",
+                "VIRTUAL_ACTION_ERR_LINKED_NOT_SUPPORTED",
+            )
+
+    def validate_query(
+        self,
+        arguments: dict[str, Any],
+        required_filter_groups: list[str] | None = None,
+    ) -> None:
+        """校验 query_ontology 动作入参（明细查询）。
+
+        在 validate_lookup 基础上增加：
+        1. select / filters / order_by 中的 linked 字段检测
+        2. filter_relation=OR + period_required 冲突检测
+        """
+        filter_relation = (arguments.get("filter_relation") or "AND").upper()
+
+        # OR + period_required 冲突：账期强制要求与 OR 连接语义矛盾
+        if filter_relation == "OR" and required_filter_groups and "period_required" in required_filter_groups:
+            raise VirtualActionValidationError(
+                "该对象含账期强制约束，不允许使用 filter_relation=OR，"
+                "OR 连接会使账期条件失去强制约束效果",
+                "VIRTUAL_ACTION_ERR_INVALID",
+            )
+
+        # 检查 select 字段：存在性 + linked 拦截
+        for fc in arguments.get("select", []):
+            self._check_linked(fc)
+
+        # 检查 filters：存在性 + linked 拦截 + op 合法性
+        for item in arguments.get("filters", []):
+            fc = item.get("field", "")
+            op = item.get("op", "")
+            if fc:
+                self._check_linked(fc)
+            if fc and op:
+                self._check_filter_op(fc, op)
+
+        # 检查 order_by 字段：存在性 + linked 拦截
+        for ob in arguments.get("order_by", []):
+            fc = ob.get("field", "")
+            if fc:
+                self._check_linked(fc)
+
+        # 强制过滤（在 OR 冲突检测通过后才到这里，即 filter_relation=AND）
+        if required_filter_groups:
+            self._check_required_filters(arguments.get("filters", []), required_filter_groups)
+
     def validate_lookup(
         self,
         arguments: dict[str, Any],
@@ -108,7 +162,7 @@ class VirtualActionValidator:
         # metrics 不能为空
         if not metrics:
             raise VirtualActionValidationError(
-                "analyze 动作 metrics 不能为空，若只需明细请使用 lookup",
+                "analyze 动作 metrics 不能为空，若只需明细请使用 query",
                 "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD",
             )
 

@@ -1,13 +1,13 @@
-"""虚拟动作注入器：为 DB/KB 对象及 DB 视图注入 lookup_*/analyze_*/search_* 虚拟动作。
+"""虚拟动作注入器：为 DB/KB 对象及 DB 视图注入 query_*/compute_*/search_* 虚拟动作。
 
 改造要点：
-- 按字段元数据规则自动推导并生成多个虚拟动作（不再统一命名为 query_*）
-- DB 对象 → lookup_*；若存在度量字段 → 同时生成 analyze_*
-- DB 视图 → lookup_* + analyze_*
+- 按字段元数据规则自动推导并生成多个虚拟动作
+- DB 对象 → query_*（明细检索）；若存在度量字段 → 同时生成 compute_*（分组统计）
+- DB 视图 → query_* + compute_*
 - KB 对象 → search_*
-- 旧 query_* 动作保留为兼容别名（标记为 legacy_aliases）
 - 注入幂等：同名动作不重复追加
 - 同时注册到全局 VirtualActionRegistry，供 MCP 路由使用
+- 动作字段统一使用中文名（field_name / property_name）
 """
 
 from __future__ import annotations
@@ -23,8 +23,8 @@ def inject_virtual_actions(loader: object) -> None:
     为 Loader 中所有 DB/KB 对象及 DB 视图注入虚拟动作。
 
     注入结果：
-    - DB 对象：lookup_{object_code}（+analyze_{object_code} 若有度量字段）
-    - DB 视图：lookup_{view_code} + analyze_{view_code}
+    - DB 对象：query_{object_code}（+compute_{object_code} 若有度量字段）
+    - DB 视图：query_{view_code} + compute_{view_code}
     - KB 对象：search_{object_code}
 
     同时向 VirtualActionRegistry 注册路由条目。
@@ -154,12 +154,12 @@ def _make_action(
 
 
 def _inject_db_object_actions(cls, existing_codes: set, registry) -> None:
-    """为 DB 对象注入 lookup_* 及可选的 analyze_* 动作。"""
+    """为 DB 对象注入 query_* 及可选的 compute_* 动作。"""
     from datacloud_data_sdk.virtual_action.generator import (
-        build_analyze_schema,
-        build_lookup_schema,
-        build_lookup_description,
-        build_analyze_description,
+        build_compute_description,
+        build_compute_schema,
+        build_query_description,
+        build_query_schema,
     )
     from datacloud_data_sdk.virtual_action.registry import ActionRoute
 
@@ -169,52 +169,46 @@ def _inject_db_object_actions(cls, existing_codes: set, registry) -> None:
     fields = cls.fields
     req_groups = _required_filter_groups(fields)
 
-    # lookup
-    lookup_code = f"lookup_{obj_code}"
-    if lookup_code not in existing_codes:
-        schema = build_lookup_schema(obj_name, fields, req_groups)
+    # query
+    query_code = f"query_{obj_code}"
+    if query_code not in existing_codes:
+        schema = build_query_schema(obj_name, fields, req_groups)
         action = _make_action(
-            action_code=lookup_code,
+            action_code=query_code,
             action_name=f"查询{obj_name}明细",
-            description=build_lookup_description(obj_name, obj_desc, fields, req_groups, "object"),
+            description=build_query_description(obj_name, obj_desc, fields, req_groups, "object"),
             belong_class=obj_code,
-            action_family="lookup",
+            action_family="query",
             virtual_backend="db_lookup",
             scope_type="object",
             scope_code=obj_code,
             input_schema=schema,
-            legacy_aliases=[f"query_{obj_code}"],
         )
         cls.actions.append(action)
-        registry.register(lookup_code, ActionRoute("object", obj_code, "lookup"))
-        logger.debug("注入 %s", lookup_code)
+        registry.register(query_code, ActionRoute("object", obj_code, "query"))
+        logger.debug("注入 %s", query_code)
 
-    # analyze（仅当存在度量字段时）
+    # compute（仅当存在度量字段时）
     if _has_measure(fields):
-        analyze_code = f"analyze_{obj_code}"
-        if analyze_code not in existing_codes:
-            schema = build_analyze_schema(obj_name, fields, req_groups)
+        compute_code = f"compute_{obj_code}"
+        if compute_code not in existing_codes:
+            schema = build_compute_schema(obj_name, fields, req_groups)
             action = _make_action(
-                action_code=analyze_code,
+                action_code=compute_code,
                 action_name=f"统计{obj_name}",
-                description=build_analyze_description(
+                description=build_compute_description(
                     obj_name, obj_desc, fields, req_groups, "object"
                 ),
                 belong_class=obj_code,
-                action_family="analyze",
+                action_family="compute",
                 virtual_backend="db_analyze",
                 scope_type="object",
                 scope_code=obj_code,
                 input_schema=schema,
             )
             cls.actions.append(action)
-            registry.register(analyze_code, ActionRoute("object", obj_code, "analyze"))
-            logger.debug("注入 %s", analyze_code)
-
-    # 旧 query_* 兼容：注册路由到 lookup（已存在则跳过）
-    legacy_code = f"query_{obj_code}"
-    if legacy_code not in existing_codes and not registry.get(legacy_code):
-        registry.register(legacy_code, ActionRoute("object", obj_code, "lookup"))
+            registry.register(compute_code, ActionRoute("object", obj_code, "compute"))
+            logger.debug("注入 %s", compute_code)
 
 
 def _inject_kb_object_actions(cls, existing_codes: set, registry) -> None:
@@ -253,12 +247,12 @@ def _inject_kb_object_actions(cls, existing_codes: set, registry) -> None:
 
 
 def _inject_view_actions(loader, registry) -> None:
-    """为所有 DB 视图注入 lookup_* + analyze_* 动作，挂载到 View.actions。"""
+    """为所有 DB 视图注入 query_* + compute_* 动作，挂载到 View.actions。"""
     from datacloud_data_sdk.virtual_action.generator import (
-        build_analyze_schema,
-        build_lookup_schema,
-        build_lookup_description,
-        build_analyze_description,
+        build_compute_description,
+        build_compute_schema,
+        build_query_description,
+        build_query_schema,
     )
     from datacloud_data_sdk.virtual_action.registry import ActionRoute
 
@@ -306,48 +300,48 @@ def _inject_view_actions(loader, registry) -> None:
         view_actions = scene.setdefault("_virtual_actions", [])
         existing_codes = {a.action_code for a in view_actions}
 
-        # lookup
-        lookup_code = f"lookup_{view_id}"
-        if lookup_code not in existing_codes:
-            schema = build_lookup_schema(view_name, view_fields, req_groups)
+        # query
+        query_code = f"query_{view_id}"
+        if query_code not in existing_codes:
+            schema = build_query_schema(view_name, view_fields, req_groups)
             action = _make_action(
-                action_code=lookup_code,
+                action_code=query_code,
                 action_name=f"查询{view_name}明细",
-                description=build_lookup_description(
+                description=build_query_description(
                     view_name, view_desc, view_fields, req_groups, "view"
                 ),
                 belong_class=view_id,
-                action_family="lookup",
+                action_family="query",
                 virtual_backend="db_lookup",
                 scope_type="view",
                 scope_code=view_id,
                 input_schema=schema,
             )
             view_actions.append(action)
-            registry.register(lookup_code, ActionRoute("view", view_id, "lookup"))
-            logger.debug("注入视图 %s", lookup_code)
+            registry.register(query_code, ActionRoute("view", view_id, "query"))
+            logger.debug("注入视图 %s", query_code)
 
-        # analyze
+        # compute
         if _has_measure(view_fields):
-            analyze_code = f"analyze_{view_id}"
-            if analyze_code not in existing_codes:
-                schema = build_analyze_schema(view_name, view_fields, req_groups)
+            compute_code = f"compute_{view_id}"
+            if compute_code not in existing_codes:
+                schema = build_compute_schema(view_name, view_fields, req_groups)
                 action = _make_action(
-                    action_code=analyze_code,
+                    action_code=compute_code,
                     action_name=f"统计{view_name}",
-                    description=build_analyze_description(
+                    description=build_compute_description(
                         view_name, view_desc, view_fields, req_groups, "view"
                     ),
                     belong_class=view_id,
-                    action_family="analyze",
+                    action_family="compute",
                     virtual_backend="db_analyze",
                     scope_type="view",
                     scope_code=view_id,
                     input_schema=schema,
                 )
                 view_actions.append(action)
-                registry.register(analyze_code, ActionRoute("view", view_id, "analyze"))
-                logger.debug("注入视图 %s", analyze_code)
+                registry.register(compute_code, ActionRoute("view", view_id, "compute"))
+                logger.debug("注入视图 %s", compute_code)
 
 
 def _resolve_source_field_type(

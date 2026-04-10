@@ -25,111 +25,14 @@ def _field_table_row(f: Any) -> str:
 
 
 def _required_restrictions(required_filter_groups: list[str]) -> str:
+    """仅返回账期类强制约束描述（适用于 query 和 compute 两种描述）。"""
     if not required_filter_groups:
         return ""
     lines = ["\n**强制限制**："]
     if "period_required" in required_filter_groups:
         lines.append("- 必须在 `filters` 中传入账期（period）字段过滤条件")
-    lines.append("- 度量字段只能出现在 `metrics` 中，不能作为维度")
     return "\n".join(lines)
 
-
-def build_lookup_description(
-    scope_name: str,
-    scope_description: str,
-    fields: list[Any],
-    required_filter_groups: list[str] | None = None,
-    scope_type: str = "object",
-) -> str:
-    """生成 lookup 动作 Markdown 描述（§6/§7 模板）。"""
-    req_groups = required_filter_groups or []
-    req_hint = "必须包含账期过滤。" if "period_required" in req_groups else ""
-
-    lines: list[str] = []
-    if scope_description:
-        lines.append(scope_description)
-        lines.append("")
-    lines.append(
-        f"按条件查询{scope_name}明细。支持字段过滤、排序、分页；"
-        f"不支持聚合统计。仅允许使用配置中声明的字段和操作符。{req_hint}"
-    )
-    lines.append("")
-    lines.append(
-        "**何时使用**：查看具体记录列表时使用；不适用于统计汇总，如需统计请用 analyze 动作。"
-    )
-
-    restrictions = _required_restrictions(req_groups)
-    if restrictions:
-        lines.append(restrictions)
-
-    # 字段能力表
-    lines.append("")
-    lines.append("**可用字段**：")
-    lines.append("| 字段 | 业务名 | 角色 | 类型 | 可过滤 | 可分组 | 可聚合 | 特殊说明 |")
-    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
-    for f in fields:
-        lines.append(_field_table_row(f))
-
-    lines.append("")
-    lines.append("**常见错误**：")
-    lines.append("- 使用了字段不支持的 op 操作符")
-    if req_groups:
-        lines.append("- 缺少账期（period）过滤条件")
-
-    return "\n".join(lines)
-
-
-def build_analyze_description(
-    scope_name: str,
-    scope_description: str,
-    fields: list[Any],
-    required_filter_groups: list[str] | None = None,
-    scope_type: str = "object",
-) -> str:
-    """生成 analyze 动作 Markdown 描述（§6/§7 模板）。"""
-    req_groups = required_filter_groups or []
-    req_hint = "必须满足账期等强制过滤规则。" if "period_required" in req_groups else ""
-    view_hint = "结果来自多对象 JOIN。" if scope_type == "view" else ""
-
-    lines: list[str] = []
-    if scope_description:
-        lines.append(scope_description)
-        lines.append("")
-    lines.append(
-        f"按规则对{scope_name}做分组统计。支持 dimensions + metrics + filters；"
-        f"不支持明细字段直接输出。{req_hint}{view_hint}"
-    )
-    lines.append("")
-    lines.append(
-        "**何时使用**：需要分组统计、聚合指标时使用；"
-        "不适用于查看明细列表，如需明细请用 lookup 动作。"
-    )
-
-    restrictions = _required_restrictions(req_groups)
-    if restrictions:
-        lines.append(restrictions)
-    else:
-        lines.append("\n**强制限制**：")
-        lines.append("- 度量字段只能出现在 `metrics` 中，不能作为维度")
-        lines.append("- `metrics` 不能为空")
-
-    # 字段能力表
-    lines.append("")
-    lines.append("**字段能力**：")
-    lines.append("| 字段 | 业务名 | 角色 | 类型 | 可过滤 | 可分组 | 可聚合 | 特殊说明 |")
-    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
-    for f in fields:
-        lines.append(_field_table_row(f))
-
-    lines.append("")
-    lines.append("**常见错误**：")
-    lines.append("- `metrics` 为空（必须至少一个指标）")
-    lines.append("- 维度字段写进 `metrics`（维度只能在 `dimensions` 中）")
-    lines.append("- `having.field` 未使用 `metrics` 中的 `as` 别名")
-    if req_groups:
-        lines.append("- 缺少账期（period）过滤条件")
-
-    return "\n".join(lines)
 
 
 def build_search_description(
@@ -181,9 +84,9 @@ def _infer_value_type(f: Any) -> str:
         return "date"
 
     kind = getattr(f, "analytic_kind", None)
-    if kind in ("number", "indicator"):
+    if kind in ("numeric", "raw_number", "basic_metric", "snapshot_metric", "derived_metric", "formula_metric"):
         return "number"
-    if kind in ("time", "period"):
+    if kind in ("datetime", "period"):
         return "date"
     return "string"
 
@@ -257,61 +160,129 @@ def _build_filters_schema(fields: list[Any]) -> dict[str, Any]:
     }
 
 
-# ── lookup schema 生成 ────────────────────────────────────────────────────────
+
+# ── search schema 生成 ────────────────────────────────────────────────────────
 
 
-def build_lookup_schema(
+def build_search_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
+    """生成 search 动作 inputSchema（知识库检索）。"""
+    filters_schema = _build_filters_schema(fields)
+    return {
+        "type": "object",
+        "description": f"在知识库 {scope_name} 中检索",
+        "properties": {
+            "query": {"type": "string", "description": "检索文本，向量相似度匹配"},
+            "filters": filters_schema,
+            "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20},
+        },
+        "required": ["query"],
+    }
+
+
+# ── query_ontology schema / description 生成（字段用 field_name 中文名）─────────
+
+
+def _fn(f: Any) -> str:
+    """取字段中文名。"""
+    return f.field_name if hasattr(f, "field_name") else getattr(f, "property_name", "")
+
+
+def _fc(f: Any) -> str:
+    """取字段编码。"""
+    return f.field_code if hasattr(f, "field_code") else f.property_code
+
+
+def _filter_item_schema_by_name(f: Any) -> dict[str, Any]:
+    """为单字段生成 filters 数组元素 schema（field const 使用 field_name）。"""
+    fname = _fn(f)
+    filter_ops = getattr(f, "filter_ops", ["eq", "in", "is_null", "is_not_null"])
+    role = getattr(f, "analytic_role", None)
+    kind = getattr(f, "analytic_kind", None)
+    role_hint = f"[{role}-{kind}]" if role else ""
+    return {
+        "type": "object",
+        "description": f"{fname} {role_hint}过滤条件",
+        "properties": {
+            "field": {"type": "string", "const": fname},
+            "op": {"type": "string", "enum": filter_ops, "description": "过滤操作符"},
+            "value": _value_schema_for_field(f),
+        },
+        "required": ["field", "op"],
+    }
+
+
+def _build_filters_schema_by_name(fields: list[Any]) -> dict[str, Any]:
+    """构建 filters 数组 schema，oneOf 按 field_name 生成每个字段的过滤条目。"""
+    filterable = [f for f in fields if getattr(f, "filter_ops", [])]
+    if not filterable:
+        return {"type": "array", "items": {"type": "object"}, "description": "过滤条件列表"}
+    return {
+        "type": "array",
+        "description": "过滤条件列表，field 填字段中文名",
+        "items": {"oneOf": [_filter_item_schema_by_name(f) for f in filterable]},
+        "x-dc-filterable-fields": [
+            {
+                "field": _fn(f),
+                "field_code": _fc(f),
+                "ops": getattr(f, "filter_ops", []),
+                "role": getattr(f, "analytic_role", None),
+                "kind": getattr(f, "analytic_kind", None),
+            }
+            for f in filterable
+        ],
+    }
+
+
+def build_query_schema(
     scope_name: str,
     fields: list[Any],
     required_filter_groups: list[str] | None = None,
 ) -> dict[str, Any]:
-    """
-    生成 lookup 动作 inputSchema。
+    """生成 query_ontology 动作 inputSchema（field 使用 field_name 中文名）。
 
-    Args:
-        scope_name: 对象或视图显示名
-        fields: OntologyField 或 ViewFieldMeta 列表
-        required_filter_groups: 强制过滤组列表
+    与 build_lookup_schema 的区别：
+    - select / filters.field / order_by.field 均使用 field_name（中文名）
+    - 自动排除 property_kind=linked 的跨表关联字段
+    - 新增 filter_relation 参数（AND/OR）
     """
-    all_codes = [f.field_code if hasattr(f, "field_code") else f.property_code for f in fields]
-    all_names = {
-        (f.field_code if hasattr(f, "field_code") else f.property_code): (
-            f.field_name if hasattr(f, "field_name") else f.property_name
-        )
-        for f in fields
-    }
-    filters_schema = _build_filters_schema(fields)
+    queryable = [f for f in fields if getattr(f, "property_kind", "physical") != "linked"]
+    all_names = [_fn(f) for f in queryable]
 
+    filters_schema = _build_filters_schema_by_name(queryable)
     required_groups = required_filter_groups or []
-    required_hint = ""
-    if required_groups:
-        required_hint = f"；强制过滤字段：{', '.join(required_groups)}"
+    required_hint = f"；强制过滤字段：{', '.join(required_groups)}" if required_groups else ""
 
     schema: dict[str, Any] = {
         "type": "object",
-        "description": f"查询 {scope_name} 明细数据{required_hint}",
+        "description": f"查询 {scope_name} 明细数据（字段用中文名）{required_hint}",
         "properties": {
             "select": {
                 "type": "array",
-                "items": {"type": "string", "enum": all_codes},
-                "description": f"指定返回字段，为空时返回全部。可选字段：{', '.join(f'{c}({all_names[c]})' for c in all_codes[:10])}{'...' if len(all_codes) > 10 else ''}",
+                "items": {"type": "string", "enum": all_names},
+                "description": "返回字段列表（中文名），为空时返回全部非关联字段",
                 "x-dc-field-catalog": [
-                    {
-                        "code": f.field_code if hasattr(f, "field_code") else f.property_code,
-                        "name": f.field_name if hasattr(f, "field_name") else f.property_name,
-                    }
-                    for f in fields
+                    {"name": _fn(f), "code": _fc(f)} for f in queryable
                 ],
             },
             "filters": filters_schema,
+            "filter_relation": {
+                "type": "string",
+                "enum": ["AND", "OR"],
+                "default": "AND",
+                "description": "过滤条件连接方式；含账期强制约束时禁止用 OR",
+            },
             "order_by": {
                 "type": "array",
-                "description": "排序规则",
+                "description": "排序规则（field 用中文名）",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "field": {"type": "string", "enum": all_codes},
-                        "direction": {"type": "string", "enum": ["asc", "desc"], "default": "asc"},
+                        "field": {"type": "string", "enum": all_names},
+                        "direction": {
+                            "type": "string",
+                            "enum": ["asc", "desc"],
+                            "default": "asc",
+                        },
                     },
                     "required": ["field"],
                 },
@@ -325,42 +296,91 @@ def build_lookup_schema(
     return schema
 
 
-# ── analyze schema 生成 ───────────────────────────────────────────────────────
+def build_query_description(
+    scope_name: str,
+    scope_description: str,
+    fields: list[Any],
+    required_filter_groups: list[str] | None = None,
+    scope_type: str = "object",
+) -> str:
+    """生成 query_ontology 动作 Markdown 描述。
+
+    与 build_lookup_description 的区别：
+    - 强调字段用中文名传入
+    - 自动排除 linked 字段
+    """
+    queryable = [f for f in fields if getattr(f, "property_kind", "physical") != "linked"]
+    req_groups = required_filter_groups or []
+    req_hint = "必须包含账期过滤。" if "period_required" in req_groups else ""
+
+    lines: list[str] = []
+    if scope_description:
+        lines.append(scope_description)
+        lines.append("")
+    lines.append(
+        f"按条件查询{scope_name}明细。**字段统一使用中文名**；支持字段过滤、排序、分页；"
+        f"不支持聚合统计。{req_hint}"
+    )
+    lines.append("")
+    lines.append(
+        "**何时使用**：查看具体记录列表时使用；不适用于统计汇总，如需统计请用 compute 动作。"
+    )
+
+    restrictions = _required_restrictions(req_groups)
+    if restrictions:
+        lines.append(restrictions)
+
+    lines.append("")
+    lines.append("**可用字段**：")
+    lines.append("| 字段编码 | 中文名 | 角色 | 类型 | 可过滤 | 可分组 | 可聚合 | 特殊说明 |")
+    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
+    for f in queryable:
+        lines.append(_field_table_row(f))
+
+    lines.append("")
+    lines.append("**常见错误**：")
+    lines.append("- 使用了字段不支持的 op 操作符")
+    lines.append("- field 填了字段编码而非中文名")
+    if req_groups:
+        lines.append("- 缺少账期（period）过滤条件")
+
+    return "\n".join(lines)
 
 
-def build_analyze_schema(
+# ── compute_ontology schema / description 生成（字段用 field_name 中文名）────────
+
+
+def build_compute_schema(
     scope_name: str,
     fields: list[Any],
     required_filter_groups: list[str] | None = None,
 ) -> dict[str, Any]:
-    """
-    生成 analyze 动作 inputSchema。
+    """生成 compute_ontology 动作 inputSchema（field 使用 field_name 中文名）。
 
-    Args:
-        scope_name: 对象或视图显示名
-        fields: OntologyField 或 ViewFieldMeta 列表
-        required_filter_groups: 强制过滤组列表
+    与 build_analyze_schema 的区别：
+    - dimensions[i].field / metrics[i].field / filters[i].field 均使用 field_name
     """
     dim_fields = [f for f in fields if getattr(f, "group_ops", [])]
     msr_fields = [
         f
         for f in fields
-        if getattr(f, "analytic_role", None) == "measure"
-        and getattr(f, "aggregate_ops", [])
-        or getattr(f, "secondary_role", None) == "measure"  # 双角色字段
+        if (
+            getattr(f, "analytic_role", None) == "measure"
+            and getattr(f, "aggregate_ops", [])
+        )
+        or getattr(f, "secondary_role", None) == "measure"
     ]
-    filters_schema = _build_filters_schema(fields)
+    filters_schema = _build_filters_schema_by_name(fields)
 
     def _dim_item(f: Any) -> dict[str, Any]:
-        fc = f.field_code if hasattr(f, "field_code") else f.property_code
-        fn = f.field_name if hasattr(f, "field_name") else f.property_name
+        fname = _fn(f)
         kind = getattr(f, "analytic_kind", None)
         gops = getattr(f, "group_ops", [])
         item: dict[str, Any] = {
             "type": "object",
-            "description": f"{fn} [{getattr(f, 'analytic_role', '')}-{kind}] 分组维度",
+            "description": f"{fname} [{getattr(f, 'analytic_role', '')}-{kind}] 分组维度",
             "properties": {
-                "field": {"type": "string", "const": fc},
+                "field": {"type": "string", "const": fname},
                 "group_op": {"type": "string", "enum": gops, "description": "分组方式"},
             },
             "required": ["field", "group_op"],
@@ -388,21 +408,21 @@ def build_analyze_schema(
         return item
 
     def _msr_item(f: Any) -> dict[str, Any]:
-        fc = f.field_code if hasattr(f, "field_code") else f.property_code
-        fn = f.field_name if hasattr(f, "field_name") else f.property_name
+        fname = _fn(f)
         agg_ops = getattr(f, "aggregate_ops", []) or ["count", "count_distinct"]
         return {
             "type": "object",
-            "description": f"{fn} [{getattr(f, 'analytic_role', '')}-{getattr(f, 'analytic_kind', '')}] 统计指标",
+            "description": (
+                f"{fname} [{getattr(f, 'analytic_role', '')}-{getattr(f, 'analytic_kind', '')}] 统计指标"
+            ),
             "properties": {
-                "field": {"type": "string", "const": fc},
+                "field": {"type": "string", "const": fname},
                 "agg": {"type": "string", "enum": agg_ops, "description": "聚合函数"},
-                "as": {"type": "string", "description": "结果列别名，用于 having 引用"},
+                "as": {"type": "string", "description": "结果列别名，用于 having/order_by 引用"},
             },
             "required": ["field", "agg", "as"],
         }
 
-    # count_all 特殊内建指标
     count_all_item: dict[str, Any] = {
         "type": "object",
         "description": "内建行数统计，不需要 field",
@@ -414,23 +434,23 @@ def build_analyze_schema(
     }
 
     metrics_items = [_msr_item(f) for f in msr_fields] + [count_all_item]
-
     required_groups = required_filter_groups or []
     required_hint = f"；强制过滤字段：{', '.join(required_groups)}" if required_groups else ""
 
     schema: dict[str, Any] = {
         "type": "object",
-        "description": f"统计分析 {scope_name}{required_hint}",
+        "description": f"统计分析 {scope_name}（字段用中文名）{required_hint}",
         "properties": {
             "dimensions": {
                 "type": "array",
-                "description": "分组维度列表（至少一个；时间类须指定粒度；range 须带 buckets）",
+                "description": "分组维度（field 用中文名；时间类须指定粒度；range 须带 buckets）",
                 "items": {"oneOf": [_dim_item(f) for f in dim_fields]}
                 if dim_fields
                 else {"type": "object"},
                 "x-dc-dimension-fields": [
                     {
-                        "field": f.field_code if hasattr(f, "field_code") else f.property_code,
+                        "field": _fn(f),
+                        "field_code": _fc(f),
                         "group_ops": getattr(f, "group_ops", []),
                         "kind": getattr(f, "analytic_kind", None),
                     }
@@ -439,12 +459,13 @@ def build_analyze_schema(
             },
             "metrics": {
                 "type": "array",
-                "description": "统计指标列表（至少一个；使用 count_all 统计总行数）",
+                "description": "统计指标（field 用中文名；至少一个；可用 count_all 统计行数）",
                 "items": {"oneOf": metrics_items},
                 "minItems": 1,
                 "x-dc-measure-fields": [
                     {
-                        "field": f.field_code if hasattr(f, "field_code") else f.property_code,
+                        "field": _fn(f),
+                        "field_code": _fc(f),
                         "agg_ops": getattr(f, "aggregate_ops", []),
                         "kind": getattr(f, "analytic_kind", None),
                     }
@@ -480,17 +501,27 @@ def build_analyze_schema(
             },
             "order_by": {
                 "type": "array",
-                "description": "排序（field 可以是 metrics.as 别名或维度字段编码）",
+                "description": "排序（field 可以是 metrics.as 别名或维度字段中文名）",
                 "items": {
                     "type": "object",
                     "properties": {
                         "field": {"type": "string"},
-                        "direction": {"type": "string", "enum": ["asc", "desc"], "default": "desc"},
+                        "direction": {
+                            "type": "string",
+                            "enum": ["asc", "desc"],
+                            "default": "desc",
+                        },
                     },
                     "required": ["field"],
                 },
             },
             "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 100},
+            "filter_relation": {
+                "type": "string",
+                "enum": ["AND", "OR"],
+                "default": "AND",
+                "description": "过滤条件连接方式；含账期强制约束时禁止用 OR",
+            },
         },
         "required": ["metrics"],
     }
@@ -499,19 +530,69 @@ def build_analyze_schema(
     return schema
 
 
-# ── search schema 生成 ────────────────────────────────────────────────────────
+def build_compute_description(
+    scope_name: str,
+    scope_description: str,
+    fields: list[Any],
+    required_filter_groups: list[str] | None = None,
+    scope_type: str = "object",
+) -> str:
+    """生成 compute_ontology 动作 Markdown 描述。
 
+    与 build_analyze_description 的区别：
+    - 强调字段用中文名传入
+    - 说明 snapshot_metric 的跨账期 SUM 限制
+    """
+    req_groups = required_filter_groups or []
+    req_hint = "必须满足账期等强制过滤规则。" if "period_required" in req_groups else ""
+    view_hint = "结果来自多对象 JOIN。" if scope_type == "view" else ""
 
-def build_search_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
-    """生成 search 动作 inputSchema（知识库检索）。"""
-    filters_schema = _build_filters_schema(fields)
-    return {
-        "type": "object",
-        "description": f"在知识库 {scope_name} 中检索",
-        "properties": {
-            "query": {"type": "string", "description": "检索文本，向量相似度匹配"},
-            "filters": filters_schema,
-            "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20},
-        },
-        "required": ["query"],
-    }
+    lines: list[str] = []
+    if scope_description:
+        lines.append(scope_description)
+        lines.append("")
+    lines.append(
+        f"按规则对{scope_name}做分组统计。**字段统一使用中文名**；"
+        f"支持 dimensions + metrics + filters；不支持明细输出。{req_hint}{view_hint}"
+    )
+    lines.append("")
+    lines.append(
+        "**何时使用**：需要分组统计、聚合指标时使用；"
+        "不适用于查看明细列表，如需明细请用 query 动作。"
+    )
+
+    restrictions = _required_restrictions(req_groups)
+    if restrictions:
+        lines.append(restrictions)
+        # compute 专有约束接续在同一"强制限制"块后
+        lines.append("- 度量字段只能出现在 `metrics` 中，不能作为维度")
+        lines.append("- `metrics` 不能为空")
+    else:
+        lines.append("\n**强制限制**：")
+        lines.append("- 度量字段只能出现在 `metrics` 中，不能作为维度")
+        lines.append("- `metrics` 不能为空")
+
+    # 拍照指标特殊说明
+    snapshot_fields = [
+        f for f in fields if getattr(f, "analytic_kind", None) == "snapshot_metric"
+    ]
+    if snapshot_fields:
+        names = "、".join(_fn(f) for f in snapshot_fields)
+        lines.append(f"- 拍照指标（{names}）跨账期时不支持 SUM，请改用 MAX/MIN")
+
+    lines.append("")
+    lines.append("**字段能力**：")
+    lines.append("| 字段编码 | 中文名 | 角色 | 类型 | 可过滤 | 可分组 | 可聚合 | 特殊说明 |")
+    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
+    for f in fields:
+        lines.append(_field_table_row(f))
+
+    lines.append("")
+    lines.append("**常见错误**：")
+    lines.append("- `metrics` 为空（必须至少一个指标）")
+    lines.append("- field 填了字段编码而非中文名")
+    lines.append("- `having.field` 未使用 `metrics` 中的 `as` 别名")
+    if req_groups:
+        lines.append("- 缺少账期（period）过滤条件")
+
+    return "\n".join(lines)

@@ -12,11 +12,11 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "by-datacloud",
     "datacloud-analysis",
     "datacloud-data",
     "datacloud-knowledge",
     "datacloud-service",
-    "whale-datacloud",
 ]
 
 [[package]]
@@ -324,6 +324,128 @@ source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/63/9a/fec38644694abfaaeca2798b58e276a8e61de49e2e37494ace423395febc/bracex-2.6.tar.gz", hash = "sha256:98f1347cd77e22ee8d967a30ad4e310b233f7754dbf31ff3fceb76145ba47dc7" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/9d/2a/9186535ce58db529927f6cf5990a849aa9e052eea3e2cfefe20b9e1802da/bracex-2.6-py3-none-any.whl", hash = "sha256:0b0049264e7340b3ec782b5cb99beb325f36c3782a32e36e876452fd49a09952" },
+]
+
+[[package]]
+name = "by-datacloud"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "aiochclient", extra = ["aiohttp"] },
+    { name = "aiomysql" },
+    { name = "aiosqlite" },
+    { name = "asyncpg" },
+    { name = "boto3" },
+    { name = "by-framework" },
+    { name = "deepagents" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "langchain" },
+    { name = "langchain-core" },
+    { name = "langchain-mcp-adapters" },
+    { name = "langchain-openai" },
+    { name = "langgraph" },
+    { name = "langgraph-checkpoint-postgres" },
+    { name = "llama-index-embeddings-openai" },
+    { name = "matplotlib" },
+    { name = "mcp" },
+    { name = "networkx" },
+    { name = "numpy" },
+    { name = "opengauss-sqlalchemy" },
+    { name = "pandas" },
+    { name = "psycopg", extra = ["binary", "pool"] },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "pypinyin" },
+    { name = "python-multipart" },
+    { name = "pyyaml" },
+    { name = "rapidfuzz" },
+    { name = "rdflib" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "sqlglot" },
+    { name = "sqlparse" },
+    { name = "strawberry-graphql", extra = ["fastapi"] },
+    { name = "uvicorn" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "datacloud-analysis" },
+    { name = "langgraph-cli", extra = ["inmem"] },
+    { name = "mypy" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiochclient", extras = ["aiohttp"], specifier = ">=2.0" },
+    { name = "aiomysql", specifier = ">=0.2" },
+    { name = "aiosqlite", specifier = ">=0.19" },
+    { name = "asyncpg", specifier = ">=0.29" },
+    { name = "boto3", specifier = ">=1.34" },
+    { name = "by-framework", specifier = ">=0.1.2" },
+    { name = "deepagents", specifier = ">=0.4.7" },
+    { name = "fastapi", specifier = ">=0.115.0" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "langchain", specifier = ">=0.3.0" },
+    { name = "langchain-core", specifier = ">=0.3.0" },
+    { name = "langchain-mcp-adapters", specifier = ">=0.2.2" },
+    { name = "langchain-openai", specifier = ">=1.1.11" },
+    { name = "langgraph", specifier = ">=1.0.10" },
+    { name = "langgraph-checkpoint-postgres", specifier = ">=2.0.0" },
+    { name = "llama-index-embeddings-openai", specifier = ">=0.3.0" },
+    { name = "matplotlib", specifier = ">=3.7" },
+    { name = "mcp", specifier = ">=1.18.0" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11" },
+    { name = "networkx", specifier = ">=3.0" },
+    { name = "numpy", specifier = ">=1.26" },
+    { name = "opengauss-sqlalchemy", specifier = ">=2.4.0" },
+    { name = "pandas", specifier = ">=2.0" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.8" },
+    { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.1" },
+    { name = "pydantic", specifier = ">=2.0" },
+    { name = "pydantic-settings", specifier = ">=2.0" },
+    { name = "pypinyin", specifier = ">=0.50" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
+    { name = "python-multipart", specifier = ">=0.0.12" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "rapidfuzz", specifier = ">=3.14.3" },
+    { name = "rdflib", specifier = ">=7.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+    { name = "sqlglot" },
+    { name = "sqlparse", specifier = ">=0.5" },
+    { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.260" },
+    { name = "uvicorn", specifier = ">=0.32.0" },
+]
+provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "datacloud-analysis", editable = "packages/datacloud-analysis" },
+    { name = "langgraph-cli", extras = ["inmem"], specifier = ">=0.2.0" },
+    { name = "mypy", specifier = ">=1.11" },
+    { name = "pre-commit", specifier = ">=3.8" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23" },
+    { name = "pytest-cov", specifier = ">=5.0" },
+    { name = "ruff", specifier = ">=0.6" },
 ]
 
 [[package]]
@@ -4424,68 +4546,6 @@ wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/c2/b6/b9afed2afadddaf5ebb2afa801abf4b0868f42f8539bfe4b071b5266c9fe/websockets-16.0-cp314-cp314t-win32.whl", hash = "sha256:5a4b4cc550cb665dd8a47f868c8d04c8230f857363ad3c9caf7a0c3bf8c61ca6" },
     { url = "https://mirrors.aliyun.com/pypi/packages/9f/3e/28135a24e384493fa804216b79a6a6759a38cc4ff59118787b9fb693df93/websockets-16.0-cp314-cp314t-win_amd64.whl", hash = "sha256:b14dc141ed6d2dde437cddb216004bcac6a1df0935d79656387bd41632ba0bbd" },
     { url = "https://mirrors.aliyun.com/pypi/packages/6f/28/258ebab549c2bf3e64d2b0217b973467394a9cea8c42f70418ca2c5d0d2e/websockets-16.0-py3-none-any.whl", hash = "sha256:1637db62fad1dc833276dded54215f2c7fa46912301a24bd94d45d46a011ceec" },
-]
-
-[[package]]
-name = "whale-datacloud"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "datacloud-data", extra = ["service", "sql"] },
-    { name = "deepagents" },
-    { name = "langchain-openai" },
-    { name = "psycopg2-binary" },
-    { name = "sqlalchemy" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "mypy" },
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "datacloud-analysis" },
-    { name = "langgraph-cli", extra = ["inmem"] },
-    { name = "mypy" },
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "datacloud-data", extras = ["sql", "service"], editable = "packages/datacloud-data" },
-    { name = "deepagents", specifier = ">=0.4.7" },
-    { name = "langchain-openai", specifier = ">=1.1.11" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.8" },
-    { name = "psycopg2-binary", specifier = ">=2.9.11" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
-    { name = "sqlalchemy", specifier = ">=2.0.48" },
-]
-provides-extras = ["dev"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "datacloud-analysis", editable = "packages/datacloud-analysis" },
-    { name = "langgraph-cli", extras = ["inmem"], specifier = ">=0.2.0" },
-    { name = "mypy", specifier = ">=1.11" },
-    { name = "pre-commit", specifier = ">=3.8" },
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-asyncio", specifier = ">=0.23" },
-    { name = "pytest-cov", specifier = ">=5.0" },
-    { name = "ruff", specifier = ">=0.6" },
 ]
 
 [[package]]
