@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/relation/ontology#">
+
+    <owl:Class rdf:about="#TermRelation"><rdfs:label>术语关系</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#rel_term_item_type_上游">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">术语类型</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">item_type</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">术语</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">上游</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">item_type包含上游</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_item_type_下游">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">术语类型</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">item_type</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">术语</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">下游</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">item_type包含下游</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_item_type_中游">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">术语类型</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">item_type</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">术语</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">中游</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">item_type包含中游</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#source_libeary"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#source_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#source_code"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_libeary"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_code"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#relation_name"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#relation_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#joinkeys"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#ext_field"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#version"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+</rdf:RDF>

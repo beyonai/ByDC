@@ -10,12 +10,12 @@
 
     <owl:NamedIndividual rdf:about="#dbsource_yizhuang_brain">
         <rdf:type rdf:resource="#DatabaseDefinition"/>
-                <dbCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</dbCode>
-                <dbType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">mysql</dbType>
-                <dbParams rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"jdbc_url": "jdbc:mysql://&lt;host&gt;:3306/&lt;db&gt;?useUnicode=true&amp;characterEncoding=UTF-8&amp;serverTimezone=Asia/Shanghai", "user": "&lt;user&gt;", "password": "&lt;password&gt;", "pool_min": 1, "pool_max": 5}</dbParams>
+        <dbCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</dbCode>
+        <dbType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">mysql</dbType>
+        <dbParams rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;jdbc_url&quot;: &quot;jdbc:mysql://10.10.168.204:3306/yizhuang_brain?useUnicode=true&amp;characterEncoding=UTF-8&amp;zeroDateTimeBehavior=convertToNull&amp;allowMultiQueries=true&amp;useSSL=false&amp;autoReconnect=true&amp;failOverReadOnly=false&amp;serverTimezone=Asia/Shanghai&quot;, &quot;user&quot;: &quot;root&quot;, &quot;password&quot;: &quot;admin123&quot;, &quot;pool_min&quot;: 5, &quot;pool_max&quot;: 20}</dbParams>
     </owl:NamedIndividual>
 
-    <owl:DatatypeProperty rdf:about="#dbCode"><rdfs:domain rdf:resource="#DatabaseDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#dbType"><rdfs:domain rdf:resource="#DatabaseDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#dbParams"><rdfs:domain rdf:resource="#DatabaseDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#dbCode"/>
+    <owl:DatatypeProperty rdf:about="#dbType"/>
+    <owl:DatatypeProperty rdf:about="#dbParams"/>
 </rdf:RDF>

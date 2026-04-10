@@ -1,5 +1,5 @@
 [project]
-name = "whale-datacloud"
+name = "by-datacloud"
 version = "0.1.0"
 description = "Whale DataCloud - A multi-service data platform"
 readme = "README.md"
@@ -18,13 +18,43 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 
-# 根项目依赖（开发工具等）
+# 根项目依赖（单发行包聚合第三方依赖）
 dependencies = [
+    "aiochclient[aiohttp]>=2.0",
+    "aiomysql>=0.2",
+    "aiosqlite>=0.19",
+    "asyncpg>=0.29",
+    "boto3>=1.34",
+    "by-framework>=0.1.2",
     "deepagents>=0.4.7",
+    "fastapi>=0.115.0",
+    "httpx>=0.27",
+    "langchain>=0.3.0",
+    "langchain-core>=0.3.0",
+    "langchain-mcp-adapters>=0.2.2",
     "langchain-openai>=1.1.11",
-    "psycopg2-binary>=2.9.11",
-    "sqlalchemy>=2.0.48",
-    "datacloud-data[sql,service]",
+    "langgraph>=1.0.10",
+    "langgraph-checkpoint-postgres>=2.0.0",
+    "llama-index-embeddings-openai>=0.3.0",
+    "matplotlib>=3.7",
+    "mcp>=1.18.0",
+    "networkx>=3.0",
+    "numpy>=1.26",
+    "opengauss-sqlalchemy>=2.4.0",
+    "pandas>=2.0",
+    "psycopg[binary,pool]>=3.1",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "pypinyin>=0.50",
+    "pyyaml>=6.0.3",
+    "rapidfuzz>=3.14.3",
+    "rdflib>=7.0",
+    "sqlalchemy[asyncio]>=2.0",
+    "sqlglot",
+    "sqlparse>=0.5",
+    "strawberry-graphql[fastapi]>=0.260",
+    "python-multipart>=0.0.12",
+    "uvicorn>=0.32.0",
 ]
 
 [dependency-groups]
@@ -58,7 +88,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/whale_datacloud"]
+packages = ["src/by_datacloud"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"packages/datacloud-analysis/src/datacloud_analysis" = "datacloud_analysis"
+"packages/datacloud-data/src/datacloud_data_sdk" = "datacloud_data_sdk"
+"packages/datacloud-data/src/datacloud_data_service" = "datacloud_data_service"
+"packages/datacloud-knowledge/src/datacloud_knowledge" = "datacloud_knowledge"
 
 # ============================================
 # Workspace 配置 - uv 多子项目管理

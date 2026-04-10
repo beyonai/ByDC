@@ -13,7 +13,7 @@
         <rdf:type rdf:resource="#EntityDefinition"/>
         <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</entity_code>
         <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表</entity_name>
-        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析宽表，整合企业经营、税收、利润、网格活力、产业环节、企业等级、风险等级等信息，主键为 `enterprise_id`。</entity_desc>
+        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析宽表，整合企业经营、税收、利润、网格活力、产业环节、企业等级、风险等级等信息，主键为 enterprise_id。</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
         <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DB</entity_source>
         <fields rdf:resource="#enterprise_id_field"/>
@@ -44,10 +44,13 @@
         <fields rdf:resource="#etl_create_time_field"/>
         <fields rdf:resource="#phy_grid_id_field"/>
         <fields rdf:resource="#phy_grid_name_field"/>
-        <fields rdf:resource="#energy_efficiency_index_field"/>
-        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["query_ads_enterprise_analysis"]</action_refs>
-        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["rel_ads_enterprise_analysis_to_ads_manage_grid_analysis", "rel_ads_enterprise_analysis_to_ads_grid_analysis"]</relations>
+        <fields rdf:resource="#data_source_field"/>
+        <fields rdf:resource="#energy_efficiency_Index_field"/>
+        <fields rdf:resource="#revenur_rule_field"/>
+        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;query_ads_enterprise_analysis&quot;]</action_refs>
+        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;rel_ads_enterprise_analysis_to_ads_manage_grid_analysis&quot;, &quot;rel_ads_enterprise_analysis_to_ads_grid_analysis&quot;, &quot;rel_ads_enterprise_analysis_to_ads_chain_analysis&quot;]</relations>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#enterprise_id_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_id</property_code>
@@ -61,13 +64,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">主键</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "primary_key"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#enterprise_name_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_name</property_code>
@@ -81,13 +85,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">冗余名称字段</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#enterprise_name</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#stat_date_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">stat_date</property_code>
@@ -101,13 +106,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">日期字符串</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "period"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#industry_name_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</property_code>
@@ -121,13 +127,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">行业名称</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#industry_name</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#business_status_name_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">business_status_name</property_code>
@@ -141,13 +148,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">如营业中</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#business_status_name</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#lng_lat_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">lng_lat</property_code>
@@ -161,13 +169,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">经纬度字符串</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "description"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#height_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">height</property_code>
@@ -177,17 +186,18 @@
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
         <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">height</source_column>
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
-        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "raw_number"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#address_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">address</property_code>
@@ -201,13 +211,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">自由文本地址</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "description"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#address</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#total_revenue_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_revenue</property_code>
@@ -217,17 +228,18 @@
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
         <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_revenue</source_column>
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
-        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
-        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string">万元</measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "basic_metric"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#total_tax_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_tax</property_code>
@@ -237,17 +249,18 @@
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
         <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_tax</source_column>
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
-        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
-        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string">万元</measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "basic_metric"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#total_profit_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_profit</property_code>
@@ -257,17 +270,18 @@
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
         <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_profit</source_column>
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
-        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
-        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string">万元</measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "basic_metric"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#tax_rate_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">tax_rate</property_code>
@@ -280,14 +294,15 @@
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
-        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">当前建表语句为字符串</ext_property>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">COMPUTED</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "derived_metric"}, "formula": "CASE WHEN total_revenue > 0 THEN total_tax / total_revenue * 100 ELSE NULL END"}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#avg_foot_traffic_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_foot_traffic</property_code>
@@ -298,16 +313,17 @@
         <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_foot_traffic</source_column>
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
-        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string">人次</measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "basic_metric"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#foot_active_level_name_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">foot_active_level_name</property_code>
@@ -321,13 +337,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#foot_active_level_name</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#avg_vehicle_flow_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_vehicle_flow</property_code>
@@ -338,16 +355,17 @@
         <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_vehicle_flow</source_column>
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
-        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string">辆次</measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "basic_metric"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#vehicle_active_level_name_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">vehicle_active_level_name</property_code>
@@ -361,13 +379,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#vehicle_active_level_name</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#avg_light_intensity_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_light_intensity</property_code>
@@ -377,17 +396,18 @@
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
         <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_light_intensity</source_column>
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
-        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">#,##0.00</data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "basic_metric"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#light_active_level_name_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">light_active_level_name</property_code>
@@ -401,13 +421,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#light_active_level_name</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#chain_code_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_code</property_code>
@@ -421,13 +442,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "id"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#chain_name_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</property_code>
@@ -441,13 +463,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#chain_name</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#manage_grid_id_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_id</property_code>
@@ -461,13 +484,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "id"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#manage_grid_name_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</property_code>
@@ -481,13 +505,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#manage_grid_name</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#enterprise_level_name_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_level_name</property_code>
@@ -501,13 +526,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#enterprise_level_name</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#risk_level_name_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">risk_level_name</property_code>
@@ -521,13 +547,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#risk_level_name</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#update_time_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_time</property_code>
@@ -537,17 +564,18 @@
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
         <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_time</source_column>
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
-        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yyyy-MM-dd HH:mm:ss</data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#etl_create_time_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">etl_create_time</property_code>
@@ -557,17 +585,18 @@
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
         <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">etl_create_time</source_column>
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
-        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yyyy-MM-dd HH:mm:ss</data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#phy_grid_id_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</property_code>
@@ -581,13 +610,14 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "id"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#phy_grid_name_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</property_code>
@@ -601,57 +631,100 @@
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#phy_grid_name</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
     </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#energy_efficiency_index_field">
+
+    <owl:NamedIndividual rdf:about="#data_source_field">
         <rdf:type rdf:resource="#EntityField"/>
-        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">energy_efficiency_index</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业经济效益等级（高、中、低）</property_name>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data_source</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">数据来源</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
         <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
-        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">energy_efficiency_index</source_column>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data_source</source_column>
         <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
         <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
         <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
         <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
         <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">-</ext_property>
-        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#energy_efficiency_index</term_type_code_path>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+        <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#energy_efficiency_Index_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">energy_efficiency_Index</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业经济效益等级（高、中、低）</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">energy_efficiency_Index</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002#energy_efficiency_Index</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_002</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">name</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
     </owl:NamedIndividual>
 
-    <owl:DatatypeProperty rdf:about="#entity_code"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#entity_name"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#entity_desc"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#entity_source"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#version"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:ObjectProperty rdf:about="#fields"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="#EntityField"/></owl:ObjectProperty>
-    <owl:DatatypeProperty rdf:about="#action_refs"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#relations"><rdfs:domain rdf:resource="#EntityDefinition"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#property_code"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#property_name"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#data_type"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#is_required"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#boolean"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#default_value"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#source_column"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#synonyms"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#data_format"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#measurement_unit"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#property_category"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#property_group"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#ext_property"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#term_type_code_path"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#library_code"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#rel_action"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#rel_term_codeorname"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#term_data_type"><rdfs:domain rdf:resource="#EntityField"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:NamedIndividual rdf:about="#revenur_rule_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">revenur_rule</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">营收规则</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</is_required>
+        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></default_value>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">revenur_rule</source_column>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></data_format>
+        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></measurement_unit>
+        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></property_category>
+        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STORAGE</property_group>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
+        <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#entity_code"/>
+    <owl:DatatypeProperty rdf:about="#entity_name"/>
+    <owl:DatatypeProperty rdf:about="#entity_desc"/>
+    <owl:DatatypeProperty rdf:about="#version"/>
+    <owl:DatatypeProperty rdf:about="#entity_source"/>
+    <owl:DatatypeProperty rdf:about="#fields"/>
+    <owl:DatatypeProperty rdf:about="#action_refs"/>
+    <owl:DatatypeProperty rdf:about="#relations"/>
+    <owl:DatatypeProperty rdf:about="#property_code"/>
+    <owl:DatatypeProperty rdf:about="#property_name"/>
+    <owl:DatatypeProperty rdf:about="#data_type"/>
+    <owl:DatatypeProperty rdf:about="#is_required"/>
+    <owl:DatatypeProperty rdf:about="#default_value"/>
+    <owl:DatatypeProperty rdf:about="#source_column"/>
+    <owl:DatatypeProperty rdf:about="#synonyms"/>
+    <owl:DatatypeProperty rdf:about="#data_format"/>
+    <owl:DatatypeProperty rdf:about="#measurement_unit"/>
+    <owl:DatatypeProperty rdf:about="#property_category"/>
+    <owl:DatatypeProperty rdf:about="#property_group"/>
+    <owl:DatatypeProperty rdf:about="#ext_property"/>
+    <owl:DatatypeProperty rdf:about="#term_type_code_path"/>
+    <owl:DatatypeProperty rdf:about="#library_code"/>
+    <owl:DatatypeProperty rdf:about="#rel_action"/>
+    <owl:DatatypeProperty rdf:about="#rel_term_codeorname"/>
+    <owl:DatatypeProperty rdf:about="#term_data_type"/>
 </rdf:RDF>

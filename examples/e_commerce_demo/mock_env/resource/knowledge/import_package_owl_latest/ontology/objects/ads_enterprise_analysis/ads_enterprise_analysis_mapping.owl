@@ -13,7 +13,7 @@
         <rdf:type rdf:resource="#EntityMapping"/>
         <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</entity_code>
         <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析表</entity_name>
-        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析宽表，整合企业经营、税收、利润、网格活力、产业环节、企业等级、风险等级等信息，主键为 `enterprise_id`。</entity_desc>
+        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业综合分析宽表，整合企业经营、税收、利润、网格活力、产业环节、企业等级、风险等级等信息，主键为 enterprise_id。</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
         <mapping rdf:resource="#enterprise_id_mapping"/>
         <mapping rdf:resource="#enterprise_name_mapping"/>
@@ -43,8 +43,11 @@
         <mapping rdf:resource="#etl_create_time_mapping"/>
         <mapping rdf:resource="#phy_grid_id_mapping"/>
         <mapping rdf:resource="#phy_grid_name_mapping"/>
-        <mapping rdf:resource="#energy_efficiency_index_mapping"/>
+        <mapping rdf:resource="#data_source_mapping"/>
+        <mapping rdf:resource="#energy_efficiency_Index_mapping"/>
+        <mapping rdf:resource="#revenur_rule_mapping"/>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#enterprise_id_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_id</property_code>
@@ -52,7 +55,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_id</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "primary_key"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#enterprise_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_name</property_code>
@@ -60,7 +65,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#stat_date_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">stat_date</property_code>
@@ -68,7 +75,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">stat_date</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "period"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#industry_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</property_code>
@@ -76,7 +85,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#business_status_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">business_status_name</property_code>
@@ -84,7 +95,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">business_status_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#lng_lat_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">lng_lat</property_code>
@@ -92,7 +105,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">lng_lat</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "description"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#height_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">height</property_code>
@@ -100,7 +115,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">height</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "raw_number"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#address_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">address</property_code>
@@ -108,7 +125,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">address</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "description"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#total_revenue_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_revenue</property_code>
@@ -116,7 +135,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_revenue</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "basic_metric"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#total_tax_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_tax</property_code>
@@ -124,7 +145,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_tax</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "basic_metric"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#total_profit_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_profit</property_code>
@@ -132,7 +155,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_profit</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "basic_metric"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#tax_rate_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">tax_rate</property_code>
@@ -140,7 +165,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">tax_rate</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "derived_metric"}, "formula": "CASE WHEN total_revenue > 0 THEN total_tax / total_revenue * 100 ELSE NULL END"}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#avg_foot_traffic_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_foot_traffic</property_code>
@@ -148,7 +175,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_foot_traffic</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "basic_metric"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#foot_active_level_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">foot_active_level_name</property_code>
@@ -156,7 +185,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">foot_active_level_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#avg_vehicle_flow_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_vehicle_flow</property_code>
@@ -164,7 +195,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_vehicle_flow</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "basic_metric"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#vehicle_active_level_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">vehicle_active_level_name</property_code>
@@ -172,7 +205,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">vehicle_active_level_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#avg_light_intensity_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_light_intensity</property_code>
@@ -180,7 +215,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">avg_light_intensity</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "MEASURE", "rule_type": "basic_metric"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#light_active_level_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">light_active_level_name</property_code>
@@ -188,7 +225,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">light_active_level_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#chain_code_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_code</property_code>
@@ -196,7 +235,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_code</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "id"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#chain_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</property_code>
@@ -204,7 +245,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chain_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#manage_grid_id_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_id</property_code>
@@ -212,7 +255,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_id</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "id"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#manage_grid_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</property_code>
@@ -220,7 +265,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">manage_grid_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#enterprise_level_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_level_name</property_code>
@@ -228,7 +275,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_level_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#risk_level_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">risk_level_name</property_code>
@@ -236,7 +285,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">risk_level_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#update_time_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_time</property_code>
@@ -244,7 +295,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_time</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#etl_create_time_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">etl_create_time</property_code>
@@ -252,7 +305,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">etl_create_time</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#phy_grid_id_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</property_code>
@@ -260,7 +315,9 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_id</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "id"}}</ext_property>
     </owl:NamedIndividual>
+
     <owl:NamedIndividual rdf:about="#phy_grid_name_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</property_code>
@@ -268,24 +325,48 @@
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phy_grid_name</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
-    </owl:NamedIndividual>
-    <owl:NamedIndividual rdf:about="#energy_efficiency_index_mapping">
-        <rdf:type rdf:resource="#Mapping"/>
-        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">energy_efficiency_index</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业经济效益等级（高、中、低）</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
-        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">energy_efficiency_index</source_column_code>
-        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
     </owl:NamedIndividual>
 
-    <owl:DatatypeProperty rdf:about="#entity_code"><rdfs:domain rdf:resource="#EntityMapping"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#entity_name"><rdfs:domain rdf:resource="#EntityMapping"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#entity_desc"><rdfs:domain rdf:resource="#EntityMapping"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#version"><rdfs:domain rdf:resource="#EntityMapping"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:ObjectProperty rdf:about="#mapping"><rdfs:domain rdf:resource="#EntityMapping"/><rdfs:range rdf:resource="#Mapping"/></owl:ObjectProperty>
-    <owl:DatatypeProperty rdf:about="#property_code"><rdfs:domain rdf:resource="#Mapping"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#property_name"><rdfs:domain rdf:resource="#Mapping"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#source_table_code"><rdfs:domain rdf:resource="#Mapping"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#source_column_code"><rdfs:domain rdf:resource="#Mapping"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
-    <owl:DatatypeProperty rdf:about="#source_datasource_code"><rdfs:domain rdf:resource="#Mapping"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:NamedIndividual rdf:about="#data_source_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data_source</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">数据来源</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">data_source</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#energy_efficiency_Index_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">energy_efficiency_Index</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业经济效益等级（高、中、低）</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">energy_efficiency_Index</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#revenur_rule_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">revenur_rule</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">营收规则</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">revenur_rule</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#entity_code"/>
+    <owl:DatatypeProperty rdf:about="#entity_name"/>
+    <owl:DatatypeProperty rdf:about="#entity_desc"/>
+    <owl:DatatypeProperty rdf:about="#version"/>
+    <owl:DatatypeProperty rdf:about="#mapping"/>
+    <owl:DatatypeProperty rdf:about="#property_code"/>
+    <owl:DatatypeProperty rdf:about="#property_name"/>
+    <owl:DatatypeProperty rdf:about="#source_table_code"/>
+    <owl:DatatypeProperty rdf:about="#source_column_code"/>
+    <owl:DatatypeProperty rdf:about="#source_datasource_code"/>
+    <owl:DatatypeProperty rdf:about="#ext_property"/>
 </rdf:RDF>
