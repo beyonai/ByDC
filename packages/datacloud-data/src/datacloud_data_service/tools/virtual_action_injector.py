@@ -73,10 +73,10 @@ def _ensure_analytic_meta(fields: list) -> None:
         ft = (f.field_type or "").upper()
         if ft in ("NUMBER", "INTEGER", "BIGINT", "DECIMAL", "DOUBLE", "FLOAT"):
             f.analytic_role = "measure"
-            f.analytic_kind = "number"
+            f.analytic_kind = "raw_number"
         elif ft in ("DATE", "DATETIME", "TIMESTAMP"):
             f.analytic_role = "dimension"
-            f.analytic_kind = "time"
+            f.analytic_kind = "datetime"
         elif f.is_primary_key:
             f.analytic_role = "dimension"
             f.analytic_kind = "id"

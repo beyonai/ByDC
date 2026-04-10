@@ -5,16 +5,6 @@
     // e_commerce_demo — DataCloud Gateway Worker
     // 依赖：先在仓库根目录执行 `uv sync --group dev`
     // ---------------------------------------------------------------
-    {
-      "name": "DataCloud Worker (e_commerce_demo)",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/examples/e_commerce_demo/backend/datacloud_service/main.py",
-      "cwd": "${workspaceFolder}",
-      "envFile": "${workspaceFolder}/examples/e_commerce_demo/backend/.env",
-      "env": {},
-      "justMyCode": false
-    },
     // ---------------------------------------------------------------
     // byclaw-data — Gateway Worker（跨目录启动）
     // 依赖：先在 byclaw-data 根目录执行 `uv sync`
@@ -31,7 +21,7 @@
       "justMyCode": false
     },
     {
-      "name": "启动 Data Service 亦庄",
+      "name": "Data-mcp 服务",
       "type": "debugpy",
       "request": "launch",
       "module": "uvicorn",
