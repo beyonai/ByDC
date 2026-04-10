@@ -33,7 +33,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Sub-groups (composable, testable in isolation)
 # ---------------------------------------------------------------------------
 
-
 class PGSettings(BaseSettings):
     """PostgreSQL connection used by LangGraph AsyncPostgresSaver & PostgresStore."""
 
@@ -143,22 +142,6 @@ class EmbeddingSettings(BaseSettings):
     model: str = Field(..., description="Embedding model identifier.")
 
 
-class DBSettings(BaseSettings):
-    """Database connection settings for OqlRouter."""
-
-    model_config = SettingsConfigDict(env_prefix="DB_", extra="ignore")
-
-    host: str = Field(default="", description="Database host")
-    port: int = Field(default=5432, description="Database port")
-    user: str = Field(default="", description="Database user")
-    password: str = Field(default="", description="Database password")
-    name: str = Field(default="", description="Database name")
-    db_schema: str = Field(
-        default="public", description="Database schema", validation_alias="DB_SCHEMA"
-    )
-    type: str = Field(default="postgresql", description="Database type (postgresql/opengauss)")
-
-
 class KnowledgeSettings(BaseSettings):
     """知识图谱查询配置。未配置时 search_knowledge 返回空。"""
 
@@ -198,7 +181,6 @@ class KnowledgeSettings(BaseSettings):
 # New Settings classes (P2)
 # ---------------------------------------------------------------------------
 
-
 class AgentSettings(BaseSettings):
     """Agent-level settings."""
 
@@ -226,9 +208,7 @@ class AIFactorySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DATACLOUD_AI_FACTORY_", extra="ignore")
 
     token: str = Field(default="", description="AI Factory API token")
-    agent_ids: list[str] = Field(
-        default_factory=list, description="AI Factory agent IDs (JSON array)"
-    )
+    agent_ids: list[str] = Field(default_factory=list, description="AI Factory agent IDs (JSON array)")
 
     @field_validator("agent_ids", mode="before")
     @classmethod
@@ -256,33 +236,9 @@ class ExecutionSettings(BaseSettings):
     react_max_rounds: int = Field(default=10, description="Maximum ReAct loop rounds")
 
 
-class OntologySettings(BaseSettings):
-    """Ontology loading mode settings."""
-
-    model_config = SettingsConfigDict(env_prefix="ONTOLOGY_", extra="ignore")
-
-    load_mode: str = Field(
-        default="unified_interface",
-        description="Ontology loading mode: mcp | dynamic_tool | unified_interface",
-    )
-    mcp_endpoint: str = Field(
-        default="",
-        description="MCP service endpoint (for mcp mode), e.g. http://localhost:8080/api/v1/mcp/",
-    )
-    scene_path: str = Field(
-        default="",
-        description="OWL scene directory path (for dynamic_tool mode)",
-    )
-    auto_register: bool = Field(
-        default=True,
-        description="Auto-register tools on startup (for dynamic_tool mode)",
-    )
-
-
 # ---------------------------------------------------------------------------
 # Aggregate Settings — single object for the whole SDK
 # ---------------------------------------------------------------------------
-
 
 class Settings(BaseSettings):
     """Aggregate all environment variables for the SDK.
@@ -305,7 +261,6 @@ class Settings(BaseSettings):
     pg: PGSettings = Field(default_factory=PGSettings)
     workspace: WorkspaceSettings = Field(default_factory=WorkspaceSettings)
     data_service: DataServiceSettings = Field(default_factory=DataServiceSettings)
-    db: DBSettings = Field(default_factory=DBSettings)
 
     # LLM roles
     llm_quick: LLMGroupSettings | None = Field(default=None)
@@ -321,7 +276,6 @@ class Settings(BaseSettings):
     gateway: GatewaySettings | None = Field(default=None)
     ai_factory: AIFactorySettings | None = Field(default=None)
     execution: ExecutionSettings | None = Field(default=None)
-    ontology: OntologySettings | None = Field(default=None)
 
     @model_validator(mode="after")
     def _load_llm_roles(self) -> "Settings":
@@ -365,11 +319,6 @@ class Settings(BaseSettings):
 
         try:
             object.__setattr__(self, "execution", ExecutionSettings())
-        except Exception:  # noqa: BLE001
-            pass
-
-        try:
-            object.__setattr__(self, "ontology", OntologySettings())
         except Exception:  # noqa: BLE001
             pass
 

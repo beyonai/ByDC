@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
@@ -25,7 +24,6 @@ class _FakeContext:
         self._configs = configs
         self.emitted: list[dict[str, Any]] = []
         self.flush_count = 0
-        self._sub_step_counter = 0
 
     def list_agent_configs(self) -> list[_AgentConfig]:
         return self._configs
@@ -47,14 +45,6 @@ class _FakeContext:
 
     async def ask_user(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
         return {"status": "waiting"}
-
-    @asynccontextmanager
-    async def sub_step(self, title: str, **_kwargs: Any):
-        """Fake sub_step context manager returning (message_id, parent_id)."""
-        self._sub_step_counter += 1
-        m_id = f"msg-{self._sub_step_counter}"
-        p_id = f"parent-{self._sub_step_counter}"
-        yield m_id, p_id
 
 
 @pytest.mark.asyncio
@@ -162,9 +152,7 @@ async def test_ask_chitchat_short_circuits_without_graph_execution(
     monkeypatch.setattr(worker, "_stream_graph", _never_called)
 
     command = AskAgentCommand(
-        header=MessageHeader(
-            message_id="m-ask-1", session_id=context.session_id, trace_id="trace-ask-1"
-        ),
+        header=MessageHeader(message_id="m-ask-1", session_id=context.session_id, trace_id="trace-ask-1"),
         content=content,
         extra_payload={},
     )
@@ -197,9 +185,7 @@ async def test_ext_command_keeps_priority_over_chitchat_short_circuit(
     monkeypatch.setattr(worker, "_stream_graph", _never_called)
 
     command = AskAgentCommand(
-        header=MessageHeader(
-            message_id="m-ask-2", session_id=context.session_id, trace_id="trace-ask-2"
-        ),
+        header=MessageHeader(message_id="m-ask-2", session_id=context.session_id, trace_id="trace-ask-2"),
         content="hello",
         extra_payload={"ext_params": {"command": "noop"}},
     )

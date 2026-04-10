@@ -62,7 +62,24 @@
       "Bash(PYTHONPATH=/d/data/code/baiying/whale_datacloud/packages/datacloud-analysis/src python:*)",
       "Bash(PYTHONPATH=src python -m pytest tests/test_agent/test_stage2_core_logic.py::TestSchemaFormatterLogic -v)",
       "Bash(PYTHONPATH=src python -m pytest tests/test_agent/test_stage2_core_logic.py -v)",
-      "Bash(PYTHONPATH=src python -m pytest tests/test_agent/test_prompt_processing.py tests/test_agent/test_stage2_core_logic.py tests/test_agent/test_stage3_core_logic.py tests/test_agent/test_stage4_core_logic.py -v --tb=line)"
+      "Bash(PYTHONPATH=src python -m pytest tests/test_agent/test_prompt_processing.py tests/test_agent/test_stage2_core_logic.py tests/test_agent/test_stage3_core_logic.py tests/test_agent/test_stage4_core_logic.py -v --tb=line)",
+      "Bash(xargs cat:*)",
+      "Bash(find /d/data/code/baiying/by-datacloud/packages/datacloud-data/src -name \"*.py\" -type f -exec grep -l \"query_\" {} \\\\;)",
+      "Bash(cat /d/data/code/baiying/byclaw-all/byclaw-data/.venv/Lib/site-packages/datacloud_knowledge-*.dist-info/direct_url.json)",
+      "Bash(cat /d/data/code/baiying/byclaw-all/byclaw-data/.venv/Lib/site-packages/datacloud_data-*.dist-info/direct_url.json)",
+      "Bash(cat /d/data/code/baiying/byclaw-all/byclaw-data/.venv/Lib/site-packages/datacloud_memory-*.dist-info/direct_url.json)",
+      "Bash(ls -la /d/data/code/baiying/byclaw-all/byclaw-data/.venv/Lib/site-packages/datacloud_analysis*)",
+      "Bash(find:*)",
+      "Bash(dir \"D:\\\\data\\\\code\\\\baiying\\\\byclaw-all\\\\byclaw-data\\\\.venv\\\\Lib\\\\site-packages\\\\datacloud_analysis\")",
+      "Bash(dir \"D:\\\\data\\\\code\\\\baiying\\\\byclaw-all\\\\byclaw-data\\\\.venv\\\\Lib\\\\site-packages\")",
+      "Bash(findstr /i \"datacloud\")",
+      "Bash(findstr \"datacloud\")",
+      "Bash(cmd:*)",
+      "Bash(.venv\\\\Scripts\\\\pip uninstall:*)",
+      "Bash(D:\\\\data\\\\code\\\\baiying\\\\byclaw-all\\\\byclaw-data\\\\.venv\\\\Scripts\\\\pip.exe uninstall:*)",
+      "Bash(D:/data/code/baiying/byclaw-all/byclaw-data/.venv/Scripts/python.exe:*)",
+      "Bash(where uv:*)",
+      "Bash(uv pip:*)"
     ]
   }
 }

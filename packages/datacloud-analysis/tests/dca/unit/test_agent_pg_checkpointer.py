@@ -14,9 +14,9 @@ def test_create_agent_returns_compiled_graph() -> None:
     graph = create_agent()
     assert graph is not None
     nodes = list(graph.get_graph().nodes.keys())
-    # Deep Agents architecture uses model/tools nodes
-    assert "model" in nodes
-    assert "tools" in nodes
+    assert "intend" in nodes
+    assert "execution" in nodes
+    assert "respond" in nodes
 
 
 def test_get_checkpointer_raises_when_uri_missing(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -96,77 +96,8 @@ async def setup() -> None:
             await init_store(settings.pg.checkpoint_uri)
             logger.info("datacloud-analysis: datacloud-memory store initialized.")
         except ImportError:
-            logger.warning("datacloud-memory not installed or init_store not available – skipping.")
-
-        # 4. Initialize OqlRouter and dependencies for knowledge injection
-        try:
-            from datacloud_data_sdk.oql import OqlRouter  # noqa: PLC0415
-            from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
-            from datacloud_data_sdk.executor.executor import Executor  # noqa: PLC0415
-            from datacloud_data_sdk.sql_executor.sql_executor import SqlExecutor  # noqa: PLC0415
-            from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager  # noqa: PLC0415
-            from datacloud_data_sdk.sql_executor.models import DataSourceConfig  # noqa: PLC0415
-            from datacloud_data_sdk.sql_executor.connector_registry import ConnectorRegistry  # noqa: PLC0415
-            from datacloud_analysis.dependencies import init_dependencies  # noqa: PLC0415
-
-            logger.info("datacloud-analysis: Creating OntologyLoader...")
-            # Create OntologyLoader (registry) - will be populated by knowledge injection middleware
-            # when it loads ontology from OWL files (including datasource definitions)
-            ontology_loader = OntologyLoader()
-            logger.info(
-                "datacloud-analysis: OntologyLoader created (datasources will be loaded from OWL files)."
-            )
-
-            logger.info("datacloud-analysis: Creating DataSourceManager...")
-            # Create DataSourceConfig for SqlExecutor (separate from OntologyLoader's datasources)
-            # Construct JDBC URL from environment settings
-            if settings.db.type.lower() in ("postgresql", "opengauss"):
-                jdbc_url = (
-                    f"jdbc:postgresql://{settings.db.host}:{settings.db.port}/{settings.db.name}"
-                )
-            elif settings.db.type.lower() == "mysql":
-                jdbc_url = f"jdbc:mysql://{settings.db.host}:{settings.db.port}/{settings.db.name}"
-            else:
-                jdbc_url = f"jdbc:{settings.db.type}://{settings.db.host}:{settings.db.port}/{settings.db.name}"
-
-            ds_config = DataSourceConfig(
-                alias="default",
-                db_type=settings.db.type.upper(),
-                jdbc_url=jdbc_url,
-                user=settings.db.user,
-                password=settings.db.password,
-            )
-            # Pass OntologyLoader as fallback_loader so DataSourceManager can access
-            # datasources loaded from OWL files (via _config.datasource_configs)
-            ds_manager = DataSourceManager(
-                configs={"default": ds_config}, fallback_loader=ontology_loader
-            )
-
-            logger.info("datacloud-analysis: Creating SqlExecutor...")
-            # Create SqlExecutor with DataSourceManager
-            sql_executor = SqlExecutor(ds_manager=ds_manager)
-
-            logger.info("datacloud-analysis: Creating Executor...")
-            # Create Executor
-            executor = Executor(sql_executor=sql_executor)
-
-            logger.info("datacloud-analysis: Creating OqlRouter...")
-            # Create OqlRouter with the loader as registry
-            oql_router = OqlRouter(registry=ontology_loader)
-
-            logger.info("datacloud-analysis: Initializing global dependencies...")
-            # Initialize global dependencies
-            init_dependencies(
-                oql_router=oql_router,
-                executor=executor,
-                datasource_registry=ConnectorRegistry,
-            )
-            logger.info("datacloud-analysis: OqlRouter initialized for knowledge injection.")
-        except Exception as exc:
-            logger.error(
-                "datacloud-analysis: Failed to initialize OqlRouter: %s",
-                exc,
-                exc_info=True,
+            logger.warning(
+                "datacloud-memory not installed or init_store not available – skipping."
             )
 
         _initialized = True

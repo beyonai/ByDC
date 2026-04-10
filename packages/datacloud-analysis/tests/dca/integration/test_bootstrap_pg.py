@@ -32,7 +32,9 @@ async def test_setup_creates_tables(initialized_sdk: None) -> None:
     uri = os.environ["DATACLOUD_PG_CHECKPOINT_URI"]
     async with await psycopg.AsyncConnection.connect(uri) as conn:
         async with conn.cursor() as cur:
-            await cur.execute("SELECT tablename FROM pg_tables WHERE tablename = 'checkpoints'")
+            await cur.execute(
+                "SELECT tablename FROM pg_tables WHERE tablename = 'checkpoints'"
+            )
             row = await cur.fetchone()
     assert row is not None, "Table 'checkpoints' should have been created by setup()."
 

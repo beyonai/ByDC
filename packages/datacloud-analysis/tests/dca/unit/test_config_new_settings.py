@@ -1,5 +1,4 @@
 """Tests for new Settings classes added in P2."""
-
 from __future__ import annotations
 
 import os
@@ -45,14 +44,11 @@ class TestGatewaySettings:
     def test_values_from_env(self) -> None:
         from datacloud_analysis.config.env import GatewaySettings
 
-        with patch.dict(
-            os.environ,
-            {
-                "DATACLOUD_GATEWAY_REDIS_HOST": "redis.local",
-                "DATACLOUD_GATEWAY_REDIS_PORT": "6380",
-                "DATACLOUD_GATEWAY_WORKER_ID": "worker-1",
-            },
-        ):
+        with patch.dict(os.environ, {
+            "DATACLOUD_GATEWAY_REDIS_HOST": "redis.local",
+            "DATACLOUD_GATEWAY_REDIS_PORT": "6380",
+            "DATACLOUD_GATEWAY_WORKER_ID": "worker-1",
+        }):
             settings = GatewaySettings()
 
         assert settings.redis_host == "redis.local"
@@ -64,13 +60,10 @@ class TestAIFactorySettings:
     def test_agent_ids_json_array(self) -> None:
         from datacloud_analysis.config.env import AIFactorySettings
 
-        with patch.dict(
-            os.environ,
-            {
-                "DATACLOUD_AI_FACTORY_TOKEN": "tok123",
-                "DATACLOUD_AI_FACTORY_AGENT_IDS": '["agent-1", "agent-2"]',
-            },
-        ):
+        with patch.dict(os.environ, {
+            "DATACLOUD_AI_FACTORY_TOKEN": "tok123",
+            "DATACLOUD_AI_FACTORY_AGENT_IDS": '["agent-1", "agent-2"]',
+        }):
             settings = AIFactorySettings()
 
         assert settings.token == "tok123"
@@ -89,12 +82,9 @@ class TestAIFactorySettings:
         """A single JSON string (not array) should become a single-item list."""
         from datacloud_analysis.config.env import AIFactorySettings
 
-        with patch.dict(
-            os.environ,
-            {
-                "DATACLOUD_AI_FACTORY_AGENT_IDS": '["agent-a"]',
-            },
-        ):
+        with patch.dict(os.environ, {
+            "DATACLOUD_AI_FACTORY_AGENT_IDS": '["agent-a"]',
+        }):
             settings = AIFactorySettings()
 
         assert settings.agent_ids == ["agent-a"]

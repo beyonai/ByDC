@@ -11,7 +11,9 @@ def test_auto_generates_thread_id() -> None:
 
 
 def test_explicit_thread_id_preserved() -> None:
-    meta = SessionMetadata(message_id="m1", session_id="s1", user_id="u1", thread_id="my-thread")
+    meta = SessionMetadata(
+        message_id="m1", session_id="s1", user_id="u1", thread_id="my-thread"
+    )
     assert meta.thread_id == "my-thread"
 
 

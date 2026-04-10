@@ -17,6 +17,4 @@ def test_analysis_knowledge_module_does_not_reference_sqlalchemy_text_or_get_ses
 
     assert "sqlalchemy.text" not in source
     assert " get_session(" not in source
-    assert (
-        "from datacloud_knowledge.knowledge_search.db.connection import get_session" not in source
-    )
+    assert "from datacloud_knowledge.knowledge_search.db.connection import get_session" not in source

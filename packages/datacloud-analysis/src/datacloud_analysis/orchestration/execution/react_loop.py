@@ -1,0 +1,530 @@
+from __future__ import annotations
+
+import json
+import logging
+import os
+import re
+from typing import Any, Literal
+
+from langchain.chat_models import init_chat_model
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.tools import BaseTool, tool
+from langgraph.types import Command, interrupt
+
+from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
+
+logger = logging.getLogger(__name__)
+
+
+async def _emit_stream_token(gateway_context: Any, token: str) -> None:
+    """向 gateway_context 推送单个流式文字 token。"""
+    if not gateway_context or not token:
+        return
+    try:
+        from by_framework import EventType, StreamChunkEvent  # type: ignore
+        from by_framework.core.protocol.content_type import SseMessageType  # type: ignore
+        from datacloud_data_sdk.stream_text import coerce_stream_chunk_text  # type: ignore
+        await gateway_context.emit_chunk(
+            StreamChunkEvent(content=coerce_stream_chunk_text(token)),
+            event_type=EventType.ANSWER_DELTA.value,
+            content_type=SseMessageType.text.value,
+        )
+    except Exception as exc:
+        logger.debug("[react_loop] stream_token emit failed: %s", exc)
+
+
+async def _stream_llm_call(
+    llm_with_tools: Any,
+    messages_window: list,
+    gateway_context: Any = None,
+) -> tuple[Any, bool]:
+    """流式调用 LLM，实时向 gateway_context 推送文字 token。
+
+    返回 (assembled_ai_msg, did_stream_text)：
+    - assembled_ai_msg: 完整的 AIMessage（由所有 chunk 累加而成）
+    - did_stream_text: 是否推送过非空文字内容（供调用方标记 answer_streamed）
+
+    注意事项：
+    - tool_calls（包括多个并行调用）在全部 chunk 收集完后统一读取，不影响推送
+    - 若 astream 返回空或累加失败，自动 fallback 至 ainvoke
+    """
+    full_msg = None
+    did_stream_text = False
+
+    # 用于追踪 finish_react tool call 的流式 answer 参数
+    _fr_idx: int | None = None       # finish_react 对应的 tool_call_chunks index
+    _fr_args_acc: str = ""           # 已累积的 args JSON 字符串
+    _fr_answer_emitted: int = 0      # 已推送的 answer 字符数
+
+    try:
+        async for chunk in llm_with_tools.astream(messages_window):
+            # 累加 chunk
+            if full_msg is None:
+                full_msg = chunk
+            else:
+                try:
+                    full_msg = full_msg + chunk
+                except Exception:
+                    # 部分 provider 的 chunk 不支持 +，保留最后一个 chunk
+                    full_msg = chunk
+
+            if gateway_context is not None:
+                # 实时推送文字 token（通常只在无 tool_calls 的轮次有内容）
+                content = getattr(chunk, "content", None)
+                if isinstance(content, str) and content:
+                    await _emit_stream_token(gateway_context, content)
+                    did_stream_text = True
+                elif isinstance(content, list):
+                    for part in content:
+                        if isinstance(part, dict) and part.get("type") == "text":
+                            t = part.get("text", "")
+                            if t:
+                                await _emit_stream_token(gateway_context, t)
+                                did_stream_text = True
+
+                # 实时推送 finish_react.answer 参数的增量内容
+                for tcc in (getattr(chunk, "tool_call_chunks", None) or []):
+                    # 第一个 chunk 上有 name，后续 chunk name 为 None
+                    if tcc.get("name") == "finish_react":
+                        _fr_idx = tcc.get("index")
+                    if _fr_idx is not None and tcc.get("index") == _fr_idx:
+                        _fr_args_acc += tcc.get("args") or ""
+                        m = re.search(r'"answer"\s*:\s*"((?:[^"\\]|\\.)*)', _fr_args_acc)
+                        if m:
+                            current = m.group(1)
+                            if len(current) > _fr_answer_emitted:
+                                delta = current[_fr_answer_emitted:]
+                                await _emit_stream_token(gateway_context, delta)
+                                did_stream_text = True
+                                _fr_answer_emitted = len(current)
+    except Exception as exc:
+        logger.warning("[react_loop] astream failed (%s), fallback to ainvoke", exc)
+        full_msg = None
+        did_stream_text = False
+
+    if full_msg is None:
+        logger.warning("[react_loop] astream returned nothing, fallback to ainvoke")
+        full_msg = await llm_with_tools.ainvoke(messages_window)
+        did_stream_text = False
+
+    return full_msg, did_stream_text
+
+_DEFAULT_MAX_ROUNDS = 10
+_TOOL_MSG_MAX_LEN = 2000   # ToolMessage 内容最大字符数
+_TRIM_KEEP_ROUNDS = 6      # 滑动窗口：保留最近 N 轮 AI+Tool 消息对
+
+@tool("finish_react")
+async def finish_react(
+    reason: str,
+    answer: str,
+    result_type: Literal["text", "csv_file", "json", "json_file", "query_result"] = "text",
+    csv_file_path: str = "",
+    data: str = "",
+) -> dict[str, Any]:
+    """ReAct 分析完毕时必须调用本工具，禁止直接输出最终答案。
+
+    Args:
+        reason: 结束原因（用于审计）
+        answer: 文字类结论或分析。result_type=text 时为唯一输出；
+                result_type=query_result 时若填写，系统会先推文字分析再推结构化数据。
+        result_type: 'text' | 'csv_file' | 'json' | 'json_file' | 'query_result'
+        csv_file_path: 文件路径（result_type=csv_file/json_file 时必填）
+        data: JSON 字符串（result_type=json 时填写，工具返回的结构化数据）
+
+    注意：
+    - 调用 data_query 类工具后，返回中含 _hint 字段，请使用 result_type=query_result，
+      系统会自动透传完整的 records/pagination/meta/file 结构，无需手动序列化。
+      若需同时返回文字分析，填写 answer 字段即可（先推文字，后推结构化数据）。
+    - execute_code 执行后会将 _result 自动保存到同名 .json 文件（result_file 字段），
+      此时推荐使用 result_type=json_file，csv_file_path 填写 result_file 路径。
+    """
+    parsed_data: Any = None
+    if result_type == "json" and data:
+        try:
+            parsed_data = json.loads(data)
+        except Exception:
+            parsed_data = data
+    return {
+        "__finish__": True,
+        "answer": answer,
+        "result_type": result_type,
+        "csv_file_path": csv_file_path,
+        "data": parsed_data,
+    }
+
+def _summarize_last_output(messages: list) -> str:
+    """从消息历史中提取最后一条有意义的输出作为兜底答案。"""
+    for msg in reversed(messages):
+        if isinstance(msg, ToolMessage):
+            content = str(msg.content or "")
+            if content:
+                return content[:2000]
+        if isinstance(msg, AIMessage):
+            content = str(msg.content or "")
+            if content:
+                return content[:2000]
+    return "任务已执行完成，但未能生成明确结论。"
+
+def _conversation_messages_for_llm(state: Any) -> list[HumanMessage | AIMessage]:
+    """Collect prior Human/AI turns from graph state for multi-turn ReAct.
+
+    Worker 会把业务历史 + 本轮用户消息写入 ``state["messages"]``；若此处仅用
+    ``user_query``（来自最后一条用户话），模型将看不到上一轮助手的回复（例如网格列表），
+    导致「前 3 个网格」等指代无法解析。
+    """
+    out: list[HumanMessage | AIMessage] = []
+    for m in state.get("messages") or []:
+        if isinstance(m, (HumanMessage, AIMessage)):
+            out.append(m)
+    return out
+
+
+def _build_llm(state: Any) -> Any:
+    """从环境变量构建 LLM（优先 reasoning，其次 coding，最后 openai 默认）。"""
+    for env_prefix in ("DATACLOUD_LLM_REASONING", "DATACLOUD_LLM_CODING"):
+        api_base = os.getenv(f"{env_prefix}_API_BASE", "")
+        api_key = os.getenv(f"{env_prefix}_API_KEY", "")
+        model = os.getenv(f"{env_prefix}_MODEL", "")
+        if api_base and api_key and model:
+            return init_chat_model(
+                model=model,
+                model_provider="openai",
+                api_key=api_key,
+                base_url=api_base,
+                temperature=0.0,
+            )
+    # 兜底
+    return init_chat_model(model="gpt-4o", model_provider="openai", temperature=0.0)
+
+def _compress_tool_result(result: Any, tool_name: str) -> str:
+    """将工具返回值压缩为 ToolMessage 内容，避免大数据撑爆上下文。
+
+    策略：
+    - 含 _hint 的 dict（data_query 类）：直接使用 _hint，LLM 已获得足够决策信息
+    - 含 records+meta 的 data block：替换为行数摘要
+    - 其他：JSON 序列化后截断至 _TOOL_MSG_MAX_LEN 字符
+    """
+    if isinstance(result, dict):
+        # 优先使用 _hint（已由 tool_wrapper 注入）
+        hint = result.get("_hint")
+        if hint:
+            return str(hint)
+        # 识别 data_query data block（直接或嵌套在 data 键下）
+        data_block = result.get("data") if isinstance(result.get("data"), dict) else result
+        if isinstance(data_block, dict) and "records" in data_block and "meta" in data_block:
+            records = data_block.get("records") or []
+            meta = data_block.get("meta") or {}
+            meta_keys = list(meta.keys()) if isinstance(meta, dict) else []
+            file_block = data_block.get("file")
+            file_hint = ""
+            if isinstance(file_block, dict) and file_block.get("file_url"):
+                file_hint = f", file_url={file_block['file_url']}"
+            return (
+                f"[{tool_name} \u8fd4\u56de: {len(records)} \u6761 records"
+                f", meta={meta_keys}{file_hint}]"
+                f" \u8bf7\u7acb\u5373\u8c03\u7528 finish_react \u4f7f\u7528 result_type=query_result\u3002"
+            )
+    # 通用：序列化后截断
+    try:
+        text = json.dumps(result, ensure_ascii=False, default=str) if isinstance(result, (dict, list)) else str(result)
+    except Exception:
+        text = repr(result)
+    if len(text) > _TOOL_MSG_MAX_LEN:
+        return text[:_TOOL_MSG_MAX_LEN] + f"... [\u5df2\u622a\u65ad, \u539f\u957f {len(text)} \u5b57\u7b26]"
+    return text
+
+
+def _trim_messages_window(messages: list) -> list:
+    """滑动窗口裁剪：保留 SystemMessage + HumanMessage + 最近 _TRIM_KEEP_ROUNDS 轮。
+
+    只裁剪送给 LLM 的副本，原始 messages 列表不受影响。
+    """
+    head = []
+    tail = []
+    for i, m in enumerate(messages):
+        if isinstance(m, (SystemMessage, HumanMessage)):
+            head.append(m)
+        else:
+            tail = messages[i:]
+            break
+    if not tail:
+        return list(messages)
+    # 每轮 = 1 AIMessage + N ToolMessage，保留最近 _TRIM_KEEP_ROUNDS * 2 条（保守估计）
+    keep = _TRIM_KEEP_ROUNDS * 2
+    if len(tail) > keep:
+        trimmed_count = len(tail) - keep
+        tail = tail[-keep:]
+        logger.debug("[react_loop] trim_messages: dropped %d old messages, kept %d", trimmed_count, len(tail))
+    return head + tail
+
+
+async def run_react_loop(
+    *,
+    state: Any,
+    tools_list: list[BaseTool],
+    system_prompt: str,
+    max_rounds: int | None = None,
+    gateway_context: Any = None,
+) -> dict[str, Any]:
+    """执行 ReAct 主循环，返回 react_final 字典。
+
+    停止信号优先级：
+    L1: LLM 调用 finish_react 工具（最优，携带结构化元数据）
+    L2: LLM 不产生 tool_calls，直接文字回答
+    L3: 超出 max_rounds 轮数
+    """
+    if max_rounds is None:
+        max_rounds = int(os.getenv("DATACLOUD_REACT_MAX_ROUNDS", str(_DEFAULT_MAX_ROUNDS)))
+
+    # tools_map 包含 finish_react
+    tools_map: dict[str, BaseTool] = {t.name: t for t in tools_list}
+    tools_map["finish_react"] = finish_react
+
+    llm = _build_llm(state)
+    llm_with_tools = llm.bind_tools(list(tools_map.values()))
+
+    # 检测是否resume：state中有react_checkpoint标记
+    react_checkpoint = state.get("react_checkpoint")
+    if react_checkpoint:
+        # 立即清除state中的checkpoint，避免下次问答误用
+        state["react_checkpoint"] = None
+        # Resume模式：恢复messages和round_idx
+        # 注意：checkpoint里的messages是序列化的dict，需要重建Message对象
+        messages_data = react_checkpoint.get("messages", [])
+        messages = []
+        for msg_data in messages_data:
+            if isinstance(msg_data, dict):
+                msg_type = msg_data.get("type")
+                if msg_type == "system":
+                    messages.append(SystemMessage(content=msg_data.get("content", "")))
+                elif msg_type == "human":
+                    messages.append(HumanMessage(content=msg_data.get("content", "")))
+                elif msg_type == "ai":
+                    messages.append(AIMessage(
+                        content=msg_data.get("content", ""),
+                        tool_calls=msg_data.get("tool_calls", [])
+                    ))
+                elif msg_type == "tool":
+                    messages.append(ToolMessage(
+                        content=msg_data.get("content", ""),
+                        tool_call_id=msg_data.get("tool_call_id", "")
+                    ))
+            else:
+                messages.append(msg_data)
+
+        start_round = react_checkpoint.get("round_idx", 0)
+        _last_query_data = react_checkpoint.get("last_query_data")
+        logger.info("[react_loop] RESUME from checkpoint: round=%d messages=%d", start_round, len(messages))
+    else:
+        # 首次执行：初始化messages
+        messages: list = [SystemMessage(content=system_prompt)]
+        conv = _conversation_messages_for_llm(state)
+        if conv:
+            messages.extend(conv)
+            logger.info("[react_loop] seeded from state.messages: %d human/ai message(s)", len(conv))
+        else:
+            user_query = str(state.get("user_query") or state.get("enriched_query") or "")
+            if user_query:
+                messages.append(HumanMessage(content=user_query))
+            else:
+                for m in reversed(state.get("messages") or []):
+                    if isinstance(m, HumanMessage):
+                        messages.append(HumanMessage(content=m.content))
+                        break
+        start_round = 0
+        _last_query_data: dict[str, Any] | None = None
+
+    for round_idx in range(start_round, max_rounds):
+        logger.info("[react_loop] round=%d/%d", round_idx + 1, max_rounds)
+
+        # Resume时跳过LLM调用，直接用checkpoint里的ai_msg
+        _skip_checkpoint_this_round = False  # 本轮是否跳过checkpoint存储（resume时）
+        if react_checkpoint and round_idx == start_round:
+            ai_msg_data = react_checkpoint.get("ai_msg")
+            if ai_msg_data:
+                # 从dict重建AIMessage对象（messages已包含，无需append）
+                if isinstance(ai_msg_data, dict):
+                    ai_msg = AIMessage(
+                        content=ai_msg_data.get("content", ""),
+                        tool_calls=ai_msg_data.get("tool_calls", []),
+                    )
+                else:
+                    ai_msg = ai_msg_data
+                logger.info("[react_loop] RESUME: reuse ai_msg from checkpoint (tool_calls=%d)", len(getattr(ai_msg, "tool_calls", [])))
+                _did_stream = False
+            else:
+                # Checkpoint损坏，重新调用LLM（流式）
+                messages_window = _trim_messages_window(messages)
+                ai_msg, _did_stream = await _stream_llm_call(llm_with_tools, messages_window, gateway_context)
+                messages.append(ai_msg)
+            react_checkpoint = None          # 清除局部变量，后续轮次正常执行
+            _skip_checkpoint_this_round = True  # 本轮是resume，跳过checkpoint存储
+        else:
+            messages_window = _trim_messages_window(messages)
+            ai_msg, _did_stream = await _stream_llm_call(llm_with_tools, messages_window, gateway_context)
+            messages.append(ai_msg)
+
+        if not getattr(ai_msg, "tool_calls", None):
+            # L2: 无 tool_calls，直接文字结束
+            logger.info("[react_loop] stop: no_tool_call at round=%d", round_idx + 1)
+            if _last_query_data is not None:
+                logger.info(
+                    "[react_loop] no_tool_call: force query_result with cached data (records=%d has_file=%s)",
+                    len(_last_query_data.get("records") or []),
+                    bool(_last_query_data.get("file")),
+                )
+                answer_text = str(ai_msg.content or "")
+                if any(token in answer_text for token in ("records", "result_type", "pagination")) or len(answer_text) > 800:
+                    answer_text = ""
+                return {
+                    "react_final": {
+                        "result_type": "query_result",
+                        "answer": answer_text,
+                        "query_data": _last_query_data,
+                        "stop_reason": "no_tool_call_with_query_data",
+                        "answer_streamed": _did_stream,
+                    },
+                    "react_rounds": round_idx + 1,
+                    "react_checkpoint": None,
+                }
+            return {
+                "react_final": {
+                    "result_type": "text",
+                    "answer": str(ai_msg.content or ""),
+                    "stop_reason": "no_tool_call",
+                    "answer_streamed": _did_stream,
+                },
+                "react_rounds": round_idx + 1,
+                "react_checkpoint": None,
+            }
+
+        for tc in ai_msg.tool_calls:
+            # 检查是否是delegate工具（可能interrupt）
+            tool_name = tc.get("name", "")
+            t_delegate = tools_map.get(tool_name)
+            is_delegate = t_delegate is not None and getattr(t_delegate, "_is_agent_delegate", False)
+
+            # 如果是delegate工具，保存checkpoint到state（顶层字段）
+            # resume模式下跳过，避免重复存储
+            if is_delegate and not _skip_checkpoint_this_round:
+                # 序列化messages：提取关键字段
+                serialized_messages = []
+                for msg in messages:
+                    if isinstance(msg, SystemMessage):
+                        serialized_messages.append({"type": "system", "content": msg.content})
+                    elif isinstance(msg, HumanMessage):
+                        serialized_messages.append({"type": "human", "content": msg.content})
+                    elif isinstance(msg, AIMessage):
+                        serialized_messages.append({
+                            "type": "ai",
+                            "content": msg.content,
+                            "tool_calls": getattr(msg, "tool_calls", [])
+                        })
+                    elif isinstance(msg, ToolMessage):
+                        serialized_messages.append({
+                            "type": "tool",
+                            "content": msg.content,
+                            "tool_call_id": msg.tool_call_id
+                        })
+
+                # 序列化ai_msg
+                serialized_ai_msg = {
+                    "type": "ai",
+                    "content": ai_msg.content,
+                    "tool_calls": getattr(ai_msg, "tool_calls", [])
+                }
+
+                checkpoint_data = {
+                    "messages": serialized_messages,
+                    "round_idx": round_idx,
+                    "ai_msg": serialized_ai_msg,
+                    "last_query_data": _last_query_data,
+                }
+                state["react_checkpoint"] = checkpoint_data
+                logger.info("[react_loop] saved checkpoint to state before delegate tool")
+
+            tool_id, result = await dispatch_tool(tc, tools_map, state, gateway_context=gateway_context)
+
+            # 缓存 data_query 结果：识别含 records+meta 的 data block
+            if isinstance(result, dict):
+                data_block = result.get("data") if isinstance(result.get("data"), dict) else result
+                if isinstance(data_block, dict) and "records" in data_block and "meta" in data_block:
+                    _last_query_data = data_block
+                    logger.info(
+                        "[react_loop] cached query_data: records=%d has_file=%s",
+                        len(data_block.get("records") or []),
+                        bool(data_block.get("file")),
+                    )
+
+            # L1: finish_react 终止
+            if isinstance(result, dict) and result.get("__finish__"):
+                logger.info("[react_loop] stop: finish_tool at round=%d", round_idx + 1)
+                final = {**result, "stop_reason": "finish_tool", "answer_streamed": _did_stream}
+                if _last_query_data is not None:
+                    logger.info(
+                        "[react_loop] finish_tool: cached query_data found (records=%d has_file=%s)",
+                        len(_last_query_data.get("records") or []),
+                        bool(_last_query_data.get("file")),
+                    )
+                    # 如果 LLM 未显式选择 query_result，也强制走结构化输出
+                    if final.get("result_type") not in {"query_result", "csv_file", "json_file"}:
+                        final["result_type"] = "query_result"
+                    if final.get("result_type") == "query_result":
+                        final["query_data"] = _last_query_data
+                        # 如已返回结构化表格，避免文本与表格矛盾
+                        answer = str(final.get("answer") or "")
+                        if answer:
+                            if any(token in answer for token in ("records", "result_type", "pagination")) or len(answer) > 800:
+                                final["answer"] = ""
+                                answer = ""
+                            meta = _last_query_data.get("meta") if isinstance(_last_query_data, dict) else {}
+                            columns_raw = meta.get("columns", []) if isinstance(meta, dict) else []
+                            col_names: list[str] = []
+                            for col in columns_raw:
+                                if isinstance(col, dict):
+                                    name = str(col.get("name") or col.get("label") or "")
+                                    if name:
+                                        col_names.append(name)
+                                elif isinstance(col, str):
+                                    col_names.append(col)
+                            has_count_col = any("数量" in n for n in col_names)
+                            has_row_data = bool(_last_query_data.get("records"))
+                            if has_count_col and has_row_data and ("未" in answer and "数量" in answer):
+                                final["answer"] = "已返回结果表，详见下方数据。"
+                return {
+                    "react_final": final,
+                    "react_rounds": round_idx + 1,
+                    "react_checkpoint": None,
+                }
+
+            messages.append(
+                ToolMessage(content=_compress_tool_result(result, tc["name"]), tool_call_id=tool_id)
+            )
+
+    # L3: 超出最大轮数
+    logger.warning("[react_loop] stop: max_rounds=%d reached", max_rounds)
+    if _last_query_data is not None:
+        logger.info(
+            "[react_loop] max_rounds: force query_result with cached data (records=%d has_file=%s)",
+            len(_last_query_data.get("records") or []),
+            bool(_last_query_data.get("file")),
+        )
+        return {
+            "react_final": {
+                "result_type": "query_result",
+                "answer": _summarize_last_output(messages),
+                "query_data": _last_query_data,
+                "stop_reason": "max_rounds_with_query_data",
+            },
+            "react_rounds": max_rounds,
+            "react_checkpoint": None,
+        }
+    return {
+        "react_final": {
+            "result_type": "text",
+            "answer": _summarize_last_output(messages),
+            "stop_reason": "max_rounds",
+        },
+        "react_rounds": max_rounds,
+        "react_checkpoint": None,
+    }

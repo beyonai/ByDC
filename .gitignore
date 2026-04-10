@@ -185,3 +185,6 @@ whale_datacloud.code-workspace
 
 pyrefly.toml
 .claude/
+
+# 本地备份包，不纳入版本库
+packages/datacloud-analysis-bak/
