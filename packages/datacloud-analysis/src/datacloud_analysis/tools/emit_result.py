@@ -17,6 +17,8 @@ from typing import Literal
 
 from langchain_core.tools import tool
 
+from datacloud_analysis.middlewares.datacloud_output import _normalize_emit_result_data
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,7 +26,7 @@ logger = logging.getLogger(__name__)
 def emit_result(
     result_type: Literal["text", "query_result", "csv_file", "json", "json_file"],
     answer: str,
-    data: dict | None = None,
+    data: str | None = None,
     file_path: str | None = None,
 ) -> str:
     """输出最终分析结果到用户界面。
@@ -40,7 +42,7 @@ def emit_result(
             - "json"         : 内联 JSON 结构化数据
             - "json_file"    : JSON 文件路径
         answer: 文本结论或摘要（所有类型必填，用于前端展示）
-        data: 结构化数据，query_result 类型时必填：
+        data: 结构化数据；传入 JSON 对象字符串，内部自动解析为 dict。query_result 类型时必填：
             {"columns": [...], "rows": [[...], ...], "total": int}
             json 类型时为任意 JSON 对象
         file_path: 文件路径（csv_file / json_file 类型时必填）
@@ -71,11 +73,17 @@ def emit_result(
         )
     """
     # 此存根在 DatacloudOutputMiddleware 未注入时提供降级日志
+    data_keys: list[str] | None = None
+    try:
+        normalized = _normalize_emit_result_data(data)
+        data_keys = list(normalized.keys()) if normalized else None
+    except (TypeError, ValueError):
+        data_keys = None
     logger.info(
         "emit_result (stub): result_type=%s answer=%r data_keys=%s file_path=%s",
         result_type,
         answer[:100] if answer else "",
-        list(data.keys()) if isinstance(data, dict) else None,
+        data_keys,
         file_path,
     )
     return "result_emitted"

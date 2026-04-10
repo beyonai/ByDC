@@ -166,24 +166,20 @@ class TestStage4MiddlewareRegistration:
 
         assert ToolCallLoggingMiddleware is not None
 
-    @patch("datacloud_analysis.agent.create_deep_agent")
-    @patch("datacloud_analysis.agent.pathlib.Path")
+    @patch("deepagents.create_deep_agent")
     @patch("datacloud_analysis.session.checkpointer.get_checkpointer")
     @patch("datacloud_analysis.backend.create_datacloud_backend")
-    @patch("datacloud_analysis.tools.registry.register_all_tools")
+    @patch("datacloud_analysis.tools.ontology_loader.create_ontology_loader")
     def test_middleware_registered_in_agent(
-        self, mock_reg, mock_backend, mock_checkpointer, mock_path, mock_create
+        self, mock_ontology_factory, mock_backend, mock_checkpointer, mock_create
     ):
         """测试中间件在 agent 中注册"""
-        mock_reg.return_value = []
+        mock_ol = Mock()
+        mock_ol.load_tools.return_value = []
+        mock_ontology_factory.return_value = mock_ol
         mock_backend.return_value = Mock()
         mock_checkpointer.return_value = Mock()
         mock_create.return_value = Mock()
-
-        # Mock pathlib.Path
-        mock_path_instance = Mock()
-        mock_path_instance.parent = Mock()
-        mock_path.return_value = mock_path_instance
 
         from datacloud_analysis.agent import _create_deep_agent
 

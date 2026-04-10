@@ -64,7 +64,15 @@
       "Bash(pip show:*)",
       "Bash(PYTHONPATH=src python -m pytest tests/datacloud_data/test_compute_executor.py -x -q)",
       "Bash(PYTHONPATH=src python -m pytest tests/datacloud_data/test_compute_executor.py -x -v)",
-      "Bash(PYTHONPATH=src python -m pytest tests/datacloud_data/test_compute_executor.py -v -q)"
+      "Bash(PYTHONPATH=src python -m pytest tests/datacloud_data/test_compute_executor.py -v -q)",
+      "Bash(conda run:*)",
+      "Bash(.venv/Scripts/python.exe -m pytest packages/datacloud-analysis/tests/test_agent/test_datacloud_output_middleware.py -v)",
+      "Bash(xargs head:*)",
+      "Bash(cp \"/d/data/code/baiying/by-datacloud/packages/datacloud-analysis/src/datacloud_analysis/middlewares/datacloud_output.py\" \"/d/data/code/baiying/byclaw-all/byclaw-data/.venv/Lib/site-packages/datacloud_analysis/middlewares/datacloud_output.py\")",
+      "Bash(cp \"/d/data/code/baiying/by-datacloud/packages/datacloud-analysis/src/datacloud_analysis/tools/emit_result.py\" \"/d/data/code/baiying/byclaw-all/byclaw-data/.venv/Lib/site-packages/datacloud_analysis/tools/emit_result.py\")",
+      "Bash(rm -f \"/d/data/code/baiying/byclaw-all/byclaw-data/.venv/Lib/site-packages/datacloud_analysis/middlewares/__pycache__/datacloud_output.cpython-\"*.pyc)",
+      "Bash(rm -f \"/d/data/code/baiying/byclaw-all/byclaw-data/.venv/Lib/site-packages/datacloud_analysis/tools/__pycache__/emit_result.cpython-\"*.pyc)",
+      "Bash(.venv/Scripts/pip install:*)"
     ]
   }
 }

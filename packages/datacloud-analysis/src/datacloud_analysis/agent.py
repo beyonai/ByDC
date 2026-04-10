@@ -24,6 +24,41 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def _drop_tools_named(tools: list[Any], *names: str) -> list[Any]:
+    """Remove tools whose ``name`` is listed in ``names``.
+
+    LangGraph ``ToolNode`` registers tools in order; a later tool with the same
+    name overwrites an earlier one. ``create_agent`` passes
+    ``middleware_tools + regular_tools``, so any ``emit_result`` in ontology or
+    MCP tools would replace ``DatacloudOutputMiddleware``'s version (which
+    accepts ``data`` as JSON string).
+
+    Args:
+        tools: Tools for ``create_deep_agent`` (typically ``BaseTool`` instances).
+        names: Tool names to strip from this list.
+
+    Returns:
+        A new list without matching tools.
+    """
+
+    banned = frozenset(names)
+    kept: list[Any] = []
+    removed = 0
+    for item in tools:
+        if getattr(item, "name", None) in banned:
+            removed += 1
+            continue
+        kept.append(item)
+    if removed:
+        logger.info(
+            "create_agent: dropped %d tool(s) named {%s} so middleware-provided tools win",
+            removed,
+            ", ".join(sorted(banned)),
+        )
+    return kept
+
+
 # ============================================================
 # 内置系统提示词（固定部分，用户不可覆盖）
 # ============================================================
@@ -269,6 +304,7 @@ def _create_deep_agent(
     import pathlib  # noqa: PLC0415
 
     from deepagents import create_deep_agent  # noqa: PLC0415
+    from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT  # noqa: PLC0415
 
     from datacloud_analysis.backend import create_datacloud_backend  # noqa: PLC0415
     from datacloud_analysis.config.env import Settings  # noqa: PLC0415
@@ -314,6 +350,8 @@ def _create_deep_agent(
         # 阶段2后，tools 仅包含 other_tools (AGENT/FUNCTION等类型)
         # OBJECT/VIEW 类型通过 mounted_objects 传递给本体加载器
         all_tools.extend(tools.values())
+
+    all_tools = _drop_tools_named(all_tools, "emit_result")
 
     # Build system prompt: user-configurable identity + built-in logic
     final_system_prompt = _build_system_prompt(
@@ -413,7 +451,16 @@ def _create_deep_agent(
         context_schema=DatacloudContext,
         backend=backend,
         skills=skill_sources,
-        subagents=[CODE_EXECUTOR_SUBAGENT],
+        subagents=[
+            {
+                **GENERAL_PURPOSE_SUBAGENT,
+                "middleware": [DatacloudOutputMiddleware()],
+            },
+            {
+                **CODE_EXECUTOR_SUBAGENT,
+                "middleware": [DatacloudOutputMiddleware()],
+            },
+        ],
         checkpointer=checkpointer,
     )
 

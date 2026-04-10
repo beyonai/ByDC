@@ -2,12 +2,15 @@
 测试 DatacloudOutputMiddleware
 """
 
-import pytest
+import json
 from unittest.mock import Mock
+
 from langchain.agents.middleware.types import AgentMiddleware
+
 from datacloud_analysis.middlewares.datacloud_output import (
     DatacloudOutputMiddleware,
     _build_6001_format,
+    _normalize_emit_result_data,
 )
 
 
@@ -67,6 +70,44 @@ class TestDatacloudOutputMiddleware:
         )
 
         assert "已输出结果" in result
+
+    def test_emit_result_query_result_data_as_json_string(self):
+        """query_result 的 data 为 JSON 字符串时应解析后正常输出"""
+        middleware = DatacloudOutputMiddleware()
+        emit_result = middleware.tools[0]
+
+        payload = {"columns": ["id"], "rows": [[1]]}
+        result = emit_result.invoke(
+            {
+                "result_type": "query_result",
+                "answer": "一行",
+                "data": json.dumps(payload, ensure_ascii=False),
+            }
+        )
+
+        assert "已输出结果" in result
+
+    def test_emit_result_data_invalid_json_string(self):
+        """data 为非法 JSON 字符串时应返回失败信息且不抛异常"""
+        middleware = DatacloudOutputMiddleware()
+        emit_result = middleware.tools[0]
+
+        result = emit_result.invoke(
+            {
+                "result_type": "query_result",
+                "answer": "测试",
+                "data": "{not json",
+            }
+        )
+
+        assert "输出失败" in result
+
+    def test_normalize_emit_result_data(self):
+        """_normalize_emit_result_data 行为"""
+        assert _normalize_emit_result_data(None) is None
+        assert _normalize_emit_result_data({}) == {}
+        assert _normalize_emit_result_data('{"a": 1}') == {"a": 1}
+        assert _normalize_emit_result_data("  ") is None
 
     def test_emit_result_csv_file(self):
         """测试输出 CSV 文件"""

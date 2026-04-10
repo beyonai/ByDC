@@ -5,49 +5,91 @@ DataCloud 输出中间件
 """
 
 from __future__ import annotations
-from typing import Any, Optional
-import logging
+
 import json
+import logging
+from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware
-from langchain_core.tools import tool
+from langchain_core.tools import StructuredTool
+from pydantic import BaseModel, field_validator
 
 logger = logging.getLogger(__name__)
 
 
-def _make_emit_result_tool(gateway_context: Optional[Any] = None):
+def _normalize_emit_result_data(data: dict | str | None) -> dict | None:
+    """将 emit_result 的 data 规范为 dict 或 None（兼容 LLM 传入 JSON 字符串）。
+
+    Args:
+        data: 结构化对象、JSON 字符串或省略。
+
+    Returns:
+        解析后的 dict，或 ``None``（无数据）。
+
+    Raises:
+        ValueError: JSON 非法，或解析结果不是 JSON 对象。
+        TypeError: ``data`` 类型既不是 dict、str 也不是 None。
+    """
+
+    if data is None:
+        return None
+    if isinstance(data, dict):
+        return data
+    if isinstance(data, str):
+        raw = data.strip()
+        if not raw:
+            return None
+        try:
+            parsed: Any = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("data 字符串不是合法 JSON") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError(
+                f"data JSON 解析后必须是对象（dict），实际为 {type(parsed).__name__}",
+            )
+        return parsed
+    raise TypeError(f"data 必须是 dict、str 或 None，实际为 {type(data).__name__}")
+
+
+class _EmitResultInput(BaseModel):
+    """emit_result 工具的输入模型。
+
+    data 字段接受 JSON 字符串（LLM 标准输出）或 dict（兼容直接调用），
+    通过 field_validator 在进入工具前统一规范为字符串，
+    彻底避免 Pydantic union 推断歧义导致的 ValidationError。
+    """
+
+    result_type: str
+    answer: str
+    data: str | None = None
+    file_path: str | None = None
+
+    @field_validator("data", mode="before")
+    @classmethod
+    def _coerce_data(cls, v: Any) -> str | None:
+        """将 dict 序列化为 JSON 字符串，str/None 原样返回。"""
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return json.dumps(v, ensure_ascii=False)
+        return v
+
+
+def _make_emit_result_tool(gateway_context: Any | None = None):
     """创建 emit_result 工具（绑定 gateway_context）。"""
 
-    @tool
-    def emit_result(
+    def _emit_result(
         result_type: str,
         answer: str,
-        data: Optional[dict] = None,
-        file_path: Optional[str] = None,
+        data: str | None = None,
+        file_path: str | None = None,
     ) -> str:
-        """
-        输出结构化结果到 6001 协议格式。
-
-        Args:
-            result_type: 结果类型
-                - "query_result": 查询结果（带数据表格）
-                - "csv_file": CSV 文件
-                - "json": JSON 数据
-                - "text": 纯文本答案
-            answer: 文本答案（用户可读的自然语言描述）
-            data: 结构化数据（可选）
-                - 对于 query_result: {"columns": [...], "rows": [...]}
-                - 对于 json: 任意 JSON 对象
-            file_path: 文件路径（可选，用于 csv_file 类型）
-
-        Returns:
-            输出状态消息
-        """
         try:
+            normalized_data = _normalize_emit_result_data(data)
             output = _build_6001_format(
                 result_type=result_type,
                 answer=answer,
-                data=data,
+                data=normalized_data,
                 file_path=file_path,
             )
 
@@ -62,14 +104,28 @@ def _make_emit_result_tool(gateway_context: Optional[Any] = None):
             logger.error("emit_result failed: %s", exc)
             return f"输出失败: {exc}"
 
-    return emit_result
+    return StructuredTool.from_function(
+        func=_emit_result,
+        name="emit_result",
+        description=(
+            "输出结构化结果到 6001 协议格式。\n\n"
+            "Args:\n"
+            "    result_type: 结果类型（query_result / csv_file / json / text）\n"
+            "    answer: 文本答案（用户可读的自然语言描述）\n"
+            "    data: 结构化数据（可选）；传入 JSON 对象字符串\n"
+            "        - 对于 query_result: {\"columns\": [...], \"rows\": [...]}\n"
+            "        - 对于 json: 任意 JSON 对象\n"
+            "    file_path: 文件路径（可选，用于 csv_file 类型）"
+        ),
+        args_schema=_EmitResultInput,
+    )
 
 
 def _build_6001_format(
     result_type: str,
     answer: str,
-    data: Optional[dict] = None,
-    file_path: Optional[str] = None,
+    data: dict | None = None,
+    file_path: str | None = None,
 ) -> dict[str, Any]:
     """构建 6001 协议格式。"""
     output: dict[str, Any] = {
@@ -139,7 +195,7 @@ class DatacloudOutputMiddleware(AgentMiddleware):
     对应重构方案 §3.1.4.4 自定义 Middleware 1
     """
 
-    def __init__(self, gateway_context: Optional[Any] = None):
+    def __init__(self, gateway_context: Any | None = None):
         self.gateway_context = gateway_context
         self.tools = [_make_emit_result_tool(gateway_context)]
 
