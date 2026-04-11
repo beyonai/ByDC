@@ -63,7 +63,7 @@ pytest tests/db/test_schema_apply.py
 
 ```bash
 export DB_HOST=localhost
-export DB_PORT=5432
+export DB_PORT=15432
 export DB_USER=postgres
 export DB_PASSWORD=your_password
 export DB_NAME=your_database

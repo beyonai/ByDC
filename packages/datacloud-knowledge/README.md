@@ -6,12 +6,6 @@
 ## 安装
 
 ```bash
-pip install datacloud-knowledge
-```
-
-或使用 `uv`：
-
-```bash
 uv add datacloud-knowledge
 ```
 
@@ -50,4 +44,3 @@ uv run mypy .
 # 运行测试
 uv run pytest
 ```
-
