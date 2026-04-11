@@ -12,16 +12,38 @@ API 端点：
 
 from __future__ import annotations
 
+import csv
 import json
 import os
 from typing import Any
 
+import anyio
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from datacloud_data_sdk.context import InvocationContext
+from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
+from datacloud_data_service.config import get_settings
 
 router = APIRouter()
+
+
+def _build_context_kwargs(request: Request) -> dict[str, str]:
+    """Build invocation context kwargs from HTTP headers."""
+    return {
+        "tenant_id": request.headers.get("X-Tenant-Id", ""),
+        "user_id": request.headers.get("X-User-Id", ""),
+        "session_id": request.headers.get("X-Session-Id", ""),
+        "token": request.headers.get("Authorization", "").removeprefix("Bearer ").strip(),
+        "system_code": request.headers.get("X-System-Code", ""),
+    }
+
+
+def _load_csv_rows(path: str) -> list[dict[str, str]]:
+    """Load CSV rows in a worker thread to avoid blocking the event loop."""
+    with open(path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        return [dict(row) for row in reader]
 
 
 def _parse_include_plan() -> bool:
@@ -101,13 +123,7 @@ async def query_endpoint(body: QueryRequest, request: Request) -> QueryResponse:
     if body.file_id:
         return await _query_by_file_id(body, request)
 
-    ctx_kwargs = {
-        "tenant_id": tenant_id,
-        "user_id": request.headers.get("X-User-Id", ""),
-        "session_id": request.headers.get("X-Session-Id", ""),
-        "token": request.headers.get("Authorization", "").removeprefix("Bearer ").strip(),
-        "system_code": request.headers.get("X-System-Code", ""),
-    }
+    ctx_kwargs = _build_context_kwargs(request)
 
     with InvocationContext(**ctx_kwargs):
         try:
@@ -141,39 +157,25 @@ async def query_endpoint(body: QueryRequest, request: Request) -> QueryResponse:
 
 
 async def _query_by_file_id(body: QueryRequest, request: Request) -> QueryResponse:
-    from datacloud_data_service.config import get_settings
-    from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
-
     settings = get_settings()
-    csv_manager = CsvStorageManager(settings.csv_base_dir)
-    path = csv_manager.get_export_path(body.file_id)
+    with InvocationContext(**_build_context_kwargs(request)):
+        csv_manager = CsvStorageManager(settings.csv_base_dir)
+        path = csv_manager.get_export_path(body.file_id)
+        stored_meta = csv_manager.get_export_meta(body.file_id)
 
     if path is None or not path.exists():
         return QueryResponse(code=404, message="File not found or invalid file_id", data={})
 
     try:
-        import csv
-
         page = body.page if body.page > 0 else 1
         page_size = body.page_size if body.page_size > 0 else 100
         skip_rows = (page - 1) * page_size
 
-        stored_meta = csv_manager.get_export_meta(body.file_id)
-
-        records = []
-        total = 0
-
-        with open(path, "r", newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            all_rows = list(reader)
-            total = len(all_rows)
-
-            start_idx = skip_rows
-            end_idx = skip_rows + page_size
-            paginated_rows = all_rows[start_idx:end_idx]
-
-            for row in paginated_rows:
-                records.append(dict(row))
+        all_rows = await anyio.to_thread.run_sync(_load_csv_rows, str(path))
+        total = len(all_rows)
+        start_idx = skip_rows
+        end_idx = skip_rows + page_size
+        records = all_rows[start_idx:end_idx]
 
         total_pages = (total + page_size - 1) // page_size if page_size > 0 else 0
         file_url = stored_meta.get("file_url", "") if stored_meta else ""
@@ -182,6 +184,9 @@ async def _query_by_file_id(body: QueryRequest, request: Request) -> QueryRespon
             file_url = stored_meta.get("download_url", "") if stored_meta else ""
         view_id = stored_meta.get("viewId", "file_view") if stored_meta else "file_view"
         trace_data = stored_meta.get("trace", {}) if stored_meta else {}
+        preview_rows = (
+            stored_meta.get("preview_rows", len(records)) if stored_meta else len(records)
+        )
 
         meta = {
             "viewId": view_id,

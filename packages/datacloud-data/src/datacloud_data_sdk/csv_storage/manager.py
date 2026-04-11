@@ -26,9 +26,9 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
+
+logger = logging.getLogger(__name__)
 
 
 class CsvStorageManager:
@@ -58,6 +58,11 @@ class CsvStorageManager:
             base_dir = os.path.join(tempfile.gettempdir(), "datacloud_csv")
         self._base = Path(base_dir)
 
+    @staticmethod
+    def _sanitize_path_segment(value: str) -> str:
+        """Sanitize a single path segment to avoid invalid or unsafe separators."""
+        return value.replace(":", "_").replace("\\", "_").replace("/", "_").strip()
+
     def _effective_base_dir(self) -> Path:
         """Resolve the CSV base dir for the current invocation.
 
@@ -75,9 +80,15 @@ class CsvStorageManager:
             return self._base
 
         workspace_dir = str(getattr(ctx, "workspace_dir", "") or "").strip()
+        base_dir = self._base
         if workspace_dir:
-            return self._shared_workspace_dir(Path(workspace_dir))
-        return self._base
+            base_dir = self._shared_workspace_dir(Path(workspace_dir))
+
+        user_id = self._sanitize_path_segment(str(getattr(ctx, "user_id", "") or ""))
+        session_id = self._sanitize_path_segment(str(getattr(ctx, "session_id", "") or ""))
+        if user_id and session_id:
+            return base_dir / user_id / "sessions" / session_id
+        return base_dir
 
     @staticmethod
     def _shared_workspace_dir(workspace_dir: Path) -> Path:
@@ -102,7 +113,7 @@ class CsvStorageManager:
             Path: CSV 文件路径
         """
         # 替换 Windows 非法字符（冒号、反斜杠等）
-        safe_request_id = request_id.replace(":", "_").replace("\\", "_").replace("/", "_")
+        safe_request_id = self._sanitize_path_segment(request_id)
         dir_path = self._effective_base_dir() / safe_request_id
         dir_path.mkdir(parents=True, exist_ok=True)
         return dir_path / f"{output_ref}.csv"
@@ -139,6 +150,15 @@ class CsvStorageManager:
 
         return file_id, path
 
+    def _export_candidates(self, file_id: str, suffix: str) -> list[Path]:
+        """Build candidate paths for scoped and legacy export files."""
+        effective_dir = self._effective_base_dir()
+        candidates = [effective_dir / "exports" / f"{file_id}{suffix}"]
+        legacy_path = self._base / "exports" / f"{file_id}{suffix}"
+        if legacy_path != candidates[0]:
+            candidates.append(legacy_path)
+        return candidates
+
     def get_export_path(self, file_id: str) -> Path | None:
         """
         获取导出文件路径
@@ -153,16 +173,17 @@ class CsvStorageManager:
         """
         if not re.match(r"^[a-f0-9\-]{36}$", file_id):
             return None
-        base_dir = self._effective_base_dir()
-        path = (base_dir / "exports" / f"{file_id}.csv").resolve()
-        base_resolved = base_dir.resolve()
-        if not path.exists() or not path.is_file():
-            return None
-        try:
-            path.relative_to(base_resolved)
-        except ValueError:
-            return None
-        return path
+        for candidate in self._export_candidates(file_id, ".csv"):
+            path = candidate.resolve()
+            base_resolved = candidate.parent.parent.resolve()
+            if not path.exists() or not path.is_file():
+                continue
+            try:
+                path.relative_to(base_resolved)
+            except ValueError:
+                continue
+            return path
+        return None
 
     def get_export_meta(self, file_id: str) -> dict[str, Any] | None:
         """
@@ -178,15 +199,15 @@ class CsvStorageManager:
         """
         if not re.match(r"^[a-f0-9\-]{36}$", file_id):
             return None
-        meta_path = self._effective_base_dir() / "exports" / f"{file_id}_meta.json"
-        if not meta_path.exists():
-            return None
-        try:
-            with open(meta_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as exc:
-            logger.warning("get_export_meta: failed to read meta file %s: %s", meta_path, exc)
-            return None
+        for meta_path in self._export_candidates(file_id, "_meta.json"):
+            if not meta_path.exists():
+                continue
+            try:
+                return json.loads(meta_path.read_text(encoding="utf-8"))
+            except Exception as exc:
+                logger.warning("get_export_meta: failed to read meta file %s: %s", meta_path, exc)
+                return None
+        return None
 
     def cleanup(self, request_id: str) -> None:
         """
@@ -198,7 +219,7 @@ class CsvStorageManager:
             request_id: 请求 ID
         """
         # 替换 Windows 非法字符（与 get_path 保持一致）
-        safe_request_id = request_id.replace(":", "_").replace("\\", "_").replace("/", "_")
+        safe_request_id = self._sanitize_path_segment(request_id)
         dir_path = self._effective_base_dir() / safe_request_id
         if dir_path.exists():
             shutil.rmtree(dir_path, ignore_errors=True)
