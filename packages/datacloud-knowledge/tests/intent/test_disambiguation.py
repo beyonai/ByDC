@@ -46,8 +46,8 @@ def test_disambiguate_single_high_confidence_candidate_is_confirmed() -> None:
 
     result = disambiguate(match_result=match_result, session=None)
 
-    assert result.confirmed == (candidate,)
-    assert result.ambiguous == ()
+    assert result.confirmed == {"企业": candidate}
+    assert result.ambiguous == {}
 
 
 @pytest.mark.intent
@@ -63,8 +63,8 @@ def test_disambiguate_multiple_candidates_prefers_top_score_gap() -> None:
 
     result = disambiguate(match_result=match_result, session=None)
 
-    assert result.confirmed == (top_candidate,)
-    assert result.ambiguous == ()
+    assert result.confirmed == {"企业": top_candidate}
+    assert result.ambiguous == {}
 
 
 @pytest.mark.intent
@@ -76,5 +76,5 @@ def test_disambiguate_empty_match_result_returns_empty_result() -> None:
 
     result = disambiguate(match_result=match_result_type(exact={}, fuzzy={}), session=None)
 
-    assert result.confirmed == ()
-    assert result.ambiguous == ()
+    assert result.confirmed == {}
+    assert result.ambiguous == {}

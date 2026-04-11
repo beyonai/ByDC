@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-from dotenv import load_dotenv
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -15,9 +14,13 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
-_ENV_TEST = _REPO_ROOT / ".vscode" / ".env.test"
-if _ENV_TEST.exists():
-    load_dotenv(_ENV_TEST, override=True)
+_REPO_SRC = _REPO_ROOT / "src"
+if str(_REPO_SRC) not in sys.path:
+    sys.path.insert(0, str(_REPO_SRC))
+
+_DB_ENV = import_module("datacloud_test_support.db_env")
+_DB_ENV.load_first_available_env_defaults(_DB_ENV.project_env_candidates(_REPO_ROOT))
+_DB_ENV.configure_test_database_env("test", require_complete=False)
 
 # OpenGauss compatibility: set KNOWLEDGE_DB_TYPE so the connection module
 # applies the PGDialect version patch before creating the engine.
