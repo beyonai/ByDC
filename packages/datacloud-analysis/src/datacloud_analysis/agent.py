@@ -22,6 +22,105 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+_DIAG_QUESTION_KEYS = (
+    "user_message",
+    "latest_user_text",
+    "question",
+    "input",
+    "task_prompt",
+)
+
+
+def _truncate_text(text: str, max_len: int) -> str:
+    stripped = (text or "").strip()
+    if len(stripped) <= max_len:
+        return stripped
+    return stripped[: max_len - 3] + "..."
+
+
+def _extract_question_context_for_log(
+    *,
+    user_message: str | None,
+    prompts_overwrite: dict[str, Any] | None,
+    system_prompt: str | None,
+) -> str:
+    """Best-effort 本轮/配置侧「问题」摘要，供核查日志使用。"""
+
+    if user_message and str(user_message).strip():
+        return _truncate_text(str(user_message), 800)
+    po = prompts_overwrite or {}
+    for key in _DIAG_QUESTION_KEYS:
+        val = po.get(key)
+        if isinstance(val, str) and val.strip():
+            return _truncate_text(val, 800)
+    if system_prompt and str(system_prompt).strip():
+        return _truncate_text(str(system_prompt), 400)
+    return (
+        "(未提供 user_message；prompts_overwrite 中亦无常见问题字段。"
+        "create_agent 多在建图时调用，若需对齐某轮提问请在调用处传入 user_message=...)"
+    )
+
+
+def _format_tools_for_diag(tool_map: dict[str, Any] | None) -> str:
+    """将合并后的工具表格式化为多行字符串，便于日志检索。"""
+
+    if not tool_map:
+        return "  (无工具)"
+    rows: list[str] = []
+    for name in sorted(tool_map.keys()):
+        obj = tool_map[name]
+        kind = type(obj).__name__
+        desc = ""
+        for attr in ("description", "description_text"):
+            raw = getattr(obj, attr, None)
+            if isinstance(raw, str) and raw.strip():
+                desc = _truncate_text(raw, 140)
+                break
+        rows.append(f"  - {name} [{kind}] {desc}")
+    return "\n".join(rows)
+
+
+def _resolve_agent_id_for_log(
+    *,
+    agent_id: str | None,
+    prompts_overwrite: dict[str, Any] | None,
+) -> str:
+    """解析日志用的 agent 标识：显式参数优先，其次 prompts_overwrite。"""
+
+    if agent_id is not None and str(agent_id).strip():
+        return str(agent_id).strip()
+    po = prompts_overwrite or {}
+    for key in ("agent_id", "agentId", "resourceId"):
+        val = po.get(key)
+        if val is not None and str(val).strip():
+            return str(val).strip()
+    return "(未提供 agent_id)"
+
+
+def _log_create_agent_diagnostics(
+    *,
+    agent_id_display: str,
+    question_context: str,
+    merged_tools: dict[str, Any] | None,
+    mounted_objects: list[str] | None,
+) -> None:
+    """打印建图时的「agent_id + 问题上下文 + 工具清单」，便于线上对照核查。"""
+
+    tool_block = _format_tools_for_diag(merged_tools)
+    logger.info(
+        "[create_agent diagnostics] ----------\n"
+        "agent_id=%s\n"
+        "问题/提示上下文:\n%s\n"
+        "mounted_objects=%s\n"
+        "合并后工具数=%d，清单:\n%s\n"
+        "[create_agent diagnostics] ----------",
+        agent_id_display,
+        question_context,
+        mounted_objects,
+        len(merged_tools or {}),
+        tool_block,
+    )
+
 
 def create_agent(
     *,
@@ -35,6 +134,8 @@ def create_agent(
     tools: dict[str, Any] | None = None,
     mounted_objects: list[str] | None = None,
     loader: Any | None = None,
+    user_message: str | None = None,
+    agent_id: str | None = None,
 ) -> Any:
     """Create a deep agent for DataCloud, usable with langgraph dev and deep-agents-ui.
 
@@ -46,6 +147,10 @@ def create_agent(
             中同名工具优先，即调用方可覆盖自动生成的工具）。
         loader: ``datacloud_data_sdk.OntologyLoader`` 实例。``mounted_objects``
             非空时必须提供；未提供则跳过本体工具生成并记录 debug 日志。
+        user_message: 可选。传入时写入核查日志的「当前提问」；否则从
+            ``prompts_overwrite`` 的 ``user_message`` / ``task_prompt`` 等键推断。
+        agent_id: 可选。写入核查日志；未传时尝试 ``prompts_overwrite`` 中的
+            ``agent_id`` / ``agentId`` / ``resourceId``。
     """
 
     # 语言和环境的日志预警可以保留，这里为了兼容现有 SDK 初始化
@@ -69,6 +174,22 @@ def create_agent(
 
     # 合并工具：本体工具为基础，caller 传入的 tools 优先覆盖同名工具
     merged_tools: dict[str, Any] | None = {**ontology_tools, **(tools or {})} or None
+
+    question_ctx = _extract_question_context_for_log(
+        user_message=user_message,
+        prompts_overwrite=prompts_overwrite,
+        system_prompt=system_prompt,
+    )
+    agent_id_display = _resolve_agent_id_for_log(
+        agent_id=agent_id,
+        prompts_overwrite=prompts_overwrite,
+    )
+    _log_create_agent_diagnostics(
+        agent_id_display=agent_id_display,
+        question_context=question_ctx,
+        merged_tools=merged_tools,
+        mounted_objects=mounted_objects,
+    )
 
     logger.info("create_agent: locale=%s (Custom StateGraph)", resolved_locale)
     logger.info(
