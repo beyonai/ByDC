@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 """测试知识图谱查询 - 验证"王小明他优秀吗"查询（SQL-native 实现）"""
 
-import os
 import sys
+from importlib import import_module
+from pathlib import Path
 from typing import Any
 
-# 将项目根目录加入路径
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+# 将项目 src 目录加入路径
+PACKAGE_SRC = Path(__file__).resolve().parents[1] / "src"
+if str(PACKAGE_SRC) not in sys.path:
+    sys.path.insert(0, str(PACKAGE_SRC))
 
-from datacloud_knowledge import SQLKnowledgeGraphQuery, TreeNode
+_KG_MODULE = import_module("datacloud_knowledge")
+SQLKnowledgeGraphQuery = _KG_MODULE.SQLKnowledgeGraphQuery
+TreeNode = _KG_MODULE.TreeNode
 
 
 def dict_to_tree(tree_dict: dict[str, Any]) -> TreeNode:
@@ -62,11 +67,12 @@ def test_wang_xiaoming() -> None:
     print("测试: 王小明他优秀吗")
     print("=" * 70)
 
-    # 从 .env.example 加载环境变量
+    # 从真实 .env 加载环境变量
     from dotenv import load_dotenv
 
-    env_path = os.path.join(os.path.dirname(__file__), ".env.example")
-    load_dotenv(env_path, override=True)
+    env_path = Path(__file__).resolve().parents[2] / ".env"
+    if env_path.exists():
+        load_dotenv(env_path, override=True)
 
     # 创建 SQL-native 服务实例
     print("\n初始化 SQLKnowledgeGraphQuery...")
