@@ -13,11 +13,14 @@ from typing import Any
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import Resource, TextContent, Tool
+from starlette.types import Message
 from starlette.types import Receive, Scope, Send
 
 from datacloud_data_sdk.utils.json_utils import dump_json
 
 logger = logging.getLogger(__name__)
+
+_SENSITIVE_HEADERS = frozenset({"authorization", "cookie", "set-cookie", "x-api-key"})
 
 # 由 routes lifespan 注入，用于在 MCP handler 中获取 loader
 _loader_ref: Any = None
@@ -66,6 +69,57 @@ def _log_tool_call(name: str, arguments: dict[str, Any]) -> None:
                 "event": "mcp_tool_call",
                 "tool_name": name,
                 "arguments": arguments,
+            }
+        ),
+    )
+
+
+def _redact_headers(headers: dict[str, str]) -> dict[str, str]:
+    """对敏感请求头做脱敏后返回。"""
+    redacted: dict[str, str] = {}
+    for key, value in headers.items():
+        if key in _SENSITIVE_HEADERS and value:
+            if key == "authorization" and value.lower().startswith("bearer "):
+                redacted[key] = "Bearer ***"
+            else:
+                redacted[key] = "***"
+            continue
+        redacted[key] = value
+    return redacted
+
+
+def _parse_jsonrpc_body(body: bytes) -> dict[str, Any]:
+    """解析 MCP JSON-RPC 请求体，失败时返回原始文本摘要。"""
+    if not body:
+        return {}
+
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return {"raw_body": body.decode("utf-8", errors="replace")}
+
+    if not isinstance(payload, dict):
+        return {"payload": payload}
+
+    return {
+        "jsonrpc": payload.get("jsonrpc"),
+        "id": payload.get("id"),
+        "method": payload.get("method"),
+        "params": payload.get("params"),
+    }
+
+
+def _log_http_request(scope: Scope, headers: dict[str, str], body: bytes) -> None:
+    """记录 MCP HTTP 请求头与 JSON-RPC 入参。"""
+    logger.info(
+        "%s",
+        dump_json(
+            {
+                "event": "mcp_http_request",
+                "http_method": scope.get("method", ""),
+                "path": scope.get("path", ""),
+                "headers": _redact_headers(headers),
+                "jsonrpc_request": _parse_jsonrpc_body(body),
             }
         ),
     )
@@ -270,6 +324,21 @@ def create_mcp_asgi_app(session_manager: StreamableHTTPSessionManager):
         from datacloud_data_sdk.context import InvocationContext
 
         headers = _headers_from_scope(scope)
+        body_chunks: list[bytes] = []
+        request_logged = False
+
+        async def logging_receive() -> Message:
+            nonlocal request_logged
+            message = await receive()
+            if message["type"] != "http.request":
+                return message
+
+            body_chunks.append(message.get("body", b""))
+            if not message.get("more_body", False) and not request_logged:
+                request_logged = True
+                _log_http_request(scope, headers, b"".join(body_chunks))
+            return message
+
         auth = headers.get("authorization", "")
         token = auth.removeprefix("Bearer ").strip() if auth else ""
         tool_mode = headers.get("x-tool-list-mode", "unified")
@@ -293,7 +362,7 @@ def create_mcp_asgi_app(session_manager: StreamableHTTPSessionManager):
         }
         try:
             with InvocationContext(**ctx_kwargs):
-                await session_manager.handle_request(scope, receive, send)
+                await session_manager.handle_request(scope, logging_receive, send)
         except Exception as e:
             logger.exception("MCP request failed: %s", e)
             from starlette.responses import JSONResponse
