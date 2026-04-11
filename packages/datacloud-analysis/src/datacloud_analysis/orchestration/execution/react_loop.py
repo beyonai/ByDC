@@ -1,15 +1,27 @@
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import os
-import re
+import time
+from typing import Any, Literal
+import json
+import logging
+import os
+from typing import Any, Literal
+import logging
+import os
 from typing import Any, Literal
 
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool, tool
-from langgraph.types import Command, interrupt
+
+try:
+    from langgraph.errors import GraphBubbleUp  # interrupt / GraphInterrupt base
+except ImportError:  # pragma: no cover - langgraph not installed or older version
+    GraphBubbleUp = type(None)  # type: ignore[assignment,misc]
 
 from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
 
@@ -112,6 +124,19 @@ async def _stream_llm_call(
 _DEFAULT_MAX_ROUNDS = 10
 _TOOL_MSG_MAX_LEN = 2000   # ToolMessage 内容最大字符数
 _TRIM_KEEP_ROUNDS = 6      # 滑动窗口：保留最近 N 轮 AI+Tool 消息对
+
+# ---- 进程内 interrupt resume 上下文缓存 ----
+# LangGraph checkpoint 是 node 级别，node 内部对 state 的修改在 interrupt 时不被保存。
+# 因此用进程内 dict 保存 react_loop 中断时的 messages 上下文，
+# key = session_id，resume 时从这里恢复而非从 state 读取。
+# 只在同一进程的 resume 流程中使用，消费后立即删除。
+_interrupt_resume_cache: dict[str, dict[str, Any]] = {}
+
+# resume replay 信号：当 react_loop 从缓存恢复并重新执行被中断的 tool 时设为 True。
+# tool 内部通过此信号跳过 llm_enhance 等昂贵操作。
+is_resume_replay: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "is_resume_replay", default=False,
+)
 
 @tool("finish_react")
 async def finish_react(
@@ -331,8 +356,60 @@ async def run_react_loop(
                     if isinstance(m, HumanMessage):
                         messages.append(HumanMessage(content=m.content))
                         break
-        start_round = 0
+
+        # 缓存最近一次 data_query 类工具返回的完整 data block（records+meta+pagination+file）
+        # 供 result_type=query_result 时原样透传给 formatter，避免 LLM 二次序列化丢失结构
         _last_query_data: dict[str, Any] | None = None
+
+        # ---- resume replay: 恢复上次中断前的 messages 上下文 ----
+        _cache_key = str(getattr(gateway_context, "session_id", "") or "") if gateway_context else ""
+        _resume_ctx: dict[str, Any] | None = _interrupt_resume_cache.pop(_cache_key, None) if _cache_key else None
+        logger.info(
+            "[react_loop] resume check: session=%s cache_key=%r cache_hit=%s cache_keys=%s",
+            _cache_key, _cache_key, _resume_ctx is not None, list(_interrupt_resume_cache.keys()),
+        )
+        if _resume_ctx is not None:
+            messages = list(_resume_ctx["messages"])
+            _last_query_data = _resume_ctx.get("last_query_data")
+            pending_tool_calls: list[dict[str, Any]] = list(_resume_ctx["pending_tool_calls"])
+            start_round = int(_resume_ctx.get("round_idx", 0))
+            logger.info(
+                "[react_loop] resume replay: restored %d messages, %d pending tool_calls, "
+                "round=%d msg_types=%s",
+                len(messages), len(pending_tool_calls), start_round + 1,
+                [type(m).__name__ for m in messages],
+            )
+            # 设置 resume replay 信号，让 tool 内部知道当前是 resume 重放
+            _resume_token = is_resume_replay.set(True)
+            try:
+                for tc in pending_tool_calls:
+                    _t0 = time.monotonic()
+                    tool_id, result = await dispatch_tool(tc, tools_map, state, gateway_context=gateway_context)
+                    logger.info(
+                        "[react_loop] resume replay: tool=%s elapsed=%.3fs",
+                        tc.get("name", "?"), time.monotonic() - _t0,
+                    )
+
+                    if isinstance(result, dict):
+                        data_block = result.get("data") if isinstance(result.get("data"), dict) else result
+                        if isinstance(data_block, dict) and "records" in data_block and "meta" in data_block:
+                            _last_query_data = data_block
+
+                    if isinstance(result, dict) and result.get("__finish__"):
+                        return {
+                            "react_final": {**result, "stop_reason": "finish_tool"},
+                            "react_rounds": start_round + 1,
+                        }
+
+                    messages.append(
+                        ToolMessage(content=_compress_tool_result(result, tc["name"]), tool_call_id=str(tc.get("id") or ""))
+                    )
+            finally:
+                is_resume_replay.reset(_resume_token)
+            # 从下一轮继续
+            start_round += 1
+        else:
+            start_round = 0
 
     for round_idx in range(start_round, max_rounds):
         logger.info("[react_loop] round=%d/%d", round_idx + 1, max_rounds)
@@ -397,8 +474,7 @@ async def run_react_loop(
                 "react_rounds": round_idx + 1,
                 "react_checkpoint": None,
             }
-
-        for tc in ai_msg.tool_calls:
+        for tc_idx, tc in enumerate(ai_msg.tool_calls):
             # 检查是否是delegate工具（可能interrupt）
             tool_name = tc.get("name", "")
             t_delegate = tools_map.get(tool_name)
@@ -443,7 +519,25 @@ async def run_react_loop(
                 state["react_checkpoint"] = checkpoint_data
                 logger.info("[react_loop] saved checkpoint to state before delegate tool")
 
-            tool_id, result = await dispatch_tool(tc, tools_map, state, gateway_context=gateway_context)
+            try:
+                tool_id, result = await dispatch_tool(tc, tools_map, state, gateway_context=gateway_context)
+            except GraphBubbleUp:
+                # 保存当前 messages + 剩余未执行的 tool_calls 到进程内缓存
+                _s_key = str(getattr(gateway_context, "session_id", "") or "") if gateway_context else ""
+                if _s_key:
+                    _interrupt_resume_cache[_s_key] = {
+                        "messages": list(messages),
+                        "pending_tool_calls": list(ai_msg.tool_calls[tc_idx:]),
+                        "round_idx": round_idx,
+                        "last_query_data": _last_query_data,
+                    }
+                logger.info(
+                    "[react_loop] interrupt: saving to cache session=%s messages=%d "
+                    "pending=%d round=%d msg_types=%s",
+                    _s_key, len(messages), len(ai_msg.tool_calls) - tc_idx, round_idx + 1,
+                    [type(m).__name__ for m in messages],
+                )
+                raise
 
             # 缓存 data_query 结果：识别含 records+meta 的 data block
             if isinstance(result, dict):
