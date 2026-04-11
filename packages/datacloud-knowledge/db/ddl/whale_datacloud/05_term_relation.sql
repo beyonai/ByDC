@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS whale_datacloud.term_relation (
 
-    relation_id       VARCHAR(255) NOT NULL PRIMARY KEY,
+    relation_id       VARCHAR(1000) NOT NULL PRIMARY KEY,
     source_term_id    VARCHAR(255) NOT NULL,
     target_term_id    VARCHAR(255) NOT NULL,
     relation_name     VARCHAR(255) NOT NULL,

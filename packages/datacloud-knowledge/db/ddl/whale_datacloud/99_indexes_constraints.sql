@@ -102,3 +102,7 @@ CREATE INDEX IF NOT EXISTS idx_tn_name_embedding_hnsw
     ON whale_datacloud.term_name
     USING hnsw (name_embedding vector_cosine_ops)
     WITH (m = 16, ef_construction = 64);
+
+-- term_name jieba 分词 BM25 GIN 索引
+CREATE INDEX IF NOT EXISTS idx_tn_name_keywords_jieba
+    ON whale_datacloud.term_name USING GIN (name_keywords_jieba);

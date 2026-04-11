@@ -12,7 +12,7 @@ ALTER TABLE whale_datacloud.term
 
 -- 2. term_relation 表
 ALTER TABLE whale_datacloud.term_relation
-    ALTER COLUMN relation_id TYPE VARCHAR(255),
+    ALTER COLUMN relation_id TYPE VARCHAR(1000),
     ALTER COLUMN source_term_id TYPE VARCHAR(255),
     ALTER COLUMN target_term_id TYPE VARCHAR(255),
     ALTER COLUMN action_term_id TYPE VARCHAR(255);

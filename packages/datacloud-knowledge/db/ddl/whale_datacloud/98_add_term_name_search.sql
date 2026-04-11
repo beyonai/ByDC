@@ -53,3 +53,19 @@ END $$;
 -- 步骤 5: 为存量数据填充 tsvector（仅执行一次，可手动运行）
 -- UPDATE whale_datacloud.term_name
 -- SET name_keywords = to_tsvector('simple', array_to_string(string_to_array(COALESCE(name_text, ''), NULL), ' '));
+
+
+-- =====================================================
+-- 步骤 6: 添加 jieba 分词 tsvector 列（词级全文搜索）
+-- 由应用层 Python jieba 分词后写入，不使用 DB trigger。
+-- =====================================================
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'whale_datacloud' AND table_name = 'term_name' AND column_name = 'name_keywords_jieba'
+    ) THEN
+        ALTER TABLE whale_datacloud.term_name ADD COLUMN name_keywords_jieba tsvector;
+        COMMENT ON COLUMN whale_datacloud.term_name.name_keywords_jieba IS 'BM25 全文搜索向量，基于 jieba 中文分词（词级粒度，由应用层填充）';
+    END IF;
+END $$;
