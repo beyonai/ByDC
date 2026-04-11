@@ -24,6 +24,7 @@ import sys
 from pathlib import Path
 
 import psycopg2
+from psycopg2.extras import execute_values
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +163,7 @@ def generate_embeddings(batch_size: int = 50) -> dict:
 
     embedding_service = get_embedding_service()
     conn = get_db_connection()
-    conn.autocommit = True
+    conn.autocommit = False
 
     try:
         # 统计总数
@@ -170,7 +171,12 @@ def generate_embeddings(batch_size: int = 50) -> dict:
             cur.execute(
                 "SELECT COUNT(*) FROM whale_datacloud.term_name WHERE name_embedding IS NULL"
             )
-            total = cur.fetchone()[0]
+            total_row = cur.fetchone()
+
+        if total_row is None:
+            raise RuntimeError("COUNT(*) query returned no rows")
+
+        total = total_row[0]
 
         if total == 0:
             logger.info("所有术语名称已有向量，无需更新")
@@ -179,9 +185,8 @@ def generate_embeddings(batch_size: int = 50) -> dict:
         logger.info("开始向量化 %d 条术语名称...", total)
 
         updated = 0
-        offset = 0
 
-        while offset < total:
+        while True:
             # 获取一批数据
             with conn.cursor() as cur:
                 cur.execute(
@@ -190,9 +195,9 @@ def generate_embeddings(batch_size: int = 50) -> dict:
                     FROM whale_datacloud.term_name
                     WHERE name_embedding IS NULL
                     ORDER BY name_id
-                    LIMIT %s OFFSET %s
+                    LIMIT %s
                     """,
-                    (batch_size, offset),
+                    (batch_size,),
                 )
                 rows = cur.fetchall()
 
@@ -207,27 +212,39 @@ def generate_embeddings(batch_size: int = 50) -> dict:
             try:
                 vectors = embedding_service.get_text_embedding_batch(texts)
             except Exception as e:
-                logger.error("向量生成失败: %s", e)
-                offset += batch_size
+                logger.error("向量生成失败，跳过当前批次: %s", e)
                 continue
+
+            payloads = [
+                (name_id, "[" + ",".join(map(str, vector)) + "]")
+                for name_id, vector in zip(name_ids, vectors, strict=True)
+            ]
 
             # 批量更新
             with conn.cursor() as cur:
-                for name_id, vector in zip(name_ids, vectors):
-                    vector_str = "[" + ",".join(map(str, vector)) + "]"
-                    cur.execute(
-                        "UPDATE whale_datacloud.term_name SET name_embedding = %s::vector WHERE name_id = %s",
-                        (vector_str, name_id),
-                    )
+                execute_values(
+                    cur,
+                    """
+                    UPDATE whale_datacloud.term_name AS tn
+                    SET name_embedding = src.embedding::vector
+                    FROM (VALUES %s) AS src(name_id, embedding)
+                    WHERE tn.name_id = src.name_id
+                    """,
+                    payloads,
+                    template="(%s, %s)",
+                    page_size=batch_size,
+                )
+
+            conn.commit()
 
             updated += len(rows)
-            offset += batch_size
             logger.info("已处理 %d/%d 条记录", updated, total)
 
         logger.info("向量化完成: %d 条记录已更新", updated)
         return {"total": total, "updated": updated}
 
     except Exception:
+        conn.rollback()
         logger.exception("向量化失败")
         raise
     finally:
@@ -323,21 +340,19 @@ def main() -> None:
         truncate_tables()
         return
 
-    # 默认：完整重建 + 导入
-    apply_ddl_and_seed()
-    result = import_package(args.import_package)
+    if not args.embed:
+        # 默认：完整重建 + 导入
+        apply_ddl_and_seed()
+        import_package(args.import_package)
 
-    # 填充 tsvector（BM25）
-    logger.info("填充 tsvector 字段...")
-    populate_tsvector()
+        # 填充 tsvector（BM25）
+        logger.info("填充 tsvector 字段...")
+        populate_tsvector()
 
     # 可选：生成向量嵌入
     if args.embed:
         logger.info("生成向量嵌入...")
-        embed_result = generate_embeddings(batch_size=args.embed_batch_size)
-        result["embeddings"] = embed_result
-
-    print(result)
+        generate_embeddings(batch_size=args.embed_batch_size)
 
 
 if __name__ == "__main__":

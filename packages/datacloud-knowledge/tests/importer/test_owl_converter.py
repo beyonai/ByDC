@@ -192,13 +192,16 @@ class TestConvertTermType:
         assert result["domain_code"] == "HR"
 
     def test_convert_term_type_typo_aliases(self) -> None:
-        """测试 typo 别名映射。"""
+        """测试 typo 别名映射。
+
+        owl_parser 已将 trem_* 正序化为 term_*，此处测试 converter 对正序化后字段的处理。
+        """
         owl_entity = {
-            "trem_type_code": "OBJECT",
-            "trem_type_name": "对象",
-            "trem_type_desc": "对象类型",
-            "trem_data_type": "DICT_TERM",
-            "trem_type_code_path": "SALE#OBJECT",
+            "term_type_code": "OBJECT",
+            "term_type_name": "对象",
+            "term_type_desc": "对象类型",
+            "term_data_type": "DICT_TERM",
+            "term_type_code_path": "SALE#OBJECT",
         }
 
         result = convert_term_type(owl_entity)
@@ -547,4 +550,9 @@ class TestRelationTypeToCardinalityConstant:
             "ONE_TO_MANY": "1:N",
             "MANY_TO_ONE": "N:1",
             "MANY_TO_MANY": "N:N",
+            # 本体结构关系（owl_gen 生成）
+            "HAS_OBJECT": "1:N",
+            "HAS_FIELD": "1:N",
+            "HAS_ACTION": "1:N",
+            "HAS_TERM": "1:N",
         }
