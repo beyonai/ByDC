@@ -22,14 +22,14 @@ _SEED_DIR = _ROOT / "db" / "seed" / "whale_datacloud"
 
 
 def _load_env_if_needed() -> None:
-    """若 DB_HOST 未设置，尝试从 .vscode/.env.test 或 .env.test 加载。"""
+    """若 DB_HOST 未设置，尝试从真实 .env 文件加载。"""
     if os.getenv("DB_HOST"):
         return
-    for candidate in (_REPO_ROOT / ".vscode" / ".env.test", _REPO_ROOT / ".env.test"):
+    for candidate in (_REPO_ROOT / ".env",):
         if not candidate.exists():
             continue
-            for raw_line in candidate.read_text(encoding="utf-8").splitlines():
-                line = raw_line.strip()
+        for raw_line in candidate.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
             if not line or line.startswith("#"):
                 continue
             if "=" in line:
@@ -129,7 +129,7 @@ def main() -> None:
         python apply_whale_datacloud.py            # 完整初始化（DDL + Seed）
         python apply_whale_datacloud.py --seed-only  # 仅执行 Seed（幂等，不 drop 表）
 
-    环境变量 DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME 可从 .vscode/.env.test 自动加载。
+    环境变量 DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME 可从导出的环境变量或仓库根 .env 提供。
     """
     import sys  # noqa: PLC0415
 
