@@ -1099,9 +1099,11 @@ def run(folder_path: str) -> dict[str, Any]:
                 step_type: str = step.get("type", "")
                 entity_type = _step_entity_type(step_type, rel_file)
                 batch_handler = _STEP_BATCH_HANDLERS.get(entity_type)
-                if batch_handler is None:
+                if batch_handler is None and step_type != "ontology":
                     logger.warning("未知 step type '%s', 跳过 %s", step_type, rel_file)
                     continue
+                if step_type == "ontology":
+                    logger.info("ontology %s (reference file, parse but skip DB)", rel_file)
 
                 file_path = root / rel_file
                 logger.info(

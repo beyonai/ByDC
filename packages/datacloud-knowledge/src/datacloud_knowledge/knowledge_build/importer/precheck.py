@@ -34,14 +34,14 @@ _REQUIRED: dict[str, list[str]] = {
 # 内置 term_type_code，无需在导入包中定义
 _BUILTIN_TYPE_CODES: frozenset[str] = frozenset(
     {
-        "EMPLOYEE",
-        "GENERAL",
-        "ONTOLOGY_VIEW",
-        "ONTOLOGY_OBJ",
-        "ONTOLOGY_ACTION",
-        "ONTOLOGY_FUNC",
-        "ONTOLOGY_PARAM",
-        "ONTOLOGY_PROP",
+        "employee",
+        "general",
+        "view",
+        "object",
+        "action",
+        "func",
+        "param",
+        "prop",
     }
 )
 

@@ -20,6 +20,11 @@ RELATION_TYPE_TO_CARDINALITY: Final[dict[str, str]] = {
     "ONE_TO_MANY": "1:N",
     "MANY_TO_ONE": "N:1",
     "MANY_TO_MANY": "N:N",
+    # 本体结构关系（owl_gen 生成）
+    "HAS_OBJECT": "1:N",
+    "HAS_FIELD": "1:N",
+    "HAS_ACTION": "1:N",
+    "HAS_TERM": "1:N",
 }
 
 
