@@ -36,6 +36,20 @@ logger = logging.getLogger(__name__)
 HEALTH_CHECK_TIMEOUT = 3.0
 
 
+def _configure_package_logger(logger_name: str) -> None:
+    """为项目包 logger 配置稳定的控制台输出。"""
+    package_logger = logging.getLogger(logger_name)
+    package_logger.setLevel(logging.INFO)
+    package_logger.propagate = False
+    if package_logger.handlers:
+        return
+
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+    package_logger.addHandler(handler)
+
+
 def _make_performance_log_handler() -> tuple[Any, dict[str, list]]:
     """
     创建性能日志处理器
@@ -116,14 +130,8 @@ def create_app(
     _mcp_session_manager = create_mcp_session_manager()
     _mcp_asgi_app = create_mcp_asgi_app(_mcp_session_manager)
 
-    sdk_logger = logging.getLogger("datacloud_data_sdk")
-    sdk_logger.setLevel(logging.INFO)
-    sdk_logger.propagate = False
-    if not sdk_logger.handlers:
-        h = logging.StreamHandler()
-        h.setLevel(logging.INFO)
-        h.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
-        sdk_logger.addHandler(h)
+    _configure_package_logger("datacloud_data_service")
+    _configure_package_logger("datacloud_data_sdk")
 
     @asynccontextmanager
     async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
