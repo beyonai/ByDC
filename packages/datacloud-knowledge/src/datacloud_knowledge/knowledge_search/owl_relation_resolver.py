@@ -140,14 +140,18 @@ def _normalize_type_code(type_code: str) -> str:
     raw = (type_code or "").strip()
     if not raw:
         return raw
-    if raw.startswith("ONTOLOGY_"):
-        return raw
     mapping = {
-        "VIEW": "ONTOLOGY_VIEW",
-        "OBJ": "ONTOLOGY_OBJ",
-        "ACTION": "ONTOLOGY_ACTION",
-        "FUNC": "ONTOLOGY_FUNC",
-        "PARAM": "ONTOLOGY_PARAM",
-        "PROP": "ONTOLOGY_PROP",
+        "ONTOLOGY_VIEW": "view",
+        "ONTOLOGY_OBJ": "object",
+        "ONTOLOGY_ACTION": "action",
+        "ONTOLOGY_FUNC": "func",
+        "ONTOLOGY_PARAM": "param",
+        "ONTOLOGY_PROP": "prop",
+        "VIEW": "view",
+        "OBJ": "object",
+        "ACTION": "action",
+        "FUNC": "func",
+        "PARAM": "param",
+        "PROP": "prop",
     }
     return mapping.get(raw, raw)
