@@ -82,19 +82,12 @@ class SubgraphResult:
 # 这些类型直接挂在本体结构下，起始点 = 原始术语
 ONTOLOGY_BASE_TYPES = frozenset(
     {
-        "OBJECT",
-        "OBJ",
-        "ONTOLOGY_OBJ",
-        "VIEW",
-        "ONTOLOGY_VIEW",
-        "ACTION",
-        "ONTOLOGY_ACTION",
-        "FUNC",
-        "ONTOLOGY_FUNC",
-        "PARAM",
-        "ONTOLOGY_PARAM",
-        "PROP",
-        "ONTOLOGY_PROP",
+        "object",
+        "view",
+        "action",
+        "func",
+        "param",
+        "prop",
     }
 )
 
