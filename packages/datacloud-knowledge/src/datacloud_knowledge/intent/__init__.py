@@ -10,6 +10,7 @@ from .service import (
     disambiguate_with_session,
     search_all_candidates_with_name_id,
     store_clarification_results,
+    typed_multi_recall_with_session,
 )
 from .storage import create_term_knowledge, create_term_with_knowledge, create_user_term_name
 from .types import (
@@ -53,10 +54,10 @@ __all__ = [
     "disambiguate",
     "disambiguate_with_session",
     "match_mentions",
-    "match_mentions",
     "match_mentions_with_search",
     "search_all_candidates_with_name_id",
     "store_clarification_results",
+    "typed_multi_recall_with_session",
     "update_score",
     "update_score_async",
 ]

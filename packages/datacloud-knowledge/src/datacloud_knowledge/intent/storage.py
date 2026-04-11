@@ -57,7 +57,6 @@ def create_user_term_name(
     log.info("Created user term name: %s -> %s (user=%s)", name_text, term_id, user_id)
     return name_id
 
-
 def create_term_with_knowledge(
     term_code: str,
     term_name: str,
@@ -95,7 +94,7 @@ def create_term_with_knowledge(
     session.execute(
         text(
             "INSERT INTO whale_datacloud.term_knowledge "
-            '(knowledge_id, term_id, desc_summary, "desc", created_time, updated_time) '
+            "(knowledge_id, term_id, desc_summary, \"desc\", created_time, updated_time) "
             "VALUES (:knowledge_id, :term_id, :desc_summary, :desc, :now, :now)"
         ),
         {
@@ -132,7 +131,7 @@ def create_term_knowledge(
     session.execute(
         text(
             "INSERT INTO whale_datacloud.term_knowledge "
-            '(knowledge_id, term_id, desc_summary, "desc", created_time, updated_time) '
+            "(knowledge_id, term_id, desc_summary, \"desc\", created_time, updated_time) "
             "VALUES (:knowledge_id, :term_id, :desc_summary, :desc, :now, :now)"
         ),
         {

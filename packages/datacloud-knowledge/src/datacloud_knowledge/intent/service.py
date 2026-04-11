@@ -290,3 +290,27 @@ def batch_update_scores_with_session(records: tuple[ScoreUpdateRecord, ...]) -> 
         return
     with get_session() as session:
         batch_update_scores(records, session)
+
+
+def typed_multi_recall_with_session(
+    items: list[Any],
+    *,
+    user_id: str | None = None,
+    top_k: int = 5,
+) -> dict[str, list[CandidateDict]]:
+    """Run typed multi-path recall with a managed DB session.
+
+    Accepts TypedKeywordState items from paradigm_builder and returns
+    dict[keyword, list[CandidateDict]] compatible with the existing
+    paradigm resolution interface.
+    """
+    from .typed_recall import typed_multi_recall
+
+    enable_vector = _vector_search_enabled()
+    with get_session() as session:
+        return typed_multi_recall(
+            items,
+            session=session,
+            top_k=top_k,
+            enable_vector=enable_vector,
+        )
