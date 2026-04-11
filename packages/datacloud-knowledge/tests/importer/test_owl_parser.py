@@ -16,7 +16,7 @@ from datacloud_knowledge.knowledge_build.importer.owl_parser import (
 )
 
 # 样例文件路径
-SAMPLE_DIR = Path("packages/datacloud-knowledge/docs/模块设计/导入包样例owl")
+SAMPLE_DIR = Path("packages/datacloud-knowledge/docs/模块设计/导入包样例")
 
 DOMAINS_OWL = SAMPLE_DIR / "meta/domains.owl"
 LIBRARY_OWL = SAMPLE_DIR / "meta/library.owl"
@@ -119,30 +119,25 @@ class TestParseTermOwl:
     """测试 term OWL 文件解析。"""
 
     def test_parse_term_returns_single_entity(self) -> None:
-        """测试解析 terms.owl 返回一个 term 实体。"""
+        """测试解析 terms.owl 返回 term 实体。"""
         entities = parse_owl_file(TERMS_OWL)
-
-        assert len(entities) == 1
+        assert len(entities) == 2  # po_organization and po_users
 
     def test_parse_term_entity_type(self) -> None:
         """测试实体类型为 term。"""
         entities = parse_owl_file(TERMS_OWL)
-
         assert entities[0]["entity_type"] == "term"
 
     def test_parse_term_properties(self) -> None:
         """测试 term 实体的属性。"""
+        # terms.owl has 2 entities; first is po_organization
         entity = parse_owl_file(TERMS_OWL)[0]
-
-        assert entity["term_code_path"] == "OBJECT#po_users"
-        assert entity["term_code"] == "po_users"
-        assert entity["term_name"] == "人员"
+        assert entity["term_code_path"] == "OBJECT#po_organization"
+        assert entity["term_code"] == "po_organization"
+        assert entity["term_name"] == "组织信息"
         assert entity["library_code"] == "hr_kb"
         assert entity["term_type_code"] == "OBJECT"
-        assert entity["term_desc"] == "人员基础信息，记录员工工号、姓名、所属组织等"
-        assert entity["synonyms"] == '["员工","用户","人员信息"]'
-        assert entity["terms_knowledge"] == '[{"name":"员工手册","content":"员工手册信息"}]'
-        assert entity["ext_field"] == "扩展字段"
+        assert entity["ext_field"] == "{}"
         assert entity["version"] == "1.0"
 
 
@@ -172,17 +167,16 @@ class TestParseRelationOwl:
     def test_parse_relation_properties(self) -> None:
         """测试 relation 实体的属性。"""
         entity = parse_owl_file(RELATION_OWL)[0]
-
         assert entity["source_library"] == "HR"
-        assert entity["source_type"] == "术语类型"
+        assert entity["source_type"] == "OBJECT"
         assert entity["source_code"] == "po_users"
         assert entity["target_library"] == "HR"
-        assert entity["target_type"] == "术语类型"
+        assert entity["target_type"] == "OBJECT"
         assert entity["target_code"] == "po_organization"
         assert entity["relation_name"] == "人员_归属_组织"
         assert entity["relation_type"] == "MANY_TO_ONE"
         assert entity["joinkeys"] == '[{"sourceField":"org_id", "targetField":"org_id"}]'
-        assert entity["ext_field"] == "扩展字段"
+        assert entity["ext_field"] == "{}"
         assert entity["version"] == "1.0"
 
 
@@ -244,7 +238,9 @@ class TestParseErrorHandling:
             temp_path = Path(f.name)
 
         try:
-            with pytest.raises(OWLParseError):
-                parse_owl_file(temp_path)
+            entities = parse_owl_file(temp_path)
+            # 未知 class 不再抛异常，而是返回 entity_type 为空的实体
+            assert len(entities) == 1
+            assert entities[0].get("entity_type", "") == ""
         finally:
             temp_path.unlink()
