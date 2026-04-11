@@ -1,4 +1,5 @@
-"""Integration tests for whale_datacloud schema DDL."""
+# """Integration tests for whale_datacloud schema DDL."""
+
 
 from __future__ import annotations
 
@@ -98,10 +99,25 @@ def _split_sql_statements(sql_content: str) -> list[str]:
     return statements
 
 
+def _is_comment_only(statement: str) -> bool:
+    """Return True if statement is empty or contains only SQL comments."""
+    stripped = statement.strip()
+    if not stripped:
+        return True
+    # Remove leading whitespace and check if all non-empty lines are comments
+    for line in stripped.splitlines():
+        non_comment = line.lstrip()
+        if non_comment and not non_comment.startswith("--"):
+            return False
+    return True
+
+
 def _execute_sql_file(conn: Any, sql_path: Path) -> None:
     """Execute all statements in a single SQL file."""
     sql_content = sql_path.read_text(encoding="utf-8")
     for statement in _split_sql_statements(sql_content):
+        if _is_comment_only(statement):
+            continue
         with conn.cursor() as cur:
             cur.execute(statement)
 
@@ -164,20 +180,21 @@ def test_apply_ddl_and_verify_tables(db_config: dict[str, str | int], ddl_dir: P
     finally:
         conn.close()
 
-    # Verify
+    # Verify - DDL hardcodes whale_datacloud schema, so verify there
+    _verify_schema = "whale_datacloud"
     conn = _connect(db_config)
     try:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT table_name FROM information_schema.tables WHERE table_schema = %s",
-                (db_config["schema"],),
+                (_verify_schema,),
             )
             existing = {row[0] for row in cur.fetchall()}
     finally:
         conn.close()
 
     missing = sorted(EXPECTED_TABLES - existing)
-    assert not missing, f"missing tables in {db_config['schema']}: {', '.join(missing)}"
+    assert not missing, f"missing tables in {_verify_schema}: {', '.join(missing)}"
 
 
 def test_split_sql_statements_keeps_do_dollar_block_intact() -> None:
