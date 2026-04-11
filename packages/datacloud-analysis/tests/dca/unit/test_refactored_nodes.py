@@ -40,7 +40,7 @@ class TestIntendNode:
 
     @pytest.mark.asyncio
     async def test_intend_routes_react_for_normal_query(self) -> None:
-        """intend_node should route non-command, non-chitchat query to execution."""
+        """intend_node should route non-command query to execution with intent=react."""
         from langchain_core.messages import HumanMessage
         from datacloud_analysis.orchestration.intend.node import intend_node
 
@@ -54,12 +54,7 @@ class TestIntendNode:
             mock_mgr.handle_ext_command = AsyncMock(return_value=(False, None))
             mock_factory.return_value = mock_mgr
 
-            # Patch LLM-based classification to return "react"
-            with patch(
-                "datacloud_analysis.orchestration.intend.intent_classifier.IntentClassifier.classify",
-                return_value="react",
-            ):
-                result = await intend_node(state, config)
+            result = await intend_node(state, config)
 
         assert result["execution_status"] == "execution"
         assert result["intent"] == "react"
@@ -69,12 +64,6 @@ class TestIntendNode:
         """When messages end with AIMessage, user_query must be last HumanMessage."""
         from langchain_core.messages import AIMessage, HumanMessage
         from datacloud_analysis.orchestration.intend.node import intend_node
-
-        captured: list[str] = []
-
-        async def fake_classify(self: Any, user_query: str, state: Any) -> str:
-            captured.append(user_query)
-            return "react"
 
         state: dict[str, Any] = {
             "messages": [
@@ -93,14 +82,9 @@ class TestIntendNode:
             mock_mgr.handle_ext_command = AsyncMock(return_value=(False, None))
             mock_factory.return_value = mock_mgr
 
-            with patch(
-                "datacloud_analysis.orchestration.intend.intent_classifier.IntentClassifier.classify",
-                new=fake_classify,
-            ):
-                result = await intend_node(state, config)
+            result = await intend_node(state, config)
 
         assert result["user_query"] == "second question"
-        assert captured == ["second question"]
 
 
 # ---------------------------------------------------------------------------

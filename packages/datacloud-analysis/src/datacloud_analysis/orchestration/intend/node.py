@@ -7,12 +7,10 @@ from typing import Any
 from langchain_core.runnables import RunnableConfig
 
 from datacloud_analysis.orchestration.intend.command_router import CommandRouter
-from datacloud_analysis.orchestration.intend.intent_classifier import IntentClassifier
 from datacloud_analysis.orchestration.message_util import last_human_text
 from datacloud_analysis.orchestration.state import AgentState
 
 _router = CommandRouter()
-_classifier = IntentClassifier()
 logger = logging.getLogger(__name__)
 
 
@@ -76,11 +74,10 @@ async def intend_node(state: AgentState, config: RunnableConfig) -> dict[str, An
             "user_query": user_query,
         }
 
-    # 2. LLM 意图分类
-    intent = await _classifier.classify(user_query, state)
+    # 2. 非命令查询直接走 react 路径，无需 LLM 意图分类
     return {
-        "intent": intent,
-        "intent_source": intent,
+        "intent": "react",
+        "intent_source": "react",
         "execution_status": "execution",
         "user_query": user_query,
     }
