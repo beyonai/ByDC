@@ -26,6 +26,11 @@ async def respond_node(state: AgentState, config: RunnableConfig) -> dict[str, A
         len(_records),
         _first_rec,
     )
+    logger.warning(
+        "[respond_node DIAG] gw_ctx.message_id=%s gw_ctx.parent_message_id=%s",
+        getattr(gw_ctx, "message_id", "N/A"),
+        getattr(gw_ctx, "parent_message_id", "N/A"),
+    )
 
     if not react_final:
         logger.warning("respond_node: react_final is empty")

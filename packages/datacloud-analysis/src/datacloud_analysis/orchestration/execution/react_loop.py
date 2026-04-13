@@ -163,6 +163,9 @@ async def finish_react(
     - 调用 data_query 类工具后，返回中含 _hint 字段，请使用 result_type=query_result，
       系统会自动透传完整的 records/pagination/meta/file 结构，无需手动序列化。
       若需同时返回文字分析，填写 answer 字段即可（先推文字，后推结构化数据）。
+    - 【重要】result_type=query_result 时，answer 字段只写一句话的文字摘要
+      （例如"共有 N 家企业"），绝对不要在 answer 里写数据表格或列表，
+      数据已经通过 query_data 自动结构化展示，写进 answer 会导致重复输出。
     - execute_code 执行后会将 _result 自动保存到同名 .json 文件（result_file 字段），
       此时推荐使用 result_type=json_file，csv_file_path 填写 result_file 路径。
     """
@@ -605,10 +608,26 @@ async def run_react_loop(
                         final["result_type"] = "query_result"
                     if final.get("result_type") == "query_result":
                         final["query_data"] = _last_query_data
-                        # 如已返回结构化表格，避免文本与表格矛盾
+                        # 如已返回结构化表格，避免文本与表格矛盾：
+                        # 1. answer 含 JSON 关键词或超长 → 清空
+                        # 2. answer 含 Markdown 表格（LLM 误把表格写进 answer）→ 清空，
+                        #    防止 _stream_llm_call 已流式推送 + format_result 再次渲染导致重复
                         answer = str(final.get("answer") or "")
                         if answer:
-                            if any(token in answer for token in ("records", "result_type", "pagination")) or len(answer) > 800:
+                            _is_json_like = any(
+                                token in answer for token in ("records", "result_type", "pagination")
+                            ) or len(answer) > 800
+                            _is_md_table = (
+                                answer.count("|") > 6
+                                and ("| --- |" in answer or "| --- " in answer or "|---|" in answer or "|---" in answer)
+                            )
+                            if _is_json_like or _is_md_table:
+                                if _is_md_table:
+                                    logger.warning(
+                                        "[react_loop] answer contains markdown table, clearing to avoid "
+                                        "double render (streamed=%s len=%d)",
+                                        final.get("answer_streamed"), len(answer),
+                                    )
                                 final["answer"] = ""
                                 answer = ""
                             meta = _last_query_data.get("meta") if isinstance(_last_query_data, dict) else {}
