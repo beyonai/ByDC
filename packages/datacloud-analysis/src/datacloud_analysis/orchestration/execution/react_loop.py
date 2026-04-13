@@ -82,18 +82,11 @@ async def _stream_llm_call(
                     full_msg = chunk
 
             if gateway_context is not None:
-                # 实时推送文字 token（通常只在无 tool_calls 的轮次有内容）
-                content = getattr(chunk, "content", None)
-                if isinstance(content, str) and content:
-                    await _emit_stream_token(gateway_context, content)
-                    did_stream_text = True
-                elif isinstance(content, list):
-                    for part in content:
-                        if isinstance(part, dict) and part.get("type") == "text":
-                            t = part.get("text", "")
-                            if t:
-                                await _emit_stream_token(gateway_context, t)
-                                did_stream_text = True
+                # 注意：不在此处推送 LLM content 文字 token。
+                # 部分 LLM（尤其是国产模型）在生成 tool_calls 的同时也输出 content 文字
+                # （如"我来查询..."），若在此处推送则会出现不必要的客套话。
+                # 纯文字答案（无 tool_calls 的最终轮）由 finish_react.answer 流式推送，
+                # 或由 formatter 在 answer_streamed=False 时一次性推送。
 
                 # 实时推送 finish_react.answer 参数的增量内容
                 for tcc in (getattr(chunk, "tool_call_chunks", None) or []):

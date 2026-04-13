@@ -506,7 +506,13 @@ async def dispatch_tool(
                     from datacloud_data_sdk.context import InvocationContext  # type: ignore
 
                 workspace_root = resolve_shared_workspace_dir(ctx.get("workspace_dir"))
+                # 从 gateway_context 提取 user_id / session_id，使 SDK 内可通过
+                # get_current_context() 拿到正确的用户/会话标识
+                _gc_user_id = str(getattr(gateway_context, "user_id", "") or "")
+                _gc_session_id = str(getattr(gateway_context, "session_id", "") or "")
                 _inv_ctx: Any = InvocationContext(
+                    user_id=_gc_user_id,
+                    session_id=_gc_session_id,
                     gateway_context=gateway_context,
                     workspace_dir=str(workspace_root) if workspace_root is not None else "",
                 )

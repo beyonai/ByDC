@@ -90,7 +90,7 @@ _NODE_THINKING_DESC: dict[str, str] = {
 _DEFAULT_THINKING_DESC = "正在处理，请稍候...\n\n"
 
 _NODE_PHASE_TITLE: dict[str, str] = {
-    "knowledge_enhance": "问题理解",
+    # "knowledge_enhance": "问题理解",
     "execution": "任务执行",
     "end": "结果生成",
 }
