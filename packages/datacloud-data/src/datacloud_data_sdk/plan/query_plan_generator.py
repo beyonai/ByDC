@@ -137,6 +137,7 @@ class LangGraphPlanGenerator(BasePlanGenerator):
         api_key: str = "",
         temperature: float = 0.0,
         max_retries: int = 2,
+        model_kwargs: dict | None = None,
     ) -> None:
         """
         初始化 LangGraph 计划生成器
@@ -147,6 +148,7 @@ class LangGraphPlanGenerator(BasePlanGenerator):
             api_key: API 密钥
             temperature: 生成温度
             max_retries: 最大重试次数
+            model_kwargs: 额外传递给 ChatOpenAI 的 model_kwargs（如 extra_body）
         """
         from datacloud_data_sdk.agents import PlanAgent
 
@@ -156,6 +158,7 @@ class LangGraphPlanGenerator(BasePlanGenerator):
             api_key=api_key,
             temperature=temperature,
             max_retries=max_retries,
+            model_kwargs=model_kwargs,
         )
 
     async def generate(

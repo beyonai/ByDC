@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,25 @@ from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
 
 logger = logging.getLogger(__name__)
 _CHUNK_ROWS = 100  # 每个 6001 chunk 携带的行数
+
+
+def _get_output_format() -> str:
+    """读取 DATACLOUD_OUTPUT_FORMAT 环境变量，返回 'markdown' 或 'json'，默认 markdown。"""
+    return os.environ.get("DATACLOUD_OUTPUT_FORMAT", "markdown").lower().strip()
+
+
+def _data_to_markdown(columns: list[str], rows: list[list[str]]) -> str:
+    """将列名和行数据渲染为 Markdown 表格字符串。"""
+    if not columns:
+        return ""
+    escape = lambda v: str(v).replace("|", "\\|").replace("\n", " ")
+    header = "| " + " | ".join(escape(c) for c in columns) + " |"
+    separator = "| " + " | ".join(["---"] * len(columns)) + " |"
+    lines = [header, separator]
+    for row in rows:
+        cells = [escape(v) for v in row]
+        lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines)
 
 
 def _resolve_result_path(path_str: str, workspace_dir: str | None) -> Path:
@@ -29,11 +49,13 @@ async def format_result(
 ) -> None:
     result_type = react_final.get("result_type", "text")
     answer_was_streamed = bool(react_final.get("answer_streamed", False))
+    output_fmt = _get_output_format()
     logger.info(
-        "[format_result] result_type=%s has_query_data=%s answer_streamed=%s",
+        "[format_result] result_type=%s has_query_data=%s answer_streamed=%s output_format=%s",
         result_type,
         bool(react_final.get("query_data")),
         answer_was_streamed,
+        output_fmt,
     )
     if result_type == "query_result":
         # data_query 原始结构透传：{result_type, records, pagination, meta, file, notice_msg}
@@ -46,7 +68,10 @@ async def format_result(
             if not answer:
                 await _emit_text(gateway_context, "（query_data 为空）")
             return
-        await _emit_query_result_as_6001(gateway_context, query_data)
+        if output_fmt == "markdown":
+            await _emit_query_result_as_markdown(gateway_context, query_data)
+        else:
+            await _emit_query_result_as_6001(gateway_context, query_data)
     elif result_type == "csv_file":
         csv_path = react_final.get("csv_file_path", "")
         if not csv_path:
@@ -56,13 +81,19 @@ async def format_result(
         if not resolved.exists():
             await _emit_text(gateway_context, f"（CSV 文件不存在: {csv_path}）")
             return
-        await _stream_csv_as_6001(gateway_context, resolved)
+        if output_fmt == "markdown":
+            await _stream_csv_as_markdown(gateway_context, resolved)
+        else:
+            await _stream_csv_as_6001(gateway_context, resolved)
     elif result_type == "json":
         data = react_final.get("data")
         if data is None:
             await _emit_text(gateway_context, "（JSON 数据为空）")
             return
-        await _emit_json_as_6001(gateway_context, data)
+        if output_fmt == "markdown":
+            await _emit_json_as_markdown(gateway_context, data)
+        else:
+            await _emit_json_as_6001(gateway_context, data)
     elif result_type == "json_file":
         # execute_code 执行后将 _result 保存到同名 .json 文件
         # data_query overflow 时保存到 CSV 文件（file_url）
@@ -77,12 +108,18 @@ async def format_result(
             return
         # 根据扩展名选择读取方式
         if resolved.suffix.lower() == ".csv":
-            await _stream_csv_as_6001(gateway_context, resolved)
+            if output_fmt == "markdown":
+                await _stream_csv_as_markdown(gateway_context, resolved)
+            else:
+                await _stream_csv_as_6001(gateway_context, resolved)
         else:
             try:
                 with open(resolved, encoding="utf-8") as f:
                     data = json.load(f)
-                await _emit_json_as_6001(gateway_context, data)
+                if output_fmt == "markdown":
+                    await _emit_json_as_markdown(gateway_context, data)
+                else:
+                    await _emit_json_as_6001(gateway_context, data)
             except Exception as exc:
                 logger.error("format_result json_file read failed: %s", exc)
                 await _emit_text(gateway_context, f"（读取 JSON 文件失败: {exc}）")
@@ -104,6 +141,78 @@ async def _emit_text(gateway_context: Any, text: str) -> None:
         )
     except Exception as exc:
         logger.warning("format_result: emit_text failed: %s", exc)
+
+
+async def _emit_json_as_markdown(gateway_context: Any, data: Any) -> None:
+    """将 JSON 数据渲染为 Markdown 表格后通过 text 通道推送。"""
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except Exception:
+            pass
+
+    if isinstance(data, list) and data and isinstance(data[0], dict):
+        columns = list(data[0].keys())
+        rows = [[str(row.get(col, "")) for col in columns] for row in data]
+    elif isinstance(data, dict) and "columns" in data and "data" in data:
+        columns = list(data["columns"])
+        rows = [list(r) for r in data["data"]]
+    elif isinstance(data, list):
+        columns = ["result"]
+        rows = [[str(item)] for item in data]
+    else:
+        columns = ["result"]
+        rows = [[json.dumps(data, ensure_ascii=False, default=str)]]
+
+    md = _data_to_markdown(columns, rows)
+    await _emit_text(gateway_context, md)
+
+
+async def _stream_csv_as_markdown(gateway_context: Any, csv_path: Path) -> None:
+    """将 CSV 文件渲染为 Markdown 表格后通过 text 通道推送。"""
+    try:
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            rows = list(reader)
+    except Exception as exc:
+        logger.error("_stream_csv_as_markdown read failed: %s", exc)
+        await _emit_text(gateway_context, f"（读取 CSV 文件失败: {exc}）")
+        return
+
+    if not rows:
+        return
+    header = rows[0]
+    data_rows = rows[1:]
+    md = _data_to_markdown(header, data_rows)
+    await _emit_text(gateway_context, md)
+
+
+async def _emit_query_result_as_markdown(gateway_context: Any, query_data: dict[str, Any]) -> None:
+    """将 data_query 返回的原始 data block 渲染为 Markdown 表格后通过 text 通道推送。"""
+    meta = query_data.get("meta") or {}
+    columns_raw = meta.get("columns", []) if isinstance(meta, dict) else []
+    columns: list[str] = []
+    for col in columns_raw:
+        if isinstance(col, dict):
+            label = str(col.get("label") or col.get("name") or "")
+            columns.append(label)
+        elif isinstance(col, str):
+            columns.append(col)
+
+    records = query_data.get("records") or []
+    if not columns and isinstance(records, list) and records and isinstance(records[0], dict):
+        columns = list(records[0].keys())
+
+    if isinstance(records, list) and records and isinstance(records[0], dict):
+        rows = [[str(r.get(c, "")) for c in columns] for r in records]
+    else:
+        rows = [[str(r)] for r in records]
+
+    notice = query_data.get("notice_msg") or query_data.get("overflow_notice") or ""
+    md = _data_to_markdown(columns, rows)
+    if notice:
+        md = md + "\n\n> " + str(notice)
+    await _emit_text(gateway_context, md)
 
 async def _emit_json_as_6001(gateway_context: Any, data: Any) -> None:
     """将工具返回的 JSON 数据转换为 6001 格式推送。

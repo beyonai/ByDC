@@ -205,6 +205,19 @@ def _conversation_messages_for_llm(state: Any) -> list[HumanMessage | AIMessage]
     return out
 
 
+def _load_model_kwargs(env_key: str) -> dict:
+    """从环境变量读取额外的 model_kwargs（JSON 格式），解析失败返回空 dict。"""
+    import json
+    raw = os.getenv(env_key, "").strip()
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except Exception:
+        logger.warning("[_load_model_kwargs] invalid JSON for %s: %s", env_key, raw)
+        return {}
+
+
 def _build_llm(state: Any) -> Any:
     """从环境变量构建 LLM（优先 reasoning，其次 coding，最后 openai 默认）。"""
     for env_prefix in ("DATACLOUD_LLM_REASONING", "DATACLOUD_LLM_CODING"):
@@ -212,12 +225,15 @@ def _build_llm(state: Any) -> Any:
         api_key = os.getenv(f"{env_prefix}_API_KEY", "")
         model = os.getenv(f"{env_prefix}_MODEL", "")
         if api_base and api_key and model:
+            model_kwargs = _load_model_kwargs(f"{env_prefix}_MODEL_KWARGS")
+            extra_kwargs: dict = {"model_kwargs": model_kwargs} if model_kwargs else {}
             return init_chat_model(
                 model=model,
                 model_provider="openai",
                 api_key=api_key,
                 base_url=api_base,
                 temperature=0.0,
+                **extra_kwargs,
             )
     # 兜底
     return init_chat_model(model="gpt-4o", model_provider="openai", temperature=0.0)
