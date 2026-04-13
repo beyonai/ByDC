@@ -1019,7 +1019,11 @@ class DataCloudWorker(GatewayWorker):
                 logger.info("_stream_graph: return session=%s status=waiting", context.session_id)
                 return {"status": "waiting"}
 
-            # 从 snapshot 中提取最终的 AI 回复
+            # final_message 仅用于 conclusion 字段（日志/子 Agent 回调）；
+            # 不再向前端推送，respond_node 已通过 format_result 完成全部输出。
+            # 原来从 state["messages"] 提取旧 AIMessage 并二次推送的逻辑已移除：
+            # react_loop 的 AIMessage 存在局部变量中，不写入 state["messages"]，
+            # 读到的是上一轮历史 AIMessage，导致旧回复重复出现在当前轮末尾。
             final_message = None
             if snapshot and snapshot.values:
                 messages = snapshot.values.get("messages", [])
@@ -1029,19 +1033,6 @@ class DataCloudWorker(GatewayWorker):
                         break
 
             if not is_agent_delegate:
-                # 普通模式：直接向前端推流
-                if final_message:
-                    logger.info(
-                        "_stream_graph: sending final AI message session=%s content_length=%d",
-                        context.session_id,
-                        len(final_message),
-                    )
-                    await context.emit_chunk(
-                        StreamChunkEvent(content=final_message),
-                        event_type=EventType.ANSWER_DELTA.value,
-                        content_type=SseMessageType.text.value,
-                    )
-
                 await context.emit_chunk(
                     StreamChunkEvent(
                         content="回答完成",

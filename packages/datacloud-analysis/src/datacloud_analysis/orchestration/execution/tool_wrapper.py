@@ -650,12 +650,23 @@ async def dispatch_tool(
                         )
                         logger.info("[tool_return] data_query file_url detected: %s", file_url)
                     else:
-                        final_output["_hint"] = (
-                            f"\u6570\u636e\u5df2\u8fd4\u56de {len(records)} \u6761 records\u3002"
-                            f"{columns_hint_suffix}"
-                            "\u8bf7\u7acb\u5373\u8c03\u7528 finish_react\uff0c\u4f7f\u7528 result_type=query_result\uff0c"
-                            "\u7cfb\u7edf\u4f1a\u81ea\u52a8\u900f\u4f20\u5b8c\u6574\u7684 records/pagination/meta \u7ed3\u6784\uff0c\u65e0\u9700\u624b\u52a8\u5e8f\u5217\u5316\u3002"
-                        )
+                        # 小结果集（≤5行）直接带上实际数据，避免 LLM 把「行数」当「字段值」
+                        # 典型场景：聚合/计数查询返回 1 行，行数=1，字段值=真正的统计结果
+                        if len(records) <= 5:
+                            records_json = json.dumps(records, ensure_ascii=False, default=str)
+                            final_output["_hint"] = (
+                                f"数据已返回 {len(records)} 条 records: {records_json}。"
+                                f"{columns_hint_suffix}"
+                                "请立即调用 finish_react，使用 result_type=query_result，"
+                                "系统会自动透传完整的 records/pagination/meta 结构，无需手动序列化。"
+                            )
+                        else:
+                            final_output["_hint"] = (
+                                f"数据已返回 {len(records)} 条 records。"
+                                f"{columns_hint_suffix}"
+                                "请立即调用 finish_react，使用 result_type=query_result，"
+                                "系统会自动透传完整的 records/pagination/meta 结构，无需手动序列化。"
+                            )
                         logger.info(
                             "[tool_return] data_query hint columns=%s records=%d",
                             ",".join(col_names[:8]),

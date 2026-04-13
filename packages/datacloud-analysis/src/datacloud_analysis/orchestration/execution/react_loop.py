@@ -261,10 +261,18 @@ def _compress_tool_result(result: Any, tool_name: str) -> str:
             file_hint = ""
             if isinstance(file_block, dict) and file_block.get("file_url"):
                 file_hint = f", file_url={file_block['file_url']}"
+            # 小结果集（≤5行）带上实际数据，防止 LLM 把「行数」误当「字段值」
+            if len(records) <= 5:
+                records_json = json.dumps(records, ensure_ascii=False, default=str)
+                return (
+                    f"[{tool_name} 返回: {len(records)} 条 records: {records_json}"
+                    f", meta={meta_keys}{file_hint}]"
+                    f" 请立即调用 finish_react 使用 result_type=query_result。"
+                )
             return (
-                f"[{tool_name} \u8fd4\u56de: {len(records)} \u6761 records"
+                f"[{tool_name} 返回: {len(records)} 条 records"
                 f", meta={meta_keys}{file_hint}]"
-                f" \u8bf7\u7acb\u5373\u8c03\u7528 finish_react \u4f7f\u7528 result_type=query_result\u3002"
+                f" 请立即调用 finish_react 使用 result_type=query_result。"
             )
     # 通用：序列化后截断
     try:
