@@ -37,8 +37,10 @@ def _data_to_markdown(columns: list[str], rows: list[list[str]]) -> str:
 def _query_result_headers_and_record_keys(query_data: dict[str, Any]) -> tuple[list[str], list[str]]:
     """从 ``meta.columns`` 解析 Markdown 表头与 ``records`` 行字典的取值键。
 
-    ``datacloud-data`` 约定 ``name``/``field_code`` 为行内字段键，``label`` 为展示名。
-    若用 ``label`` 去 ``dict.get``，会出现「表头有列、单元格全空」。
+    - **取值键**：与 ``records[i]`` 中 dict 的 key 一致；优先 ``field_code`` / ``code``，
+      再 ``name`` / ``field``（与 query_executor 等约定 ``name``=字段编码 一致）。
+    - **表头**：优先人类可读名（``label`` / ``field_name`` / ``property_name`` 等），
+      避免仅有 ``name``=字段编码时把表头也显示成编码。
     """
 
     meta = query_data.get("meta") or {}
@@ -47,14 +49,25 @@ def _query_result_headers_and_record_keys(query_data: dict[str, Any]) -> tuple[l
     keys: list[str] = []
     for col in columns_raw:
         if isinstance(col, dict):
-            name = str(
-                col.get("name") or col.get("field") or col.get("field_code") or ""
+            record_key = str(
+                col.get("field_code")
+                or col.get("code")
+                or col.get("name")
+                or col.get("field")
+                or ""
             ).strip()
-            label = str(col.get("label") or col.get("title") or "").strip()
-            record_key = name or label
+            display = str(
+                col.get("label")
+                or col.get("title")
+                or col.get("field_name")
+                or col.get("property_name")
+                or col.get("displayName")
+                or col.get("display_name")
+                or ""
+            ).strip()
             if not record_key:
                 continue
-            header = (label or name) if label else name
+            header = display or record_key
             keys.append(record_key)
             headers.append(header or record_key)
         elif isinstance(col, str) and col.strip():
@@ -167,6 +180,10 @@ async def format_result(
 async def _emit_text(gateway_context: Any, text: str) -> None:
     if gateway_context is None:
         return
+    # [DIAG] 诊断日志：追踪每次 text 推送的内容和调用栈
+    import traceback as _tb
+    _caller = "".join(_tb.format_stack(limit=4)[-3:-1]).replace("\n", " | ")
+    logger.warning("[_emit_text DIAG] len=%d preview=%r caller=%s", len(text), text[:120], _caller)
     try:
         from by_framework import EventType, StreamChunkEvent  # type: ignore
         from by_framework.core.protocol.content_type import SseMessageType  # type: ignore
@@ -227,6 +244,14 @@ async def _emit_query_result_as_markdown(gateway_context: Any, query_data: dict[
     """将 data_query 返回的原始 data block 渲染为 Markdown 表格后通过 text 通道推送。"""
     columns, record_keys = _query_result_headers_and_record_keys(query_data)
     records = query_data.get("records") or []
+
+    # [DIAG] 诊断日志
+    logger.warning(
+        "[_emit_query_result_as_markdown DIAG] records_n=%d columns=%s first_record=%s",
+        len(records),
+        columns[:5],
+        str(records[0])[:120] if records else "N/A",
+    )
 
     if isinstance(records, list) and records and isinstance(records[0], dict):
         rows = [[str(r.get(k, "")) for k in record_keys] for r in records]
@@ -367,6 +392,15 @@ async def _emit_query_result_as_6001(gateway_context: Any, query_data: dict[str,
     """
     if gateway_context is None:
         return
+
+    # [DIAG] 诊断日志
+    _recs = query_data.get("records") or []
+    logger.warning(
+        "[_emit_query_result_as_6001 DIAG] records_n=%d first_record=%s",
+        len(_recs),
+        str(_recs[0])[:120] if _recs else "N/A",
+    )
+
     try:
         from by_framework import EventType, StreamChunkEvent  # type: ignore
     except ImportError:

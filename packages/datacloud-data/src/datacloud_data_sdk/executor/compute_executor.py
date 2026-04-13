@@ -239,6 +239,8 @@ def _translate_arguments(
     if "dimensions" in arguments:
         new_dims = []
         for dim in arguments["dimensions"] or []:
+            if isinstance(dim, str):  # 兼容 LLM 传字符串的情况，自动包装为 {"field": dim}
+                dim = {"field": dim}
             new_dim = dict(dim)
             fname = dim.get("field", "")
             new_dim["field"] = name_to_code.get(fname, fname)

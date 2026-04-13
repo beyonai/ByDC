@@ -78,6 +78,25 @@ class View:
         # 视图字段元数据（来自 mapping OWL，由 loader 填充）
         self.fields: list[Any] = []
 
+    def _sync_runtime_metadata(self) -> None:
+        """从 loader 当前 scene 同步视图动作和字段，兼容延迟注入。"""
+        if self._loader is None:
+            return
+
+        scene = getattr(self._loader, "_scenes", {}).get(self.view_id)
+        if not isinstance(scene, dict):
+            return
+
+        virtual_actions = scene.get("_virtual_actions")
+        if isinstance(virtual_actions, list):
+            self.actions = list(virtual_actions)
+
+        fields = scene.get("fields")
+        if isinstance(fields, list):
+            from datacloud_data_sdk.virtual_action.models import ViewFieldMeta
+
+            self.fields = [field for field in fields if isinstance(field, ViewFieldMeta)]
+
     def get_description(self) -> str:
         """
         生成 Markdown 格式的视图自生说明
@@ -435,46 +454,63 @@ class View:
         self, object_code: str, action_code: str, params: dict[str, object]
     ) -> dict[str, object]:
         """通过视图调用对象动作，异常向上抛出。"""
+        return await self.get_object(object_code).invoke_action(action_code, params)
+
+    def get_objects(self) -> list[Object]:
+        """返回视图中的对象列表。"""
+        return list(self.objects)
+
+    def get_object(self, object_code: str) -> Object:
+        """按对象编码获取视图中的对象。"""
         for obj in self.objects:
             if obj.object_code == object_code:
-                return await obj.invoke_action(action_code, params)
+                return obj
         raise ValueError(f"Object {object_code!r} not in view {self.view_id!r}")
 
     def _find_action(self, action_code: str) -> Any | None:
-        """在视图的虚拟动作列表中查找动作定义。"""
+        """在视图自身动作中查找动作定义。"""
+        self._sync_runtime_metadata()
         for action in self.actions:
             if getattr(action, "action_code", None) == action_code:
                 return action
         return None
 
+    def get_action_schema(self, action_code: str) -> dict[str, object]:
+        """获取视图动作的 JSON Schema。"""
+        from datacloud_data_sdk.action import Action
+        from datacloud_data_sdk.exceptions import ActionNotFoundError
+
+        action = self._find_action(action_code)
+        if action is None:
+            raise ActionNotFoundError(self.view_id, action_code)
+        return Action(action, loader=self._get_loader()).get_schema()
+
     def list_action_codes(self) -> list[str]:
-        """返回视图所有虚拟动作的编码列表。"""
+        """返回视图自身动作的编码列表。"""
+        self._sync_runtime_metadata()
         return [a.action_code for a in self.actions]
 
     async def invoke_action(self, action_code: str, params: dict[str, Any]) -> dict[str, Any]:
         """
-        执行视图级虚拟动作。
+        执行视图动作。
 
         共享 Action.execute() 主执行路径，并在其中路由到
         ViewLookupExecutor 或 ViewAnalyzeExecutor。
 
         Args:
-            action_code: 虚拟动作编码（如 lookup_{view_id} / analyze_{view_id}）
+            action_code: 视图动作编码
             params: 动作输入参数
 
         Returns:
             dict: {"records": [...], "total": int, "meta": {...}}
 
         Raises:
-            ValueError: 动作不存在时抛出
+            ActionNotFoundError: 动作不存在时抛出
         """
         from datacloud_data_sdk.action import Action
         from datacloud_data_sdk.exceptions import ActionNotFoundError
 
         action = self._find_action(action_code)
         if action is None:
-            raise ActionNotFoundError(action_code)
-
-        loader = self._get_loader()
-        a = Action(action, loader)
-        return await a.execute(params)
+            raise ActionNotFoundError(self.view_id, action_code)
+        return await Action(action, loader=self._get_loader()).execute(params)

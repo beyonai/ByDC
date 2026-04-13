@@ -1019,18 +1019,16 @@ class DataCloudWorker(GatewayWorker):
                 logger.info("_stream_graph: return session=%s status=waiting", context.session_id)
                 return {"status": "waiting"}
 
-            # final_message 仅用于 conclusion 字段（日志/子 Agent 回调）；
-            # 不再向前端推送，respond_node 已通过 format_result 完成全部输出。
-            # 原来从 state["messages"] 提取旧 AIMessage 并二次推送的逻辑已移除：
-            # react_loop 的 AIMessage 存在局部变量中，不写入 state["messages"]，
-            # 读到的是上一轮历史 AIMessage，导致旧回复重复出现在当前轮末尾。
+            # conclusion 取当前轮 react_final["answer"]，而非 state["messages"] 里的最后 AIMessage。
+            # react_loop 的 AIMessage 存在局部变量中，不写入 state["messages"]；
+            # snapshot.values["messages"] 里的最后一条 AIMessage 始终是历史记录（上一轮），
+            # 直接用它会把上一轮的旧回复文本携带到 conclusion，被 GatewayWorker 二次推送给用户。
             final_message = None
             if snapshot and snapshot.values:
-                messages = snapshot.values.get("messages", [])
-                for msg in reversed(messages):
-                    if isinstance(msg, AIMessage) and msg.content:
-                        final_message = msg.content
-                        break
+                react_final_snap = snapshot.values.get("react_final") or {}
+                _ans = str(react_final_snap.get("answer") or "").strip()
+                if _ans:
+                    final_message = _ans
 
             if not is_agent_delegate:
                 await context.emit_chunk(

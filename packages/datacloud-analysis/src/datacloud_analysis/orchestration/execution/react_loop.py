@@ -113,6 +113,15 @@ async def _stream_llm_call(
         full_msg = await llm_with_tools.ainvoke(messages_window)
         did_stream_text = False
 
+    # [DIAG] 诊断日志：记录本次 LLM 调用流式推送的 finish_react.answer 内容
+    if _fr_answer_emitted > 0:
+        m = re.search(r'"answer"\s*:\s*"((?:[^"\\]|\\.)*)', _fr_args_acc)
+        _streamed_answer = m.group(1) if m else _fr_args_acc[:200]
+        logger.warning(
+            "[_stream_llm_call DIAG] did_stream=%s fr_answer_emitted=%d streamed_answer_preview=%r",
+            did_stream_text, _fr_answer_emitted, _streamed_answer[:200],
+        )
+
     return full_msg, did_stream_text
 
 _DEFAULT_MAX_ROUNDS = 10
@@ -364,6 +373,13 @@ async def run_react_loop(
         conv = _conversation_messages_for_llm(state)
         if conv:
             messages.extend(conv)
+            # [DIAG] 诊断日志：打印历史消息内容预览
+            for _i, _m in enumerate(conv):
+                logger.warning(
+                    "[react_loop DIAG] seeded conv[%d] type=%s preview=%r",
+                    _i, type(_m).__name__,
+                    str(getattr(_m, "content", ""))[:200],
+                )
             logger.info("[react_loop] seeded from state.messages: %d human/ai message(s)", len(conv))
         else:
             user_query = str(state.get("user_query") or state.get("enriched_query") or "")
@@ -577,6 +593,12 @@ async def run_react_loop(
                         "[react_loop] finish_tool: cached query_data found (records=%d has_file=%s)",
                         len(_last_query_data.get("records") or []),
                         bool(_last_query_data.get("file")),
+                    )
+                    # [DIAG] 记录 query_data 第一条记录，便于排查轮次是否对应
+                    _qd_recs = _last_query_data.get("records") or []
+                    logger.warning(
+                        "[react_loop DIAG] finish_react query_data first_rec=%s",
+                        str(_qd_recs[0])[:120] if _qd_recs else "N/A",
                     )
                     # 如果 LLM 未显式选择 query_result，也强制走结构化输出
                     if final.get("result_type") not in {"query_result", "csv_file", "json_file"}:

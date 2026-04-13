@@ -12,6 +12,21 @@ async def respond_node(state: AgentState, config: RunnableConfig) -> dict[str, A
     react_final = state.get("react_final") or {}
     workspace_dir = state.get("workspace_dir")
 
+    # [DIAG] 诊断日志：确认 respond_node 收到的是当前轮还是上一轮的 react_final
+    _qd = react_final.get("query_data") or {}
+    _records = _qd.get("records") or [] if isinstance(_qd, dict) else []
+    _first_rec = str(_records[0])[:80] if _records else "N/A"
+    logger.warning(
+        "[respond_node DIAG] result_type=%s answer_streamed=%s answer_preview=%r "
+        "has_query_data=%s records_n=%d first_record_preview=%s",
+        react_final.get("result_type"),
+        react_final.get("answer_streamed"),
+        str(react_final.get("answer") or "")[:80],
+        bool(react_final.get("query_data")),
+        len(_records),
+        _first_rec,
+    )
+
     if not react_final:
         logger.warning("respond_node: react_final is empty")
         await format_result({"result_type": "text", "answer": ""}, gw_ctx, workspace_dir)

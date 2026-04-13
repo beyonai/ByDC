@@ -20,6 +20,7 @@ from datacloud_data_sdk.executor.view_executor_support import (
 )
 from datacloud_data_sdk.executor.view_executor_support import (
     build_view_execution_context,
+    build_view_result_columns_meta,
     collect_required_objects,
     quote_identifier,
 )
@@ -146,8 +147,9 @@ class ViewLookupExecutor:
             dict(zip(col_keys, row, strict=False)) if isinstance(row, (list, tuple)) else row
             for row in rows
         ]
+        columns_meta = build_view_result_columns_meta(view, col_keys)
         return {
             "records": records,
             "total": len(records),
-            "meta": {"view_id": view.view_id, "columns": col_keys},
+            "meta": {"view_id": view.view_id, "columns": columns_meta},
         }

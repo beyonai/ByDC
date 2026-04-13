@@ -227,6 +227,7 @@ class AnalyzeExecutor:
         table = cls.table_name
 
         dimensions = arguments.get("dimensions") or []
+        dimensions = [{"field": d} if isinstance(d, str) else d for d in dimensions]  # 兼容字符串元素
         metrics = arguments.get("metrics") or []
         filters = arguments.get("filters") or []
         having_list = arguments.get("having") or []

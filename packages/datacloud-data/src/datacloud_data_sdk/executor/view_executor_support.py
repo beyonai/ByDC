@@ -297,3 +297,38 @@ def _resolve_join_closure(
             closure_objects.add(current)
             current = parents[current]
     return closure_objects
+
+
+def build_view_result_columns_meta(view: Any, col_keys: list[str]) -> list[dict[str, str]]:
+    """将视图查询结果列键规范为与 ``QueryExecutor`` 一致的 ``meta.columns`` 结构。
+
+    原先仅返回 ``property_code`` 字符串列表，前端 / Markdown 无法取中文 ``label``。
+    此处按视图 ``fields``（``ViewFieldMeta``）映射 ``name``=行内键、``label``=展示名。
+
+    Args:
+        view: 已加载的视图对象（含 ``fields``）。
+        col_keys: SELECT 结果列顺序，与 ``records`` 行字典的 key 一致。
+
+    Returns:
+        ``[{"name": code, "label": display, "type": "..."}, ...]``；未知列 ``label`` 回退为 ``name``。
+    """
+
+    if not col_keys:
+        return []
+
+    code_to_field: dict[str, Any] = {}
+    for vf in getattr(view, "fields", []) or []:
+        code = str(getattr(vf, "property_code", "") or "").strip()
+        if code:
+            code_to_field[code] = vf
+
+    out: list[dict[str, str]] = []
+    for fc in col_keys:
+        vf = code_to_field.get(fc)
+        label = str(getattr(vf, "property_name", "") or "").strip() if vf else ""
+        if not label:
+            label = fc
+        raw_type = getattr(vf, "field_type", None) if vf else None
+        ft = str(raw_type or "string").lower()
+        out.append({"name": fc, "label": label, "type": ft})
+    return out

@@ -440,6 +440,34 @@ class TestFormatResult:
         assert "v1" in md
         assert "| 2 |" in md or "| 2" in md
 
+    @pytest.mark.asyncio
+    async def test_query_result_markdown_prefers_field_name_for_header(self) -> None:
+        """无 label 时表头应使用 field_name（部分接口把中文放在 field_name）。"""
+        from datacloud_analysis.orchestration.respond.formatter import format_result
+
+        mock_gw = AsyncMock()
+        with patch(
+            "datacloud_analysis.orchestration.respond.formatter._emit_text",
+            new_callable=AsyncMock,
+        ) as mock_emit:
+            await format_result(
+                {
+                    "result_type": "query_result",
+                    "query_data": {
+                        "records": [{"grid_id": "g1"}],
+                        "meta": {
+                            "columns": [
+                                {"name": "grid_id", "field_name": "管理网格编码"},
+                            ]
+                        },
+                    },
+                },
+                gateway_context=mock_gw,
+            )
+        md = mock_emit.call_args[0][1]
+        assert "管理网格编码" in md
+        assert "grid_id" not in md.split("\n")[0]
+
 
 # ---------------------------------------------------------------------------
 # graph_builder test
