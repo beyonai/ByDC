@@ -545,6 +545,10 @@ async def run_react_loop(
         else:
             start_round = 0
 
+    # ── TTFB 计时起点：执行阶段（react_loop LLM 调用）正式开始 ──────────────────
+    if gateway_context is not None and hasattr(gateway_context, "mark_execution_start"):
+        gateway_context.mark_execution_start()
+
     for round_idx in range(start_round, max_rounds):
         logger.info("[react_loop] round=%d/%d", round_idx + 1, max_rounds)
 
