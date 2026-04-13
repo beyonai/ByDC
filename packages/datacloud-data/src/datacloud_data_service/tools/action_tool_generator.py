@@ -25,6 +25,10 @@ class ActionToolGenerator:
                 "description": schema.get("description", ""),
                 "inputSchema": schema["inputSchema"],
             }
-            tool["_meta"] = {"object_code": object_code, "action_type": action.action_type}
+            tool["_meta"] = {
+                "object_code": object_code,
+                "action_type": action.action_type,   # 族名，如 "query" / "compute" / "search"
+                "action_code": action.action_code,   # 唯一码，如 "query_ads_manage_grid_analysis"
+            }
             tools.append(tool)
         return tools

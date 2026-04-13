@@ -134,6 +134,7 @@ def create_agent(
     tools: dict[str, Any] | None = None,
     mounted_objects: list[str] | None = None,
     loader: Any | None = None,
+    skip_action_families: frozenset[str] = frozenset(),
     user_message: str | None = None,
     agent_id: str | None = None,
 ) -> Any:
@@ -170,6 +171,7 @@ def create_agent(
     ontology_tools = OntologyToolLoader(
         mounted_objects=mounted_objects,
         loader=loader,
+        skip_action_families=skip_action_families,
     ).load()
 
     # 合并工具：本体工具为基础，caller 传入的 tools 优先覆盖同名工具

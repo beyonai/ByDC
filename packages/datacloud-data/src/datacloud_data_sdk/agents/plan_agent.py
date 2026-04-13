@@ -330,12 +330,14 @@ class PlanAgent:
         api_key: str = "",
         temperature: float = 0.0,
         max_retries: int = 2,
+        model_kwargs: dict | None = None,
     ) -> None:
         self._model = model
         self._base_url = base_url
         self._api_key = api_key
         self._temperature = temperature
         self._max_retries = max_retries
+        self._model_kwargs = model_kwargs or {}
         self._llm: Any = None
         self._validator = PlanValidator()
 
@@ -361,11 +363,13 @@ class PlanAgent:
                     "",
                     "langchain-openai not installed. Install with: pip install langchain-openai",
                 ) from e
+            extra_kwargs: dict = {"model_kwargs": self._model_kwargs} if self._model_kwargs else {}
             self._llm = ChatOpenAI(
                 model=self._model,
                 base_url=self._base_url,
                 api_key=self._api_key,
                 temperature=self._temperature,
+                **extra_kwargs,
             )
         return self._llm
 
