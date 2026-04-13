@@ -118,6 +118,10 @@ class TermResolver:
             if not p.term_set or p.param_code not in resolved:
                 continue
             raw = resolved[p.param_code]
+            if raw is None:
+                # 可选参数未填时 Pydantic 默认置 None，无需 term 解析，与
+                # resolve_filter_values 中 `if value is None: return` 行为保持一致
+                continue
             param_name = p.param_name or p.param_code
             try:
                 if isinstance(raw, (list, tuple)):

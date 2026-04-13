@@ -71,10 +71,12 @@ def build_query_response(
         data["plan"] = plan
 
     if threshold > 0 and total > threshold:
+        # meta["columns"] 可能是字符串列表（ViewLookupExecutor / _normalize_to_unified_format
+        # 生成的原始字段码）或字典列表（{"name": ..., "label": ...}），需兼容两种格式
         columns = [
-            c.get("name") or c.get("label")
+            ((c.get("name") or c.get("label")) if isinstance(c, dict) else c)
             for c in meta.get("columns", [])
-            if c.get("name") or c.get("label")
+            if ((c.get("name") or c.get("label")) if isinstance(c, dict) else c)
         ]
         if not columns and records:
             columns = list(records[0].keys())
