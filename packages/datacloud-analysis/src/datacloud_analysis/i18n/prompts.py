@@ -138,6 +138,10 @@ def _build_exec_zh() -> str:
     )
     parts.extend(
         [
+            "## compute 统计工具参数规则\n",
+            "- 调用 compute_{对象编码} 时，`metrics` 数组每项必须包含：`field`（字段中文名）、"
+            "**`agg`**（聚合名，如 count、sum、count_distinct）、`as`（结果列别名）。\n",
+            "- 禁止使用 `func` 作为聚合键名；协议与校验只识别 **`agg`**。\n",
             "## 查询工具参数规则\n",
             "- 调用数据查询工具时，query 参数必须是完整的自然语言问题，描述用户真正想查询的内容，例如「查询企业分析表的全部字段」。\n",
             "- 禁止使用 *、%、ALL 等通配符或占位符作为 query 参数。\n",
@@ -182,6 +186,9 @@ def _build_exec_en() -> str:
         "- Use tools to complete tasks. Call finish_react when done.\n"
         "- Each tool call must include a reason field.\n"
         + (hint if hint else "")
+        + "## Compute tool rules\n"
+        "- For compute_{object}, each metrics item must use the key **`agg`** "
+        "(e.g. count_distinct), never `func`.\n"
         + "## Data query tool rules\n"
         "- Returns {data: {result_type, records, file: {file_url}, meta}}.\n"
         "- If file_url or _hint present, data is saved. Do NOT call write_file.\n"

@@ -417,7 +417,13 @@ def build_compute_schema(
             ),
             "properties": {
                 "field": {"type": "string", "const": fname},
-                "agg": {"type": "string", "enum": agg_ops, "description": "聚合函数"},
+                "agg": {
+                    "type": "string",
+                    "enum": agg_ops,
+                    "description": (
+                        "聚合函数（协议键名必须为 agg，如 count_distinct；禁止使用 func 键）"
+                    ),
+                },
                 "as": {"type": "string", "description": "结果列别名，用于 having/order_by 引用"},
             },
             "required": ["field", "agg", "as"],
@@ -590,6 +596,7 @@ def build_compute_description(
     lines.append("")
     lines.append("**常见错误**：")
     lines.append("- `metrics` 为空（必须至少一个指标）")
+    lines.append("- `metrics` 项误用 `func` 表示聚合：必须使用键名 **`agg`**（如 `\"agg\": \"count_distinct\"`）")
     lines.append("- field 填了字段编码而非中文名")
     lines.append("- `having.field` 未使用 `metrics` 中的 `as` 别名")
     if req_groups:

@@ -26,6 +26,33 @@ def _field_map(fields: list[Any]) -> dict[str, Any]:
     return result
 
 
+def _list_or_empty(arguments: dict[str, Any], key: str) -> list[Any]:
+    """读取 ``arguments[key]``；缺失或为 ``None`` 时返回空列表。
+
+    注意：``dict.get(key, [])`` 在键存在且值为 ``None``（如 JSON null）时仍返回 ``None``，
+    会导致 ``for x in ...`` 触发 ``TypeError``。
+    """
+
+    val = arguments.get(key)
+    return val if isinstance(val, list) else []
+
+
+def _coerce_metric_agg_from_func(mtr: dict[str, Any]) -> None:
+    """若 ``agg`` 缺失但存在 ``func``，将后者写入 ``agg`` 并移除 ``func``。
+
+    协议 §3.2.3 规定键名为 ``agg``；部分模型误用 ``func``，会导致校验读到空聚合。
+    原地修改 ``mtr``。
+    """
+
+    raw_agg = mtr.get("agg")
+    if isinstance(raw_agg, str) and raw_agg.strip():
+        return
+    func_val = mtr.get("func")
+    if isinstance(func_val, str) and func_val.strip():
+        mtr["agg"] = func_val.strip()
+        mtr.pop("func", None)
+
+
 class VirtualActionValidator:
     """
     虚拟动作输入校验器。
@@ -109,11 +136,11 @@ class VirtualActionValidator:
             )
 
         # 检查 select 字段：存在性 + linked 拦截
-        for fc in arguments.get("select", []):
+        for fc in _list_or_empty(arguments, "select"):
             self._check_linked(fc)
 
         # 检查 filters：存在性 + linked 拦截 + op 合法性
-        for item in arguments.get("filters", []):
+        for item in _list_or_empty(arguments, "filters"):
             fc = item.get("field", "")
             op = item.get("op", "")
             if fc:
@@ -122,14 +149,14 @@ class VirtualActionValidator:
                 self._check_filter_op(fc, op)
 
         # 检查 order_by 字段：存在性 + linked 拦截
-        for ob in arguments.get("order_by", []):
+        for ob in _list_or_empty(arguments, "order_by"):
             fc = ob.get("field", "")
             if fc:
                 self._check_linked(fc)
 
         # 强制过滤（在 OR 冲突检测通过后才到这里，即 filter_relation=AND）
         if required_filter_groups:
-            self._check_required_filters(arguments.get("filters", []), required_filter_groups)
+            self._check_required_filters(_list_or_empty(arguments, "filters"), required_filter_groups)
 
     def validate_lookup(
         self,
@@ -138,17 +165,17 @@ class VirtualActionValidator:
     ) -> None:
         """校验 lookup 动作入参。"""
         # 检查 filters
-        for item in arguments.get("filters", []):
+        for item in _list_or_empty(arguments, "filters"):
             fc = item.get("field", "")
             op = item.get("op", "")
             if fc and op:
                 self._check_filter_op(fc, op)
         # 检查 select 字段存在性
-        for fc in arguments.get("select", []):
+        for fc in _list_or_empty(arguments, "select"):
             self._get_field(fc)
         # 强制过滤
         if required_filter_groups:
-            self._check_required_filters(arguments.get("filters", []), required_filter_groups)
+            self._check_required_filters(_list_or_empty(arguments, "filters"), required_filter_groups)
 
     def validate_analyze(
         self,
@@ -156,8 +183,8 @@ class VirtualActionValidator:
         required_filter_groups: list[str] | None = None,
     ) -> None:
         """校验 analyze 动作入参。"""
-        dimensions = arguments.get("dimensions", [])
-        metrics = arguments.get("metrics", [])
+        dimensions = _list_or_empty(arguments, "dimensions")
+        metrics = _list_or_empty(arguments, "metrics")
 
         # metrics 不能为空
         if not metrics:
@@ -188,6 +215,10 @@ class VirtualActionValidator:
         # 收集 metrics.as 别名，供 having 引用校验
         metric_aliases: set[str] = set()
         for mtr in metrics:
+            if isinstance(mtr, dict):
+                _coerce_metric_agg_from_func(mtr)
+            if not isinstance(mtr, dict):
+                continue
             if mtr.get("agg") == "count_all":
                 alias = mtr.get("as", "")
                 if alias:
@@ -208,7 +239,7 @@ class VirtualActionValidator:
                 metric_aliases.add(alias)
 
         # 校验 having.field 必须是 metrics.as 别名
-        for hav in arguments.get("having", []):
+        for hav in _list_or_empty(arguments, "having"):
             hfield = hav.get("field", "")
             if hfield and hfield not in metric_aliases:
                 raise VirtualActionValidationError(
@@ -217,7 +248,7 @@ class VirtualActionValidator:
                 )
 
         # 校验 filters
-        for item in arguments.get("filters", []):
+        for item in _list_or_empty(arguments, "filters"):
             fc = item.get("field", "")
             op = item.get("op", "")
             if fc and op:
@@ -225,4 +256,4 @@ class VirtualActionValidator:
 
         # 强制过滤
         if required_filter_groups:
-            self._check_required_filters(arguments.get("filters", []), required_filter_groups)
+            self._check_required_filters(_list_or_empty(arguments, "filters"), required_filter_groups)

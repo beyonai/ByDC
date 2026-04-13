@@ -317,6 +317,49 @@ async def test_range_bucket_grouping(executor_with_data: ComputeExecutor) -> Non
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 用例4b：metrics 误写 func 键时归一为 agg
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def test_compute_accepts_json_null_having_and_dimensions(executor_with_data: ComputeExecutor) -> None:
+    """JSON null 映射为 Python None 时，不得对 having/dimensions 做 ``for ... in None``。"""
+
+    executor = executor_with_data
+    result = await executor.execute(
+        "enterprise_base",
+        {
+            "dimensions": None,
+            "metrics": [{"field": "企业收入", "agg": "sum", "as": "total_revenue"}],
+            "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+            "having": None,
+        },
+    )
+    assert len(result["records"]) == 1
+    assert result["records"][0]["total_revenue"] == pytest.approx(23_000_000)
+
+
+async def test_metrics_func_alias_normalized_like_agg(executor_with_data: ComputeExecutor) -> None:
+    """LLM 误用 ``func`` 代替 ``agg`` 时，校验与 SQL 应与使用 ``agg`` 一致。"""
+
+    executor = executor_with_data
+    result = await executor.execute(
+        "enterprise_base",
+        {
+            "dimensions": [{"field": "区域名称", "group_op": "self"}],
+            "metrics": [{"field": "企业收入", "func": "sum", "as": "total_revenue"}],
+            "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+            "order_by": [{"field": "total_revenue", "direction": "desc"}],
+        },
+    )
+    records = result["records"]
+    assert len(records) == 2
+    assert records[0]["region_name"] == "亦庄"
+    assert records[0]["total_revenue"] == pytest.approx(20_000_000)
+    assert records[1]["region_name"] == "通州"
+    assert records[1]["total_revenue"] == pytest.approx(3_000_000)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 用例5：metrics 为空报错
 # ─────────────────────────────────────────────────────────────────────────────
 
