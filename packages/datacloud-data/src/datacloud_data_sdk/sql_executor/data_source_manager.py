@@ -20,11 +20,71 @@
 """
 
 from __future__ import annotations
+import logging
+import re
 from typing import Any
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError
 from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 from datacloud_data_sdk.sql_executor.base_connector import BaseSourceConnector
 from datacloud_data_sdk.sql_executor.connector_registry import ConnectorRegistry
+
+_logger = logging.getLogger(__name__)
+
+
+def _render_sql(sql: str, params: dict[str, Any] | None) -> str:
+    """将命名参数占位符（:name）替换为实际值，生成可直接执行的 SQL 字符串。"""
+    if not params:
+        return sql
+
+    # 按占位符名称长度降序排列，避免短名称替换掉长名称的前缀
+    # 例如 :p_name_0 和 :p_name 同时存在时，先替换 :p_name_0
+    sorted_keys = sorted(params.keys(), key=len, reverse=True)
+
+    result = sql
+    for key in sorted_keys:
+        value = params[key]
+        if value is None:
+            rendered = "NULL"
+        elif isinstance(value, bool):
+            rendered = "1" if value else "0"
+        elif isinstance(value, (int, float)):
+            rendered = str(value)
+        else:
+            # 字符串：转义单引号后加引号
+            rendered = "'" + str(value).replace("'", "''") + "'"
+        result = re.sub(rf":{re.escape(key)}\b", rendered, result)
+
+    return result
+
+
+class _LoggingConnectorProxy(BaseSourceConnector):
+    """透明代理：在真实 connector 执行 SQL 前打印可执行的完整 SQL 日志。"""
+
+    def __init__(self, real: BaseSourceConnector) -> None:
+        self._real = real
+        self.config = real.config
+
+    @classmethod
+    def supported_type(cls) -> str:
+        return ""
+
+    async def execute(self, sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        try:
+            from datacloud_data_sdk.trace_context import current_trace_id
+            _tid = current_trace_id.get("????????")
+        except Exception:
+            _tid = "????????"
+        _logger.warning("[%s] SQL: %s", _tid, _render_sql(sql, params))
+        return await self._real.execute(sql, params)
+
+    async def test_connection(self) -> bool:
+        return await self._real.test_connection()
+
+    async def close(self) -> None:
+        await self._real.close()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._real, name)
 
 
 class DataSourceManager:
@@ -76,7 +136,7 @@ class DataSourceManager:
             DataSourceUnavailableError: 数据源配置不存在时抛出
         """
         if alias in self._connectors:
-            return self._connectors[alias]
+            return _LoggingConnectorProxy(self._connectors[alias])
 
         config = self._configs.get(alias)
 
@@ -99,7 +159,7 @@ class DataSourceManager:
         connector_cls = ConnectorRegistry.get(config.db_type)
         connector = connector_cls(config)
         self._connectors[alias] = connector
-        return connector
+        return _LoggingConnectorProxy(connector)
 
     async def close_all(self) -> None:
         """

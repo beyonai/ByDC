@@ -435,11 +435,16 @@ async def dispatch_tool(
     if len(raw_params) == 1 and "params" in raw_params and isinstance(raw_params["params"], dict):
         raw_params = raw_params["params"]
 
-    logger.info(
-        "[tool_call] tool=%s reason=%s params=%s",
+    try:
+        from datacloud_data_sdk.trace_context import current_trace_id as _tid
+        _trace_id = _tid.get("????????")
+    except Exception:
+        _trace_id = "????????"
+    logger.warning(
+        "[%s] ──── tool=%s params=%s",
+        _trace_id,
         tool_name,
-        reason,
-        _sanitize(raw_params),
+        json.dumps(raw_params, ensure_ascii=False, default=str)[:2000],
     )
 
     # --- 构建 HookContext ---

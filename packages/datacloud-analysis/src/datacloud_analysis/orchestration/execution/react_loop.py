@@ -6,6 +6,7 @@ import logging
 import re
 import os
 import time
+import uuid
 from typing import Any, Literal
 import json
 import logging
@@ -330,6 +331,15 @@ async def run_react_loop(
     """
     if max_rounds is None:
         max_rounds = int(os.getenv("DATACLOUD_REACT_MAX_ROUNDS", str(_DEFAULT_MAX_ROUNDS)))
+
+    # ── 请求追踪 ID：串联本次问答的所有工具调用和 SQL ─────────────────────────
+    from datacloud_data_sdk.trace_context import current_trace_id as _trace_id_var
+    _trace_id = uuid.uuid4().hex[:8]
+    _trace_token = _trace_id_var.set(_trace_id)
+
+    # ── 日志：打印本轮用户提问 ──────────────────────────────────────────────────
+    _user_query_log = str(state.get("user_query") or state.get("enriched_query") or "")
+    logger.warning("[%s] ════ USER_QUERY: %s", _trace_id, _user_query_log)
 
     # tools_map 包含 finish_react
     tools_map: dict[str, BaseTool] = {t.name: t for t in tools_list}
