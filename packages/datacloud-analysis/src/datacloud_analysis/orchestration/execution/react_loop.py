@@ -125,9 +125,67 @@ async def _stream_llm_call(
 
     return full_msg, did_stream_text
 
+
+async def _invoke_llm_with_fallback(
+    primary_llm_with_tools: Any,
+    fallback_llm_with_tools: Any | None,
+    messages_window: list,
+    gateway_context: Any,
+    *,
+    state: Any,
+    round_idx: int,
+) -> tuple[Any, bool]:
+    """调用 LLM，内置三层容错：
+
+    1. 主模型 + 指数退避重试（最多 DATACLOUD_LLM_MAX_RETRIES 次）
+    2. 备用模型 + 指数退避重试（若 DATACLOUD_LLM_FALLBACK_ENABLED=true）
+    3. 全部不可用 → 保存断点到 Redis + 向用户推送引导文案 + 抛 _LlmUnavailableError
+    """
+    from datacloud_analysis.orchestration.execution.llm_retry import stream_llm_call_with_retry
+    from datacloud_analysis.orchestration.execution.llm_checkpoint import (
+        save_llm_failure_checkpoint,
+        CHECKPOINT_REPLY,
+    )
+
+    # ── 主模型（含重试）────────────────────────────────────────────────────────
+    last_exc: Exception
+    try:
+        return await stream_llm_call_with_retry(
+            _stream_llm_call, primary_llm_with_tools, messages_window, gateway_context
+        )
+    except Exception as primary_exc:
+        logger.warning("[LLM] 主模型全部重试失败 round=%d: %s", round_idx + 1, primary_exc)
+        last_exc = primary_exc
+
+    # ── 备用模型（含重试）──────────────────────────────────────────────────────
+    if fallback_llm_with_tools is not None:
+        try:
+            fallback_model = os.getenv("DATACLOUD_LLM_FALLBACK_MODEL", "fallback")
+            logger.warning("[LLM] 主模型失败，切换到备用模型: %s", fallback_model)
+            return await stream_llm_call_with_retry(
+                _stream_llm_call, fallback_llm_with_tools, messages_window, gateway_context
+            )
+        except Exception as fallback_exc:
+            logger.error("[LLM] 备用模型也失败 round=%d: %s", round_idx + 1, fallback_exc)
+            last_exc = fallback_exc
+
+    # ── 全部不可用：保存断点 + 推送引导文案 ────────────────────────────────────
+    session_id = str(getattr(gateway_context, "session_id", "") or "") if gateway_context else ""
+    redis_client = (
+        getattr(gateway_context, "redis", None)
+        or getattr(gateway_context, "_redis_client", None)
+    )
+    await save_llm_failure_checkpoint(redis_client, session_id, state, round_idx, last_exc)
+    await _emit_stream_token(gateway_context, CHECKPOINT_REPLY)
+    raise _LlmUnavailableError(CHECKPOINT_REPLY) from last_exc
+
 _DEFAULT_MAX_ROUNDS = 10
 _TOOL_MSG_MAX_LEN = 2000   # ToolMessage 内容最大字符数
 _TRIM_KEEP_ROUNDS = 6      # 滑动窗口：保留最近 N 轮 AI+Tool 消息对
+
+
+class _LlmUnavailableError(RuntimeError):
+    """主模型与备用模型全部不可用时抛出。携带已向用户推送的引导文案。"""
 
 # ---- 进程内 interrupt resume 上下文缓存 ----
 # LangGraph checkpoint 是 node 级别，node 内部对 state 的修改在 interrupt 时不被保存。
@@ -341,12 +399,41 @@ async def run_react_loop(
     _user_query_log = str(state.get("user_query") or state.get("enriched_query") or "")
     logger.warning("[%s] ════ USER_QUERY: %s", _trace_id, _user_query_log)
 
+    # ── LLM 失败断点检测：前次请求模型全不可用时保存了断点，本次恢复 ──────────────
+    _session_id = str(getattr(gateway_context, "session_id", "") or "") if gateway_context else ""
+    _redis_client = (
+        getattr(gateway_context, "redis", None)
+        or getattr(gateway_context, "_redis_client", None)
+    ) if gateway_context else None
+    from datacloud_analysis.orchestration.execution.llm_checkpoint import (
+        load_llm_failure_checkpoint,
+        delete_llm_failure_checkpoint,
+    )
+    _llm_failure_ckpt = await load_llm_failure_checkpoint(_redis_client, _session_id)
+    if _llm_failure_ckpt is not None:
+        logger.warning(
+            "[LLM] 检测到 LLM 失败断点，从断点恢复 session=%s completed_steps=%d",
+            _session_id, _llm_failure_ckpt.get("completed_steps", 0),
+        )
+        # 补充上次请求时保存的 state 字段（如 confirmed_terms 等上下文）
+        _ckpt_state: dict = _llm_failure_ckpt.get("state_snapshot") or {}
+        for _k, _v in _ckpt_state.items():
+            if not state.get(_k):
+                state[_k] = _v
+        # 消费后立即删除，避免影响后续正常请求
+        await delete_llm_failure_checkpoint(_redis_client, _session_id)
+
     # tools_map 包含 finish_react
     tools_map: dict[str, BaseTool] = {t.name: t for t in tools_list}
     tools_map["finish_react"] = finish_react
 
     llm = _build_llm(state)
     llm_with_tools = llm.bind_tools(list(tools_map.values()))
+
+    # 备用模型（每次请求独立构建，不缓存；未配置时为 None）
+    from datacloud_analysis.orchestration.execution.llm_retry import _build_fallback_llm as _bfl
+    _fallback_llm = _bfl()
+    fallback_llm_with_tools = _fallback_llm.bind_tools(list(tools_map.values())) if _fallback_llm else None
 
     # 检测是否resume：state中有react_checkpoint标记
     react_checkpoint = state.get("react_checkpoint")
@@ -463,30 +550,49 @@ async def run_react_loop(
 
         # Resume时跳过LLM调用，直接用checkpoint里的ai_msg
         _skip_checkpoint_this_round = False  # 本轮是否跳过checkpoint存储（resume时）
-        if react_checkpoint and round_idx == start_round:
-            ai_msg_data = react_checkpoint.get("ai_msg")
-            if ai_msg_data:
-                # 从dict重建AIMessage对象（messages已包含，无需append）
-                if isinstance(ai_msg_data, dict):
-                    ai_msg = AIMessage(
-                        content=ai_msg_data.get("content", ""),
-                        tool_calls=ai_msg_data.get("tool_calls", []),
-                    )
+        try:
+            if react_checkpoint and round_idx == start_round:
+                ai_msg_data = react_checkpoint.get("ai_msg")
+                if ai_msg_data:
+                    # 从dict重建AIMessage对象（messages已包含，无需append）
+                    if isinstance(ai_msg_data, dict):
+                        ai_msg = AIMessage(
+                            content=ai_msg_data.get("content", ""),
+                            tool_calls=ai_msg_data.get("tool_calls", []),
+                        )
+                    else:
+                        ai_msg = ai_msg_data
+                    logger.info("[react_loop] RESUME: reuse ai_msg from checkpoint (tool_calls=%d)", len(getattr(ai_msg, "tool_calls", [])))
+                    _did_stream = False
                 else:
-                    ai_msg = ai_msg_data
-                logger.info("[react_loop] RESUME: reuse ai_msg from checkpoint (tool_calls=%d)", len(getattr(ai_msg, "tool_calls", [])))
-                _did_stream = False
+                    # Checkpoint损坏，重新调用LLM（流式）
+                    messages_window = _trim_messages_window(messages)
+                    ai_msg, _did_stream = await _invoke_llm_with_fallback(
+                        llm_with_tools, fallback_llm_with_tools, messages_window, gateway_context,
+                        state=state, round_idx=round_idx,
+                    )
+                    messages.append(ai_msg)
+                react_checkpoint = None          # 清除局部变量，后续轮次正常执行
+                _skip_checkpoint_this_round = True  # 本轮是resume，跳过checkpoint存储
             else:
-                # Checkpoint损坏，重新调用LLM（流式）
                 messages_window = _trim_messages_window(messages)
-                ai_msg, _did_stream = await _stream_llm_call(llm_with_tools, messages_window, gateway_context)
+                ai_msg, _did_stream = await _invoke_llm_with_fallback(
+                    llm_with_tools, fallback_llm_with_tools, messages_window, gateway_context,
+                    state=state, round_idx=round_idx,
+                )
                 messages.append(ai_msg)
-            react_checkpoint = None          # 清除局部变量，后续轮次正常执行
-            _skip_checkpoint_this_round = True  # 本轮是resume，跳过checkpoint存储
-        else:
-            messages_window = _trim_messages_window(messages)
-            ai_msg, _did_stream = await _stream_llm_call(llm_with_tools, messages_window, gateway_context)
-            messages.append(ai_msg)
+        except _LlmUnavailableError as _llm_err:
+            # 引导文案已由 _invoke_llm_with_fallback 推送，此处直接返回
+            return {
+                "react_final": {
+                    "result_type": "text",
+                    "answer": str(_llm_err),
+                    "stop_reason": "llm_unavailable",
+                    "answer_streamed": True,
+                },
+                "react_rounds": round_idx + 1,
+                "react_checkpoint": None,
+            }
 
         if not getattr(ai_msg, "tool_calls", None):
             # L2: 无 tool_calls，直接文字结束
