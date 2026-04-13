@@ -34,6 +34,42 @@ def _data_to_markdown(columns: list[str], rows: list[list[str]]) -> str:
     return "\n".join(lines)
 
 
+def _query_result_headers_and_record_keys(query_data: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """从 ``meta.columns`` 解析 Markdown 表头与 ``records`` 行字典的取值键。
+
+    ``datacloud-data`` 约定 ``name``/``field_code`` 为行内字段键，``label`` 为展示名。
+    若用 ``label`` 去 ``dict.get``，会出现「表头有列、单元格全空」。
+    """
+
+    meta = query_data.get("meta") or {}
+    columns_raw = meta.get("columns", []) if isinstance(meta, dict) else []
+    headers: list[str] = []
+    keys: list[str] = []
+    for col in columns_raw:
+        if isinstance(col, dict):
+            name = str(
+                col.get("name") or col.get("field") or col.get("field_code") or ""
+            ).strip()
+            label = str(col.get("label") or col.get("title") or "").strip()
+            record_key = name or label
+            if not record_key:
+                continue
+            header = (label or name) if label else name
+            keys.append(record_key)
+            headers.append(header or record_key)
+        elif isinstance(col, str) and col.strip():
+            s = col.strip()
+            keys.append(s)
+            headers.append(s)
+
+    records = query_data.get("records") or []
+    if not keys and isinstance(records, list) and records and isinstance(records[0], dict):
+        keys = list(records[0].keys())
+        headers = list(keys)
+
+    return headers, keys
+
+
 def _resolve_result_path(path_str: str, workspace_dir: str | None) -> Path:
     resolved = Path(path_str)
     if not resolved.is_absolute() and workspace_dir:
@@ -189,22 +225,11 @@ async def _stream_csv_as_markdown(gateway_context: Any, csv_path: Path) -> None:
 
 async def _emit_query_result_as_markdown(gateway_context: Any, query_data: dict[str, Any]) -> None:
     """将 data_query 返回的原始 data block 渲染为 Markdown 表格后通过 text 通道推送。"""
-    meta = query_data.get("meta") or {}
-    columns_raw = meta.get("columns", []) if isinstance(meta, dict) else []
-    columns: list[str] = []
-    for col in columns_raw:
-        if isinstance(col, dict):
-            label = str(col.get("label") or col.get("name") or "")
-            columns.append(label)
-        elif isinstance(col, str):
-            columns.append(col)
-
+    columns, record_keys = _query_result_headers_and_record_keys(query_data)
     records = query_data.get("records") or []
-    if not columns and isinstance(records, list) and records and isinstance(records[0], dict):
-        columns = list(records[0].keys())
 
     if isinstance(records, list) and records and isinstance(records[0], dict):
-        rows = [[str(r.get(c, "")) for c in columns] for r in records]
+        rows = [[str(r.get(k, "")) for k in record_keys] for r in records]
     else:
         rows = [[str(r)] for r in records]
 

@@ -409,6 +409,37 @@ class TestFormatResult:
         # Should not raise
         await format_result({"result_type": "text", "answer": "test"}, None)
 
+    @pytest.mark.asyncio
+    async def test_query_result_markdown_uses_name_for_record_keys(self) -> None:
+        """query_result markdown must index rows by meta column `name`, not `label`."""
+        from datacloud_analysis.orchestration.respond.formatter import format_result
+
+        mock_gw = AsyncMock()
+        with patch(
+            "datacloud_analysis.orchestration.respond.formatter._emit_text",
+            new_callable=AsyncMock,
+        ) as mock_emit:
+            await format_result(
+                {
+                    "result_type": "query_result",
+                    "query_data": {
+                        "records": [{"field_code_a": "v1", "field_code_b": "2"}],
+                        "meta": {
+                            "columns": [
+                                {"name": "field_code_a", "label": "列 A"},
+                                {"name": "field_code_b", "label": "列 B"},
+                            ]
+                        },
+                    },
+                },
+                gateway_context=mock_gw,
+            )
+        md = mock_emit.call_args[0][1]
+        assert "列 A" in md
+        assert "列 B" in md
+        assert "v1" in md
+        assert "| 2 |" in md or "| 2" in md
+
 
 # ---------------------------------------------------------------------------
 # graph_builder test

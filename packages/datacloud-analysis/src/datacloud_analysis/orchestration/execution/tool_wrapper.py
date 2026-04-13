@@ -314,6 +314,29 @@ async def _invoke_tool_with_runtime_context(
     return await tool.ainvoke(tool_params)
 
 
+def _normalize_mcp_output(output: Any) -> Any:
+    """将 MCP 协议格式 {"content": [...], "isError": false} 归一化为内层 JSON dict。
+
+    MCP 工具返回格式：{"content": [{"type": "text", "text": "json_string"}], "isError": false}
+    归一化为：{"code": 0, "message": "success", "data": {...}} 等内层 dict，
+    使后续 data_block 检测（records+meta）能正常工作。
+    """
+    if not isinstance(output, dict):
+        return output
+    if "content" not in output or "isError" not in output:
+        return output
+    content = output.get("content") or []
+    for item in content:
+        if isinstance(item, dict) and item.get("type") == "text":
+            try:
+                parsed = json.loads(item.get("text", ""))
+                if isinstance(parsed, dict):
+                    return parsed
+            except Exception:  # noqa: BLE001
+                pass
+    return output
+
+
 async def dispatch_tool(
     tool_call: dict[str, Any],
     tools_map: dict[str, BaseTool],
@@ -496,6 +519,7 @@ async def dispatch_tool(
                     )
                 finally:
                     _inv_ctx.__exit__(None, None, None)
+                output = _normalize_mcp_output(output)  # 归一化 MCP 格式，使 data_block 检测可识别
                 ctx["tool_output"] = output
                 ctx["tool_error"] = None
             except GraphBubbleUp:
