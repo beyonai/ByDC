@@ -1,6 +1,7 @@
 """意图理解原子能力子包。"""
 
 from .cache import UserNameCache
+from .clarification import analyze_query_clarification
 from .disambiguation import build_shortest_path_tree, disambiguate
 from .matching import match_mentions, match_mentions_with_search
 from .score_update import batch_update_scores, update_score, update_score_async
@@ -14,6 +15,7 @@ from .service import (
 )
 from .storage import create_term_knowledge, create_term_with_knowledge, create_user_term_name
 from .types import (
+    ClarificationResult,
     DisambiguationResult,
     MatchCandidate,
     MatchResult,
@@ -30,6 +32,7 @@ from .types import (
 
 __all__ = [
     # Types
+    "ClarificationResult",
     "DisambiguationResult",
     "MatchCandidate",
     "MatchResult",
@@ -44,6 +47,7 @@ __all__ = [
     "TimeExpr",
     # Cache
     "UserNameCache",
+    "analyze_query_clarification",
     "batch_update_scores",
     "batch_update_scores_with_session",
     "build_shortest_path_tree",
