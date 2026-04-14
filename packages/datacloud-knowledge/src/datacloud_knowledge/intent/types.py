@@ -127,6 +127,32 @@ class ScoreUpdateRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class ClarificationResult:
+    """查询澄清分析结果。
+
+    Attributes:
+        query: 规范化后的查询文本。
+        needs_clarification: 是否需要继续向用户澄清。
+        form: 需要澄清时返回的结构化表单定义，JSON 字符串。
+        knowledge: 无需澄清时返回的结构化知识结果，JSON 字符串。
+    """
+
+    query: str
+    needs_clarification: bool = False
+    form: str = ""
+    knowledge: str = ""
+
+    def to_legacy_dict(self) -> dict[str, str | bool]:
+        """Return the legacy demo-compatible payload."""
+        return {
+            "query": self.query,
+            "complex_ask_user": self.needs_clarification,
+            "form": self.form,
+            "knowledge": self.knowledge,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ShortestPathTreeNode:
     """最短路径树节点。"""
 
