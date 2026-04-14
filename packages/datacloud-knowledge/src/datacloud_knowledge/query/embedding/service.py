@@ -24,18 +24,18 @@ class EmbeddingConfig(BaseSettings):
     """Embedding 服务配置。
 
     环境变量：
-        EMBEDDING_API_BASE: API 基础 URL
-        EMBEDDING_API_KEY: API 密钥
-        EMBEDDING_MODEL: 模型名称
-        EMBEDDING_BATCH_SIZE: 批量处理大小
-        EMBEDDING_DIMS: 向量维度
+        DATACLOUD_EMBEDDING_API_BASE: API 基础 URL
+        DATACLOUD_EMBEDDING_API_KEY: API 密钥
+        DATACLOUD_EMBEDDING_MODEL: 模型名称
+        DATACLOUD_EMBEDDING_BATCH_SIZE: 批量处理大小
+        DATACLOUD_EMBEDDING_DIMS: 向量维度
     """
 
-    embedding_api_base: str = os.environ['EMBEDDING_API_BASE']
-    embedding_api_key: str = os.environ['EMBEDDING_API_KEY']
-    embedding_model: str = os.environ['EMBEDDING_MODEL']
-    embedding_batch_size: int = int(os.environ.get('EMBEDDING_BATCH_SIZE', 10))
-    embedding_dims: int = int(os.environ.get('EMBEDDING_DIMS', 1024))
+    embedding_api_base: str = os.environ["DATACLOUD_EMBEDDING_API_BASE"]
+    embedding_api_key: str = os.environ["DATACLOUD_EMBEDDING_API_KEY"]
+    embedding_model: str = os.environ["DATACLOUD_EMBEDDING_MODEL"]
+    embedding_batch_size: int = int(os.environ.get("DATACLOUD_EMBEDDING_BATCH_SIZE", 10))
+    embedding_dims: int = int(os.environ.get("DATACLOUD_EMBEDDING_DIMS", 1024))
 
     model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore"}
 

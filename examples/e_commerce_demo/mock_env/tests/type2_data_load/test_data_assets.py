@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import traceback
 from pathlib import Path
+from urllib.parse import urlparse
 
 import psycopg2
 import pytest
@@ -121,18 +122,17 @@ def _load_csv_into_table(csv_path: Path, schema: str, table: str) -> None:
 
 def _read_db_config_from_env_example(env_path: Path) -> dict[str, str | int]:
     cfg = dotenv_values(env_path)
-    host = cfg.get("DB_HOST")
-    port = cfg.get("DB_PORT")
-    user = cfg.get("DB_USER")
-    password = cfg.get("DB_PASSWORD")
-    database = cfg.get("DB_NAME")
-    assert all([host, port, user, password, database]), f"missing DB_* in {env_path}"
+    database_url = cfg.get("DATACLOUD_DB_URL")
+    user = cfg.get("DATACLOUD_DB_USER")
+    password = cfg.get("DATACLOUD_DB_PASSWORD")
+    assert all([database_url, user, password]), f"missing DATACLOUD_DB_* in {env_path}"
+    parsed = urlparse(str(database_url).removeprefix("jdbc:"))
     return {
-        "host": str(host),
-        "port": int(str(port)),
+        "host": parsed.hostname or "localhost",
+        "port": parsed.port or 5432,
         "user": str(user),
         "password": str(password),
-        "database": str(database),
+        "database": parsed.path.lstrip("/") or "postgres",
     }
 
 

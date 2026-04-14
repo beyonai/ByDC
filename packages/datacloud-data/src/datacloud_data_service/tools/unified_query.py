@@ -48,6 +48,7 @@ class UnifiedQuery:
         question: str,
         view_id: str = "",
         object_ids: list[str] | None = None,
+        knowledge_context: str | None = None,
         include_plan: bool = True,
         page: int = 1,
         page_size: int = 100,
@@ -66,6 +67,7 @@ class UnifiedQuery:
             question: 自然语言问题
             view_id: 视图 ID（可选）
             object_ids: 对象 ID 列表（可选）
+            knowledge_context: 可选的知识增强上下文
             include_plan: 是否在结果中包含执行计划
             page: 页码（保留，暂未使用）
             page_size: 每页大小（保留，暂未使用）
@@ -94,14 +96,22 @@ class UnifiedQuery:
         try:
             if view_id:
                 view = self._loader.get_view(view_id)
-                result = await view.query(question, include_plan=include_plan)
+                result = await view.query(
+                    question,
+                    include_plan=include_plan,
+                    knowledge_context=knowledge_context,
+                )
             elif object_ids and len(object_ids) == 1:
                 obj = self._loader.get_object(object_ids[0])
-                result = await obj.query(question, include_plan=include_plan)
+                result = await obj.query(
+                    question,
+                    include_plan=include_plan,
+                    knowledge_context=knowledge_context,
+                )
             else:
                 all_ids = object_ids or [c.object_code for c in self._loader.get_ontology_classes()]
-                from datacloud_data_sdk.view import View
                 from datacloud_data_sdk.relation import Relation
+                from datacloud_data_sdk.view import View
 
                 objects = [self._loader.get_object(oid) for oid in all_ids]
                 object_set = set(all_ids)
@@ -123,7 +133,11 @@ class UnifiedQuery:
                     objects=objects,
                     relations=relations,
                 )
-                result = await view.query(question, include_plan=include_plan)
+                result = await view.query(
+                    question,
+                    include_plan=include_plan,
+                    knowledge_context=knowledge_context,
+                )
 
             return _wrap(result)
 

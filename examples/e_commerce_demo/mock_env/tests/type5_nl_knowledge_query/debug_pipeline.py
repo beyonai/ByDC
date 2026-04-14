@@ -26,14 +26,14 @@ async def main():
     if env_path.exists():
         load_dotenv(env_path, override=True)
 
-    model = os.getenv("DATACLOUD_LLM_REASONING_MODEL", "openai:kimi-k2.5")
+    model = os.getenv("DATACLOUD_LLM_MODEL", "openai:kimi-k2.5")
     if not model.startswith("openai:"):
         model = f"openai:{model}"
 
     llm = init_chat_model(
         model=model,
-        api_key=os.getenv("OPENAI_API_KEY") or os.getenv("DATACLOUD_LLM_REASONING_API_KEY"),
-        base_url=os.getenv("OPENAI_BASE_URL") or os.getenv("DATACLOUD_LLM_REASONING_API_BASE"),
+        api_key=os.getenv("DATACLOUD_LLM_API_KEY"),
+        base_url=os.getenv("DATACLOUD_LLM_API_BASE"),
     )
 
     last_user_msg = "请查询【企业综合分析表】 100条数据。"

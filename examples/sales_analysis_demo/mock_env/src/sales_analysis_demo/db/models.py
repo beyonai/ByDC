@@ -87,7 +87,7 @@ class PoUsers(Base):
 # 待办相关表：schema 可配置（默认 crm_demo）
 # ---------------------------------------------------------------------------
 
-TODO_SCHEMA = os.getenv("TODO_SCHEMA", "crm_demo")
+TODO_SCHEMA = os.getenv("DATACLOUD_TODO_SCHEMA", "crm_demo")
 
 
 class TodoItems(Base):

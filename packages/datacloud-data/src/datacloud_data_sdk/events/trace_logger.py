@@ -25,13 +25,13 @@ def log_exception_stack(
 
     使用 traceback.format_exception 获取完整栈（与 format_exc 等价，但支持传入异常对象）。
     输出到 sys.stderr 和 path 指定的文件；path=None 时使用
-    os.environ.get("DC_TRACE_LOG_PATH", "logs/query_trace.log")。
+    os.environ.get("DATACLOUD_TRACE_LOG_PATH", "logs/query_trace.log")。
     JSON 行格式：event_type, request_id, trace_id, timestamp(ISO8601), exception, traceback。
     """
     tb_text = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
     exc_str = f"{type(exc).__name__}: {exc}"
 
-    log_path = path or os.environ.get("DC_TRACE_LOG_PATH", "logs/query_trace.log")
+    log_path = path or os.environ.get("DATACLOUD_TRACE_LOG_PATH", "logs/query_trace.log")
     record = {
         "event_type": "QueryException",
         "request_id": request_id or "",

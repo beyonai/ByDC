@@ -52,12 +52,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from collections.abc import AsyncIterator, Iterator
-from contextlib import asynccontextmanager
-from typing import Any, Optional
+from contextlib import asynccontextmanager, suppress
+from typing import Any
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
+
+from datacloud_analysis.config.db_url import (
+    build_postgres_connection_uri,
+    resolve_checkpoint_schema,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -275,11 +279,11 @@ class OpenGaussSaver:
 
     def put(self, config: Any, checkpoint: Any, metadata: Any, new_versions: Any) -> Any:
         """OpenGauss-compatible put — no ON CONFLICT."""
-        from psycopg import errors as pge  # noqa: PLC0415
-        from psycopg.types.json import Jsonb  # noqa: PLC0415
         from langgraph.checkpoint.base import (  # noqa: PLC0415
             get_serializable_checkpoint_metadata,
         )
+        from psycopg import errors as pge  # noqa: PLC0415
+        from psycopg.types.json import Jsonb  # noqa: PLC0415
 
         configurable = config["configurable"].copy()
         thread_id = configurable.pop("thread_id")
@@ -312,10 +316,8 @@ class OpenGaussSaver:
                 for blob_row in self._dump_blobs(  # type: ignore[attr-defined]
                     thread_id, checkpoint_ns, blob_values, blob_versions
                 ):
-                    try:
+                    with suppress(pge.UniqueViolation):
                         cur.execute(self._INS_BLOB, blob_row)
-                    except pge.UniqueViolation:
-                        pass  # same channel+version already stored
 
             # checkpoint: INSERT; UPDATE on conflict (simulate ON CONFLICT DO UPDATE)
             try:
@@ -344,8 +346,8 @@ class OpenGaussSaver:
         self, config: Any, writes: Any, task_id: str, task_path: str = ""
     ) -> None:
         """OpenGauss-compatible put_writes — no ON CONFLICT."""
-        from psycopg import errors as pge  # noqa: PLC0415
         from langgraph.checkpoint.base import WRITES_IDX_MAP  # noqa: PLC0415
+        from psycopg import errors as pge  # noqa: PLC0415
 
         thread_id = config["configurable"]["thread_id"]
         checkpoint_ns = config["configurable"]["checkpoint_ns"]
@@ -367,10 +369,8 @@ class OpenGaussSaver:
                     cur.execute(self._INS_WRITE, row)
                 else:
                     # Simulate ON CONFLICT DO NOTHING
-                    try:
+                    with suppress(pge.UniqueViolation):
                         cur.execute(self._INS_WRITE, row)
-                    except pge.UniqueViolation:
-                        pass  # already written
 
 
 # ---------------------------------------------------------------------------
@@ -413,11 +413,11 @@ class SyncPGCheckpointer(BaseCheckpointSaver):
 
     # ── async interface ────────────────────────────────────────────────────
 
-    async def aget_tuple(self, config: Any) -> Optional[Any]:
+    async def aget_tuple(self, config: Any) -> Any | None:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._inner.get_tuple, config)
 
-    async def aget(self, config: Any) -> Optional[Any]:
+    async def aget(self, config: Any) -> Any | None:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._inner.get, config)
 
@@ -470,10 +470,10 @@ class SyncPGCheckpointer(BaseCheckpointSaver):
 
     # ── sync interface ─────────────────────────────────────────────────────
 
-    def get_tuple(self, config: Any) -> Optional[Any]:
+    def get_tuple(self, config: Any) -> Any | None:
         return self._inner.get_tuple(config)
 
-    def get(self, config: Any) -> Optional[Any]:
+    def get(self, config: Any) -> Any | None:
         return self._inner.get(config)
 
     def put(self, config: Any, checkpoint: Any, metadata: Any, new_versions: Any) -> Any:
@@ -495,9 +495,10 @@ class SyncPGCheckpointer(BaseCheckpointSaver):
 def ensure_tables_opengauss(conn: Any, schema: str) -> None:
     """Create checkpoint tables using OpenGauss-compatible DDL (sync conn).
 
-    Used as a fallback when ``PostgresSaver.setup()`` fails due to
-    OpenGauss SQL syntax differences (e.g. ``ADD COLUMN IF NOT EXISTS``).
+    This mirrors the upstream checkpoint schema while avoiding PostgreSQL-only
+    migration syntax such as ``ADD COLUMN IF NOT EXISTS``.
     """
+    latest_migration = _get_latest_checkpoint_migration()
     ddl = [
         "CREATE TABLE IF NOT EXISTS checkpoint_migrations (v INTEGER PRIMARY KEY)",
         """
@@ -537,6 +538,22 @@ def ensure_tables_opengauss(conn: Any, schema: str) -> None:
             PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id, task_id, idx)
         )
         """,
+        "ALTER TABLE checkpoint_blobs ALTER COLUMN blob DROP NOT NULL",
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'checkpoint_writes'
+                  AND column_name = 'task_path'
+            ) THEN
+                ALTER TABLE checkpoint_writes
+                ADD COLUMN task_path TEXT NOT NULL DEFAULT '';
+            END IF;
+        END $$;
+        """,
         "CREATE INDEX IF NOT EXISTS chk_thread    ON checkpoints(thread_id)",
         "CREATE INDEX IF NOT EXISTS blobs_thread  ON checkpoint_blobs(thread_id)",
         "CREATE INDEX IF NOT EXISTS writes_thread ON checkpoint_writes(thread_id)",
@@ -548,13 +565,27 @@ def ensure_tables_opengauss(conn: Any, schema: str) -> None:
         cur.execute(
             """
             INSERT INTO checkpoint_migrations(v)
-            SELECT 9 WHERE NOT EXISTS (
-                SELECT 1 FROM checkpoint_migrations WHERE v = 9
+            SELECT %s WHERE NOT EXISTS (
+                SELECT 1 FROM checkpoint_migrations WHERE v = %s
             )
-            """
+            """,
+            (latest_migration, latest_migration),
         )
 
     logger.info("OpenGauss checkpoint tables ensured (schema=%s).", schema or "public")
+
+
+def _get_latest_checkpoint_migration() -> int:
+    """Return the upstream migration version bundled with PostgresSaver."""
+    from langgraph.checkpoint.postgres import PostgresSaver  # noqa: PLC0415
+
+    migrations = getattr(PostgresSaver, "MIGRATIONS", ())
+    if not migrations:
+        logger.warning(
+            "PostgresSaver.MIGRATIONS is unavailable; falling back to checkpoint migration v9."
+        )
+        return 9
+    return len(migrations) - 1
 
 
 # ---------------------------------------------------------------------------
@@ -601,29 +632,30 @@ async def get_checkpointer(
     Parameters
     ----------
     checkpoint_uri:
-        psycopg-format connection string.  Falls back to the
-        ``DATACLOUD_PG_CHECKPOINT_URI`` environment variable when not provided
-        (e.g. when called directly from ``langgraph.json``).
+        psycopg-format connection string. Falls back to a DSN built from
+        ``DATACLOUD_DB_URL`` / ``DATACLOUD_DB_USER`` / ``DATACLOUD_DB_PASSWORD``
+        when not provided (e.g. when called directly from ``langgraph.json``).
     checkpoint_schema:
-        Schema to use for checkpoint tables.  Falls back to
-        ``DATACLOUD_PG_CHECKPOINT_SCHEMA`` when ``None`` (not provided).
+        Schema to use for checkpoint tables. Falls back to the schema inferred
+        from ``DATACLOUD_DB_URL`` when ``None`` (not provided).
         Pass ``""`` to explicitly use the default ``public`` schema without
         reading the environment variable.
     """
-    from psycopg import Connection, errors, sql  # noqa: PLC0415
+    from psycopg import Connection, sql  # noqa: PLC0415
     from psycopg.rows import dict_row  # noqa: PLC0415
     from psycopg_pool import ConnectionPool  # noqa: PLC0415
 
-    # Fall back to env vars only when called without explicit args (e.g. langgraph.json).
+    # Fall back to unified DB env vars only when called without explicit args.
     if not checkpoint_uri:
-        checkpoint_uri = os.getenv("DATACLOUD_PG_CHECKPOINT_URI", "").strip()
+        checkpoint_uri = build_postgres_connection_uri()
     if checkpoint_schema is None:
-        checkpoint_schema = os.getenv("DATACLOUD_PG_CHECKPOINT_SCHEMA", "").strip()
+        checkpoint_schema = resolve_checkpoint_schema("")
 
     if not checkpoint_uri:
         raise RuntimeError(
-            "DATACLOUD_PG_CHECKPOINT_URI is not set. "
-            "Set it in .env or remove the checkpointer from langgraph.json "
+            "DATACLOUD_DB_URL is not set. "
+            "Set DATACLOUD_DB_URL / DATACLOUD_DB_USER / DATACLOUD_DB_PASSWORD in .env "
+            "or remove the checkpointer from langgraph.json "
             "to fall back to in-memory storage."
         )
 
@@ -658,21 +690,9 @@ async def get_checkpointer(
         )
 
         saver = make_opengauss_saver(pool)
-
-        try:
-            saver.setup()
-            logger.info("Checkpoint tables ready (standard sync setup).")
-        except (errors.SyntaxError, errors.UndefinedObject) as exc:
-            logger.warning(
-                "saver.setup() failed (%s: %s); "
-                "falling back to OpenGauss-compatible DDL.",
-                type(exc).__name__,
-                exc,
-            )
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(
-                None, _ensure_tables_from_pool, pool, checkpoint_schema
-            )
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, _ensure_tables_from_pool, pool, checkpoint_schema)
+        logger.info("Checkpoint tables ready (OpenGauss-compatible setup).")
 
         wrapped = SyncPGCheckpointer(saver)
         logger.info(

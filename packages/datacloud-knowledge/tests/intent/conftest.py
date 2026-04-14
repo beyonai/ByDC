@@ -22,16 +22,11 @@ _DB_ENV = import_module("datacloud_test_support.db_env")
 _DB_ENV.load_first_available_env_defaults(_DB_ENV.project_env_candidates(_REPO_ROOT))
 _DB_ENV.configure_test_database_env("test", require_complete=False)
 
-# OpenGauss compatibility: set KNOWLEDGE_DB_TYPE so the connection module
-# applies the PGDialect version patch before creating the engine.
-if not os.getenv("KNOWLEDGE_DB_TYPE"):
-    os.environ["KNOWLEDGE_DB_TYPE"] = "opengauss"
-
 _KB_SRC = _REPO_ROOT / "packages" / "datacloud-knowledge" / "src"
 if str(_KB_SRC) not in sys.path:
     sys.path.insert(0, str(_KB_SRC))
 
-_REQUIRED_DB_ENV_VARS = ("DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME")
+_REQUIRED_DB_ENV_VARS = ("DATACLOUD_DB_URL", "DATACLOUD_DB_USER")
 
 
 def pytest_configure(config: pytest.Config) -> None:

@@ -224,7 +224,7 @@ def test_run_with_callback(
     """完整流程：预检 → 入库 → 回调通知。
 
     需要：
-      - 真实 PostgreSQL/OpenGauss 数据库（环境变量 DB_HOST 等配置正确）
+      - 真实 PostgreSQL/OpenGauss 数据库（环境变量 DATACLOUD_DB_URL 等配置正确）
       - DATACLOUD_ENABLE_INTEGRATION_TESTS=1
     db_ready fixture 会自动执行 apply_ddl() + apply_seed()，
     确保表结构和内置术语类型（ONTOLOGY_OBJ / ONTOLOGY_VIEW 等）已存在。

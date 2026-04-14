@@ -111,10 +111,15 @@ _SYSTEM_RULES = """
 
 
 def _default_recommend_model() -> str:
-    return os.environ.get(
-        "DATACLOUD_RECOMMEND_LLM_MODEL",
-        os.environ.get("DATACLOUD_LLM_REASONING_MODEL", "gpt-4o-mini"),
-    ).strip()
+    return os.environ.get("DATACLOUD_LLM_MODEL", "gpt-4o-mini").strip()
+
+
+def _default_recommend_temperature() -> float:
+    raw_temperature = os.environ.get("DATACLOUD_LLM_TEMPERATURE", "0.0").strip()
+    try:
+        return float(raw_temperature)
+    except ValueError:
+        return 0.0
 
 
 def _parse_json_string_list(raw: str) -> list[str]:
@@ -185,20 +190,14 @@ class RecommendedQuestionsPlugin(Plugin):
         if not q:
             return []
 
-        api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        api_key = os.environ.get("DATACLOUD_LLM_API_KEY", "").strip()
         if not api_key:
-            logger.warning("RecommendedQuestionsPlugin: OPENAI_API_KEY missing, skip")
+            logger.warning("RecommendedQuestionsPlugin: DATACLOUD_LLM_API_KEY missing, skip")
             return []
 
-        base_url = os.environ.get("OPENAI_BASE_URL")
+        base_url = os.environ.get("DATACLOUD_LLM_API_BASE")
         model = _default_recommend_model()
-        temperature = 0.35
-        raw_temp = os.environ.get("DATACLOUD_RECOMMEND_LLM_TEMPERATURE", "").strip()
-        if raw_temp:
-            try:
-                temperature = float(raw_temp)
-            except ValueError:
-                temperature = 0.35
+        temperature = _default_recommend_temperature()
 
         knowledge = (
             _ENTERPRISE_FIELD_KNOWLEDGE.strip() + "\n\n" + _MANAGE_GRID_FIELD_KNOWLEDGE.strip()

@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class FileStoreSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="FILE_", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="DATACLOUD_FILE_", extra="ignore")
 
     storage_driver: str | None = Field(default=None, description="s3|local")
 

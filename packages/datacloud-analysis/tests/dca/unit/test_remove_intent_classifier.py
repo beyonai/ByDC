@@ -2,7 +2,7 @@
 
 覆盖范围：
 1. intend_node 普通查询路径下，IntentClassifier.classify 永不被调用
-2. 即使配置了 DATACLOUD_LLM_QUICK_* 环境变量，也不触发 LLM 调用
+2. 即使配置了 DATACLOUD_LLM_* 环境变量，也不触发 LLM 调用
 3. 普通查询始终返回 intent="react"，execution_status="execution"
 4. CommandRouter 仍然正常工作（删除 classifier 不影响命令路由）
 5. user_query 仍正确取最后一条 HumanMessage 的内容
@@ -82,22 +82,22 @@ class TestIntentClassifierNeverCalled:
 
 
 # ---------------------------------------------------------------------------
-# 2. 即使配置了 DATACLOUD_LLM_QUICK_*，也不触发 LLM 网络调用
+# 2. 即使配置了 DATACLOUD_LLM_*，也不触发 LLM 网络调用
 # ---------------------------------------------------------------------------
 
-class TestNoLlmCallEvenWithQuickEnv:
-    """配置了快速 LLM 环境变量时，intend_node 依然不触发任何 LLM 调用。"""
+class TestNoLlmCallEvenWithSharedEnv:
+    """配置了统一 LLM 环境变量时，intend_node 依然不触发任何 LLM 调用。"""
 
     @pytest.mark.asyncio
     async def test_no_init_chat_model_called(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """即使配置了 QUICK 环境变量，intend_node 也不触发任何 LLM 调用。
+        """即使配置了统一 LLM 环境变量，intend_node 也不触发任何 LLM 调用。
 
         intent_classifier.py 已删除，node.py 不再引用 init_chat_model；
         直接验证结果正确即可（无需 patch 已不存在的模块）。
         """
-        monkeypatch.setenv("DATACLOUD_LLM_QUICK_API_BASE", "http://fake-llm:8080/v1")
-        monkeypatch.setenv("DATACLOUD_LLM_QUICK_API_KEY", "fake-key-123")
-        monkeypatch.setenv("DATACLOUD_LLM_QUICK_MODEL", "fake-gpt")
+        monkeypatch.setenv("DATACLOUD_LLM_API_BASE", "http://fake-llm:8080/v1")
+        monkeypatch.setenv("DATACLOUD_LLM_API_KEY", "fake-key-123")
+        monkeypatch.setenv("DATACLOUD_LLM_MODEL", "fake-gpt")
 
         from datacloud_analysis.orchestration.intend.node import intend_node
 

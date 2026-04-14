@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from urllib.parse import quote_plus
+from urllib.parse import urlparse
 
 import pytest
 from sqlalchemy.dialects.postgresql.base import PGDialect
@@ -46,7 +47,7 @@ def test_database_connection_with_env_example(mock_env_root: Path) -> None:
     except OperationalError as exc:
         raise AssertionError(
             f"cannot connect target database '{db_name}'. "
-            "Please verify DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME in .env.example. "
+            "Please verify DATACLOUD_DB_URL/DATACLOUD_DB_USER/DATACLOUD_DB_PASSWORD in .env.example. "
             f"detail: {exc}"
         ) from exc
 
@@ -122,20 +123,19 @@ def _read_ddl_from_table_files(table_sql_paths: list[Path]) -> str:
 def _build_database_dsn_from_env_example(mock_env_root: Path) -> tuple[str, str]:
     env_path = mock_env_root / ".env.example"
     cfg = dotenv_values(env_path)
-    db_host = cfg.get("DB_HOST")
-    db_port = cfg.get("DB_PORT")
-    db_user = cfg.get("DB_USER")
-    db_password = cfg.get("DB_PASSWORD")
-    db_name = cfg.get("DB_NAME")
-    assert all([db_host, db_port, db_user, db_password, db_name]), (
-        f"missing DB_* config in {env_path}"
+    db_url = cfg.get("DATACLOUD_DB_URL")
+    db_user = cfg.get("DATACLOUD_DB_USER")
+    db_password = cfg.get("DATACLOUD_DB_PASSWORD")
+    assert all([db_url, db_user, db_password]), (
+        f"missing DATACLOUD_DB_* config in {env_path}"
     )
+    parsed = urlparse(str(db_url).removeprefix("jdbc:"))
     encoded_password = quote_plus(str(db_password))
     database_dsn = (
         f"postgresql+psycopg2://{db_user}:{encoded_password}@"
-        f"{db_host}:{int(str(db_port))}/{db_name}"
+        f"{parsed.hostname or 'localhost'}:{parsed.port or 5432}/{parsed.path.lstrip('/') or 'postgres'}"
     )
-    return database_dsn, str(db_name)
+    return database_dsn, parsed.path.lstrip("/") or "postgres"
 
 
 def _patch_opengauss_version_parser() -> None:

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-# 最先加载 .env，确保 DB_HOST 等配置在 connection 模块导入前生效
+# 最先加载 .env，确保 DATACLOUD_DB_URL 等配置在 connection 模块导入前生效
 _env_path = Path(__file__).resolve().parent.parent.parent / ".env"
 if _env_path.exists():
     from dotenv import load_dotenv

@@ -18,24 +18,19 @@
 
 from __future__ import annotations
 
-import json
 from abc import ABC, abstractmethod
-from dataclasses import asdict
 from typing import Any
 
 from datacloud_data_sdk.exceptions import (
     CannotAnswerError,
-    PlanGenerationError,
     PlanValidationError,
 )
 from datacloud_data_sdk.plan.models import (
     ObjectViewPayload,
-    PlanAggregation,
-    PlanStep,
     QueryExecutionPlan,
     parse_plan,
 )
-from datacloud_data_sdk.utils.case_utils import camel_to_snake_keys, snake_to_camel_keys
+from datacloud_data_sdk.utils.case_utils import camel_to_snake_keys
 
 
 class BasePlanGenerator(ABC):
@@ -50,6 +45,7 @@ class BasePlanGenerator(ABC):
         self,
         payload: ObjectViewPayload,
         question: str,
+        knowledge_context: str | None = None,
         validation_errors: list[str] | None = None,
         term_loader: Any = None,
     ) -> QueryExecutionPlan:
@@ -59,6 +55,7 @@ class BasePlanGenerator(ABC):
         Args:
             payload: 对象视图载荷
             question: 自然语言问题
+            knowledge_context: 可选的知识增强上下文
             validation_errors: 验证错误列表（用于重试）
             term_loader: 术语加载器
 
@@ -92,6 +89,7 @@ class MockPlanGenerator(BasePlanGenerator):
         self,
         payload: ObjectViewPayload,
         question: str,
+        knowledge_context: str | None = None,
         validation_errors: list[str] | None = None,
         term_loader: Any = None,
     ) -> QueryExecutionPlan:
@@ -101,6 +99,7 @@ class MockPlanGenerator(BasePlanGenerator):
         Args:
             payload: 对象视图载荷（忽略）
             question: 问题（忽略）
+            knowledge_context: 知识增强上下文（忽略）
             validation_errors: 验证错误（忽略）
             term_loader: 术语加载器（忽略）
 
@@ -165,6 +164,7 @@ class LangGraphPlanGenerator(BasePlanGenerator):
         self,
         payload: ObjectViewPayload,
         question: str,
+        knowledge_context: str | None = None,
         validation_errors: list[str] | None = None,
         term_loader: Any = None,
     ) -> QueryExecutionPlan:
@@ -179,6 +179,7 @@ class LangGraphPlanGenerator(BasePlanGenerator):
         Args:
             payload: 对象视图载荷
             question: 自然语言问题
+            knowledge_context: 可选的知识增强上下文
             validation_errors: 验证错误列表（用于重试）
             term_loader: 术语加载器
 
@@ -189,7 +190,12 @@ class LangGraphPlanGenerator(BasePlanGenerator):
             CannotAnswerError: 无法回答问题时抛出
             PlanValidationError: 计划验证失败时抛出
         """
-        plan, vr = await self._agent.run(payload, question, term_loader)
+        plan, vr = await self._agent.run(
+            payload,
+            question,
+            knowledge_context=knowledge_context,
+            term_loader=term_loader,
+        )
         if not plan.can_answer:
             raise CannotAnswerError(plan.clarification)
         if vr and not vr.valid:

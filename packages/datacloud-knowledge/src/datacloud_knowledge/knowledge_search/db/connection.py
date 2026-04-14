@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import os
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
-from urllib.parse import quote_plus
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.dialects.postgresql.base import PGDialect
 from sqlalchemy.orm import Session, sessionmaker
+
+from datacloud_knowledge.db_url import build_sqlalchemy_database_config, infer_database_type_from_url
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -15,24 +15,7 @@ if TYPE_CHECKING:
 
 _engine: Engine | None = None
 _session_local: sessionmaker[Session] | None = None
-
-
-def _build_database_url() -> str:
-    host = os.getenv("DB_HOST") or os.getenv("DC_DB_HOST")
-    if host:
-        port = os.getenv("DB_PORT") or os.getenv("DC_DB_PORT", "5432")
-        user = os.getenv("DB_USER") or os.getenv("DC_DB_USER", "postgres")
-        password = os.getenv("DB_PASSWORD") or os.getenv("DC_DB_PASSWORD", "")
-        database = os.getenv("DB_NAME") or os.getenv("DC_DB_NAME", "postgres")
-
-        safe_password = quote_plus(password) if password else ""
-        auth = f"{user}:{safe_password}" if safe_password else user
-        return f"postgresql+psycopg://{auth}@{host}:{port}/{database}"
-
-    url = os.getenv("DATABASE_URL", "postgresql+psycopg://localhost:5432/postgres")
-    if url.startswith("postgresql://"):
-        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
-    return url
+_SQL_ECHO = False
 
 
 def _patch_pgdialect_opengauss() -> None:
@@ -43,15 +26,16 @@ def _patch_pgdialect_opengauss() -> None:
 def _get_engine() -> Engine:
     global _engine
     if _engine is None:
-        db_type = os.getenv("KNOWLEDGE_DB_TYPE") or os.getenv("DC_KNOWLEDGE_DB_TYPE") or ""
+        db_type = infer_database_type_from_url()
         if db_type.lower() == "opengauss":
             _patch_pgdialect_opengauss()
 
-        database_url = _build_database_url()
+        database_url, connect_args = build_sqlalchemy_database_config("psycopg")
         _engine = create_engine(
             database_url,
-            echo=os.getenv("SQL_ECHO", "false").lower() == "true",
+            echo=_SQL_ECHO,
             pool_pre_ping=True,
+            connect_args=connect_args,
         )
     return _engine
 

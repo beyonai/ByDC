@@ -23,8 +23,8 @@ _FALLBACK_LOCALE = "zh_CN"
 
 
 def _get_query_tool_hint_zh() -> str:
-    """根据 ONTOLOGY_LOAD_MODE 返回当前查询工具命名格式的提示段。"""
-    mode = os.environ.get("ONTOLOGY_LOAD_MODE", "").strip()
+    """根据 DATACLOUD_ONTOLOGY_LOAD_MODE 返回当前查询工具命名格式的提示段。"""
+    mode = os.environ.get("DATACLOUD_ONTOLOGY_LOAD_MODE", "").strip()
     if mode == "ontology_query":
         return (
             "## 查询工具命名规则\n"
@@ -43,7 +43,7 @@ def _get_query_tool_hint_zh() -> str:
 
 def _get_query_tool_hint_en() -> str:
     """English version of query tool naming hint."""
-    mode = os.environ.get("ONTOLOGY_LOAD_MODE", "").strip()
+    mode = os.environ.get("DATACLOUD_ONTOLOGY_LOAD_MODE", "").strip()
     if mode == "ontology_query":
         return (
             "## Query tool naming\n"

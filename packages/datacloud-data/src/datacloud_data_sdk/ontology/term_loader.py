@@ -86,14 +86,14 @@ class TermLoader(ABC):
         """根据配置返回 ApiTermLoader 或 KbTermLoader。
 
         config 留空时直接从环境变量读取：
-        - DC_TERM_LOADER_TYPE: api | kb（默认 kb）
-        - DC_ZNT_SERVER: ApiTermLoader 的 base_url
+        - DATACLOUD_TERM_LOADER_TYPE: api | kb（默认 kb）
+        - DATACLOUD_ZNT_SERVER: ApiTermLoader 的 base_url
         """
         import os
 
-        loader_type = config.get("type", os.environ.get("DC_TERM_LOADER_TYPE", "kb"))
+        loader_type = config.get("type", os.environ.get("DATACLOUD_TERM_LOADER_TYPE", "kb"))
         if loader_type == "api":
-            base_url = config.get("base_url", os.environ.get("DC_ZNT_SERVER", ""))
+            base_url = config.get("base_url", os.environ.get("DATACLOUD_ZNT_SERVER", ""))
             return ApiTermLoader.from_config({"base_url": base_url})
         return KbTermLoader.from_config(config.get("kb", {}))
 

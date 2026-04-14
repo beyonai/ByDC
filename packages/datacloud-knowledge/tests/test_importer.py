@@ -22,6 +22,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 import psycopg2
 from psycopg2.extras import execute_values
@@ -57,8 +58,8 @@ TRUNCATE_ORDER = [
 
 
 def load_env() -> None:
-    """从 .env 文件加载环境变量（如果 DB_HOST 未设置）。"""
-    if os.getenv("DB_HOST"):
+    """从 .env 文件加载环境变量（如果 DATACLOUD_DB_URL 未设置）。"""
+    if os.getenv("DATACLOUD_DB_URL"):
         return
 
     for env_file in ENV_FILES:
@@ -79,17 +80,18 @@ def load_env() -> None:
 
 def get_db_connection() -> psycopg2.extensions.connection:
     """创建数据库连接。"""
-    required = ["DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME"]
+    required = ["DATACLOUD_DB_URL", "DATACLOUD_DB_USER"]
     missing = [k for k in required if not os.getenv(k)]
     if missing:
         raise ValueError(f"缺少环境变量: {missing}")
 
+    parsed = urlparse(os.getenv("DATACLOUD_DB_URL", "").removeprefix("jdbc:"))
     return psycopg2.connect(
-        host=os.getenv("DB_HOST", ""),
-        port=int(os.getenv("DB_PORT", "5432")),
-        user=os.getenv("DB_USER", ""),
-        password=os.getenv("DB_PASSWORD", ""),
-        dbname=os.getenv("DB_NAME", ""),
+        host=parsed.hostname or "localhost",
+        port=parsed.port or 5432,
+        user=os.getenv("DATACLOUD_DB_USER", ""),
+        password=os.getenv("DATACLOUD_DB_PASSWORD", ""),
+        dbname=parsed.path.lstrip("/") or "postgres",
     )
 
 

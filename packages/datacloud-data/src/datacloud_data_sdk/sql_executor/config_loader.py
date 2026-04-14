@@ -62,7 +62,7 @@ def load_datasources_from_yaml(path: str | Path) -> dict[str, DataSourceConfig]:
             db_type: MYSQL
             jdbc_url: jdbc:mysql://host:3306/db
             user: root
-            password: ${DB_PASSWORD}
+            password: ${DATACLOUD_DB_PASSWORD}
             pool_min: 1
             pool_max: 5
     """

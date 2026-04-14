@@ -1,4 +1,8 @@
+import pytest
+
+from datacloud_data_sdk.exceptions import ActionNotFoundError
 from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
 
 REGISTRY = {
     "functions": [],
@@ -13,7 +17,35 @@ REGISTRY = {
             "fields": [
                 {"field_code": "bo_id", "field_name": "商机ID", "field_type": "STRING"},
             ],
-            "actions": [],
+            "actions": [
+                {
+                    "action_code": "calc_score",
+                    "action_name": "计算评分",
+                    "description": "计算商机评分",
+                    "script": (
+                        "def execute(params):\n"
+                        "    owner_id = params.get('owner_id', '')\n"
+                        "    return {'score': 100, 'owner_id': owner_id}\n"
+                    ),
+                    "function_refs": [],
+                    "action_type": "operation",
+                    "params": [
+                        {
+                            "param_code": "owner_id",
+                            "param_name": "负责人ID",
+                            "direction": "IN",
+                            "param_type": "STRING",
+                            "required": False,
+                        },
+                        {
+                            "param_code": "score",
+                            "param_name": "评分",
+                            "direction": "OUT",
+                            "param_type": "NUMBER",
+                        },
+                    ],
+                }
+            ],
         },
         {
             "object_code": "sales_contract",
@@ -70,6 +102,134 @@ def test_view_list_objects() -> None:
     loader.load_scene(SCENE)
     view = loader.get_view("scene_01")
     assert len(view.objects) == 2
+
+
+def test_view_get_objects_returns_view_objects() -> None:
+    loader = OntologyLoader()
+    loader.load_from_content(REGISTRY)
+    loader.load_scene(SCENE)
+    view = loader.get_view("scene_01")
+
+    objects = view.get_objects()
+
+    assert [obj.object_code for obj in objects] == ["sales_bo", "sales_contract"]
+
+
+def test_view_get_object_returns_target_object() -> None:
+    loader = OntologyLoader()
+    loader.load_from_content(REGISTRY)
+    loader.load_scene(SCENE)
+    view = loader.get_view("scene_01")
+
+    obj = view.get_object("sales_bo")
+
+    assert obj.object_code == "sales_bo"
+    assert "calc_score" in obj.list_action_codes()
+
+
+@pytest.mark.asyncio
+async def test_view_get_object_can_execute_object_action() -> None:
+    loader = OntologyLoader()
+    loader.load_from_content(REGISTRY)
+    loader.load_scene(SCENE)
+    view = loader.get_view("scene_01")
+
+    result = await view.get_object("sales_bo").invoke_action("calc_score", {"owner_id": "u_001"})
+
+    assert result["records"] == [{"score": 100, "owner_id": "u_001"}]
+    assert result["meta"]["columns"] == ["score", "owner_id"]
+    assert result["total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_view_invoke_action_only_supports_view_actions() -> None:
+    loader = OntologyLoader()
+    loader.load_from_content(REGISTRY)
+    loader.load_scene(SCENE)
+    view = loader.get_view("scene_01")
+
+    with pytest.raises(ActionNotFoundError):
+        await view.invoke_action("calc_score", {"owner_id": "u_001"})
+
+
+def test_view_virtual_actions_refresh_after_late_injection() -> None:
+    loader = OntologyLoader()
+    loader.load_from_content(
+        {
+            "objects": [
+                {
+                    "object_code": "ads_grid_analysis",
+                    "object_name": "物理网格综合分析表",
+                    "source_type": "DB",
+                    "table_name": "ads_grid_analysis",
+                    "fields": [
+                        {
+                            "field_code": "grid_name",
+                            "field_name": "物理网格名称",
+                            "field_type": "STRING",
+                            "ext_property": (
+                                '{"property_role_rule": {"property_role": "DIMENSION", '
+                                '"rule_type": "attribute_name"}}'
+                            ),
+                        },
+                        {
+                            "field_code": "total_revenue",
+                            "field_name": "物理网格总营收（万元）",
+                            "field_type": "DOUBLE",
+                            "ext_property": (
+                                '{"property_role_rule": {"property_role": "MEASURE", '
+                                '"rule_type": "index_numerical"}}'
+                            ),
+                        },
+                    ],
+                    "actions": [],
+                }
+            ],
+            "relations": [],
+            "views": [
+                {
+                    "view_id": "scene_grid_analysis",
+                    "view_name": "物理网格综合分析视图",
+                    "description": "",
+                    "objects": [{"object_code": "ads_grid_analysis"}],
+                    "relations": [],
+                    "mappings": [
+                        {
+                            "property_code": "grid_name",
+                            "property_name": "物理网格名称",
+                            "source_object_code": "ads_grid_analysis",
+                            "source_object_column_code": "grid_name",
+                            "ext_property": (
+                                "{&quot;property_role_rule&quot;: "
+                                "{&quot;property_role&quot;: &quot;DIMENSION&quot;, "
+                                "&quot;rule_type&quot;: &quot;attribute_name&quot;}}"
+                            ),
+                        },
+                        {
+                            "property_code": "total_revenue",
+                            "property_name": "物理网格总营收（万元）",
+                            "source_object_code": "ads_grid_analysis",
+                            "source_object_column_code": "total_revenue",
+                            "ext_property": (
+                                "{&quot;property_role_rule&quot;: "
+                                "{&quot;property_role&quot;: &quot;MEASURE&quot;, "
+                                "&quot;rule_type&quot;: &quot;index_numerical&quot;}}"
+                            ),
+                        },
+                    ],
+                }
+            ],
+        }
+    )
+    view = loader.get_view("scene_grid_analysis")
+
+    assert view.list_action_codes() == []
+
+    inject_virtual_actions(loader)
+
+    assert "query_scene_grid_analysis" in view.list_action_codes()
+    assert "compute_scene_grid_analysis" in view.list_action_codes()
+    assert view.get_action_schema("query_scene_grid_analysis")["name"] == "query_scene_grid_analysis"
 
 
 def test_build_view_result_columns_meta_uses_property_name() -> None:

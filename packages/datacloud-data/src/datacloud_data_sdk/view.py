@@ -18,7 +18,7 @@ View 聚合多个对象，提供跨对象的查询能力和自生说明。
 from __future__ import annotations
 
 import logging
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from datacloud_data_sdk.relation import Relation
 
@@ -132,7 +132,12 @@ class View:
 
         return "\n".join(lines)
 
-    async def query(self, question: str, include_plan: bool = True) -> dict[str, object]:
+    async def query(
+        self,
+        question: str,
+        include_plan: bool = True,
+        knowledge_context: str | None = None,
+    ) -> dict[str, object]:
         """
         跨对象自然语言查询
 
@@ -148,6 +153,7 @@ class View:
         Args:
             question: 自然语言查询问题
             include_plan: 是否在结果中包含执行计划
+            knowledge_context: 可选的知识增强上下文，会传递给查询计划生成模型
 
         Returns:
             dict: 查询结果，包含 records, total, meta 等字段
@@ -175,7 +181,6 @@ class View:
         from datacloud_data_sdk.executor.executor import Executor
         from datacloud_data_sdk.executor.kb_executor import KbExecutor
         from datacloud_data_sdk.executor.script_executor import ScriptExecutor
-        from datacloud_data_sdk.plan.data_permission_rewriter import DataPermissionRewriter
         from datacloud_data_sdk.plan.execution_object_converter import ExecutionObjectConverter
         from datacloud_data_sdk.plan.object_view_builder import ObjectViewBuilder
         from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
@@ -225,6 +230,7 @@ class View:
             plan = await config.plan_generator.generate(
                 payload,
                 question,
+                knowledge_context=knowledge_context,
                 term_loader=getattr(config, "term_loader", None),
             )
             if not plan.can_answer:
@@ -271,7 +277,7 @@ class View:
                     logger.debug("observer/reporter callback failed", exc_info=True)
 
             try:
-                ctx = get_current_context()
+                get_current_context()
                 # plan = DataPermissionRewriter().rewrite(plan, ctx)
             except Exception:
                 logger.debug("observer/reporter callback failed", exc_info=True)

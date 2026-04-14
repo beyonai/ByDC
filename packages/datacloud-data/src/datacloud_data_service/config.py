@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -24,32 +24,52 @@ def _repo_root() -> Path:
 
 
 class Settings(BaseSettings):
-    llm_base_url: str = ""
-    llm_api_key: str = ""
-    llm_model: str = "gpt-4o"
-    llm_temperature: float = 0.0
-    ontology_path: str = "resources/ontology/crm_demo/objects_registry.json"
-    scene_path: str = "resources/ontology/crm_demo/scene_01_data_analysis.json"
-    csv_base_dir: str = "./tmp"
+    llm_api_base: str = Field(default="", validation_alias="DATACLOUD_LLM_API_BASE")
+    llm_api_key: str = Field(default="", validation_alias="DATACLOUD_LLM_API_KEY")
+    llm_model: str = Field(default="gpt-4o", validation_alias="DATACLOUD_LLM_MODEL")
+    llm_temperature: float = Field(default=0.0, validation_alias="DATACLOUD_LLM_TEMPERATURE")
+    ontology_path: str = Field(
+        default="resources/ontology/crm_demo/objects_registry.json",
+        validation_alias="DATACLOUD_ONTOLOGY_PATH",
+    )
+    csv_base_dir: str = Field(default="./tmp", validation_alias="DATACLOUD_CSV_BASE_DIR")
     # 查询结果溢出：超过阈值时存 CSV 并提供下载，避免模型上下文超长
-    query_result_csv_threshold: int = 5  # 超过此行数则存 CSV
-    query_result_preview_rows: int = 5  # 返回给模型的前几行预览
-    api_base_url: str = "http://127.0.0.1:8080"  # 用于拼接下载地址，如 https://example.com
-    max_plan_retries: int = 2
-    sql_execution_mode: str = "internal"
-    trace_log_path: str = "logs/query_trace.log"  # 环境变量 DC_TRACE_LOG_PATH
-    trace_enabled: bool = False  # 环境变量 DC_TRACE_ENABLED
-    znt_server: str = ""  # 术语服务地址，环境变量 DC_ZNT_SERVER
-    term_loader_type: str = "kb"  # 术语加载器类型: kb | api，环境变量 DC_TERM_LOADER_TYPE
+    query_result_csv_threshold: int = Field(
+        default=5,
+        validation_alias="DATACLOUD_QUERY_RESULT_CSV_THRESHOLD",
+    )
+    query_result_preview_rows: int = Field(
+        default=5,
+        validation_alias="DATACLOUD_QUERY_RESULT_PREVIEW_ROWS",
+    )
+    api_base_url: str = Field(
+        default="http://127.0.0.1:8080",
+        validation_alias="DATACLOUD_API_BASE_URL",
+    )
+    max_plan_retries: int = Field(default=2, validation_alias="DATACLOUD_MAX_PLAN_RETRIES")
+    sql_execution_mode: str = Field(
+        default="internal",
+        validation_alias="DATACLOUD_SQL_EXECUTION_MODE",
+    )
+    trace_log_path: str = Field(
+        default="logs/query_trace.log",
+        validation_alias="DATACLOUD_TRACE_LOG_PATH",
+    )
+    trace_enabled: bool = Field(default=False, validation_alias="DATACLOUD_TRACE_ENABLED")
+    znt_server: str = Field(default="", validation_alias="DATACLOUD_ZNT_SERVER")
+    term_loader_type: str = Field(default="kb", validation_alias="DATACLOUD_TERM_LOADER_TYPE")
     # CORS 允许的源，逗号分隔，如 "http://localhost:3000,http://127.0.0.1:3000"
-    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    cors_origins: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000",
+        validation_alias="DATACLOUD_CORS_ORIGINS",
+    )
 
-    model_config = {"env_prefix": "DC_", "env_file": ".env", "extra": "ignore"}
+    model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore"}
 
     @model_validator(mode="after")
     def _resolve_relative_paths(self) -> Settings:
         root = _repo_root()
-        for name in ("ontology_path", "scene_path", "csv_base_dir", "trace_log_path"):
+        for name in ("ontology_path", "csv_base_dir", "trace_log_path"):
             raw = getattr(self, name)
             p = Path(raw).expanduser()
             if not p.is_absolute():

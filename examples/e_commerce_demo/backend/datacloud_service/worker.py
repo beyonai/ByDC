@@ -374,8 +374,8 @@ class DataCloudWorker(GatewayWorker):
             loaded_agent_ids,
         )
 
-        # Set ontology scene path for knowledge injection middleware
-        if not os.environ.get("DATACLOUD_ONTOLOGY_SCENE_PATH"):
+        # Set ontology path for knowledge injection middleware
+        if not os.environ.get("DATACLOUD_ONTOLOGY_PATH"):
             from pathlib import Path
             from datacloud_service.plugins.worker_plugins.init_agent_conf import _datacloud_repo_root
 
@@ -390,8 +390,8 @@ class DataCloudWorker(GatewayWorker):
                 / "import_package_owl_onto"
             )
             if scene_path.exists():
-                os.environ["DATACLOUD_ONTOLOGY_SCENE_PATH"] = str(scene_path)
-                logger.info("DataCloudWorker: Set DATACLOUD_ONTOLOGY_SCENE_PATH=%s", scene_path)
+                os.environ["DATACLOUD_ONTOLOGY_PATH"] = str(scene_path)
+                logger.info("DataCloudWorker: Set DATACLOUD_ONTOLOGY_PATH=%s", scene_path)
 
         from datacloud_analysis import bootstrap
 
@@ -461,11 +461,11 @@ class DataCloudWorker(GatewayWorker):
         )
 
         if self.api_key:
-            os.environ["OPENAI_API_KEY"] = self.api_key
+            os.environ["DATACLOUD_LLM_API_KEY"] = self.api_key
         if self.base_url:
-            os.environ["OPENAI_BASE_URL"] = self.base_url
+            os.environ["DATACLOUD_LLM_API_BASE"] = self.base_url
         if self.model_name:
-            os.environ["DATACLOUD_LLM_REASONING_MODEL"] = self.model_name
+            os.environ["DATACLOUD_LLM_MODEL"] = self.model_name
 
         ext_params = extra_payload.get("ext_params")
         runtime_agent_key = self._resolve_runtime_agent_key(

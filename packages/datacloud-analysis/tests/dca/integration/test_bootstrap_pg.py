@@ -1,7 +1,7 @@
 """Integration test: bootstrap.setup() creates PG checkpoint tables.
 
 Requires a running PostgreSQL instance.  Set the env var:
-    DATACLOUD_PG_CHECKPOINT_URI=postgresql://...
+    DATACLOUD_DB_URL=jdbc:postgresql://...
 
 Run selectively:
     pytest tests/integration/test_bootstrap_pg.py -v -m integration
@@ -12,14 +12,15 @@ from __future__ import annotations
 import os
 
 import pytest
+from datacloud_analysis.config.db_url import build_postgres_connection_uri
 
-_PG_CHECKPOINT_URI = os.environ.get("DATACLOUD_PG_CHECKPOINT_URI", "").strip()
+_PG_CHECKPOINT_URI = build_postgres_connection_uri()
 
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(
         not _PG_CHECKPOINT_URI,
-        reason="DATACLOUD_PG_CHECKPOINT_URI is required for integration bootstrap tests",
+        reason="DATACLOUD_DB_URL is required for integration bootstrap tests",
     ),
 ]
 
@@ -29,7 +30,7 @@ async def test_setup_creates_tables(initialized_sdk: None) -> None:
     """After bootstrap.setup(), the checkpoint tables must exist."""
     import psycopg  # noqa: PLC0415
 
-    uri = os.environ["DATACLOUD_PG_CHECKPOINT_URI"]
+    uri = build_postgres_connection_uri()
     async with await psycopg.AsyncConnection.connect(uri) as conn:
         async with conn.cursor() as cur:
             await cur.execute(

@@ -1,4 +1,4 @@
-"""test_llm_retry.py — TDD 红阶段：llm_retry 模块尚未实现，全部用例应失败。"""
+"""test_llm_retry.py — 覆盖 LLM 重试与备用模型关闭行为。"""
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
@@ -142,8 +142,14 @@ async def test_retry_succeeds_on_second_attempt(monkeypatch: pytest.MonkeyPatch)
             raise exc
         return "recovered"
 
-    monkeypatch.setenv("DATACLOUD_LLM_MAX_RETRIES", "3")
-    monkeypatch.setenv("DATACLOUD_LLM_RETRY_MIN_WAIT", "0")
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_RETRIES",
+        3,
+    )
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MIN_WAIT",
+        0.0,
+    )
 
     with patch("asyncio.sleep", new_callable=AsyncMock):
         result = await stream_llm_call_with_retry(_flaky)
@@ -166,8 +172,14 @@ async def test_retry_exhausted_raises_original_exception(monkeypatch: pytest.Mon
         exc.status_code = 500  # type: ignore[attr-defined]
         raise exc
 
-    monkeypatch.setenv("DATACLOUD_LLM_MAX_RETRIES", "2")
-    monkeypatch.setenv("DATACLOUD_LLM_RETRY_MIN_WAIT", "0")
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_RETRIES",
+        2,
+    )
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MIN_WAIT",
+        0.0,
+    )
 
     with patch("asyncio.sleep", new_callable=AsyncMock):
         with pytest.raises(Exception, match="server error"):
@@ -190,7 +202,10 @@ async def test_non_retryable_error_not_retried(monkeypatch: pytest.MonkeyPatch) 
         exc.status_code = 401  # type: ignore[attr-defined]
         raise exc
 
-    monkeypatch.setenv("DATACLOUD_LLM_MAX_RETRIES", "3")
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_RETRIES",
+        3,
+    )
 
     with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
         with pytest.raises(Exception, match="unauthorized"):
@@ -216,10 +231,22 @@ async def test_rate_limit_429_adds_extra_wait(monkeypatch: pytest.MonkeyPatch) -
             raise exc
         return "ok"
 
-    monkeypatch.setenv("DATACLOUD_LLM_MAX_RETRIES", "3")
-    monkeypatch.setenv("DATACLOUD_LLM_RETRY_MIN_WAIT", "1.0")
-    monkeypatch.setenv("DATACLOUD_LLM_RETRY_MAX_WAIT", "60.0")
-    monkeypatch.setenv("DATACLOUD_LLM_RETRY_RATE_LIMIT_WAIT", "10.0")
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_RETRIES",
+        3,
+    )
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MIN_WAIT",
+        1.0,
+    )
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_WAIT",
+        60.0,
+    )
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_RATE_LIMIT_WAIT",
+        10.0,
+    )
 
     sleep_calls: list[float] = []
 
@@ -248,9 +275,18 @@ async def test_exponential_backoff_increases_wait(monkeypatch: pytest.MonkeyPatc
         exc.status_code = 500  # type: ignore[attr-defined]
         raise exc
 
-    monkeypatch.setenv("DATACLOUD_LLM_MAX_RETRIES", "3")
-    monkeypatch.setenv("DATACLOUD_LLM_RETRY_MIN_WAIT", "1.0")
-    monkeypatch.setenv("DATACLOUD_LLM_RETRY_MAX_WAIT", "60.0")
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_RETRIES",
+        3,
+    )
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MIN_WAIT",
+        1.0,
+    )
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_WAIT",
+        60.0,
+    )
 
     sleep_calls: list[float] = []
 
@@ -266,53 +302,8 @@ async def test_exponential_backoff_increases_wait(monkeypatch: pytest.MonkeyPatc
 
 # ─── _build_fallback_llm ──────────────────────────────────────────────────────
 
-def test_build_fallback_llm_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_build_fallback_llm_always_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     from datacloud_analysis.orchestration.execution.llm_retry import _build_fallback_llm
 
-    monkeypatch.delenv("DATACLOUD_LLM_FALLBACK_ENABLED", raising=False)
+    _ = monkeypatch
     assert _build_fallback_llm() is None
-
-
-def test_build_fallback_llm_explicit_false(monkeypatch: pytest.MonkeyPatch) -> None:
-    from datacloud_analysis.orchestration.execution.llm_retry import _build_fallback_llm
-
-    monkeypatch.setenv("DATACLOUD_LLM_FALLBACK_ENABLED", "false")
-    assert _build_fallback_llm() is None
-
-
-def test_build_fallback_llm_incomplete_config_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
-    """启用但缺少 MODEL/BASE_URL/API_KEY，不抛异常，返回 None。"""
-    from datacloud_analysis.orchestration.execution.llm_retry import _build_fallback_llm
-
-    monkeypatch.setenv("DATACLOUD_LLM_FALLBACK_ENABLED", "true")
-    monkeypatch.delenv("DATACLOUD_LLM_FALLBACK_MODEL", raising=False)
-    monkeypatch.delenv("DATACLOUD_LLM_FALLBACK_BASE_URL", raising=False)
-    monkeypatch.delenv("DATACLOUD_LLM_FALLBACK_API_KEY", raising=False)
-    assert _build_fallback_llm() is None
-
-
-def test_build_fallback_llm_returns_llm_instance(monkeypatch: pytest.MonkeyPatch) -> None:
-    """配置完整时调用 init_chat_model 并返回其结果。"""
-    from datacloud_analysis.orchestration.execution.llm_retry import _build_fallback_llm
-
-    monkeypatch.setenv("DATACLOUD_LLM_FALLBACK_ENABLED", "true")
-    monkeypatch.setenv("DATACLOUD_LLM_FALLBACK_MODEL", "gpt-3.5-turbo")
-    monkeypatch.setenv("DATACLOUD_LLM_FALLBACK_BASE_URL", "https://api.openai.com/v1")
-    monkeypatch.setenv("DATACLOUD_LLM_FALLBACK_API_KEY", "sk-test-key")
-
-    fake_llm = object()
-
-    with patch(
-        "datacloud_analysis.orchestration.execution.llm_retry.init_chat_model",
-        return_value=fake_llm,
-    ) as mock_init:
-        result = _build_fallback_llm()
-
-    assert result is fake_llm
-    mock_init.assert_called_once_with(
-        model="gpt-3.5-turbo",
-        model_provider="openai",
-        api_key="sk-test-key",
-        base_url="https://api.openai.com/v1",
-        temperature=0.0,
-    )
