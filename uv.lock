@@ -328,7 +328,7 @@ wheels = [
 
 [[package]]
 name = "by-datacloud"
-version = "0.1.2"
+version = "0.1.4"
 source = { editable = "." }
 dependencies = [
     { name = "aiochclient", extra = ["aiohttp"] },
@@ -885,6 +885,7 @@ dependencies = [
     { name = "deepagents" },
     { name = "httpx" },
     { name = "langchain" },
+    { name = "langchain-anthropic" },
     { name = "langchain-core" },
     { name = "langchain-openai" },
     { name = "langgraph" },
@@ -911,6 +912,7 @@ requires-dist = [
     { name = "deepagents", specifier = ">=0.4.7" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "langchain", specifier = ">=0.3.0" },
+    { name = "langchain-anthropic", specifier = ">=0.3.0" },
     { name = "langchain-core", specifier = ">=0.3.0" },
     { name = "langchain-openai", specifier = ">=1.1.10" },
     { name = "langgraph", specifier = ">=1.0.10" },

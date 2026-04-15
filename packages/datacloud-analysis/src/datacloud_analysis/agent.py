@@ -138,7 +138,7 @@ def create_agent(
     skip_action_families: frozenset[str] = frozenset(),
     user_message: str | None = None,
     agent_id: str | None = None,
-    knowledge_enhancer: Callable[[str], Any] | None = None,
+    knowledge_enhancer: Callable[..., Any] | None = None,
 ) -> Any:
     """Create a deep agent for DataCloud, usable with langgraph dev and deep-agents-ui.
 

@@ -3,17 +3,10 @@ from __future__ import annotations
 import contextvars
 import json
 import logging
-import re
 import os
+import re
 import time
 import uuid
-from typing import Any, Literal
-import json
-import logging
-import os
-from typing import Any, Literal
-import logging
-import os
 from typing import Any, Literal
 
 from langchain.chat_models import init_chat_model
@@ -141,11 +134,11 @@ async def _invoke_llm_with_fallback(
     2. 备用模型 + 指数退避重试（若运行时显式注入备用模型实例）
     3. 全部不可用 → 保存断点到 Redis + 向用户推送引导文案 + 抛 _LlmUnavailableError
     """
-    from datacloud_analysis.orchestration.execution.llm_retry import stream_llm_call_with_retry
     from datacloud_analysis.orchestration.execution.llm_checkpoint import (
-        save_llm_failure_checkpoint,
         CHECKPOINT_REPLY,
+        save_llm_failure_checkpoint,
     )
+    from datacloud_analysis.orchestration.execution.llm_retry import stream_llm_call_with_retry
 
     # ── 主模型（含重试）────────────────────────────────────────────────────────
     last_exc: Exception
@@ -468,8 +461,8 @@ async def run_react_loop(
         or getattr(gateway_context, "_redis_client", None)
     ) if gateway_context else None
     from datacloud_analysis.orchestration.execution.llm_checkpoint import (
-        load_llm_failure_checkpoint,
         delete_llm_failure_checkpoint,
+        load_llm_failure_checkpoint,
     )
     _llm_failure_ckpt = await load_llm_failure_checkpoint(_redis_client, _session_id)
     if _llm_failure_ckpt is not None:

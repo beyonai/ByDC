@@ -58,7 +58,7 @@ def _make_knowledge_result(
     return result
 
 
-async def _grid_knowledge_enhancer(query: str) -> Any:
+async def _grid_knowledge_enhancer(query: str, gateway_context: Any = None, message_pid: str = "") -> Any:
     """模拟高效益网格知识查询的 enhancer（有 knowledge，无歧义）。"""
     return _make_knowledge_result(
         needs_clarification=False,
@@ -67,7 +67,7 @@ async def _grid_knowledge_enhancer(query: str) -> Any:
     )
 
 
-async def _industry_clarification_enhancer(query: str) -> Any:
+async def _industry_clarification_enhancer(query: str, gateway_context: Any = None, message_pid: str = "") -> Any:
     """模拟产业链查询的 enhancer（有歧义，无 knowledge）。"""
     return _make_knowledge_result(
         needs_clarification=True,
@@ -77,7 +77,7 @@ async def _industry_clarification_enhancer(query: str) -> Any:
     )
 
 
-async def _passthrough_enhancer(query: str) -> Any:
+async def _passthrough_enhancer(query: str, gateway_context: Any = None, message_pid: str = "") -> Any:
     """模拟透传查询的 enhancer（无知识，无歧义）。"""
     return _make_knowledge_result(
         needs_clarification=False,

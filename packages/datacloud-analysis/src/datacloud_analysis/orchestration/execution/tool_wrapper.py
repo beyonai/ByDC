@@ -476,6 +476,10 @@ async def dispatch_tool(
         base_ctx = ctx
         ctx, before_decision = await hook_manager.run_before(ctx)
         ctx = _merge_ctx(base_ctx, ctx)
+        # 将 hook 可能修改过的 knowledge_payload 同步回 state，
+        # 确保同一轮 execution 中后续工具调用能读到更新后的值（例如 needs_clarification 被清除）
+        if "knowledge_payload" in ctx:
+            state["knowledge_payload"] = ctx["knowledge_payload"]
         if before_decision:
             action = str(before_decision.get("action") or "")
             if action == "short_circuit":

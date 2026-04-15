@@ -73,3 +73,24 @@ class TestExecutionSettings:
             settings = ExecutionSettings()
 
         assert settings.react_max_rounds == 20
+
+
+def test_settings_propagates_unexpected_llm_loader_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unexpected runtime errors in LLM role loading must not be silently swallowed."""
+    from datacloud_analysis.config import env as env_module
+
+    monkeypatch.setenv("DATACLOUD_DB_URL", "jdbc:postgresql://localhost:5432/demo")
+    monkeypatch.setenv("DATACLOUD_DB_USER", "demo")
+    monkeypatch.setenv("DATACLOUD_DB_PASSWORD", "demo")
+
+    def _raise_runtime_error(_cls: type[object], _role: str) -> env_module.LLMGroupSettings:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(
+        env_module.LLMGroupSettings,
+        "for_role",
+        classmethod(_raise_runtime_error),
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        env_module.Settings()

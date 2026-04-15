@@ -3,22 +3,31 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Callable
+
+BatchUpdater = Callable[[tuple[Any, ...]], None]
 
 try:
-    from datacloud_knowledge.intent import ScoreUpdateRecord
-    from datacloud_knowledge.intent import batch_update_scores_with_session
+    from datacloud_knowledge.intent import ScoreUpdateRecord as ImportedScoreUpdateRecord
+    from datacloud_knowledge.intent import (
+        batch_update_scores_with_session as imported_batch_update_scores_with_session,
+    )
+    updater_impl: BatchUpdater | None = imported_batch_update_scores_with_session
 except ModuleNotFoundError:
     @dataclass(frozen=True)
-    class ScoreUpdateRecord:
+    class FallbackScoreUpdateRecord:
         """Fallback record type used when datacloud_knowledge is unavailable."""
 
         name_id: str
         success: bool
 
-    batch_update_scores_with_session: Callable[[tuple[ScoreUpdateRecord, ...]], None] | None = None
+    ImportedScoreUpdateRecord = FallbackScoreUpdateRecord
+    updater_impl = None
+
+ScoreUpdateRecord = ImportedScoreUpdateRecord
+batch_update_scores_with_session = updater_impl
 
 logger = logging.getLogger(__name__)
 

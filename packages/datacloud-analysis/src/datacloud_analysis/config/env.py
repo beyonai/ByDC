@@ -17,9 +17,9 @@ EMBEDDING     Embedding model  (memory/knowledge vector search)
 from __future__ import annotations
 
 import os
-from typing import Any
+from collections.abc import Callable
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from datacloud_analysis.config.db_url import (
@@ -27,10 +27,17 @@ from datacloud_analysis.config.db_url import (
     resolve_checkpoint_schema,
 )
 
-
 # ---------------------------------------------------------------------------
 # Sub-groups (composable, testable in isolation)
 # ---------------------------------------------------------------------------
+
+def _load_optional[T](loader: Callable[[], T]) -> T | None:
+    """Load optional config group; only swallow validation/missing-env failures."""
+    try:
+        return loader()
+    except (ValidationError, ValueError):
+        return None
+
 
 class PGSettings(BaseSettings):
     """Checkpoint PostgreSQL connection resolved from DATACLOUD_DB_*."""
@@ -66,7 +73,7 @@ class LLMGroupSettings(BaseSettings):
     temperature: float = Field(default=0.0, description="Sampling temperature.")
 
     @classmethod
-    def for_role(cls, role: str) -> "LLMGroupSettings":
+    def for_role(cls, role: str) -> LLMGroupSettings:
         """Factory: load the shared LLM settings for a logical role.
 
         Args:
@@ -94,6 +101,7 @@ class LLMGroupSettings(BaseSettings):
             model=model,
             temperature=temperature,
         )
+
 
 class EmbeddingSettings(BaseSettings):
     """Settings for the embedding (vector) model."""
@@ -207,7 +215,7 @@ class Settings(BaseSettings):
     execution: ExecutionSettings | None = Field(default=None)
 
     @model_validator(mode="after")
-    def _load_llm_roles(self) -> "Settings":
+    def _load_llm_roles(self) -> Settings:
         """Populate LLM role settings from their env prefixes (soft-fail when missing)."""
         roles = {
             "llm_quick": "quick",
@@ -217,33 +225,15 @@ class Settings(BaseSettings):
         }
         for attr, role in roles.items():
             try:
-                object.__setattr__(self, attr, LLMGroupSettings.for_role(role))
-            except Exception:  # noqa: BLE001
-                pass  # Role not configured; callers must check for None
+                role_config = LLMGroupSettings.for_role(role)
+            except (ValidationError, ValueError):
+                role_config = None
+            object.__setattr__(self, attr, role_config)
 
-        try:
-            object.__setattr__(self, "embedding", EmbeddingSettings())
-        except Exception:  # noqa: BLE001
-            pass
-
-        try:
-            object.__setattr__(self, "knowledge", KnowledgeSettings())
-        except Exception:  # noqa: BLE001
-            pass
-
-        try:
-            object.__setattr__(self, "agent", AgentSettings())
-        except Exception:  # noqa: BLE001
-            pass
-
-        try:
-            object.__setattr__(self, "gateway", GatewaySettings())
-        except Exception:  # noqa: BLE001
-            pass
-
-        try:
-            object.__setattr__(self, "execution", ExecutionSettings())
-        except Exception:  # noqa: BLE001
-            pass
+        object.__setattr__(self, "embedding", _load_optional(lambda: EmbeddingSettings.model_validate({})))
+        object.__setattr__(self, "knowledge", _load_optional(lambda: KnowledgeSettings.model_validate({})))
+        object.__setattr__(self, "agent", _load_optional(lambda: AgentSettings.model_validate({})))
+        object.__setattr__(self, "gateway", _load_optional(lambda: GatewaySettings.model_validate({})))
+        object.__setattr__(self, "execution", _load_optional(lambda: ExecutionSettings.model_validate({})))
 
         return self

@@ -52,7 +52,7 @@ async def test_tc01_knowledge_no_clarification_writes_both_state_fields() -> Non
     )
     result = await intend_node(_make_state("高效益网格的营收"), _make_config(), knowledge_enhancer=enhancer)
 
-    enhancer.assert_awaited_once_with("高效益网格的营收")
+    enhancer.assert_awaited_once_with("高效益网格的营收", None, "")
     assert "knowledge_payload" in result
     assert result["knowledge_payload"]["needs_clarification"] is False
     assert result["knowledge_payload"]["knowledge"] != ""

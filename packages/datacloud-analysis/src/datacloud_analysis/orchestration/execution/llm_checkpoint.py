@@ -99,7 +99,11 @@ async def load_llm_failure_checkpoint(
         data = await redis_client.get(key)
         if not data:
             return None
-        return json.loads(data)
+        payload: Any = json.loads(data)
+        if not isinstance(payload, dict):
+            logger.warning("[LLM] checkpoint payload is not a dict, key=%s type=%s", key, type(payload).__name__)
+            return None
+        return payload
     except Exception as exc:
         logger.error("[LLM] checkpoint 加载失败: %s", exc)
         return None

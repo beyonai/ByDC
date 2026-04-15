@@ -403,6 +403,49 @@ class DataCloudWorker(GatewayWorker):
         """Capabilities registered by this worker."""
         return [os.environ.get("DATACLOUD_GATEWAY_WORKER_ID", "datacloud")]
 
+    def get_agent_types(self) -> list[str]:
+        """Compatibility method required by by_framework GatewayWorker abstract API."""
+        return self.get_capabilities()
+
+    def _load_skill_capabilities(self, *, user_id: str, task_id: str) -> dict[str, Any]:
+        """Load task-scoped skills and expose awaitable wrappers with policy metadata."""
+        from datacloud_analysis.workspace.paths import build_task_paths
+        from datacloud_analysis.workspace.skills_loader import SkillLoader
+
+        task_paths = build_task_paths(user_id=user_id, task_id=task_id)
+        registry = SkillLoader(task_paths).load_all()
+        capabilities: dict[str, Any] = {}
+
+        def _wrap_skill(fn: Any) -> Any:
+            async def _wrapped(**params: Any) -> Any:
+                result = fn(**params)
+                if asyncio.iscoroutine(result):
+                    return await result
+                return result
+
+            return _wrapped
+
+        for name, entry in registry.items():
+            run_fn = entry.get("run")
+            if not callable(run_fn):
+                continue
+            wrapped = _wrap_skill(run_fn)
+            raw_meta = entry.get("meta")
+            meta = raw_meta if isinstance(raw_meta, dict) else {}
+            setattr(wrapped, "_skill_risk_level", str(meta.get("risk_level") or "medium"))
+            setattr(
+                wrapped,
+                "_skill_allowlist_tags",
+                [str(tag) for tag in (meta.get("allowlist_tags") or []) if str(tag).strip()],
+            )
+            setattr(
+                wrapped,
+                "_skill_blocklist_tags",
+                [str(tag) for tag in (meta.get("blocklist_tags") or []) if str(tag).strip()],
+            )
+            capabilities[str(name)] = wrapped
+        return capabilities
+
     async def _emit_6001(self, context: AgentContext, payload: dict[str, Any]) -> None:
         """Emit one structured data-table JSON chunk (content_type=6001)."""
         data_table_type = getattr(SseMessageType, "data_table_json", None)
@@ -532,14 +575,16 @@ class DataCloudWorker(GatewayWorker):
 
         if isinstance(command, AskAgentCommand):
             # 初始提示：第一层 sub_step(阶段标题)，第二层 emit_chunk(说明文本，路由到思考区)
-            async with context.sub_step(_NODE_PHASE_TITLE["knowledge_enhance"]) as (m_id, p_id):
-                await context.emit_chunk(
-                    StreamChunkEvent(content="已接收到用户消息，开始处理"),
-                    event_type=EventType.REASONING_LOG_START.value,
-                    content_type=SseReasonMessageType.think_text.value,
-                    message_id=m_id,
-                    parent_message_id=p_id,
-                )
+            sub_step = getattr(context, "sub_step", None)
+            if callable(sub_step):
+                async with sub_step(_NODE_PHASE_TITLE["knowledge_enhance"]) as (m_id, p_id):
+                    await context.emit_chunk(
+                        StreamChunkEvent(content="已接收到用户消息，开始处理"),
+                        event_type=EventType.REASONING_LOG_START.value,
+                        content_type=SseReasonMessageType.think_text.value,
+                        message_id=m_id,
+                        parent_message_id=p_id,
+                    )
             user_text = _latest_user_text_from_content(command.content)
             if _is_light_chitchat(user_text):
                 await context.emit_chunk(

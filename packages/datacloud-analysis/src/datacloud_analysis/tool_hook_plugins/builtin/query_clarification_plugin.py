@@ -94,7 +94,12 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 "paradigmList": paradigm_list,
             },
         })
-        _apply_resume_to_params(ctx, tool_name, resume_value, payload)
+        # interrupt 恢复后：清除 needs_clarification 标志，避免后续工具调用再次触发中断死循环。
+        # tool_wrapper 会把修改后的 ctx["knowledge_payload"] 同步回 state。
+        updated_payload = dict(payload)
+        updated_payload["needs_clarification"] = False
+        ctx["knowledge_payload"] = updated_payload
+        _apply_resume_to_params(ctx, tool_name, resume_value, updated_payload)
         return {"action": "patch", "patch": {"tool_params": dict(ctx["tool_params"])}}
 
     # 层 B 知识注入：仅对 data_query_* 工具注入 contextKnowledge

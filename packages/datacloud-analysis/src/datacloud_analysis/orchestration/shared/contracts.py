@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Literal, Mapping, cast
+from typing import Any, Literal, cast
 
 TaskStatus = Literal["success", "failed", "blocked"]
 BlockedReason = Literal["missing_dependency"] | str | None
@@ -12,10 +13,7 @@ def _coerce_str_list(value: Any) -> list[str]:
         return []
     result: list[str] = []
     for item in value:
-        if isinstance(item, str):
-            text = item.strip()
-        else:
-            text = str(item).strip()
+        text = item.strip() if isinstance(item, str) else str(item).strip()
         if text:
             result.append(text)
     return result
@@ -192,9 +190,8 @@ class TaskResult:
         status_value = str(payload.get("status") or "").strip().lower()
         if status_value not in {"success", "failed", "blocked"}:
             raise ValueError(f"Unsupported task status: {status_value}")
-        result_meta = (
-            dict(payload.get("result_meta")) if isinstance(payload.get("result_meta"), Mapping) else {}
-        )
+        raw_result_meta = payload.get("result_meta")
+        result_meta = dict(raw_result_meta) if isinstance(raw_result_meta, Mapping) else {}
         raw_refs = payload.get("artifact_refs") or []
         artifact_refs: list[ArtifactRef] = []
         if isinstance(raw_refs, list):

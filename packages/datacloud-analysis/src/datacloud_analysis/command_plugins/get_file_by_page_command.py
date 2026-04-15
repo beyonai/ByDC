@@ -139,17 +139,22 @@ def _pagination_dict(page: int, page_size: int, total: int) -> dict[str, Any]:
 
 def _make_6001_error(message: str, page: int = 1, page_size: int = 50) -> dict[str, Any]:
     return {
+        "code": 1,
+        "message": message,
+        "data": {
             "records": [],
             "meta": {},
             "pagination": _pagination_dict(page, page_size, 0),
             "file": {},
-        }
+        },
+    }
 
 
 def _resolve_file_and_meta_paths(*, workspace_dir: str, file_id: str) -> tuple[Path, Path]:
-    workspace_root = resolve_shared_workspace_dir(workspace_dir)
-    if workspace_root is None:
+    workspace_root_raw = resolve_shared_workspace_dir(workspace_dir)
+    if workspace_root_raw is None:
         raise FileNotFoundError("workspace_dir 不能为空")
+    workspace_root = Path(str(workspace_root_raw))
     if not workspace_root.exists():
         raise FileNotFoundError(f"workspace_dir 不存在: {workspace_root}")
 
@@ -191,7 +196,7 @@ def _shared_workspace_dir(workspace_dir: Path) -> Path:
     resolved = resolve_shared_workspace_dir(workspace_dir)
     if resolved is None:
         return workspace_dir.resolve()
-    return resolved
+    return Path(str(resolved))
 
 
 def _read_file_page(
@@ -206,7 +211,7 @@ def _read_file_page(
     if file_path.suffix == ".jsonl":
         meta_info: dict[str, Any] = {}
         records: list[Any] = []
-        with open(file_path, "r", encoding="utf-8") as fh:
+        with open(file_path, encoding="utf-8") as fh:
             first_line = fh.readline()
             if not first_line:
                 return meta_info, records, 0, _pagination_dict(page, page_size, 0)
@@ -221,7 +226,7 @@ def _read_file_page(
         total = int(raw_total) if raw_total is not None else len(records)
         return meta_info, records, total, _pagination_dict(page, page_size, total)
 
-    with open(file_path, "r", encoding="utf-8") as fh:
+    with open(file_path, encoding="utf-8") as fh:
         content = json.load(fh)
     if isinstance(content, list):
         total = len(content)
@@ -237,21 +242,21 @@ def _read_file_page(
 
 
 def _read_meta_file(meta_path: Path) -> dict[str, Any]:
-    """读取元数据 JSON 文件，若不存在则返回空字典。"""
+    """Read side-car metadata JSON, returning {} when missing."""
     if not meta_path.exists():
         return {}
-    with open(meta_path, "r", encoding="utf-8") as fh:
+    with open(meta_path, encoding="utf-8") as fh:
         content = json.load(fh)
     return content if isinstance(content, dict) else {}
 
 
 def _read_csv_page(csv_path: Path, page: int, page_size: int) -> tuple[list[dict[str, Any]], int]:
-    """读取 CSV 文件并返回指定页的数据和总数。"""
+    """Read one page from a CSV file and return records with total rows."""
     start_idx = (page - 1) * page_size
     end_idx = start_idx + page_size
 
     all_rows: list[dict[str, Any]] = []
-    with open(csv_path, "r", encoding="utf-8", newline="") as fh:
+    with open(csv_path, encoding="utf-8", newline="") as fh:
         reader = csv.DictReader(fh)
         for row in reader:
             all_rows.append(dict(row))
@@ -259,3 +264,4 @@ def _read_csv_page(csv_path: Path, page: int, page_size: int) -> tuple[list[dict
     total = len(all_rows)
     records = all_rows[start_idx:end_idx]
     return records, total
+

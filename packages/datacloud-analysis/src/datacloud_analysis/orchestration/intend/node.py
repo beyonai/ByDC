@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import os
@@ -39,19 +40,50 @@ def _trace_user_query_enabled() -> bool:
 def _message_line_preview(msg: Any, *, max_len: int = 100) -> str:
     cls = type(msg).__name__
     raw = getattr(msg, "content", "")
-    if isinstance(raw, str):
-        one = raw.replace("\n", "\\n")
-    else:
-        one = repr(raw)
+    one = raw.replace("\n", "\\n") if isinstance(raw, str) else repr(raw)
     if len(one) > max_len:
         one = one[: max_len - 3] + "..."
-    return "%s(%s)" % (cls, one)
+    return f"{cls}({one})"
+
+
+async def _invoke_knowledge_enhancer(
+    knowledge_enhancer: Callable[..., Any],
+    *,
+    user_query: str,
+    gateway_context: Any,
+    message_parent_id: str,
+) -> Any:
+    try:
+        signature = inspect.signature(knowledge_enhancer)
+        params = list(signature.parameters.values())
+        accepts_varargs = any(param.kind is inspect.Parameter.VAR_POSITIONAL for param in params)
+        positional_count = sum(
+            1
+            for param in params
+            if param.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        )
+        if accepts_varargs or positional_count >= 3:
+            value = knowledge_enhancer(user_query, gateway_context, message_parent_id)
+        elif positional_count == 2:
+            value = knowledge_enhancer(user_query, gateway_context)
+        else:
+            value = knowledge_enhancer(user_query)
+    except (TypeError, ValueError):
+        # Some callables don't expose inspectable signatures (or expose dynamic wrappers).
+        try:
+            value = knowledge_enhancer(user_query, gateway_context, message_parent_id)
+        except TypeError:
+            value = knowledge_enhancer(user_query)
+
+    if inspect.isawaitable(value):
+        return await value
+    return value
 
 
 async def intend_node(
     state: AgentState,
     config: RunnableConfig,
-    knowledge_enhancer: Callable[[str, Any, str], Any] | None = None,
+    knowledge_enhancer: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     gw_ctx = (config.get("configurable") or {}).get("gateway_context")
     messages = state.get("messages") or []
@@ -109,7 +141,12 @@ async def intend_node(
         try:
             _cfg = config.get("configurable") or {}
             message_pid = str(_cfg.get("knowledge_enhance_node_id") or "")
-            result = await knowledge_enhancer(user_query, gw_ctx, message_pid)
+            result = await _invoke_knowledge_enhancer(
+                knowledge_enhancer,
+                user_query=user_query,
+                gateway_context=gw_ctx,
+                message_parent_id=message_pid,
+            )
             knowledge_payload: dict[str, Any] = {
                 "needs_clarification": result.needs_clarification,
                 "form": result.form,

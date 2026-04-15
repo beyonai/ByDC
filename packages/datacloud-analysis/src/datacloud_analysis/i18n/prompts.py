@@ -73,7 +73,8 @@ def _disable_ask_user_tool() -> bool:
 
 def get_system_prompt(locale: str | None = None) -> str:
     """Return locale-specific system prompt with fallback support."""
-    resolved_locale = locale or os.getenv("DATACLOUD_AGENT_LOCALE", _FALLBACK_LOCALE)
+    resolved_locale_raw = locale or os.getenv("DATACLOUD_AGENT_LOCALE", _FALLBACK_LOCALE)
+    resolved_locale = resolved_locale_raw or _FALLBACK_LOCALE
     return _SYSTEM_PROMPTS.get(resolved_locale, _SYSTEM_PROMPTS[_FALLBACK_LOCALE])
 
 

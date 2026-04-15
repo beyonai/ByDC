@@ -9,9 +9,17 @@ from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
 
 logger = logging.getLogger(__name__)
 
+
+def _workspace_root_path(workspace_dir: str | None) -> Path | None:
+    raw = resolve_shared_workspace_dir(workspace_dir)
+    if raw is None:
+        return None
+    return Path(str(raw))
+
+
 def _resolve_safe_path(path: str, workspace_dir: str | None) -> Path:
     """Resolve path within workspace_dir. Raises ValueError if escaping."""
-    workspace_root = resolve_shared_workspace_dir(workspace_dir)
+    workspace_root = _workspace_root_path(workspace_dir)
     p = Path(path)
     if not p.is_absolute() and workspace_root:
         p = workspace_root / p

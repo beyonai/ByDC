@@ -86,9 +86,9 @@ def _query_result_headers_and_record_keys(query_data: dict[str, Any]) -> tuple[l
 def _resolve_result_path(path_str: str, workspace_dir: str | None) -> Path:
     resolved = Path(path_str)
     if not resolved.is_absolute() and workspace_dir:
-        workspace_root = resolve_shared_workspace_dir(workspace_dir)
-        if workspace_root is not None:
-            resolved = workspace_root / path_str
+        workspace_root_raw = resolve_shared_workspace_dir(workspace_dir)
+        if workspace_root_raw is not None:
+            resolved = Path(str(workspace_root_raw)) / path_str
     return resolved
 
 async def format_result(

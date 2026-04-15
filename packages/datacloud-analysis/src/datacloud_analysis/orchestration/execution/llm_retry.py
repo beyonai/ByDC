@@ -8,7 +8,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from typing import Any, Callable
+from collections.abc import Callable, Mapping
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,8 @@ def _is_retryable(exc: BaseException) -> bool:
 def _parse_retry_after(exc: BaseException) -> float:
     """从 429 响应头中解析 Retry-After 秒数，找不到或非数字返回 0.0。"""
     response = getattr(exc, "response", None)
-    headers: dict = getattr(response, "headers", {}) if response else {}
+    raw_headers = getattr(response, "headers", None) if response else None
+    headers: Mapping[str, Any] = raw_headers if isinstance(raw_headers, Mapping) else {}
     ra = headers.get("Retry-After") or headers.get("retry-after", "")
     if ra and re.match(r"^\d+$", str(ra)):
         return float(ra)
@@ -100,7 +102,9 @@ async def stream_llm_call_with_retry(
             await asyncio.sleep(wait)
 
     # 理论上不会到达此处（循环内 raise 或 return），但类型检查需要
-    raise last_exc  # type: ignore[misc]
+    if last_exc is None:
+        raise RuntimeError("LLM retry loop exited without result")
+    raise last_exc
 
 
 def _build_fallback_llm() -> Any | None:

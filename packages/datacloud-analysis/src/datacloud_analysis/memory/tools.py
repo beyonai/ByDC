@@ -22,6 +22,17 @@ from langchain_core.tools import tool
 logger = logging.getLogger(__name__)
 
 
+def _normalize_recall_items(raw: Any) -> list[dict[str, Any]]:
+    """Normalize external memory payload into list[dict[str, Any]]."""
+    if not isinstance(raw, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    for item in raw:
+        if isinstance(item, dict):
+            normalized.append(dict(item))
+    return normalized
+
+
 @tool
 async def search_memory(query: str, user_id: str, limit: int = 5) -> list[dict[str, str]]:
     """Layer-1: search the user's long-term memory index.
@@ -76,7 +87,8 @@ async def recall_memory(query: str, user_id: str, limit: int = 3) -> list[dict[s
     try:
         from datacloud_memory.query import search_experiences  # noqa: PLC0415
 
-        return await search_experiences(user_id=user_id, query=query, limit=limit)
+        raw_items = await search_experiences(user_id=user_id, query=query, limit=limit)
+        return _normalize_recall_items(raw_items)
     except ImportError:
         logger.debug("datacloud-memory not available; returning empty recall.")
         return []

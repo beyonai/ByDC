@@ -51,10 +51,19 @@ class MemoryLoader:
         try:
             from datacloud_memory.query import get_global_rules  # noqa: PLC0415
 
-            return await get_global_rules(self._user_id)
+            raw_rules = await get_global_rules(self._user_id)
         except ImportError:
             logger.debug("datacloud-memory not available; skipping global rules.")
             return []
+
+        if not isinstance(raw_rules, list):
+            return []
+
+        normalized: list[dict[str, Any]] = []
+        for item in raw_rules:
+            if isinstance(item, dict):
+                normalized.append(dict(item))
+        return normalized
 
     @staticmethod
     def _render_markdown(rules: list[dict[str, Any]]) -> str:

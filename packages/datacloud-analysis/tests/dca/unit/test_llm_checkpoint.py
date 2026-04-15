@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-
 # ─── 常量内容检验 ──────────────────────────────────────────────────────────────
 
 def test_checkpoint_reply_guides_user_to_resend() -> None:
@@ -33,7 +32,9 @@ def test_expired_reply_is_non_empty() -> None:
 @pytest.mark.asyncio
 async def test_save_uses_correct_redis_key() -> None:
     """key 格式必须是 llm:checkpoint:{session_id}。"""
-    from datacloud_analysis.orchestration.execution.llm_checkpoint import save_llm_failure_checkpoint
+    from datacloud_analysis.orchestration.execution.llm_checkpoint import (
+        save_llm_failure_checkpoint,
+    )
 
     redis = AsyncMock()
     redis.setex = AsyncMock(return_value=True)
@@ -54,7 +55,9 @@ async def test_save_uses_correct_redis_key() -> None:
 @pytest.mark.asyncio
 async def test_save_sets_ttl_3600() -> None:
     """TTL 必须是 3600 秒。"""
-    from datacloud_analysis.orchestration.execution.llm_checkpoint import save_llm_failure_checkpoint
+    from datacloud_analysis.orchestration.execution.llm_checkpoint import (
+        save_llm_failure_checkpoint,
+    )
 
     redis = AsyncMock()
     redis.setex = AsyncMock(return_value=True)
@@ -74,7 +77,9 @@ async def test_save_sets_ttl_3600() -> None:
 @pytest.mark.asyncio
 async def test_save_payload_contains_required_fields() -> None:
     """持久化的 JSON 必须包含 session_id / completed_steps / error_type / saved_at。"""
-    from datacloud_analysis.orchestration.execution.llm_checkpoint import save_llm_failure_checkpoint
+    from datacloud_analysis.orchestration.execution.llm_checkpoint import (
+        save_llm_failure_checkpoint,
+    )
 
     redis = AsyncMock()
     redis.setex = AsyncMock(return_value=True)
@@ -97,7 +102,9 @@ async def test_save_payload_contains_required_fields() -> None:
 
 @pytest.mark.asyncio
 async def test_save_returns_true_on_success() -> None:
-    from datacloud_analysis.orchestration.execution.llm_checkpoint import save_llm_failure_checkpoint
+    from datacloud_analysis.orchestration.execution.llm_checkpoint import (
+        save_llm_failure_checkpoint,
+    )
 
     redis = AsyncMock()
     redis.setex = AsyncMock(return_value=True)
@@ -115,7 +122,9 @@ async def test_save_returns_true_on_success() -> None:
 @pytest.mark.asyncio
 async def test_save_no_redis_returns_false_without_crash() -> None:
     """redis_client=None 时优雅降级，返回 False，不抛异常。"""
-    from datacloud_analysis.orchestration.execution.llm_checkpoint import save_llm_failure_checkpoint
+    from datacloud_analysis.orchestration.execution.llm_checkpoint import (
+        save_llm_failure_checkpoint,
+    )
 
     result = await save_llm_failure_checkpoint(
         redis_client=None,
@@ -130,7 +139,9 @@ async def test_save_no_redis_returns_false_without_crash() -> None:
 @pytest.mark.asyncio
 async def test_save_redis_connection_error_returns_false() -> None:
     """Redis 操作本身抛异常时返回 False，不向上传播。"""
-    from datacloud_analysis.orchestration.execution.llm_checkpoint import save_llm_failure_checkpoint
+    from datacloud_analysis.orchestration.execution.llm_checkpoint import (
+        save_llm_failure_checkpoint,
+    )
 
     redis = AsyncMock()
     redis.setex = AsyncMock(side_effect=ConnectionError("redis unreachable"))
@@ -149,7 +160,9 @@ async def test_save_redis_connection_error_returns_false() -> None:
 
 @pytest.mark.asyncio
 async def test_load_returns_checkpoint_when_exists() -> None:
-    from datacloud_analysis.orchestration.execution.llm_checkpoint import load_llm_failure_checkpoint
+    from datacloud_analysis.orchestration.execution.llm_checkpoint import (
+        load_llm_failure_checkpoint,
+    )
 
     stored = {"session_id": "sess-load", "completed_steps": 2, "state_snapshot": {"user_query": "hi"}}
     redis = AsyncMock()
@@ -166,7 +179,9 @@ async def test_load_returns_checkpoint_when_exists() -> None:
 @pytest.mark.asyncio
 async def test_load_returns_none_when_key_missing() -> None:
     """Redis 返回 None（key 不存在或已过期）时返回 None。"""
-    from datacloud_analysis.orchestration.execution.llm_checkpoint import load_llm_failure_checkpoint
+    from datacloud_analysis.orchestration.execution.llm_checkpoint import (
+        load_llm_failure_checkpoint,
+    )
 
     redis = AsyncMock()
     redis.get = AsyncMock(return_value=None)
@@ -176,8 +191,24 @@ async def test_load_returns_none_when_key_missing() -> None:
 
 
 @pytest.mark.asyncio
+async def test_load_returns_none_for_non_object_payload() -> None:
+    """If stored payload is valid JSON but not an object, loader should return None."""
+    from datacloud_analysis.orchestration.execution.llm_checkpoint import (
+        load_llm_failure_checkpoint,
+    )
+
+    redis = AsyncMock()
+    redis.get = AsyncMock(return_value=json.dumps(["bad", "payload"]).encode())
+
+    result = await load_llm_failure_checkpoint(redis, "sess-bad")
+    assert result is None
+
+
+@pytest.mark.asyncio
 async def test_load_no_redis_returns_none() -> None:
-    from datacloud_analysis.orchestration.execution.llm_checkpoint import load_llm_failure_checkpoint
+    from datacloud_analysis.orchestration.execution.llm_checkpoint import (
+        load_llm_failure_checkpoint,
+    )
 
     result = await load_llm_failure_checkpoint(None, "sess-no-redis")
     assert result is None
@@ -186,7 +217,9 @@ async def test_load_no_redis_returns_none() -> None:
 @pytest.mark.asyncio
 async def test_load_redis_error_returns_none() -> None:
     """Redis 操作失败时返回 None，不抛异常。"""
-    from datacloud_analysis.orchestration.execution.llm_checkpoint import load_llm_failure_checkpoint
+    from datacloud_analysis.orchestration.execution.llm_checkpoint import (
+        load_llm_failure_checkpoint,
+    )
 
     redis = AsyncMock()
     redis.get = AsyncMock(side_effect=ConnectionError("redis down"))
@@ -199,7 +232,9 @@ async def test_load_redis_error_returns_none() -> None:
 
 @pytest.mark.asyncio
 async def test_delete_calls_redis_delete_with_correct_key() -> None:
-    from datacloud_analysis.orchestration.execution.llm_checkpoint import delete_llm_failure_checkpoint
+    from datacloud_analysis.orchestration.execution.llm_checkpoint import (
+        delete_llm_failure_checkpoint,
+    )
 
     redis = AsyncMock()
     redis.delete = AsyncMock(return_value=1)
@@ -210,14 +245,18 @@ async def test_delete_calls_redis_delete_with_correct_key() -> None:
 
 @pytest.mark.asyncio
 async def test_delete_no_redis_no_crash() -> None:
-    from datacloud_analysis.orchestration.execution.llm_checkpoint import delete_llm_failure_checkpoint
+    from datacloud_analysis.orchestration.execution.llm_checkpoint import (
+        delete_llm_failure_checkpoint,
+    )
 
     await delete_llm_failure_checkpoint(None, "sess-no-redis")  # 不抛异常即通过
 
 
 @pytest.mark.asyncio
 async def test_delete_redis_error_no_crash() -> None:
-    from datacloud_analysis.orchestration.execution.llm_checkpoint import delete_llm_failure_checkpoint
+    from datacloud_analysis.orchestration.execution.llm_checkpoint import (
+        delete_llm_failure_checkpoint,
+    )
 
     redis = AsyncMock()
     redis.delete = AsyncMock(side_effect=ConnectionError("redis down"))
