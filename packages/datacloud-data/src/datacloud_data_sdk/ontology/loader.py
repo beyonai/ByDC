@@ -163,6 +163,11 @@ class OntologyLoader:
         self._classes.clear()
         self._relations.clear()
         self._scenes.clear()
+        self._functions.clear()
+
+        for fn_code, fn_config in content.get("functions", {}).items():
+            if isinstance(fn_config, dict):
+                self._functions[fn_code] = fn_config
 
         for obj in content.get("objects", []):
             fields = self._parse_fields(obj.get("fields", []))

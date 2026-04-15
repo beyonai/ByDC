@@ -25,6 +25,7 @@ Action 是数据服务中执行操作的核心抽象，支持多种执行方式�
 from __future__ import annotations
 
 import logging
+from urllib.parse import quote
 from typing import Any
 
 from datacloud_data_sdk.ontology.models import OntologyAction, OntologyActionParam, OntologyField
@@ -315,18 +316,7 @@ class Action:
                 preview_rows=preview_rows,
             )
         if self._action.function_refs:
-            from datacloud_data_sdk.plan.param_converter import (
-                _to_function_param,
-                map_to_physical,
-            )
-
-            in_params = [
-                _to_function_param(p)
-                for p in self._action.params
-                if getattr(p, "direction", "IN") in ("IN", "INOUT")
-            ]
-            physical_params = map_to_physical(params, in_params)
-            result = await self._execute_api(physical_params)
+            result = await self._execute_api(params)
             normalized = self._normalize_to_unified_format(result)
             return build_query_response(
                 normalized,
@@ -703,13 +693,29 @@ class Action:
         if not config:
             raise ActionNotConfiguredError(self._action.action_code)
 
-        url = self._build_url(config)
-        headers = self._build_headers()
+        method, path_template = self._get_request_target(config)
+        request_parts = self._build_request_parts(params, method=method)
+        url = self._build_url(
+            config,
+            path_template=path_template,
+            path_params=request_parts["path"],
+        )
+        headers = self._build_headers(request_parts["headers"])
 
-        log_curl("POST", url, headers=headers, body=params)
+        log_curl(
+            method,
+            url,
+            headers=headers,
+            body=request_parts["body"] if request_parts["body"] else None,
+        )
 
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, json=params, headers=headers)
+            request_kwargs: dict[str, Any] = {"headers": headers}
+            if request_parts["query"]:
+                request_kwargs["params"] = request_parts["query"]
+            if request_parts["body"]:
+                request_kwargs["json"] = request_parts["body"]
+            resp = await client.request(method, url, **request_kwargs)
 
         if resp.status_code >= 400:
             raise ApiExecutionError(function_code, resp.status_code, resp.text)
@@ -734,14 +740,88 @@ class Action:
             "meta": {"viewId": "auto_view", "columns": columns, "total": len(records)},
         }
 
-    def _build_url(self, config: dict[str, Any]) -> str:
+    def _get_request_target(self, config: dict[str, Any]) -> tuple[str, str]:
+        """从 function config 解析 HTTP method 与 path。"""
+        paths = config.get("paths", {})
+        path_template, operations = next(iter(paths.items()), ("", {}))
+        if not isinstance(operations, dict):
+            return "POST", path_template
+        method = next(iter(operations.keys()), "post").upper()
+        return method, path_template
+
+    def _build_request_parts(self, params: dict[str, Any], *, method: str) -> dict[str, dict[str, Any]]:
+        """根据动作 mapping_path 将参数拆分为 path/query/body/header。"""
+        result: dict[str, dict[str, Any]] = {
+            "path": {},
+            "query": {},
+            "body": {},
+            "headers": {},
+        }
+        default_location = "query" if method.upper() in {"GET", "DELETE", "HEAD"} else "body"
+        for param in self._action.params:
+            if getattr(param, "direction", "IN") not in ("IN", "INOUT"):
+                continue
+            value = params.get(param.param_code)
+            if value is None and param.default_value is not None:
+                value = param.default_value
+            if value is None:
+                continue
+            location, key = self._resolve_request_mapping(
+                getattr(param, "mapping_path", ""),
+                param.param_code,
+                default_location=default_location,
+            )
+            result[location][key] = value
+        return result
+
+    @staticmethod
+    def _resolve_request_mapping(
+        mapping_path: str,
+        fallback_key: str,
+        *,
+        default_location: str,
+    ) -> tuple[str, str]:
+        """解析参数位置与物理字段名。"""
+        if not mapping_path.startswith("$."):
+            return default_location, fallback_key
+
+        parts = [part for part in mapping_path[2:].split(".") if part]
+        if not parts:
+            return default_location, fallback_key
+
+        location_map = {
+            "requestBody": "body",
+            "body": "body",
+            "query": "query",
+            "queryParams": "query",
+            "path": "path",
+            "pathParams": "path",
+            "headers": "headers",
+            "header": "headers",
+        }
+        location = location_map.get(parts[0], default_location)
+        key_parts = parts[1:] if parts[0] in location_map else parts
+        key = key_parts[-1].removesuffix("[]") if key_parts else fallback_key
+        return location, key
+
+    def _build_url(
+        self,
+        config: dict[str, Any],
+        *,
+        path_template: str | None = None,
+        path_params: dict[str, Any] | None = None,
+    ) -> str:
         servers = config.get("servers", [])
         base_url = servers[0]["url"] if servers else "http://localhost:8080"
         paths = config.get("paths", {})
-        path = next(iter(paths), "")
+        path = path_template if path_template is not None else next(iter(paths), "")
+        for key, value in (path_params or {}).items():
+            encoded = quote(str(value), safe="")
+            path = path.replace(f"{{{key}}}", encoded)
+            path = path.replace(f":{key}", encoded)
         return f"{base_url}{path}"
 
-    def _build_headers(self) -> dict[str, str]:
+    def _build_headers(self, extra_headers: dict[str, Any] | None = None) -> dict[str, str]:
         from datacloud_data_sdk.context import get_current_context
 
         headers: dict[str, str] = {"Content-Type": "application/json"}
@@ -753,6 +833,8 @@ class Action:
                 headers["X-Tenant-Id"] = ctx.tenant_id
         except Exception as exc:
             logger.debug("_build_headers: failed to inject auth context: %s", exc)
+        for key, value in (extra_headers or {}).items():
+            headers[str(key)] = str(value)
         return headers
 
     def _extract_records_fallback(self, data: Any) -> list[dict[str, Any]]:

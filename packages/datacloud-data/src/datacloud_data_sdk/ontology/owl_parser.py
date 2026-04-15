@@ -19,6 +19,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,8 @@ class ParsedField:
     rel_term_codeorname: str | None = None
     term_data_type: str | None = None
     ext_property: str | None = None  # OWL ext_property JSON 字符串（含 property_role_rule）
+    mapping_path: str = ""
+    object_property: str | None = None
 
 
 @dataclass
@@ -66,6 +69,9 @@ class ParsedAction:
     params: list[dict[str, Any]] = field(default_factory=list)
     request_param_refs: list[str] = field(default_factory=list)
     response_param_refs: list[str] = field(default_factory=list)
+    request_url: str = ""
+    request_method: str = ""
+    script: str | None = None
 
 
 @dataclass
@@ -239,7 +245,13 @@ class OwlParser:
         entity_desc = self._get_predicate_value(g, subject, "entity_desc") or ""
         entity_source = self._get_predicate_value(g, subject, "entity_source") or "DB"
 
-        source_type = "DB" if "DB" in entity_source else "API"
+        source_upper = entity_source.upper()
+        if "KNOWLEDGE_BASE" in source_upper:
+            source_type = "KNOWLEDGE_BASE"
+        elif "DB" in source_upper:
+            source_type = "DB"
+        else:
+            source_type = "API"
 
         action_refs_str = self._get_predicate_value(g, subject, "action_refs") or "[]"
         action_refs = self._parse_loose_json_list(action_refs_str)
@@ -323,17 +335,23 @@ class OwlParser:
         action_desc = self._get_predicate_value(g, subject, "action_desc") or ""
         action_type_str = self._get_predicate_value(g, subject, "action_type") or "QUERY"
 
+        action_type_upper = action_type_str.upper()
         action_type = "query"
-        if "UPDATE" in action_type_str:
-            action_type = "update"
-        elif "QUERY" in action_type_str:
+        if "OPERATION" in action_type_upper or "UPDATE" in action_type_upper:
+            action_type = "operation"
+        elif "QUERY" in action_type_upper:
             action_type = "query"
+        elif action_type_str.strip():
+            action_type = action_type_str.strip().lower()
 
         function_refs_str = self._get_predicate_value(g, subject, "function_refs") or "[]"
         function_refs = self._parse_loose_json_list(function_refs_str)
 
         belong_entity_str = self._get_predicate_value(g, subject, "belong_entity") or "[]"
         belong_entities = self._parse_loose_json_list(belong_entity_str)
+        request_url = self._get_predicate_value(g, subject, "request_url") or ""
+        request_method = self._get_predicate_value(g, subject, "request_method") or ""
+        script = self._get_predicate_value(g, subject, "script")
 
         request_params = self._get_predicate_values(g, subject, "request_params")
         response_params = self._get_predicate_values(g, subject, "response_params")
@@ -346,6 +364,9 @@ class OwlParser:
             function_refs=function_refs,
             request_param_refs=request_params,
             response_param_refs=response_params,
+            request_url=request_url,
+            request_method=request_method,
+            script=script or None,
         )
         self._actions[action_code] = action
 
@@ -368,6 +389,11 @@ class OwlParser:
         library_code = self._get_predicate_value(g, subject, "library_code")
         rel_term_codeorname = self._get_predicate_value(g, subject, "rel_term_codeorname")
         term_data_type = self._get_predicate_value(g, subject, "term_data_type")
+        mapping_path = (
+            self._get_predicate_value(g, subject, "mapping_path")
+            or self._get_predicate_value(g, subject, "json_path")
+            or ""
+        )
 
         fld = ParsedField(
             field_code=param_code,
@@ -378,6 +404,7 @@ class OwlParser:
             library_code=library_code if library_code else None,
             rel_term_codeorname=rel_term_codeorname if rel_term_codeorname else None,
             term_data_type=term_data_type if term_data_type else None,
+            mapping_path=mapping_path,
         )
         self._request_params_by_uri[str(subject)] = fld
 
@@ -391,6 +418,12 @@ class OwlParser:
         library_code = self._get_predicate_value(g, subject, "library_code")
         rel_term_codeorname = self._get_predicate_value(g, subject, "rel_term_codeorname")
         term_data_type = self._get_predicate_value(g, subject, "term_data_type")
+        mapping_path = (
+            self._get_predicate_value(g, subject, "json_path")
+            or self._get_predicate_value(g, subject, "mapping_path")
+            or ""
+        )
+        object_property = self._get_predicate_value(g, subject, "object_property")
 
         fld = ParsedField(
             field_code=field_code,
@@ -400,6 +433,8 @@ class OwlParser:
             library_code=library_code if library_code else None,
             rel_term_codeorname=rel_term_codeorname if rel_term_codeorname else None,
             term_data_type=term_data_type if term_data_type else None,
+            mapping_path=mapping_path,
+            object_property=object_property if object_property else None,
         )
         self._response_params_by_uri[str(subject)] = fld
 
@@ -629,6 +664,8 @@ class OwlParser:
             library_code=param_field.library_code or object_field.library_code,
             rel_term_codeorname=param_field.rel_term_codeorname or object_field.rel_term_codeorname,
             term_data_type=param_field.term_data_type or object_field.term_data_type,
+            mapping_path=param_field.mapping_path,
+            object_property=param_field.object_property,
         )
 
     def parse_directory(
@@ -644,6 +681,7 @@ class OwlParser:
 
         self._apply_mappings_to_objects()
 
+        functions: dict[str, dict[str, Any]] = {}
         objects = []
         for obj in self._objects.values():
             # Resolve field URIs (from <fields rdf:resource="..."/>) to ParsedField instances
@@ -693,6 +731,8 @@ class OwlParser:
                             "required": f.required,
                             "direction": "IN",
                         }
+                        if f.mapping_path:
+                            param_dict["mapping_path"] = f.mapping_path
                         if f.term_type_code_path:
                             term_meta = self._build_term_meta(f)
                             if term_meta:
@@ -715,11 +755,19 @@ class OwlParser:
                             "required": f.required,
                             "direction": "OUT",
                         }
+                        if f.mapping_path:
+                            param_dict["mapping_path"] = f.mapping_path
                         if f.term_type_code_path:
                             term_meta = self._build_term_meta(f)
                             if term_meta:
                                 param_dict["termMeta"] = term_meta
                         params.append(param_dict)
+
+                    self._merge_function_configs(
+                        functions=functions,
+                        action=action,
+                        params=params,
+                    )
 
                     actions.append(
                         {
@@ -727,8 +775,9 @@ class OwlParser:
                             "action_name": action.action_name,
                             "description": action.description,
                             "action_type": action.action_type,
-                            "function_refs": action.function_refs,
+                            "function_refs": list(action.function_refs),
                             "params": params,
+                            "script": action.script,
                         }
                     )
 
@@ -808,11 +857,306 @@ class OwlParser:
             )
 
         return {
+            "functions": functions,
             "objects": objects,
             "relations": relations,
             "datasource_configs": datasource_configs,
             "views": views,
         }
+
+    def _merge_function_configs(
+        self,
+        *,
+        functions: dict[str, dict[str, Any]],
+        action: ParsedAction,
+        params: list[dict[str, Any]],
+    ) -> None:
+        """从动作定义中回填最小 function 配置，供 API 动作执行。"""
+        if action.script or not action.request_url:
+            return
+
+        if not action.function_refs:
+            action.function_refs = [self._build_generated_function_code(action.action_code)]
+
+        server_url, path = self._split_request_url(action.request_url)
+        if not path:
+            return
+
+        method = (action.request_method or "POST").lower()
+        operation: dict[str, Any] = {
+            "summary": action.description or action.action_name or action.action_code,
+        }
+        request_body_params = self._filter_request_params_by_location(params, method=method, location="body")
+        request_schema = self._build_request_body_schema(request_body_params)
+        if request_schema:
+            operation["requestBody"] = {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": request_schema,
+                    }
+                },
+            }
+        operation_parameters = self._build_operation_parameters(params, method=method)
+        if operation_parameters:
+            operation["parameters"] = operation_parameters
+        response_schema = self._build_response_schema(params)
+        if response_schema:
+            operation["responses"] = {
+                "200": {
+                    "description": f"{action.action_name or action.action_code}结果",
+                    "content": {
+                        "application/json": {
+                            "schema": response_schema,
+                        }
+                    },
+                }
+            }
+        else:
+            operation["responses"] = {
+                "200": {"description": f"{action.action_name or action.action_code}结果"}
+            }
+
+        config: dict[str, Any] = {
+            "openapi": "3.0.3",
+            "info": {
+                "title": action.action_name or action.action_code,
+                "version": "1.0.0",
+            },
+            "paths": {path: {method: operation}},
+        }
+        if server_url:
+            config["servers"] = [{"url": server_url}]
+
+        for function_code in action.function_refs:
+            functions.setdefault(function_code, config)
+
+    @staticmethod
+    def _build_generated_function_code(action_code: str) -> str:
+        """为仅配置 request_url 的动作生成稳定的函数编码。"""
+        fragment = re.sub(r"[^0-9A-Za-z_]+", "_", action_code).strip("_")
+        if not fragment:
+            fragment = "action"
+        if fragment[0].isdigit():
+            fragment = f"n_{fragment}"
+        return f"fn_{fragment}"
+
+    def _build_request_body_schema(self, params: list[dict[str, Any]]) -> dict[str, Any] | None:
+        """基于动作入参生成 requestBody schema。"""
+        schema = self._build_schema_from_params(
+            params,
+        )
+        return schema if schema.get("properties") else None
+
+    def _build_response_schema(self, params: list[dict[str, Any]]) -> dict[str, Any] | None:
+        """基于动作出参生成响应 schema。"""
+        schema = self._build_schema_from_params(
+            [
+                param
+                for param in params
+                if param.get("direction") in ("OUT", "INOUT")
+            ]
+        )
+        return schema if schema.get("properties") else None
+
+    def _build_schema_from_params(
+        self,
+        params: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """根据 mapping_path 构造嵌套 JSON Schema。"""
+        root: dict[str, Any] = {"type": "object", "properties": {}}
+        for param in params:
+            mapping_path = str(param.get("mapping_path") or "")
+            location, path_parts = self._parse_request_mapping_path(
+                mapping_path,
+                default_location="body",
+            )
+            if location != "body":
+                path_parts = []
+            if not path_parts:
+                path_parts = [str(param.get("param_code", "")).strip()]
+            path_parts = [part for part in path_parts if part]
+            if not path_parts:
+                continue
+
+            leaf_schema = self._param_to_json_schema(param)
+            self._assign_schema_path(
+                root,
+                path_parts,
+                leaf_schema,
+                required=bool(param.get("required", False)),
+            )
+        return root
+
+    @staticmethod
+    def _parse_request_mapping_path(
+        mapping_path: str,
+        *,
+        default_location: str,
+    ) -> tuple[str, list[str]]:
+        """解析请求 mapping_path，返回 (location, path_parts)。"""
+        if not mapping_path.startswith("$."):
+            return default_location, []
+
+        parts = [part for part in mapping_path[2:].split(".") if part]
+        if not parts:
+            return default_location, []
+
+        location_map = {
+            "requestBody": "body",
+            "body": "body",
+            "query": "query",
+            "queryParams": "query",
+            "path": "path",
+            "pathParams": "path",
+            "headers": "header",
+            "header": "header",
+        }
+        location = location_map.get(parts[0], default_location)
+        path_parts = parts[1:] if parts[0] in location_map else parts
+        return location, path_parts
+
+    def _filter_request_params_by_location(
+        self,
+        params: list[dict[str, Any]],
+        *,
+        method: str,
+        location: str,
+    ) -> list[dict[str, Any]]:
+        """筛选指定位置的请求参数。"""
+        result: list[dict[str, Any]] = []
+        default_location = "query" if method in {"get", "delete", "head"} else "body"
+        for param in params:
+            if param.get("direction") not in ("IN", "INOUT"):
+                continue
+            param_location, _ = self._parse_request_mapping_path(
+                str(param.get("mapping_path") or ""),
+                default_location=default_location,
+            )
+            if param_location == location:
+                result.append(param)
+        return result
+
+    def _build_operation_parameters(
+        self,
+        params: list[dict[str, Any]],
+        *,
+        method: str,
+    ) -> list[dict[str, Any]]:
+        """根据动作入参构造 OpenAPI parameters。"""
+        default_location = "query" if method in {"get", "delete", "head"} else "body"
+        result: list[dict[str, Any]] = []
+        for param in params:
+            if param.get("direction") not in ("IN", "INOUT"):
+                continue
+            location, path_parts = self._parse_request_mapping_path(
+                str(param.get("mapping_path") or ""),
+                default_location=default_location,
+            )
+            if location == "body":
+                continue
+            name = path_parts[-1].removesuffix("[]") if path_parts else str(param.get("param_code", ""))
+            param_schema = self._param_to_json_schema(param)
+            description = param_schema.pop("description", "")
+            required = True if location == "path" else bool(param.get("required", False))
+            parameter: dict[str, Any] = {
+                "name": name,
+                "in": location,
+                "required": required,
+                "schema": param_schema,
+            }
+            if description:
+                parameter["description"] = description
+            result.append(parameter)
+        return result
+
+    @staticmethod
+    def _param_to_json_schema(param: dict[str, Any]) -> dict[str, Any]:
+        """将参数定义转换为 JSON Schema 叶子节点。"""
+        param_type = str(param.get("param_type", "STRING")).upper()
+        type_mapping = {
+            "STRING": "string",
+            "NUMBER": "number",
+            "DECIMAL": "number",
+            "INTEGER": "integer",
+            "BIGINT": "integer",
+            "BOOLEAN": "boolean",
+            "DATE": "string",
+            "DATETIME": "string",
+            "ARRAY": "array",
+            "LIST": "array",
+            "OBJECT": "object",
+        }
+        json_type = type_mapping.get(param_type, "string")
+        schema: dict[str, Any] = {"type": json_type}
+        if json_type == "array":
+            schema["items"] = {"type": "string"}
+        description = str(param.get("param_name") or "").strip()
+        if description:
+            schema["description"] = description
+        return schema
+
+    def _assign_schema_path(
+        self,
+        root: dict[str, Any],
+        path_parts: list[str],
+        leaf_schema: dict[str, Any],
+        *,
+        required: bool,
+    ) -> None:
+        """将叶子 schema 合并到指定路径。"""
+        current = root
+        for index, raw_part in enumerate(path_parts):
+            is_last = index == len(path_parts) - 1
+            is_array = raw_part.endswith("[]")
+            part = raw_part[:-2] if is_array else raw_part
+            properties = current.setdefault("properties", {})
+
+            if is_last:
+                existing = properties.get(part)
+                if existing is None:
+                    properties[part] = leaf_schema if not is_array else {
+                        "type": "array",
+                        "items": leaf_schema,
+                    }
+                elif is_array and existing.get("type") == "array":
+                    existing.setdefault("items", leaf_schema)
+                else:
+                    existing.update({k: v for k, v in leaf_schema.items() if k not in existing})
+                if required:
+                    required_list = current.setdefault("required", [])
+                    if part not in required_list:
+                        required_list.append(part)
+                return
+
+            if is_array:
+                node = properties.setdefault(
+                    part,
+                    {"type": "array", "items": {"type": "object", "properties": {}}},
+                )
+                items = node.setdefault("items", {"type": "object", "properties": {}})
+                items.setdefault("type", "object")
+                items.setdefault("properties", {})
+                current = items
+            else:
+                node = properties.setdefault(part, {"type": "object", "properties": {}})
+                node.setdefault("type", "object")
+                node.setdefault("properties", {})
+                current = node
+
+    @staticmethod
+    def _split_request_url(request_url: str) -> tuple[str, str]:
+        """将请求 URL 拆分为 server_url 与 path。"""
+        if not request_url:
+            return "", ""
+
+        parsed = urlsplit(request_url)
+        if parsed.scheme and parsed.netloc:
+            base = f"{parsed.scheme}://{parsed.netloc}"
+            path = parsed.path or "/"
+            return base, path
+
+        return "", request_url
 
 
 def _infer_scoped_entity_code(path: Path, suffix: str) -> str | None:
