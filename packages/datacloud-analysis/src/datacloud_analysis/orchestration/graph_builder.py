@@ -24,7 +24,7 @@ def _route_after_intend(state: AgentState) -> str:
 def build_analysis_graph(
     prompts_overwrite: dict[str, Any] | None = None,
     tools: dict[str, Any] | None = None,
-    knowledge_enhancer: Callable[[str], Any] | None = None,
+    knowledge_enhancer: Callable[[str, Any, str], Any] | None = None,
 ) -> StateGraph:
     """Return an uncompiled StateGraph for the DataCloud 3-node pipeline."""
     builder = StateGraph(AgentState)

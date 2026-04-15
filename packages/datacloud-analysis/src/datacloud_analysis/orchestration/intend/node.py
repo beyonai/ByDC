@@ -51,7 +51,7 @@ def _message_line_preview(msg: Any, *, max_len: int = 100) -> str:
 async def intend_node(
     state: AgentState,
     config: RunnableConfig,
-    knowledge_enhancer: Callable[[str], Any] | None = None,
+    knowledge_enhancer: Callable[[str, Any, str], Any] | None = None,
 ) -> dict[str, Any]:
     gw_ctx = (config.get("configurable") or {}).get("gateway_context")
     messages = state.get("messages") or []
@@ -107,7 +107,9 @@ async def intend_node(
     # 3. 知识增强（仅当 knowledge_enhancer 提供时调用）
     if knowledge_enhancer is not None:
         try:
-            result = await knowledge_enhancer(user_query)
+            _cfg = config.get("configurable") or {}
+            message_pid = str(_cfg.get("knowledge_enhance_node_id") or "")
+            result = await knowledge_enhancer(user_query, gw_ctx, message_pid)
             knowledge_payload: dict[str, Any] = {
                 "needs_clarification": result.needs_clarification,
                 "form": result.form,
