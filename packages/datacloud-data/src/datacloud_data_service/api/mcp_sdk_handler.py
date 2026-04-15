@@ -13,8 +13,7 @@ from typing import Any
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import Resource, TextContent, Tool
-from starlette.types import Message
-from starlette.types import Receive, Scope, Send
+from starlette.types import Message, Receive, Scope, Send
 
 from datacloud_data_sdk.utils.json_utils import dump_json
 
@@ -187,6 +186,7 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
                     question=tool_arguments.get("question", ""),
                     view_id=tool_arguments.get("view_id", ""),
                     object_ids=tool_arguments.get("object_ids"),
+                    knowledge_context=tool_arguments.get("knowledge_context"),
                 )
                 text = _unwrap_sdk_payload_text(result)
                 return [TextContent(type="text", text=text)]
@@ -256,6 +256,10 @@ def _unified_query_tool_fallback() -> Tool:
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "对象ID列表",
+                },
+                "knowledge_context": {
+                    "type": "string",
+                    "description": "知识增强上下文，会在生成查询计划时提供给模型（可选）",
                 },
             },
             "required": ["question"],

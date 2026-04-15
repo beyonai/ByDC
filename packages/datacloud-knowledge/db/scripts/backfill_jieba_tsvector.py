@@ -10,8 +10,8 @@
     python db/scripts/backfill_jieba_tsvector.py --force   # 全量重新填充
 
 环境变量:
-    DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME — 数据库连接
-    BACKFILL_BATCH_SIZE — 每批处理行数，默认 1000
+    DATACLOUD_DB_URL, DATACLOUD_DB_USER, DATACLOUD_DB_PASSWORD — 数据库连接
+    DATACLOUD_KNOWLEDGE_BACKFILL_BATCH_SIZE — 每批处理行数，默认 1000
 
 索引侧使用 jieba.lcut_for_search（搜索引擎模式，宽分词提高召回率）；
 查询侧使用 jieba.lcut（精确分词提高精确率）。
@@ -35,17 +35,21 @@ import psycopg
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-BATCH_SIZE = int(os.getenv("BACKFILL_BATCH_SIZE", "1000"))
+BATCH_SIZE = int(os.getenv("DATACLOUD_KNOWLEDGE_BACKFILL_BATCH_SIZE", "1000"))
 REPO_ROOT = Path(__file__).resolve().parents[4]
 ENV_FILES = [
     REPO_ROOT / ".vscode" / ".env",
     REPO_ROOT / ".env",
 ]
+KB_SRC = REPO_ROOT / "packages" / "datacloud-knowledge" / "src"
+
+if str(KB_SRC) not in sys.path:
+    sys.path.insert(0, str(KB_SRC))
 
 
 def load_env() -> None:
-    """从 .env 文件加载环境变量（如果 DB_HOST 未设置）。"""
-    if os.getenv("DB_HOST"):
+    """从 .env 文件加载环境变量（如果 DATACLOUD_DB_URL 未设置）。"""
+    if os.getenv("DATACLOUD_DB_URL"):
         return
 
     for env_file in ENV_FILES:
@@ -74,14 +78,9 @@ def _jieba_tokenize(text: str) -> str:
 
 
 def _connect() -> psycopg.Connection:  # type: ignore[type-arg]
-    dsn = (
-        f"host={os.environ['DB_HOST']} "
-        f"port={os.environ.get('DB_PORT', '5432')} "
-        f"dbname={os.environ['DB_NAME']} "
-        f"user={os.environ['DB_USER']} "
-        f"password={os.environ['DB_PASSWORD']}"
-    )
-    return psycopg.connect(dsn, autocommit=True)
+    from datacloud_knowledge.db_url import build_postgres_connection_uri
+
+    return psycopg.connect(build_postgres_connection_uri(), autocommit=True)
 
 
 def _column_exists(conn: psycopg.Connection) -> bool:  # type: ignore[type-arg]
@@ -179,7 +178,7 @@ def main() -> None:
     args = parser.parse_args()
 
     load_env()
-    for var in ("DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD"):
+    for var in ("DATACLOUD_DB_URL", "DATACLOUD_DB_USER"):
         if var not in os.environ:
             log.error("缺少环境变量 %s", var)
             sys.exit(1)

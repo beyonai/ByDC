@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from pathlib import Path
 
 import psycopg2
@@ -19,11 +20,15 @@ _ROOT = Path(__file__).resolve().parents[2]
 _REPO_ROOT = _ROOT.parents[1]
 _DDL_DIR = _ROOT / "db" / "ddl" / "whale_datacloud"
 _SEED_DIR = _ROOT / "db" / "seed" / "whale_datacloud"
+_SRC_DIR = _ROOT / "src"
+
+if str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
 
 
 def _load_env_if_needed() -> None:
-    """若 DB_HOST 未设置，尝试从真实 .env 文件加载。"""
-    if os.getenv("DB_HOST"):
+    """若 DATACLOUD_DB_URL 未设置，尝试从真实 .env 文件加载。"""
+    if os.getenv("DATACLOUD_DB_URL"):
         return
     for candidate in (_REPO_ROOT / ".env",):
         if not candidate.exists():
@@ -39,23 +44,10 @@ def _load_env_if_needed() -> None:
                 if k and k not in os.environ:
                     os.environ[k] = v
         break
-
-
-def _required_env(name: str) -> str:
-    value = os.getenv(name, "").strip()
-    if not value:
-        raise ValueError(f"missing required env var: {name}")
-    return value
-
-
 def _connect() -> psycopg2.extensions.connection:
-    return psycopg2.connect(
-        host=_required_env("DB_HOST"),
-        port=int(_required_env("DB_PORT")),
-        user=_required_env("DB_USER"),
-        password=_required_env("DB_PASSWORD"),
-        dbname=_required_env("DB_NAME"),
-    )
+    from datacloud_knowledge.db_url import build_postgres_connection_uri
+
+    return psycopg2.connect(dsn=build_postgres_connection_uri())
 
 
 def _sql_files(directory: Path) -> list[Path]:
@@ -129,10 +121,8 @@ def main() -> None:
         python apply_whale_datacloud.py            # 完整初始化（DDL + Seed）
         python apply_whale_datacloud.py --seed-only  # 仅执行 Seed（幂等，不 drop 表）
 
-    环境变量 DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME 可从导出的环境变量或仓库根 .env 提供。
+    环境变量 DATACLOUD_DB_URL/USER/PASSWORD 可从导出的环境变量或仓库根 .env 提供。
     """
-    import sys  # noqa: PLC0415
-
     _load_env_if_needed()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     if "--seed-only" in sys.argv:

@@ -418,44 +418,12 @@ def _get_conn():
     获取PG连接，使用 settings.database_url 或详细配置。
     该方法为同步实现，如项目已有统一封装，可直接替换调用。
     """
-    db_schema = None
+    from sales_analysis_demo.db.connection import build_psycopg_connection_dsn
 
-    # 优先使用 database_url，如果没有则使用详细配置构建连接
-    if settings.database_url:
-        # 处理 database_url 中可能包含的 schema 参数
-        database_url = settings.database_url
-        if 'schema=' in database_url:
-            # 提取 schema 参数
-            import urllib.parse
-            parsed = urllib.parse.urlparse(database_url)
-            query_params = urllib.parse.parse_qs(parsed.query)
-            db_schema = query_params.get('schema', [None])[0]
-            # 移除 schema 参数重新构建 URL
-            if db_schema:
-                query_params.pop('schema', None)
-                new_query = urllib.parse.urlencode(query_params, doseq=True)
-                database_url = database_url.replace(parsed.query, new_query).rstrip('?')
-
-        conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
-    else:
-        # 使用详细配置构建连接
-        conn = psycopg2.connect(
-            host=getattr(settings, "db_host", "localhost"),
-            port=getattr(settings, "db_port", 5432),
-            database=getattr(settings, "db_name", "postgres"),
-            user=getattr(settings, "db_user", "postgres"),
-            password=getattr(settings, "db_password", ""),
-            cursor_factory=RealDictCursor
-        )
-
-    # 设置 schema（优先使用从 URL 中提取的 schema，否则使用配置的 schema）
-    final_schema = db_schema or getattr(settings, "db_schema", None)
-    if final_schema:
-        with conn.cursor() as cur:
-            cur.execute(f"SET search_path TO {final_schema}")
-        conn.commit()
-
-    return conn
+    return psycopg2.connect(
+        dsn=build_psycopg_connection_dsn(),
+        cursor_factory=RealDictCursor,
+    )
 
 
 

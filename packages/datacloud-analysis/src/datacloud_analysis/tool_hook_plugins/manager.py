@@ -15,6 +15,11 @@ from datacloud_analysis.tool_hook_plugins.types import HookContext, HookDecision
 
 logger = logging.getLogger(__name__)
 
+try:
+    from langgraph.errors import GraphBubbleUp as _GraphBubbleUp
+except ImportError:
+    _GraphBubbleUp = type(None)  # type: ignore[misc,assignment]
+
 
 @dataclass(frozen=True)
 class _LoadedToolHookPlugin:
@@ -115,6 +120,8 @@ class ToolHookPluginManager:
     ) -> HookDecision | None:
         try:
             return await _invoke_callback(callback, context)
+        except _GraphBubbleUp:  # type: ignore[misc]
+            raise
         except Exception as exc:  # noqa: BLE001
             if _strict_mode():
                 logger.error("Tool hook callback failed in strict mode: plugin_id=%s error=%s", plugin_id, exc)

@@ -68,9 +68,9 @@ def _load_env() -> Path:
 
 
 def _reasoning_config() -> tuple[str, str, str]:
-    model = os.getenv("DATACLOUD_LLM_REASONING_MODEL", "Qwen/Qwen3-235B-A22B")
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("DATACLOUD_LLM_REASONING_API_KEY") or ""
-    base_url = os.getenv("OPENAI_BASE_URL") or os.getenv("DATACLOUD_LLM_REASONING_API_BASE") or ""
+    model = os.getenv("DATACLOUD_LLM_MODEL", "Qwen/Qwen3-235B-A22B")
+    api_key = os.getenv("DATACLOUD_LLM_API_KEY", "")
+    base_url = os.getenv("DATACLOUD_LLM_API_BASE", "")
     return model, api_key, base_url
 
 

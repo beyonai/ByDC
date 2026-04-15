@@ -137,8 +137,8 @@ async def _invoke_llm_with_fallback(
 ) -> tuple[Any, bool]:
     """调用 LLM，内置三层容错：
 
-    1. 主模型 + 指数退避重试（最多 DATACLOUD_LLM_MAX_RETRIES 次）
-    2. 备用模型 + 指数退避重试（若 DATACLOUD_LLM_FALLBACK_ENABLED=true）
+    1. 主模型 + 指数退避重试（使用代码内默认策略）
+    2. 备用模型 + 指数退避重试（若运行时显式注入备用模型实例）
     3. 全部不可用 → 保存断点到 Redis + 向用户推送引导文案 + 抛 _LlmUnavailableError
     """
     from datacloud_analysis.orchestration.execution.llm_retry import stream_llm_call_with_retry
@@ -160,8 +160,7 @@ async def _invoke_llm_with_fallback(
     # ── 备用模型（含重试）──────────────────────────────────────────────────────
     if fallback_llm_with_tools is not None:
         try:
-            fallback_model = os.getenv("DATACLOUD_LLM_FALLBACK_MODEL", "fallback")
-            logger.warning("[LLM] 主模型失败，切换到备用模型: %s", fallback_model)
+            logger.warning("[LLM] 主模型失败，切换到备用模型")
             return await stream_llm_call_with_retry(
                 _stream_llm_call, fallback_llm_with_tools, messages_window, gateway_context
             )
@@ -268,37 +267,22 @@ def _conversation_messages_for_llm(state: Any) -> list[HumanMessage | AIMessage]
             out.append(m)
     return out
 
-
-def _load_model_kwargs(env_key: str) -> dict:
-    """从环境变量读取额外的 model_kwargs（JSON 格式），解析失败返回空 dict。"""
-    import json
-    raw = os.getenv(env_key, "").strip()
-    if not raw:
-        return {}
-    try:
-        return json.loads(raw)
-    except Exception:
-        logger.warning("[_load_model_kwargs] invalid JSON for %s: %s", env_key, raw)
-        return {}
-
-
 def _build_llm(state: Any) -> Any:
-    """从环境变量构建 LLM（优先 reasoning，其次 coding，最后 openai 默认）。"""
-    for env_prefix in ("DATACLOUD_LLM_REASONING", "DATACLOUD_LLM_CODING"):
-        api_base = os.getenv(f"{env_prefix}_API_BASE", "")
-        api_key = os.getenv(f"{env_prefix}_API_KEY", "")
-        model = os.getenv(f"{env_prefix}_MODEL", "")
-        if api_base and api_key and model:
-            model_kwargs = _load_model_kwargs(f"{env_prefix}_MODEL_KWARGS")
-            extra_kwargs: dict = {"model_kwargs": model_kwargs} if model_kwargs else {}
-            return init_chat_model(
-                model=model,
-                model_provider="openai",
-                api_key=api_key,
-                base_url=api_base,
-                temperature=0.0,
-                **extra_kwargs,
-            )
+    """从统一的 DATACLOUD_LLM_* 环境变量构建 LLM。"""
+    _ = state
+    api_base = os.getenv("DATACLOUD_LLM_API_BASE", "")
+    api_key = os.getenv("DATACLOUD_LLM_API_KEY", "")
+    model = os.getenv("DATACLOUD_LLM_MODEL", "")
+    raw_temperature = os.getenv("DATACLOUD_LLM_TEMPERATURE", "0.0").strip()
+    temperature = float(raw_temperature) if raw_temperature else 0.0
+    if api_base and api_key and model:
+        return init_chat_model(
+            model=model,
+            model_provider="openai",
+            api_key=api_key,
+            base_url=api_base,
+            temperature=temperature,
+        )
     # 兜底
     return init_chat_model(model="gpt-4o", model_provider="openai", temperature=0.0)
 

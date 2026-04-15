@@ -167,7 +167,7 @@ def create_app(
 
                 plan_gen = LangGraphPlanGenerator(
                     model=settings.llm_model,
-                    base_url=settings.llm_base_url,
+                    base_url=settings.llm_api_base,
                     api_key=settings.llm_api_key,
                     temperature=settings.llm_temperature,
                     max_retries=settings.max_plan_retries,
@@ -181,7 +181,7 @@ def create_app(
                     exc_info=True,
                 )
         else:
-            logger.warning("DC_LLM_API_KEY not set, LLM plan generation disabled")
+            logger.warning("DATACLOUD_LLM_API_KEY not set, LLM plan generation disabled")
 
         # configs = datasource_configs if datasource_configs is not None else _build_datasource_configs(settings)
         # if configs:

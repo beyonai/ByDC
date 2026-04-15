@@ -29,6 +29,8 @@ from typing import Any
 import psycopg
 from psycopg import Connection, Cursor
 
+from datacloud_knowledge.db_url import build_postgres_connection_uri
+
 from . import owl_converter, owl_parser
 from .snowflake import _next_snowflake_id, _next_snowflake_ids
 
@@ -194,32 +196,17 @@ def _connect() -> Connection:
     - DATACLOUD_DB_CONNECT_TIMEOUT：连接超时（秒），默认 30；仅影响建连阶段。
     - DATACLOUD_DB_LOCK_TIMEOUT_MS：锁等待超时（毫秒）。>0 时执行 SET lock_timeout，
       避免 INSERT/UPDATE 在等表锁/行锁时无限挂起；未设置则不启用（与 PostgreSQL 默认一致）。
-    - DATACLOUD_DB_APPLICATION_NAME：会话 application_name（默认 datacloud_knowledge_import），
-      便于在 pg_stat_activity / OpenGauss 监控里区分 Python 入库连接与 DBeaver。
-
     若入库卡在 domain 首条 INSERT，多为其他会话持有 whale_datacloud.* 上的锁且未提交，
     请在库上查阻塞会话或设置 DATACLOUD_DB_LOCK_TIMEOUT_MS=30000 快速得到 lock timeout 报错。
     """
 
-    def _req(name: str) -> str:
-        v = os.getenv(name, "").strip()
-        if not v:
-            raise ValueError(f"缺少环境变量: {name}")
-        return v
-
     ct_raw = os.getenv("DATACLOUD_DB_CONNECT_TIMEOUT", "30").strip()
     connect_timeout = int(ct_raw) if ct_raw.isdigit() else 30
 
-    app_name = os.getenv("DATACLOUD_DB_APPLICATION_NAME", "datacloud_knowledge_import").strip()
-    if not app_name:
-        app_name = "datacloud_knowledge_import"
+    app_name = "datacloud_knowledge_import"
 
     _kw: dict[str, Any] = {
-        "host": _req("DB_HOST"),
-        "port": int(_req("DB_PORT")),
-        "user": _req("DB_USER"),
-        "password": _req("DB_PASSWORD"),
-        "dbname": _req("DB_NAME"),
+        "conninfo": build_postgres_connection_uri(),
         "connect_timeout": connect_timeout,
     }
     try:

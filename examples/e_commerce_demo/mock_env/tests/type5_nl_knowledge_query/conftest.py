@@ -31,11 +31,9 @@ def knowledge_service():
     """返回 SQLKnowledgeGraphQuery 服务实例。
 
     需要配置环境变量才能连接数据库：
-    - DB_HOST: 数据库主机
-    - DB_PORT: 数据库端口
-    - DB_USER: 数据库用户名
-    - DB_PASSWORD: 数据库密码
-    - DB_NAME: 数据库名称
+    - DATACLOUD_DB_URL: 数据库 JDBC/URI 地址
+    - DATACLOUD_DB_USER: 数据库用户名
+    - DATACLOUD_DB_PASSWORD: 数据库密码
     """
     from dotenv import load_dotenv
 
@@ -52,7 +50,7 @@ def knowledge_service():
             break
 
     # 检查必要的环境变量
-    required_vars = ["DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME"]
+    required_vars = ["DATACLOUD_DB_URL", "DATACLOUD_DB_USER"]
     missing = [v for v in required_vars if not os.getenv(v)]
     if missing:
         pytest.skip(f"缺少数据库环境变量: {missing}")

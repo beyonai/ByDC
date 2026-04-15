@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 from psycopg.sql import SQL, Composed, Identifier
 from psycopg_pool import ConnectionPool
 
+from datacloud_knowledge.db_url import build_postgres_connection_uri
+
 from .fuzzy import (
     FuzzyConfig,
     FuzzySuggestion,
@@ -121,8 +123,8 @@ class SQLKnowledgeGraphQuery:
         """Initialize with DB config or auto-read from env vars.
 
         Args:
-            db_config: Dict with host, port, user, password, database
-                      If None, reads from DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME
+            db_config: Dict with explicit psycopg connection kwargs.
+                      If None, reads from DATACLOUD_DB_URL/USER/PASSWORD
             schema: Database schema name (default: whale_datacloud)
             default_hops: Default number of hops for queries
             pool_min: Minimum connection pool size
@@ -159,18 +161,7 @@ class SQLKnowledgeGraphQuery:
 
     def _load_db_config_from_env(self) -> dict[str, Any]:
         """Load DB config from environment variables."""
-        required = ["DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME"]
-        missing = [v for v in required if not os.getenv(v)]
-        if missing:
-            raise ValueError(f"Missing DB env vars: {', '.join(missing)}")
-
-        return {
-            "host": os.environ["DB_HOST"],
-            "port": int(os.environ["DB_PORT"]),
-            "user": os.environ["DB_USER"],
-            "password": os.environ["DB_PASSWORD"],
-            "database": os.environ["DB_NAME"],
-        }
+        return {"conninfo": build_postgres_connection_uri()}
 
     def _get_pool(self) -> ConnectionPool:
         """Get or create connection pool."""
@@ -178,15 +169,26 @@ class SQLKnowledgeGraphQuery:
             if ConnectionPool is None:
                 raise RuntimeError("psycopg_pool not available, install psycopg[pool]")
             config = self.db_config.copy()
-            if "database" in config:
-                config["dbname"] = config.pop("database")
-            self._pool = ConnectionPool(
-                kwargs=config,
-                min_size=self._pool_min,
-                max_size=self._pool_max,
-                open=True,
-                max_idle=10,  # Close idle connections after 10 seconds
-            )
+            conninfo = config.pop("conninfo", None)
+            if conninfo is not None:
+                self._pool = ConnectionPool(
+                    conninfo=str(conninfo),
+                    kwargs=config or None,
+                    min_size=self._pool_min,
+                    max_size=self._pool_max,
+                    open=True,
+                    max_idle=10,  # Close idle connections after 10 seconds
+                )
+            else:
+                if "database" in config:
+                    config["dbname"] = config.pop("database")
+                self._pool = ConnectionPool(
+                    kwargs=config,
+                    min_size=self._pool_min,
+                    max_size=self._pool_max,
+                    open=True,
+                    max_idle=10,  # Close idle connections after 10 seconds
+                )
         return self._pool
 
     @contextmanager
@@ -1539,13 +1541,16 @@ def create_sql_graph_query(
 
     Args override environment variables.
     """
-    config = {
-        "host": host or os.getenv("DB_HOST", "localhost"),
-        "port": port or int(os.getenv("DB_PORT", "5432")),
-        "user": user or os.getenv("DB_USER", "postgres"),
-        "password": password or os.getenv("DB_PASSWORD", ""),
-        "database": database or os.getenv("DB_NAME", "postgres"),
-    }
+    if host is None and port is None and user is None and password is None and database is None:
+        config = {"conninfo": build_postgres_connection_uri()}
+    else:
+        config = {
+            "host": host or "localhost",
+            "port": port or 5432,
+            "user": user or "postgres",
+            "password": password or "",
+            "database": database or "postgres",
+        }
     return SQLKnowledgeGraphQuery(db_config=config, schema=schema)
 
 

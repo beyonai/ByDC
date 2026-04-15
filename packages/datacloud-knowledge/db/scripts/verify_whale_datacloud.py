@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import os
+import sys
+from pathlib import Path
 
 import psycopg2
 
@@ -17,24 +18,19 @@ EXPECTED_TABLES = {
     "term_relation",
 }
 
+_ROOT = Path(__file__).resolve().parents[2]
+_SRC_DIR = _ROOT / "src"
 
-def _required_env(name: str) -> str:
-    value = os.getenv(name, "").strip()
-    if not value:
-        raise ValueError(f"missing required env var: {name}")
-    return value
-
+if str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
 
 def main() -> None:
     """Verify schema existence and expected table set."""
-    host = _required_env("DB_HOST")
-    port = int(_required_env("DB_PORT"))
-    user = _required_env("DB_USER")
-    password = _required_env("DB_PASSWORD")
-    dbname = _required_env("DB_NAME")
-    schema = os.getenv("DB_SCHEMA", "whale_datacloud")
+    from datacloud_knowledge.db_url import build_postgres_connection_uri, resolve_knowledge_schema
 
-    conn = psycopg2.connect(host=host, port=port, user=user, password=password, dbname=dbname)
+    schema = resolve_knowledge_schema()
+
+    conn = psycopg2.connect(dsn=build_postgres_connection_uri())
     try:
         with conn.cursor() as cur:
             cur.execute(

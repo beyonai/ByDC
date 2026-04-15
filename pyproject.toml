@@ -1,6 +1,6 @@
 [project]
 name = "by-datacloud"
-version = "0.1.2"
+version = "0.1.4"
 description = "Whale DataCloud - A multi-service data platform"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -209,7 +209,7 @@ python_functions = ["test_*"]
 addopts = "-v --tb=short"
 asyncio_mode = "auto"
 markers = [
-    "db_integration: requires reachable PostgreSQL/openGauss database (set DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME)",
+    "db_integration: requires reachable PostgreSQL/openGauss database (set DATACLOUD_DB_URL/DATACLOUD_DB_USER/DATACLOUD_DB_PASSWORD)",
     "type1_schema: DDL schema tests",
     "type2_data: structured data load tests",
     "type3_api: API service tests",

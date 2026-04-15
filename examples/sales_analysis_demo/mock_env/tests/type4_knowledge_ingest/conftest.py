@@ -75,7 +75,7 @@ def db_ready(integration_enabled: bool) -> None:
     """集成测试前置条件检查：验证数据库已就绪，而不是负责初始化数据库。
 
     检查项：
-      1. 能连上数据库（env 变量 DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME）
+      1. 能连上数据库（env 变量 DATACLOUD_DB_URL / DATACLOUD_DB_USER / DATACLOUD_DB_PASSWORD）
       2. whale_datacloud.term_type 表存在
       3. 内置术语类型（is_builtin=TRUE）至少有一条记录
 
@@ -96,22 +96,24 @@ def db_ready(integration_enabled: bool) -> None:
     import psycopg2  # type: ignore[import]
 
     # ── 检查环境变量 ─────────────────────────────────────────────────────────
-    missing = [v for v in ("DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME")
-               if not os.getenv(v)]
+    missing = [v for v in ("DATACLOUD_DB_URL", "DATACLOUD_DB_USER") if not os.getenv(v)]
     if missing:
         pytest.skip(
             f"缺少数据库环境变量 {missing}，请配置后重试。\n"
-            "提示：在 .vscode/.env.test 或环境中设置 DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME"
+            "提示：在 .vscode/.env.test 或环境中设置 DATACLOUD_DB_URL / DATACLOUD_DB_USER / DATACLOUD_DB_PASSWORD"
         )
 
     # ── 检查能否连接 ──────────────────────────────────────────────────────────
     try:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(os.environ["DATACLOUD_DB_URL"].removeprefix("jdbc:"))
         conn = psycopg2.connect(
-            host=os.environ["DB_HOST"],
-            port=int(os.environ["DB_PORT"]),
-            user=os.environ["DB_USER"],
-            password=os.environ["DB_PASSWORD"],
-            dbname=os.environ["DB_NAME"],
+            host=parsed.hostname or "localhost",
+            port=parsed.port or 5432,
+            user=os.environ["DATACLOUD_DB_USER"],
+            password=os.getenv("DATACLOUD_DB_PASSWORD", ""),
+            dbname=parsed.path.lstrip("/") or "postgres",
         )
     except Exception as exc:
         pytest.skip(

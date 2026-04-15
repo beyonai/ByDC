@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
@@ -12,6 +14,22 @@ from datacloud_analysis.orchestration.state import AgentState
 
 _router = CommandRouter()
 logger = logging.getLogger(__name__)
+
+
+def _format_knowledge_for_prompt(knowledge_json: str) -> str:
+    """将 knowledge JSON 转为人类可读字段映射文本（降低 token 消耗）。"""
+    try:
+        data = json.loads(knowledge_json)
+        items = data.get("paradigmList", [])
+        lines = []
+        for item in items:
+            name = item.get("name") or item.get("termName") or ""
+            desc = item.get("fieldName") or item.get("description") or ""
+            if name and desc:
+                lines.append(f"{name} → {desc}")
+        return "\n".join(lines) if lines else knowledge_json
+    except Exception:
+        return knowledge_json
 
 
 def _trace_user_query_enabled() -> bool:
@@ -30,7 +48,11 @@ def _message_line_preview(msg: Any, *, max_len: int = 100) -> str:
     return "%s(%s)" % (cls, one)
 
 
-async def intend_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
+async def intend_node(
+    state: AgentState,
+    config: RunnableConfig,
+    knowledge_enhancer: Callable[[str], Awaitable[Any]] | None = None,
+) -> dict[str, Any]:
     gw_ctx = (config.get("configurable") or {}).get("gateway_context")
     messages = state.get("messages") or []
     # 必须用「最后一条用户话」，不能取 messages[-1]：合并后的 state 常以 AIMessage 结尾，
@@ -75,9 +97,28 @@ async def intend_node(state: AgentState, config: RunnableConfig) -> dict[str, An
         }
 
     # 2. 非命令查询直接走 react 路径，无需 LLM 意图分类
-    return {
+    updates: dict[str, Any] = {
         "intent": "react",
         "intent_source": "react",
         "execution_status": "execution",
         "user_query": user_query,
     }
+
+    # 3. 知识增强（仅当 knowledge_enhancer 提供时调用）
+    if knowledge_enhancer is not None:
+        try:
+            result = await knowledge_enhancer(user_query)
+            knowledge_payload: dict[str, Any] = {
+                "needs_clarification": result.needs_clarification,
+                "form": result.form,
+                "knowledge": result.knowledge,
+                "query": getattr(result, "query", user_query),
+            }
+            updates["knowledge_payload"] = knowledge_payload
+            if result.knowledge:
+                snippet = _format_knowledge_for_prompt(result.knowledge)
+                updates["knowledge_snippets"] = [snippet] if snippet else []
+        except Exception:
+            logger.exception("[intend_node] knowledge_enhancer failed, skipping")
+
+    return updates

@@ -20,12 +20,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from datacloud_data_sdk.action import Action
 from datacloud_data_sdk.exceptions import ActionNotFoundError
 from datacloud_data_sdk.ontology.models import OntologyAction, OntologyClass
 from datacloud_data_sdk.relation import Relation
+
+logger = logging.getLogger(__name__)
 
 
 class Object:
@@ -172,7 +172,12 @@ class Object:
                 return a
         raise ActionNotFoundError(self._cls.object_code, action_code)
 
-    async def query(self, question: str, include_plan: bool = True) -> dict[str, object]:
+    async def query(
+        self,
+        question: str,
+        include_plan: bool = True,
+        knowledge_context: str | None = None,
+    ) -> dict[str, object]:
         """
         自然语言查询
 
@@ -188,6 +193,7 @@ class Object:
         Args:
             question: 自然语言查询问题
             include_plan: 是否在结果中包含执行计划
+            knowledge_context: 可选的知识增强上下文，会传递给查询计划生成模型
 
         Returns:
             dict: 查询结果，包含 records, total, meta 等字段
@@ -199,11 +205,6 @@ class Object:
         import uuid
         from dataclasses import asdict
 
-        from datacloud_data_sdk.plan.object_view_builder import ObjectViewBuilder
-        from datacloud_data_sdk.plan.execution_object_converter import ExecutionObjectConverter
-        from datacloud_data_sdk.plan.data_permission_rewriter import DataPermissionRewriter
-        from datacloud_data_sdk.executor.executor import Executor
-        from datacloud_data_sdk.executor.kb_executor import KbExecutor
         from datacloud_data_sdk.aggregator.direct_aggregator import DirectAggregator
         from datacloud_data_sdk.aggregator.sqlite_aggregator import SqliteAggregator
         from datacloud_data_sdk.context import get_current_context
@@ -214,6 +215,10 @@ class Object:
             TermAmbiguousError,
             TermNotFoundError,
         )
+        from datacloud_data_sdk.executor.executor import Executor
+        from datacloud_data_sdk.executor.kb_executor import KbExecutor
+        from datacloud_data_sdk.plan.execution_object_converter import ExecutionObjectConverter
+        from datacloud_data_sdk.plan.object_view_builder import ObjectViewBuilder
 
         if not hasattr(self, "_loader") or self._loader is None:
             raise NotImplementedError(
@@ -264,6 +269,7 @@ class Object:
             plan = await config.plan_generator.generate(
                 payload,
                 question,
+                knowledge_context=knowledge_context,
                 term_loader=getattr(config, "term_loader", None),
             )
             if not plan.can_answer:
@@ -312,7 +318,7 @@ class Object:
                     logger.debug("observer/reporter callback failed", exc_info=True)
 
             try:
-                ctx = get_current_context()
+                get_current_context()
                 # plan = DataPermissionRewriter().rewrite(plan, ctx)
             except Exception:
                 logger.debug("observer/reporter callback failed", exc_info=True)
@@ -344,10 +350,10 @@ class Object:
                 except Exception:
                     logger.debug("observer/reporter callback failed", exc_info=True)
 
-            from datacloud_data_sdk.sql_executor.sql_executor import SqlExecutor
-            from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
             from datacloud_data_sdk.executor.api_executor import ApiExecutor
             from datacloud_data_sdk.executor.script_executor import ScriptExecutor
+            from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
+            from datacloud_data_sdk.sql_executor.sql_executor import SqlExecutor
 
             ds_manager = (
                 DataSourceManager(config.datasource_configs) if config.datasource_configs else None

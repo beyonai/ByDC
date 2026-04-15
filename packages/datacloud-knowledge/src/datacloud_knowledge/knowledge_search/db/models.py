@@ -1,6 +1,5 @@
 ﻿from __future__ import annotations
 
-import os
 from datetime import datetime
 from typing import Any
 
@@ -8,7 +7,9 @@ from sqlalchemy import Boolean, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-KNOWLEDGE_SCHEMA = os.getenv("KNOWLEDGE_SCHEMA", "whale_datacloud")
+from datacloud_knowledge.db_url import resolve_knowledge_schema
+
+KNOWLEDGE_SCHEMA = resolve_knowledge_schema()
 
 
 class Base(DeclarativeBase):
@@ -85,4 +86,3 @@ class TermKnowledge(Base):
     sort_order: Mapped[int] = mapped_column(nullable=False, default=0)
     created_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-

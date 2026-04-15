@@ -90,6 +90,10 @@ class ToolRegistry:
                         "items": {"type": "string"},
                         "description": "限定查询的对象ID列表（可选）",
                     },
+                    "knowledge_context": {
+                        "type": "string",
+                        "description": "知识增强上下文，会在生成查询计划时提供给模型（可选）",
+                    },
                 },
                 "required": ["question"],
             },

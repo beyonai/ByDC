@@ -72,6 +72,7 @@ def test_tools_list_includes_title() -> None:
         unified = next((t for t in tools if t["name"] == "unified_data_query"), None)
         assert unified is not None
         assert unified.get("title") == "统一数据查询"
+        assert "knowledge_context" in unified["inputSchema"]["properties"]
 
 
 def test_tools_list_with_trailing_slash_works() -> None:

@@ -6,6 +6,7 @@ import os
 import sys
 from importlib import import_module
 from pathlib import Path
+from urllib.parse import parse_qsl, urlparse
 
 import pytest
 
@@ -44,17 +45,21 @@ def ddl_dir(package_root: Path) -> Path:
 @pytest.fixture(scope="session")
 def db_config() -> dict[str, str | int]:
     """Load required DB config from environment variables."""
-    required_keys = ["DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME"]
+    required_keys = ["DATACLOUD_DB_URL", "DATACLOUD_DB_USER"]
     missing = [key for key in required_keys if not os.getenv(key)]
     if missing:
         pytest.skip(f"db_integration: missing env vars: {', '.join(missing)}")
 
-    schema = os.getenv("DB_SCHEMA", "whale_datacloud")
+    parsed = urlparse(os.environ["DATACLOUD_DB_URL"].removeprefix("jdbc:"))
+    schema = next(
+        (value for key, value in parse_qsl(parsed.query, keep_blank_values=True) if key in {"currentSchema", "schema"} and value),
+        "whale_datacloud",
+    )
     return {
-        "host": str(os.environ["DB_HOST"]),
-        "port": int(os.environ["DB_PORT"]),
-        "user": str(os.environ["DB_USER"]),
-        "password": str(os.environ["DB_PASSWORD"]),
-        "database": str(os.environ["DB_NAME"]),
+        "host": parsed.hostname or "localhost",
+        "port": parsed.port or 5432,
+        "user": str(os.environ["DATACLOUD_DB_USER"]),
+        "password": os.getenv("DATACLOUD_DB_PASSWORD", ""),
+        "database": parsed.path.lstrip("/") or "postgres",
         "schema": schema,
     }

@@ -4,6 +4,8 @@ import logging
 from fastapi.testclient import TestClient
 
 from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.plan.models import QueryExecutionPlan, parse_plan
+from datacloud_data_sdk.plan.query_plan_generator import BasePlanGenerator
 from datacloud_data_sdk.plan.query_plan_generator import MockPlanGenerator
 from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 
@@ -63,6 +65,23 @@ MOCK_PLAN = {
 }
 
 
+class CapturePlanGenerator(BasePlanGenerator):
+    def __init__(self, fixed_plan: dict[str, object]) -> None:
+        self._fixed_plan = fixed_plan
+        self.captured_knowledge_context: str | None = None
+
+    async def generate(
+        self,
+        payload,
+        question: str,
+        knowledge_context: str | None = None,
+        validation_errors=None,
+        term_loader=None,
+    ) -> QueryExecutionPlan:
+        self.captured_knowledge_context = knowledge_context
+        return parse_plan(self._fixed_plan, question)
+
+
 def _create_test_app(tmp_path=None, trigger_lifespan_first: bool = False):
     """创建测试 app。若 trigger_lifespan_first=True，会先发请求触发 lifespan，再替换 loader 并注入 event_bus。"""
     from datacloud_data_service.api.routes import create_app
@@ -86,6 +105,27 @@ def _create_test_app(tmp_path=None, trigger_lifespan_first: bool = False):
     )
     app.state.loader = loader
     return app
+
+
+def _create_capture_test_app(tmp_path):
+    from datacloud_data_service.api.routes import create_app
+
+    app = create_app()
+    loader = OntologyLoader()
+    loader.load_from_content(REGISTRY)
+    generator = CapturePlanGenerator(fixed_plan=MOCK_PLAN)
+    loader.configure(
+        plan_generator=generator,
+        datasource_configs={
+            "test_db": DataSourceConfig(
+                alias="test_db", db_type="SQLITE", jdbc_url="jdbc:sqlite::memory:"
+            )
+        },
+        csv_base_dir=str(tmp_path),
+        event_bus=getattr(app.state, "event_bus", None),
+    )
+    app.state.loader = loader
+    return app, generator
 
 
 def test_rest_query_returns_response(tmp_path) -> None:
@@ -171,3 +211,19 @@ def test_rest_query_omits_plan_when_env_false(tmp_path, monkeypatch) -> None:
     assert resp.status_code == 200
     assert resp.json()["code"] == 0
     assert "plan" not in resp.json()["data"]
+
+
+def test_rest_query_forwards_optional_knowledge_context(tmp_path) -> None:
+    app, generator = _create_capture_test_app(tmp_path)
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.post(
+        "/api/v1/query",
+        json={
+            "question": "查商机",
+            "knowledge_context": "商机金额口径：按含税金额统计",
+        },
+        headers=HEADERS,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["code"] == 0
+    assert generator.captured_knowledge_context == "商机金额口径：按含税金额统计"

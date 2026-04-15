@@ -10,23 +10,22 @@ Variable naming convention:
 Groups
 ------
 PG            PostgreSQL (LangGraph checkpoint store)
-WORKSPACE     File-system paths for public/private/task directories
-DATA_SERVICE  External data-query microservice (HTTP API)
-LLM_QUICK     Fast Q&A model  (intent classification, routing)
-LLM_CODING    Code generation model  (script writing, sbx_run_code)
-LLM_REASONING Deep reasoning model  (planning, summarisation)
-LLM_MULTIMODAL Multi-modal model  (image/table understanding)
+LLM           Shared LLM settings reused by all runtime roles
 EMBEDDING     Embedding model  (memory/knowledge vector search)
 """
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
+import os
 from typing import Any
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from datacloud_analysis.config.db_url import (
+    build_postgres_connection_uri,
+    resolve_checkpoint_schema,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -34,51 +33,32 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # ---------------------------------------------------------------------------
 
 class PGSettings(BaseSettings):
-    """PostgreSQL connection used by LangGraph AsyncPostgresSaver & PostgresStore."""
+    """Checkpoint PostgreSQL connection resolved from DATACLOUD_DB_*."""
 
-    model_config = SettingsConfigDict(env_prefix="DATACLOUD_PG_", extra="ignore")
+    model_config = SettingsConfigDict(extra="ignore")
 
     checkpoint_uri: str = Field(
-        ...,
-        description="Full PostgreSQL DSN, e.g. postgresql://user:pass@host:5432/db?sslmode=disable",
+        default_factory=build_postgres_connection_uri,
+        description="PostgreSQL DSN derived from DATACLOUD_DB_URL / USER / PASSWORD.",
     )
     checkpoint_schema: str = Field(
-        default="public",
-        description="Schema that holds checkpoint tables. Defaults to 'public'.",
+        default_factory=resolve_checkpoint_schema,
+        description="Schema inferred from DATACLOUD_DB_URL query params. Defaults to 'public'.",
     )
 
-
-class WorkspaceSettings(BaseSettings):
-    """File-system root directories for the workspace (design §4.2)."""
-
-    model_config = SettingsConfigDict(env_prefix="DATACLOUD_WORKSPACE_", extra="ignore")
-
-    public_root: Path = Field(
-        ...,
-        description="Enterprise public domain root (maps to public/datacloud/ in design).",
-    )
-    private_root: Path = Field(
-        ...,
-        description=(
-            "User private domain root prefix. "
-            "Actual per-user path is built at runtime: {private_root}/{user_id}/…"
-        ),
-    )
-    tasks_root: Path | None = Field(
-        default=None,
-        description=(
-            "Optional separate root for task sandboxes. "
-            "Falls back to {private_root}/{user_id}/workspaces/tasks when unset."
-        ),
-    )
+    @field_validator("checkpoint_uri")
+    @classmethod
+    def _validate_checkpoint_uri(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError(
+                "Missing DATACLOUD DB env vars: "
+                "DATACLOUD_DB_URL / DATACLOUD_DB_USER / DATACLOUD_DB_PASSWORD"
+            )
+        return value
 
 
 class LLMGroupSettings(BaseSettings):
-    """Settings for one LLM role (quick / coding / reasoning / multimodal).
-
-    Instantiate with a role-specific env_prefix, e.g.:
-        LLMGroupSettings(_env_prefix="DATACLOUD_LLM_QUICK_")
-    """
+    """Shared LLM settings reused by each logical role."""
 
     api_base: str = Field(..., description="Base URL of the LLM API endpoint.")
     api_key: str = Field(..., description="API key / bearer token.")
@@ -87,50 +67,33 @@ class LLMGroupSettings(BaseSettings):
 
     @classmethod
     def for_role(cls, role: str) -> "LLMGroupSettings":
-        """Factory: load settings for the given role from its env prefix.
+        """Factory: load the shared LLM settings for a logical role.
 
         Args:
             role: One of ``quick``, ``coding``, ``reasoning``, ``multimodal``.
         """
-        prefix = f"DATACLOUD_LLM_{role.upper()}_"
-        return cls(_env_prefix=prefix)  # type: ignore[call-arg]
+        api_base = os.getenv("DATACLOUD_LLM_API_BASE", "").strip()
+        api_key = os.getenv("DATACLOUD_LLM_API_KEY", "").strip()
+        model = os.getenv("DATACLOUD_LLM_MODEL", "").strip()
+        raw_temperature = os.getenv("DATACLOUD_LLM_TEMPERATURE", "0.0").strip()
 
+        if not (api_base and api_key and model):
+            raise ValueError(
+                "Missing DATACLOUD LLM env vars: "
+                "DATACLOUD_LLM_API_BASE / DATACLOUD_LLM_API_KEY / DATACLOUD_LLM_MODEL"
+            )
 
-class DataServiceSettings(BaseSettings):
-    """HTTP client settings for the external data-query microservice.
+        try:
+            temperature = float(raw_temperature)
+        except ValueError as exc:
+            raise ValueError(f"Invalid temperature for role {role}: {raw_temperature}") from exc
 
-    The data service is used by dynamic query tools mounted into each agent.
-    Static header defaults are configured here; per-request runtime context
-    (if any) should be injected by the caller.
-    """
-
-    model_config = SettingsConfigDict(env_prefix="DATACLOUD_DATA_SERVICE_", extra="ignore")
-
-    base_url: str = Field(
-        ...,
-        description="Base URL of the data query service, e.g. http://10.45.134.164:8080",
-    )
-    api_key: str = Field(
-        default="",
-        description="Bearer token for Authorization header.",
-    )
-    tenant_id: str = Field(
-        default="",
-        description="Static X-Tenant-Id header value.",
-    )
-    system_code: str = Field(
-        default="",
-        description="Static X-System-Code header value (e.g. 'crm').",
-    )
-    query_path: str = Field(
-        default="/api/v1/query",
-        description="API path for the NL query endpoint.",
-    )
-    timeout: int = Field(
-        default=180,
-        description="HTTP request timeout in seconds.",
-    )
-
+        return cls(
+            api_base=api_base,
+            api_key=api_key,
+            model=model,
+            temperature=temperature,
+        )
 
 class EmbeddingSettings(BaseSettings):
     """Settings for the embedding (vector) model."""
@@ -164,11 +127,7 @@ class KnowledgeSettings(BaseSettings):
     db_name: str = Field(default="", description="知识库数据库名称")
     db_schema: str = Field(default="public", description="知识库数据库 schema")
     db_type: str = Field(default="postgresql", description="知识库数据库类型")
-    knowledge_schema: str = Field(
-        default="",
-        validation_alias="DATACLOUD_KNOWLEDGE_SCHEMA",
-        description="知识 schema 标识（裸变量，无前缀）",
-    )
+    knowledge_schema: str = Field(default="", description="知识 schema 标识")
 
     @property
     def graph_files_list(self) -> list[str]:
@@ -202,32 +161,6 @@ class GatewaySettings(BaseSettings):
     worker_id: str = Field(default="", description="Worker node identifier")
 
 
-class AIFactorySettings(BaseSettings):
-    """AI Factory settings (token + agent_ids list)."""
-
-    model_config = SettingsConfigDict(env_prefix="DATACLOUD_AI_FACTORY_", extra="ignore")
-
-    token: str = Field(default="", description="AI Factory API token")
-    agent_ids: list[str] = Field(default_factory=list, description="AI Factory agent IDs (JSON array)")
-
-    @field_validator("agent_ids", mode="before")
-    @classmethod
-    def _parse_agent_ids(cls, v: Any) -> Any:
-        if isinstance(v, str):
-            v = v.strip()
-            if not v:
-                return []
-            try:
-                parsed = json.loads(v)
-                if isinstance(parsed, list):
-                    return [str(item) for item in parsed]
-                return [str(parsed)]
-            except (json.JSONDecodeError, ValueError):
-                # Treat as comma-separated fallback
-                return [item.strip() for item in v.split(",") if item.strip()]
-        return v
-
-
 class ExecutionSettings(BaseSettings):
     """Execution / ReAct loop settings."""
 
@@ -251,7 +184,6 @@ class Settings(BaseSettings):
         from datacloud_analysis.config.env import Settings
         cfg = Settings()
         print(cfg.pg.checkpoint_uri)
-        print(cfg.workspace.public_root)
         llm_quick = cfg.llm_quick
     """
 
@@ -259,8 +191,6 @@ class Settings(BaseSettings):
 
     # --- sub-groups loaded lazily via validators ---
     pg: PGSettings = Field(default_factory=PGSettings)
-    workspace: WorkspaceSettings = Field(default_factory=WorkspaceSettings)
-    data_service: DataServiceSettings = Field(default_factory=DataServiceSettings)
 
     # LLM roles
     llm_quick: LLMGroupSettings | None = Field(default=None)
@@ -274,7 +204,6 @@ class Settings(BaseSettings):
     # New settings groups (P2)
     agent: AgentSettings | None = Field(default=None)
     gateway: GatewaySettings | None = Field(default=None)
-    ai_factory: AIFactorySettings | None = Field(default=None)
     execution: ExecutionSettings | None = Field(default=None)
 
     @model_validator(mode="after")
@@ -309,11 +238,6 @@ class Settings(BaseSettings):
 
         try:
             object.__setattr__(self, "gateway", GatewaySettings())
-        except Exception:  # noqa: BLE001
-            pass
-
-        try:
-            object.__setattr__(self, "ai_factory", AIFactorySettings())
         except Exception:  # noqa: BLE001
             pass
 

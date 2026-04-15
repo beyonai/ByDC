@@ -123,8 +123,11 @@ async def test_scenario1_primary_fails_fallback_takes_over(
         call_log.append("fallback_called")
         return expected_msg, False
 
-    # MAX_RETRIES=0：主模型失败 1 次即放弃，直接切备用
-    monkeypatch.setenv("DATACLOUD_LLM_MAX_RETRIES", "0")
+    # 最大重试数改为 0：主模型失败 1 次即放弃，直接切备用
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_RETRIES",
+        0,
+    )
 
     with patch.object(rl_module, "_stream_llm_call", fake_stream):
         result_msg, did_stream = await _invoke_llm_with_fallback(
@@ -167,8 +170,14 @@ async def test_scenario1_primary_retries_then_fallback(
         call_log.append("fallback")
         return expected_msg, True
 
-    monkeypatch.setenv("DATACLOUD_LLM_MAX_RETRIES", "2")
-    monkeypatch.setenv("DATACLOUD_LLM_RETRY_MIN_WAIT", "0")
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_RETRIES",
+        2,
+    )
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MIN_WAIT",
+        0.0,
+    )
 
     with patch.object(rl_module, "_stream_llm_call", fake_stream):
         with patch("asyncio.sleep", new_callable=AsyncMock):
@@ -212,7 +221,10 @@ async def test_scenario2_all_models_fail_checkpoint_saved(
     fake_redis = _FakeRedis()
     ctx = _FakeGatewayContext(session_id="sess-recovery-test", redis=fake_redis)
 
-    monkeypatch.setenv("DATACLOUD_LLM_MAX_RETRIES", "0")
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_RETRIES",
+        0,
+    )
 
     with patch.object(rl_module, "_stream_llm_call", fake_stream_fail):
         with pytest.raises(_LlmUnavailableError):
@@ -272,7 +284,10 @@ async def test_scenario2_checkpoint_recovered_on_next_request(
     mock_llm = MagicMock()
     mock_llm.bind_tools.return_value = mock_llm_with_tools
 
-    monkeypatch.setenv("DATACLOUD_LLM_MAX_RETRIES", "0")
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_RETRIES",
+        0,
+    )
 
     with patch.object(rl_module, "_build_llm", return_value=mock_llm):
         with patch("datacloud_analysis.orchestration.execution.llm_retry._build_fallback_llm", return_value=None):
@@ -321,7 +336,10 @@ async def test_scenario3_end_to_end_degradation_to_fallback(
         # 备用模型成功返回
         return final_answer, False
 
-    monkeypatch.setenv("DATACLOUD_LLM_MAX_RETRIES", "0")
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_RETRIES",
+        0,
+    )
 
     with patch.object(rl_module, "_build_llm", return_value=primary_llm):
         with patch("datacloud_analysis.orchestration.execution.llm_retry._build_fallback_llm", return_value=fallback_llm):
@@ -361,7 +379,10 @@ async def test_scenario3_both_models_fail_returns_unavailable(
         raise exc
 
     ctx = _FakeGatewayContext(session_id="sess-e2e-fail", redis=_FakeRedis())
-    monkeypatch.setenv("DATACLOUD_LLM_MAX_RETRIES", "0")
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_RETRIES",
+        0,
+    )
 
     with patch.object(rl_module, "_build_llm", return_value=primary_llm):
         with patch("datacloud_analysis.orchestration.execution.llm_retry._build_fallback_llm", return_value=fallback_llm):

@@ -56,40 +56,6 @@ class TestGatewaySettings:
         assert settings.worker_id == "worker-1"
 
 
-class TestAIFactorySettings:
-    def test_agent_ids_json_array(self) -> None:
-        from datacloud_analysis.config.env import AIFactorySettings
-
-        with patch.dict(os.environ, {
-            "DATACLOUD_AI_FACTORY_TOKEN": "tok123",
-            "DATACLOUD_AI_FACTORY_AGENT_IDS": '["agent-1", "agent-2"]',
-        }):
-            settings = AIFactorySettings()
-
-        assert settings.token == "tok123"
-        assert settings.agent_ids == ["agent-1", "agent-2"]
-
-    def test_agent_ids_empty_string(self) -> None:
-        from datacloud_analysis.config.env import AIFactorySettings
-
-        env = {k: v for k, v in os.environ.items() if not k.startswith("DATACLOUD_AI_FACTORY_")}
-        with patch.dict(os.environ, env, clear=True):
-            settings = AIFactorySettings()
-
-        assert settings.agent_ids == []
-
-    def test_agent_ids_single_string_fallback(self) -> None:
-        """A single JSON string (not array) should become a single-item list."""
-        from datacloud_analysis.config.env import AIFactorySettings
-
-        with patch.dict(os.environ, {
-            "DATACLOUD_AI_FACTORY_AGENT_IDS": '["agent-a"]',
-        }):
-            settings = AIFactorySettings()
-
-        assert settings.agent_ids == ["agent-a"]
-
-
 class TestExecutionSettings:
     def test_default_react_max_rounds(self) -> None:
         from datacloud_analysis.config.env import ExecutionSettings

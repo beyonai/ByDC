@@ -108,6 +108,36 @@ async def test_generate_node_with_validation_errors_includes_retry_prompt() -> N
         assert "错误2" in user_content
 
 
+@pytest.mark.asyncio
+async def test_generate_node_includes_knowledge_context_in_prompt() -> None:
+    """知识增强上下文存在时，应追加到 user message 中供规划模型参考。"""
+    captured_messages = []
+
+    async def capture_astream(messages):
+        captured_messages.append(messages)
+        yield MagicMock(content=MOCK_LLM_RESPONSE_JSON)
+
+    with patch("langchain_openai.ChatOpenAI") as mock_chat_cls:
+        mock_instance = MagicMock()
+        mock_instance.astream = capture_astream
+        mock_chat_cls.return_value = mock_instance
+
+        agent = PlanAgent()
+        state: dict = {
+            "payload": PAYLOAD,
+            "question": "查商机",
+            "knowledge_context": "商机金额按含税口径理解",
+            "validation_errors": None,
+        }
+
+        await agent._generate_node(state, {})
+
+        assert len(captured_messages) == 1
+        user_content = captured_messages[0][1]["content"]
+        assert "知识增强上下文" in user_content
+        assert "商机金额按含税口径理解" in user_content
+
+
 def test_validate_node_can_answer_false_returns_none() -> None:
     """can_answer=False 时，_validate_node 不校验，返回 validation_result=None。"""
     agent = PlanAgent()

@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from datacloud_data_sdk.context import InvocationContext
@@ -145,6 +144,7 @@ async def _handle_tools_call(request: Request, params: dict) -> dict:
             question=arguments.get("question", ""),
             view_id=arguments.get("view_id", ""),
             object_ids=arguments.get("object_ids"),
+            knowledge_context=arguments.get("knowledge_context"),
         )
 
     object_code = _find_action_object(loader, tool_name)
@@ -189,6 +189,10 @@ def _fallback_unified_query_tool() -> dict:
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "对象ID列表",
+                },
+                "knowledge_context": {
+                    "type": "string",
+                    "description": "知识增强上下文，会在生成查询计划时提供给模型（可选）",
                 },
             },
             "required": ["question"],

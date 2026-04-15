@@ -33,6 +33,7 @@ class HookContext(TypedDict, total=False):
     term_hints: list[dict[str, Any]]
     term_context: list[dict[str, Any]]
     knowledge_snippets: list[dict[str, Any]]
+    knowledge_payload: dict[str, Any]
     workspace_dir: str | None
     tool_output: Any
     tool_error: HookError | None

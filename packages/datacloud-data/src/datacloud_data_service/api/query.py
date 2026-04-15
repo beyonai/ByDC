@@ -19,7 +19,7 @@ from typing import Any
 
 import anyio
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from datacloud_data_sdk.context import InvocationContext
 from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
@@ -50,12 +50,12 @@ def _parse_include_plan() -> bool:
     """
     解析是否在响应中包含执行计划
 
-    从环境变量 DC_INCLUDE_PLAN_IN_RESPONSE 读取配置。
+    从环境变量 DATACLOUD_INCLUDE_PLAN_IN_RESPONSE 读取配置。
 
     Returns:
         bool: 是否包含计划
     """
-    v = os.environ.get("DC_INCLUDE_PLAN_IN_RESPONSE", "true").lower()
+    v = os.environ.get("DATACLOUD_INCLUDE_PLAN_IN_RESPONSE", "true").lower()
     return v not in ("false", "0")
 
 
@@ -74,7 +74,8 @@ class QueryRequest(BaseModel):
 
     question: str
     view_id: str = ""
-    object_ids: list[str] = []
+    object_ids: list[str] = Field(default_factory=list)
+    knowledge_context: str | None = None
     page: int = 1
     page_size: int = 100
     file_id: str = ""
@@ -135,6 +136,7 @@ async def query_endpoint(body: QueryRequest, request: Request) -> QueryResponse:
                 question=body.question,
                 view_id=body.view_id,
                 object_ids=body.object_ids or None,
+                knowledge_context=body.knowledge_context,
                 include_plan=include_plan,
                 page=body.page if body.page > 0 else 1,
                 page_size=body.page_size if body.page_size > 0 else 100,

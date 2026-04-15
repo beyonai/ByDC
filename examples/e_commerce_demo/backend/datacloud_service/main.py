@@ -58,9 +58,9 @@ class WorkerConfig:
             return int(raw.strip(), 10) if raw and raw.strip() else default
 
         return cls(
-            api_key=opt("OPENAI_API_KEY"),
-            base_url=opt("OPENAI_BASE_URL"),
-            model_name=os.environ.get("DATACLOUD_LLM_REASONING_MODEL", "Qwen/Qwen3-235B-A22B"),
+            api_key=opt("DATACLOUD_LLM_API_KEY"),
+            base_url=opt("DATACLOUD_LLM_API_BASE"),
+            model_name=os.environ.get("DATACLOUD_LLM_MODEL", "Qwen/Qwen3-235B-A22B"),
             worker_id=os.environ.get("DATACLOUD_GATEWAY_WORKER_ID", "datacloud"),
             redis_host=os.environ.get("DATACLOUD_GATEWAY_REDIS_HOST", "localhost"),
             redis_port=as_int("DATACLOUD_GATEWAY_REDIS_PORT", 6379),
@@ -69,7 +69,7 @@ class WorkerConfig:
             redis_username=opt("DATACLOUD_GATEWAY_REDIS_USERNAME"),
             consumer_group=os.environ.get("DATACLOUD_GATEWAY_CONSUMER_GROUP", "datacloud"),
             workspace_dir=os.environ.get("DATACLOUD_GATEWAY_WORKSPACE_DIR", "/tmp/datacloud"),
-            ai_factory_url=os.environ.get("AI_FACTORY_URL", "http://10.10.168.203:8080"),
+            ai_factory_url=os.environ.get("DATACLOUD_AI_FACTORY_URL", "http://10.10.168.203:8080"),
         )
 
     def run_worker_kwargs(self) -> dict[str, Any]:

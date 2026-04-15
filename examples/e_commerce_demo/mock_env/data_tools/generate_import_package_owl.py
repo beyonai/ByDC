@@ -739,11 +739,10 @@ def ontology_desc(type_code: str, term_code: str) -> str:
 def render_dbsource() -> str:
     params = json.dumps(
         {
-            "host": "${DB_HOST}",
-            "port": "${DB_PORT}",
-            "user": "${DB_USER}",
-            "password": "${DB_PASSWORD}",
-            "database": "${DB_NAME}",
+            "jdbc_url": "${DATACLOUD_DB_URL}",
+            "user": "${DATACLOUD_DB_USER}",
+            "password": "${DATACLOUD_DB_PASSWORD}",
+            "currentSchema": "e_commerce_demo",
             "schema": "e_commerce_demo",
             "charset": "utf8mb4",
         },

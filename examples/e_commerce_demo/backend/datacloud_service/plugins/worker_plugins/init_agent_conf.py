@@ -27,7 +27,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # 环境变量名称常量
-ENV_ONTOLOGY_SCENE_PATH = "DATACLOUD_ONTOLOGY_SCENE_PATH"
+ENV_ONTOLOGY_PATH = "DATACLOUD_ONTOLOGY_PATH"
 ENV_DISABLE_SSL_VERIFY = "DATACLOUD_DISABLE_SSL_VERIFY"
 
 
@@ -61,7 +61,7 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
                 enabled=True,
             )
         )
-        self.ai_factory_url = os.environ.get("AI_FACTORY_URL", "http://10.10.168.203:8569")
+        self.ai_factory_url = os.environ.get("DATACLOUD_AI_FACTORY_URL", "http://10.10.168.203:8569")
         self.ai_factory_token = os.environ.get("DATACLOUD_AI_FACTORY_TOKEN", "")
         self.loaded_agent_ids: list[str] = []
         repo_root = _datacloud_repo_root()
@@ -470,9 +470,9 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             loader.load_from_owl_directory(scene_path)
             loader.configure(
                 plan_generator=LangGraphPlanGenerator(
-                    model=os.environ.get("DATACLOUD_LLM_CODING_MODEL", "Qwen/Qwen3-235B-A22B"),
-                    base_url=os.environ.get("OPENAI_BASE_URL"),
-                    api_key=os.environ.get("OPENAI_API_KEY"),
+                    model=os.environ.get("DATACLOUD_LLM_MODEL", "Qwen/Qwen3-235B-A22B"),
+                    base_url=os.environ.get("DATACLOUD_LLM_API_BASE"),
+                    api_key=os.environ.get("DATACLOUD_LLM_API_KEY"),
                     temperature=0.0,
                 ),
                 term_loader=TermLoader.from_config({}),
@@ -678,7 +678,12 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             question = (
                 params.get("question") or params.get("query") or params.get("description") or ""
             )
-            return await query_func(question=str(question), include_plan=True)
+            knowledge_context = params.get("knowledge_context") or ""
+            return await query_func(
+                question=str(question),
+                include_plan=True,
+                knowledge_context=str(knowledge_context) if knowledge_context else None,
+            )
 
         # 构建详细的工具描述，包含对象 Schema
         doc_parts = [f"Query tool: {tool_name}"]
@@ -686,7 +691,9 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
             doc_parts.append(tool_desc)
         if object_description:
             doc_parts.append("\n" + object_description)
-        doc_parts.append("\nParams: question/query/description (one of them).")
+        doc_parts.append(
+            "\nParams: question/query/description (one of them), knowledge_context (optional)."
+        )
 
         _tool.__doc__ = "\n".join(doc_parts)
         return _tool
