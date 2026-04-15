@@ -32,8 +32,6 @@ class TypedKeywordState(Protocol):
 
 
 log = logging.getLogger(__name__)
-if not log.handlers:
-    log.setLevel(logging.INFO)
 
 _SCHEMA = "whale_datacloud"
 _BM25_MIN_SCORE = 0.001
@@ -76,8 +74,27 @@ def typed_multi_recall_batch(
             result.setdefault(f"{item.ktype}:{item.keyword}", [])
 
     if batch.requests:
+        log.debug(
+            "[recall_batch] 开始召回: %d 个关键词=[%s]",
+            len(batch.requests),
+            ", ".join(f"{r.ktype}:{r.keyword!r}" for r in batch.requests),
+        )
         path_results = _run_paths_concurrent(batch, top_k=top_k, enable_vector=enable_vector)
-        result.update(_fuse_and_shape(batch, path_results, top_k=top_k, rrf_k=rrf_k))
+        fused = _fuse_and_shape(batch, path_results, top_k=top_k, rrf_k=rrf_k)
+        result.update(fused)
+        # 逐 keyword 记录召回结果
+        for req in batch.requests:
+            candidates = fused.get(req.map_key, [])
+            if candidates:
+                top_names = [c["term_name"] for c in candidates[:3]]
+                log.debug(
+                    "[recall_batch] %s -> %d 候选 top3=%s",
+                    req.map_key,
+                    len(candidates),
+                    top_names,
+                )
+            else:
+                log.debug("[recall_batch] %s -> 0 候选", req.map_key)
 
     for item in items:
         map_key = f"{item.ktype}:{item.keyword}"
