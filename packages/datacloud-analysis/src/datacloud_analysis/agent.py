@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from typing import Any
 
 from datacloud_analysis.i18n import get_supported_locales
@@ -138,7 +138,7 @@ def create_agent(
     skip_action_families: frozenset[str] = frozenset(),
     user_message: str | None = None,
     agent_id: str | None = None,
-    knowledge_enhancer: Callable[[str], Awaitable[Any]] | None = None,
+    knowledge_enhancer: Callable[[str], Any] | None = None,
 ) -> Any:
     """Create a deep agent for DataCloud, usable with langgraph dev and deep-agents-ui.
 
@@ -154,12 +154,12 @@ def create_agent(
             ``prompts_overwrite`` 的 ``user_message`` / ``task_prompt`` 等键推断。
         agent_id: 可选。写入核查日志；未传时尝试 ``prompts_overwrite`` 中的
             ``agent_id`` / ``agentId`` / ``resourceId``。
-        knowledge_enhancer: 可选。知识增强异步函数，签名为
-            ``async (query: str) -> ClarificationResult``。传入后，每次
-            ``intend_node`` 调用时会先调用此函数，将知识摘要写入
+        knowledge_enhancer: 可选。知识增强函数，签名为
+            ``(query: str) -> ClarificationResult``（同步或异步均可）。
+            传入后，每次 ``intend_node`` 调用时会先调用此函数，将知识摘要写入
             ``knowledge_snippets``、将完整结果写入 ``knowledge_payload``，
             供后续 execution_node 和 query_clarification_plugin 使用（§6.4）。
-            典型用法: ``knowledge_enhancer=analyze_query_clarification``。
+            典型用法：在调用方用 ``asyncio.to_thread`` 包装同步函数后传入。
     """
 
     # 语言和环境的日志预警可以保留，这里为了兼容现有 SDK 初始化

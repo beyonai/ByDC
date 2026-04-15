@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
@@ -51,7 +51,7 @@ def _message_line_preview(msg: Any, *, max_len: int = 100) -> str:
 async def intend_node(
     state: AgentState,
     config: RunnableConfig,
-    knowledge_enhancer: Callable[[str], Awaitable[Any]] | None = None,
+    knowledge_enhancer: Callable[[str], Any] | None = None,
 ) -> dict[str, Any]:
     gw_ctx = (config.get("configurable") or {}).get("gateway_context")
     messages = state.get("messages") or []

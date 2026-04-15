@@ -79,13 +79,21 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
 
     if needs_clarification:
         # 追问中断（§6.7 层 B 追问逻辑）
+        # interrupt value 格式须与 worker._stream_graph 的解析逻辑对齐：
+        #   interrupt_value["ask_user_payload"]["paradigmList"] → complex_ask_user
         from langgraph.types import interrupt  # type: ignore[import]
         form_str = payload.get("form", "")
         try:
             paradigm_list = json.loads(form_str).get("paradigmList", [])
         except Exception:
             paradigm_list = []
-        resume_value = interrupt({"paradigmList": paradigm_list})
+        resume_value = interrupt({
+            "prompt": "查询条件存在歧义，请确认查询维度",
+            "reason_code": "PARADIGM_CLARIFICATION",
+            "ask_user_payload": {
+                "paradigmList": paradigm_list,
+            },
+        })
         _apply_resume_to_params(ctx, tool_name, resume_value, payload)
         return {"action": "patch", "patch": {"tool_params": dict(ctx["tool_params"])}}
 
