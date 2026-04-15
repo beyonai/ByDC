@@ -143,6 +143,14 @@ async def execution_node(
         system_parts.append(custom_task)
     system_prompt = "\n\n".join(p for p in system_parts if p)
 
+    # 层 A：知识增强注入（knowledge_snippets 由 intend_node 写入，格式已经是可读文本）
+    knowledge_snippets = state.get("knowledge_snippets") or []
+    if knowledge_snippets:
+        knowledge_section = "\n\n## 数据查询知识增强\n" + "\n".join(
+            s if isinstance(s, str) else str(s) for s in knowledge_snippets
+        )
+        system_prompt = system_prompt + knowledge_section
+
     tools_list = _build_tools_list(default_tools)
     max_rounds = int(os.getenv("DATACLOUD_REACT_MAX_ROUNDS", "10"))
 

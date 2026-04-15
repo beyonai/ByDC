@@ -456,6 +456,7 @@ async def dispatch_tool(
         "workspace_dir": state.get("workspace_dir"),
         "knowledge_snippets": list(state.get("knowledge_snippets") or []),
         "term_context": list(state.get("confirmed_terms") or []),
+        "knowledge_payload": dict(state.get("knowledge_payload") or {}),
     }
 
     hook_manager = get_tool_hook_plugin_manager()
