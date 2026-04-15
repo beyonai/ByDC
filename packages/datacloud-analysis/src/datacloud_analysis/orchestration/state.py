@@ -80,7 +80,14 @@ class AgentState(MessagesState):
     command_result: dict | None        # intend 节点命令结果
     react_rounds: int | None           # 实际执行轮数
     react_final: dict | None           # 停止时的结构化结果
-    react_checkpoint: dict | None      # React loop checkpoint for interrupt/resume
+    react_checkpoint: dict | None      # React loop checkpoint for interrupt/resume（delegate 工具路径）
+
+    # --- react_loop interrupt/resume State 持久化（方案 B）---
+    # interrupt 时由 react_loop 写入，LangGraph checkpoint 自动持久化；resume 时读出并清除。
+    react_messages: list[dict[str, Any]] | None       # 中断时的消息历史（序列化为 dict 列表）
+    react_pending_tool_calls: list[dict[str, Any]] | None  # 中断时未执行的 tool calls
+    react_round_idx: int | None                       # 中断时的 round 索引
+    react_last_query_data: dict[str, Any] | None      # 中断时缓存的 query data block
 
 
 StateDict = MutableMapping[str, Any]

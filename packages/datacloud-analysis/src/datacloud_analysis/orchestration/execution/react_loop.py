@@ -186,18 +186,69 @@ _TRIM_KEEP_ROUNDS = 6      # 滑动窗口：保留最近 N 轮 AI+Tool 消息对
 class _LlmUnavailableError(RuntimeError):
     """主模型与备用模型全部不可用时抛出。携带已向用户推送的引导文案。"""
 
-# ---- 进程内 interrupt resume 上下文缓存 ----
-# LangGraph checkpoint 是 node 级别，node 内部对 state 的修改在 interrupt 时不被保存。
-# 因此用进程内 dict 保存 react_loop 中断时的 messages 上下文，
-# key = session_id，resume 时从这里恢复而非从 state 读取。
-# 只在同一进程的 resume 流程中使用，消费后立即删除。
-_interrupt_resume_cache: dict[str, dict[str, Any]] = {}
-
 # resume replay 信号：当 react_loop 从缓存恢复并重新执行被中断的 tool 时设为 True。
 # tool 内部通过此信号跳过 llm_enhance 等昂贵操作。
 is_resume_replay: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "is_resume_replay", default=False,
 )
+
+
+# ---- messages 序列化 / 反序列化（用于写入 LangGraph State）----
+
+def _serialize_messages(messages: list) -> list[dict[str, Any]]:
+    """将 LangChain Message 列表序列化为可 JSON 持久化的 dict 列表。"""
+    result: list[dict[str, Any]] = []
+    for msg in messages:
+        if isinstance(msg, SystemMessage):
+            result.append({"type": "system", "content": str(msg.content or "")})
+        elif isinstance(msg, HumanMessage):
+            result.append({"type": "human", "content": str(msg.content or "")})
+        elif isinstance(msg, AIMessage):
+            result.append({
+                "type": "ai",
+                "content": str(msg.content or ""),
+                "tool_calls": list(getattr(msg, "tool_calls", []) or []),
+            })
+        elif isinstance(msg, ToolMessage):
+            result.append({
+                "type": "tool",
+                "content": str(msg.content or ""),
+                "tool_call_id": str(getattr(msg, "tool_call_id", "") or ""),
+            })
+        else:
+            # 未知类型：尽力序列化
+            result.append({
+                "type": "unknown",
+                "content": str(getattr(msg, "content", repr(msg))),
+            })
+    return result
+
+
+def _deserialize_messages(data: list[dict[str, Any]]) -> list:
+    """将 dict 列表反序列化为 LangChain Message 对象列表。"""
+    result = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        msg_type = item.get("type", "")
+        content = item.get("content", "")
+        if msg_type == "system":
+            result.append(SystemMessage(content=content))
+        elif msg_type == "human":
+            result.append(HumanMessage(content=content))
+        elif msg_type == "ai":
+            result.append(AIMessage(
+                content=content,
+                tool_calls=list(item.get("tool_calls") or []),
+            ))
+        elif msg_type == "tool":
+            result.append(ToolMessage(
+                content=content,
+                tool_call_id=str(item.get("tool_call_id") or ""),
+            ))
+        else:
+            result.append(HumanMessage(content=content))
+    return result
 
 @tool("finish_react")
 async def finish_react(
@@ -479,13 +530,30 @@ async def run_react_loop(
         # 供 result_type=query_result 时原样透传给 formatter，避免 LLM 二次序列化丢失结构
         _last_query_data: dict[str, Any] | None = None
 
-        # ---- resume replay: 恢复上次中断前的 messages 上下文 ----
-        _cache_key = str(getattr(gateway_context, "session_id", "") or "") if gateway_context else ""
-        _resume_ctx: dict[str, Any] | None = _interrupt_resume_cache.pop(_cache_key, None) if _cache_key else None
-        logger.info(
-            "[react_loop] resume check: session=%s cache_key=%r cache_hit=%s cache_keys=%s",
-            _cache_key, _cache_key, _resume_ctx is not None, list(_interrupt_resume_cache.keys()),
-        )
+        # ---- resume replay: 方案 B — 从 LangGraph State 恢复中断上下文 ----
+        # resume 检测：从 LangGraph State 读取中断上下文（方案 B，跨实例/重启可靠）
+        _resume_ctx: dict[str, Any] | None = None
+        _state_msgs = state.get("react_messages")
+        if _state_msgs is not None:
+            _resume_ctx = {
+                "messages": _deserialize_messages(_state_msgs),
+                "pending_tool_calls": list(state.get("react_pending_tool_calls") or []),
+                "round_idx": int(state.get("react_round_idx") or 0),
+                "last_query_data": state.get("react_last_query_data"),
+            }
+            # 消费后立即清除，避免下次问答误用
+            state["react_messages"] = None
+            state["react_pending_tool_calls"] = None
+            state["react_round_idx"] = None
+            state["react_last_query_data"] = None
+            logger.info(
+                "[react_loop] resume check: hit state react_messages messages=%d pending=%d round=%d",
+                len(_state_msgs),
+                len(_resume_ctx["pending_tool_calls"]),
+                _resume_ctx["round_idx"],
+            )
+        else:
+            logger.info("[react_loop] resume check: no react_messages in state, fresh start")
         if _resume_ctx is not None:
             messages = list(_resume_ctx["messages"])
             _last_query_data = _resume_ctx.get("last_query_data")
@@ -663,19 +731,17 @@ async def run_react_loop(
             try:
                 tool_id, result = await dispatch_tool(tc, tools_map, state, gateway_context=gateway_context)
             except GraphBubbleUp:
-                # 保存当前 messages + 剩余未执行的 tool_calls 到进程内缓存
+                # 方案 B：将中断上下文写入 LangGraph State（由 checkpoint 跨实例/重启持久化）
+                _pending = list(ai_msg.tool_calls[tc_idx:])
+                state["react_messages"] = _serialize_messages(messages)
+                state["react_pending_tool_calls"] = _pending
+                state["react_round_idx"] = round_idx
+                state["react_last_query_data"] = _last_query_data
                 _s_key = str(getattr(gateway_context, "session_id", "") or "") if gateway_context else ""
-                if _s_key:
-                    _interrupt_resume_cache[_s_key] = {
-                        "messages": list(messages),
-                        "pending_tool_calls": list(ai_msg.tool_calls[tc_idx:]),
-                        "round_idx": round_idx,
-                        "last_query_data": _last_query_data,
-                    }
                 logger.info(
-                    "[react_loop] interrupt: saving to cache session=%s messages=%d "
+                    "[react_loop] interrupt: saving to state session=%s messages=%d "
                     "pending=%d round=%d msg_types=%s",
-                    _s_key, len(messages), len(ai_msg.tool_calls) - tc_idx, round_idx + 1,
+                    _s_key, len(messages), len(_pending), round_idx + 1,
                     [type(m).__name__ for m in messages],
                 )
                 raise

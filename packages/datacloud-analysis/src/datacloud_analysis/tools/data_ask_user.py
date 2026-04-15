@@ -23,7 +23,7 @@ class DataAskUserContext(AgentContext):
             parent_message_id=parent_message_id,
             data=_build_sse_layout(
                 content=json.dumps(
-                    {"paradigmList": event.metadata.get("paradigmList",[])}, 
+                    {"paradigmList": event.metadata.get("paradigmList",[])},
                     ensure_ascii=False),
                 role="assistant",
                 content_type='3012',
