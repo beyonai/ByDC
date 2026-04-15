@@ -21,6 +21,7 @@ dependencies = [
     "langchain>=0.3.0",
     "langchain-core>=0.3.0",
     "langchain-openai>=1.1.10",
+    "langchain-anthropic>=0.3.0",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
     "psycopg[binary,pool]>=3.1",

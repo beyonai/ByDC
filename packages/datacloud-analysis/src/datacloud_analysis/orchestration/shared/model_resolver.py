@@ -36,6 +36,11 @@ def resolve_reasoning_model_spec(raw_model: str | None = None) -> ReasoningModel
     2. Accept provider-prefixed value like ``openai:Qwen/Qwen3-235B-A22B``.
     3. Strip known provider prefix and return provider separately.
     4. Keep unknown prefixes as-is (treat whole value as model).
+
+    注意：推荐使用 ``DATACLOUD_LLM_MODEL_PROVIDER`` 环境变量显式指定协议
+    （``openai`` 或 ``anthropic``），不要在 ``DATACLOUD_LLM_MODEL`` 中使用
+    ``provider:model`` 前缀写法，两者同时存在时以 ``DATACLOUD_LLM_MODEL_PROVIDER``
+    为准。
     """
     raw = (raw_model if raw_model is not None else os.getenv("DATACLOUD_LLM_MODEL", "")).strip()
     if not raw:
@@ -70,3 +75,12 @@ def resolve_reasoning_api_key() -> str | None:
 def resolve_reasoning_base_url() -> str | None:
     """Resolve base URL fallback chain for reasoning model requests."""
     return os.getenv("DATACLOUD_LLM_API_BASE")
+
+
+def resolve_reasoning_provider() -> str:
+    """Resolve the LLM provider from ``DATACLOUD_LLM_MODEL_PROVIDER``.
+
+    返回值为 ``openai``（默认）或 ``anthropic``。
+    请使用此变量指定协议，不要在 ``DATACLOUD_LLM_MODEL`` 中使用前缀写法。
+    """
+    return os.getenv("DATACLOUD_LLM_MODEL_PROVIDER", "openai").strip().lower()

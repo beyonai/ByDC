@@ -572,7 +572,17 @@ async def dispatch_tool(
                     )
                 with delegate_parent_scope:
                     await _run_tool()
-                # 第三层：返回内容 / 错误摘要
+                # 工具入参（before_hook 处理后的最终参数，在工具执行后才有完整值）
+                if ctx.get("tool_params"):
+                    try:
+                        await _emit_tool_detail(
+                            gateway_context,
+                            "工具入参",
+                            ctx.get("tool_params"),
+                        )
+                    except Exception as _emit_exc:
+                        logger.debug("emit 工具入参 failed: %s", _emit_exc)
+                # 工具返回内容 / 错误摘要
                 if ctx.get("tool_error"):
                     err_msg = ctx["tool_error"].get("message", "")
                     await _emit_tool_detail(

@@ -319,23 +319,50 @@ def _conversation_messages_for_llm(state: Any) -> list[HumanMessage | AIMessage]
     return out
 
 def _build_llm(state: Any) -> Any:
-    """从统一的 DATACLOUD_LLM_* 环境变量构建 LLM。"""
+    """从统一的 DATACLOUD_LLM_* 环境变量构建 LLM。
+
+    支持的环境变量：
+      DATACLOUD_LLM_MODEL_PROVIDER  协议类型：openai（默认）或 anthropic
+                                    请使用此变量指定协议，不要在 DATACLOUD_LLM_MODEL
+                                    中使用 "provider:model" 前缀写法。
+      DATACLOUD_LLM_MODEL           模型名称（纯名称，不含 provider 前缀）
+      DATACLOUD_LLM_API_KEY         API Key
+      DATACLOUD_LLM_API_BASE        API Base URL；anthropic 官方 API 可不填
+      DATACLOUD_LLM_TEMPERATURE     温度，默认 0.0
+      DATACLOUD_LLM_MODEL_KWARGS    JSON 字符串，透传额外参数，如 {"max_tokens": 8192}
+    """
+    import json as _json
     _ = state
-    api_base = os.getenv("DATACLOUD_LLM_API_BASE", "")
-    api_key = os.getenv("DATACLOUD_LLM_API_KEY", "")
-    model = os.getenv("DATACLOUD_LLM_MODEL", "")
-    raw_temperature = os.getenv("DATACLOUD_LLM_TEMPERATURE", "0.0").strip()
-    temperature = float(raw_temperature) if raw_temperature else 0.0
-    if api_base and api_key and model:
-        return init_chat_model(
-            model=model,
-            model_provider="openai",
-            api_key=api_key,
-            base_url=api_base,
-            temperature=temperature,
-        )
-    # 兜底
-    return init_chat_model(model="gpt-4o", model_provider="openai", temperature=0.0)
+    provider    = os.getenv("DATACLOUD_LLM_MODEL_PROVIDER", "openai").strip().lower()
+    model       = os.getenv("DATACLOUD_LLM_MODEL", "").strip()
+    api_key     = os.getenv("DATACLOUD_LLM_API_KEY", "").strip()
+    api_base    = os.getenv("DATACLOUD_LLM_API_BASE", "").strip()
+    raw_temp    = os.getenv("DATACLOUD_LLM_TEMPERATURE", "0.0").strip()
+    temperature = float(raw_temp) if raw_temp else 0.0
+
+    raw_kwargs = os.getenv("DATACLOUD_LLM_MODEL_KWARGS", "").strip()
+    extra_kwargs: dict = {}
+    if raw_kwargs:
+        try:
+            extra_kwargs = _json.loads(raw_kwargs)
+        except Exception:
+            logger.warning("DATACLOUD_LLM_MODEL_KWARGS 解析失败，已忽略: %s", raw_kwargs)
+
+    if not model:
+        logger.warning("DATACLOUD_LLM_MODEL 未配置，回退至 gpt-4o")
+        return init_chat_model(model="gpt-4o", model_provider="openai", temperature=0.0)
+
+    kwargs: dict = {"model": model, "temperature": temperature, **extra_kwargs}
+    if api_key:
+        kwargs["api_key"] = api_key
+    if api_base:
+        kwargs["base_url"] = api_base
+
+    if provider == "anthropic":
+        return init_chat_model(model_provider="anthropic", **kwargs)
+    else:
+        # openai 兼容协议（默认）
+        return init_chat_model(model_provider="openai", **kwargs)
 
 def _compress_tool_result(result: Any, tool_name: str) -> str:
     """将工具返回值压缩为 ToolMessage 内容，避免大数据撑爆上下文。
