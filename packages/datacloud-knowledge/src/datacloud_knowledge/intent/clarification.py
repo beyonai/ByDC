@@ -17,9 +17,11 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from .llm_confirm import ConfirmedQuery, llm_confirm
+from .llm_utils import EventEmitter
 from .natquery import expand_query, natquery_to_five_stage
 from .paradigm_builder import build_paradigm_resolution_state, five_stage_keys_from_raw
 from .types import ClarificationResult
@@ -50,22 +52,26 @@ def _confirmed_query_to_paradigm_list(cq: ConfirmedQuery) -> list[dict[str, Any]
         if original in clarify_keywords:
             continue  # 会在 clarify_items 中展示，跳过
         kid += 1
-        select_result.append({
-            "keyword": original,
-            "recall": [s.expr] if s.expr != original else [],
-            "choiceKeyword": s.expr,
-            "kid": kid,
-            "ktype": "select",
-        })
+        select_result.append(
+            {
+                "keyword": original,
+                "recall": [s.expr] if s.expr != original else [],
+                "choiceKeyword": s.expr,
+                "kid": kid,
+                "ktype": "select",
+            }
+        )
     # clarify 项 — 展示候选列表供用户选择
     for ci in cq.clarify_items:
         kid += 1
-        select_result.append({
-            "keyword": ci.keyword,
-            "recall": ci.candidates,
-            "kid": kid,
-            "ktype": "select",
-        })
+        select_result.append(
+            {
+                "keyword": ci.keyword,
+                "recall": ci.candidates,
+                "kid": kid,
+                "ktype": "select",
+            }
+        )
 
     # paradigmId=2: 分组条件 (GROUP BY)
     group_result = [
@@ -80,14 +86,16 @@ def _confirmed_query_to_paradigm_list(cq: ConfirmedQuery) -> list[dict[str, Any]
             display_value = ", ".join(str(v) for v in w.value)
         else:
             display_value = str(w.value)
-        filter_result.append({
-            "type": "predicate",
-            "field": w.field,
-            "fieldRecall": [],
-            "comparison": w.op if w.op != "=" else "eq",
-            "value": display_value,
-            "valueRecall": [],
-        })
+        filter_result.append(
+            {
+                "type": "predicate",
+                "field": w.field,
+                "fieldRecall": [],
+                "comparison": w.op if w.op != "=" else "eq",
+                "value": display_value,
+                "valueRecall": [],
+            }
+        )
 
     # paradigmId=4: 排序目标
     order_result = [
@@ -107,13 +115,17 @@ def _confirmed_query_to_paradigm_list(cq: ConfirmedQuery) -> list[dict[str, Any]
     ]
 
 
-def analyze_query_clarification(query: str) -> ClarificationResult:
+def analyze_query_clarification(
+    query: str,
+    on_event: Callable[[Any], None] | None = None,
+) -> ClarificationResult:
     """分析查询是否需要用户澄清。
 
     完整流程：NL → LLM展开 → 召回 → LLM确认 → ClarificationResult。
 
     Args:
         query: 用户原始自然语言查询。
+        on_event: 可选回调，接收 StreamEvent 实例（标题/工具名/入参/思考/返回/错误）。
 
     Returns:
         ClarificationResult:
@@ -121,73 +133,102 @@ def analyze_query_clarification(query: str) -> ClarificationResult:
           - needs_clarification=False + knowledge: LLM 确认完毕的 paradigmList
           - LLM 失败时透传 ClarificationResult(query=query)
     """
-    # Step 1: LLM 展开 + 结构化
-    natquery = expand_query(query)
-    if natquery is None:
-        logger.warning("[clarification] LLM 展开失败，返回原始查询")
-        return ClarificationResult(query=query)
+    emit = EventEmitter(on_event)
+
+    # ── Step 1: LLM 展开 + 结构化 ──
+    with emit.step("问题理解", "expand_query", {"query": query}):
+        natquery = expand_query(query, on_event=on_event)
+        if natquery is None:
+            logger.warning("[clarification] LLM 展开失败，返回原始查询")
+            emit.error("LLM 展开失败")
+            return ClarificationResult(query=query)
+        emit.result(natquery.model_dump())
 
     expanded_query = natquery.query
     logger.info("[clarification] Step1 展开完成: %s", expanded_query)
 
-    # Step 2: NatQuery → 五段式 → 召回
+    # ── Step 2: NatQuery → 五段式 → 召回 ──
     five_stage_raw = natquery_to_five_stage(natquery)
     structured_query = five_stage_keys_from_raw(five_stage_raw)
 
-    try:
-        state = build_paradigm_resolution_state(
-            original_question=query,
-            structured_query=structured_query,
-        )
-    except Exception:
-        logger.exception("[clarification] Step2 召回失败，返回展开结果")
-        return ClarificationResult(query=expanded_query)
+    with emit.step("知识召回", "knowledge_recall", structured_query):
+        try:
+            state = build_paradigm_resolution_state(
+                original_question=query,
+                structured_query=structured_query,
+            )
+        except Exception:
+            logger.exception("[clarification] Step2 召回失败，返回展开结果")
+            emit.error("知识召回失败")
+            return ClarificationResult(query=expanded_query)
+
+        recall_summary = {
+            "items": len(state.items),
+            "resolved": sum(1 for it in state.items if it.is_resolved),
+        }
+        emit.result(recall_summary)
 
     logger.info(
         "[clarification] Step2 召回完成: items=%d, resolved=%d",
-        len(state.items),
-        sum(1 for it in state.items if it.is_resolved),
+        recall_summary["items"],
+        recall_summary["resolved"],
     )
 
-    # Step 3: LLM 确认 — 基于召回结果生成真实 schema 查询
-    confirmed = llm_confirm(
-        original_question=query,
-        expanded_query=expanded_query,
-        state=state,
-    )
-
-    if confirmed is None:
-        # LLM 确认失败 → fallback 到纯召回结果
-        logger.warning("[clarification] Step3 LLM确认失败，fallback 到召回结果")
-        paradigm_list = state.build_paradigm_list()
-        unresolved = state.unresolved_items()
-        if unresolved:
+    # ── Step 3: LLM 确认 ──
+    with emit.step(
+        "查询确认",
+        "llm_confirm",
+        {
+            "original_question": query,
+            "expanded_query": expanded_query,
+        },
+    ):
+        confirmed = llm_confirm(
+            original_question=query,
+            expanded_query=expanded_query,
+            state=state,
+            on_event=on_event,
+        )
+        if confirmed is None:
+            logger.warning("[clarification] Step3 LLM确认失败，fallback 到召回结果")
+            emit.error("LLM 确认失败，使用召回结果兜底")
+            paradigm_list = state.build_paradigm_list()
+            unresolved = state.unresolved_items()
+            if unresolved:
+                return ClarificationResult(
+                    query=expanded_query,
+                    needs_clarification=True,
+                    form=_serialize_payload({"paradigmList": paradigm_list}),
+                )
             return ClarificationResult(
                 query=expanded_query,
-                needs_clarification=True,
-                form=_serialize_payload({"paradigmList": paradigm_list}),
+                knowledge=_serialize_payload({"paradigmList": paradigm_list}),
             )
-        return ClarificationResult(
-            query=expanded_query,
-            knowledge=_serialize_payload({"paradigmList": paradigm_list}),
+
+        emit.result(
+            {
+                "select": [s.expr for s in confirmed.select],
+                "where": [
+                    {"field": w.field, "op": w.op, "value": w.value} for w in confirmed.where
+                ],
+                "group_by": confirmed.group_by,
+                "needs_clarification": confirmed.needs_clarification,
+            }
         )
 
-    # Step 4: 构建 paradigmList
-    paradigm_list = _confirmed_query_to_paradigm_list(confirmed)
+    # ── Step 4: 构建 paradigmList ──
+    with emit.step("结果生成", "build_paradigm_list"):
+        paradigm_list = _confirmed_query_to_paradigm_list(confirmed)
+        payload = _serialize_payload({"paradigmList": paradigm_list})
+        emit.result(payload)
 
     if confirmed.needs_clarification:
-        logger.info(
-            "[clarification] Step4 需要澄清: %d 项",
-            len(confirmed.clarify_items),
-        )
+        logger.info("[clarification] Step4 需要澄清: %d 项", len(confirmed.clarify_items))
         return ClarificationResult(
             query=expanded_query,
             needs_clarification=True,
-            form=_serialize_payload({"paradigmList": paradigm_list}),
+            form=payload,
         )
 
     logger.info("[clarification] Step4 LLM确认完毕，无需澄清")
-    return ClarificationResult(
-        query=expanded_query,
-        knowledge=_serialize_payload({"paradigmList": paradigm_list}),
-    )
+    return ClarificationResult(query=expanded_query, knowledge=payload)

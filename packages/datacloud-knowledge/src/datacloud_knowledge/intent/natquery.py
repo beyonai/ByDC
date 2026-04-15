@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections.abc import Callable
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -191,15 +192,11 @@ def natquery_to_five_stage(nq: NatQuery) -> dict[str, Any]:
     for w in nq.where:
         op_prefix = _OP_MAP.get(str(w.op), str(w.op))
         if isinstance(w.value, list):
-            filter_condition.setdefault(w.field, []).extend(
-                str(v) for v in w.value
-            )
+            filter_condition.setdefault(w.field, []).extend(str(v) for v in w.value)
         elif op_prefix == "eq" or w.op == "=":
             filter_condition.setdefault(w.field, []).append(str(w.value))
         else:
-            filter_condition.setdefault(w.field, []).append(
-                f"{w.op}{w.value}"
-            )
+            filter_condition.setdefault(w.field, []).append(f"{w.op}{w.value}")
 
     return {
         "query": nq.query,
@@ -214,25 +211,33 @@ def natquery_to_five_stage(nq: NatQuery) -> dict[str, Any]:
 # ── 公共 API ─────────────────────────────────────────────────────────
 
 
-def expand_query(query: str) -> NatQuery | None:
+def expand_query(
+    query: str,
+    on_event: Callable[[Any], None] | None = None,
+) -> NatQuery | None:
     """调用 LLM 将自然语言查询展开为 NatQuery 结构。
 
     Args:
         query: 用户原始自然语言查询。
+        on_event: 可选回调，接收 StreamEvent 实例。
 
     Returns:
         NatQuery 实例，LLM 调用失败时返回 None。
     """
-    from .llm_utils import build_llm, extract_json_from_text  # noqa: PLC0415
+    from .llm_utils import build_llm, extract_json_from_text, stream_invoke_with_thinking  # noqa: PLC0415
 
     try:
         llm = build_llm()
         llm_with_tool = llm.bind_tools([NatQuery], tool_choice="NatQuery")
-        response = llm_with_tool.invoke([
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": query},
-        ])
-        if response.tool_calls:
+        response = stream_invoke_with_thinking(
+            llm_with_tool,
+            [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": query},
+            ],
+            on_event=on_event,
+        )
+        if response and response.tool_calls:
             args = response.tool_calls[0]["args"]
             logger.info(
                 "[natquery] LLM expand ok: %s",

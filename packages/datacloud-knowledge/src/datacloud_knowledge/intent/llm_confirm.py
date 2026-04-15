@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections.abc import Callable
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -59,9 +60,7 @@ class ConfirmedQuery(BaseModel):
     - 多个候选无法区分 → 放入 clarify_items
     """
 
-    select: list[ConfirmedSelectExpr] = Field(
-        description="使用真实术语名的 SELECT 列表"
-    )
+    select: list[ConfirmedSelectExpr] = Field(description="使用真实术语名的 SELECT 列表")
     where: list[ConfirmedWhereClause] = Field(
         default_factory=list,
         description="WHERE 条件（含重构后新增的维度过滤）",
@@ -163,10 +162,7 @@ def _format_recall_context(
                     if enum_values:
                         enum_part = f"（{dim}全部值: {enum_values}）"
                         shown_dims.add(dim)
-                hint_lines.append(
-                    f"  {keyword}: \"{span}\" → {value} (维度={dim})"
-                    f"{enum_part}"
-                )
+                hint_lines.append(f'  {keyword}: "{span}" → {value} (维度={dim}){enum_part}')
         if hint_lines:
             lines.append("")
             lines.append("== 维度值线索（从短语中识别，辅助理解） ==")
@@ -211,6 +207,7 @@ def llm_confirm(
     original_question: str,
     expanded_query: str,
     state: Any,
+    on_event: Callable[[Any], None] | None = None,
 ) -> ConfirmedQuery | None:
     """基于召回结果，调 LLM 生成真实 schema 的确认查询。
 
@@ -218,6 +215,7 @@ def llm_confirm(
         original_question: 用户原始查询。
         expanded_query: NatQuery 展开后的查询文本。
         state: ParadigmResolutionState（含 items + candidates）。
+        on_event: 可选回调，接收 StreamEvent 实例。
 
     Returns:
         ConfirmedQuery 实例，LLM 失败时返回 None。
@@ -231,23 +229,30 @@ def llm_confirm(
         return None
 
     user_prompt = _build_confirm_user_prompt(
-        original_question, expanded_query, recall_context,
+        original_question,
+        expanded_query,
+        recall_context,
     )
     logger.debug("[llm_confirm] 知识上下文:\n%s", recall_context)
     logger.debug("[llm_confirm] user_prompt:\n%s", user_prompt)
 
     try:
-        from .llm_utils import build_llm, extract_json_from_text  # noqa: PLC0415
+        from .llm_utils import build_llm, extract_json_from_text, stream_invoke_with_thinking  # noqa: PLC0415
 
         llm = build_llm()
         llm_with_tool = llm.bind_tools(
-            [ConfirmedQuery], tool_choice="ConfirmedQuery",
+            [ConfirmedQuery],
+            tool_choice="ConfirmedQuery",
         )
-        response = llm_with_tool.invoke([
-            {"role": "system", "content": CONFIRM_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ])
-        if response.tool_calls:
+        response = stream_invoke_with_thinking(
+            llm_with_tool,
+            [
+                {"role": "system", "content": CONFIRM_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            on_event=on_event,
+        )
+        if response and response.tool_calls:
             args = response.tool_calls[0]["args"]
             logger.info(
                 "[llm_confirm] LLM 确认完成: %s",
