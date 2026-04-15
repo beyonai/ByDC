@@ -54,6 +54,7 @@ from .types import (
     ShortestPathTreeResult,
     SlotResult,
     SortSemantic,
+    StreamEvent,
     TimeExpr,
 )
 
@@ -88,6 +89,7 @@ __all__ = [
     "ShortestPathTreeResult",
     "SlotResult",
     "SortSemantic",
+    "StreamEvent",
     "TimeExpr",
     # Cache
     "UserNameCache",
