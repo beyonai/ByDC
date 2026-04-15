@@ -235,7 +235,7 @@ class OntologyToolLoader:
         from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
 
         loader = OntologyLoader()
-        loader.load_from_owl_directory(scene_path)
+        loader.load_from_owl_directory(owl_path)
         inject_virtual_actions(loader)   # 必须在此之前调用
 
         tools = OntologyToolLoader(

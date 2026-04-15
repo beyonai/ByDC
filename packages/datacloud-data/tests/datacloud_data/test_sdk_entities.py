@@ -1,4 +1,6 @@
+import asyncio
 import pytest
+from unittest.mock import patch
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.exceptions import ActionNotFoundError
 
@@ -136,3 +138,121 @@ def test_get_description_shows_script_action() -> None:
     desc = obj.get_description()
     assert "calc_score" in desc
     assert "脚本" in desc or "Script" in desc
+
+
+def test_action_execute_supports_get_query_and_path_params() -> None:
+    loader = OntologyLoader()
+    loader.load_from_content(
+        {
+            "functions": [
+                {
+                    "function_code": "fn_get_user_detail",
+                    "function_type": "API",
+                    "api_schema": {
+                        "openapi": "3.0.3",
+                        "info": {"title": "查询人员详情", "version": "1.0.0"},
+                        "servers": [{"url": "http://mock:8080"}],
+                        "paths": {
+                            "/api/v1/users/{userId}": {
+                                "get": {
+                                    "parameters": [
+                                        {
+                                            "name": "userId",
+                                            "in": "path",
+                                            "required": True,
+                                            "schema": {"type": "string"},
+                                        },
+                                        {
+                                            "name": "keyword",
+                                            "in": "query",
+                                            "required": False,
+                                            "schema": {"type": "string"},
+                                        },
+                                    ],
+                                    "responses": {"200": {"description": "查询结果"}},
+                                }
+                            }
+                        },
+                    },
+                }
+            ],
+            "objects": [
+                {
+                    "object_code": "po_users",
+                    "object_name": "人员",
+                    "source_type": "API",
+                    "fields": [],
+                    "actions": [
+                        {
+                            "action_code": "query_user_detail",
+                            "action_name": "查询人员详情",
+                            "description": "按用户ID查询人员详情",
+                            "action_type": "query",
+                            "function_refs": ["fn_get_user_detail"],
+                            "params": [
+                                {
+                                    "param_code": "user_id",
+                                    "param_name": "用户ID",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "required": True,
+                                    "mapping_path": "$.path.userId",
+                                },
+                                {
+                                    "param_code": "keyword",
+                                    "param_name": "关键字",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "mapping_path": "$.query.keyword",
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "relations": [],
+        }
+    )
+    obj = loader.get_object("po_users")
+    captured: dict[str, object] = {}
+
+    class _MockResponse:
+        status_code = 200
+        text = "ok"
+
+        @staticmethod
+        def json() -> list[dict[str, str]]:
+            return [{"userId": "U001"}]
+
+    class _MockAsyncClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+
+        async def __aenter__(self) -> "_MockAsyncClient":
+            return self
+
+        async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
+            del exc_type, exc, tb
+
+        async def request(self, method: str, url: str, **kwargs: object) -> _MockResponse:
+            captured["method"] = method
+            captured["url"] = url
+            captured["kwargs"] = kwargs
+            return _MockResponse()
+
+    async def _run() -> dict[str, object]:
+        with patch("httpx.AsyncClient", _MockAsyncClient):
+            return await obj.invoke_action(
+                "query_user_detail",
+                {"user_id": "U001", "keyword": "alice"},
+            )
+
+    result = asyncio.run(_run())
+
+    assert captured["method"] == "GET"
+    assert captured["url"] == "http://mock:8080/api/v1/users/U001"
+    assert captured["kwargs"] == {
+        "headers": {"Content-Type": "application/json"},
+        "params": {"keyword": "alice"},
+    }
+    assert result["records"] == [{"userId": "U001"}]
