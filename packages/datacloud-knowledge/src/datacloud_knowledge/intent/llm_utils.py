@@ -46,11 +46,11 @@ def extract_json_from_text(text: str) -> dict[str, Any] | None:
 def build_llm() -> Any:
     """构建 LLM 实例（懒导入 langchain，不增加硬依赖）。
 
-    按优先级读取环境变量：DATACLOUD_LLM_QUICK → DATACLOUD_LLM_REASONING → OPENAI 兜底。
+    按优先级读取环境变量：DATACLOUD_LLM → OPENAI 兜底。
     """
     from langchain.chat_models import init_chat_model  # noqa: PLC0415
 
-    for env_prefix in ("DATACLOUD_LLM_QUICK", "DATACLOUD_LLM_REASONING"):
+    for env_prefix in ("DATACLOUD_LLM", "OPENAI"):
         api_base = os.getenv(f"{env_prefix}_API_BASE", "")
         api_key = os.getenv(f"{env_prefix}_API_KEY", "")
         model = os.getenv(f"{env_prefix}_MODEL", "")
