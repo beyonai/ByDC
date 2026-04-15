@@ -4,6 +4,7 @@ New 3-node architecture: intend → execution → respond
 """
 from __future__ import annotations
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
@@ -23,12 +24,13 @@ def _route_after_intend(state: AgentState) -> str:
 def build_analysis_graph(
     prompts_overwrite: dict[str, Any] | None = None,
     tools: dict[str, Any] | None = None,
+    knowledge_enhancer: Callable[[str], Awaitable[Any]] | None = None,
 ) -> StateGraph:
     """Return an uncompiled StateGraph for the DataCloud 3-node pipeline."""
     builder = StateGraph(AgentState)
 
     async def _intend(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
-        return await intend_node(state, config)
+        return await intend_node(state, config, knowledge_enhancer=knowledge_enhancer)
 
     async def _execution(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         return await execution_node(state, config, default_tools=tools, prompts_overwrite=prompts_overwrite)
@@ -54,9 +56,10 @@ def build_analysis_graph(
 
     tool_keys = sorted((tools or {}).keys())
     logger.info(
-        "build_analysis_graph: 3-node pipeline wired — tools count=%d keys=%s",
+        "build_analysis_graph: 3-node pipeline wired — tools count=%d keys=%s knowledge_enhancer=%s",
         len(tool_keys),
         tool_keys,
+        knowledge_enhancer is not None,
     )
 
     return builder

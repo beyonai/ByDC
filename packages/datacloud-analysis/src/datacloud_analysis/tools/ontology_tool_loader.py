@@ -25,7 +25,12 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _schema_type_to_python(field_schema: dict[str, Any]) -> Any:
-    """将 JSON Schema 字段类型映射到 Python 类型。复杂嵌套类型使用 dict / list。"""
+    """将 JSON Schema 字段类型映射到 Python 类型。
+
+    array 类型会检查 items 子 schema：
+    - items.type == "string" → list[str]（保留 items 信息，防止 LLM 填 dict/object）
+    - 其他 array → list
+    """
     t = field_schema.get("type")
     if t == "string":
         return str
@@ -36,6 +41,9 @@ def _schema_type_to_python(field_schema: dict[str, Any]) -> Any:
     if t == "boolean":
         return bool
     if t == "array":
+        items = field_schema.get("items")
+        if isinstance(items, dict) and items.get("type") == "string":
+            return list[str]  # Pydantic 会生成 items:{type:string}，LLM 知道元素是字符串
         return list
     if t == "object":
         return dict
@@ -64,13 +72,26 @@ def _make_coerce_base(coerce_fields: frozenset[str]) -> type:
     return _CoerceBase
 
 
+def _get_array_label(py_type: Any) -> str:
+    """返回 array 类型的描述标签（用于拼接到 description 里告知 LLM 元素格式）。"""
+    import typing  # noqa: PLC0415
+    origin = getattr(py_type, "__origin__", None)
+    if origin is list:
+        args = getattr(py_type, "__args__", ())
+        if args and args[0] is str:
+            return "string 数组（每个元素为字段名字符串，如 [\"字段A\", \"字段B\"]）"
+        return "array"
+    return "array"
+
+
 def _json_schema_to_pydantic(schema: dict[str, Any], model_name: str) -> type:
     """
     将顶层为 object 的 JSON Schema 转换为简化的 Pydantic BaseModel。
 
     规则：
     - 顶层 properties → 对应 Python 类型字段
-    - 嵌套 object / array → dict / list（携带 description）
+    - array[string] → list[str]（携带 items 信息，LLM 看到 items:{type:string}）
+    - 其他 array / object → list / dict（携带 description）
     - required 字段 → 必填（无默认值）；其余字段 → Optional，默认 None
     - schema 为空或非 object 类型 → 生成空 BaseModel（接受任意调用）
     - 可选的 dict/list 字段：描述中注明期望类型，并在 pre-validator 中将 "" 转换为
@@ -87,18 +108,25 @@ def _json_schema_to_pydantic(schema: dict[str, Any], model_name: str) -> type:
     # 记录需要空字符串转 None 的可选 dict/list 字段
     coerce_fields: set[str] = set()
 
-    _TYPE_LABEL: dict[type, str] = {dict: "object", list: "array"}
-
     for field_name, field_schema in properties.items():
         py_type = _schema_type_to_python(field_schema)
         description = field_schema.get("description", field_name)
+
+        # 判断是否为 list/dict 类族（含泛型 list[str] 等）
+        origin = getattr(py_type, "__origin__", None)
+        is_list_like = py_type is list or origin is list
+        is_dict_like = py_type is dict or origin is dict
 
         if field_name in required_fields:
             pydantic_fields[field_name] = (py_type, Field(..., description=description))
         else:
             # 为 dict/list 类型追加类型说明，提示 LLM 不需要时传 null 而非 ""
-            if py_type in _TYPE_LABEL:
-                description = f"{description}（{_TYPE_LABEL[py_type]}，不需要时传 null 或省略）"
+            if is_list_like:
+                label = _get_array_label(py_type)
+                description = f"{description}（{label}，不需要时传 null 或省略）"
+                coerce_fields.add(field_name)
+            elif is_dict_like:
+                description = f"{description}（object，不需要时传 null 或省略）"
                 coerce_fields.add(field_name)
             pydantic_fields[field_name] = (
                 Optional[py_type],

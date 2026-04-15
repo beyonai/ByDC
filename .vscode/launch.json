@@ -1,45 +1,5 @@
 {
+  // byclaw-data-worker、Data-mcp 服务 已迁至 byclaw-all/.vscode/launch.json
   "version": "0.2.0",
-  "configurations": [
-    // ---------------------------------------------------------------
-    // e_commerce_demo — DataCloud Gateway Worker
-    // 依赖：先在仓库根目录执行 `uv sync --group dev`
-    // ---------------------------------------------------------------
-    // ---------------------------------------------------------------
-    // byclaw-data — Gateway Worker（跨目录启动）
-    // 依赖：先在 byclaw-data 根目录执行 `uv sync`
-    // ---------------------------------------------------------------
-    {
-      "name": "byclaw-data-worker",
-      "type": "debugpy",
-      "request": "launch",
-      "python": "${workspaceFolder}/../byclaw-all/byclaw-data/.venv/Scripts/python.exe",
-      "program": "${workspaceFolder}/../byclaw-all/byclaw-data/src/byclaw_data/main.py",
-      "cwd": "${workspaceFolder}/../byclaw-all/byclaw-data",
-      "envFile": "${workspaceFolder}/../byclaw-all/byclaw-data/.env",
-      "env": {},
-      "justMyCode": false
-    },
-    {
-      "name": "Data-mcp 服务",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "uvicorn",
-      "args": [
-        "datacloud_data_service.api.routes:create_app",
-        "--factory",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8080"
-      ],
-      "cwd": "${workspaceFolder}",
-      "env": {
-        "PYTHONPATH": "${workspaceFolder}/packages/datacloud-data/src;${workspaceFolder}/packages/datacloud-knowledge/src;${workspaceFolder}"
-      },
-      "envFile": "${workspaceFolder}/../byclaw-all/byclaw-data/.env",
-      "console": "integratedTerminal",
-      "justMyCode": false
-    }
-  ]
+  "configurations": []
 }
