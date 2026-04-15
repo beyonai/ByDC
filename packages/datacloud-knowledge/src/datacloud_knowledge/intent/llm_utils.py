@@ -161,7 +161,9 @@ def build_llm() -> Any:
     """构建 LLM 实例（懒导入 langchain，不增加硬依赖）。
 
     按优先级读取环境变量：DATACLOUD_LLM → OPENAI 兜底。
-    支持 MODEL_PROVIDER（默认 openai，可配 anthropic）和 MODEL_KWARGS。
+    通过 DATACLOUD_LLM_MODEL_PROVIDER 指定协议（openai 默认，或 anthropic）。
+    请使用此变量指定协议，不要在 DATACLOUD_LLM_MODEL 中使用前缀写法。
+    支持 MODEL_KWARGS（JSON 字符串）透传额外参数。
     """
     from langchain.chat_models import init_chat_model  # noqa: PLC0415
 
@@ -169,8 +171,8 @@ def build_llm() -> Any:
         api_base = os.getenv(f"{env_prefix}_API_BASE", "")
         api_key = os.getenv(f"{env_prefix}_API_KEY", "")
         model = os.getenv(f"{env_prefix}_MODEL", "")
-        if api_base and api_key and model:
-            provider = os.getenv(f"{env_prefix}_MODEL_PROVIDER", "openai")
+        if api_key and model:
+            provider = os.getenv(f"{env_prefix}_MODEL_PROVIDER", "openai").strip().lower()
             temperature = float(os.getenv(f"{env_prefix}_TEMPERATURE", "0.0"))
             # 读取可选的 MODEL_KWARGS（JSON 字符串）
             model_kwargs: dict[str, Any] = {}
@@ -182,14 +184,16 @@ def build_llm() -> Any:
                     logger.warning(
                         "[build_llm] 无法解析 %s_MODEL_KWARGS: %s", env_prefix, raw_kwargs
                     )
-            return init_chat_model(
+            kwargs: dict[str, Any] = dict(
                 model=model,
                 model_provider=provider,
                 api_key=api_key,
-                base_url=api_base,
                 temperature=temperature,
                 **model_kwargs,
             )
+            if api_base:
+                kwargs["base_url"] = api_base
+            return init_chat_model(**kwargs)
     # 兜底
     api_key = os.getenv("OPENAI_API_KEY", "")
     base_url = os.getenv("OPENAI_BASE_URL", "")
