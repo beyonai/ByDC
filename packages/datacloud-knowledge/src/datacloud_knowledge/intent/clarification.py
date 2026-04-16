@@ -136,7 +136,7 @@ def analyze_query_clarification(
     emit = EventEmitter(on_event)
 
     # ── Step 1: LLM 展开 + 结构化 ──
-    with emit.step("问题理解", "expand_query", {"query": query}):
+    with emit.step("查询分析", "expand_query", {"query": query}):
         natquery = expand_query(query, on_event=on_event)
         if natquery is None:
             logger.warning("[clarification] LLM 展开失败，返回原始查询")

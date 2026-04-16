@@ -67,11 +67,15 @@ class EventEmitter:
     @contextmanager
     def step(self, title: str, tool: str, args: Any = None):  # noqa: ANN204
         """推送 title + tool_name + tool_args，yield 后由调用方推 result/error。"""
+        self._emit("step_begin", title)
         self.title(title)
         self.tool_name(tool)
         if args is not None:
             self.tool_args(args)
-        yield self
+        try:
+            yield self
+        finally:
+            self._emit("step_end", title)
 
 
 def _to_json(obj: Any) -> str:
@@ -103,7 +107,7 @@ def stream_invoke_with_thinking(
     if not on_event:
         return llm_with_tool.invoke(messages)
 
-    from .types import StreamEvent  # noqa: PLC0415
+    from .types import StreamEvent, StreamEventKind  # noqa: PLC0415
 
     full = None
     for chunk in llm_with_tool.stream(messages):
@@ -121,7 +125,7 @@ def stream_invoke_with_thinking(
             thinking = chunk.additional_kwargs.get("reasoning_content", "")
 
         if thinking:
-            on_event(StreamEvent(kind=StreamEvent.THINKING, content=thinking))
+            on_event(StreamEvent(kind=StreamEventKind.THINKING, content=thinking))
 
         full = chunk if full is None else full + chunk
     return full
