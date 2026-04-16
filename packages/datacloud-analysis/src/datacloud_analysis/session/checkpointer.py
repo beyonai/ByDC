@@ -14,12 +14,14 @@ Usage in orchestration::
 
 from __future__ import annotations
 
+from typing import Any
+
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
-_checkpointer: BaseCheckpointSaver | None = None
+_checkpointer: BaseCheckpointSaver[Any] | None = None
 
 
-def set_checkpointer(saver: BaseCheckpointSaver) -> None:
+def set_checkpointer(saver: BaseCheckpointSaver[Any]) -> None:
     """Register the checkpointer instance (called once by ``bootstrap.setup()``)."""
 
     global _checkpointer
@@ -33,7 +35,7 @@ def reset_checkpointer() -> None:
     _checkpointer = None
 
 
-def get_checkpointer() -> BaseCheckpointSaver:
+def get_checkpointer() -> BaseCheckpointSaver[Any]:
     """Return the initialized checkpointer.
 
     Raises
