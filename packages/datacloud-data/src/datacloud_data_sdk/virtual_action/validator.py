@@ -196,9 +196,12 @@ class VirtualActionValidator:
         # 校验维度
         for dim in dimensions:
             fc = dim.get("field", "")
-            group_op = dim.get("group_op", "")
             f = self._get_field(fc)
             allowed_gops = getattr(f, "group_ops", [])
+            # group_op 未传时跳过校验（不约束分组方式）
+            if "group_op" not in dim:
+                continue
+            group_op = dim["group_op"]
             if allowed_gops and group_op not in allowed_gops:
                 fname = getattr(f, "field_name", None) or getattr(f, "property_name", fc)
                 raise VirtualActionValidationError(
