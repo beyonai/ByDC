@@ -144,6 +144,11 @@ def create_app(
             logger.info("Using loader_override for OntologyLoader")
         else:
             loader = OntologyLoader()
+            
+            from datacloud_data_sdk.ontology.term_loader import TermLoader
+            logger.info("Configured TermLoader")
+            term_loader = TermLoader.from_config({})
+            loader.configure(term_loader=term_loader)
             ontology_path = Path(settings.ontology_path)
             if ontology_path.exists():
                 loader.load_from_owl_directory(ontology_path)
@@ -213,12 +218,6 @@ def create_app(
             query_result_csv_threshold=settings.query_result_csv_threshold,
             query_result_preview_rows=settings.query_result_preview_rows,
         )
-
-        from datacloud_data_sdk.ontology.term_loader import TermLoader
-
-        term_loader = TermLoader.from_config({})
-        loader.configure(term_loader=term_loader)
-        logger.info("Configured TermLoader")
 
         app.state.loader = loader
         logger.info("OntologyLoader initialized and stored in app.state")

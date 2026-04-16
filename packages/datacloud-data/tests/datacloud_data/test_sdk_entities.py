@@ -1,8 +1,11 @@
 import asyncio
-import pytest
 from unittest.mock import patch
-from datacloud_data_sdk.ontology.loader import OntologyLoader
+
+import pytest
+
 from datacloud_data_sdk.exceptions import ActionNotFoundError
+from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.ontology.term_loader import TermLoader
 
 REGISTRY = {
     "functions": [
@@ -102,6 +105,130 @@ def test_action_get_schema_returns_input_output() -> None:
     assert "description" in schema
     assert "owner_id" in schema["inputSchema"]["properties"]
     assert schema["inputSchema"]["required"] == ["owner_id"]
+    assert schema["inputSchema"]["properties"]["owner_id"]["type"] == "string"
+    assert schema["outputSchema"]["properties"]["bo_list"]["type"] == "array"
+    assert schema["outputSchema"]["properties"]["bo_list"]["items"] == {"type": "string"}
+
+
+def test_action_get_schema_preserves_decimal_and_datetime_hints() -> None:
+    loader = OntologyLoader()
+    loader.load_from_content(
+        {
+            "functions": [],
+            "objects": [
+                {
+                    "object_code": "expense",
+                    "object_name": "费用",
+                    "source_type": "API",
+                    "fields": [],
+                    "actions": [
+                        {
+                            "action_code": "apply_expense",
+                            "action_name": "申请费用",
+                            "action_type": "operation",
+                            "function_refs": [],
+                            "params": [
+                                {
+                                    "param_code": "expense_amount",
+                                    "param_name": "费用金额",
+                                    "direction": "IN",
+                                    "param_type": "DECIMAL",
+                                },
+                                {
+                                    "param_code": "apply_time",
+                                    "param_name": "申请时间",
+                                    "direction": "IN",
+                                    "param_type": "DATETIME",
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "relations": [],
+        }
+    )
+    obj = loader.get_object("expense")
+    schema = obj.get_action_schema("apply_expense")
+    amount_schema = schema["inputSchema"]["properties"]["expense_amount"]
+    assert amount_schema["type"] == "number"
+    assert amount_schema["format"] == "decimal"
+    time_schema = schema["inputSchema"]["properties"]["apply_time"]
+    assert time_schema["type"] == "string"
+    assert time_schema["format"] == "date-time"
+
+
+def test_action_get_schema_supports_array_and_term_enum() -> None:
+    loader = OntologyLoader()
+    loader.configure(
+        term_loader=TermLoader.from_mapping(
+            {
+                "priority.code": [
+                    {"code": "HIGH", "label": "高"},
+                    {"code": "LOW", "label": "低"},
+                ]
+            }
+        )
+    )
+    loader.load_from_content(
+        {
+            "functions": [],
+            "objects": [
+                {
+                    "object_code": "todo_items",
+                    "object_name": "待办",
+                    "source_type": "API",
+                    "fields": [],
+                    "actions": [
+                        {
+                            "action_code": "create_todo",
+                            "action_name": "创建待办",
+                            "action_type": "operation",
+                            "function_refs": [],
+                            "params": [
+                                {
+                                    "param_code": "handlerIds",
+                                    "param_name": "处理人",
+                                    "direction": "IN",
+                                    "param_type": "ARRAY",
+                                    "termMeta": {
+                                        "termMasterType": "list",
+                                        "termTypeCode": "staffName",
+                                        "termField": "code",
+                                    },
+                                },
+                                {
+                                    "param_code": "priority",
+                                    "param_name": "优先级",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "termMeta": {
+                                        "termMasterType": "dict",
+                                        "termTypeCode": "priority",
+                                        "termField": "code",
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "relations": [],
+        }
+    )
+
+    obj = loader.get_object("todo_items")
+    schema = obj.get_action_schema("create_todo")
+
+    handler_ids_schema = schema["inputSchema"]["properties"]["handlerIds"]
+    assert handler_ids_schema["type"] == "array"
+    assert handler_ids_schema["items"] == {"type": "string"}
+    assert set(handler_ids_schema) == {"type", "items", "description"}
+
+    priority_schema = schema["inputSchema"]["properties"]["priority"]
+    assert priority_schema["type"] == "string"
+    assert priority_schema["enum"] == ["HIGH", "LOW"]
+    assert set(priority_schema) == {"type", "description", "enum"}
 
 
 def test_list_action_codes_includes_script_action() -> None:

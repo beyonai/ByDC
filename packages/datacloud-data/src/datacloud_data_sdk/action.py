@@ -120,11 +120,16 @@ PARAM_TYPE_MAP: dict[str, str] = {
     "STRING": "string",
     "NUMBER": "number",
     "DECIMAL": "number",
+    "DOUBLE": "number",
+    "FLOAT": "number",
     "INTEGER": "integer",
+    "INT": "integer",
     "BIGINT": "integer",
+    "LONG": "integer",
     "BOOLEAN": "boolean",
     "DATE": "string",
     "DATETIME": "string",
+    "TIMESTAMP": "string",
     "ARRAY": "array",
     "LIST": "array",
     "OBJECT": "object",
@@ -222,10 +227,7 @@ class Action:
         properties: dict[str, dict[str, object]] = {}
         required: list[str] = []
         for p in params:
-            prop: dict[str, object] = {
-                "type": PARAM_TYPE_MAP.get(p.param_type.upper(), "string"),
-                "description": p.param_name,
-            }
+            prop = self._build_param_schema(p)
             if p.default_value is not None:
                 prop["default"] = p.default_value
             properties[p.param_code] = prop
@@ -235,6 +237,120 @@ class Action:
         if required:
             schema["required"] = required
         return schema
+
+    def _build_param_schema(self, param: OntologyActionParam) -> dict[str, object]:
+        """构造单个参数的 JSON Schema。"""
+        raw_type = (param.param_type or "STRING").upper()
+        schema_type = PARAM_TYPE_MAP.get(raw_type, "string")
+        schema: dict[str, object] = {
+            "type": schema_type,
+            "description": param.param_name,
+        }
+
+        if raw_type in ("DATE",):
+            schema["format"] = "date"
+        elif raw_type in ("DATETIME", "TIMESTAMP"):
+            schema["format"] = "date-time"
+        elif raw_type in ("DECIMAL", "DOUBLE", "FLOAT"):
+            schema["format"] = raw_type.lower()
+        elif raw_type in ("ARRAY", "LIST"):
+            schema["items"] = {"type": "string"}
+
+        self._inject_term_schema(schema, param)
+        return schema
+
+    def _inject_term_schema(
+        self,
+        schema: dict[str, object],
+        param: OntologyActionParam,
+    ) -> None:
+        """将可落到标准 Schema 的术语信息注入参数 schema。"""
+        if param.term_type != "enum" or not param.term_set:
+            return
+
+        enum_schema = self._get_enum_target_schema(schema)
+        if enum_schema is None:
+            return
+
+        term_loader = self._get_term_loader()
+        if term_loader is None:
+            return
+
+        term_type_code = self._get_term_type_code(param.term_set)
+        entries = self._get_term_entries(
+            term_loader,
+            term_set=param.term_set,
+            dataset_id=param.dataset_id,
+            term_type_code=term_type_code,
+        )
+        enum_codes = [entry["code"] for entry in entries if entry.get("code")]
+        if not enum_codes:
+            return
+
+        enum_schema["enum"] = enum_codes
+
+    @staticmethod
+    def _get_enum_target_schema(schema: dict[str, object]) -> dict[str, object] | None:
+        """获取应注入 enum 的 schema 节点。"""
+        if schema.get("type") == "array":
+            items = schema.get("items")
+            return items if isinstance(items, dict) else None
+        return schema
+
+    def _get_term_loader(self) -> Any:
+        """获取 loader 上配置的术语加载器。"""
+        if self._loader is None:
+            return None
+        return getattr(self._loader._config, "term_loader", None)
+
+    @staticmethod
+    def _get_term_type_code(term_set: str) -> str | None:
+        """从 term_set 推导 term_type_code。"""
+        if "." not in term_set:
+            return None
+        return term_set.split(".", 1)[0]
+
+    @staticmethod
+    def _get_term_entries(
+        term_loader: Any,
+        *,
+        term_set: str,
+        dataset_id: int | None,
+        term_type_code: str | None,
+    ) -> list[dict[str, str]]:
+        """获取术语条目列表，优先使用条目接口，失败时回退到 code/value。"""
+        try:
+            entries = term_loader.get_entries(
+                term_set,
+                dataset_id=dataset_id,
+                term_type_code=term_type_code,
+            )
+        except Exception:
+            entries = []
+
+        normalized_entries: list[dict[str, str]] = []
+        for entry in entries:
+            code = entry.get("code")
+            if not code:
+                continue
+            normalized_entries.append(
+                {
+                    "code": str(code),
+                    "label": str(entry.get("label", code)),
+                }
+            )
+        if normalized_entries:
+            return normalized_entries
+
+        try:
+            codes = term_loader.get_codes(
+                term_set,
+                dataset_id=dataset_id,
+                term_type_code=term_type_code,
+            )
+        except Exception:
+            codes = []
+        return [{"code": str(code), "label": str(code)} for code in codes if code]
 
     def _map_names(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """

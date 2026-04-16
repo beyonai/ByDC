@@ -24,6 +24,22 @@ from urllib.parse import urlsplit
 logger = logging.getLogger(__name__)
 
 
+def _predicate_local_name(predicate: Any) -> str:
+    """提取谓词的本地名称。"""
+    predicate_str = str(predicate)
+    if "#" in predicate_str:
+        return predicate_str.rsplit("#", 1)[-1]
+    if "/" in predicate_str:
+        return predicate_str.rsplit("/", 1)[-1]
+    return predicate_str
+
+
+def _is_rdf_type_predicate(predicate: Any) -> bool:
+    """判断是否为 RDF 的内置 type 谓词。"""
+    predicate_str = str(predicate)
+    return predicate_str == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+
+
 @dataclass
 class ParsedObject:
     object_code: str
@@ -184,18 +200,34 @@ class OwlParser:
                 self._parse_mapping(g, s, mapping_scope)
 
     def _get_predicate_value(self, g: Any, subject: Any, predicate_suffix: str) -> str | None:
+        matches: list[tuple[Any, Any]] = []
+        fallback_matches: list[tuple[Any, Any]] = []
         for p, o in g.predicate_objects(subject):
-            p_str = str(p)
-            if p_str.endswith(predicate_suffix):
+            local_name = _predicate_local_name(p)
+            if local_name == predicate_suffix:
+                matches.append((p, o))
+            elif str(p).endswith(predicate_suffix):
+                fallback_matches.append((p, o))
+
+        for p, o in matches:
+            if not _is_rdf_type_predicate(p):
                 return str(o)
+        if matches:
+            return str(matches[0][1])
+        if fallback_matches:
+            return str(fallback_matches[0][1])
         return None
 
     def _get_predicate_values(self, g: Any, subject: Any, predicate_suffix: str) -> list[str]:
-        result = []
+        exact_matches: list[str] = []
+        fallback_matches: list[str] = []
         for p, o in g.predicate_objects(subject):
-            p_str = str(p)
-            if p_str.endswith(predicate_suffix):
-                result.append(str(o))
+            local_name = _predicate_local_name(p)
+            if local_name == predicate_suffix:
+                exact_matches.append(str(o))
+            elif str(p).endswith(predicate_suffix):
+                fallback_matches.append(str(o))
+        result = exact_matches or fallback_matches
         return result
 
     def _parse_loose_json_list(self, s: str) -> list:
