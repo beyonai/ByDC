@@ -17,6 +17,14 @@ from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
 logger = logging.getLogger(__name__)
 
 
+def _get_file_manager(context: Any):
+    """从 gateway_context 中取 FileManager，不可用时返回 None。"""
+    try:
+        return context.agent_runtime_state.session_manager.file_manager
+    except AttributeError:
+        return None
+
+
 def _workspace_root_path(workspace_dir: str | None) -> Path | None:
     raw = resolve_shared_workspace_dir(workspace_dir)
     if raw is None:
@@ -64,12 +72,22 @@ def _safe_json_dumps(module: ModuleType, value: Any) -> str:
 
 
 @tool("write_code")
-async def write_code(filename: str, code: str) -> dict[str, Any]:
+async def write_code(
+    filename: str,
+    code: str,
+    _context: Any = None,
+) -> dict[str, Any]:
     """Write Python source into workspace."""
-    workspace_dir = os.getenv("DATACLOUD_ACTIVE_WORKSPACE")
     if not filename.endswith(".py"):
         filename = f"{filename}.py"
 
+    file_manager = _get_file_manager(_context)
+    if file_manager is not None:
+        result = await file_manager.write_file(filename, code)
+        return result
+
+    # 降级：本地路径实现（本地开发 / 单测场景）
+    workspace_dir = os.getenv("DATACLOUD_ACTIVE_WORKSPACE")
     try:
         resolved = _resolve_safe_path(filename, workspace_dir)
     except ValueError as err:
@@ -86,21 +104,35 @@ async def write_code(filename: str, code: str) -> dict[str, Any]:
 
 
 @tool("execute_code")
-async def execute_code(filename: str, timeout: int = 120) -> dict[str, Any]:  # noqa: ASYNC109
+async def execute_code(
+    filename: str,
+    timeout: int = 120,
+    _context: Any = None,
+) -> dict[str, Any]:  # noqa: ASYNC109
     """Execute one Python file in workspace and return output/result."""
-    workspace_dir = os.getenv("DATACLOUD_ACTIVE_WORKSPACE")
     if not filename.endswith(".py"):
         filename = f"{filename}.py"
 
-    try:
-        resolved = _resolve_safe_path(filename, workspace_dir)
-    except ValueError as err:
-        return {"exit_code": 1, "output": str(err), "result": None}
+    file_manager = _get_file_manager(_context)
+    if file_manager is not None:
+        # 读取源文件：走 file_manager
+        read_result = await file_manager.read_file(filename)
+        if not read_result["success"]:
+            return {"exit_code": 1, "output": read_result["error"], "result": None}
+        code = read_result["data"]["content"]
+        resolved: Path | None = None
+    else:
+        # 降级：本地路径实现（本地开发 / 单测场景）
+        workspace_dir = os.getenv("DATACLOUD_ACTIVE_WORKSPACE")
+        try:
+            resolved = _resolve_safe_path(filename, workspace_dir)
+        except ValueError as err:
+            return {"exit_code": 1, "output": str(err), "result": None}
 
-    if not resolved.exists():
-        return {"exit_code": 1, "output": f"File does not exist: {filename}", "result": None}
+        if not resolved.exists():
+            return {"exit_code": 1, "output": f"File does not exist: {filename}", "result": None}
 
-    code = resolved.read_text(encoding="utf-8")
+        code = resolved.read_text(encoding="utf-8")
 
     def _run() -> dict[str, Any]:
         stdout_buf = io.StringIO()
@@ -116,7 +148,7 @@ async def execute_code(filename: str, timeout: int = 120) -> dict[str, Any]:  # 
                 exec(code, namespace)  # noqa: S102
             result_obj = namespace.get("_result")
 
-            if result_obj is not None and json_module is not None:
+            if result_obj is not None and json_module is not None and resolved is not None:
                 with contextlib.suppress(Exception):
                     json_path = resolved.with_suffix(".json")
                     payload = _safe_json_dumps(json_module, result_obj)
@@ -126,7 +158,7 @@ async def execute_code(filename: str, timeout: int = 120) -> dict[str, Any]:  # 
                 "exit_code": 0,
                 "output": stdout_buf.getvalue(),
                 "result": result_obj,
-                "result_file": str(resolved.with_suffix(".json")) if result_obj is not None else None,
+                "result_file": str(resolved.with_suffix(".json")) if (result_obj is not None and resolved is not None) else None,
             }
         except Exception as exc:  # noqa: BLE001
             return {

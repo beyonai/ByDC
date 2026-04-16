@@ -1,28 +1,30 @@
 """Tools package — atomic capabilities exposed to the Agent (design §3.1 TOOLBOX).
 
-Tool          Module          Design symbol
--------       ------          -------------
-search_knowledge  knowledge   T_KNOW_SEARCH
-sbx_run_code      sandbox     T_SBX_RUN
-sbx_read_file     sandbox     T_SBX_READ
-sbx_write_file    sandbox     T_SBX_WRITE
-build_skill       skill       T_SKILL_BUILD
-render_report     report      T_REPORT
+Tool              Module          Design symbol
+-------           ------          -------------
+search_knowledge  knowledge       T_KNOW_SEARCH
+build_skill       skill           T_SKILL_BUILD
+render_report     report          T_REPORT
 
 Memory tools (recall_memory, search_memory, read_memory) live in
 ``memory.tools`` to keep the memory package self-contained.
+
+File I/O tools (read_file, write_file) and code execution tools
+(write_code, execute_code) are registered directly in
+``orchestration/execution/node.py`` and delegate to the Gateway
+``FileManager`` when ``gateway_context`` is available.
+
+.. note::
+    ``sbx_read_file``, ``sbx_write_file``, ``sbx_run_code`` from
+    ``tools.sandbox`` are deprecated and no longer exported here.
 """
 
 from .knowledge import search_knowledge
 from .report import render_report
-from .sandbox import sbx_read_file, sbx_run_code, sbx_write_file
 from .skill import build_skill
 
 __all__ = [
     "search_knowledge",
-    "sbx_run_code",
-    "sbx_read_file",
-    "sbx_write_file",
     "build_skill",
     "render_report",
 ]

@@ -1,7 +1,7 @@
 """Tests for QueryExecutor — query_ontology 明细检索实现（§3.2.2 验收用例）。
 
 覆盖：
-  用例1  基础物理字段查询（name_to_code + AND 过滤 + ORDER BY + LIMIT）
+  用例1  基础物理字段查询（field_code 直接传入 + AND 过滤 + ORDER BY + LIMIT）
   用例2  空 select 返回全部非 linked 字段
   用例3  派生指标字段 formula 展开（SELECT / WHERE / ORDER BY）
   用例4  filter_relation=OR
@@ -10,6 +10,10 @@
   用例7  不存在字段 → UNSUPPORTED_FIELD
   用例8  非法 op（like 用于 id 字段） → UNSUPPORTED_OP
   用例9  linked 字段拦截 → LINKED_NOT_SUPPORTED
+
+协议变更（§3.2.2 改动点）：
+  select / filters.field / order_by.field 均填写 field_code（字段编码），
+  不再填中文名；执行器不再做 name_to_code 翻译。
 """
 
 from __future__ import annotations
@@ -175,18 +179,19 @@ async def executor_with_data(loader: OntologyLoader):
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def test_basic_physical_query(executor_with_data: QueryExecutor) -> None:
-    """用例1：name_to_code 映射、AND 过滤、ORDER BY、LIMIT 正确执行。"""
+    """用例1：LLM 直接传 field_code，AND 过滤、ORDER BY、LIMIT 正确执行。"""
     executor = executor_with_data
     result = await executor.execute(
         "enterprise_base",
         {
-            "select": ["企业名称", "账期", "企业收入"],
+            # ★ 新协议：select / filters.field / order_by.field 均填 field_code
+            "select": ["enterprise_name", "period", "revenue"],
             "filters": [
-                {"field": "区域名称", "op": "eq", "value": "亦庄"},
-                {"field": "账期",     "op": "eq", "value": "2026-01"},
-                {"field": "企业收入", "op": "gte", "value": 5000000},
+                {"field": "region_name", "op": "eq",  "value": "亦庄"},
+                {"field": "period",      "op": "eq",  "value": "2026-01"},
+                {"field": "revenue",     "op": "gte", "value": 5000000},
             ],
-            "order_by": [{"field": "企业收入", "direction": "desc"}],
+            "order_by": [{"field": "revenue", "direction": "desc"}],
             "limit": 10,
             "offset": 0,
         },
@@ -209,12 +214,13 @@ async def test_basic_physical_query(executor_with_data: QueryExecutor) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def test_empty_select_returns_all_non_linked(executor_with_data: QueryExecutor) -> None:
-    """用例2：不传 select 时返回全部非 linked 字段。"""
+    """用例2：不传 select 时返回全部非 linked 字段。filters.field 也用 field_code。"""
     executor = executor_with_data
     result = await executor.execute(
         "enterprise_base",
         {
-            "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+            # ★ filters.field 填 field_code
+            "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
             "limit": 10,
         },
     )
@@ -232,18 +238,21 @@ async def test_empty_select_returns_all_non_linked(executor_with_data: QueryExec
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def test_derived_metric_formula_expansion(executor_with_data: QueryExecutor) -> None:
-    """用例3：derived_metric 字段在 SELECT / WHERE / ORDER BY 中展开 formula。"""
+    """用例3：derived_metric 字段在 SELECT / WHERE / ORDER BY 中展开 formula。
+    select / filters.field / order_by.field 均传 field_code（tax_rate）。
+    """
     executor = executor_with_data
     result = await executor.execute(
         "enterprise_base",
         {
-            "select": ["企业名称", "账期", "企业实际税负率"],
+            # ★ 新协议：传 field_code，不再传中文名
+            "select": ["enterprise_name", "period", "tax_rate"],
             "filters": [
-                {"field": "账期",         "op": "eq", "value": "2026-01"},
+                {"field": "period",   "op": "eq", "value": "2026-01"},
                 # total_tax/total_revenue：亦庄科技=2.5%，通州制造=3%，亦庄智能=5%
-                {"field": "企业实际税负率", "op": "gt", "value": 0.025},
+                {"field": "tax_rate", "op": "gt", "value": 0.025},
             ],
-            "order_by": [{"field": "企业实际税负率", "direction": "desc"}],
+            "order_by": [{"field": "tax_rate", "direction": "desc"}],
             "limit": 10,
         },
     )
@@ -260,15 +269,18 @@ async def test_derived_metric_formula_expansion(executor_with_data: QueryExecuto
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def test_filter_relation_or(executor_with_data: QueryExecutor) -> None:
-    """用例4：filter_relation=OR 时多个条件取并集（使用无 period_required 的对象）。"""
+    """用例4：filter_relation=OR 时多个条件取并集（使用无 period_required 的对象）。
+    filters.field 传 field_code。
+    """
     executor = executor_with_data
     result = await executor.execute(
         "enterprise_simple",  # 无 period 字段，无 period_required 约束
         {
-            "select": ["企业名称", "企业收入"],
+            # ★ select / filters.field 均用 field_code
+            "select": ["enterprise_name", "revenue"],
             "filters": [
-                {"field": "企业收入", "op": "gte", "value": 10000000},  # 亦庄智能
-                {"field": "区域名称", "op": "eq",  "value": "通州"},    # 通州制造
+                {"field": "revenue",     "op": "gte", "value": 10000000},  # 亦庄智能
+                {"field": "region_name", "op": "eq",  "value": "通州"},    # 通州制造
             ],
             "filter_relation": "OR",
             "limit": 10,
@@ -284,13 +296,16 @@ async def test_filter_relation_or(executor_with_data: QueryExecutor) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def test_period_required_missing(executor_with_data: QueryExecutor) -> None:
-    """用例5：对象含 period 字段（period_required），未传账期条件 → REQUIRED_FILTER_MISSING。"""
+    """用例5：对象含 period 字段（period_required），未传账期条件 → REQUIRED_FILTER_MISSING。
+    filters.field 传 field_code。
+    """
     executor = executor_with_data
     with pytest.raises(VirtualActionValidationError) as exc_info:
         await executor.execute(
             "enterprise_base",
             {
-                "filters": [{"field": "区域名称", "op": "eq", "value": "亦庄"}],
+                # ★ field_code
+                "filters": [{"field": "region_name", "op": "eq", "value": "亦庄"}],
                 "limit": 10,
             },
         )
@@ -302,15 +317,18 @@ async def test_period_required_missing(executor_with_data: QueryExecutor) -> Non
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def test_period_required_with_or_relation_conflict(executor_with_data: QueryExecutor) -> None:
-    """用例6：含 period_required 的对象使用 filter_relation=OR → INVALID。"""
+    """用例6：含 period_required 的对象使用 filter_relation=OR → INVALID。
+    filters.field 传 field_code。
+    """
     executor = executor_with_data
     with pytest.raises(VirtualActionValidationError) as exc_info:
         await executor.execute(
             "enterprise_base",
             {
+                # ★ field_code
                 "filters": [
-                    {"field": "账期",     "op": "eq",  "value": "2026-01"},
-                    {"field": "企业收入", "op": "gte", "value": 5000000},
+                    {"field": "period",  "op": "eq",  "value": "2026-01"},
+                    {"field": "revenue", "op": "gte", "value": 5000000},
                 ],
                 "filter_relation": "OR",
                 "limit": 10,
@@ -324,14 +342,15 @@ async def test_period_required_with_or_relation_conflict(executor_with_data: Que
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def test_nonexistent_field(executor_with_data: QueryExecutor) -> None:
-    """用例7：select 中包含对象未声明的字段名 → UNSUPPORTED_FIELD。"""
+    """用例7：select 中包含对象未声明的 field_code → UNSUPPORTED_FIELD。"""
     executor = executor_with_data
     with pytest.raises(VirtualActionValidationError) as exc_info:
         await executor.execute(
             "enterprise_base",
             {
-                "select": ["企业名称", "不存在字段"],
-                "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+                # ★ field_code；nonexistent_field 不存在
+                "select": ["enterprise_name", "nonexistent_field"],
+                "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
                 "limit": 5,
             },
         )
@@ -343,15 +362,18 @@ async def test_nonexistent_field(executor_with_data: QueryExecutor) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def test_invalid_op_for_id_field(executor_with_data: QueryExecutor) -> None:
-    """用例8：对 id 类字段（企业ID）使用 like → UNSUPPORTED_OP。"""
+    """用例8：对 id 类字段（enterprise_id）使用 like → UNSUPPORTED_OP。
+    filters.field 传 field_code。
+    """
     executor = executor_with_data
     with pytest.raises(VirtualActionValidationError) as exc_info:
         await executor.execute(
             "enterprise_base",
             {
+                # ★ field_code
                 "filters": [
-                    {"field": "账期",   "op": "eq",   "value": "2026-01"},
-                    {"field": "企业ID", "op": "like", "value": "BJ%"},
+                    {"field": "period",        "op": "eq",   "value": "2026-01"},
+                    {"field": "enterprise_id", "op": "like", "value": "BJ%"},
                 ],
                 "limit": 5,
             },
@@ -364,15 +386,84 @@ async def test_invalid_op_for_id_field(executor_with_data: QueryExecutor) -> Non
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def test_linked_field_blocked(executor_with_data: QueryExecutor) -> None:
-    """用例9：select 中包含 property_kind=linked 的字段 → LINKED_NOT_SUPPORTED。"""
+    """用例9：select 中包含 property_kind=linked 的字段 → LINKED_NOT_SUPPORTED。
+    select 传 field_code。
+    """
     executor = executor_with_data
     with pytest.raises(VirtualActionValidationError) as exc_info:
         await executor.execute(
             "enterprise_base",
             {
-                "select": ["企业名称", "所属园区名称"],
-                "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+                # ★ field_code；linked_park 是 linked 字段
+                "select": ["enterprise_name", "linked_park"],
+                "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
                 "limit": 5,
             },
         )
     assert exc_info.value.error_code == "VIRTUAL_ACTION_ERR_LINKED_NOT_SUPPORTED"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 协议边界：中文名不再被接受（§3.2.2 改动点 核心约束）
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def test_chinese_name_in_select_rejected(executor_with_data: QueryExecutor) -> None:
+    """协议边界：select 中传中文名（旧协议）→ UNSUPPORTED_FIELD。
+    执行器不再做 name_to_code 翻译，中文名在 field_map 中不存在，应报字段不存在。
+    """
+    executor = executor_with_data
+    with pytest.raises(VirtualActionValidationError) as exc_info:
+        await executor.execute(
+            "enterprise_base",
+            {
+                # ★ 故意传中文名（旧协议），新协议应拒绝
+                "select": ["企业名称", "账期"],
+                "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
+                "limit": 5,
+            },
+        )
+    assert exc_info.value.error_code == "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD"
+
+
+async def test_chinese_name_in_filters_rejected(executor_with_data: QueryExecutor) -> None:
+    """协议边界：filters.field 传中文名（旧协议）→ UNSUPPORTED_FIELD 或账期约束报错。
+    执行器不再做翻译，中文名在 field_map 中查不到，校验应识别为不存在字段。
+    """
+    executor = executor_with_data
+    with pytest.raises(VirtualActionValidationError) as exc_info:
+        await executor.execute(
+            "enterprise_base",
+            {
+                "select": ["enterprise_name", "revenue"],
+                # ★ 故意用中文名（旧协议）传 filters.field
+                "filters": [
+                    {"field": "账期",    "op": "eq",  "value": "2026-01"},
+                    {"field": "企业收入", "op": "gte", "value": 5000000},
+                ],
+                "limit": 5,
+            },
+        )
+    # 中文名在 field_map 找不到 → 校验报字段不存在，或因找不到 period 字段导致账期约束报错
+    assert exc_info.value.error_code in (
+        "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD",
+        "VIRTUAL_ACTION_ERR_REQUIRED_FILTER_MISSING",
+    )
+
+
+async def test_chinese_name_in_order_by_rejected(executor_with_data: QueryExecutor) -> None:
+    """协议边界：order_by.field 传中文名（旧协议）不应静默忽略。
+    新协议要求 order_by.field 为 field_code；传中文名时生成 SQL 中列名非法，
+    执行层应报错（RuntimeError 或 ValidationError）。
+    """
+    executor = executor_with_data
+    with pytest.raises((VirtualActionValidationError, RuntimeError)):
+        await executor.execute(
+            "enterprise_base",
+            {
+                "select": ["enterprise_name", "revenue"],
+                "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
+                # ★ 故意传中文名（旧协议）
+                "order_by": [{"field": "企业收入", "direction": "desc"}],
+                "limit": 5,
+            },
+        )

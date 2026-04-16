@@ -7,7 +7,7 @@
 - KB 对象 → search_*
 - 注入幂等：同名动作不重复追加
 - 同时注册到全局 VirtualActionRegistry，供 MCP 路由使用
-- 动作字段统一使用中文名（field_name / property_name）
+- 动作字段统一使用字段编码（field_code / property_code），不再使用中文名
 """
 
 from __future__ import annotations

@@ -1,12 +1,26 @@
 """Sandbox tools.
 
+.. deprecated::
+    ``sbx_read_file`` / ``sbx_write_file`` 未被 Agent 挂载，已由
+    ``tools/file_io.py`` 中的 ``read_file`` / ``write_file`` 接管。
+    ``sbx_run_code`` 同样未挂载，属历史遗留。
+    计划在下一个 major 版本移除整个模块。
+
 Tools:
 - ``sbx_run_code``: execute Python code in-process with bounded imports.
 - ``sbx_read_file``: read a file under sandbox root for one task.
 - ``sbx_write_file``: write a file under sandbox root for one task.
 """
-
 from __future__ import annotations
+
+import warnings
+
+warnings.warn(
+    "datacloud_analysis.tools.sandbox is deprecated and will be removed in the next major version. "
+    "Use read_file / write_file from datacloud_analysis.tools.file_io instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import asyncio
 import base64

@@ -16,7 +16,6 @@ from datacloud_analysis.orchestration.state import AgentState
 from datacloud_analysis.tools.ask_user import ask_user
 from datacloud_analysis.tools.file_io import read_file, write_file
 from datacloud_analysis.tools.code_exec import write_code, execute_code
-from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +62,16 @@ def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
         if t.name == "ask_user":
             tools.append(t)
         else:
-            tools.append(inject_reason_field(t))
+            # 在 inject_reason_field 之前检测签名，因为 inject_reason_field 会替换 coroutine
+            # 导致原始 _context 参数签名消失
+            runtime_context_param = (
+                _resolve_runtime_context_param(getattr(t, "coroutine", None))
+                or _resolve_runtime_context_param(getattr(t, "func", None))
+            )
+            tool = inject_reason_field(t)
+            if runtime_context_param:
+                setattr(tool, "_datacloud_runtime_context_param", runtime_context_param)
+            tools.append(tool)
 
     # Dynamic tools from agent config
     if default_tools:
@@ -153,13 +161,6 @@ async def execution_node(
 
     tools_list = _build_tools_list(default_tools)
     max_rounds = int(os.getenv("DATACLOUD_REACT_MAX_ROUNDS", "10"))
-
-    # 设置 workspace 环境变量供工具使用
-    workspace_dir = state.get("workspace_dir")
-    if workspace_dir:
-        workspace_root = resolve_shared_workspace_dir(workspace_dir)
-        if workspace_root is not None:
-            os.environ["DATACLOUD_ACTIVE_WORKSPACE"] = str(workspace_root)
 
     logger.info(
         "[execution_node] tools=%s max_rounds=%d",

@@ -10,6 +10,14 @@ from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
 logger = logging.getLogger(__name__)
 
 
+def _get_file_manager(context: Any):
+    """从 gateway_context 中取 FileManager，不可用时返回 None。"""
+    try:
+        return context.agent_runtime_state.session_manager.file_manager
+    except AttributeError:
+        return None
+
+
 def _workspace_root_path(workspace_dir: str | None) -> Path | None:
     raw = resolve_shared_workspace_dir(workspace_dir)
     if raw is None:
@@ -32,14 +40,27 @@ def _resolve_safe_path(path: str, workspace_dir: str | None) -> Path:
             raise ValueError(f"Path {path!r} is outside workspace_dir {workspace_dir!r}")
     return p
 
+
 @tool("read_file")
-async def read_file(path: str, encoding: str = "utf-8") -> str:
+async def read_file(
+    path: str,
+    encoding: str = "utf-8",
+    _context: Any = None,
+) -> str:
     """读取 workspace 内指定文件，返回文本内容。
 
     Args:
         path: 文件路径（相对于 workspace_dir 或绝对路径）
         encoding: 文件编码，默认 utf-8
     """
+    file_manager = _get_file_manager(_context)
+    if file_manager is not None:
+        result = await file_manager.read_file(path, encoding=encoding)
+        if not result["success"]:
+            return f"错误：{result['error']}"
+        return result["data"]["content"]
+
+    # 降级：本地路径实现（本地开发 / 单测场景）
     workspace_dir = os.getenv("DATACLOUD_ACTIVE_WORKSPACE")
     try:
         resolved = _resolve_safe_path(path, workspace_dir)
@@ -55,8 +76,14 @@ async def read_file(path: str, encoding: str = "utf-8") -> str:
         logger.error("read_file failed path=%s error=%s", path, exc)
         return f"错误：读取失败 {exc}"
 
+
 @tool("write_file")
-async def write_file(path: str, content: str, encoding: str = "utf-8") -> dict[str, Any]:
+async def write_file(
+    path: str,
+    content: str,
+    encoding: str = "utf-8",
+    _context: Any = None,
+) -> dict[str, Any]:
     """将内容写入 workspace 内指定文件（自动创建父目录）。
 
     Args:
@@ -67,6 +94,12 @@ async def write_file(path: str, content: str, encoding: str = "utf-8") -> dict[s
     Returns:
         {"success": bool, "path": str, "size": int}
     """
+    file_manager = _get_file_manager(_context)
+    if file_manager is not None:
+        result = await file_manager.write_file(path, content, encoding=encoding)
+        return result
+
+    # 降级：本地路径实现（本地开发 / 单测场景）
     workspace_dir = os.getenv("DATACLOUD_ACTIVE_WORKSPACE")
     try:
         resolved = _resolve_safe_path(path, workspace_dir)

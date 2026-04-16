@@ -3,7 +3,7 @@
 覆盖：
   用例1  基础分组统计（period month + region self + HAVING + ORDER BY）
   用例2  HAVING 过滤聚合结果
-  用例3  派生指标（formula 展开）AVG 统计
+  用例3  派生指标（formula 展开）MAX 统计 + AVG 禁止
   用例4  range 区间分组
   用例5  metrics 为空报错 → UNSUPPORTED_FIELD
   用例6  having.field 非 metrics.as 别名报错 → UNSUPPORTED_FIELD
@@ -11,6 +11,12 @@
   用例8  账期强制约束——缺失 period 条件报错 → REQUIRED_FILTER_MISSING
   用例9  全表聚合（空 dimensions）
   用例10 拍照指标跨账期 SUM 报错 → UNSUPPORTED_OP
+
+协议变更（§3.2.3 改动点）：
+  dimensions[i].field / metrics[i].field / filters[i].field 均填写 field_code（字段编码），
+  不再填中文名；执行器不再做 name_to_code 翻译。
+  having[i].field 仍为 metrics.as 别名（不变）。
+  order_by[i].field 仍为 metrics.as 别名或维度 field_code（不变）。
 """
 
 from __future__ import annotations
@@ -169,20 +175,23 @@ async def executor_with_data(loader: OntologyLoader):
 
 
 async def test_basic_group_stats(executor_with_data: ComputeExecutor) -> None:
-    """用例1：按账期+区域分组统计收入和企业数，过滤 2026-01，按总收入降序。"""
+    """用例1：按账期+区域分组统计收入和企业数，过滤 2026-01，按总收入降序。
+    dimensions[i].field / metrics[i].field / filters[i].field 均传 field_code。
+    """
     executor = executor_with_data
     result = await executor.execute(
         "enterprise_base",
         {
+            # ★ 新协议：field 传 field_code
             "dimensions": [
-                {"field": "账期", "group_op": "month"},
-                {"field": "区域名称", "group_op": "self"},
+                {"field": "period",      "group_op": "month"},
+                {"field": "region_name", "group_op": "self"},
             ],
             "metrics": [
-                {"field": "企业收入", "agg": "sum", "as": "total_revenue"},
+                {"field": "revenue",  "agg": "sum", "as": "total_revenue"},
                 {"agg": "count_all", "as": "ent_count"},
             ],
-            "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+            "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
             "order_by": [{"field": "total_revenue", "direction": "desc"}],
             "limit": 10,
         },
@@ -216,14 +225,17 @@ async def test_basic_group_stats(executor_with_data: ComputeExecutor) -> None:
 
 
 async def test_having_filter(executor_with_data: ComputeExecutor) -> None:
-    """用例2：HAVING total_revenue >= 15M，仅 亦庄(20M) 通过，通州(3M) 被过滤。"""
+    """用例2：HAVING total_revenue >= 15M，仅 亦庄(20M) 通过，通州(3M) 被过滤。
+    field 传 field_code。
+    """
     executor = executor_with_data
     result = await executor.execute(
         "enterprise_base",
         {
-            "dimensions": [{"field": "区域名称", "group_op": "self"}],
-            "metrics": [{"field": "企业收入", "agg": "sum", "as": "total_revenue"}],
-            "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+            # ★ field_code
+            "dimensions": [{"field": "region_name", "group_op": "self"}],
+            "metrics": [{"field": "revenue", "agg": "sum", "as": "total_revenue"}],
+            "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
             "having": [{"field": "total_revenue", "op": "gte", "value": 15_000_000}],
             "order_by": [{"field": "total_revenue", "direction": "desc"}],
         },
@@ -241,6 +253,7 @@ async def test_having_filter(executor_with_data: ComputeExecutor) -> None:
 
 async def test_derived_metric_formula_max(executor_with_data: ComputeExecutor) -> None:
     """用例3：derived_metric 字段在 metrics 中展开 formula，MAX 聚合正确执行。
+    metrics[i].field 传 field_code（tax_rate）。
 
     设计约束：derived_metric 只允许 max/min，不允许 sum/avg（§3.2.3.2）。
     亦庄最大税负率：max(200000/8000000, 600000/12000000) = max(0.025, 0.05) = 0.05
@@ -251,9 +264,10 @@ async def test_derived_metric_formula_max(executor_with_data: ComputeExecutor) -
     result = await executor.execute(
         "enterprise_base",
         {
-            "dimensions": [{"field": "区域名称", "group_op": "self"}],
-            "metrics": [{"field": "企业实际税负率", "agg": "max", "as": "max_tax_rate"}],
-            "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+            # ★ field_code
+            "dimensions": [{"field": "region_name", "group_op": "self"}],
+            "metrics": [{"field": "tax_rate", "agg": "max", "as": "max_tax_rate"}],
+            "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
             "having": [{"field": "max_tax_rate", "op": "gt", "value": 0.03}],
             "order_by": [{"field": "max_tax_rate", "direction": "desc"}],
         },
@@ -265,15 +279,18 @@ async def test_derived_metric_formula_max(executor_with_data: ComputeExecutor) -
 
 
 async def test_derived_metric_avg_raises(executor_with_data: ComputeExecutor) -> None:
-    """用例3b：derived_metric 不允许 avg，应报 UNSUPPORTED_OP（§3.2.3.2）。"""
+    """用例3b：derived_metric 不允许 avg，应报 UNSUPPORTED_OP（§3.2.3.2）。
+    metrics[i].field 传 field_code。
+    """
     executor = executor_with_data
     with pytest.raises(VirtualActionValidationError) as exc_info:
         await executor.execute(
             "enterprise_base",
             {
-                "dimensions": [{"field": "区域名称", "group_op": "self"}],
-                "metrics": [{"field": "企业实际税负率", "agg": "avg", "as": "avg_rate"}],
-                "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+                # ★ field_code
+                "dimensions": [{"field": "region_name", "group_op": "self"}],
+                "metrics": [{"field": "tax_rate", "agg": "avg", "as": "avg_rate"}],
+                "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
             },
         )
     assert exc_info.value.error_code == "VIRTUAL_ACTION_ERR_UNSUPPORTED_OP"
@@ -285,14 +302,17 @@ async def test_derived_metric_avg_raises(executor_with_data: ComputeExecutor) ->
 
 
 async def test_range_bucket_grouping(executor_with_data: ComputeExecutor) -> None:
-    """用例4：按收入区间统计企业数，2026-01 收入 8M/3M/12M 分别落入不同区间。"""
+    """用例4：按收入区间统计企业数，2026-01 收入 8M/3M/12M 分别落入不同区间。
+    dimensions[i].field / filters[i].field 传 field_code。
+    """
     executor = executor_with_data
     result = await executor.execute(
         "enterprise_base",
         {
             "dimensions": [
                 {
-                    "field": "企业收入",
+                    # ★ field_code
+                    "field": "revenue",
                     "group_op": "range",
                     "buckets": [
                         {"from": None, "to": 1_000_000, "label": "100万以下"},
@@ -302,7 +322,8 @@ async def test_range_bucket_grouping(executor_with_data: ComputeExecutor) -> Non
                 }
             ],
             "metrics": [{"agg": "count_all", "as": "ent_count"}],
-            "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+            # ★ field_code
+            "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
             "order_by": [{"field": "ent_count", "direction": "desc"}],
         },
     )
@@ -317,20 +338,23 @@ async def test_range_bucket_grouping(executor_with_data: ComputeExecutor) -> Non
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 用例4b：metrics 误写 func 键时归一为 agg
+# 用例4b：JSON null having/dimensions 容错
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 async def test_compute_accepts_json_null_having_and_dimensions(executor_with_data: ComputeExecutor) -> None:
-    """JSON null 映射为 Python None 时，不得对 having/dimensions 做 ``for ... in None``。"""
+    """JSON null 映射为 Python None 时，不得对 having/dimensions 做 ``for ... in None``。
+    metrics[i].field / filters[i].field 传 field_code。
+    """
 
     executor = executor_with_data
     result = await executor.execute(
         "enterprise_base",
         {
             "dimensions": None,
-            "metrics": [{"field": "企业收入", "agg": "sum", "as": "total_revenue"}],
-            "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+            # ★ field_code
+            "metrics": [{"field": "revenue", "agg": "sum", "as": "total_revenue"}],
+            "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
             "having": None,
         },
     )
@@ -339,15 +363,18 @@ async def test_compute_accepts_json_null_having_and_dimensions(executor_with_dat
 
 
 async def test_metrics_func_alias_normalized_like_agg(executor_with_data: ComputeExecutor) -> None:
-    """LLM 误用 ``func`` 代替 ``agg`` 时，校验与 SQL 应与使用 ``agg`` 一致。"""
+    """LLM 误用 ``func`` 代替 ``agg`` 时，校验与 SQL 应与使用 ``agg`` 一致。
+    field 传 field_code。
+    """
 
     executor = executor_with_data
     result = await executor.execute(
         "enterprise_base",
         {
-            "dimensions": [{"field": "区域名称", "group_op": "self"}],
-            "metrics": [{"field": "企业收入", "func": "sum", "as": "total_revenue"}],
-            "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+            # ★ field_code
+            "dimensions": [{"field": "region_name", "group_op": "self"}],
+            "metrics": [{"field": "revenue", "func": "sum", "as": "total_revenue"}],
+            "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
             "order_by": [{"field": "total_revenue", "direction": "desc"}],
         },
     )
@@ -365,13 +392,16 @@ async def test_metrics_func_alias_normalized_like_agg(executor_with_data: Comput
 
 
 async def test_empty_metrics_raises(executor_with_data: ComputeExecutor) -> None:
-    """用例5：metrics 为空 → VirtualActionValidationError UNSUPPORTED_FIELD。"""
+    """用例5：metrics 为空 → VirtualActionValidationError UNSUPPORTED_FIELD。
+    field 传 field_code。
+    """
     with pytest.raises(VirtualActionValidationError) as exc_info:
         await executor_with_data.execute(
             "enterprise_base",
             {
-                "dimensions": [{"field": "区域名称", "group_op": "self"}],
-                "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+                # ★ field_code
+                "dimensions": [{"field": "region_name", "group_op": "self"}],
+                "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
             },
         )
     assert exc_info.value.error_code == "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD"
@@ -383,15 +413,20 @@ async def test_empty_metrics_raises(executor_with_data: ComputeExecutor) -> None
 
 
 async def test_having_field_not_alias_raises(executor_with_data: ComputeExecutor) -> None:
-    """用例6：having.field 使用了字段中文名而非 metrics.as 别名 → UNSUPPORTED_FIELD。"""
+    """用例6：having.field 使用了 field_code 而非 metrics.as 别名 → UNSUPPORTED_FIELD。
+    metrics[i].field / filters[i].field / dimensions[i].field 传 field_code。
+    having.field 必须是 metrics.as 别名，此处故意传 field_code（revenue）触发报错。
+    """
     with pytest.raises(VirtualActionValidationError) as exc_info:
         await executor_with_data.execute(
             "enterprise_base",
             {
-                "dimensions": [{"field": "区域名称", "group_op": "self"}],
-                "metrics": [{"field": "企业收入", "agg": "sum", "as": "total_revenue"}],
-                "having": [{"field": "企业收入", "op": "gte", "value": 10_000_000}],
-                "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+                # ★ field_code
+                "dimensions": [{"field": "region_name", "group_op": "self"}],
+                "metrics": [{"field": "revenue", "agg": "sum", "as": "total_revenue"}],
+                # having.field 故意填 field_code（revenue）而非别名（total_revenue）→ 应报错
+                "having": [{"field": "revenue", "op": "gte", "value": 10_000_000}],
+                "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
             },
         )
     assert exc_info.value.error_code == "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD"
@@ -403,14 +438,17 @@ async def test_having_field_not_alias_raises(executor_with_data: ComputeExecutor
 
 
 async def test_invalid_group_op_for_id_field(executor_with_data: ComputeExecutor) -> None:
-    """用例7：对 id 类型字段（企业ID）使用 month 分组方式 → UNSUPPORTED_OP。"""
+    """用例7：对 id 类型字段（enterprise_id）使用 month 分组方式 → UNSUPPORTED_OP。
+    dimensions[i].field 传 field_code。
+    """
     with pytest.raises(VirtualActionValidationError) as exc_info:
         await executor_with_data.execute(
             "enterprise_base",
             {
-                "dimensions": [{"field": "企业ID", "group_op": "month"}],
+                # ★ field_code
+                "dimensions": [{"field": "enterprise_id", "group_op": "month"}],
                 "metrics": [{"agg": "count_all", "as": "cnt"}],
-                "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+                "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
             },
         )
     assert exc_info.value.error_code == "VIRTUAL_ACTION_ERR_UNSUPPORTED_OP"
@@ -422,13 +460,16 @@ async def test_invalid_group_op_for_id_field(executor_with_data: ComputeExecutor
 
 
 async def test_period_required_missing(executor_with_data: ComputeExecutor) -> None:
-    """用例8：对象含 period_required，未传账期过滤条件 → REQUIRED_FILTER_MISSING。"""
+    """用例8：对象含 period_required，未传账期过滤条件 → REQUIRED_FILTER_MISSING。
+    dimensions[i].field / metrics[i].field 传 field_code。
+    """
     with pytest.raises(VirtualActionValidationError) as exc_info:
         await executor_with_data.execute(
             "enterprise_base",
             {
-                "dimensions": [{"field": "区域名称", "group_op": "self"}],
-                "metrics": [{"field": "企业收入", "agg": "sum", "as": "total_revenue"}],
+                # ★ field_code；无 filters → 无账期条件
+                "dimensions": [{"field": "region_name", "group_op": "self"}],
+                "metrics": [{"field": "revenue", "agg": "sum", "as": "total_revenue"}],
             },
         )
     assert exc_info.value.error_code == "VIRTUAL_ACTION_ERR_REQUIRED_FILTER_MISSING"
@@ -440,16 +481,19 @@ async def test_period_required_missing(executor_with_data: ComputeExecutor) -> N
 
 
 async def test_global_aggregation_no_dimensions(executor_with_data: ComputeExecutor) -> None:
-    """用例9：不传 dimensions，直接对所有 2026-01 行聚合总收入和行数。"""
+    """用例9：不传 dimensions，直接对所有 2026-01 行聚合总收入和行数。
+    metrics[i].field / filters[i].field 传 field_code。
+    """
     executor = executor_with_data
     result = await executor.execute(
         "enterprise_base",
         {
+            # ★ field_code
             "metrics": [
-                {"field": "企业收入", "agg": "sum", "as": "total_revenue"},
+                {"field": "revenue",  "agg": "sum", "as": "total_revenue"},
                 {"agg": "count_all", "as": "ent_count"},
             ],
-            "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+            "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
         },
     )
     records = result["records"]
@@ -464,18 +508,82 @@ async def test_global_aggregation_no_dimensions(executor_with_data: ComputeExecu
 
 
 async def test_snapshot_metric_cross_period_sum_raises(executor_with_data: ComputeExecutor) -> None:
-    """用例10：snapshot_metric 字段 + period 出现在 dimensions + agg=sum → UNSUPPORTED_OP。"""
+    """用例10：snapshot_metric 字段 + period 出现在 dimensions + agg=sum → UNSUPPORTED_OP。
+    dimensions[i].field / metrics[i].field / filters[i].field 传 field_code。
+    """
     with pytest.raises(VirtualActionValidationError) as exc_info:
         await executor_with_data.execute(
             "enterprise_base",
             {
-                "dimensions": [{"field": "账期", "group_op": "month"}],
-                "metrics": [{"field": "月初用户数", "agg": "sum", "as": "total_users"}],
+                # ★ field_code
+                "dimensions": [{"field": "period", "group_op": "month"}],
+                "metrics": [{"field": "beginning_users", "agg": "sum", "as": "total_users"}],
                 "filters": [
-                    {"field": "账期", "op": "between", "value": ["2026-01", "2026-02"]}
+                    {"field": "period", "op": "between", "value": ["2026-01", "2026-02"]}
                 ],
             },
         )
     assert exc_info.value.error_code == "VIRTUAL_ACTION_ERR_UNSUPPORTED_OP"
     assert "月初用户数" in str(exc_info.value)
     assert "跨账期" in str(exc_info.value)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 协议边界：中文名不再被接受（§3.2.3 改动点 核心约束）
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def test_chinese_name_in_dimensions_rejected(executor_with_data: ComputeExecutor) -> None:
+    """协议边界：dimensions[i].field 传中文名（旧协议）→ UNSUPPORTED_FIELD 或 UNSUPPORTED_OP。
+    执行器不再做 name_to_code 翻译，中文名在 field_map 中不存在。
+    """
+    with pytest.raises(VirtualActionValidationError) as exc_info:
+        await executor_with_data.execute(
+            "enterprise_base",
+            {
+                # ★ 故意传中文名（旧协议），新协议应拒绝
+                "dimensions": [{"field": "区域名称", "group_op": "self"}],
+                "metrics": [{"field": "revenue", "agg": "sum", "as": "total_revenue"}],
+                "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
+            },
+        )
+    assert exc_info.value.error_code in (
+        "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD",
+        "VIRTUAL_ACTION_ERR_UNSUPPORTED_OP",
+    )
+
+
+async def test_chinese_name_in_metrics_rejected(executor_with_data: ComputeExecutor) -> None:
+    """协议边界：metrics[i].field 传中文名（旧协议）→ UNSUPPORTED_FIELD。
+    执行器不再做翻译，中文名在 field_map 中查不到。
+    """
+    with pytest.raises(VirtualActionValidationError) as exc_info:
+        await executor_with_data.execute(
+            "enterprise_base",
+            {
+                "dimensions": [{"field": "region_name", "group_op": "self"}],
+                # ★ 故意传中文名（旧协议）
+                "metrics": [{"field": "企业收入", "agg": "sum", "as": "total_revenue"}],
+                "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
+            },
+        )
+    assert exc_info.value.error_code == "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD"
+
+
+async def test_chinese_name_in_filters_rejected(executor_with_data: ComputeExecutor) -> None:
+    """协议边界：filters[i].field 传中文名（旧协议）→ 账期约束报错或字段不存在。
+    执行器不再做翻译，中文名在 field_map 中找不到 period 字段 → 账期约束未满足。
+    """
+    with pytest.raises(VirtualActionValidationError) as exc_info:
+        await executor_with_data.execute(
+            "enterprise_base",
+            {
+                "dimensions": [{"field": "region_name", "group_op": "self"}],
+                "metrics": [{"field": "revenue", "agg": "sum", "as": "total_revenue"}],
+                # ★ 故意传中文名（旧协议）；"账期" 在 field_map 中找不到 → period_required 未满足
+                "filters": [{"field": "账期", "op": "eq", "value": "2026-01"}],
+            },
+        )
+    assert exc_info.value.error_code in (
+        "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD",
+        "VIRTUAL_ACTION_ERR_REQUIRED_FILTER_MISSING",
+    )

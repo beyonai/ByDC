@@ -1,20 +1,20 @@
 """QueryExecutor：执行 query_* 虚拟动作（单对象明细检索）。
 
-协议格式（§3.2.2）：
+协议格式（§3.2.2，字段编码版）：
 {
-  "select":          ["字段中文名", ...],           // 可选，空 = 全部字段
-  "filters":         [{"field": "中文名", "op": "...", "value": ...}],
-  "filter_relation": "AND" | "OR",                  // 默认 AND
-  "order_by":        [{"field": "中文名", "direction": "asc|desc"}],
+  "select":          ["field_code", ...],              // 可选，空 = 全部字段
+  "filters":         [{"field": "field_code", "op": "...", "value": ...}],
+  "filter_relation": "AND" | "OR",                     // 默认 AND
+  "order_by":        [{"field": "field_code", "direction": "asc|desc"}],
   "limit":           100,
   "offset":          0
 }
 
-特点（相对于旧 LookupExecutor）：
-- field 使用字段中文名（field_name），内部通过 name_to_code 反向映射为 field_code
+特点：
+- field 直接使用字段编码（field_code），无需 name_to_code 翻译
 - 支持 derived_metric / formula_metric / virtual_tag 的 formula 展开
 - 支持 filter_relation OR/AND
-- 校验前置：linked 字段拦截、op 合法性、account期强制约束
+- 校验前置：linked 字段拦截、op 合法性、账期强制约束
 """
 
 from __future__ import annotations
@@ -132,8 +132,9 @@ def _build_where(
 class QueryExecutor:
     """执行单对象 query_ontology 明细检索动作。
 
-    与旧 LookupExecutor 的区别：
-    - 接受字段中文名（field_name），内部映射到 field_code
+    协议（§3.2.2 字段编码版）：
+    - select / filters.field / order_by.field 均接受 field_code
+    - 不再接受字段中文名；传中文名时校验层报 UNSUPPORTED_FIELD
     - 支持 formula 字段（derived_metric / formula_metric / virtual_tag）展开
     - 内置参数校验（linked 字段、op 合法性、period_required）
     """
@@ -157,7 +158,7 @@ class QueryExecutor:
 
         Args:
             object_code: 对象编码
-            arguments:   符合 §3.2.2.1 协议的入参（字段名为中文名）
+            arguments:   符合 §3.2.2.1 协议的入参（field 均为 field_code）
 
         Returns:
             {"records": [...], "total": int, "meta": {"columns": [...], "object_code": ...}}
@@ -170,49 +171,42 @@ class QueryExecutor:
         config = self._ds._configs.get(alias) if alias else None
         db_type = getattr(config, "db_type", "SQLITE") if config else "SQLITE"
 
-        # ── 1. 构建映射 ───────────────────────────────────────────────────────
+        # ── 1. 构建字段映射（field_code → OntologyField） ─────────────────────
         field_map: dict[str, Any] = {f.field_code: f for f in cls.fields}
-        name_to_code: dict[str, str] = {f.field_name: f.field_code for f in cls.fields}
 
-        # ── 2. 把入参中的中文名翻译成 field_code ──────────────────────────────
-        translated = _translate_arguments(arguments, name_to_code)
-
-        # ── 3. 参数校验 ────────────────────────────────────────────────────────
-        # 收集 period_required 约束（来自字段元数据）
+        # ── 2. 参数校验（直接用 field_code，无需翻译） ─────────────────────────
         required_groups = [
             f.required_filter_group
             for f in cls.fields
             if getattr(f, "required_filter_group", None)
         ]
         validator = VirtualActionValidator(list(field_map.values()))
-        validator.validate_query(translated, required_groups or None)
+        validator.validate_query(arguments, required_groups or None)
 
-        # ── 4. 确定 SELECT 字段 ────────────────────────────────────────────────
-        select_codes: list[str] = translated.get("select") or []
+        # ── 3. 确定 SELECT 字段 ────────────────────────────────────────────────
+        select_codes: list[str] = arguments.get("select") or []
         if select_codes:
-            # 过滤掉不在 field_map 中的编码（已经在 validator 报错，此处防御）
             select_fields = [field_map[fc] for fc in select_codes if fc in field_map]
         else:
-            # 空 select → 全部非 linked 字段
             select_fields = [
                 f for f in cls.fields
                 if getattr(f, "property_kind", "physical") != "linked"
             ]
 
-        # ── 5. 构建 SQL ────────────────────────────────────────────────────────
+        # ── 4. 构建 SQL ────────────────────────────────────────────────────────
         table = cls.table_name
         select_exprs = ", ".join(_resolve_select_expr(f, db_type) for f in select_fields)
 
         filter_relation = (arguments.get("filter_relation") or "AND").upper()
         where_sql, params = _build_where(
-            translated.get("filters") or [],
+            arguments.get("filters") or [],
             field_map,
             db_type,
             filter_relation,
         )
 
         order_clauses: list[str] = []
-        for ob in translated.get("order_by") or []:
+        for ob in arguments.get("order_by") or []:
             fc = ob.get("field", "")
             direction = ob.get("direction", "asc").upper()
             if direction not in ("ASC", "DESC"):
@@ -231,7 +225,7 @@ class QueryExecutor:
             sql += f" ORDER BY {', '.join(order_clauses)}"
         sql += f" LIMIT {limit} OFFSET {offset}"
 
-        # ── 6. 执行 SQL ────────────────────────────────────────────────────────
+        # ── 5. 执行 SQL ────────────────────────────────────────────────────────
         try:
             connector = self._ds.get_connector(alias)
             rows = await connector.execute(sql, params)
@@ -240,7 +234,7 @@ class QueryExecutor:
         except Exception as exc:
             raise RuntimeError(f"query_ontology failed: {exc}") from exc
 
-        # ── 7. 构建返回值 ──────────────────────────────────────────────────────
+        # ── 6. 构建返回值 ──────────────────────────────────────────────────────
         col_keys = [f.field_code for f in select_fields]
         records = [
             dict(zip(col_keys, row)) if isinstance(row, (list, tuple)) else row
@@ -261,39 +255,3 @@ class QueryExecutor:
             "total": len(records),
             "meta": {"columns": columns, "object_code": object_code},
         }
-
-
-def _translate_arguments(
-    arguments: dict[str, Any],
-    name_to_code: dict[str, str],
-) -> dict[str, Any]:
-    """将 arguments 中所有字段中文名替换为 field_code。
-
-    仅翻译 select / filters.field / order_by.field，其余参数原样保留。
-    """
-    translated: dict[str, Any] = dict(arguments)
-
-    if "select" in arguments:
-        translated["select"] = [
-            name_to_code.get(n, n) for n in (arguments["select"] or [])
-        ]
-
-    if "filters" in arguments:
-        new_filters = []
-        for item in arguments["filters"] or []:
-            new_item = dict(item)
-            fname = item.get("field", "")
-            new_item["field"] = name_to_code.get(fname, fname)
-            new_filters.append(new_item)
-        translated["filters"] = new_filters
-
-    if "order_by" in arguments:
-        new_order = []
-        for ob in arguments["order_by"] or []:
-            new_ob = dict(ob)
-            fname = ob.get("field", "")
-            new_ob["field"] = name_to_code.get(fname, fname)
-            new_order.append(new_ob)
-        translated["order_by"] = new_order
-
-    return translated
