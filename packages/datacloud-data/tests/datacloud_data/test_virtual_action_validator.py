@@ -8,12 +8,10 @@ Bug：group_op 缺失时 dim.get("group_op", "") 返回 ""，
 from __future__ import annotations
 
 import pytest
-
 from datacloud_data_sdk.virtual_action.validator import (
     VirtualActionValidationError,
     VirtualActionValidator,
 )
-
 
 # ---------------------------------------------------------------------------
 # 极简 stub field —— 只需满足 _field_map / _get_field 所需接口
