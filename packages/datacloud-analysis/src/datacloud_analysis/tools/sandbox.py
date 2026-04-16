@@ -1,50 +1,124 @@
-"""Sandbox tools — T_SBX_RUN / T_SBX_READ / T_SBX_WRITE (design §3.1 / §4.4).
+"""Sandbox tools.
 
-These three tools are the Agent's hands inside the isolated sandbox
-(LocalDockerBackend or RemoteDockerBackend).  They map directly to the
-three sandbox symbols in the design flowchart.
+Tools:
+- ``sbx_run_code``: execute Python code in-process with bounded imports.
+- ``sbx_read_file``: read a file under sandbox root for one task.
+- ``sbx_write_file``: write a file under sandbox root for one task.
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
+import builtins
 import contextlib
+import importlib
 import io
 import logging
+import os
+from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_SANDBOX_ROOT = ".datacloud_sandbox"
+_DEFAULT_TASK_BUCKET = "_default"
+_ALLOWED_IMPORT_ROOTS = frozenset(
+    {
+        "collections",
+        "datetime",
+        "itertools",
+        "json",
+        "math",
+        "pandas",
+        "statistics",
+    }
+)
+_SAFE_BUILTINS: dict[str, Any] = {
+    "abs": builtins.abs,
+    "all": builtins.all,
+    "any": builtins.any,
+    "bool": builtins.bool,
+    "dict": builtins.dict,
+    "enumerate": builtins.enumerate,
+    "Exception": builtins.Exception,
+    "filter": builtins.filter,
+    "float": builtins.float,
+    "int": builtins.int,
+    "len": builtins.len,
+    "list": builtins.list,
+    "map": builtins.map,
+    "max": builtins.max,
+    "min": builtins.min,
+    "print": builtins.print,
+    "range": builtins.range,
+    "round": builtins.round,
+    "set": builtins.set,
+    "sorted": builtins.sorted,
+    "str": builtins.str,
+    "sum": builtins.sum,
+    "tuple": builtins.tuple,
+    "zip": builtins.zip,
+}
+
+
+def _restricted_import(
+    name: str,
+    globals_: dict[str, Any] | None = None,
+    locals_: dict[str, Any] | None = None,
+    fromlist: tuple[str, ...] = (),
+    level: int = 0,
+) -> ModuleType:
+    root = name.split(".", 1)[0]
+    if root not in _ALLOWED_IMPORT_ROOTS:
+        raise ImportError(f"Import '{root}' is not allowed in sandbox execution.")
+    return builtins.__import__(name, globals_, locals_, fromlist, level)
+
+
+def _sandbox_task_root(task_id: str) -> Path:
+    base = Path(os.getenv("DATACLOUD_SANDBOX_ROOT", _DEFAULT_SANDBOX_ROOT)).resolve()
+    task_bucket = task_id.strip() or _DEFAULT_TASK_BUCKET
+    return (base / task_bucket).resolve()
+
+
+def _resolve_sandbox_path(path: str, task_id: str) -> Path:
+    rel = Path(path)
+    if rel.is_absolute():
+        raise ValueError(f"Path {path!r} must be relative to the sandbox task root.")
+
+    root = _sandbox_task_root(task_id)
+    resolved = (root / rel).resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as err:
+        raise ValueError(f"Path {path!r} is outside sandbox root {root!s}.") from err
+    return resolved
+
+
+def _load_optional_modules() -> tuple[ModuleType | None, ModuleType | None]:
+    json_module: ModuleType | None
+    pandas_module: ModuleType | None
+    try:
+        json_module = importlib.import_module("json")
+        pandas_module = importlib.import_module("pandas")
+    except ImportError:
+        json_module = None
+        pandas_module = None
+    return json_module, pandas_module
+
 
 @tool
 async def sbx_run_code(
     code: str,
     language: str = "python",
-    timeout: int = 120,
+    timeout: int = 120,  # noqa: ASYNC109
     task_id: str = "",
     input_files: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """T_SBX_RUN — execute Python code locally with access to dep task data files.
-
-    Args:
-        code:        Python source code to execute.
-        language:    Reserved for future use; currently only "python" is supported.
-        timeout:     Execution timeout in seconds.
-        task_id:     Identifier of the current task (for logging).
-        input_files: Mapping of dep task_id → absolute JSONL file path.
-                     Available as ``input_files`` variable inside the code.
-                     The code may also use ``pd`` (pandas) and ``json`` directly.
-
-    Returns:
-        ``{"exit_code": int, "output": str, "result": Any}``
-        where ``result`` is the value assigned to ``_result`` inside the code.
-
-    Note:
-        Code is executed via ``exec()`` without sandbox isolation.
-        Intended for internal / trusted environments only.
-    """
+    """Execute Python code with a constrained global namespace."""
     if language != "python":
         return {
             "exit_code": 1,
@@ -54,20 +128,15 @@ async def sbx_run_code(
 
     def _run() -> dict[str, Any]:
         stdout_buf = io.StringIO()
-
-        # Pre-import common modules so generated code can skip import statements
-        try:
-            import json as _json
-            import pandas as _pd
-        except ImportError:
-            _json = None  # type: ignore[assignment]
-            _pd = None    # type: ignore[assignment]
+        json_module, pandas_module = _load_optional_modules()
+        sandbox_builtins = dict(_SAFE_BUILTINS)
+        sandbox_builtins["__import__"] = _restricted_import
 
         namespace: dict[str, Any] = {
-            "__builtins__": __builtins__,
+            "__builtins__": sandbox_builtins,
             "input_files": input_files or {},
-            "json": _json,
-            "pd": _pd,
+            "json": json_module,
+            "pd": pandas_module,
         }
 
         try:
@@ -91,10 +160,10 @@ async def sbx_run_code(
             loop.run_in_executor(None, _run),
             timeout=float(timeout),
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         result = {
             "exit_code": 1,
-            "output": f"执行超时（{timeout}s），请简化计算逻辑或增大 timeout。",
+            "output": f"Execution timeout ({timeout}s). Please simplify computation.",
             "result": None,
         }
 
@@ -109,32 +178,30 @@ async def sbx_run_code(
 
 @tool
 async def sbx_read_file(path: str, task_id: str = "") -> str:
-    """T_SBX_READ — read a file from the sandbox workspace.
+    """Read one file under the sandbox task directory.
 
-    Args:
-        path:    Relative path inside the sandbox (e.g. ``outputs/report.csv``).
-        task_id: Used to locate the correct sandbox instance.
-
-    Returns:
-        File contents as a string (binary files base64-encoded).
+    Returns UTF-8 text when possible; otherwise returns ``base64:<payload>``.
     """
-    raise NotImplementedError(
-        "sbx_read_file: sandbox backend integration not yet implemented."
-    )
+    resolved = _resolve_sandbox_path(path, task_id)
+    if not resolved.exists():
+        raise FileNotFoundError(f"Sandbox file does not exist: {path}")
+    if not resolved.is_file():
+        raise ValueError(f"Sandbox path is not a file: {path}")
+
+    data = await asyncio.to_thread(resolved.read_bytes)
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return "base64:" + base64.b64encode(data).decode("ascii")
 
 
 @tool
 async def sbx_write_file(path: str, content: str, task_id: str = "") -> str:
-    """T_SBX_WRITE — write or overwrite a file in the sandbox workspace.
+    """Write one UTF-8 text file under the sandbox task directory.
 
-    Args:
-        path:    Relative path inside the sandbox.
-        content: Text content to write.
-        task_id: Used to locate the correct sandbox instance.
-
-    Returns:
-        Absolute path of the written file inside the sandbox.
+    Returns the absolute written path.
     """
-    raise NotImplementedError(
-        "sbx_write_file: sandbox backend integration not yet implemented."
-    )
+    resolved = _resolve_sandbox_path(path, task_id)
+    await asyncio.to_thread(resolved.parent.mkdir, parents=True, exist_ok=True)
+    await asyncio.to_thread(resolved.write_text, content, encoding="utf-8")
+    return str(resolved)
