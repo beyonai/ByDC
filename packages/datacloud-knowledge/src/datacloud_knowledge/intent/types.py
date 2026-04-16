@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from dataclasses import dataclass, field
 
 
@@ -152,6 +153,19 @@ class ClarificationResult:
         }
 
 
+class StreamEventKind(StrEnum):
+    """流式事件 kind 的统一枚举定义。"""
+
+    TITLE = "title"
+    TOOL_NAME = "tool_name"
+    TOOL_ARGS = "tool_args"
+    THINKING = "thinking"
+    TOOL_RESULT = "tool_result"
+    ERROR = "error"
+    STEP_BEGIN = "step_begin"
+    STEP_END = "step_end"
+
+
 @dataclass(frozen=True, slots=True)
 class StreamEvent:
     """函数内部流式推送事件。
@@ -164,27 +178,11 @@ class StreamEvent:
         content: 事件内容（文本或 JSON 字符串）。
     """
 
-    kind: str
+    kind: StreamEventKind
     content: str
 
-    # --- kind 常量 ---
-    TITLE: str = field(init=False, default="title")
-    """阶段标题，如 "问题理解"、"知识召回"。"""
-
-    TOOL_NAME: str = field(init=False, default="tool_name")
-    """工具名称，如 "expand_query"、"llm_confirm"。"""
-
-    TOOL_ARGS: str = field(init=False, default="tool_args")
-    """工具入参 JSON。"""
-
-    THINKING: str = field(init=False, default="thinking")
-    """LLM 思考过程增量文本。"""
-
-    TOOL_RESULT: str = field(init=False, default="tool_result")
-    """工具返回结果 JSON。"""
-
-    ERROR: str = field(init=False, default="error")
-    """工具调用失败信息。"""
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "kind", StreamEventKind(self.kind))
 
 
 @dataclass(frozen=True, slots=True)

@@ -55,6 +55,7 @@ from .types import (
     SlotResult,
     SortSemantic,
     StreamEvent,
+    StreamEventKind,
     TimeExpr,
 )
 
@@ -90,6 +91,7 @@ __all__ = [
     "SlotResult",
     "SortSemantic",
     "StreamEvent",
+    "StreamEventKind",
     "TimeExpr",
     # Cache
     "UserNameCache",
