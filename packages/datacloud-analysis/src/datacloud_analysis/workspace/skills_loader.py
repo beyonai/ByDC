@@ -19,8 +19,8 @@ Each skill is a ``.py`` file that must define:
 Example::
 
     SKILL_META = {
-        "name": "group_agg",
-        "description": "Group-by aggregation helper.",
+        "name": "sample_skill",
+        "description": "Sample helper skill.",
         "version": "1.0.0",
     }
 
