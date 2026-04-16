@@ -78,6 +78,7 @@ class RecallCandidate:
     confidence: float
     score: float
     name_id: str = ""
+    term_code: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> RecallCandidate:
@@ -89,6 +90,7 @@ class RecallCandidate:
             confidence=float(data.get("confidence") or 0.0),
             score=float(data.get("score") or 0.0),
             name_id=str(data.get("name_id") or ""),
+            term_code=str(data.get("term_code") or ""),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -100,6 +102,7 @@ class RecallCandidate:
             "confidence": self.confidence,
             "score": self.score,
             "name_id": self.name_id,
+            "term_code": self.term_code,
         }
 
 

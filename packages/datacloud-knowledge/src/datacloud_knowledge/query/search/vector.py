@@ -30,6 +30,7 @@ class VectorResult:
         name_id: 名称 ID
         term_type_code: 术语类型代码
         similarity: 相似度分数 (0-1)
+        term_code: 术语编码
     """
 
     term_id: str
@@ -37,6 +38,7 @@ class VectorResult:
     name_id: str
     term_type_code: str
     similarity: float
+    term_code: str = ""
 
 
 def vector_search(
@@ -73,7 +75,8 @@ def vector_search(
             tn.name_text AS term_name,
             tn.name_id,
             t.term_type_code,
-            1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS similarity
+            1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS similarity,
+            t.term_code
         FROM
             whale_datacloud.term_name tn,
             whale_datacloud.term t
@@ -91,7 +94,7 @@ def vector_search(
 
         results: list[VectorResult] = []
         for row in rows:
-            term_id, term_name, name_id, term_type_code, similarity = row
+            term_id, term_name, name_id, term_type_code, similarity, term_code = row
             if similarity >= min_similarity:
                 results.append(
                     VectorResult(
@@ -100,6 +103,7 @@ def vector_search(
                         name_id=name_id,
                         term_type_code=term_type_code,
                         similarity=float(similarity),
+                        term_code=str(term_code) if term_code else "",
                     )
                 )
 
@@ -136,8 +140,9 @@ def vector_search_by_vector(
             tn.name_text AS term_name,
             tn.name_id,
             t.term_type_code,
-            1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS similarity
-        FROM
+            1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS similarity,
+            t.term_code
+        From
             whale_datacloud.term_name tn,
             whale_datacloud.term t
         WHERE
@@ -154,7 +159,7 @@ def vector_search_by_vector(
 
         results: list[VectorResult] = []
         for row in rows:
-            term_id, term_name, name_id, term_type_code, similarity = row
+            term_id, term_name, name_id, term_type_code, similarity, term_code = row
             if similarity >= min_similarity:
                 results.append(
                     VectorResult(
@@ -163,6 +168,7 @@ def vector_search_by_vector(
                         name_id=name_id,
                         term_type_code=term_type_code,
                         similarity=float(similarity),
+                        term_code=str(term_code) if term_code else "",
                     )
                 )
 

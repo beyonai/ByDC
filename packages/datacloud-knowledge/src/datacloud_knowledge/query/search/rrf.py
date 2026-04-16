@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 
@@ -18,17 +19,19 @@ class RRFCandidate:
     name_id: str
     term_type_code: str
     rrf_score: float
+    term_code: str = ""
 
 
 def rrf_fuse(
-    ranked_lists: list[list[tuple[str, str, str, str]]],
+    ranked_lists: Sequence[Sequence[tuple[str, ...]]],
     *,
     k: int = 60,
     top_n: int | None = None,
 ) -> list[RRFCandidate]:
     """对多个排序列表执行 RRF 融合。
 
-    每个 ranked_list 中的元素为 ``(term_id, term_name, name_id, term_type_code)``，
+    每个 ranked_list 中的元素为 ``(term_id, term_name, name_id, term_type_code)``
+    或 ``(term_id, term_name, name_id, term_type_code, term_code)``，
     排在前面的 rank 更高。
 
     Args:
@@ -44,15 +47,19 @@ def rrf_fuse(
 
     # term_id -> 累积 rrf 分数
     score_map: dict[str, float] = {}
-    # term_id -> (term_name, name_id, term_type_code)  取首次出现
-    info_map: dict[str, tuple[str, str, str]] = {}
+    # term_id -> (term_name, name_id, term_type_code, term_code)  取首次出现
+    info_map: dict[str, tuple[str, str, str, str]] = {}
 
     for ranked_list in ranked_lists:
         for rank, item in enumerate(ranked_list, start=1):
-            term_id, term_name, name_id, term_type_code = item
+            term_id = item[0]
+            term_name = item[1]
+            name_id = item[2]
+            term_type_code = item[3]
+            term_code = item[4] if len(item) > 4 else ""
             score_map[term_id] = score_map.get(term_id, 0.0) + 1.0 / (k + rank)
             if term_id not in info_map:
-                info_map[term_id] = (term_name, name_id, term_type_code)
+                info_map[term_id] = (term_name, name_id, term_type_code, term_code)
 
     # 按 rrf_score 降序
     sorted_ids = sorted(score_map, key=lambda tid: score_map[tid], reverse=True)
@@ -66,6 +73,7 @@ def rrf_fuse(
             name_id=info_map[tid][1],
             term_type_code=info_map[tid][2],
             rrf_score=score_map[tid],
+            term_code=info_map[tid][3],
         )
         for tid in sorted_ids
     ]

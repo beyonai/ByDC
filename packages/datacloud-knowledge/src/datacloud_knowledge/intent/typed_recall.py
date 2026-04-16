@@ -67,16 +67,16 @@ _WHERE_VALUE_PER_TYPE: Final[int] = 3
 
 
 def _diversify_by_type(
-    ranked: list[tuple[str, str, str, str]],
+    ranked: list[tuple[str, str, str, str, str]],
     per_type: int = _WHERE_VALUE_PER_TYPE,
-) -> list[tuple[str, str, str, str]]:
+) -> list[tuple[str, str, str, str, str]]:
     """按 term_type_code 分组截断，保证类型多样性。
 
-    输入 tuple: (term_id, term_name, name_id, term_type_code)。
+    输入 tuple: (term_id, term_name, name_id, term_type_code, term_code)。
     保持原始排序，每个 type 最多保留 per_type 条。
     """
     type_counts: dict[str, int] = defaultdict(int)
-    result: list[tuple[str, str, str, str]] = []
+    result: list[tuple[str, str, str, str, str]] = []
     for item in ranked:
         ttc = item[3]  # term_type_code
         if type_counts[ttc] < per_type:
@@ -86,12 +86,12 @@ def _diversify_by_type(
 
 
 def _topn_per_type(
-    results: list[tuple[str, str, str, str]],
+    results: list[tuple[str, str, str, str, str]],
     per_type: int,
-) -> list[tuple[str, str, str, str]]:
+) -> list[tuple[str, str, str, str, str]]:
     """对已有结果按 term_type_code 分桶取 top per_type（用于不支持 SQL 分区的路径）。"""
     buckets: dict[str, int] = defaultdict(int)
-    merged: list[tuple[str, str, str, str]] = []
+    merged: list[tuple[str, str, str, str, str]] = []
     for r in results:
         ttc = r[3] if len(r) > 3 else ""
         if buckets[ttc] < per_type:
@@ -167,7 +167,7 @@ def _recall_single_keyword(
     当 ``ktype == "whereValue"`` 时，每一路召回按 ``term_type_code`` 分组搜索，
     每个 type 独立搜 top N，保证类型多样性。
     """
-    ranked_lists: list[list[tuple[str, str, str, str]]] = []
+    ranked_lists: list[list[tuple[str, str, str, str, str]]] = []
     path_names: list[str] = []  # 用于日志
     _per_type = ktype == "whereValue" and type_filter is not None and len(type_filter) > 1
     # ── 路径 1: BM25 AND（精确字符匹配）──
@@ -180,7 +180,10 @@ def _recall_single_keyword(
                 min_score=0.001,
                 term_type_codes=type_filter,
             )
-            raw = [(r.term_id, r.term_name, r.name_id, r.term_type_code) for r in bm25_and_results]
+            raw = [
+                (r.term_id, r.term_name, r.name_id, r.term_type_code, r.term_code)
+                for r in bm25_and_results
+            ]
         else:
             bm25_and_results = bm25_search(
                 session,
@@ -189,7 +192,10 @@ def _recall_single_keyword(
                 min_score=0.001,
                 term_type_codes=type_filter,
             )
-            raw = [(r.term_id, r.term_name, r.name_id, r.term_type_code) for r in bm25_and_results]
+            raw = [
+                (r.term_id, r.term_name, r.name_id, r.term_type_code, r.term_code)
+                for r in bm25_and_results
+            ]
         if raw:
             ranked_lists.append(raw)
             path_names.append("bm25_and")
@@ -210,7 +216,8 @@ def _recall_single_keyword(
                 term_type_codes=type_filter,
             )
             jieba_results = [
-                (r.term_id, r.term_name, r.name_id, r.term_type_code) for r in jieba_bm25_results
+                (r.term_id, r.term_name, r.name_id, r.term_type_code, r.term_code)
+                for r in jieba_bm25_results
             ]
         else:
             jieba_bm25_results = bm25_search_jieba(
@@ -221,7 +228,8 @@ def _recall_single_keyword(
                 term_type_codes=type_filter,
             )
             jieba_results = [
-                (r.term_id, r.term_name, r.name_id, r.term_type_code) for r in jieba_bm25_results
+                (r.term_id, r.term_name, r.name_id, r.term_type_code, r.term_code)
+                for r in jieba_bm25_results
             ]
         if not jieba_results:
             # jieba 列不存在或无结果，回退为旧的应用层 jieba 分词 + RRF
@@ -302,7 +310,8 @@ def _recall_single_keyword(
             )
             if vector_results:
                 raw = [
-                    (r.term_id, r.term_name, r.name_id, r.term_type_code) for r in vector_results
+                    (r.term_id, r.term_name, r.name_id, r.term_type_code, r.term_code)
+                    for r in vector_results
                 ]
                 ranked_lists.append(raw)
                 path_names.append("vector")
@@ -334,6 +343,7 @@ def _recall_single_keyword(
                     str(candidate["term_name"]),
                     str(candidate["name_id"]),
                     str(candidate["term_type_code"]),
+                    str(candidate.get("term_code") or ""),
                 )
                 for candidate in candidates
             ],
@@ -364,6 +374,7 @@ def _shape_candidates(
                 "confidence": min(c.rrf_score * 10, 1.0),
                 "score": c.rrf_score,
                 "name_id": c.name_id,
+                "term_code": getattr(c, "term_code", ""),
             }
         )
         if len(candidates) >= top_k:

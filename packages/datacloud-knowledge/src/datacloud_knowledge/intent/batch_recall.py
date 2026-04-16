@@ -167,7 +167,7 @@ def _run_paths_concurrent(
     *,
     top_k: int,
     enable_vector: bool,
-) -> dict[str, dict[str, list[tuple[str, str, str, str]]]]:
+) -> dict[str, dict[str, list[tuple[str, str, str, str, str]]]]:
     futures: dict[str, Any] = {}
     with ThreadPoolExecutor(max_workers=4) as pool:
         futures["bm25_and"] = pool.submit(_batch_bm25_and, batch, top_k=top_k)
@@ -176,7 +176,7 @@ def _run_paths_concurrent(
         if enable_vector:
             futures["vector"] = pool.submit(_batch_vector, batch, top_k=top_k)
 
-        results: dict[str, dict[str, list[tuple[str, str, str, str]]]] = {}
+        results: dict[str, dict[str, list[tuple[str, str, str, str, str]]]] = {}
         for name, future in futures.items():
             try:
                 results[name] = future.result(timeout=30)
@@ -188,7 +188,7 @@ def _run_paths_concurrent(
 
 def _fuse_and_shape(
     batch: PreparedBatch,
-    path_results: dict[str, dict[str, list[tuple[str, str, str, str]]]],
+    path_results: dict[str, dict[str, list[tuple[str, str, str, str, str]]]],
     *,
     top_k: int,
     rrf_k: int,
@@ -197,7 +197,7 @@ def _fuse_and_shape(
 
     result: dict[str, list[CandidateDict]] = {}
     for req in batch.requests:
-        ranked_lists: list[list[tuple[str, str, str, str]]] = []
+        ranked_lists: list[list[tuple[str, str, str, str, str]]] = []
         for path_hits in path_results.values():
             hits = path_hits.get(req.map_key, [])
             if hits:
@@ -212,6 +212,7 @@ def _fuse_and_shape(
                         candidate.term_name,
                         candidate.name_id,
                         candidate.term_type_code,
+                        candidate.term_code,
                     )
                     for candidate in fused
                 ]
@@ -237,7 +238,7 @@ def _batch_bm25_and(
     batch: PreparedBatch,
     *,
     top_k: int,
-) -> dict[str, list[tuple[str, str, str, str]]]:
+) -> dict[str, list[tuple[str, str, str, str, str]]]:
     started_at = time.monotonic()
     with get_session() as session:
         if not _has_name_keywords_column(session):
@@ -270,7 +271,7 @@ def _batch_jieba_bm25(
     batch: PreparedBatch,
     *,
     top_k: int,
-) -> dict[str, list[tuple[str, str, str, str]]]:
+) -> dict[str, list[tuple[str, str, str, str, str]]]:
     started_at = time.monotonic()
     with get_session() as session:
         if not _has_jieba_column(session):
@@ -303,10 +304,10 @@ def _batch_substring(
     batch: PreparedBatch,
     *,
     top_k: int,
-) -> dict[str, list[tuple[str, str, str, str]]]:
+) -> dict[str, list[tuple[str, str, str, str, str]]]:
     started_at = time.monotonic()
     with get_session() as session:
-        results: dict[str, list[tuple[str, str, str, str]]] = {}
+        results: dict[str, list[tuple[str, str, str, str, str]]] = {}
         for type_filter, requests in _group_requests_by_filter(batch.normal_requests).items():
             if requests:
                 results.update(_run_substring_query(session, requests, type_filter, top_k=top_k))
@@ -336,7 +337,7 @@ def _batch_vector(
     *,
     top_k: int,
     min_similarity: float = _VECTOR_MIN_SIMILARITY,
-) -> dict[str, list[tuple[str, str, str, str]]]:
+) -> dict[str, list[tuple[str, str, str, str, str]]]:
     started_at = time.monotonic()
     if not batch.requests:
         return {}
@@ -348,7 +349,7 @@ def _batch_vector(
     vector_strs = ["[" + ",".join(map(str, vec)) + "]" for vec in vectors]
 
     # N 个独立查询并发执行，每个走 HNSW 索引
-    results: dict[str, list[tuple[str, str, str, str]]] = {}
+    results: dict[str, list[tuple[str, str, str, str, str]]] = {}
     with ThreadPoolExecutor(max_workers=min(len(batch.requests), 8)) as pool:
         futures = {
             pool.submit(
@@ -383,8 +384,8 @@ def _run_tsquery_batches(
     top_k: int,
     column_name: str,
     tokenizer: Callable[[str], str],
-) -> dict[str, list[tuple[str, str, str, str]]]:
-    results: dict[str, list[tuple[str, str, str, str]]] = {}
+) -> dict[str, list[tuple[str, str, str, str, str]]]:
+    results: dict[str, list[tuple[str, str, str, str, str]]] = {}
     for type_filter, requests in _group_requests_by_filter(normal_requests).items():
         if requests:
             results.update(
@@ -431,7 +432,7 @@ def _run_tsquery_query(
     column_name: str,
     tokenizer: Callable[[str], str],
     per_type_limit: int = 0,
-) -> dict[str, list[tuple[str, str, str, str]]]:
+) -> dict[str, list[tuple[str, str, str, str, str]]]:
     input_values, params = _build_values_clause(
         requests,
         value_getter=lambda request: str(tokenizer(request.keyword)),
@@ -469,7 +470,7 @@ def _run_substring_query(
     *,
     top_k: int,
     per_type_limit: int = 0,
-) -> dict[str, list[tuple[str, str, str, str]]]:
+) -> dict[str, list[tuple[str, str, str, str, str]]]:
     input_values, params = _build_values_clause(
         requests,
         value_getter=lambda request: request.keyword,
@@ -503,7 +504,8 @@ _VECTOR_NORMAL_SQL = text(f"""
            tn.name_text AS term_name,
            tn.name_id,
            t.term_type_code,
-           1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score
+           1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score,
+           t.term_code
     FROM {_SCHEMA}.term_name tn
     JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
     WHERE tn.name_embedding IS NOT NULL
@@ -516,7 +518,8 @@ _VECTOR_TYPED_SQL = text(f"""
            tn.name_text AS term_name,
            tn.name_id,
            t.term_type_code,
-           1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score
+           1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score,
+           t.term_code
     FROM {_SCHEMA}.term_name tn
     JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
     WHERE tn.name_embedding IS NOT NULL
@@ -526,23 +529,25 @@ _VECTOR_TYPED_SQL = text(f"""
 """).bindparams(bindparam("type_codes", expanding=True))
 
 _VECTOR_PER_TYPE_SQL = text(f"""
-    SELECT term_id, term_name, name_id, term_type_code, score
+    SELECT term_id, term_name, name_id, term_type_code, score, term_code
     FROM (
         SELECT top_n.term_id,
                top_n.term_name,
                top_n.name_id,
                top_n.term_type_code,
                top_n.score,
+               top_n.term_code,
                ROW_NUMBER() OVER (
-                 PARTITION BY top_n.term_type_code
-                 ORDER BY top_n.score DESC
+                  PARTITION BY top_n.term_type_code
+                  ORDER BY top_n.score DESC
                ) AS rn
         FROM (
             SELECT tn.term_id,
                    tn.name_text AS term_name,
                    tn.name_id,
                    t.term_type_code,
-                   1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score
+                   1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score,
+                   t.term_code
             FROM {_SCHEMA}.term_name tn
             JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
             WHERE tn.name_embedding IS NOT NULL
@@ -562,7 +567,7 @@ def _run_single_vector_query(
     *,
     top_k: int,
     min_similarity: float,
-) -> dict[str, list[tuple[str, str, str, str]]]:
+) -> dict[str, list[tuple[str, str, str, str, str]]]:
     """\u5355 keyword \u5411\u91cf\u67e5\u8be2\uff0c\u4f7f\u7528 HNSW \u7d22\u5f15 (ORDER BY <=> :constant LIMIT k)\u3002"""
     with get_session() as session:
         params: dict[str, Any] = {
@@ -583,10 +588,18 @@ def _run_single_vector_query(
             params["limit"] = top_k * 3
 
         rows = session.execute(sql, params).fetchall()
-        results: list[tuple[str, str, str, str]] = []
-        for term_id, term_name, name_id, term_type_code, score in rows:
+        results: list[tuple[str, str, str, str, str]] = []
+        for term_id, term_name, name_id, term_type_code, score, term_code in rows:
             if float(score) >= min_similarity:
-                results.append((str(term_id), str(term_name), str(name_id), str(term_type_code)))
+                results.append(
+                    (
+                        str(term_id),
+                        str(term_name),
+                        str(name_id),
+                        str(term_type_code),
+                        str(term_code),
+                    )
+                )
         return {req.map_key: results} if results else {}
 
 
@@ -627,16 +640,17 @@ def _build_tsquery_sql(
             WITH input(keyword_key, tsquery_text) AS (
               VALUES {input_values}
             )
-            SELECT i.keyword_key, s.term_id, s.term_name, s.name_id, s.term_type_code, s.score
+            SELECT i.keyword_key, s.term_id, s.term_name, s.name_id, s.term_type_code, s.score, s.term_code
             FROM input i
             CROSS JOIN LATERAL (
-              SELECT term_id, term_name, name_id, term_type_code, score
+              SELECT term_id, term_name, name_id, term_type_code, score, term_code
               FROM (
                 SELECT tn.term_id,
                        tn.name_text AS term_name,
                        tn.name_id,
                        t.term_type_code,
                        ts_rank_cd(tn.{tsvector_column}, to_tsquery('simple', i.tsquery_text), 32) AS score,
+                       t.term_code,
                        ROW_NUMBER() OVER (
                          PARTITION BY t.term_type_code
                          ORDER BY ts_rank_cd(tn.{tsvector_column}, to_tsquery('simple', i.tsquery_text), 32) DESC
@@ -656,14 +670,15 @@ def _build_tsquery_sql(
             WITH input(keyword_key, tsquery_text) AS (
               VALUES {input_values}
             )
-            SELECT i.keyword_key, s.term_id, s.term_name, s.name_id, s.term_type_code, s.score
+            SELECT i.keyword_key, s.term_id, s.term_name, s.name_id, s.term_type_code, s.score, s.term_code
             FROM input i
             CROSS JOIN LATERAL (
               SELECT tn.term_id,
                      tn.name_text AS term_name,
                      tn.name_id,
                      t.term_type_code,
-                     ts_rank_cd(tn.{tsvector_column}, to_tsquery('simple', i.tsquery_text), 32) AS score
+                     ts_rank_cd(tn.{tsvector_column}, to_tsquery('simple', i.tsquery_text), 32) AS score,
+                     t.term_code
               FROM {_SCHEMA}.term_name tn
               JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
               WHERE tn.{tsvector_column} @@ to_tsquery('simple', i.tsquery_text)
@@ -696,16 +711,17 @@ def _build_substring_sql(
             WITH input(keyword_key, keyword_text) AS (
               VALUES {input_values}
             )
-            SELECT i.keyword_key, s.term_id, s.term_name, s.name_id, s.term_type_code, s.score
+            SELECT i.keyword_key, s.term_id, s.term_name, s.name_id, s.term_type_code, s.score, s.term_code
             FROM input i
             CROSS JOIN LATERAL (
-              SELECT term_id, term_name, name_id, term_type_code, score
+              SELECT term_id, term_name, name_id, term_type_code, score, term_code
               FROM (
                 SELECT tn.term_id,
                        tn.name_text AS term_name,
                        tn.name_id,
                        t.term_type_code,
                        LENGTH(tn.name_text)::float AS score,
+                       t.term_code,
                        ROW_NUMBER() OVER (
                          PARTITION BY t.term_type_code
                          ORDER BY LENGTH(tn.name_text) DESC
@@ -727,14 +743,15 @@ def _build_substring_sql(
             WITH input(keyword_key, keyword_text) AS (
               VALUES {input_values}
             )
-            SELECT i.keyword_key, s.term_id, s.term_name, s.name_id, s.term_type_code, s.score
+            SELECT i.keyword_key, s.term_id, s.term_name, s.name_id, s.term_type_code, s.score, s.term_code
             FROM input i
             CROSS JOIN LATERAL (
               SELECT tn.term_id,
                      tn.name_text AS term_name,
                      tn.name_id,
                      t.term_type_code,
-                     LENGTH(tn.name_text)::float AS score
+                     LENGTH(tn.name_text)::float AS score,
+                     t.term_code
               FROM {_SCHEMA}.term_name tn
               JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
               WHERE (
@@ -753,17 +770,23 @@ def _build_substring_sql(
     return sql_obj
 
 
-def _collect_ranked_rows(rows: Any) -> dict[str, list[tuple[str, str, str, str]]]:
-    grouped: dict[str, list[tuple[str, str, str, str]]] = defaultdict(list)
-    for keyword_key, term_id, term_name, name_id, term_type_code, _score in rows:
+def _collect_ranked_rows(rows: Any) -> dict[str, list[tuple[str, str, str, str, str]]]:
+    grouped: dict[str, list[tuple[str, str, str, str, str]]] = defaultdict(list)
+    for keyword_key, term_id, term_name, name_id, term_type_code, _score, term_code in rows:
         grouped[str(keyword_key)].append(
-            (str(term_id), str(term_name), str(name_id), str(term_type_code))
+            (
+                str(term_id),
+                str(term_name),
+                str(name_id),
+                str(term_type_code),
+                str(term_code),
+            )
         )
     return dict(grouped)
 
 
 def _shape_diversified_candidates(
-    diversified: list[tuple[str, str, str, str]],
+    diversified: list[tuple[str, str, str, str, str]],
     fused: list[Any],
     type_filter: frozenset[str] | None,
     *,
@@ -771,7 +794,7 @@ def _shape_diversified_candidates(
 ) -> list[CandidateDict]:
     score_map = {candidate.term_id: candidate.rrf_score for candidate in fused}
     candidates: list[CandidateDict] = []
-    for term_id, term_name, name_id, term_type_code in diversified:
+    for term_id, term_name, name_id, term_type_code, term_code in diversified:
         if type_filter is not None and term_type_code not in type_filter:
             continue
         score = float(score_map.get(term_id, 0.0))
@@ -784,6 +807,7 @@ def _shape_diversified_candidates(
                 "confidence": min(score * 10, 1.0),
                 "score": score,
                 "name_id": name_id,
+                "term_code": term_code,
             }
         )
         if len(candidates) >= top_k:
