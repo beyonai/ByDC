@@ -35,9 +35,9 @@ def _get_jieba() -> Any:
 
 def _bm25_results_to_ranked_list(
     results: list[BM25Result],
-) -> list[tuple[str, str, str, str]]:
+) -> list[tuple[str, str, str, str, str]]:
     """将 BM25Result 列表转为 RRF 所需的 ranked tuple 列表。"""
-    return [(r.term_id, r.term_name, r.name_id, r.term_type_code) for r in results]
+    return [(r.term_id, r.term_name, r.name_id, r.term_type_code, r.term_code) for r in results]
 
 
 def jieba_recall(
@@ -48,7 +48,7 @@ def jieba_recall(
     min_bm25_score: float = 0.001,
     rrf_k: int = 60,
     term_type_codes: set[str] | None = None,
-) -> list[tuple[str, str, str, str]]:
+) -> list[tuple[str, str, str, str, str]]:
     """对查询文本进行 jieba 分词 + 逐 token BM25 召回 + RRF 内融合。
 
     Args:
@@ -59,7 +59,7 @@ def jieba_recall(
         rrf_k: RRF 平滑常数。
 
     Returns:
-        ``(term_id, term_name, name_id, term_type_code)`` 列表，按 RRF 分数降序。
+        ``(term_id, term_name, name_id, term_type_code, term_code)`` 列表，按 RRF 分数降序。
     """
     query_text = query_text.strip()
     if not query_text:
@@ -74,7 +74,7 @@ def jieba_recall(
     log.debug("jieba_recall: '%s' → tokens=%s", query_text, tokens)
 
     # 对每个 token 执行 BM25 OR 搜索
-    ranked_lists: list[list[tuple[str, str, str, str]]] = []
+    ranked_lists: list[list[tuple[str, str, str, str, str]]] = []
     for token in tokens:
         bm25_results = bm25_search_with_or(
             session,
@@ -91,4 +91,4 @@ def jieba_recall(
 
     # RRF 内融合
     fused = rrf_fuse(ranked_lists, k=rrf_k, top_n=top_k)
-    return [(c.term_id, c.term_name, c.name_id, c.term_type_code) for c in fused]
+    return [(c.term_id, c.term_name, c.name_id, c.term_type_code, c.term_code) for c in fused]
