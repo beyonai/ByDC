@@ -1,12 +1,11 @@
 """TC-01 ~ TC-05: intend_node 知识增强集成测试。"""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-from langchain_core.messages import HumanMessage
-
 from datacloud_analysis.orchestration.intend.node import intend_node
+from langchain_core.messages import HumanMessage
 
 
 def _make_state(query: str) -> dict:
@@ -50,7 +49,9 @@ async def test_tc01_knowledge_no_clarification_writes_both_state_fields() -> Non
             knowledge='{"paradigmList":[{"name":"营收","fieldName":"企业总营收（万元）"}]}',
         )
     )
-    result = await intend_node(_make_state("高效益网格的营收"), _make_config(), knowledge_enhancer=enhancer)
+    result = await intend_node(
+        _make_state("高效益网格的营收"), _make_config(), knowledge_enhancer=enhancer
+    )
 
     enhancer.assert_awaited_once_with("高效益网格的营收", None, "")
     assert "knowledge_payload" in result
@@ -79,7 +80,9 @@ async def test_tc02_needs_clarification_no_knowledge_skips_snippets() -> None:
             knowledge="",
         )
     )
-    result = await intend_node(_make_state("信息技术各链上下游企业数"), _make_config(), knowledge_enhancer=enhancer)
+    result = await intend_node(
+        _make_state("信息技术各链上下游企业数"), _make_config(), knowledge_enhancer=enhancer
+    )
 
     payload = result.get("knowledge_payload")
     assert payload is not None
@@ -101,7 +104,9 @@ async def test_tc03_needs_clarification_and_knowledge_both_written() -> None:
             knowledge='{"paradigmList":[{"name":"营收","fieldName":"总营收"}]}',
         )
     )
-    result = await intend_node(_make_state("上游龙头企业数"), _make_config(), knowledge_enhancer=enhancer)
+    result = await intend_node(
+        _make_state("上游龙头企业数"), _make_config(), knowledge_enhancer=enhancer
+    )
 
     # 两者均写入
     assert result.get("knowledge_snippets"), "知识非空时 knowledge_snippets 应写入"
@@ -120,7 +125,9 @@ async def test_tc04_passthrough_no_snippets_written() -> None:
             knowledge="",
         )
     )
-    result = await intend_node(_make_state("查询所有客户"), _make_config(), knowledge_enhancer=enhancer)
+    result = await intend_node(
+        _make_state("查询所有客户"), _make_config(), knowledge_enhancer=enhancer
+    )
 
     # knowledge_payload 写入（记录透传状态），但 knowledge_snippets 不写
     assert result.get("knowledge_payload") is not None
@@ -132,7 +139,9 @@ async def test_tc04_passthrough_no_snippets_written() -> None:
 # TC-05: knowledge_enhancer=None → API 不被调用，state 无 knowledge_payload
 # ---------------------------------------------------------------------------
 async def test_tc05_no_enhancer_api_not_called() -> None:
-    result = await intend_node(_make_state("帮我订一张机票"), _make_config(), knowledge_enhancer=None)
+    result = await intend_node(
+        _make_state("帮我订一张机票"), _make_config(), knowledge_enhancer=None
+    )
 
     # knowledge_payload 不应出现在结果中
     assert "knowledge_payload" not in result or result["knowledge_payload"] is None

@@ -2,6 +2,7 @@
 
 New 3-node architecture: intend → execution → respond
 """
+
 from __future__ import annotations
 
 import logging

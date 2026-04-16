@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from datacloud_data_sdk.ontology.loader import OntologyLoader
+
 from datacloud_data_service.tools.action_tool_generator import ActionToolGenerator
 
 

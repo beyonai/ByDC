@@ -1,4 +1,3 @@
-﻿# ruff: noqa: S101
 from __future__ import annotations
 
 import inspect
@@ -52,4 +51,3 @@ def test_sql_engine_name_index_does_not_use_scope_user_id_is_null() -> None:
 
     assert "scope_user_id' IS NULL" not in method_source
     assert "COALESCE((tn.search_scope->>'scope_user_id'), '') = ''" in method_source
-

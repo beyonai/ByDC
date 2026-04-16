@@ -1,24 +1,25 @@
 """Tests for refactored nodes: intend, react_loop, tool_wrapper, formatter, graph_builder."""
+
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # intend_node tests
 # ---------------------------------------------------------------------------
+
 
 class TestIntendNode:
     @pytest.mark.asyncio
     async def test_intend_routes_command(self) -> None:
         """intend_node should route JSON command messages to command_done path."""
         import json
-        from langchain_core.messages import HumanMessage
+
         from datacloud_analysis.orchestration.intend.node import intend_node
+        from langchain_core.messages import HumanMessage
 
         # Build a state with a command message
         cmd_msg = HumanMessage(content=json.dumps({"command": "get_file", "page": 1}))
@@ -41,8 +42,8 @@ class TestIntendNode:
     @pytest.mark.asyncio
     async def test_intend_routes_react_for_normal_query(self) -> None:
         """intend_node should route non-command query to execution with intent=react."""
-        from langchain_core.messages import HumanMessage
         from datacloud_analysis.orchestration.intend.node import intend_node
+        from langchain_core.messages import HumanMessage
 
         state: dict[str, Any] = {"messages": [HumanMessage(content="请查询本季度销售额")]}
         config: dict[str, Any] = {"configurable": {}}
@@ -62,8 +63,8 @@ class TestIntendNode:
     @pytest.mark.asyncio
     async def test_intend_uses_last_human_not_trailing_ai(self) -> None:
         """When messages end with AIMessage, user_query must be last HumanMessage."""
-        from langchain_core.messages import AIMessage, HumanMessage
         from datacloud_analysis.orchestration.intend.node import intend_node
+        from langchain_core.messages import AIMessage, HumanMessage
 
         state: dict[str, Any] = {
             "messages": [
@@ -91,13 +92,14 @@ class TestIntendNode:
 # run_react_loop tests
 # ---------------------------------------------------------------------------
 
+
 class TestReactLoop:
     @pytest.mark.asyncio
     async def test_stop_on_finish_tool(self) -> None:
         """L1 stop: LLM calls finish_react -> loop terminates."""
-        from langchain_core.messages import AIMessage
         import datacloud_analysis.orchestration.execution.react_loop as rl_module
         from datacloud_analysis.orchestration.execution.react_loop import run_react_loop
+        from langchain_core.messages import AIMessage
 
         tool_call = {
             "name": "finish_react",
@@ -127,9 +129,9 @@ class TestReactLoop:
     @pytest.mark.asyncio
     async def test_stop_on_no_tool_call(self) -> None:
         """L2 stop: LLM returns text without tool calls -> loop terminates."""
-        from langchain_core.messages import AIMessage
         import datacloud_analysis.orchestration.execution.react_loop as rl_module
         from datacloud_analysis.orchestration.execution.react_loop import run_react_loop
+        from langchain_core.messages import AIMessage
 
         ai_msg = AIMessage(content="Direct answer here", tool_calls=[])
 
@@ -153,9 +155,9 @@ class TestReactLoop:
     @pytest.mark.asyncio
     async def test_multi_turn_state_messages_passed_to_llm(self) -> None:
         """Prior Human+AIMessage in state.messages must reach the LLM (not only user_query)."""
-        from langchain_core.messages import AIMessage, HumanMessage
         import datacloud_analysis.orchestration.execution.react_loop as rl_module
         from datacloud_analysis.orchestration.execution.react_loop import run_react_loop
+        from langchain_core.messages import AIMessage, HumanMessage
 
         ai_msg = AIMessage(content="grid A,B,C (prior answer)", tool_calls=[])
 
@@ -184,18 +186,16 @@ class TestReactLoop:
         call_args = mock_llm_with_tools.ainvoke.call_args
         assert call_args is not None
         passed = call_args[0][0]
-        joined = " ".join(
-            str(getattr(m, "content", m)) for m in passed if hasattr(m, "content")
-        )
+        joined = " ".join(str(getattr(m, "content", m)) for m in passed if hasattr(m, "content"))
         assert "g1..g10" in joined
         assert "first 3 grids" in joined
 
     @pytest.mark.asyncio
     async def test_stop_on_max_rounds(self) -> None:
         """L3 stop: max rounds exceeded -> loop terminates with fallback."""
-        from langchain_core.messages import AIMessage
         import datacloud_analysis.orchestration.execution.react_loop as rl_module
         from datacloud_analysis.orchestration.execution.react_loop import run_react_loop
+        from langchain_core.messages import AIMessage
         from langchain_core.tools import tool
 
         @tool("dummy_tool")
@@ -216,14 +216,18 @@ class TestReactLoop:
         mock_llm = MagicMock()
         mock_llm.bind_tools.return_value = mock_llm_with_tools
 
-        with patch.object(rl_module, "_build_llm", return_value=mock_llm):
-            with patch.object(rl_module, "dispatch_tool", new=AsyncMock(return_value=("tc1", "tool_result"))):
-                result = await run_react_loop(
-                    state={"user_query": "test", "messages": []},
-                    tools_list=[dummy_tool],
-                    system_prompt="sys",
-                    max_rounds=2,
-                )
+        with (
+            patch.object(rl_module, "_build_llm", return_value=mock_llm),
+            patch.object(
+                rl_module, "dispatch_tool", new=AsyncMock(return_value=("tc1", "tool_result"))
+            ),
+        ):
+            result = await run_react_loop(
+                state={"user_query": "test", "messages": []},
+                tools_list=[dummy_tool],
+                system_prompt="sys",
+                max_rounds=2,
+            )
 
         assert result["react_final"]["stop_reason"] == "max_rounds"
         assert result["react_rounds"] == 2
@@ -233,6 +237,7 @@ class TestReactLoop:
 # dispatch_tool tests
 # ---------------------------------------------------------------------------
 
+
 class TestDispatchTool:
     @pytest.mark.asyncio
     async def test_finish_react_path(self) -> None:
@@ -241,7 +246,12 @@ class TestDispatchTool:
 
         tc = {
             "name": "finish_react",
-            "args": {"reason": "done", "answer": "result", "result_type": "text", "csv_file_path": ""},
+            "args": {
+                "reason": "done",
+                "answer": "result",
+                "result_type": "text",
+                "csv_file_path": "",
+            },
             "id": "id1",
         }
         _, result = await dispatch_tool(tc, {}, state={})
@@ -283,13 +293,31 @@ class TestDispatchTool:
 
         mock_hook_manager = MagicMock()
         mock_hook_manager.run_before = AsyncMock(
-            return_value=({"tool_name": "my_tool", "tool_params": {"param": "val"}, "tool_output": None, "tool_error": None}, None)
+            return_value=(
+                {
+                    "tool_name": "my_tool",
+                    "tool_params": {"param": "val"},
+                    "tool_output": None,
+                    "tool_error": None,
+                },
+                None,
+            )
         )
         mock_hook_manager.run_after = AsyncMock(
-            return_value=({"tool_name": "my_tool", "tool_params": {"param": "val"}, "tool_output": {"data": "result"}, "tool_error": None}, None)
+            return_value=(
+                {
+                    "tool_name": "my_tool",
+                    "tool_params": {"param": "val"},
+                    "tool_output": {"data": "result"},
+                    "tool_error": None,
+                },
+                None,
+            )
         )
 
-        with patch.object(tw_module, "get_tool_hook_plugin_manager", return_value=mock_hook_manager):
+        with patch.object(
+            tw_module, "get_tool_hook_plugin_manager", return_value=mock_hook_manager
+        ):
             _, result = await dispatch_tool(
                 tc,
                 {"my_tool": mock_tool},
@@ -316,7 +344,12 @@ class TestDispatchTool:
         mock_hook_manager = MagicMock()
         mock_hook_manager.run_before = AsyncMock(
             return_value=(
-                {"tool_name": "my_tool", "tool_params": {"param": "val"}, "tool_output": None, "tool_error": None},
+                {
+                    "tool_name": "my_tool",
+                    "tool_params": {"param": "val"},
+                    "tool_output": None,
+                    "tool_error": None,
+                },
                 None,
             )
         )
@@ -344,17 +377,19 @@ class TestDispatchTool:
             def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
                 return None
 
-        with patch.object(tw_module, "get_tool_hook_plugin_manager", return_value=mock_hook_manager):
-            with patch("datacloud_data_sdk.context.InvocationContext", FakeInvocationContext):
-                _, result = await dispatch_tool(
-                    tc,
-                    {"my_tool": mock_tool},
-                    state={
-                        "agent_id": "s1",
-                        "user_query": "q",
-                        "workspace_dir": "/tmp/datacloud/10011741/private/10011835",
-                    },
-                )
+        with (
+            patch.object(tw_module, "get_tool_hook_plugin_manager", return_value=mock_hook_manager),
+            patch("datacloud_data_sdk.context.InvocationContext", FakeInvocationContext),
+        ):
+            _, result = await dispatch_tool(
+                tc,
+                {"my_tool": mock_tool},
+                state={
+                    "agent_id": "s1",
+                    "user_query": "q",
+                    "workspace_dir": "/tmp/datacloud/10011741/private/10011835",
+                },
+            )
 
         assert result == {"data": "result"}
         assert captured_kwargs["workspace_dir"] == "/tmp/datacloud/10011741/private"
@@ -363,6 +398,7 @@ class TestDispatchTool:
 # ---------------------------------------------------------------------------
 # format_result tests
 # ---------------------------------------------------------------------------
+
 
 class TestFormatResult:
     @pytest.mark.asyncio
@@ -472,6 +508,7 @@ class TestFormatResult:
 # ---------------------------------------------------------------------------
 # graph_builder test
 # ---------------------------------------------------------------------------
+
 
 class TestGraphBuilder:
     def test_build_analysis_graph_compiles(self) -> None:

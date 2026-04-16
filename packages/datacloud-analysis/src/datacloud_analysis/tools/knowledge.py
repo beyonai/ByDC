@@ -96,7 +96,9 @@ def _normalize_search_payload(raw: dict[str, Any], *, query: str) -> dict[str, A
                 "hops": int(item.get("hops", 0) or 0),
                 "node_count": int(item.get("node_count", 0) or 0),
                 "edge_count": int(item.get("edge_count", 0) or 0),
-                "tree": _normalize_tree(item.get("tree") if isinstance(item.get("tree"), dict) else None),
+                "tree": _normalize_tree(
+                    item.get("tree") if isinstance(item.get("tree"), dict) else None
+                ),
             }
         )
 
@@ -209,7 +211,9 @@ async def disambiguate_candidates(
         else:
             fuzzy[word] = converted
 
-    dis_result = await asyncio.to_thread(disambiguate_with_session, MatchResult(exact=exact, fuzzy=fuzzy))
+    dis_result = await asyncio.to_thread(
+        disambiguate_with_session, MatchResult(exact=exact, fuzzy=fuzzy)
+    )
     confirmed_raw = dis_result.confirmed
     ambiguous_raw = dis_result.ambiguous
 
@@ -393,7 +397,9 @@ async def update_term_scores(
             )
             return
         except Exception as exc:  # noqa: BLE001
-            logger.warning("update_term_scores: async call_agent failed, fallback to local update: %s", exc)
+            logger.warning(
+                "update_term_scores: async call_agent failed, fallback to local update: %s", exc
+            )
 
     from datacloud_knowledge.intent import ScoreUpdateRecord, batch_update_scores_with_session
 
@@ -401,4 +407,3 @@ async def update_term_scores(
         ScoreUpdateRecord(name_id=item["name_id"], success=item["success"]) for item in normalized
     )
     await asyncio.to_thread(batch_update_scores_with_session, records)
-

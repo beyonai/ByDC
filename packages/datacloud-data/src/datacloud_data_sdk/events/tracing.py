@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
 from datacloud_data_sdk.events.bus import EventBus
 from datacloud_data_sdk.events.events import (
@@ -73,17 +74,17 @@ class EventSpan:
     trace_id: str
     request_id: str
     span_id: str
-    parent_span_id: Optional[str]
+    parent_span_id: str | None
     module: str
     event_in: str
-    event_out: Optional[str]
+    event_out: str | None
     started_at: float
     finished_at: float
     duration_ms: float
     status: str
-    error_message: Optional[str] = None
-    input_summary: Optional[dict] = None
-    output_summary: Optional[dict] = None
+    error_message: str | None = None
+    input_summary: dict | None = None
+    output_summary: dict | None = None
 
 
 class TracingMiddleware:

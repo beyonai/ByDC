@@ -60,7 +60,8 @@ async def _invoke_knowledge_enhancer(
         positional_count = sum(
             1
             for param in params
-            if param.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            if param.kind
+            in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
         )
         if accepts_varargs or positional_count >= 3:
             value = knowledge_enhancer(user_query, gateway_context, message_parent_id)

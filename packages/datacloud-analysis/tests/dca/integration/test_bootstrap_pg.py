@@ -9,8 +9,6 @@ Run selectively:
 
 from __future__ import annotations
 
-import os
-
 import pytest
 from datacloud_analysis.config.db_url import build_postgres_connection_uri
 
@@ -31,12 +29,9 @@ async def test_setup_creates_tables(initialized_sdk: None) -> None:
     import psycopg  # noqa: PLC0415
 
     uri = build_postgres_connection_uri()
-    async with await psycopg.AsyncConnection.connect(uri) as conn:
-        async with conn.cursor() as cur:
-            await cur.execute(
-                "SELECT tablename FROM pg_tables WHERE tablename = 'checkpoints'"
-            )
-            row = await cur.fetchone()
+    async with await psycopg.AsyncConnection.connect(uri) as conn, conn.cursor() as cur:
+        await cur.execute("SELECT tablename FROM pg_tables WHERE tablename = 'checkpoints'")
+        row = await cur.fetchone()
     assert row is not None, "Table 'checkpoints' should have been created by setup()."
 
 

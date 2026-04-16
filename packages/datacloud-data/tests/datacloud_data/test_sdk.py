@@ -8,10 +8,6 @@ from pathlib import Path
 from datacloud_data_sdk import InvocationContext, OntologyLoader
 from datacloud_data_sdk.ontology.term_loader import TermLoader
 from datacloud_data_sdk.plan.query_plan_generator import LangGraphPlanGenerator
-
-import os
-from pathlib import Path
-
 from dotenv import load_dotenv
 
 load_dotenv(
@@ -180,5 +176,80 @@ async def main5() -> None:
     print(result)
 
 
+async def main6() -> None:
+    loader = OntologyLoader()
+    loader.load_from_owl_directory(
+        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai_v2/by-datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package_owl_onto/"
+    )
+    loader.configure(
+        plan_generator=LangGraphPlanGenerator(
+            model="Qwen/Qwen3-Coder-30B-Instruct",
+            base_url="https://lab.iwhalecloud.com/gpt-proxy/v1",
+            api_key="ailab_AoZF2HGutyJd7y5o4AH8doqNvFjEp4toeBp58v8EQo93lRI8lCkG/tye3YfS+5gwwtZey/kD+tQlKJ7YqX2Oviwi3yZ5xe1Srb6WzwEq/ZBBQ73UUlSpW6g=",
+            temperature=0.0,
+            max_retries=2,
+        ),
+        term_loader=TermLoader.from_config({}),
+        csv_base_dir=str(Path("./tmp").resolve()),
+        sql_execution_mode="internal",
+    )
+    obj = loader.get_object("ads_enterprise_analysis")
+    from datacloud_data_service.tools.virtual_action_injector import (
+        inject_virtual_actions,
+    )
+
+    inject_virtual_actions(loader)
+
+    print("actions:", obj.list_action_codes())
+    print("schema:", obj.get_action_schema("query_ads_enterprise_analysis"))
+
+    with InvocationContext(tenant_id="t1", user_id="u1"):
+        result = await obj.invoke_action(
+            "query_ads_enterprise_analysis",
+            {
+                "select": ["企业唯一 ID", "企业全称"],
+                "order_by": [{"field": "企业总营收（万元）", "direction": "desc"}],
+                "limit": 100,
+                "offset": 0,
+            },
+        )
+    print(result)
+
+
+async def main7() -> None:
+    loader = OntologyLoader()
+    loader.load_from_owl_directory(
+        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai_v2/by-datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package_owl_onto/"
+    )
+    loader.configure(
+        plan_generator=LangGraphPlanGenerator(
+            model="Qwen/Qwen3-Coder-30B-Instruct",
+            base_url="https://lab.iwhalecloud.com/gpt-proxy/v1",
+            api_key="ailab_AoZF2HGutyJd7y5o4AH8doqNvFjEp4toeBp58v8EQo93lRI8lCkG/tye3YfS+5gwwtZey/kD+tQlKJ7YqX2Oviwi3yZ5xe1Srb6WzwEq/ZBBQ73UUlSpW6g=",
+            temperature=0.0,
+            max_retries=2,
+        ),
+        term_loader=TermLoader.from_config({}),
+        csv_base_dir=str(Path("./tmp").resolve()),
+        sql_execution_mode="internal",
+    )
+    obj = loader.get_view("scene_enterprise_analysis")
+    from datacloud_data_service.tools.virtual_action_injector import (
+        inject_virtual_actions,
+    )
+
+    inject_virtual_actions(loader)
+
+    print("actions:", obj.list_action_codes())
+    print("schema:", obj.get_action_schema("query_scene_enterprise_analysis"))
+
+    with InvocationContext(tenant_id="t1", user_id="u1"):
+        result = await obj.invoke_action(
+            "query_scene_enterprise_analysis",
+            {"select": [], "order_by": [], "limit": 10, "offset": 0},
+        )
+    print(result)
+
+
 if __name__ == "__main__":
-    asyncio.run(main5())
+    asyncio.run(main7())

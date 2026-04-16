@@ -25,7 +25,7 @@
 """
 
 from __future__ import annotations
-from typing import Type
+
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError
 from datacloud_data_sdk.sql_executor.base_connector import BaseSourceConnector
 
@@ -46,10 +46,10 @@ class ConnectorRegistry:
         connector = cls(config)
     """
 
-    _registry: dict[str, Type[BaseSourceConnector]] = {}
+    _registry: dict[str, type[BaseSourceConnector]] = {}
 
     @classmethod
-    def register(cls, db_type: str, connector_cls: Type[BaseSourceConnector]) -> None:
+    def register(cls, db_type: str, connector_cls: type[BaseSourceConnector]) -> None:
         """
         注册数据库连接器类
 
@@ -60,7 +60,7 @@ class ConnectorRegistry:
         cls._registry[db_type.upper()] = connector_cls
 
     @classmethod
-    def get(cls, db_type: str) -> Type[BaseSourceConnector]:
+    def get(cls, db_type: str) -> type[BaseSourceConnector]:
         """
         获取数据库连接器类
 

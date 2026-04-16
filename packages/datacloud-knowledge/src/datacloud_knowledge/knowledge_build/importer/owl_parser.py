@@ -197,6 +197,7 @@ def _append_property_value(entity: dict[str, str | list[str]], key: str, value: 
 
     entity[key] = [current_value, value]
 
+
 # ── SAX 流式解析器 ────────────────────────────────────────────────────────────────
 
 

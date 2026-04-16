@@ -26,7 +26,6 @@ from datacloud_data_sdk.exceptions import DataSourceUnavailableError
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 from datacloud_data_sdk.virtual_action.validator import (
-    VirtualActionValidationError,
     VirtualActionValidator,
 )
 
@@ -176,9 +175,7 @@ class QueryExecutor:
 
         # ── 2. 参数校验（直接用 field_code，无需翻译） ─────────────────────────
         required_groups = [
-            f.required_filter_group
-            for f in cls.fields
-            if getattr(f, "required_filter_group", None)
+            f.required_filter_group for f in cls.fields if getattr(f, "required_filter_group", None)
         ]
         validator = VirtualActionValidator(list(field_map.values()))
         validator.validate_query(arguments, required_groups or None)
@@ -189,8 +186,7 @@ class QueryExecutor:
             select_fields = [field_map[fc] for fc in select_codes if fc in field_map]
         else:
             select_fields = [
-                f for f in cls.fields
-                if getattr(f, "property_kind", "physical") != "linked"
+                f for f in cls.fields if getattr(f, "property_kind", "physical") != "linked"
             ]
 
         # ── 4. 构建 SQL ────────────────────────────────────────────────────────
@@ -237,8 +233,7 @@ class QueryExecutor:
         # ── 6. 构建返回值 ──────────────────────────────────────────────────────
         col_keys = [f.field_code for f in select_fields]
         records = [
-            dict(zip(col_keys, row)) if isinstance(row, (list, tuple)) else row
-            for row in rows
+            dict(zip(col_keys, row)) if isinstance(row, (list, tuple)) else row for row in rows
         ]
 
         columns = [

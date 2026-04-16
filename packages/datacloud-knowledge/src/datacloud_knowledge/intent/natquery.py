@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from collections.abc import Callable
 from typing import Any
@@ -242,8 +241,8 @@ def _extract_recall_terms(expr: str) -> list[str]:
     cleaned = _SQL_PUNCT_RE.sub(" ", cleaned)
     # 按空白拆分，过滤空串和纯数字/单字符噪声
     terms: list[str] = []
-    for segment in cleaned.split():
-        segment = segment.strip()
+    for raw_segment in cleaned.split():
+        segment = raw_segment.strip()
         if len(segment) >= 2 and not segment.isdigit():
             terms.append(segment)
     return terms
@@ -330,7 +329,11 @@ def expand_query(
     Returns:
         NatQuery 实例，LLM 调用失败时返回 None。
     """
-    from .llm_utils import build_llm, extract_json_from_text, stream_invoke_with_thinking  # noqa: PLC0415
+    from .llm_utils import (
+        build_llm,
+        extract_json_from_text,
+        stream_invoke_with_thinking,
+    )
 
     try:
         llm = build_llm()

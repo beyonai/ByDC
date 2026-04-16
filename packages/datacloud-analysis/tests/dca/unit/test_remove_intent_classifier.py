@@ -10,17 +10,16 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-
 # ---------------------------------------------------------------------------
 # 1. classify() 永远不被调用
 # ---------------------------------------------------------------------------
+
 
 class TestIntentClassifierNeverCalled:
     """删除后，intend_node 不应再有 IntentClassifier 相关属性或调用。"""
@@ -85,6 +84,7 @@ class TestIntentClassifierNeverCalled:
 # 2. 即使配置了 DATACLOUD_LLM_*，也不触发 LLM 网络调用
 # ---------------------------------------------------------------------------
 
+
 class TestNoLlmCallEvenWithSharedEnv:
     """配置了统一 LLM 环境变量时，intend_node 依然不触发任何 LLM 调用。"""
 
@@ -121,6 +121,7 @@ class TestNoLlmCallEvenWithSharedEnv:
 # ---------------------------------------------------------------------------
 # 3. 普通查询始终返回 intent="react"，不依赖 LLM
 # ---------------------------------------------------------------------------
+
 
 class TestIntentAlwaysReact:
     """删除 classifier 后，非命令查询的 intent 应固定为 react。"""
@@ -169,12 +170,14 @@ class TestIntentAlwaysReact:
 # 4. CommandRouter 仍然正常工作
 # ---------------------------------------------------------------------------
 
+
 class TestCommandRouterStillWorks:
     """删除 IntentClassifier 不影响 CommandRouter 的命令路由功能。"""
 
     @pytest.mark.asyncio
     async def test_json_command_still_routes_to_command_done(self) -> None:
         import json
+
         from datacloud_analysis.orchestration.intend.node import intend_node
 
         cmd_msg = HumanMessage(content=json.dumps({"command": "get_file", "page": 2}))
@@ -197,6 +200,7 @@ class TestCommandRouterStillWorks:
     async def test_command_route_short_circuits_to_command_done(self) -> None:
         """命令路由短路后，直接返回 command_done，不进入 react 路径。"""
         import json
+
         from datacloud_analysis.orchestration.intend.node import intend_node
 
         cmd_msg = HumanMessage(content=json.dumps({"command": "update_terms"}))
@@ -219,6 +223,7 @@ class TestCommandRouterStillWorks:
 # ---------------------------------------------------------------------------
 # 5. user_query 仍正确取最后一条 HumanMessage
 # ---------------------------------------------------------------------------
+
 
 class TestUserQueryExtraction:
     """删除 classifier 后，user_query 提取逻辑不变。"""

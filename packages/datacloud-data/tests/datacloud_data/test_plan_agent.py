@@ -1,9 +1,9 @@
 """PlanAgent 单元测试。"""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+from unittest.mock import MagicMock, patch
 
+import pytest
 from datacloud_data_sdk.agents.plan_agent import PlanAgent
 
 

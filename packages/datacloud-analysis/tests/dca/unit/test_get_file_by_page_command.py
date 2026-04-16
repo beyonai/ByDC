@@ -4,7 +4,6 @@ import json
 from pathlib import Path, PurePosixPath
 
 import pytest
-
 from datacloud_analysis.command_plugins import get_file_by_page_command as get_file_module
 from datacloud_analysis.command_plugins.ext_command_dispatcher import handle_ext_command
 from datacloud_analysis.command_plugins.get_file_by_page_command import (
@@ -90,7 +89,12 @@ def test_get_file_by_page_command_uses_private_workspace_root(tmp_path: Path) ->
 
 def test_get_file_by_page_error_payload_uses_standard_envelope(tmp_path: Path) -> None:
     handled, payload = handle_get_file_by_page_command(
-        ext_params={"command": "getFileByPage", "fileId": "not_found.csv", "page": 1, "pagesize": 10},
+        ext_params={
+            "command": "getFileByPage",
+            "fileId": "not_found.csv",
+            "page": 1,
+            "pagesize": 10,
+        },
         session_id="s4",
         workspace_dir=str(tmp_path),
     )

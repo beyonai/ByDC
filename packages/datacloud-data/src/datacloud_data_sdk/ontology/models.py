@@ -90,7 +90,9 @@ class OntologyField:
     resolve_param_binding: dict | None = None
     # 分析语义字段（来自 OWL ext_property.property_role_rule，规则引擎派生）
     analytic_role: str | None = None  # "dimension" | "measure"
-    analytic_kind: str | None = None  # "id"|"name"|"datetime"|"period"|"numeric"|"raw_number"|"basic_metric"|...
+    analytic_kind: str | None = (
+        None  # "id"|"name"|"datetime"|"period"|"numeric"|"raw_number"|"basic_metric"|...
+    )
     secondary_role: str | None = None  # 规则推断的附加能力角色
     filter_ops: list[str] = field(default_factory=list)
     group_ops: list[str] = field(default_factory=list)

@@ -3,6 +3,7 @@
 当前运行时只暴露统一的 DATACLOUD_LLM_* 环境变量。
 重试与备用模型策略使用代码内默认值，不再通过环境变量配置。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -76,8 +77,7 @@ async def stream_llm_call_with_retry(
         except Exception as exc:
             last_exc = exc
             is_rate_limit = (
-                getattr(exc, "status_code", None) == 429
-                or getattr(exc, "status", None) == 429
+                getattr(exc, "status_code", None) == 429 or getattr(exc, "status", None) == 429
             )
             if not _is_retryable(exc) or attempt >= max_retries:
                 logger.error(
@@ -88,7 +88,7 @@ async def stream_llm_call_with_retry(
                 )
                 raise
 
-            wait = min(min_wait * (2 ** attempt), max_wait)
+            wait = min(min_wait * (2**attempt), max_wait)
             if is_rate_limit:
                 wait += _parse_retry_after(exc) or rate_limit_wait
 

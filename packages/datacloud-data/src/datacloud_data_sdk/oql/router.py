@@ -8,19 +8,20 @@ OQL 路由层
 """
 
 from __future__ import annotations
+
 import logging
-from typing import Any
 import sys
+from typing import Any
 
 if sys.version_info >= (3, 8):
-    from typing import Literal
+    pass
 else:
-    from typing_extensions import Literal
+    pass
 
-from datacloud_data_sdk.oql.adapter import OqlAdapter, resolve_object, route_by_source_type
+from datacloud_data_sdk.oql.adapter import OqlAdapter, resolve_object
 from datacloud_data_sdk.oql.cross_source_executor import CrossSourceExecutor
-from datacloud_data_sdk.oql.pipeline_executor import PipelineExecutor
 from datacloud_data_sdk.oql.models import OQLError, OQLErrorCode
+from datacloud_data_sdk.oql.pipeline_executor import PipelineExecutor
 
 logger = logging.getLogger(__name__)
 

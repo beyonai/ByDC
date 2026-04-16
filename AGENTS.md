@@ -117,3 +117,16 @@ uv run pytest -m db_integration  # 数据库集成测试
 2. 代码结构清晰、健壮、可维护、可扩展、可测试。
 3. 逻辑严谨、无冗余、无废话、高性能。
 4. 符合 GitHub 开源项目标准，可直接用于企业项目。
+
+1. 严格遵循仓库现有 pyproject.toml 的 ruff / mypy 配置
+2. Python 3.12，完整类型注解
+3. 使用 pathlib、logging、f-string
+4. 禁止 print、裸 except、通配符导入
+5. import 顺序必须符合 ruff/isort
+6. 修改后你必须自行运行并修复直到通过以下检查：
+   - uv run ruff format src/by_datacloud packages
+   - uv run ruff check src/by_datacloud packages
+   - uv run mypy src/by_datacloud packages
+7. 如果发现不通过，继续修改，不要停在“这里可能有问题”
+8. 只做最小必要改动，保持包边界清晰
+

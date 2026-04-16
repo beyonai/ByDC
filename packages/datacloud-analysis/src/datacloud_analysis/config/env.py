@@ -31,6 +31,7 @@ from datacloud_analysis.config.db_url import (
 # Sub-groups (composable, testable in isolation)
 # ---------------------------------------------------------------------------
 
+
 def _load_optional[T](loader: Callable[[], T]) -> T | None:
     """Load optional config group; only swallow validation/missing-env failures."""
     try:
@@ -148,6 +149,7 @@ class KnowledgeSettings(BaseSettings):
 # New Settings classes (P2)
 # ---------------------------------------------------------------------------
 
+
 class AgentSettings(BaseSettings):
     """Agent-level settings."""
 
@@ -180,6 +182,7 @@ class ExecutionSettings(BaseSettings):
 # ---------------------------------------------------------------------------
 # Aggregate Settings — single object for the whole SDK
 # ---------------------------------------------------------------------------
+
 
 class Settings(BaseSettings):
     """Aggregate all environment variables for the SDK.
@@ -230,10 +233,18 @@ class Settings(BaseSettings):
                 role_config = None
             object.__setattr__(self, attr, role_config)
 
-        object.__setattr__(self, "embedding", _load_optional(lambda: EmbeddingSettings.model_validate({})))
-        object.__setattr__(self, "knowledge", _load_optional(lambda: KnowledgeSettings.model_validate({})))
+        object.__setattr__(
+            self, "embedding", _load_optional(lambda: EmbeddingSettings.model_validate({}))
+        )
+        object.__setattr__(
+            self, "knowledge", _load_optional(lambda: KnowledgeSettings.model_validate({}))
+        )
         object.__setattr__(self, "agent", _load_optional(lambda: AgentSettings.model_validate({})))
-        object.__setattr__(self, "gateway", _load_optional(lambda: GatewaySettings.model_validate({})))
-        object.__setattr__(self, "execution", _load_optional(lambda: ExecutionSettings.model_validate({})))
+        object.__setattr__(
+            self, "gateway", _load_optional(lambda: GatewaySettings.model_validate({}))
+        )
+        object.__setattr__(
+            self, "execution", _load_optional(lambda: ExecutionSettings.model_validate({}))
+        )
 
         return self

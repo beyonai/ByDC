@@ -16,18 +16,19 @@ SQL 执行器模块
 """
 
 from __future__ import annotations
+
 import csv
 import logging
 from pathlib import Path
-from typing import Any
+
+from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
 from datacloud_data_sdk.executor.models import SqlExecTask
 from datacloud_data_sdk.executor.step_results import StepResults
-from datacloud_data_sdk.sql_executor.models import SqlExecResult
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
+from datacloud_data_sdk.sql_executor.models import SqlExecResult
 from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
 from datacloud_data_sdk.sql_executor.select_column_parser import extract_select_columns
 from datacloud_data_sdk.sql_executor.sql_alias_quoter import quote_aliases
-from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
 
 logger = logging.getLogger(__name__)
 

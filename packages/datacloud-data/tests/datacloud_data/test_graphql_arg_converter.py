@@ -1,7 +1,5 @@
 """GraphQL where 参数到 filters 格式转换的测试。"""
 
-import pytest
-
 from datacloud_data_sdk.graphql.arg_converter import where_to_filters
 
 

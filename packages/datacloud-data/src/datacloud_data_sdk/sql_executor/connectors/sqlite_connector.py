@@ -1,8 +1,10 @@
 """SQLite 连接器（内存/文件）。"""
 
 from __future__ import annotations
+
 import sqlite3
 from typing import Any
+
 from datacloud_data_sdk.sql_executor.base_connector import BaseSourceConnector
 from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 

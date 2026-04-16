@@ -20,13 +20,15 @@
 """
 
 from __future__ import annotations
+
 import logging
 import re
 from typing import Any
+
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError
-from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 from datacloud_data_sdk.sql_executor.base_connector import BaseSourceConnector
 from datacloud_data_sdk.sql_executor.connector_registry import ConnectorRegistry
+from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 
 _logger = logging.getLogger(__name__)
 
@@ -71,6 +73,7 @@ class _LoggingConnectorProxy(BaseSourceConnector):
     async def execute(self, sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         try:
             from datacloud_data_sdk.trace_context import current_trace_id
+
             _tid = current_trace_id.get("????????")
         except Exception:
             _tid = "????????"

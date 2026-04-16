@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import re
 
-from datacloud_data_sdk.plan.models import PlanStep, QueryExecutionPlan
 from datacloud_data_sdk.context import RequestContext
+from datacloud_data_sdk.plan.models import PlanStep, QueryExecutionPlan
 
 
 class DataPermissionRewriter:

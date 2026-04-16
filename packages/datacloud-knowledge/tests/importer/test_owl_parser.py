@@ -9,7 +9,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from datacloud_knowledge.knowledge_build.importer.owl_parser import (
     OWLParseError,
     parse_owl_file,

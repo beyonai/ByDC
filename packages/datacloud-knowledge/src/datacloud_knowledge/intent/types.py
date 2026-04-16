@@ -5,8 +5,8 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
 from dataclasses import dataclass, field
+from enum import StrEnum
 
 
 @dataclass(frozen=True, slots=True)

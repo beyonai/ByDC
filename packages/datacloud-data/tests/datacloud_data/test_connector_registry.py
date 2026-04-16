@@ -1,7 +1,7 @@
 import pytest
+from datacloud_data_sdk.exceptions import DataSourceUnavailableError
 from datacloud_data_sdk.sql_executor.connector_registry import ConnectorRegistry
 from datacloud_data_sdk.sql_executor.connectors.sqlite_connector import SQLiteConnector
-from datacloud_data_sdk.exceptions import DataSourceUnavailableError
 
 
 def test_sqlite_connector_registered_by_default() -> None:

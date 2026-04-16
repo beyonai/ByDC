@@ -23,8 +23,10 @@
 """
 
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import Any
+
 from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 
 

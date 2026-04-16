@@ -135,8 +135,9 @@ def create_app(
 
     @asynccontextmanager
     async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
-        from datacloud_data_service.config import get_settings
         from datacloud_data_sdk.ontology.loader import OntologyLoader
+
+        from datacloud_data_service.config import get_settings
 
         settings = get_settings()
         if loader_override is not None:
@@ -144,8 +145,9 @@ def create_app(
             logger.info("Using loader_override for OntologyLoader")
         else:
             loader = OntologyLoader()
-            
+
             from datacloud_data_sdk.ontology.term_loader import TermLoader
+
             logger.info("Configured TermLoader")
             term_loader = TermLoader.from_config({})
             loader.configure(term_loader=term_loader)
@@ -230,8 +232,9 @@ def create_app(
 
     app = FastAPI(title="DataCloud Data Service", version="0.1.0", lifespan=_lifespan)
 
-    from datacloud_data_service.config import get_settings
     from fastapi.middleware.cors import CORSMiddleware
+
+    from datacloud_data_service.config import get_settings
 
     settings_for_cors = get_settings()
     cors_val = settings_for_cors.cors_origins.strip()
@@ -274,7 +277,7 @@ def create_app(
                 connector = manager.get_connector(alias)
                 await asyncio.wait_for(connector.test_connection(), timeout=HEALTH_CHECK_TIMEOUT)
                 datasources_status[alias] = "ok"
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 datasources_status[alias] = "timeout"
             except Exception:
                 datasources_status[alias] = "error"

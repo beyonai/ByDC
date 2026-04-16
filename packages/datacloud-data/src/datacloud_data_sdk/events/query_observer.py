@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
-from typing import Any
 
 from datacloud_data_sdk.events.bus import EventBus
 from datacloud_data_sdk.events.events import (
@@ -17,6 +17,8 @@ from datacloud_data_sdk.events.events import (
     QueryRequestReceived,
     StepsExecuted,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class QueryObserver:

@@ -22,6 +22,19 @@ logger = logging.getLogger(__name__)
 _SENSITIVE_KEYS = frozenset({"password", "token", "secret", "api_key", "apikey"})
 
 
+def _append_local_sdk_src_for_tests() -> None:
+    """Append the local datacloud-data src path for test/dev fallback imports."""
+    import os
+    import sys
+
+    repo_root = os.path.abspath(__file__)
+    for _ in range(7):
+        repo_root = os.path.dirname(repo_root)
+    sdk_src = os.path.join(repo_root, "packages", "datacloud-data", "src")
+    if os.path.exists(sdk_src):
+        sys.path.append(sdk_src)
+
+
 def _sanitize(params: dict[str, Any]) -> str:
     sanitized = {
         k: "***" if any(s in k.lower() for s in _SENSITIVE_KEYS) else v for k, v in params.items()
@@ -62,12 +75,12 @@ def inject_reason_field(t: BaseTool) -> BaseTool:
             return t
 
         # 以原 schema 为基类新增 reason 字段，保留原 schema 的所有 validator（含 _CoerceBase）
-        NewSchema = create_model(
+        new_schema = create_model(
             f"{original_schema.__name__}WithReason",
             __base__=original_schema,
             reason=(str, Field(default="", description="选择本工具的理由")),
         )
-        t.args_schema = NewSchema
+        t.args_schema = new_schema
 
         # 包装底层 coroutine，在调用原始实现前剥除 reason
         if hasattr(t, "coroutine") and t.coroutine is not None:
@@ -137,7 +150,7 @@ def _consume_delegate_resume_replay_suppression(gateway_context: Any) -> bool:
         )
     )
     if should_skip:
-        setattr(gateway_context, "_datacloud_skip_delegate_resume_replay_output", False)
+        gateway_context._datacloud_skip_delegate_resume_replay_output = False
     return should_skip
 
 
@@ -377,13 +390,15 @@ async def dispatch_tool(
 
     # --- 特殊工具：agent_delegate（内部调用 interrupt，必须跳过 hook 的 try/except）---
     t_delegate = tools_map.get(tool_name)
-    is_delegate_flag = getattr(t_delegate, "_is_agent_delegate", False) if t_delegate is not None else False
+    is_delegate_flag = (
+        getattr(t_delegate, "_is_agent_delegate", False) if t_delegate is not None else False
+    )
     is_agent_delegate = isinstance(is_delegate_flag, bool) and is_delegate_flag
     if t_delegate is not None and is_agent_delegate:
         # 把 react checkpoint 注入到 gateway_context，delegate tool 可以访问
         react_checkpoint = state.get("react_checkpoint")
         if react_checkpoint and gateway_context is not None:
-            setattr(gateway_context, "_react_checkpoint", react_checkpoint)
+            gateway_context._react_checkpoint = react_checkpoint
 
         if _consume_delegate_resume_replay_suppression(gateway_context):
             result = await _invoke_tool_with_runtime_context(
@@ -437,6 +452,7 @@ async def dispatch_tool(
 
     try:
         from datacloud_data_sdk.trace_context import current_trace_id as _tid
+
         _trace_id = _tid.get("????????")
     except Exception:
         _trace_id = "????????"
@@ -506,13 +522,7 @@ async def dispatch_tool(
                 try:
                     from datacloud_data_sdk.context import InvocationContext  # type: ignore
                 except ImportError:  # pragma: no cover - fallback for tests/dev env
-                    import sys
-                    from pathlib import Path
-
-                    repo_root = Path(__file__).resolve().parents[6]
-                    sdk_src = repo_root / "packages" / "datacloud-data" / "src"
-                    if sdk_src.exists():
-                        sys.path.append(str(sdk_src))
+                    _append_local_sdk_src_for_tests()
                     from datacloud_data_sdk.context import InvocationContext  # type: ignore
 
                 workspace_root = resolve_shared_workspace_dir(ctx.get("workspace_dir"))

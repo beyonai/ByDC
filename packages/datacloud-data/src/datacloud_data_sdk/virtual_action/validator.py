@@ -128,7 +128,11 @@ class VirtualActionValidator:
         filter_relation = (arguments.get("filter_relation") or "AND").upper()
 
         # OR + period_required 冲突：账期强制要求与 OR 连接语义矛盾
-        if filter_relation == "OR" and required_filter_groups and "period_required" in required_filter_groups:
+        if (
+            filter_relation == "OR"
+            and required_filter_groups
+            and "period_required" in required_filter_groups
+        ):
             raise VirtualActionValidationError(
                 "该对象含账期强制约束，不允许使用 filter_relation=OR，"
                 "OR 连接会使账期条件失去强制约束效果",
@@ -156,7 +160,9 @@ class VirtualActionValidator:
 
         # 强制过滤（在 OR 冲突检测通过后才到这里，即 filter_relation=AND）
         if required_filter_groups:
-            self._check_required_filters(_list_or_empty(arguments, "filters"), required_filter_groups)
+            self._check_required_filters(
+                _list_or_empty(arguments, "filters"), required_filter_groups
+            )
 
     def validate_lookup(
         self,
@@ -175,7 +181,9 @@ class VirtualActionValidator:
             self._get_field(fc)
         # 强制过滤
         if required_filter_groups:
-            self._check_required_filters(_list_or_empty(arguments, "filters"), required_filter_groups)
+            self._check_required_filters(
+                _list_or_empty(arguments, "filters"), required_filter_groups
+            )
 
     def validate_analyze(
         self,
@@ -256,4 +264,6 @@ class VirtualActionValidator:
 
         # 强制过滤
         if required_filter_groups:
-            self._check_required_filters(_list_or_empty(arguments, "filters"), required_filter_groups)
+            self._check_required_filters(
+                _list_or_empty(arguments, "filters"), required_filter_groups
+            )

@@ -48,7 +48,7 @@ class FileManager:
                 raise BackendMisconfiguredError(
                     "S3 driver selected but missing required S3 settings"
                 )
-            from datacloud_knowledge.file_store.backends.s3 import S3Backend  # noqa: PLC0415
+            from datacloud_knowledge.file_store.backends.s3 import S3Backend
 
             backend: FileStorageBackend = S3Backend.from_settings(settings)
         else:

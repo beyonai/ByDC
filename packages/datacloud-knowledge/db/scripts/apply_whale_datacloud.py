@@ -44,6 +44,8 @@ def _load_env_if_needed() -> None:
                 if k and k not in os.environ:
                     os.environ[k] = v
         break
+
+
 def _connect() -> psycopg2.extensions.connection:
     from datacloud_knowledge.db_url import build_postgres_connection_uri
 

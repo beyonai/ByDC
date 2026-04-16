@@ -8,6 +8,7 @@
 Redis Key 格式：llm:checkpoint:{session_id}
 TTL：3600 秒（1 小时），超时后 checkpoint 自动失效
 """
+
 from __future__ import annotations
 
 import datetime
@@ -26,12 +27,11 @@ CHECKPOINT_REPLY: str = (
     "请稍等片刻后，**重新发送同样的问题**，系统将自动从中断处继续处理，无需重新开始。"
 )
 
-EXPIRED_REPLY: str = (
-    "您之前的问题处理记录已过期，将重新为您查询，请稍候。"
-)
+EXPIRED_REPLY: str = "您之前的问题处理记录已过期，将重新为您查询，请稍候。"
 
 
 # ─── 内部工具函数 ───────────────────────────────────────────────────────────────
+
 
 def _checkpoint_key(session_id: str) -> str:
     """生成 Redis key。"""
@@ -39,6 +39,7 @@ def _checkpoint_key(session_id: str) -> str:
 
 
 # ─── 公开 API ───────────────────────────────────────────────────────────────────
+
 
 async def save_llm_failure_checkpoint(
     redis_client: Any,
@@ -101,7 +102,11 @@ async def load_llm_failure_checkpoint(
             return None
         payload: Any = json.loads(data)
         if not isinstance(payload, dict):
-            logger.warning("[LLM] checkpoint payload is not a dict, key=%s type=%s", key, type(payload).__name__)
+            logger.warning(
+                "[LLM] checkpoint payload is not a dict, key=%s type=%s",
+                key,
+                type(payload).__name__,
+            )
             return None
         return payload
     except Exception as exc:

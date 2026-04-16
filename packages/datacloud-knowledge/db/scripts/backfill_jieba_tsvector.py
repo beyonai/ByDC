@@ -67,6 +67,7 @@ def load_env() -> None:
                     os.environ[key] = value
         break
 
+
 def _jieba_tokenize(text: str) -> str:
     """jieba 搜索引擎模式分词后用空格拼接，供 to_tsvector('simple', ...) 使用。
 
@@ -138,7 +139,7 @@ def _backfill(conn: psycopg.Connection, *, force: bool = False) -> None:  # type
     while True:
         with conn.cursor() as cur:
             cur.execute(
-                f"""
+                """
                 SELECT name_id, name_text
                 FROM whale_datacloud.term_name
                 WHERE name_keywords_jieba IS NULL AND name_text IS NOT NULL

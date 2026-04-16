@@ -16,8 +16,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from datacloud_data_sdk.stream_text import coerce_stream_chunk_text
-
 logger = logging.getLogger(__name__)
 
 _THINK_EVENT_TYPE = "reasoningLogDelta"
@@ -144,6 +142,7 @@ class GatewayProgressReporter:
     async def _emit_reasoning_title(self, title: str) -> tuple[str, str]:
         message_id = self._new_message_id()
         parent_message_id = self._root_message_id()
+        fallback_error: Exception | None = None
 
         try:
             await self._emit_state(
@@ -157,12 +156,13 @@ class GatewayProgressReporter:
                 "emit reasoning title directly failed, fallback to sub_step",
                 exc_info=True,
             )
+            fallback_error = exc
 
         sub_step = getattr(self._ctx, "sub_step", None)
         if sub_step is None:
             raise RuntimeError(
                 "gateway_context does not support reasoning emit or sub_step"
-            ) from exc
+            ) from fallback_error
 
         async with sub_step(title) as (fallback_m_id, fallback_p_m_id):
             pass
@@ -175,6 +175,7 @@ class GatewayProgressReporter:
     ) -> tuple[str, str]:
         message_id = self._new_message_id()
         parent_message_id = self._root_message_id()
+        fallback_error: Exception | None = None
 
         try:
             await self._emit_state(
@@ -194,12 +195,13 @@ class GatewayProgressReporter:
                 "emit reasoning block directly failed, fallback to sub_step",
                 exc_info=True,
             )
+            fallback_error = exc
 
         sub_step = getattr(self._ctx, "sub_step", None)
         if sub_step is None:
             raise RuntimeError(
                 "gateway_context does not support reasoning emit or sub_step"
-            ) from exc
+            ) from fallback_error
 
         async with sub_step(title) as (fallback_m_id, fallback_p_m_id):
             if text:

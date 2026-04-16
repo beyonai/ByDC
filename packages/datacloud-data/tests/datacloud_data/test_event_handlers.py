@@ -1,4 +1,3 @@
-import pytest
 from datacloud_data_sdk.events.bus import EventBus
 from datacloud_data_sdk.events.handlers import register_query_handlers
 
@@ -20,7 +19,7 @@ async def test_register_handlers_multiple_events():
     received = []
     register_query_handlers(bus, on_event=lambda e: received.append(type(e).__name__))
 
-    from datacloud_data_sdk.events.events import QueryRequestReceived, ObjectViewBuilt
+    from datacloud_data_sdk.events.events import ObjectViewBuilt, QueryRequestReceived
 
     await bus.publish(QueryRequestReceived(request_id="r1", trace_id="t1"))
     await bus.publish(ObjectViewBuilt(request_id="r1", trace_id="t1"))

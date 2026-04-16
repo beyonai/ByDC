@@ -24,6 +24,7 @@ _SRC_DIR = _ROOT / "src"
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
+
 def main() -> None:
     """Verify schema existence and expected table set."""
     from datacloud_knowledge.db_url import build_postgres_connection_uri, resolve_knowledge_schema

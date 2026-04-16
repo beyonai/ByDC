@@ -19,6 +19,7 @@ TC-27 的两阶段中断行为（GraphBubbleUp raise → resume return）在此�
 - test_tc27_interrupt_first_call_raises_graph_bubble_up
 - test_tc27_interrupt_resume_second_call_returns_value
 """
+
 from __future__ import annotations
 
 import json
@@ -26,11 +27,9 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from langchain_core.tools import StructuredTool
-from pydantic import BaseModel, Field
-
 from datacloud_analysis.tool_hook_plugins.manager import get_tool_hook_plugin_manager
-
+from langchain_core.tools import StructuredTool
+from pydantic import BaseModel, ConfigDict, Field
 
 # ---------------------------------------------------------------------------
 # autouse fixture：确保 datacloud_data_sdk.context 在每个测试前可用
@@ -56,7 +55,7 @@ def _ensure_sdk_context_mock() -> None:  # type: ignore[return]
                 def __init__(self, **kwargs: object) -> None:
                     self._kwargs = kwargs
 
-                def __enter__(self) -> "_FakeInvocationContext":
+                def __enter__(self) -> _FakeInvocationContext:
                     return self
 
                 def __exit__(self, *args: object) -> None:
@@ -71,9 +70,12 @@ def _ensure_sdk_context_mock() -> None:  # type: ignore[return]
 # 辅助：工具 schema & factory
 # ---------------------------------------------------------------------------
 
+
 class _DataQuerySchema(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     query: str = Field(description="查询语句")
-    contextKnowledge: str = Field(default="", description="上下文知识")
+    context_knowledge: str = Field(default="", alias="contextKnowledge", description="上下文知识")
 
 
 class _QueryGridSchema(BaseModel):
@@ -125,6 +127,7 @@ def _paradigm_metric() -> dict:
 # TC-27 两阶段中断行为（GraphBubbleUp raise → resume return）
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_tc27_interrupt_first_call_raises_graph_bubble_up() -> None:
     """TC-27: before_hook 中 interrupt() 抛 GraphBubbleUp → dispatch_tool 向上透传（不被 except Exception 吞掉）。
@@ -133,8 +136,8 @@ async def test_tc27_interrupt_first_call_raises_graph_bubble_up() -> None:
     因此用 patch 将 interrupt 替换为直接抛 GraphBubbleUp 的 mock，
     从而验证「dispatch_tool 正确透传 GraphBubbleUp」这一核心特性。
     """
-    from langgraph.errors import GraphBubbleUp
     from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
+    from langgraph.errors import GraphBubbleUp
 
     payload = {
         "needs_clarification": True,
@@ -158,11 +161,13 @@ async def test_tc27_interrupt_first_call_raises_graph_bubble_up() -> None:
 
     get_tool_hook_plugin_manager.cache_clear()
     try:
-        with patch("langgraph.types.interrupt", side_effect=_raising_interrupt):
-            with pytest.raises(GraphBubbleUp):
-                await dispatch_tool(
-                    tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
-                )
+        with (
+            patch("langgraph.types.interrupt", side_effect=_raising_interrupt),
+            pytest.raises(GraphBubbleUp),
+        ):
+            await dispatch_tool(
+                tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
+            )
     finally:
         get_tool_hook_plugin_manager.cache_clear()
 
@@ -186,8 +191,8 @@ async def test_tc27_interrupt_resume_second_call_returns_value_and_tool_receives
 
     captured_calls: list[dict] = []
 
-    async def _tool_coroutine(query: str, contextKnowledge: str = "", **kwargs: Any) -> dict:
-        captured_calls.append({"query": query, "contextKnowledge": contextKnowledge})
+    async def _tool_coroutine(query: str, context_knowledge: str = "", **kwargs: Any) -> dict:
+        captured_calls.append({"query": query, "contextKnowledge": context_knowledge})
         return {"records": [], "meta": {}}
 
     tool = StructuredTool(
@@ -202,13 +207,17 @@ async def test_tc27_interrupt_resume_second_call_returns_value_and_tool_receives
     get_tool_hook_plugin_manager.cache_clear()
     try:
         with patch("langgraph.types.interrupt", return_value=resume_value):
-            await dispatch_tool(tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None)
+            await dispatch_tool(
+                tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
+            )
     finally:
         get_tool_hook_plugin_manager.cache_clear()
 
     assert len(captured_calls) == 1, f"工具应被调用一次，实际：{len(captured_calls)}"
     call = captured_calls[0]
-    assert call["query"] == "高效益网格营收利润", f"query 应来自 payload.query，实际：{call['query']!r}"
+    assert call["query"] == "高效益网格营收利润", (
+        f"query 应来自 payload.query，实际：{call['query']!r}"
+    )
     assert "营收 → 企业总营收（万元）" in call["contextKnowledge"], (
         f"contextKnowledge 应含字段映射，实际：{call['contextKnowledge']!r}"
     )
@@ -218,6 +227,7 @@ async def test_tc27_interrupt_resume_second_call_returns_value_and_tool_receives
 # ---------------------------------------------------------------------------
 # TC-18: query_* 工具 → resume → OQL 结构化参数
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_tc18_query_star_resume_produces_oql_params() -> None:
@@ -259,7 +269,9 @@ async def test_tc18_query_star_resume_produces_oql_params() -> None:
     get_tool_hook_plugin_manager.cache_clear()
     try:
         with patch("langgraph.types.interrupt", return_value=resume_value):
-            await dispatch_tool(tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None)
+            await dispatch_tool(
+                tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
+            )
     finally:
         get_tool_hook_plugin_manager.cache_clear()
 
@@ -279,14 +291,13 @@ async def test_tc18_query_star_resume_produces_oql_params() -> None:
 # TC-19: data_query_* 工具 → resume → query + contextKnowledge
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_tc19_data_query_star_resume_produces_query_and_context_knowledge() -> None:
     """TC-19: data_query_* 工具 resume 后收到 query（来自 payload.query）和 contextKnowledge（字段映射）。"""
     from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
 
-    resume_value = {
-        "paradigmList": [_paradigm_revenue(), _paradigm_profit()]
-    }
+    resume_value = {"paradigmList": [_paradigm_revenue(), _paradigm_profit()]}
     payload = {
         "needs_clarification": True,
         "form": json.dumps(resume_value),
@@ -297,8 +308,8 @@ async def test_tc19_data_query_star_resume_produces_query_and_context_knowledge(
 
     captured_calls: list[dict] = []
 
-    async def _tool_coroutine(query: str, contextKnowledge: str = "", **kwargs: Any) -> dict:
-        captured_calls.append({"query": query, "contextKnowledge": contextKnowledge})
+    async def _tool_coroutine(query: str, context_knowledge: str = "", **kwargs: Any) -> dict:
+        captured_calls.append({"query": query, "contextKnowledge": context_knowledge})
         return {"records": [], "meta": {}}
 
     tool = StructuredTool(
@@ -317,7 +328,9 @@ async def test_tc19_data_query_star_resume_produces_query_and_context_knowledge(
     get_tool_hook_plugin_manager.cache_clear()
     try:
         with patch("langgraph.types.interrupt", return_value=resume_value):
-            await dispatch_tool(tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None)
+            await dispatch_tool(
+                tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
+            )
     finally:
         get_tool_hook_plugin_manager.cache_clear()
 
@@ -370,7 +383,9 @@ async def test_tc19_original_llm_params_are_discarded_on_resume() -> None:
     get_tool_hook_plugin_manager.cache_clear()
     try:
         with patch("langgraph.types.interrupt", return_value=resume_value):
-            await dispatch_tool(tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None)
+            await dispatch_tool(
+                tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
+            )
     finally:
         get_tool_hook_plugin_manager.cache_clear()
 
@@ -388,6 +403,7 @@ async def test_tc19_original_llm_params_are_discarded_on_resume() -> None:
 # TC-20: compute_* 工具 → resume → dimensions/metrics
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_tc20_compute_star_resume_produces_dimensions_and_metrics() -> None:
     """TC-20: compute_* 工具 resume 后收到 dimensions/metrics 结构（来自 paradigmList）。"""
@@ -395,9 +411,9 @@ async def test_tc20_compute_star_resume_produces_dimensions_and_metrics() -> Non
 
     resume_value = {
         "paradigmList": [
-            _paradigm_dim(),                                    # dimensionName
-            _paradigm_metric(),                                  # metricName + agg
-            {"metricName": "企业总利润（万元）"},                 # agg 缺省 → sum
+            _paradigm_dim(),  # dimensionName
+            _paradigm_metric(),  # metricName + agg
+            {"metricName": "企业总利润（万元）"},  # agg 缺省 → sum
         ]
     }
     payload = {
@@ -426,7 +442,9 @@ async def test_tc20_compute_star_resume_produces_dimensions_and_metrics() -> Non
     get_tool_hook_plugin_manager.cache_clear()
     try:
         with patch("langgraph.types.interrupt", return_value=resume_value):
-            await dispatch_tool(tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None)
+            await dispatch_tool(
+                tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
+            )
     finally:
         get_tool_hook_plugin_manager.cache_clear()
 
@@ -474,7 +492,9 @@ async def test_tc20_compute_empty_paradigm_list_produces_empty_dims_metrics() ->
     get_tool_hook_plugin_manager.cache_clear()
     try:
         with patch("langgraph.types.interrupt", return_value=resume_value):
-            await dispatch_tool(tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None)
+            await dispatch_tool(
+                tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
+            )
     finally:
         get_tool_hook_plugin_manager.cache_clear()
 
@@ -487,6 +507,7 @@ async def test_tc20_compute_empty_paradigm_list_produces_empty_dims_metrics() ->
 # ---------------------------------------------------------------------------
 # TC-21: data_query_* 同时有 knowledge 且 needs_clarification → 走 interrupt（优先）
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_tc21_needs_clarification_takes_priority_over_knowledge_injection() -> None:
@@ -501,17 +522,17 @@ async def test_tc21_needs_clarification_takes_priority_over_knowledge_injection(
     resume_value = {"paradigmList": resume_paradigm}
 
     payload = {
-        "needs_clarification": True,          # ← 有歧义
+        "needs_clarification": True,  # ← 有歧义
         "form": json.dumps(resume_value),
-        "knowledge": raw_knowledge,           # ← 且有 knowledge（两者并存）
+        "knowledge": raw_knowledge,  # ← 且有 knowledge（两者并存）
         "query": "高效益网格的营收汇总",
     }
     state = _make_state("data_query_grid", knowledge_payload=payload)
 
     captured_calls: list[dict] = []
 
-    async def _tool_coroutine(query: str, contextKnowledge: str = "", **kwargs: Any) -> dict:
-        captured_calls.append({"query": query, "contextKnowledge": contextKnowledge})
+    async def _tool_coroutine(query: str, context_knowledge: str = "", **kwargs: Any) -> dict:
+        captured_calls.append({"query": query, "contextKnowledge": context_knowledge})
         return {"records": [], "meta": {}}
 
     tool = StructuredTool(
@@ -526,7 +547,9 @@ async def test_tc21_needs_clarification_takes_priority_over_knowledge_injection(
     get_tool_hook_plugin_manager.cache_clear()
     try:
         with patch("langgraph.types.interrupt", return_value=resume_value):
-            await dispatch_tool(tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None)
+            await dispatch_tool(
+                tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
+            )
     finally:
         get_tool_hook_plugin_manager.cache_clear()
 
@@ -550,11 +573,12 @@ async def test_tc21_needs_clarification_takes_priority_over_knowledge_injection(
 # TC-21 追加：非数据工具在 needs_clarification=True 时不触发 interrupt
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_tc21_non_data_tool_not_affected_by_clarification_flag() -> None:
     """TC-21 补充：非数据工具（send_email）即使 knowledge_payload.needs_clarification=True 也不触发 interrupt。"""
+
     from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
-    from langgraph.errors import GraphBubbleUp
 
     payload = {
         "needs_clarification": True,

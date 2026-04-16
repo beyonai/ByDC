@@ -36,7 +36,7 @@ class SandboxMounter:
         task_paths: The resolved paths for the current task.
     """
 
-    def __init__(self, task_paths: "TaskPaths") -> None:
+    def __init__(self, task_paths: TaskPaths) -> None:
         self._paths = task_paths
 
     def prepare(self) -> None:

@@ -1,9 +1,9 @@
 import pytest
+from datacloud_data_sdk.agents.plan_agent import _serialize_payload
 from datacloud_data_sdk.ontology.term_loader import TermLoader
 from datacloud_data_sdk.plan.models import (
     ObjectViewAction,
     ObjectViewField,
-    ObjectViewFunction,
     ObjectViewFunctionParam,
     ObjectViewObject,
     ObjectViewPayload,
@@ -11,10 +11,8 @@ from datacloud_data_sdk.plan.models import (
     QueryExecutionPlan,
 )
 from datacloud_data_sdk.plan.query_plan_generator import (
-    BasePlanGenerator,
     MockPlanGenerator,
 )
-from datacloud_data_sdk.agents.plan_agent import _serialize_payload
 from datacloud_data_sdk.utils.case_utils import camel_to_snake, camel_to_snake_keys
 
 PAYLOAD = ObjectViewPayload(view_id="v1", sources=[], objects=[], relations=[])

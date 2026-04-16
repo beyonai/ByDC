@@ -1,10 +1,12 @@
 """SqliteAggregator: 用 SQLite 内存库做跨步骤 JOIN。"""
 
 from __future__ import annotations
+
 import csv
 import sqlite3
 from pathlib import Path
 from typing import Any
+
 from datacloud_data_sdk.aggregator.base import BaseAggregator
 from datacloud_data_sdk.executor.step_results import StepResults
 from datacloud_data_sdk.plan.models import PlanAggregation

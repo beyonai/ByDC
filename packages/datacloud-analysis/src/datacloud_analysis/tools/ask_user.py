@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from langchain_core.tools import tool
 from langgraph.types import interrupt
+
 
 @tool("ask_user")
 async def ask_user(question: str, reason: str = "") -> str:
@@ -14,9 +16,11 @@ async def ask_user(question: str, reason: str = "") -> str:
         question: 向用户提出的问题
         reason: 为何需要询问用户（用于审计日志）
     """
-    answer = interrupt({
-        "question": question,
-        "reason": reason,
-        "reason_code": "ASK_USER",
-    })
+    answer = interrupt(
+        {
+            "question": question,
+            "reason": reason,
+            "reason_code": "ASK_USER",
+        }
+    )
     return str(answer)

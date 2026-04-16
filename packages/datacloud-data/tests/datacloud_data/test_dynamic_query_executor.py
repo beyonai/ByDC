@@ -1,7 +1,6 @@
 """Tests for DynamicQueryExecutor."""
 
 import pytest
-
 from datacloud_data_sdk.executor.dynamic_query_executor import DynamicQueryExecutor
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager

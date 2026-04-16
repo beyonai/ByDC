@@ -23,7 +23,6 @@ def quote_aliases(sql: str, db_type: str) -> str:
 
 def _quote_select_aliases(sql: str, quote_char: str) -> str:
     import sqlparse
-    from sqlparse import sql as sql_ast
     from sqlparse import tokens as T
 
     parsed = sqlparse.parse(sql)

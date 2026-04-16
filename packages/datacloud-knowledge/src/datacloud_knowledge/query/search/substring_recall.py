@@ -67,7 +67,7 @@ def substring_recall(
             ORDER BY
                 LENGTH(tn.name_text) DESC
             LIMIT :limit
-        """).bindparams(  # noqa: S608
+        """).bindparams(
             bindparam("type_codes", expanding=True),
         )
         params: dict[str, object] = {
@@ -93,7 +93,7 @@ def substring_recall(
             ORDER BY
                 LENGTH(tn.name_text) DESC
             LIMIT :limit
-        """)  # noqa: S608
+        """)
         params = {"query_text": query_text, "limit": top_k}
 
     try:
@@ -141,7 +141,7 @@ def substring_recall_partitioned(
         ) ranked
         WHERE rn <= :per_type_limit
         ORDER BY LENGTH(term_name) DESC
-    """).bindparams(  # noqa: S608
+    """).bindparams(
         bindparam("type_codes", expanding=True),
     )
     params: dict[str, object] = {

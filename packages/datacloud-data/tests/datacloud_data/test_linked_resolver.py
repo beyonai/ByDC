@@ -6,7 +6,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from datacloud_data_sdk.executor.linked_resolver import (
     resolve_api_linked_batch,
     resolve_db_linked_batch,

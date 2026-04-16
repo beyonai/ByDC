@@ -11,16 +11,8 @@ Tools:
 - ``sbx_read_file``: read a file under sandbox root for one task.
 - ``sbx_write_file``: write a file under sandbox root for one task.
 """
+
 from __future__ import annotations
-
-import warnings
-
-warnings.warn(
-    "datacloud_analysis.tools.sandbox is deprecated and will be removed in the next major version. "
-    "Use read_file / write_file from datacloud_analysis.tools.file_io instead.",
-    DeprecationWarning,
-    stacklevel=2,
-)
 
 import asyncio
 import base64
@@ -30,6 +22,7 @@ import importlib
 import io
 import logging
 import os
+import warnings
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -37,6 +30,13 @@ from typing import Any
 from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
+
+warnings.warn(
+    "datacloud_analysis.tools.sandbox is deprecated and will be removed in the next major version. "
+    "Use read_file / write_file from datacloud_analysis.tools.file_io instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 _DEFAULT_SANDBOX_ROOT = ".datacloud_sandbox"
 _DEFAULT_TASK_BUCKET = "_default"

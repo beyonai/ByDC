@@ -1,6 +1,7 @@
 """ResultConverter: 查询结果 -> CSV 文件。"""
 
 from __future__ import annotations
+
 import csv
 from pathlib import Path
 from typing import Any
@@ -51,7 +52,7 @@ class ResultConverter:
             logger.warning("ResultConverter.from_csv: file does not exist: %s", path)
             return []
 
-        with open(path, "r", newline="", encoding="utf-8") as f:
+        with open(path, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             records = list(reader)
             logger.info("ResultConverter.from_csv: loaded %d records", len(records))

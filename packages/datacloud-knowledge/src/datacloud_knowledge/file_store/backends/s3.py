@@ -164,7 +164,7 @@ def _create_s3_client(
     secret_access_key: str,
 ) -> Any:
     try:
-        import boto3  # noqa: PLC0415
+        import boto3
     except Exception as e:  # pragma: no cover
         raise BackendMisconfiguredError("boto3 is required for S3 backend") from e
 
@@ -179,8 +179,8 @@ def _create_s3_client(
 
 def _client_error_type() -> type | None:
     try:
-        from botocore.exceptions import ClientError  # noqa: PLC0415
-
-        return ClientError  # type: ignore[no-any-return]
+        from botocore.exceptions import ClientError
     except Exception:  # pragma: no cover
         return None
+    else:
+        return ClientError  # type: ignore[no-any-return]

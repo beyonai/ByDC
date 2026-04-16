@@ -17,10 +17,6 @@ import logging
 import re
 import threading
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -93,10 +89,11 @@ class DimensionValueResolver:
         if self._loaded:
             return
         try:
-            from datacloud_knowledge.knowledge_search.db.connection import (  # noqa: PLC0415
+            from sqlalchemy import text
+
+            from datacloud_knowledge.knowledge_search.db.connection import (
                 get_session,
             )
-            from sqlalchemy import text  # noqa: PLC0415
 
             with get_session() as session:
                 rows = session.execute(
@@ -217,11 +214,29 @@ class DimensionValueResolver:
 
 
 _PUNCT_RE = re.compile(r"[\s\u3000（）()【】\[\]{}、，。！？：；\"']+")
-_MEASURE_KEYWORDS = frozenset({
-    "数量", "总数", "金额", "营收", "利润", "缴税", "均值", "平均",
-    "占比", "比例", "增长率", "总量", "面积", "密度", "人次", "辆次",
-    "强度", "税负率", "效益",
-})
+_MEASURE_KEYWORDS = frozenset(
+    {
+        "数量",
+        "总数",
+        "金额",
+        "营收",
+        "利润",
+        "缴税",
+        "均值",
+        "平均",
+        "占比",
+        "比例",
+        "增长率",
+        "总量",
+        "面积",
+        "密度",
+        "人次",
+        "辆次",
+        "强度",
+        "税负率",
+        "效益",
+    }
+)
 
 
 def _normalize(text: str) -> str:
@@ -242,7 +257,7 @@ def _extract_tokens(keyword: str) -> list[str]:
     比 cut + 手动二次拆分更稳定。
     """
     try:
-        import jieba  # noqa: PLC0415
+        import jieba
 
         tokens = list(jieba.cut_for_search(keyword))
     except ImportError:
@@ -252,9 +267,9 @@ def _extract_tokens(keyword: str) -> list[str]:
     # 去重保序
     seen: set[str] = set()
     unique: list[str] = []
-    for t in tokens:
-        t = t.strip()
-        if t and t not in seen:
-            seen.add(t)
-            unique.append(t)
+    for raw_token in tokens:
+        token = raw_token.strip()
+        if token and token not in seen:
+            seen.add(token)
+            unique.append(token)
     return unique

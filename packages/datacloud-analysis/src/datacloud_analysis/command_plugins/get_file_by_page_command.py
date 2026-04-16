@@ -264,4 +264,3 @@ def _read_csv_page(csv_path: Path, page: int, page_size: int) -> tuple[list[dict
     total = len(all_rows)
     records = all_rows[start_idx:end_idx]
     return records, total
-

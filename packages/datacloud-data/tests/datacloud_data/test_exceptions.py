@@ -1,17 +1,11 @@
 from datacloud_data_sdk.exceptions import (
+    ActionNotConfiguredError,
+    CannotAnswerError,
     DatacloudError,
     ObjectNotFoundError,
-    ActionNotFoundError,
-    InvalidOntologyFormatError,
-    PlanGenerationError,
     PlanValidationError,
-    CannotAnswerError,
-    ApiExecutionError,
-    SqlExecutionError,
     ScriptExecutionError,
-    ActionNotConfiguredError,
-    DataSourceUnavailableError,
-    AggregationError,
+    SqlExecutionError,
 )
 
 

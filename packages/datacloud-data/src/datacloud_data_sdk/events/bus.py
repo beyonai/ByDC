@@ -17,7 +17,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from datacloud_data_sdk.events.events import BaseEvent
 

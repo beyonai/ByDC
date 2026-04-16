@@ -32,18 +32,15 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
-
 from datacloud_data_sdk.virtual_action.generator import (
     build_compute_description,
     build_compute_schema,
     build_query_description,
     build_query_schema,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 测试用字段 stub（模拟 OntologyField）
@@ -81,19 +78,27 @@ class _F:
 
 # 三个典型字段
 _REGION = _F(
-    "region_name", "区域名称",
-    analytic_role="dimension", analytic_kind="name",
-    filter_ops=["eq", "in"], group_ops=["self"],
+    "region_name",
+    "区域名称",
+    analytic_role="dimension",
+    analytic_kind="name",
+    filter_ops=["eq", "in"],
+    group_ops=["self"],
 )
 _PERIOD = _F(
-    "period", "账期",
-    analytic_role="dimension", analytic_kind="period",
-    filter_ops=["eq", "between"], group_ops=["month", "year"],
+    "period",
+    "账期",
+    analytic_role="dimension",
+    analytic_kind="period",
+    filter_ops=["eq", "between"],
+    group_ops=["month", "year"],
     required_filter_group="period_required",
 )
 _REVENUE = _F(
-    "revenue", "企业收入",
-    analytic_role="measure", analytic_kind="basic_metric",
+    "revenue",
+    "企业收入",
+    analytic_role="measure",
+    analytic_kind="basic_metric",
     filter_ops=["eq", "gt", "gte", "lt", "lte"],
     aggregate_ops=["sum", "avg", "min", "max"],
 )
@@ -155,11 +160,11 @@ def test_q1_select_enum_uses_field_code(query_schema: dict[str, Any]) -> None:
     enum_vals: list[str] = select_prop["items"]["enum"]
     # 必须包含三个 field_code
     assert "region_name" in enum_vals, f"select enum 缺少 region_name，实际：{enum_vals}"
-    assert "period"      in enum_vals, f"select enum 缺少 period，实际：{enum_vals}"
-    assert "revenue"     in enum_vals, f"select enum 缺少 revenue，实际：{enum_vals}"
+    assert "period" in enum_vals, f"select enum 缺少 period，实际：{enum_vals}"
+    assert "revenue" in enum_vals, f"select enum 缺少 revenue，实际：{enum_vals}"
     # 不能含中文名
     assert "区域名称" not in enum_vals, f"select enum 不应含中文名，实际：{enum_vals}"
-    assert "账期"     not in enum_vals, f"select enum 不应含中文名，实际：{enum_vals}"
+    assert "账期" not in enum_vals, f"select enum 不应含中文名，实际：{enum_vals}"
     assert "企业收入" not in enum_vals, f"select enum 不应含中文名，实际：{enum_vals}"
 
 
@@ -172,8 +177,8 @@ def test_q2_filter_field_const_uses_field_code(query_schema: dict[str, Any]) -> 
             f"filter field.const '{c}' 含非 ASCII 字符（中文名），应为 field_code"
         )
     assert "region_name" in consts, f"缺少 region_name，实际 consts={consts}"
-    assert "period"      in consts, f"缺少 period，实际 consts={consts}"
-    assert "revenue"     in consts, f"缺少 revenue，实际 consts={consts}"
+    assert "period" in consts, f"缺少 period，实际 consts={consts}"
+    assert "revenue" in consts, f"缺少 revenue，实际 consts={consts}"
 
 
 def test_q3_order_by_field_enum_uses_field_code(query_schema: dict[str, Any]) -> None:
@@ -232,7 +237,7 @@ def test_c1_dimension_field_const_uses_field_code(compute_schema: dict[str, Any]
             f"dimensions field.const '{c}' 含中文，应为 field_code"
         )
     assert "region_name" in consts, f"缺少 region_name，实际：{consts}"
-    assert "period"      in consts, f"缺少 period，实际：{consts}"
+    assert "period" in consts, f"缺少 period，实际：{consts}"
 
 
 def test_c2_metric_field_const_uses_field_code(compute_schema: dict[str, Any]) -> None:
@@ -301,27 +306,27 @@ def test_x3_measure_catalog_field_is_field_code(compute_schema: dict[str, Any]) 
 
 def test_d1_query_description_no_chinese_name_phrase() -> None:
     desc = build_query_description(
-        '企业基础信息', '企业信息对象', FIELDS, required_filter_groups=['period_required']
+        "企业基础信息", "企业信息对象", FIELDS, required_filter_groups=["period_required"]
     )
-    assert '字段统一使用中文名' not in desc, 'query description 仍含旧提示[字段统一使用中文名]'
+    assert "字段统一使用中文名" not in desc, "query description 仍含旧提示[字段统一使用中文名]"
 
 
 def test_d2_query_description_no_wrong_error_hint() -> None:
     desc = build_query_description(
-        '企业基础信息', '企业信息对象', FIELDS, required_filter_groups=['period_required']
+        "企业基础信息", "企业信息对象", FIELDS, required_filter_groups=["period_required"]
     )
-    assert 'field 填了字段编码而非中文名' not in desc, 'query description 常见错误仍含旧提示'
+    assert "field 填了字段编码而非中文名" not in desc, "query description 常见错误仍含旧提示"
 
 
 def test_d3_compute_description_no_chinese_name_phrase() -> None:
     desc = build_compute_description(
-        '企业基础信息', '企业信息对象', FIELDS, required_filter_groups=['period_required']
+        "企业基础信息", "企业信息对象", FIELDS, required_filter_groups=["period_required"]
     )
-    assert '字段统一使用中文名' not in desc, 'compute description 仍含旧提示[字段统一使用中文名]'
+    assert "字段统一使用中文名" not in desc, "compute description 仍含旧提示[字段统一使用中文名]"
 
 
 def test_d4_compute_description_no_wrong_error_hint() -> None:
     desc = build_compute_description(
-        '企业基础信息', '企业信息对象', FIELDS, required_filter_groups=['period_required']
+        "企业基础信息", "企业信息对象", FIELDS, required_filter_groups=["period_required"]
     )
-    assert 'field 填了字段编码而非中文名' not in desc, 'compute description 常见错误仍含旧提示'
+    assert "field 填了字段编码而非中文名" not in desc, "compute description 常见错误仍含旧提示"

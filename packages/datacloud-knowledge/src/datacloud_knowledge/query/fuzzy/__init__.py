@@ -35,13 +35,11 @@ from .types import (
 )
 
 __all__ = [
-    # Types
+    "DEFAULT_STOPWORDS",
+    "FuzzyConfig",
     "FuzzyMatch",
     "FuzzySuggestion",
     "UnmatchedSpan",
-    "FuzzyConfig",
-    # Main API functions
     "create_matcher",
     "match_all_unmatched",
-    "DEFAULT_STOPWORDS",
 ]

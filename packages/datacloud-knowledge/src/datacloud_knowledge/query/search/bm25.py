@@ -1,4 +1,4 @@
-﻿"""BM25 搜索实现。
+"""BM25 搜索实现。
 
 使用 PostgreSQL 的 tsvector + ts_rank_cd 实现 BM25 风格的全文搜索。
 术语名称使用单字分词，存储在 name_keywords 字段中。
@@ -77,9 +77,7 @@ def _has_name_keywords_column(session: Session) -> bool:
 
 
 def _build_search_sql(*, with_type_filter: bool = False) -> object:
-    type_clause = (
-        "\n            AND t.term_type_code IN :type_codes" if with_type_filter else ""
-    )
+    type_clause = "\n            AND t.term_type_code IN :type_codes" if with_type_filter else ""
     sql_text = f"""
         SELECT
             tn.term_id,
@@ -100,7 +98,7 @@ def _build_search_sql(*, with_type_filter: bool = False) -> object:
         LIMIT :limit
     """
     if with_type_filter:
-        return text(sql_text).bindparams(  # noqa: S608
+        return text(sql_text).bindparams(
             bindparam("type_codes", expanding=True),
         )
     return text(sql_text)
@@ -231,7 +229,7 @@ def _build_partitioned_search_sql(*, with_type_filter: bool = True) -> object:
         WHERE rn <= :per_type_limit
         ORDER BY score DESC
     """
-    return text(sql_text).bindparams(  # noqa: S608
+    return text(sql_text).bindparams(
         bindparam("type_codes", expanding=True),
     )
 
@@ -280,8 +278,11 @@ def bm25_search_partitioned(
         return []
     try:
         return _run_partitioned_search(
-            session, tsquery=tsquery, per_type_limit=per_type_limit,
-            min_score=min_score, term_type_codes=term_type_codes,
+            session,
+            tsquery=tsquery,
+            per_type_limit=per_type_limit,
+            min_score=min_score,
+            term_type_codes=term_type_codes,
         )
     except Exception:
         _rollback_quietly(session)
@@ -304,8 +305,11 @@ def bm25_search_with_or_partitioned(
         return []
     try:
         return _run_partitioned_search(
-            session, tsquery=tsquery, per_type_limit=per_type_limit,
-            min_score=min_score, term_type_codes=term_type_codes,
+            session,
+            tsquery=tsquery,
+            per_type_limit=per_type_limit,
+            min_score=min_score,
+            term_type_codes=term_type_codes,
         )
     except Exception:
         _rollback_quietly(session)
@@ -361,9 +365,7 @@ def _jieba_tokenize(text_input: str) -> str:
 
 def _build_jieba_search_sql(*, with_type_filter: bool = False) -> object:
     """BM25 查询 name_keywords_jieba 列。"""
-    type_clause = (
-        "\n            AND t.term_type_code IN :type_codes" if with_type_filter else ""
-    )
+    type_clause = "\n            AND t.term_type_code IN :type_codes" if with_type_filter else ""
     sql_text = f"""
         SELECT
             tn.term_id,
@@ -384,7 +386,7 @@ def _build_jieba_search_sql(*, with_type_filter: bool = False) -> object:
         LIMIT :limit
     """
     if with_type_filter:
-        return text(sql_text).bindparams(  # noqa: S608
+        return text(sql_text).bindparams(
             bindparam("type_codes", expanding=True),
         )
     return text(sql_text)
@@ -437,8 +439,11 @@ def bm25_search_jieba(
         return []
     try:
         return _run_jieba_search(
-            session, tsquery=tsquery, top_k=top_k,
-            min_score=min_score, term_type_codes=term_type_codes,
+            session,
+            tsquery=tsquery,
+            top_k=top_k,
+            min_score=min_score,
+            term_type_codes=term_type_codes,
         )
     except Exception:
         _rollback_quietly(session)
@@ -474,7 +479,7 @@ def _build_jieba_partitioned_sql() -> object:
         WHERE rn <= :per_type_limit
         ORDER BY score DESC
     """
-    return text(sql_text).bindparams(  # noqa: S608
+    return text(sql_text).bindparams(
         bindparam("type_codes", expanding=True),
     )
 

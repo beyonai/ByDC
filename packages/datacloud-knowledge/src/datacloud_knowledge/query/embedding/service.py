@@ -8,8 +8,8 @@
 
 from __future__ import annotations
 
-import os
 import logging
+import os
 from typing import TYPE_CHECKING
 
 from pydantic_settings import BaseSettings
@@ -34,8 +34,8 @@ class EmbeddingConfig(BaseSettings):
     embedding_api_base: str = os.environ["DATACLOUD_EMBEDDING_API_BASE"]
     embedding_api_key: str = os.environ["DATACLOUD_EMBEDDING_API_KEY"]
     embedding_model: str = os.environ["DATACLOUD_EMBEDDING_MODEL"]
-    embedding_batch_size: int = int(os.environ.get("DATACLOUD_EMBEDDING_BATCH_SIZE", 10))
-    embedding_dims: int = int(os.environ.get("DATACLOUD_EMBEDDING_DIMS", 1024))
+    embedding_batch_size: int = int(os.environ.get("DATACLOUD_EMBEDDING_BATCH_SIZE", "10"))
+    embedding_dims: int = int(os.environ.get("DATACLOUD_EMBEDDING_DIMS", "1024"))
 
     model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore"}
 

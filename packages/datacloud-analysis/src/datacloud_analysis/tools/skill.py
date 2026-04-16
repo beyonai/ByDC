@@ -10,10 +10,10 @@ by ``workspace.skills_loader.SkillLoader``.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import textwrap
 from pathlib import Path
-from typing import Any
 
 from langchain_core.tools import tool
 
@@ -45,7 +45,7 @@ async def build_skill(
         Absolute path of the saved skill file.
     """
     dest_dir = Path(skills_private_dir)
-    dest_dir.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(dest_dir.mkdir, parents=True, exist_ok=True)
     dest_file = dest_dir / f"{name}.py"
 
     # Ensure the provided code is a complete function definition.
@@ -65,6 +65,6 @@ async def build_skill(
         {code}
     ''')
 
-    dest_file.write_text(skill_source, encoding="utf-8")
+    await asyncio.to_thread(dest_file.write_text, skill_source, encoding="utf-8")
     logger.info("build_skill: saved '%s' to %s", name, dest_file)
     return str(dest_file)

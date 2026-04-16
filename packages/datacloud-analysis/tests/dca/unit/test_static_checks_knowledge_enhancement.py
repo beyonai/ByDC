@@ -3,6 +3,7 @@
 验证 datacloud_analysis/orchestration/state.py 中的 AgentState 包含
 知识增强方案所需的两个 state 字段，防止字段被意外删除导致框架层逻辑静默失效。
 """
+
 from __future__ import annotations
 
 import typing
@@ -11,6 +12,7 @@ import typing
 def _get_agent_state_annotations() -> dict[str, object]:
     """收集 AgentState 的全部类型注解（含继承链）。"""
     from datacloud_analysis.orchestration.state import AgentState
+
     # get_type_hints 会递归展开 TypedDict 继承链中的所有字段
     try:
         return typing.get_type_hints(AgentState)
@@ -41,27 +43,26 @@ def test_tc37_agent_state_has_knowledge_snippets_field() -> None:
 def test_tc37_knowledge_payload_allows_none() -> None:
     """knowledge_payload 字段类型允许 None（未调用 knowledge_enhancer 时的初始状态）。"""
     from datacloud_analysis.orchestration.state import AgentState
+
     annotation = AgentState.__annotations__.get("knowledge_payload", "")
     annotation_str = str(annotation)
     # 检查注解含 None（Optional / Union[..., None]）
-    assert "None" in annotation_str, (
-        f"knowledge_payload 应允许 None，实际注解：{annotation_str}"
-    )
+    assert "None" in annotation_str, f"knowledge_payload 应允许 None，实际注解：{annotation_str}"
 
 
 def test_tc37_knowledge_snippets_allows_none() -> None:
     """knowledge_snippets 字段类型允许 None（无知识增强时的透传状态）。"""
     from datacloud_analysis.orchestration.state import AgentState
+
     annotation = AgentState.__annotations__.get("knowledge_snippets", "")
     annotation_str = str(annotation)
-    assert "None" in annotation_str, (
-        f"knowledge_snippets 应允许 None，实际注解：{annotation_str}"
-    )
+    assert "None" in annotation_str, f"knowledge_snippets 应允许 None，实际注解：{annotation_str}"
 
 
 def test_tc37_hook_context_has_knowledge_payload_field() -> None:
     """HookContext TypedDict 包含 knowledge_payload 字段（tool_wrapper 注入 ctx 后 before_hook 可读取）。"""
     from datacloud_analysis.tool_hook_plugins.types import HookContext
+
     hints = typing.get_type_hints(HookContext)
     assert "knowledge_payload" in hints, (
         "HookContext 缺少 knowledge_payload 字段——before_hook 读取缓存依赖此字段"

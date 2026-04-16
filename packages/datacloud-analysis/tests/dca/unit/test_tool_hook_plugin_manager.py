@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from datacloud_analysis.tool_hook_plugins.manager import get_tool_hook_plugin_manager
 from datacloud_analysis.tool_hook_plugins.types import HookContext
 

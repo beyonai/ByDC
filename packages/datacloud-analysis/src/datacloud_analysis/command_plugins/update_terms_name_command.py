@@ -14,8 +14,10 @@ try:
     from datacloud_knowledge.intent import (
         batch_update_scores_with_session as imported_batch_update_scores_with_session,
     )
+
     updater_impl: BatchUpdater | None = imported_batch_update_scores_with_session
 except ModuleNotFoundError:
+
     @dataclass(frozen=True)
     class FallbackScoreUpdateRecord:
         """Fallback record type used when datacloud_knowledge is unavailable."""

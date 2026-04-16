@@ -12,6 +12,6 @@ tools    MCP tool wrappers (recall_memory, search_memory, read_memory)
 """
 
 from .loader import MemoryLoader
-from .tools import recall_memory, read_memory, search_memory
+from .tools import read_memory, recall_memory, search_memory
 
 __all__ = ["MemoryLoader", "recall_memory", "search_memory", "read_memory"]

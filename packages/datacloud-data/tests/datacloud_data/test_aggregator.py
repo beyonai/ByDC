@@ -1,10 +1,11 @@
 import csv
-import pytest
 from pathlib import Path
-from datacloud_data_sdk.plan.models import PlanAggregation
+
+import pytest
 from datacloud_data_sdk.aggregator.direct_aggregator import DirectAggregator
 from datacloud_data_sdk.aggregator.sqlite_aggregator import SqliteAggregator
 from datacloud_data_sdk.executor.step_results import StepResult, StepResults
+from datacloud_data_sdk.plan.models import PlanAggregation
 
 
 def make_csv(tmp_path: Path, filename: str, rows: list[dict]) -> str:

@@ -21,7 +21,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from datacloud_data_sdk.executor.query_executor import QueryExecutor
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
@@ -30,6 +29,7 @@ from datacloud_data_sdk.virtual_action.validator import VirtualActionValidationE
 # ─────────────────────────────────────────────────────────────────────────────
 # 测试对象本体定义
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _ext(property_role: str, rule_type: str, formula: str | None = None) -> str:
     """构造 ext_property JSON 字符串。"""
@@ -78,7 +78,9 @@ ENTERPRISE_FIELDS = [
         "field_type": "NUMBER",
         "source_column": "revenue",
         "property_kind": "physical",
-        "ext_property": _ext("MEASURE", "indicator"),  # OWL rule_type=indicator → analytic_kind=basic_metric
+        "ext_property": _ext(
+            "MEASURE", "indicator"
+        ),  # OWL rule_type=indicator → analytic_kind=basic_metric
     },
     {
         "field_code": "scale",
@@ -135,8 +137,7 @@ ONTOLOGY_CONTENT = {
             },
             "table_name": "enterprise_tbl",
             "fields": [
-                f for f in ENTERPRISE_FIELDS
-                if f["field_code"] not in ("period", "linked_park")
+                f for f in ENTERPRISE_FIELDS if f["field_code"] not in ("period", "linked_park")
             ],
         },
     ]
@@ -146,11 +147,12 @@ ONTOLOGY_CONTENT = {
 # Fixtures
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def loader() -> OntologyLoader:
-    l = OntologyLoader()
-    l.load_from_content(ONTOLOGY_CONTENT)
-    return l
+    loader_instance = OntologyLoader()
+    loader_instance.load_from_content(ONTOLOGY_CONTENT)
+    return loader_instance
 
 
 @pytest.fixture
@@ -178,6 +180,7 @@ async def executor_with_data(loader: OntologyLoader):
 # 用例1：基础物理字段查询（正常路径）
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 async def test_basic_physical_query(executor_with_data: QueryExecutor) -> None:
     """用例1：LLM 直接传 field_code，AND 过滤、ORDER BY、LIMIT 正确执行。"""
     executor = executor_with_data
@@ -187,9 +190,9 @@ async def test_basic_physical_query(executor_with_data: QueryExecutor) -> None:
             # ★ 新协议：select / filters.field / order_by.field 均填 field_code
             "select": ["enterprise_name", "period", "revenue"],
             "filters": [
-                {"field": "region_name", "op": "eq",  "value": "亦庄"},
-                {"field": "period",      "op": "eq",  "value": "2026-01"},
-                {"field": "revenue",     "op": "gte", "value": 5000000},
+                {"field": "region_name", "op": "eq", "value": "亦庄"},
+                {"field": "period", "op": "eq", "value": "2026-01"},
+                {"field": "revenue", "op": "gte", "value": 5000000},
             ],
             "order_by": [{"field": "revenue", "direction": "desc"}],
             "limit": 10,
@@ -212,6 +215,7 @@ async def test_basic_physical_query(executor_with_data: QueryExecutor) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # 用例2：空 select 返回全部非 linked 字段
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 async def test_empty_select_returns_all_non_linked(executor_with_data: QueryExecutor) -> None:
     """用例2：不传 select 时返回全部非 linked 字段。filters.field 也用 field_code。"""
@@ -237,6 +241,7 @@ async def test_empty_select_returns_all_non_linked(executor_with_data: QueryExec
 # 用例3：派生指标字段 formula 展开
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 async def test_derived_metric_formula_expansion(executor_with_data: QueryExecutor) -> None:
     """用例3：derived_metric 字段在 SELECT / WHERE / ORDER BY 中展开 formula。
     select / filters.field / order_by.field 均传 field_code（tax_rate）。
@@ -248,7 +253,7 @@ async def test_derived_metric_formula_expansion(executor_with_data: QueryExecuto
             # ★ 新协议：传 field_code，不再传中文名
             "select": ["enterprise_name", "period", "tax_rate"],
             "filters": [
-                {"field": "period",   "op": "eq", "value": "2026-01"},
+                {"field": "period", "op": "eq", "value": "2026-01"},
                 # total_tax/total_revenue：亦庄科技=2.5%，通州制造=3%，亦庄智能=5%
                 {"field": "tax_rate", "op": "gt", "value": 0.025},
             ],
@@ -268,6 +273,7 @@ async def test_derived_metric_formula_expansion(executor_with_data: QueryExecuto
 # 用例4：filter_relation=OR
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 async def test_filter_relation_or(executor_with_data: QueryExecutor) -> None:
     """用例4：filter_relation=OR 时多个条件取并集（使用无 period_required 的对象）。
     filters.field 传 field_code。
@@ -279,8 +285,8 @@ async def test_filter_relation_or(executor_with_data: QueryExecutor) -> None:
             # ★ select / filters.field 均用 field_code
             "select": ["enterprise_name", "revenue"],
             "filters": [
-                {"field": "revenue",     "op": "gte", "value": 10000000},  # 亦庄智能
-                {"field": "region_name", "op": "eq",  "value": "通州"},    # 通州制造
+                {"field": "revenue", "op": "gte", "value": 10000000},  # 亦庄智能
+                {"field": "region_name", "op": "eq", "value": "通州"},  # 通州制造
             ],
             "filter_relation": "OR",
             "limit": 10,
@@ -294,6 +300,7 @@ async def test_filter_relation_or(executor_with_data: QueryExecutor) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # 用例5：账期强制约束——缺失账期条件
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 async def test_period_required_missing(executor_with_data: QueryExecutor) -> None:
     """用例5：对象含 period 字段（period_required），未传账期条件 → REQUIRED_FILTER_MISSING。
@@ -316,6 +323,7 @@ async def test_period_required_missing(executor_with_data: QueryExecutor) -> Non
 # 用例6：账期强制约束 + filter_relation=OR 冲突
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 async def test_period_required_with_or_relation_conflict(executor_with_data: QueryExecutor) -> None:
     """用例6：含 period_required 的对象使用 filter_relation=OR → INVALID。
     filters.field 传 field_code。
@@ -327,7 +335,7 @@ async def test_period_required_with_or_relation_conflict(executor_with_data: Que
             {
                 # ★ field_code
                 "filters": [
-                    {"field": "period",  "op": "eq",  "value": "2026-01"},
+                    {"field": "period", "op": "eq", "value": "2026-01"},
                     {"field": "revenue", "op": "gte", "value": 5000000},
                 ],
                 "filter_relation": "OR",
@@ -340,6 +348,7 @@ async def test_period_required_with_or_relation_conflict(executor_with_data: Que
 # ─────────────────────────────────────────────────────────────────────────────
 # 用例7：不存在字段
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 async def test_nonexistent_field(executor_with_data: QueryExecutor) -> None:
     """用例7：select 中包含对象未声明的 field_code → UNSUPPORTED_FIELD。"""
@@ -361,6 +370,7 @@ async def test_nonexistent_field(executor_with_data: QueryExecutor) -> None:
 # 用例8：非法 op（like 用于 id 类字段）
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 async def test_invalid_op_for_id_field(executor_with_data: QueryExecutor) -> None:
     """用例8：对 id 类字段（enterprise_id）使用 like → UNSUPPORTED_OP。
     filters.field 传 field_code。
@@ -372,7 +382,7 @@ async def test_invalid_op_for_id_field(executor_with_data: QueryExecutor) -> Non
             {
                 # ★ field_code
                 "filters": [
-                    {"field": "period",        "op": "eq",   "value": "2026-01"},
+                    {"field": "period", "op": "eq", "value": "2026-01"},
                     {"field": "enterprise_id", "op": "like", "value": "BJ%"},
                 ],
                 "limit": 5,
@@ -384,6 +394,7 @@ async def test_invalid_op_for_id_field(executor_with_data: QueryExecutor) -> Non
 # ─────────────────────────────────────────────────────────────────────────────
 # 用例9：linked 字段拦截
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 async def test_linked_field_blocked(executor_with_data: QueryExecutor) -> None:
     """用例9：select 中包含 property_kind=linked 的字段 → LINKED_NOT_SUPPORTED。
@@ -406,6 +417,7 @@ async def test_linked_field_blocked(executor_with_data: QueryExecutor) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # 协议边界：中文名不再被接受（§3.2.2 改动点 核心约束）
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 async def test_chinese_name_in_select_rejected(executor_with_data: QueryExecutor) -> None:
     """协议边界：select 中传中文名（旧协议）→ UNSUPPORTED_FIELD。
@@ -437,7 +449,7 @@ async def test_chinese_name_in_filters_rejected(executor_with_data: QueryExecuto
                 "select": ["enterprise_name", "revenue"],
                 # ★ 故意用中文名（旧协议）传 filters.field
                 "filters": [
-                    {"field": "账期",    "op": "eq",  "value": "2026-01"},
+                    {"field": "账期", "op": "eq", "value": "2026-01"},
                     {"field": "企业收入", "op": "gte", "value": 5000000},
                 ],
                 "limit": 5,

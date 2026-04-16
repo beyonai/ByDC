@@ -16,10 +16,8 @@ import re
 from typing import Any
 
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError
-from datacloud_data_sdk.executor.db_sql_builder import build_where_clause
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
-
 
 _PKEY_RE = re.compile(r"[^a-zA-Z0-9]")
 
@@ -152,7 +150,7 @@ class LookupExecutor:
         select_codes = arguments.get("select") or [f.field_code for f in physical_fields]
         select_pairs = [(fc, field_to_col[fc]) for fc in select_codes if fc in field_to_col]
         if not select_pairs:
-            select_pairs = [(f.field_code, col) for f.field_code, col in field_to_col.items()]
+            select_pairs = list(field_to_col.items())
 
         # WHERE
         filters = arguments.get("filters") or []

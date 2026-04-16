@@ -60,7 +60,6 @@ def _get_query_tool_hint_en() -> str:
     return ""
 
 
-
 def _disable_ask_user_tool() -> bool:
     """Match ``execution/node.py``: when True, builtin ``ask_user`` is not mounted."""
 
@@ -92,9 +91,7 @@ def _build_exec_zh() -> str:
         "- 工具返回中包含 _hint 字段时，必须立即按照 _hint 指示调用 finish_react，禁止将数据整理为文字回复。\n",
     ]
     if not no_ask:
-        parts.append(
-            "- 仅当问题含义不清或工具明确要求追问时，才使用 ask_user（详见下方规则）。\n"
-        )
+        parts.append("- 仅当问题含义不清或工具明确要求追问时，才使用 ask_user（详见下方规则）。\n")
     else:
         parts.append(
             "- 当前未挂载 ask_user 工具：禁止试图调用 ask_user。"
@@ -124,9 +121,7 @@ def _build_exec_zh() -> str:
             ]
         )
     else:
-        parts.append(
-            "- 查询工具成功返回数据后，应直接调用 finish_react，不得再试图追问用户。\n"
-        )
+        parts.append("- 查询工具成功返回数据后，应直接调用 finish_react，不得再试图追问用户。\n")
 
     ask_user_result_line = (
         "- 如果 result_type=ask_user，需要向用户追问，使用 ask_user 工具。\n"
@@ -189,8 +184,7 @@ def _build_exec_en() -> str:
         + (hint if hint else "")
         + "## Compute tool rules\n"
         "- For compute_{object}, each metrics item must use the key **`agg`** "
-        "(e.g. count_distinct), never `func`.\n"
-        + "## Data query tool rules\n"
+        "(e.g. count_distinct), never `func`.\n" + "## Data query tool rules\n"
         "- Returns {data: {result_type, records, file: {file_url}, meta}}.\n"
         "- If file_url or _hint present, data is saved. Do NOT call write_file.\n"
         "## Result type rules\n"

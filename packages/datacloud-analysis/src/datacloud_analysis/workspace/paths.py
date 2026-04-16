@@ -47,4 +47,3 @@ def build_task_paths(*, user_id: str, task_id: str) -> TaskPaths:
 
 
 __all__ = ["TaskPaths", "build_task_paths"]
-

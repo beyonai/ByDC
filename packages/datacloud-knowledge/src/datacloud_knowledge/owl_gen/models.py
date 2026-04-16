@@ -84,6 +84,7 @@ class ViewConfig:
     object_codes: list[str]
     field_mappings: list[ViewFieldMapping] = field(default_factory=list)
 
+
 @dataclass
 class OwlGenConfig:
     """OWL 生成配置 — 参数化，支持不同业务场景复用。
@@ -114,7 +115,6 @@ class OwlGenConfig:
 
     # ── 对象间关系 ──
     object_relations: list[ObjectRelation]
-
 
     # ── 输出目录 ──
     output_dir: Path

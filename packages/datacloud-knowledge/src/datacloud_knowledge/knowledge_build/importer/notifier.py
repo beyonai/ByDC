@@ -47,7 +47,7 @@ def notify(
         with urllib.request.urlopen(req, timeout=_TIMEOUT_SECONDS) as resp:
             status_code = resp.status
             logger.info("callback notified: url=%s status=%d", url, status_code)
-            return True if 200 <= status_code < 300 else False
+            return 200 <= status_code < 300
 
     except urllib.error.HTTPError as exc:
         logger.warning("callback HTTP error: url=%s status=%d", url, exc.code)

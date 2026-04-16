@@ -8,8 +8,8 @@ from urllib.parse import quote_plus, urlparse, urlunparse
 from datacloud_data_sdk.exceptions import SqlExecutionError
 from datacloud_data_sdk.sql_executor.base_connector import BaseSourceConnector
 from datacloud_data_sdk.sql_executor.jdbc_parser import (
-    parse_jdbc_url,
     extract_current_schema,
+    parse_jdbc_url,
 )
 from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 

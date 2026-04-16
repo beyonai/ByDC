@@ -1,15 +1,12 @@
 """GraphQL 场景测试：DB list、API action 真实执行。"""
 
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from datacloud_data_sdk.graphql.server import get_graphql_router
+from datacloud_data_sdk.ontology.loader import OntologyLoader
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from datacloud_data_sdk.graphql.server import create_schema_from_loader, get_graphql_router
-from datacloud_data_sdk.ontology.loader import OntologyLoader
-from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 
 
 @pytest.mark.asyncio

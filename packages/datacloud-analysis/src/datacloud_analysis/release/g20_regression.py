@@ -64,7 +64,7 @@ def build_default_cases() -> list[RegressionCase]:
                 "uv run pytest "
                 "packages/datacloud-analysis/tests/dca/unit/test_worker_resume_regressions.py "
                 "packages/datacloud-analysis/tests/dca/unit/test_execution_node.py "
-                "-k \"resume or level3_interrupt\" -q"
+                '-k "resume or level3_interrupt" -q'
             ),
         ),
         RegressionCase(
@@ -100,8 +100,7 @@ def build_default_cases() -> list[RegressionCase]:
             category="performance",
             title="关键单测集合时延基线（执行层）",
             command=(
-                "uv run pytest "
-                "packages/datacloud-analysis/tests/dca/unit/test_execution_node.py -q"
+                "uv run pytest packages/datacloud-analysis/tests/dca/unit/test_execution_node.py -q"
             ),
             required=False,
         ),
@@ -240,18 +239,12 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run G20 closeout regression suite.")
     parser.add_argument(
         "--output",
-        default=(
-            "docs/概要设计/重构剩余批次/04-收口波次D/"
-            "G20-全链路回归与发布清单/回归报告.md"
-        ),
+        default=("docs/概要设计/重构剩余批次/04-收口波次D/G20-全链路回归与发布清单/回归报告.md"),
         help="Markdown report output path.",
     )
     parser.add_argument(
         "--json-output",
-        default=(
-            "docs/概要设计/重构剩余批次/04-收口波次D/"
-            "G20-全链路回归与发布清单/回归结果.json"
-        ),
+        default=("docs/概要设计/重构剩余批次/04-收口波次D/G20-全链路回归与发布清单/回归结果.json"),
         help="JSON result output path.",
     )
     parser.add_argument("--dry-run", action="store_true", help="Do not execute commands.")
@@ -277,8 +270,7 @@ def main() -> int:
             capture_output=True,
             text=True,
             check=False,
-        )
-        .stdout.strip()
+        ).stdout.strip()
     ) or "unknown"
     report = render_markdown_report(
         results=results,

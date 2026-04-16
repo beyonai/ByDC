@@ -9,7 +9,6 @@ from textwrap import dedent, indent
 from typing import Any
 
 import pytest
-
 from datacloud_knowledge.knowledge_build.importer import executor, precheck
 
 

@@ -9,16 +9,12 @@ OQL 跨源执行器（策略 B）
 """
 
 from __future__ import annotations
+
 import logging
 from typing import Any
 
 from datacloud_data_sdk.oql.adapter import (
     OqlAdapter,
-    resolve_object,
-    resolve_column,
-    build_field_map,
-    translate_conditions,
-    preprocess_where_terms,
 )
 from datacloud_data_sdk.oql.memory_merger import MemoryMerger
 from datacloud_data_sdk.oql.models import OQLError, OQLErrorCode

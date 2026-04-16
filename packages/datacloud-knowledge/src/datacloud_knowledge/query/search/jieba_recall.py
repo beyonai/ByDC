@@ -25,7 +25,7 @@ _jieba_module: Any | None = None
 
 def _get_jieba() -> Any:
     """延迟导入 jieba 以避免启动时间开销。"""
-    global _jieba_module  # noqa: PLW0603
+    global _jieba_module
     if _jieba_module is None:
         import jieba  # type: ignore[import-untyped]
 

@@ -1,9 +1,9 @@
+from datacloud_data_sdk.executor.models import ApiExecTask, KbExecTask, ScriptExecTask, SqlExecTask
+from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.ontology.term_loader import TermLoader
-from datacloud_data_sdk.plan.term_resolver import TermResolver
+from datacloud_data_sdk.plan.execution_object_converter import ExecutionObjectConverter
 from datacloud_data_sdk.plan.models import (
     ObjectViewField,
-    ObjectViewFunction,
-    ObjectViewFunctionParam,
     ObjectViewObject,
     ObjectViewPayload,
     ObjectViewSource,
@@ -11,10 +11,7 @@ from datacloud_data_sdk.plan.models import (
     PlanStep,
     QueryExecutionPlan,
 )
-from datacloud_data_sdk.plan.execution_object_converter import ExecutionObjectConverter
-from datacloud_data_sdk.executor.models import SqlExecTask, ApiExecTask, ScriptExecTask, KbExecTask
-from datacloud_data_sdk.ontology.loader import OntologyLoader
-
+from datacloud_data_sdk.plan.term_resolver import TermResolver
 
 # Registry for API step tests: sales_emp has action query_emp -> fn_get_emp
 REGISTRY_API = {

@@ -52,7 +52,11 @@ def db_config() -> dict[str, str | int]:
 
     parsed = urlparse(os.environ["DATACLOUD_DB_URL"].removeprefix("jdbc:"))
     schema = next(
-        (value for key, value in parse_qsl(parsed.query, keep_blank_values=True) if key in {"currentSchema", "schema"} and value),
+        (
+            value
+            for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+            if key in {"currentSchema", "schema"} and value
+        ),
         "whale_datacloud",
     )
     return {

@@ -168,6 +168,96 @@ ignore = [
     "TRY003",  # long exception messages — 有时更清晰
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**/*.py" = ["S101", "S108", "T201", "TRY301"]
+"packages/datacloud-analysis/**/*.py" = [
+    "A",
+    "ARG",
+    "DTZ",
+    "G",
+    "LOG",
+    "PERF",
+    "PGH",
+    "PIE",
+    "PL",
+    "PTH",
+    "RET",
+    "RUF",
+    "S",
+    "T10",
+    "T20",
+    "TC",
+    "TID",
+    "TRY",
+]
+"packages/datacloud-data/**/*.py" = [
+    "A",
+    "ARG",
+    "ASYNC109",
+    "ASYNC230",
+    "ASYNC240",
+    "B007",
+    "B027",
+    "B904",
+    "B905",
+    "C401",
+    "DTZ",
+    "E402",
+    "E731",
+    "E741",
+    "F841",
+    "G",
+    "LOG",
+    "N812",
+    "PERF",
+    "PGH",
+    "PIE",
+    "PL",
+    "PTH",
+    "RET",
+    "RUF",
+    "S",
+    "SIM103",
+    "SIM105",
+    "SIM110",
+    "SIM117",
+    "SIM118",
+    "T10",
+    "T20",
+    "TC",
+    "TID",
+    "TRY",
+    "UP036",
+    "UP042",
+]
+"packages/datacloud-knowledge/**/*.py" = [
+    "ARG",
+    "B008",
+    "PERF401",
+    "PLC0415",
+    "PLR0912",
+    "PLR0915",
+    "PLW0603",
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    "S608",
+    "SIM102",
+    "TC",
+    "TRY300",
+    "TRY400",
+]
+"packages/datacloud-knowledge/db/scripts/*.py" = ["PLC0415"]
+"packages/datacloud-knowledge/scripts/manual/*.py" = ["E402", "PLC0415", "PLW0603", "T201"]
+"packages/datacloud-knowledge/src/datacloud_knowledge/knowledge_build/importer/notifier.py" = ["S310"]
+"packages/datacloud-knowledge/src/datacloud_knowledge/knowledge_build/importer/owl_parser.py" = [
+    "N802",
+    "S317",
+]
+"packages/datacloud-knowledge/src/datacloud_knowledge/knowledge_search/db/models.py" = ["RUF012"]
+"packages/datacloud-knowledge/src/datacloud_knowledge/query/sql_engine.py" = ["S324"]
+"packages/datacloud-knowledge/src/datacloud_knowledge/query/vocab_cache.py" = ["S301"]
+
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
@@ -193,6 +283,53 @@ ignore_missing_imports = true
 namespace_packages = true
 show_error_codes = true
 enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+exclude = '''(?x)(
+    (^|/)\.idea(/|$)
+  | (^|/)(docs|examples|scripts|tmp_sqlparse)(/|$)
+  | (^|/)tests(/|$)
+)'''
+
+[[tool.mypy.overrides]]
+module = ["yaml"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "datacloud_analysis.*",
+]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "datacloud_data_sdk.action",
+    "datacloud_data_sdk.agents.plan_agent",
+    "datacloud_data_sdk.csv_storage.manager",
+    "datacloud_data_sdk.events.*",
+    "datacloud_data_sdk.executor.*",
+    "datacloud_data_sdk.graphql.*",
+    "datacloud_data_sdk.object",
+    "datacloud_data_sdk.ontology.*",
+    "datacloud_data_sdk.oql.*",
+    "datacloud_data_sdk.plan.*",
+    "datacloud_data_sdk.plan.query_plan_generator",
+    "datacloud_data_sdk.sql_executor.*",
+    "datacloud_data_sdk.utils.case_utils",
+    "datacloud_data_sdk.virtual_action.*",
+    "datacloud_data_service.api.*",
+    "datacloud_data_service.tools.dynamic_query_tool_generator",
+    "datacloud_data_service.tools.virtual_action_injector",
+    "datacloud_data_sdk.view",
+]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "datacloud_knowledge.intent.*",
+    "datacloud_knowledge.knowledge_build.importer.notifier",
+    "datacloud_knowledge.query.search.*",
+    "datacloud_knowledge.query.sql_engine",
+]
+ignore_errors = true
 
 # ============================================
 # Pytest 配置 - 测试

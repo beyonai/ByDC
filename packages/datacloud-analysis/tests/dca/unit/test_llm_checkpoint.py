@@ -1,4 +1,5 @@
 """test_llm_checkpoint.py — TDD 红阶段：llm_checkpoint 模块尚未实现，全部用例应失败。"""
+
 from __future__ import annotations
 
 import json
@@ -7,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 # ─── 常量内容检验 ──────────────────────────────────────────────────────────────
+
 
 def test_checkpoint_reply_guides_user_to_resend() -> None:
     """CHECKPOINT_REPLY 应告知用户'重新发送同样的问题'。"""
@@ -28,6 +30,7 @@ def test_expired_reply_is_non_empty() -> None:
 
 
 # ─── save_llm_failure_checkpoint ──────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_save_uses_correct_redis_key() -> None:
@@ -158,13 +161,18 @@ async def test_save_redis_connection_error_returns_false() -> None:
 
 # ─── load_llm_failure_checkpoint ──────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_load_returns_checkpoint_when_exists() -> None:
     from datacloud_analysis.orchestration.execution.llm_checkpoint import (
         load_llm_failure_checkpoint,
     )
 
-    stored = {"session_id": "sess-load", "completed_steps": 2, "state_snapshot": {"user_query": "hi"}}
+    stored = {
+        "session_id": "sess-load",
+        "completed_steps": 2,
+        "state_snapshot": {"user_query": "hi"},
+    }
     redis = AsyncMock()
     redis.get = AsyncMock(return_value=json.dumps(stored).encode())
 
@@ -229,6 +237,7 @@ async def test_load_redis_error_returns_none() -> None:
 
 
 # ─── delete_llm_failure_checkpoint ────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_delete_calls_redis_delete_with_correct_key() -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from pathlib import Path
 
+from datacloud_knowledge.owl_gen.generator import generate_from_tables
 from datacloud_knowledge.owl_gen.models import (
     FieldRole,
     ObjectRelation,
@@ -13,7 +14,6 @@ from datacloud_knowledge.owl_gen.models import (
     ViewFieldMapping,
 )
 from datacloud_knowledge.owl_gen.renderers.manifest import render_manifest
-from datacloud_knowledge.owl_gen.generator import generate_from_tables
 from datacloud_knowledge.owl_gen.renderers.ontology import (
     render_single_view,
     render_view,

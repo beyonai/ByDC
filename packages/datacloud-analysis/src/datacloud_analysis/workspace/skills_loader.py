@@ -1,4 +1,4 @@
-﻿"""Skill scanning and registration (design 搂鍥?/ skills loading).
+"""Skill scanning and registration (design 搂鍥?/ skills loading).
 
 Skill types and priority (lower 鈫?higher, higher overrides lower)
 -----------------------------------------------------------------
@@ -102,7 +102,9 @@ def _normalize_skill_meta(raw: dict[str, Any], *, default_name: str) -> SkillMet
 def _find_repo_root() -> Path | None:
     current = Path(__file__).resolve()
     for parent in current.parents:
-        marker = parent / "examples" / "e_commerce_demo" / "backend" / "datacloud_service" / "plugins"
+        marker = (
+            parent / "examples" / "e_commerce_demo" / "backend" / "datacloud_service" / "plugins"
+        )
         if marker.exists():
             return parent
     return None
@@ -145,7 +147,9 @@ class SkillLoader:
     """
 
     def __init__(self, task_paths: TaskPaths) -> None:
-        self._layers: list[SkillScanLayer] = [SkillScanLayer(source="builtin", path=_BUILTIN_SKILLS_DIR)]
+        self._layers: list[SkillScanLayer] = [
+            SkillScanLayer(source="builtin", path=_BUILTIN_SKILLS_DIR)
+        ]
         self._layers.extend(
             SkillScanLayer(source="extension", path=path) for path in _extension_skill_dirs()
         )
@@ -247,5 +251,3 @@ class SkillLoader:
         except Exception as exc:  # noqa: BLE001
             logger.warning("Failed to load skill file %s: %s", path, exc)
             return False
-
-

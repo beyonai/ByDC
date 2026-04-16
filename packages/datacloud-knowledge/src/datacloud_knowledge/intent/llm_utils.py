@@ -37,7 +37,7 @@ class EventEmitter:
 
     def _emit(self, kind: str, content: str) -> None:
         if self._on_event:
-            from .types import StreamEvent  # noqa: PLC0415
+            from .types import StreamEvent
 
             self._on_event(StreamEvent(kind=kind, content=content))
 
@@ -65,7 +65,7 @@ class EventEmitter:
     # --- 组合：step 上下文管理器 ---
 
     @contextmanager
-    def step(self, title: str, tool: str, args: Any = None):  # noqa: ANN204
+    def step(self, title: str, tool: str, args: Any = None):
         """推送 title + tool_name + tool_args，yield 后由调用方推 result/error。"""
         self._emit("step_begin", title)
         self.title(title)
@@ -107,7 +107,7 @@ def stream_invoke_with_thinking(
     if not on_event:
         return llm_with_tool.invoke(messages)
 
-    from .types import StreamEvent, StreamEventKind  # noqa: PLC0415
+    from .types import StreamEvent, StreamEventKind
 
     full = None
     for chunk in llm_with_tool.stream(messages):
@@ -177,7 +177,7 @@ def build_llm() -> Any:
     请使用此变量指定协议，不要在 DATACLOUD_LLM_MODEL 中使用前缀写法。
     支持 MODEL_KWARGS（JSON 字符串）透传额外参数。
     """
-    from langchain.chat_models import init_chat_model  # noqa: PLC0415
+    from langchain.chat_models import init_chat_model
 
     for env_prefix in ("DATACLOUD_LLM", "OPENAI"):
         api_base = os.getenv(f"{env_prefix}_API_BASE", "")

@@ -28,10 +28,7 @@ def log_curl(
     for k, v in hdrs.items():
         parts.append(f'-H "{k}: {v}"')
     if body is not None:
-        if isinstance(body, dict):
-            body_str = json.dumps(body, ensure_ascii=False)
-        else:
-            body_str = str(body)
+        body_str = json.dumps(body, ensure_ascii=False) if isinstance(body, dict) else str(body)
         parts.append(f"-d '{body_str}'")
     cmd = " ".join(parts)
     logger.info("[curl] %s", cmd)

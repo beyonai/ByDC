@@ -64,9 +64,7 @@ async def setup() -> None:
         try:
             from datacloud_memory.store import init_store  # noqa: PLC0415
         except ImportError:
-            logger.warning(
-                "datacloud-memory not installed or init_store not available, skipping."
-            )
+            logger.warning("datacloud-memory not installed or init_store not available, skipping.")
         else:
             await init_store(settings.pg.checkpoint_uri)
             logger.info("datacloud-analysis: datacloud-memory store initialized.")

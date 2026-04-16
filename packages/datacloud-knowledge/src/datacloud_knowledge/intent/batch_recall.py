@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from sqlalchemy import bindparam, text
 
@@ -344,10 +345,7 @@ def _batch_vector(
 
     svc = get_embedding_service()
     vectors = svc.get_text_embedding_batch([req.keyword for req in batch.requests])
-    vector_strs = [
-        "[" + ",".join(map(str, vec)) + "]"
-        for vec in vectors
-    ]
+    vector_strs = ["[" + ",".join(map(str, vec)) + "]" for vec in vectors]
 
     # N 个独立查询并发执行，每个走 HNSW 索引
     results: dict[str, list[tuple[str, str, str, str]]] = {}
@@ -496,7 +494,6 @@ def _run_substring_query(
     return _collect_ranked_rows(session.execute(statement, params).fetchall())
 
 
-
 # ---------------------------------------------------------------------------
 # Single-vector query (HNSW-friendly: ORDER BY embedding <=> :constant LIMIT k)
 # ---------------------------------------------------------------------------
@@ -512,7 +509,7 @@ _VECTOR_NORMAL_SQL = text(f"""
     WHERE tn.name_embedding IS NOT NULL
     ORDER BY tn.name_embedding <=> CAST(:vector AS vector)
     LIMIT :limit
-""")  # noqa: S608
+""")
 
 _VECTOR_TYPED_SQL = text(f"""
     SELECT tn.term_id,
@@ -526,7 +523,7 @@ _VECTOR_TYPED_SQL = text(f"""
       AND t.term_type_code IN :type_codes
     ORDER BY tn.name_embedding <=> CAST(:vector AS vector)
     LIMIT :limit
-""").bindparams(bindparam("type_codes", expanding=True))  # noqa: S608
+""").bindparams(bindparam("type_codes", expanding=True))
 
 _VECTOR_PER_TYPE_SQL = text(f"""
     SELECT term_id, term_name, name_id, term_type_code, score
@@ -556,7 +553,7 @@ _VECTOR_PER_TYPE_SQL = text(f"""
     ) ranked
     WHERE rn <= :per_type_limit AND score >= :min_similarity
     ORDER BY score DESC
-""").bindparams(bindparam("type_codes", expanding=True))  # noqa: S608
+""").bindparams(bindparam("type_codes", expanding=True))
 
 
 def _run_single_vector_query(
@@ -589,9 +586,7 @@ def _run_single_vector_query(
         results: list[tuple[str, str, str, str]] = []
         for term_id, term_name, name_id, term_type_code, score in rows:
             if float(score) >= min_similarity:
-                results.append(
-                    (str(term_id), str(term_name), str(name_id), str(term_type_code))
-                )
+                results.append((str(term_id), str(term_name), str(name_id), str(term_type_code)))
         return {req.map_key: results} if results else {}
 
 
@@ -756,6 +751,7 @@ def _build_substring_sql(
     if type_filter is not None:
         return sql_obj.bindparams(bindparam("type_codes", expanding=True))
     return sql_obj
+
 
 def _collect_ranked_rows(rows: Any) -> dict[str, list[tuple[str, str, str, str]]]:
     grouped: dict[str, list[tuple[str, str, str, str]]] = defaultdict(list)

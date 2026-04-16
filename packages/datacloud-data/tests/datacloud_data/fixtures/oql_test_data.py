@@ -5,8 +5,8 @@ OQL 测试数据和 Mock 注册表
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any, Optional
 
 
 @dataclass
@@ -16,9 +16,9 @@ class MockField:
     field_code: str
     field_name: str
     data_type: str
-    source_column: Optional[str] = None
+    source_column: str | None = None
     physical_mappings: dict = field(default_factory=dict)
-    term_set: Optional[str] = None
+    term_set: str | None = None
 
 
 @dataclass
@@ -46,8 +46,8 @@ class MockClass:
     object_code: str
     object_name: str
     source_type: str  # "DB" or "API"
-    datasource_alias: Optional[str] = None
-    table_name: Optional[str] = None
+    datasource_alias: str | None = None
+    table_name: str | None = None
     fields: list[MockField] = field(default_factory=list)
     relations: list[MockRelation] = field(default_factory=list)
     actions: list[MockAction] = field(default_factory=list)
@@ -120,7 +120,7 @@ class MockRegistry:
         )
         self.classes["Manual"] = manual_cls
 
-    def get_class(self, object_code: str) -> Optional[MockClass]:
+    def get_class(self, object_code: str) -> MockClass | None:
         """获取本体类"""
         return self.classes.get(object_code)
 
@@ -134,7 +134,7 @@ class MockDatasourceRegistry:
             "api_manual": MockDatasource("api_manual", "API"),
         }
 
-    def get(self, alias: str) -> Optional[MockDatasource]:
+    def get(self, alias: str) -> MockDatasource | None:
         """获取数据源"""
         return self.datasources.get(alias)
 

@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import logging
 import os
 from pathlib import Path
 from typing import Any
+
 from langchain_core.tools import tool
 
 from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
@@ -36,8 +38,8 @@ def _resolve_safe_path(path: str, workspace_dir: str | None) -> Path:
         ws = workspace_root.resolve()
         try:
             p.relative_to(ws)
-        except ValueError:
-            raise ValueError(f"Path {path!r} is outside workspace_dir {workspace_dir!r}")
+        except ValueError as err:
+            raise ValueError(f"Path {path!r} is outside workspace_dir {workspace_dir!r}") from err
     return p
 
 

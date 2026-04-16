@@ -1,7 +1,5 @@
 """OntologyValidator 校验 property_kind 与配置一致性。"""
 
-import pytest
-
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.ontology.validator import OntologyValidator
 

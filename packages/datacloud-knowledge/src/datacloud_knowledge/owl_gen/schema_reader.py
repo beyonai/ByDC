@@ -92,7 +92,7 @@ def load_term_values(
         with conn.cursor() as cur:
             for binding in config.term_bindings:
                 cur.execute(
-                    f"SELECT DISTINCT `{binding.column_name}` "  # noqa: S608
+                    f"SELECT DISTINCT `{binding.column_name}` "
                     f"FROM `{binding.table_code}` "
                     f"WHERE `{binding.column_name}` IS NOT NULL "
                     f"AND `{binding.column_name}` != '' "

@@ -1,7 +1,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from datacloud_data_sdk.exceptions import TermNotFoundError
 from datacloud_data_sdk.ontology.term_loader import (
     ApiTermLoader,

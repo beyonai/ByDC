@@ -8,7 +8,6 @@ Requires: psycopg[binary,pool]>=3.1
 
 from __future__ import annotations
 
-import os
 from collections import defaultdict
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field

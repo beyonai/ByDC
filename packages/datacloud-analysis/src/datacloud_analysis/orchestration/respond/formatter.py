@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import csv
@@ -40,7 +40,9 @@ def _data_to_markdown(columns: list[str], rows: list[list[str]]) -> str:
     return "\n".join(lines)
 
 
-def _query_result_headers_and_record_keys(query_data: dict[str, Any]) -> tuple[list[str], list[str]]:
+def _query_result_headers_and_record_keys(
+    query_data: dict[str, Any],
+) -> tuple[list[str], list[str]]:
     """Resolve display headers and record keys from query_result payload."""
     meta = query_data.get("meta") or {}
     columns_raw = meta.get("columns", []) if isinstance(meta, dict) else []
@@ -435,7 +437,12 @@ async def _emit_query_result_as_6001(gateway_context: Any, query_data: dict[str,
                     columns_norm.append({"name": col, "label": col, "type": "string"})
 
         records = query_data.get("records") or []
-        if not columns_norm and isinstance(records, list) and records and isinstance(records[0], dict):
+        if (
+            not columns_norm
+            and isinstance(records, list)
+            and records
+            and isinstance(records[0], dict)
+        ):
             columns_norm = [{"name": key, "label": key, "type": "string"} for key in records[0]]
 
         payload: dict[str, Any] = {

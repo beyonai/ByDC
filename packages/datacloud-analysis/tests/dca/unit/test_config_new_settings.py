@@ -1,4 +1,5 @@
 """Tests for new Settings classes added in P2."""
+
 from __future__ import annotations
 
 import os
@@ -44,11 +45,14 @@ class TestGatewaySettings:
     def test_values_from_env(self) -> None:
         from datacloud_analysis.config.env import GatewaySettings
 
-        with patch.dict(os.environ, {
-            "DATACLOUD_GATEWAY_REDIS_HOST": "redis.local",
-            "DATACLOUD_GATEWAY_REDIS_PORT": "6380",
-            "DATACLOUD_GATEWAY_WORKER_ID": "worker-1",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "DATACLOUD_GATEWAY_REDIS_HOST": "redis.local",
+                "DATACLOUD_GATEWAY_REDIS_PORT": "6380",
+                "DATACLOUD_GATEWAY_WORKER_ID": "worker-1",
+            },
+        ):
             settings = GatewaySettings()
 
         assert settings.redis_host == "redis.local"

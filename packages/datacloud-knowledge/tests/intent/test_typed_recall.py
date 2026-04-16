@@ -1,4 +1,3 @@
-# ruff: noqa: S101
 """typed_recall 模块的单元测试。
 
 使用 mock 替代真实数据库和 embedding 服务，验证：
@@ -112,7 +111,6 @@ class TestTypedMultiRecall:
         _mock_load: MagicMock,
     ) -> None:
         from datacloud_data_sdk.plan.paradigm_builder import TypedKeywordState
-
         from datacloud_knowledge.intent.typed_recall import typed_multi_recall
 
         items = [
@@ -140,7 +138,6 @@ class TestTypedMultiRecall:
         mock_load: MagicMock,
     ) -> None:
         from datacloud_data_sdk.plan.paradigm_builder import TypedKeywordState
-
         from datacloud_knowledge.intent.typed_recall import typed_multi_recall
 
         mock_load.return_value = {"object", "view", "action", "prop"}
@@ -180,7 +177,6 @@ class TestTypedMultiRecall:
     ) -> None:
         """同一个 keyword 出现在多个 item 中，只调一次 recall。"""
         from datacloud_data_sdk.plan.paradigm_builder import TypedKeywordState
-
         from datacloud_knowledge.intent.typed_recall import typed_multi_recall
 
         mock_load.return_value = {"object", "view", "action", "prop"}
@@ -215,7 +211,7 @@ class TestTypedMultiRecall:
             ),
         ]
         session = MagicMock()
-        typed_multi_recall(items, session=session)
+        result = typed_multi_recall(items, session=session)
         # 同一个 keyword "行业" 但 ktype 不同，应该各自召回一次
         assert mock_recall.call_count == 2
         assert "select:行业" in result

@@ -61,7 +61,6 @@ class MySQLConnector(BaseSourceConnector):
 
     async def execute(self, sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         from sqlalchemy import text
-        from sqlalchemy.ext.asyncio import AsyncSession
 
         try:
             async with self._engine.begin() as conn:

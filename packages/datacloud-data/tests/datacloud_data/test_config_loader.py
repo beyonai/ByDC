@@ -5,8 +5,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-import pytest
-
 from datacloud_data_sdk.sql_executor.config_loader import load_datasources_from_yaml
 
 

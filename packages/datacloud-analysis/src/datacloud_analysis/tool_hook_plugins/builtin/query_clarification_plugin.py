@@ -46,6 +46,7 @@ def _format_knowledge_for_prompt(knowledge_json: str) -> str:
 async def _call_fallback_enhancer(user_query: str) -> Any:
     """兜底：当 knowledge_payload 缓存为空时重新调用知识增强 API。"""
     from datacloud_knowledge.intent import analyze_query_clarification  # type: ignore[import]
+
     return await analyze_query_clarification(user_query)
 
 
@@ -82,18 +83,21 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         # interrupt value 格式须与 worker._stream_graph 的解析逻辑对齐：
         #   interrupt_value["ask_user_payload"]["paradigmList"] → complex_ask_user
         from langgraph.types import interrupt  # type: ignore[import]
+
         form_str = payload.get("form", "")
         try:
             paradigm_list = json.loads(form_str).get("paradigmList", [])
         except Exception:
             paradigm_list = []
-        resume_value = interrupt({
-            "prompt": "查询条件存在歧义，请确认查询维度",
-            "reason_code": "PARADIGM_CLARIFICATION",
-            "ask_user_payload": {
-                "paradigmList": paradigm_list,
-            },
-        })
+        resume_value = interrupt(
+            {
+                "prompt": "查询条件存在歧义，请确认查询维度",
+                "reason_code": "PARADIGM_CLARIFICATION",
+                "ask_user_payload": {
+                    "paradigmList": paradigm_list,
+                },
+            }
+        )
         # interrupt 恢复后：清除 needs_clarification 标志，避免后续工具调用再次触发中断死循环。
         # tool_wrapper 会把修改后的 ctx["knowledge_payload"] 同步回 state。
         updated_payload = dict(payload)

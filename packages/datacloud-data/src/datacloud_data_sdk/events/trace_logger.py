@@ -7,7 +7,7 @@ import json
 import os
 import sys
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -36,7 +36,7 @@ def log_exception_stack(
         "event_type": "QueryException",
         "request_id": request_id or "",
         "trace_id": trace_id or "",
-        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+        "timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
         "exception": exc_str,
         "traceback": tb_text,
     }
@@ -63,7 +63,7 @@ def _build_event_record(event: object) -> dict:
         "event_type": type(event).__name__,
         "request_id": request_id,
         "trace_id": trace_id,
-        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+        "timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
         "payload": payload,
     }
 

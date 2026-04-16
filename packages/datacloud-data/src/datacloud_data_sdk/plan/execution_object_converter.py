@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from datacloud_data_sdk.executor.models import ApiExecTask, KbExecTask, ScriptExecTask, SqlExecTask
-from datacloud_data_sdk.plan.param_converter import map_to_physical, _to_function_param
 from datacloud_data_sdk.plan.models import (
     ObjectViewField,
     ObjectViewPayload,
-    QueryExecutionPlan,
     PlanStep,
+    QueryExecutionPlan,
 )
+from datacloud_data_sdk.plan.param_converter import _to_function_param, map_to_physical
 from datacloud_data_sdk.plan.sql_term_resolver import resolve_sql_literals
 
 if TYPE_CHECKING:
@@ -22,8 +22,8 @@ if TYPE_CHECKING:
 class ExecutionObjectConverter:
     def __init__(
         self,
-        term_resolver: "TermResolver | None" = None,
-        loader: "OntologyLoader | None" = None,
+        term_resolver: TermResolver | None = None,
+        loader: OntologyLoader | None = None,
     ) -> None:
         self._term_resolver = term_resolver
         self._loader = loader

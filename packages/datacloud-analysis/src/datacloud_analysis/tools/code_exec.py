@@ -104,11 +104,11 @@ async def write_code(
 
 
 @tool("execute_code")
-async def execute_code(
+async def execute_code(  # noqa: ASYNC109
     filename: str,
-    timeout: int = 120,
+    timeout: int = 120,  # noqa: ASYNC109
     _context: Any = None,
-) -> dict[str, Any]:  # noqa: ASYNC109
+) -> dict[str, Any]:
     """Execute one Python file in workspace and return output/result."""
     if not filename.endswith(".py"):
         filename = f"{filename}.py"
@@ -158,7 +158,9 @@ async def execute_code(
                 "exit_code": 0,
                 "output": stdout_buf.getvalue(),
                 "result": result_obj,
-                "result_file": str(resolved.with_suffix(".json")) if (result_obj is not None and resolved is not None) else None,
+                "result_file": str(resolved.with_suffix(".json"))
+                if (result_obj is not None and resolved is not None)
+                else None,
             }
         except Exception as exc:  # noqa: BLE001
             return {

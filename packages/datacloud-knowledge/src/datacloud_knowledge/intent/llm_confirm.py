@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from collections.abc import Callable
 from typing import Any
 
@@ -174,7 +173,7 @@ def _format_recall_context(
 def _get_resolver() -> Any:
     """懒获取 DimensionValueResolver，不可用时返回 None。"""
     try:
-        from .dimension_values import DimensionValueResolver  # noqa: PLC0415
+        from .dimension_values import DimensionValueResolver
 
         return DimensionValueResolver.get_instance()
     except Exception:
@@ -237,7 +236,11 @@ def llm_confirm(
     logger.debug("[llm_confirm] user_prompt:\n%s", user_prompt)
 
     try:
-        from .llm_utils import build_llm, extract_json_from_text, stream_invoke_with_thinking  # noqa: PLC0415
+        from .llm_utils import (
+            build_llm,
+            extract_json_from_text,
+            stream_invoke_with_thinking,
+        )
 
         llm = build_llm()
         llm_with_tool = llm.bind_tools(

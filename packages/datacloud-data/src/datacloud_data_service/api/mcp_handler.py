@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from datacloud_data_sdk.context import InvocationContext
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-
-from datacloud_data_sdk.context import InvocationContext
 
 router = APIRouter()
 
@@ -110,6 +109,7 @@ def _get_tools_list(request: Request) -> list[dict]:
         return [_fallback_unified_query_tool()]
 
     from datacloud_data_sdk.context import get_current_context
+
     from datacloud_data_service.tools.registry import ToolRegistry
 
     registry = ToolRegistry(loader)

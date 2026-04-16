@@ -11,9 +11,9 @@
 - TC-R04: 多个 pending tool calls 在 resume 时按顺序全部重放
 - TC-R05: messages 序列化/反序列化完整性（SystemMessage/HumanMessage/AIMessage/ToolMessage）
 """
+
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -23,10 +23,10 @@ from langchain_core.tools import StructuredTool
 from langgraph.errors import GraphBubbleUp
 from pydantic import BaseModel
 
-
 # ---------------------------------------------------------------------------
 # 辅助 Schema
 # ---------------------------------------------------------------------------
+
 
 class _SimpleSchema(BaseModel):
     query: str = ""
@@ -35,6 +35,7 @@ class _SimpleSchema(BaseModel):
 # ---------------------------------------------------------------------------
 # 辅助：构造最小 state
 # ---------------------------------------------------------------------------
+
 
 def _make_state(**extra: Any) -> dict[str, Any]:
     return {
@@ -80,6 +81,7 @@ def _make_ai_msg(*tool_names: str) -> AIMessage:
 # TC-R01: interrupt 触发 → react_messages 写入 state，进程内缓存不写入
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_tc_r01_interrupt_writes_react_messages_to_state() -> None:
     """TC-R01: dispatch_tool 抛 GraphBubbleUp 时，state["react_messages"] 和
@@ -91,30 +93,30 @@ async def test_tc_r01_interrupt_writes_react_messages_to_state() -> None:
     tool = _make_tool("data_query_test")
     ai_msg = _make_ai_msg("data_query_test")
 
-    with patch(
-        "datacloud_analysis.orchestration.execution.react_loop._build_llm",
-        return_value=_fake_llm_with_tools(),
-    ):
-        with patch(
+    with (
+        patch(
+            "datacloud_analysis.orchestration.execution.react_loop._build_llm",
+            return_value=_fake_llm_with_tools(),
+        ),
+        patch(
             "datacloud_analysis.orchestration.execution.react_loop._invoke_llm_with_fallback",
             new_callable=AsyncMock,
             return_value=(ai_msg, False),
-        ):
-            with patch(
-                "datacloud_analysis.orchestration.execution.react_loop.dispatch_tool",
-                side_effect=GraphBubbleUp("paradigm interrupt"),
-            ):
-                with pytest.raises(GraphBubbleUp):
-                    await run_react_loop(
-                        state=state,
-                        tools_list=[tool],
-                        system_prompt="你是数据分析助手",
-                    )
+        ),
+        patch(
+            "datacloud_analysis.orchestration.execution.react_loop.dispatch_tool",
+            side_effect=GraphBubbleUp("paradigm interrupt"),
+        ),
+        pytest.raises(GraphBubbleUp),
+    ):
+        await run_react_loop(
+            state=state,
+            tools_list=[tool],
+            system_prompt="你是数据分析助手",
+        )
 
     # 核心断言 1：state 已写入 react_messages
-    assert state.get("react_messages") is not None, (
-        "interrupt 后 state['react_messages'] 应非 None"
-    )
+    assert state.get("react_messages") is not None, "interrupt 后 state['react_messages'] 应非 None"
     assert isinstance(state["react_messages"], list), (
         "react_messages 应为 list（序列化后的消息列表）"
     )
@@ -131,11 +133,11 @@ async def test_tc_r01_interrupt_writes_react_messages_to_state() -> None:
 # TC-R02: resume 时从 state 恢复，LLM 不被重新调用
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_tc_r02_resume_reads_from_state_llm_not_called() -> None:
     """TC-R02: state["react_messages"] 有值时，run_react_loop 直接重放工具，不调用 LLM。"""
     from datacloud_analysis.orchestration.execution.react_loop import (
-        _deserialize_messages,
         _serialize_messages,
         run_react_loop,
     )
@@ -178,24 +180,24 @@ async def test_tc_r02_resume_reads_from_state_llm_not_called() -> None:
         llm_call_count += 1
         return (AIMessage(content="ok"), False)
 
-    with patch(
-        "datacloud_analysis.orchestration.execution.react_loop._build_llm",
-        return_value=_fake_llm_with_tools(),
-    ):
-        with patch(
+    with (
+        patch(
+            "datacloud_analysis.orchestration.execution.react_loop._build_llm",
+            return_value=_fake_llm_with_tools(),
+        ),
+        patch(
             "datacloud_analysis.orchestration.execution.react_loop._invoke_llm_with_fallback",
             side_effect=_fake_llm,
-        ):
-            result = await run_react_loop(
-                state=state,
-                tools_list=[tool],
-                system_prompt="你是数据分析助手",
-            )
+        ),
+    ):
+        await run_react_loop(
+            state=state,
+            tools_list=[tool],
+            system_prompt="你是数据分析助手",
+        )
 
     # 核心断言 1：LLM 未被调用（replay 直接执行 pending_tool_calls）
-    assert llm_call_count == 0, (
-        f"resume 时 LLM 不应被调用，实际调用了 {llm_call_count} 次"
-    )
+    assert llm_call_count == 0, f"resume 时 LLM 不应被调用，实际调用了 {llm_call_count} 次"
     # 核心断言 2：工具被调用一次（replay）
     assert len(tool_calls_received) == 1, (
         f"工具应被 replay 调用一次，实际 {len(tool_calls_received)} 次"
@@ -205,6 +207,7 @@ async def test_tc_r02_resume_reads_from_state_llm_not_called() -> None:
 # ---------------------------------------------------------------------------
 # TC-R03: resume 成功后 state 中的 react_messages 字段被清除
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_tc_r03_state_cleared_after_successful_resume() -> None:
@@ -241,16 +244,18 @@ async def test_tc_r03_state_cleared_after_successful_resume() -> None:
         coroutine=_finish_tool,
     )
 
-    with patch(
-        "datacloud_analysis.orchestration.execution.react_loop._build_llm",
-        return_value=_fake_llm_with_tools(),
-    ):
-        with patch(
+    with (
+        patch(
+            "datacloud_analysis.orchestration.execution.react_loop._build_llm",
+            return_value=_fake_llm_with_tools(),
+        ),
+        patch(
             "datacloud_analysis.orchestration.execution.react_loop._invoke_llm_with_fallback",
             new_callable=AsyncMock,
             return_value=(AIMessage(content="ok"), False),
-        ):
-            await run_react_loop(state=state, tools_list=[tool], system_prompt="sys")
+        ),
+    ):
+        await run_react_loop(state=state, tools_list=[tool], system_prompt="sys")
 
     # 核心断言：replay 消费后 state 字段被清除
     assert state.get("react_messages") is None, (
@@ -267,6 +272,7 @@ async def test_tc_r03_state_cleared_after_successful_resume() -> None:
 # ---------------------------------------------------------------------------
 # TC-R04: 多个 pending tool calls 在 resume 时全部按顺序重放
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_tc_r04_multiple_pending_tools_all_replayed_in_order() -> None:
@@ -310,23 +316,29 @@ async def test_tc_r04_multiple_pending_tools_all_replayed_in_order() -> None:
         replayed_tools.append("data_query_c")
         return {"__finish__": True, "answer": "done", "result_type": "text"}
 
-    tool_b = StructuredTool(name="data_query_b", description="b", args_schema=_SimpleSchema, coroutine=_tool_b)
-    tool_c = StructuredTool(name="data_query_c", description="c", args_schema=_SimpleSchema, coroutine=_tool_c)
+    tool_b = StructuredTool(
+        name="data_query_b", description="b", args_schema=_SimpleSchema, coroutine=_tool_b
+    )
+    tool_c = StructuredTool(
+        name="data_query_c", description="c", args_schema=_SimpleSchema, coroutine=_tool_c
+    )
 
-    with patch(
-        "datacloud_analysis.orchestration.execution.react_loop._build_llm",
-        return_value=_fake_llm_with_tools(),
-    ):
-        with patch(
+    with (
+        patch(
+            "datacloud_analysis.orchestration.execution.react_loop._build_llm",
+            return_value=_fake_llm_with_tools(),
+        ),
+        patch(
             "datacloud_analysis.orchestration.execution.react_loop._invoke_llm_with_fallback",
             new_callable=AsyncMock,
             return_value=(AIMessage(content="ok"), False),
-        ):
-            await run_react_loop(
-                state=state,
-                tools_list=[tool_b, tool_c],
-                system_prompt="sys",
-            )
+        ),
+    ):
+        await run_react_loop(
+            state=state,
+            tools_list=[tool_b, tool_c],
+            system_prompt="sys",
+        )
 
     assert replayed_tools == ["data_query_b", "data_query_c"], (
         f"两个 pending tool 应按顺序 b→c 重放，实际：{replayed_tools}"
@@ -336,6 +348,7 @@ async def test_tc_r04_multiple_pending_tools_all_replayed_in_order() -> None:
 # ---------------------------------------------------------------------------
 # TC-R05: messages 序列化/反序列化完整性
 # ---------------------------------------------------------------------------
+
 
 def test_tc_r05_serialize_deserialize_all_message_types() -> None:
     """TC-R05: _serialize_messages / _deserialize_messages 支持全部四种消息类型，往返无损。"""

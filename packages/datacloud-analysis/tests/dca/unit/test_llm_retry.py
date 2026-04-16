@@ -1,12 +1,13 @@
 """test_llm_retry.py — 覆盖 LLM 重试与备用模型关闭行为。"""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-
 # ─── _is_retryable ────────────────────────────────────────────────────────────
+
 
 def test_is_retryable_http_429() -> None:
     from datacloud_analysis.orchestration.execution.llm_retry import _is_retryable
@@ -70,6 +71,7 @@ def test_not_retryable_http_403() -> None:
 
 # ─── _parse_retry_after ───────────────────────────────────────────────────────
 
+
 def test_parse_retry_after_numeric_header() -> None:
     from datacloud_analysis.orchestration.execution.llm_retry import _parse_retry_after
 
@@ -110,6 +112,7 @@ def test_parse_retry_after_non_numeric_returns_zero() -> None:
 
 
 # ─── stream_llm_call_with_retry ───────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_retry_succeeds_on_first_try() -> None:
@@ -181,9 +184,11 @@ async def test_retry_exhausted_raises_original_exception(monkeypatch: pytest.Mon
         0.0,
     )
 
-    with patch("asyncio.sleep", new_callable=AsyncMock):
-        with pytest.raises(Exception, match="server error"):
-            await stream_llm_call_with_retry(_always_fail)
+    with (
+        patch("asyncio.sleep", new_callable=AsyncMock),
+        pytest.raises(Exception, match="server error"),
+    ):
+        await stream_llm_call_with_retry(_always_fail)
 
     assert call_count == 3  # 首次 1 次 + 重试 2 次
 
@@ -207,9 +212,11 @@ async def test_non_retryable_error_not_retried(monkeypatch: pytest.MonkeyPatch) 
         3,
     )
 
-    with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-        with pytest.raises(Exception, match="unauthorized"):
-            await stream_llm_call_with_retry(_auth_fail)
+    with (
+        patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        pytest.raises(Exception, match="unauthorized"),
+    ):
+        await stream_llm_call_with_retry(_auth_fail)
 
     assert call_count == 1
     mock_sleep.assert_not_called()
@@ -293,14 +300,20 @@ async def test_exponential_backoff_increases_wait(monkeypatch: pytest.MonkeyPatc
     async def _fake_sleep(seconds: float) -> None:
         sleep_calls.append(seconds)
 
-    with patch("asyncio.sleep", side_effect=_fake_sleep):
-        with pytest.raises(Exception):
-            await stream_llm_call_with_retry(_always_fail_500)
+    with (
+        patch("asyncio.sleep", side_effect=_fake_sleep),
+        pytest.raises(
+            Exception,
+            match="server error",
+        ),
+    ):
+        await stream_llm_call_with_retry(_always_fail_500)
 
     assert sleep_calls == pytest.approx([1.0, 2.0, 4.0])
 
 
 # ─── _build_fallback_llm ──────────────────────────────────────────────────────
+
 
 def test_build_fallback_llm_always_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     from datacloud_analysis.orchestration.execution.llm_retry import _build_fallback_llm

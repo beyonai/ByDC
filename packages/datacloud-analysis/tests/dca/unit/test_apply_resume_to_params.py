@@ -9,20 +9,21 @@
 注：interrupt() 的两阶段行为（首次 raise / resume 后返回）需要 LangGraph 图集成测试环境，
     本文件仅验证 resume 之后 _apply_resume_to_params 的参数构造逻辑（纯函数，无外部依赖）。
 """
+
 from __future__ import annotations
 
 from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
     _apply_resume_to_params,
-    _extract_knowledge_from_paradigm,
-    _build_oql_params_from_paradigm,
     _build_compute_params_from_paradigm,
+    _build_oql_params_from_paradigm,
+    _extract_knowledge_from_paradigm,
 )
 from datacloud_analysis.tool_hook_plugins.types import HookContext
-
 
 # ---------------------------------------------------------------------------
 # 辅助工厂
 # ---------------------------------------------------------------------------
+
 
 def _make_ctx(
     tool_name: str = "data_query_grid",
@@ -49,6 +50,7 @@ _PARADIGM_ITEM_METRIC = {"metricName": "企业总营收（万元）", "agg": "su
 # TC-27a: data_query_* — contextKnowledge 从 paradigmList 条目提取
 # ===========================================================================
 
+
 def test_tc27a_data_query_resume_extracts_context_knowledge() -> None:
     """resume 后 data_query_* 工具的 contextKnowledge 由 paradigmList 条目提取。"""
     ctx = _make_ctx(tool_name="data_query_grid")
@@ -68,6 +70,7 @@ def test_tc27a_data_query_resume_extracts_context_knowledge() -> None:
 # TC-27b: data_query_* — query 取自 payload["query"]（规范化后的自然语言）
 # ===========================================================================
 
+
 def test_tc27b_data_query_query_comes_from_payload() -> None:
     """data_query_* 的 query 字段取自 payload['query']（analyze_query_clarification 规范化结果）。"""
     ctx = _make_ctx(tool_name="data_query_enterprise", user_query="原始问题")
@@ -82,6 +85,7 @@ def test_tc27b_data_query_query_comes_from_payload() -> None:
 # ===========================================================================
 # TC-27c: data_query_* — payload["query"] 为空时 fallback 到 user_query
 # ===========================================================================
+
 
 def test_tc27c_data_query_fallback_to_user_query_when_payload_query_empty() -> None:
     """payload['query'] 为空时，query 字段 fallback 到 ctx['user_query']。"""
@@ -98,16 +102,19 @@ def test_tc27c_data_query_fallback_to_user_query_when_payload_query_empty() -> N
 # TC-27d: query_* — 构造 OQL 结构化参数（select/where/group_by/order_by）
 # ===========================================================================
 
+
 def test_tc27d_query_star_resume_constructs_oql_params() -> None:
     """resume 后 query_* 工具的 tool_params 为 OQL 结构化参数。"""
     ctx = _make_ctx(
         tool_name="query_grid",
         tool_params={"query": "旧参数应被替换"},  # 原始 LLM 参数，应被整体替换
     )
-    resume_value = {"paradigmList": [
-        {"fieldName": "企业总营收（万元）"},
-        {"fieldName": "物理网格亩产效益（万元/亩）"},
-    ]}
+    resume_value = {
+        "paradigmList": [
+            {"fieldName": "企业总营收（万元）"},
+            {"fieldName": "物理网格亩产效益（万元/亩）"},
+        ]
+    }
     payload = {"query": "", "knowledge": "", "needs_clarification": True}
 
     _apply_resume_to_params(ctx, "query_grid", resume_value, payload)
@@ -126,17 +133,20 @@ def test_tc27d_query_star_resume_constructs_oql_params() -> None:
 # TC-27e: compute_* — 构造 dimensions/metrics（中文字段名）
 # ===========================================================================
 
+
 def test_tc27e_compute_star_resume_constructs_dimensions_metrics() -> None:
     """resume 后 compute_* 工具的 tool_params 为 dimensions/metrics 结构。"""
     ctx = _make_ctx(
         tool_name="compute_grid",
         tool_params={"old": "旧参数应被替换"},
     )
-    resume_value = {"paradigmList": [
-        {"dimensionName": "企业经济效益等级"},
-        {"metricName": "企业总营收（万元）", "agg": "sum"},
-        {"metricName": "企业总利润（万元）"},  # agg 缺省 → "sum"
-    ]}
+    resume_value = {
+        "paradigmList": [
+            {"dimensionName": "企业经济效益等级"},
+            {"metricName": "企业总营收（万元）", "agg": "sum"},
+            {"metricName": "企业总利润（万元）"},  # agg 缺省 → "sum"
+        ]
+    }
     payload = {"query": "", "knowledge": "", "needs_clarification": True}
 
     _apply_resume_to_params(ctx, "compute_grid", resume_value, payload)
@@ -153,6 +163,7 @@ def test_tc27e_compute_star_resume_constructs_dimensions_metrics() -> None:
 # TC-27f: 未知工具类型 — tool_params 不被修改
 # ===========================================================================
 
+
 def test_tc27f_unknown_tool_type_does_not_modify_tool_params() -> None:
     """未知工具类型（非 data_query_*/query_*/compute_* 前缀）不修改 tool_params。"""
     original_params = {"some": "param"}
@@ -162,14 +173,13 @@ def test_tc27f_unknown_tool_type_does_not_modify_tool_params() -> None:
 
     _apply_resume_to_params(ctx, "send_email", resume_value, payload)
 
-    assert ctx["tool_params"] == original_params, (
-        "未知工具类型不应修改 tool_params"
-    )
+    assert ctx["tool_params"] == original_params, "未知工具类型不应修改 tool_params"
 
 
 # ===========================================================================
 # TC-27g: paradigmList 为空 — contextKnowledge 为空字符串，select 为空列表
 # ===========================================================================
+
 
 def test_tc27g_empty_paradigm_list_produces_empty_context_knowledge() -> None:
     """paradigmList 为空时，data_query_* 的 contextKnowledge 为空字符串。"""
@@ -198,6 +208,7 @@ def test_tc27g_empty_paradigm_list_produces_empty_select() -> None:
 # TC-27h: tool_params 整体替换（原始 LLM 参数被丢弃）
 # ===========================================================================
 
+
 def test_tc27h_tool_params_are_wholly_replaced_not_merged() -> None:
     """resume 后 tool_params 为整体替换，原始 LLM 含歧义参数被完全丢弃。"""
     ctx = _make_ctx(
@@ -222,6 +233,7 @@ def test_tc27h_tool_params_are_wholly_replaced_not_merged() -> None:
 # _extract_knowledge_from_paradigm 独立测试
 # ===========================================================================
 
+
 def test_extract_knowledge_uses_name_and_field_name() -> None:
     """name + fieldName → '名称 → 字段名' 格式。"""
     selected = [
@@ -243,8 +255,8 @@ def test_extract_knowledge_falls_back_to_term_name_and_description() -> None:
 def test_extract_knowledge_skips_incomplete_items() -> None:
     """name 或 fieldName 任一为空时，该条目被跳过。"""
     selected = [
-        {"name": "营收"},                         # 缺 fieldName → 跳过
-        {"fieldName": "企业总营收（万元）"},         # 缺 name → 跳过
+        {"name": "营收"},  # 缺 fieldName → 跳过
+        {"fieldName": "企业总营收（万元）"},  # 缺 name → 跳过
         {"name": "利润", "fieldName": "企业总利润（万元）"},  # 完整 → 保留
     ]
     result = _extract_knowledge_from_paradigm(selected)
@@ -256,6 +268,7 @@ def test_extract_knowledge_skips_incomplete_items() -> None:
 # ===========================================================================
 # _build_oql_params_from_paradigm 独立测试
 # ===========================================================================
+
 
 def test_build_oql_params_extracts_field_names_into_select() -> None:
     selected = [
@@ -273,6 +286,7 @@ def test_build_oql_params_extracts_field_names_into_select() -> None:
 # ===========================================================================
 # _build_compute_params_from_paradigm 独立测试
 # ===========================================================================
+
 
 def test_build_compute_params_separates_dims_and_metrics() -> None:
     selected = [

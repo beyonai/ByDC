@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from datacloud_analysis.orchestration.shared.contracts import PlanTask, TaskResult
 from datacloud_analysis.orchestration.state import (
     ensure_blocked_task,

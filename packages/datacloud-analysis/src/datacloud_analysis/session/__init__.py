@@ -12,8 +12,10 @@ from .metadata import SessionMetadata, build_run_config
 from .pg_opengauss import (
     OpenGaussSaver,
     SyncPGCheckpointer,
-    make_opengauss_saver,
     ensure_tables_opengauss,
+    make_opengauss_saver,
+)
+from .pg_opengauss import (
     get_checkpointer as get_opengauss_checkpointer,
 )
 

@@ -1,9 +1,9 @@
 import json
-import pytest
 from pathlib import Path
 
-from datacloud_data_sdk.ontology.loader import OntologyLoader
+import pytest
 from datacloud_data_sdk.exceptions import ObjectNotFoundError
+from datacloud_data_sdk.ontology.loader import OntologyLoader
 
 MINIMAL_REGISTRY = {
     "functions": [

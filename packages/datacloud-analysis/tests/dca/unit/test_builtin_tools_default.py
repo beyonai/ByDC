@@ -4,11 +4,13 @@
 - read_file / ask_user 是默认工具
 - write_code / write_file / execute_code 不在默认工具列表中
 """
+
 from __future__ import annotations
 
 
 def _get_builtin_tool_names() -> list[str]:
     from datacloud_analysis.orchestration.execution.node import _BUILTIN_TOOLS
+
     return [t.name for t in _BUILTIN_TOOLS]
 
 

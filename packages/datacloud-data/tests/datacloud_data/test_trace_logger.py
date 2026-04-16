@@ -6,8 +6,6 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from datacloud_data_sdk.events.trace_logger import log_exception_stack
 
 

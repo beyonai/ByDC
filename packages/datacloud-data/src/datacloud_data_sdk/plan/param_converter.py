@@ -18,7 +18,7 @@ def _extract_physical_key(mapping_path: str) -> str:
     return parts[-1] if parts else ""
 
 
-def _to_function_param(p: "OntologyActionParam") -> ObjectViewFunctionParam:
+def _to_function_param(p: OntologyActionParam) -> ObjectViewFunctionParam:
     """将 OntologyActionParam 转为 ObjectViewFunctionParam（供 map_to_physical 使用）。"""
     return ObjectViewFunctionParam(
         param_code=p.param_code,

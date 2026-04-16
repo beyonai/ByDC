@@ -2,7 +2,6 @@ import asyncio
 from unittest.mock import patch
 
 import pytest
-
 from datacloud_data_sdk.exceptions import ActionNotFoundError
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.ontology.term_loader import TermLoader

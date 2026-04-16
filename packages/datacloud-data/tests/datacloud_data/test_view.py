@@ -1,5 +1,4 @@
 import pytest
-
 from datacloud_data_sdk.exceptions import ActionNotFoundError
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
@@ -229,7 +228,9 @@ def test_view_virtual_actions_refresh_after_late_injection() -> None:
 
     assert "query_scene_grid_analysis" in view.list_action_codes()
     assert "compute_scene_grid_analysis" in view.list_action_codes()
-    assert view.get_action_schema("query_scene_grid_analysis")["name"] == "query_scene_grid_analysis"
+    assert (
+        view.get_action_schema("query_scene_grid_analysis")["name"] == "query_scene_grid_analysis"
+    )
 
 
 def test_build_view_result_columns_meta_uses_property_name() -> None:

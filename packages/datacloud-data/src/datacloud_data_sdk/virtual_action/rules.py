@@ -9,7 +9,6 @@ import html
 import json
 from typing import Any
 
-
 # ── OWL property_role → 运行时 analytic_role ──────────────────────────────────
 _ROLE_MAP: dict[str, str] = {
     "DIMENSION_ATTR": "dimension",
@@ -20,75 +19,123 @@ _ROLE_MAP: dict[str, str] = {
 _KIND_MAP: dict[str, str] = {
     "id": "id",
     "name": "name",
-    "description": "description",       # 新增
-    "time": "datetime",                  # 改名（旧 "time" → "datetime"）
+    "description": "description",  # 新增
+    "time": "datetime",  # 改名（旧 "time" → "datetime"）
     "period": "period",
-    "numerical": "numeric",              # 改名（旧 "number"）
-    "index_numerical": "raw_number",     # 改名（旧 "number"）
-    "indicator": "basic_metric",         # 改名（旧 "indicator"）
+    "numerical": "numeric",  # 改名（旧 "number"）
+    "index_numerical": "raw_number",  # 改名（旧 "number"）
+    "indicator": "basic_metric",  # 改名（旧 "indicator"）
     "snapshot_metric": "snapshot_metric",  # 新增
-    "derived_metric": "derived_metric",    # 新增
-    "formula_metric": "formula_metric",    # 新增
-    "virtual_tag": "virtual_tag",          # 新增
-    "primary_key": "primary_key",          # 新增
+    "derived_metric": "derived_metric",  # 新增
+    "formula_metric": "formula_metric",  # 新增
+    "virtual_tag": "virtual_tag",  # 新增
+    "primary_key": "primary_key",  # 新增
 }
 
 # ── 默认操作符映射 (analytic_role, analytic_kind) → ops ───────────────────────
 _FILTER_OPS: dict[tuple[str, str], list[str]] = {
     # DIMENSION
-    ("dimension", "id"):          ["eq", "in", "is_null", "is_not_null"],
-    ("dimension", "name"):        ["eq", "in", "like", "is_null", "is_not_null"],
+    ("dimension", "id"): ["eq", "in", "is_null", "is_not_null"],
+    ("dimension", "name"): ["eq", "in", "like", "is_null", "is_not_null"],
     ("dimension", "description"): ["eq", "in", "like", "is_null", "is_not_null"],
     ("dimension", "datetime"): [
-        "eq", "in", "gt", "gte", "lt", "lte", "between", "is_null", "is_not_null",
+        "eq",
+        "in",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+        "is_null",
+        "is_not_null",
     ],
     ("dimension", "period"): [
-        "eq", "in", "gt", "gte", "lt", "lte", "between", "is_null", "is_not_null",
+        "eq",
+        "in",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+        "is_null",
+        "is_not_null",
     ],
-    ("dimension", "numeric"):     ["eq", "in", "gt", "gte", "lt", "lte", "is_null", "is_not_null"],
+    ("dimension", "numeric"): ["eq", "in", "gt", "gte", "lt", "lte", "is_null", "is_not_null"],
     ("dimension", "virtual_tag"): ["eq", "in", "is_null", "is_not_null"],
     # MEASURE
-    ("measure", "primary_key"):      ["eq", "in", "is_null", "is_not_null"],
-    ("measure", "raw_number"):       ["eq", "in", "gt", "gte", "lt", "lte", "is_null", "is_not_null"],
-    ("measure", "basic_metric"):     ["eq", "in", "gt", "gte", "lt", "lte", "is_null", "is_not_null"],
-    ("measure", "snapshot_metric"):  ["eq", "in", "gt", "gte", "lt", "lte", "is_null", "is_not_null"],
-    ("measure", "derived_metric"):   [
-        "eq", "in", "gt", "gte", "lt", "lte", "between", "is_null", "is_not_null",
+    ("measure", "primary_key"): ["eq", "in", "is_null", "is_not_null"],
+    ("measure", "raw_number"): ["eq", "in", "gt", "gte", "lt", "lte", "is_null", "is_not_null"],
+    ("measure", "basic_metric"): ["eq", "in", "gt", "gte", "lt", "lte", "is_null", "is_not_null"],
+    ("measure", "snapshot_metric"): [
+        "eq",
+        "in",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "is_null",
+        "is_not_null",
     ],
-    ("measure", "formula_metric"):   [
-        "eq", "in", "gt", "gte", "lt", "lte", "between", "is_null", "is_not_null",
+    ("measure", "derived_metric"): [
+        "eq",
+        "in",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+        "is_null",
+        "is_not_null",
+    ],
+    ("measure", "formula_metric"): [
+        "eq",
+        "in",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+        "is_null",
+        "is_not_null",
     ],
 }
 
 _GROUP_OPS: dict[tuple[str, str], list[str]] = {
-    ("dimension", "id"):         ["self"],
-    ("dimension", "name"):       ["self"],
-    ("dimension", "datetime"):   ["day", "month", "quarter", "year"],
-    ("dimension", "period"):     ["month", "quarter", "year"],
-    ("dimension", "numeric"):    [],  # 数值维度不允许分组
+    ("dimension", "id"): ["self"],
+    ("dimension", "name"): ["self"],
+    ("dimension", "datetime"): ["day", "month", "quarter", "year"],
+    ("dimension", "period"): ["month", "quarter", "year"],
+    ("dimension", "numeric"): [],  # 数值维度不允许分组
     ("dimension", "virtual_tag"): ["self"],
-    ("measure", "primary_key"):  ["self"],
-    ("measure", "raw_number"):   ["range"],
+    ("measure", "primary_key"): ["self"],
+    ("measure", "raw_number"): ["range"],
     ("measure", "basic_metric"): ["range"],
     ("measure", "snapshot_metric"): ["range"],
-    ("measure", "derived_metric"):  ["range"],
-    ("measure", "formula_metric"):  ["range"],
+    ("measure", "derived_metric"): ["range"],
+    ("measure", "formula_metric"): ["range"],
 }
 
 _AGG_OPS: dict[tuple[str, str], list[str]] = {
-    ("dimension", "id"):         ["count", "count_distinct"],
-    ("dimension", "name"):       [],
+    ("dimension", "id"): ["count", "count_distinct"],
+    ("dimension", "name"): [],
     ("dimension", "description"): [],
-    ("dimension", "datetime"):   [],
-    ("dimension", "period"):     [],
-    ("dimension", "numeric"):    ["sum", "avg", "min", "max"],
+    ("dimension", "datetime"): [],
+    ("dimension", "period"): [],
+    ("dimension", "numeric"): ["sum", "avg", "min", "max"],
     ("dimension", "virtual_tag"): [],
-    ("measure", "primary_key"):  ["count", "count_distinct"],
-    ("measure", "raw_number"):   ["sum", "avg", "min", "max"],
+    ("measure", "primary_key"): ["count", "count_distinct"],
+    ("measure", "raw_number"): ["sum", "avg", "min", "max"],
     ("measure", "basic_metric"): ["sum", "avg", "min", "max"],
-    ("measure", "snapshot_metric"): ["max", "min", "sum"],  # cross-period sum 由 ComputeExecutor 动态检测
-    ("measure", "derived_metric"):  ["max", "min"],          # sum/avg 均禁止；比率/增量率类指标跨维聚合无业务意义
-    ("measure", "formula_metric"):  ["sum", "count", "count_distinct", "avg", "min", "max"],
+    ("measure", "snapshot_metric"): [
+        "max",
+        "min",
+        "sum",
+    ],  # cross-period sum 由 ComputeExecutor 动态检测
+    ("measure", "derived_metric"): [
+        "max",
+        "min",
+    ],  # sum/avg 均禁止；比率/增量率类指标跨维聚合无业务意义
+    ("measure", "formula_metric"): ["sum", "count", "count_distinct", "avg", "min", "max"],
 }
 
 # ── 强制过滤组 ────────────────────────────────────────────────────────────────

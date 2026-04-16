@@ -143,4 +143,3 @@ async def test_update_term_scores_dispatches_async_command(
         {"name_id": "name-1", "success": True},
         {"name_id": "name-2", "success": False},
     ]
-

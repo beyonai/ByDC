@@ -214,8 +214,8 @@ def _inject_db_object_actions(cls, existing_codes: set, registry) -> None:
 def _inject_kb_object_actions(cls, existing_codes: set, registry) -> None:
     """为 KB 对象注入 search_* 动作。"""
     from datacloud_data_sdk.virtual_action.generator import (
-        build_search_schema,
         build_search_description,
+        build_search_schema,
     )
     from datacloud_data_sdk.virtual_action.registry import ActionRoute
 
@@ -374,7 +374,7 @@ def _extract_view_fields(scene: dict, loader: Any) -> list:
     3. 空列表（由调用方降级到对象字段）
     """
     from datacloud_data_sdk.virtual_action.models import ViewFieldMeta
-    from datacloud_data_sdk.virtual_action.rules import parse_analytic_role, derive_field_ops
+    from datacloud_data_sdk.virtual_action.rules import derive_field_ops, parse_analytic_role
 
     # 优先使用已解析的 ViewFieldMeta 列表
     if "fields" in scene and scene["fields"]:

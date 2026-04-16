@@ -1,7 +1,6 @@
 """测试 scenario 本体 fixtures 加载与数据初始化。"""
 
 import pytest
-
 from datacloud_data_sdk.executor.dynamic_query_executor import DynamicQueryExecutor
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 

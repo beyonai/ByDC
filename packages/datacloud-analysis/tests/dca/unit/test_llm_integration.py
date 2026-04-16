@@ -5,27 +5,32 @@
   场景 2 - 主+备用全部失败 → Checkpoint 保存 → 下次请求自动恢复
   场景 3 - run_react_loop 端到端：主模型失败，全程切换到备用模型完成请求
 """
+
 from __future__ import annotations
 
 import contextvars
 import json
 import sys
+
+# ── 测试环境：mock 未安装的 SDK 依赖 ─────────────────────────────────────────────
+# datacloud_data_sdk 在 datacloud-analysis 单包测试环境中未安装，提前注入 mock 模块
+# 必须在任何 datacloud_analysis 导入之前完成，否则 import chain 会报 ModuleNotFoundError
+import types
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage
 
-# ── 测试环境：mock 未安装的 SDK 依赖 ─────────────────────────────────────────────
-# datacloud_data_sdk 在 datacloud-analysis 单包测试环境中未安装，提前注入 mock 模块
-# 必须在任何 datacloud_analysis 导入之前完成，否则 import chain 会报 ModuleNotFoundError
-import types
 
 def _inject_sdk_mocks() -> None:
     """把 datacloud_data_sdk 及其所有子模块注入 sys.modules。"""
     import types
 
-    _VAR: contextvars.ContextVar[str] = contextvars.ContextVar("datacloud_trace_id", default="")
+    trace_var: contextvars.ContextVar[str] = contextvars.ContextVar(
+        "datacloud_trace_id",
+        default="",
+    )
 
     def _make_mod(name: str) -> types.ModuleType:
         m = types.ModuleType(name)
@@ -37,7 +42,7 @@ def _inject_sdk_mocks() -> None:
 
         # trace_context
         tc = _make_mod("datacloud_data_sdk.trace_context")
-        tc.current_trace_id = _VAR  # type: ignore[attr-defined]
+        tc.current_trace_id = trace_var  # type: ignore[attr-defined]
         sdk.trace_context = tc  # type: ignore[attr-defined]
 
         # stream_text
@@ -49,21 +54,18 @@ def _inject_sdk_mocks() -> None:
         for sub in ("exceptions", "sql_executor", "ontology"):
             _make_mod(f"datacloud_data_sdk.{sub}")
 
+
 _inject_sdk_mocks()
 
 import datacloud_analysis.orchestration.execution.react_loop as rl_module  # noqa: E402
 from datacloud_analysis.orchestration.execution.react_loop import (  # noqa: E402
-    _LlmUnavailableError,
     _invoke_llm_with_fallback,
+    _LlmUnavailableError,
     run_react_loop,
 )
-from datacloud_analysis.orchestration.execution.llm_checkpoint import (  # noqa: E402
-    CHECKPOINT_REPLY,
-    load_llm_failure_checkpoint,
-)
-
 
 # ─── 共用工具 ──────────────────────────────────────────────────────────────────
+
 
 class _FakeRedis:
     """进程内内存 Redis stub，供多次调用间共享状态。"""
@@ -98,6 +100,7 @@ class _FakeGatewayContext:
 
 
 # ─── 场景 1：主模型全部重试失败 → 自动切换备用模型 ─────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_scenario1_primary_fails_fallback_takes_over(
@@ -179,16 +182,18 @@ async def test_scenario1_primary_retries_then_fallback(
         0.0,
     )
 
-    with patch.object(rl_module, "_stream_llm_call", fake_stream):
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            result_msg, _ = await _invoke_llm_with_fallback(
-                primary_llm,
-                fallback_llm,
-                messages_window=[],
-                gateway_context=None,
-                state={},
-                round_idx=1,
-            )
+    with (
+        patch.object(rl_module, "_stream_llm_call", fake_stream),
+        patch("asyncio.sleep", new_callable=AsyncMock),
+    ):
+        result_msg, _ = await _invoke_llm_with_fallback(
+            primary_llm,
+            fallback_llm,
+            messages_window=[],
+            gateway_context=None,
+            state={},
+            round_idx=1,
+        )
 
     assert result_msg is expected_msg
     # 主模型被调用 3 次（1 首次 + 2 重试），备用模型 1 次
@@ -198,6 +203,7 @@ async def test_scenario1_primary_retries_then_fallback(
 
 
 # ─── 场景 2：主+备用全部失败 → Checkpoint 保存 → 下次请求自动恢复 ──────────────────
+
 
 @pytest.mark.asyncio
 async def test_scenario2_all_models_fail_checkpoint_saved(
@@ -226,16 +232,18 @@ async def test_scenario2_all_models_fail_checkpoint_saved(
         0,
     )
 
-    with patch.object(rl_module, "_stream_llm_call", fake_stream_fail):
-        with pytest.raises(_LlmUnavailableError):
-            await _invoke_llm_with_fallback(
-                primary_llm,
-                fallback_llm,
-                messages_window=[],
-                gateway_context=ctx,
-                state={"user_query": "帮我查小米的营收", "confirmed_terms": ["小米"]},
-                round_idx=1,
-            )
+    with (
+        patch.object(rl_module, "_stream_llm_call", fake_stream_fail),
+        pytest.raises(_LlmUnavailableError),
+    ):
+        await _invoke_llm_with_fallback(
+            primary_llm,
+            fallback_llm,
+            messages_window=[],
+            gateway_context=ctx,
+            state={"user_query": "帮我查小米的营收", "confirmed_terms": ["小米"]},
+            round_idx=1,
+        )
 
     # ✅ Redis 中有断点
     raw = await fake_redis.get("llm:checkpoint:sess-recovery-test")
@@ -265,13 +273,15 @@ async def test_scenario2_checkpoint_recovered_on_next_request(
     await fake_redis.setex(
         "llm:checkpoint:sess-recovery",
         3600,
-        json.dumps({
-            "session_id": "sess-recovery",
-            "completed_steps": 1,
-            "state_snapshot": {"user_query": "帮我查小米的营收", "confirmed_terms": ["小米"]},
-            "error_type": "Exception",
-            "error_message": "all models down",
-        }),
+        json.dumps(
+            {
+                "session_id": "sess-recovery",
+                "completed_steps": 1,
+                "state_snapshot": {"user_query": "帮我查小米的营收", "confirmed_terms": ["小米"]},
+                "error_type": "Exception",
+                "error_message": "all models down",
+            }
+        ),
     )
 
     ctx = _FakeGatewayContext(session_id="sess-recovery", redis=fake_redis)
@@ -289,15 +299,20 @@ async def test_scenario2_checkpoint_recovered_on_next_request(
         0,
     )
 
-    with patch.object(rl_module, "_build_llm", return_value=mock_llm):
-        with patch("datacloud_analysis.orchestration.execution.llm_retry._build_fallback_llm", return_value=None):
-            result = await run_react_loop(
-                state={"user_query": "帮我查小米的营收", "messages": []},
-                tools_list=[],
-                system_prompt="你是数据分析助手",
-                gateway_context=ctx,
-                max_rounds=3,
-            )
+    with (
+        patch.object(rl_module, "_build_llm", return_value=mock_llm),
+        patch(
+            "datacloud_analysis.orchestration.execution.llm_retry._build_fallback_llm",
+            return_value=None,
+        ),
+    ):
+        result = await run_react_loop(
+            state={"user_query": "帮我查小米的营收", "messages": []},
+            tools_list=[],
+            system_prompt="你是数据分析助手",
+            gateway_context=ctx,
+            max_rounds=3,
+        )
 
     # ✅ 请求正常完成
     assert result["react_final"]["stop_reason"] != "llm_unavailable"
@@ -308,6 +323,7 @@ async def test_scenario2_checkpoint_recovered_on_next_request(
 
 
 # ─── 场景 3：run_react_loop 端到端，主模型失败全程使用备用模型 ─────────────────────
+
 
 @pytest.mark.asyncio
 async def test_scenario3_end_to_end_degradation_to_fallback(
@@ -341,16 +357,21 @@ async def test_scenario3_end_to_end_degradation_to_fallback(
         0,
     )
 
-    with patch.object(rl_module, "_build_llm", return_value=primary_llm):
-        with patch("datacloud_analysis.orchestration.execution.llm_retry._build_fallback_llm", return_value=fallback_llm):
-            with patch.object(rl_module, "_stream_llm_call", fake_stream):
-                result = await run_react_loop(
-                    state={"user_query": "查营收", "messages": []},
-                    tools_list=[],
-                    system_prompt="你是助手",
-                    gateway_context=None,
-                    max_rounds=3,
-                )
+    with (
+        patch.object(rl_module, "_build_llm", return_value=primary_llm),
+        patch(
+            "datacloud_analysis.orchestration.execution.llm_retry._build_fallback_llm",
+            return_value=fallback_llm,
+        ),
+        patch.object(rl_module, "_stream_llm_call", fake_stream),
+    ):
+        result = await run_react_loop(
+            state={"user_query": "查营收", "messages": []},
+            tools_list=[],
+            system_prompt="你是助手",
+            gateway_context=None,
+            max_rounds=3,
+        )
 
     # ✅ 请求成功完成（备用模型的 L2 no_tool_call 路径）
     react_final = result["react_final"]
@@ -384,16 +405,21 @@ async def test_scenario3_both_models_fail_returns_unavailable(
         0,
     )
 
-    with patch.object(rl_module, "_build_llm", return_value=primary_llm):
-        with patch("datacloud_analysis.orchestration.execution.llm_retry._build_fallback_llm", return_value=fallback_llm):
-            with patch.object(rl_module, "_stream_llm_call", fake_stream_always_fail):
-                result = await run_react_loop(
-                    state={"user_query": "查营收", "messages": []},
-                    tools_list=[],
-                    system_prompt="你是助手",
-                    gateway_context=ctx,
-                    max_rounds=3,
-                )
+    with (
+        patch.object(rl_module, "_build_llm", return_value=primary_llm),
+        patch(
+            "datacloud_analysis.orchestration.execution.llm_retry._build_fallback_llm",
+            return_value=fallback_llm,
+        ),
+        patch.object(rl_module, "_stream_llm_call", fake_stream_always_fail),
+    ):
+        result = await run_react_loop(
+            state={"user_query": "查营收", "messages": []},
+            tools_list=[],
+            system_prompt="你是助手",
+            gateway_context=ctx,
+            max_rounds=3,
+        )
 
     # ✅ stop_reason 标记为 llm_unavailable
     assert result["react_final"]["stop_reason"] == "llm_unavailable"
@@ -404,9 +430,12 @@ async def test_scenario3_both_models_fail_returns_unavailable(
 
 # ─── 辅助：async iterator helper（Python 3.10+ 有 aiter，低版本兼容） ──────────────
 
+
 def aiter(items: list) -> Any:
     """把普通 list 包成 async iterator，供 mock astream 使用。"""
+
     async def _gen():
         for item in items:
             yield item
+
     return _gen()

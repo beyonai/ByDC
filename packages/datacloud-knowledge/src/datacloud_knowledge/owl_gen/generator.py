@@ -18,7 +18,6 @@ from datacloud_knowledge.owl_gen.renderers.ontology import (
     render_mapping,
     render_object,
     render_single_view,
-    render_view,
     render_view_mapping,
 )
 from datacloud_knowledge.owl_gen.renderers.relations import (

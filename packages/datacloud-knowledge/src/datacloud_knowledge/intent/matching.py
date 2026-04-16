@@ -71,7 +71,7 @@ def match_mentions(
         if postings:
             # 精确匹配
             exact_candidates: list[MatchCandidate] = []
-            for term_id, term_type_code, source_match_type, score in postings:
+            for term_id, term_type_code, _source_match_type, score in postings:
                 confidence = 1.0
                 exact_candidates.append(
                     MatchCandidate(
@@ -139,7 +139,7 @@ def match_mentions_with_search(
     result: dict[str, tuple[MatchCandidate, ...]] = {}
 
     for mention in mentions:
-        if search_mode == 'strict':
+        if search_mode == "strict":
             user_name_index: dict[str, list[tuple[str, str, str, float]]] | None = None
             if user_id is not None and user_cache is not None:
                 user_name_index = user_cache.get(user_id)
@@ -151,7 +151,7 @@ def match_mentions_with_search(
             if postings:
                 # 精确匹配
                 exact_candidates: list[MatchCandidate] = []
-                for term_id, term_type_code, source_match_type, score in postings:
+                for term_id, term_type_code, _source_match_type, score in postings:
                     exact_candidates.append(
                         MatchCandidate(
                             term_id=term_id,
@@ -228,7 +228,7 @@ def _fuzzy_match(
 
         # 获取该匹配术语的所有候选项
         postings = name_index.get(matched_name, [])
-        for term_id, term_type_code, match_type in postings:
+        for term_id, term_type_code, _match_type in postings:
             fuzzy_candidates.append(
                 MatchCandidate(
                     term_id=term_id,

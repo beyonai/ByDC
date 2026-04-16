@@ -1,11 +1,15 @@
 from __future__ import annotations
+
 import logging
 from typing import Any
+
 from langchain_core.runnables import RunnableConfig
-from datacloud_analysis.orchestration.state import AgentState
+
 from datacloud_analysis.orchestration.respond.formatter import format_result
+from datacloud_analysis.orchestration.state import AgentState
 
 logger = logging.getLogger(__name__)
+
 
 async def respond_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     gw_ctx = (config.get("configurable") or {}).get("gateway_context")

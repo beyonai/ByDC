@@ -918,7 +918,9 @@ class OwlParser:
         operation: dict[str, Any] = {
             "summary": action.description or action.action_name or action.action_code,
         }
-        request_body_params = self._filter_request_params_by_location(params, method=method, location="body")
+        request_body_params = self._filter_request_params_by_location(
+            params, method=method, location="body"
+        )
         request_schema = self._build_request_body_schema(request_body_params)
         if request_schema:
             operation["requestBody"] = {
@@ -983,11 +985,7 @@ class OwlParser:
     def _build_response_schema(self, params: list[dict[str, Any]]) -> dict[str, Any] | None:
         """基于动作出参生成响应 schema。"""
         schema = self._build_schema_from_params(
-            [
-                param
-                for param in params
-                if param.get("direction") in ("OUT", "INOUT")
-            ]
+            [param for param in params if param.get("direction") in ("OUT", "INOUT")]
         )
         return schema if schema.get("properties") else None
 
@@ -1087,7 +1085,11 @@ class OwlParser:
             )
             if location == "body":
                 continue
-            name = path_parts[-1].removesuffix("[]") if path_parts else str(param.get("param_code", ""))
+            name = (
+                path_parts[-1].removesuffix("[]")
+                if path_parts
+                else str(param.get("param_code", ""))
+            )
             param_schema = self._param_to_json_schema(param)
             description = param_schema.pop("description", "")
             required = True if location == "path" else bool(param.get("required", False))
@@ -1147,10 +1149,14 @@ class OwlParser:
             if is_last:
                 existing = properties.get(part)
                 if existing is None:
-                    properties[part] = leaf_schema if not is_array else {
-                        "type": "array",
-                        "items": leaf_schema,
-                    }
+                    properties[part] = (
+                        leaf_schema
+                        if not is_array
+                        else {
+                            "type": "array",
+                            "items": leaf_schema,
+                        }
+                    )
                 elif is_array and existing.get("type") == "array":
                     existing.setdefault("items", leaf_schema)
                 else:

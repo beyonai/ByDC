@@ -152,7 +152,9 @@ async def test_ask_chitchat_short_circuits_without_graph_execution(
     monkeypatch.setattr(worker, "_stream_graph", _never_called)
 
     command = AskAgentCommand(
-        header=MessageHeader(message_id="m-ask-1", session_id=context.session_id, trace_id="trace-ask-1"),
+        header=MessageHeader(
+            message_id="m-ask-1", session_id=context.session_id, trace_id="trace-ask-1"
+        ),
         content=content,
         extra_payload={},
     )
@@ -185,7 +187,9 @@ async def test_ext_command_keeps_priority_over_chitchat_short_circuit(
     monkeypatch.setattr(worker, "_stream_graph", _never_called)
 
     command = AskAgentCommand(
-        header=MessageHeader(message_id="m-ask-2", session_id=context.session_id, trace_id="trace-ask-2"),
+        header=MessageHeader(
+            message_id="m-ask-2", session_id=context.session_id, trace_id="trace-ask-2"
+        ),
         content="hello",
         extra_payload={"ext_params": {"command": "noop"}},
     )

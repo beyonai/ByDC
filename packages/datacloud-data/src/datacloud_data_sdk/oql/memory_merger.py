@@ -6,6 +6,7 @@ OQL 内存合并工具
 """
 
 from __future__ import annotations
+
 from typing import Any
 
 

@@ -29,8 +29,20 @@ AGGREGATIONS_KEY = "统计函数"
 
 _TIME_WORDS = frozenset(
     {
-        "时间", "年份", "月份", "日期", "账期", "时间段", "季度",
-        "time", "year", "month", "date", "billing period", "time period", "quarter",
+        "时间",
+        "年份",
+        "月份",
+        "日期",
+        "账期",
+        "时间段",
+        "季度",
+        "time",
+        "year",
+        "month",
+        "date",
+        "billing period",
+        "time period",
+        "quarter",
     }
 )
 
@@ -214,11 +226,13 @@ class ParadigmResolutionState:
                     }
                     for item in items
                 ]
-            paradigms.append({
-                "paradigmId": paradigm_id,
-                "paradigmName": paradigm_name,
-                "paradigmResult": paradigm_result,
-            })
+            paradigms.append(
+                {
+                    "paradigmId": paradigm_id,
+                    "paradigmName": paradigm_name,
+                    "paradigmResult": paradigm_result,
+                }
+            )
         return paradigms
 
     def to_dict(self) -> dict[str, Any]:
@@ -257,10 +271,7 @@ def build_paradigm_resolution_state(
         "[paradigm_builder] 五段式解析: items=%d, searchable=%d, details=[%s]",
         len(state.items),
         sum(1 for it in state.items if it.search_enabled),
-        ", ".join(
-            f"{it.ktype}:{it.keyword!r}(search={it.search_enabled})"
-            for it in state.items
-        ),
+        ", ".join(f"{it.ktype}:{it.keyword!r}(search={it.search_enabled})" for it in state.items),
     )
     state.knowledge_lookup_succeeded = _populate_recall_candidates(state)
     _enrich_dimension_value_hints(state)
@@ -287,26 +298,30 @@ def _build_typed_items(structured_query: dict[str, Any]) -> list[TypedKeywordSta
     items: list[TypedKeywordState] = []
 
     for index, keyword in enumerate(structured_query.get(QUERY_TARGETS_KEY, []), start=1):
-        items.append(TypedKeywordState(
-            item_id=f"select-{index}",
-            paradigm_id="1",
-            paradigm_name="查询值",
-            keyword=str(keyword),
-            kid=index,
-            ktype="select",
-            search_enabled=not _is_time_word(str(keyword)),
-        ))
+        items.append(
+            TypedKeywordState(
+                item_id=f"select-{index}",
+                paradigm_id="1",
+                paradigm_name="查询值",
+                keyword=str(keyword),
+                kid=index,
+                ktype="select",
+                search_enabled=not _is_time_word(str(keyword)),
+            )
+        )
 
     for index, keyword in enumerate(structured_query.get(GROUP_BY_KEY, []), start=1):
-        items.append(TypedKeywordState(
-            item_id=f"groupBy-{index}",
-            paradigm_id="2",
-            paradigm_name="分组条件",
-            keyword=str(keyword),
-            kid=index,
-            ktype="groupBy",
-            search_enabled=not _is_time_word(str(keyword)),
-        ))
+        items.append(
+            TypedKeywordState(
+                item_id=f"groupBy-{index}",
+                paradigm_id="2",
+                paradigm_name="分组条件",
+                keyword=str(keyword),
+                kid=index,
+                ktype="groupBy",
+                search_enabled=not _is_time_word(str(keyword)),
+            )
+        )
 
     filter_kid = 0
     filters = structured_query.get(FILTERS_KEY, {})
@@ -316,59 +331,65 @@ def _build_typed_items(structured_query: dict[str, Any]) -> list[TypedKeywordSta
             for raw_value in values:
                 filter_kid += 1
                 comparison, normalized_value = _normalize_filter_value(str(raw_value))
-                items.append(TypedKeywordState(
-                    item_id=f"whereKey-{filter_kid}",
-                    paradigm_id="3",
-                    paradigm_name="过滤条件",
-                    keyword=str(field_keyword),
-                    kid=filter_kid,
-                    ktype="whereKey",
-                    search_enabled=True,  # 字段名总是召回，需要解析到真实 schema
-                    comparison=comparison,
-                ))
-                items.append(TypedKeywordState(
-                    item_id=f"whereValue-{filter_kid}",
-                    paradigm_id="3",
-                    paradigm_name="过滤条件",
-                    keyword=normalized_value,
-                    kid=filter_kid,
-                    ktype="whereValue",
-                    search_enabled=not _should_skip_where_value_recall(
-                        str(raw_value), normalized_value
-                    ),
-                    comparison=comparison,
-                ))
+                items.append(
+                    TypedKeywordState(
+                        item_id=f"whereKey-{filter_kid}",
+                        paradigm_id="3",
+                        paradigm_name="过滤条件",
+                        keyword=str(field_keyword),
+                        kid=filter_kid,
+                        ktype="whereKey",
+                        search_enabled=True,  # 字段名总是召回，需要解析到真实 schema
+                        comparison=comparison,
+                    )
+                )
+                items.append(
+                    TypedKeywordState(
+                        item_id=f"whereValue-{filter_kid}",
+                        paradigm_id="3",
+                        paradigm_name="过滤条件",
+                        keyword=normalized_value,
+                        kid=filter_kid,
+                        ktype="whereValue",
+                        search_enabled=not _should_skip_where_value_recall(
+                            str(raw_value), normalized_value
+                        ),
+                        comparison=comparison,
+                    )
+                )
 
     for index, keyword in enumerate(structured_query.get(ORDER_BY_KEY, []), start=1):
-        items.append(TypedKeywordState(
-            item_id=f"orderBy-{index}",
-            paradigm_id="4",
-            paradigm_name="排序目标",
-            keyword=str(keyword),
-            kid=index,
-            ktype="orderBy",
-            search_enabled=not _is_time_word(str(keyword)),
-        ))
+        items.append(
+            TypedKeywordState(
+                item_id=f"orderBy-{index}",
+                paradigm_id="4",
+                paradigm_name="排序目标",
+                keyword=str(keyword),
+                kid=index,
+                ktype="orderBy",
+                search_enabled=not _is_time_word(str(keyword)),
+            )
+        )
 
     for index, keyword in enumerate(structured_query.get(AGGREGATIONS_KEY, []), start=1):
-        items.append(TypedKeywordState(
-            item_id=f"aggregation-{index}",
-            paradigm_id="5",
-            paradigm_name="统计函数",
-            keyword=str(keyword),
-            kid=index,
-            ktype="aggregation",
-            search_enabled=False,
-        ))
+        items.append(
+            TypedKeywordState(
+                item_id=f"aggregation-{index}",
+                paradigm_id="5",
+                paradigm_name="统计函数",
+                keyword=str(keyword),
+                kid=index,
+                ktype="aggregation",
+                search_enabled=False,
+            )
+        )
 
     return items
 
 
 def _populate_recall_candidates(state: ParadigmResolutionState) -> bool:
     """对 typed items 执行知识召回，填充候选项。"""
-    searchable = [
-        item for item in state.items if item.search_enabled and item.keyword.strip()
-    ]
+    searchable = [item for item in state.items if item.search_enabled and item.keyword.strip()]
     if not searchable:
         for item in state.items:
             item.candidates = []
@@ -395,9 +416,7 @@ def _populate_recall_candidates(state: ParadigmResolutionState) -> bool:
         map_key = f"{item.ktype}:{item.keyword}"
         raw_candidates = candidates_map.get(map_key, [])
         item.candidates = [
-            RecallCandidate.from_dict(c)
-            for c in raw_candidates
-            if isinstance(c, dict)
+            RecallCandidate.from_dict(c) for c in raw_candidates if isinstance(c, dict)
         ]
         if item.candidates:
             top_names = [c.term_name for c in item.candidates[:3]]
@@ -439,14 +458,16 @@ def _build_filter_paradigm_result(items: list[TypedKeywordState]) -> list[dict[s
         value_item = next((i for i in pair if i.ktype == "whereValue"), None)
         if key_item is None or value_item is None:
             continue
-        result.append({
-            "type": "predicate",
-            "field": key_item.resolved_keyword,
-            "fieldRecall": key_item.recall,
-            "comparison": value_item.comparison,
-            "value": value_item.resolved_keyword,
-            "valueRecall": value_item.recall,
-        })
+        result.append(
+            {
+                "type": "predicate",
+                "field": key_item.resolved_keyword,
+                "fieldRecall": key_item.recall,
+                "comparison": value_item.comparison,
+                "value": value_item.resolved_keyword,
+                "valueRecall": value_item.recall,
+            }
+        )
     return result
 
 
@@ -463,10 +484,10 @@ def _is_time_word(value: str) -> bool:
 
 
 _TIME_VALUE_PATTERNS = (
-    re.compile(r"^\d{6,8}$"),                                       # 202602, 20260201
-    re.compile(r"^\d{4}[-/年]\d{1,2}[-/月]?(\d{1,2}日?)?$"),       # 2026-02, 2026年2月
-    re.compile(r"^(第?[一二三四1-4]季度|[上下]半年|全年)$"),          # 第二季度, 上半年
-    re.compile(r"^\d{4}年?$"),                                      # 2026, 2026年
+    re.compile(r"^\d{6,8}$"),  # 202602, 20260201
+    re.compile(r"^\d{4}[-/年]\d{1,2}[-/月]?(\d{1,2}日?)?$"),  # 2026-02, 2026年2月
+    re.compile(r"^(第?[一二三四1-4]季度|[上下]半年|全年)$"),  # 第二季度, 上半年
+    re.compile(r"^\d{4}年?$"),  # 2026, 2026年
 )
 
 
@@ -512,12 +533,23 @@ def _normalize_filter_value(raw_value: str) -> tuple[str, str]:
 
 def _map_operator(operator: str) -> str:
     mapping = {
-        ">": "gt", ">=": "gte", "<": "lt", "<=": "lte", "=": "eq",
-        "大于": "gt", "高于": "gt", "超过": "gt",
-        "大于等于": "gte", "不小于": "gte",
-        "小于": "lt", "低于": "lt", "少于": "lt",
-        "小于等于": "lte", "不大于": "lte",
-        "等于": "eq", "为": "eq",
+        ">": "gt",
+        ">=": "gte",
+        "<": "lt",
+        "<=": "lte",
+        "=": "eq",
+        "大于": "gt",
+        "高于": "gt",
+        "超过": "gt",
+        "大于等于": "gte",
+        "不小于": "gte",
+        "小于": "lt",
+        "低于": "lt",
+        "少于": "lt",
+        "小于等于": "lte",
+        "不大于": "lte",
+        "等于": "eq",
+        "为": "eq",
     }
     return mapping.get(operator, "eq")
 
@@ -545,9 +577,7 @@ def _log_resolution_summary(state: ParadigmResolutionState) -> None:
             label = selected.term_name if selected else item.keyword
             resolved.append(f"{item.ktype}:{item.keyword!r}->{label!r}")
         else:
-            unresolved.append(
-                f"{item.ktype}:{item.keyword!r}({len(item.candidates)}候选)"
-            )
+            unresolved.append(f"{item.ktype}:{item.keyword!r}({len(item.candidates)}候选)")
     logger.debug(
         "[paradigm_builder] 解析摘要: resolved=%d unresolved=%d skipped=%d",
         len(resolved),
@@ -565,7 +595,7 @@ def _log_resolution_summary(state: ParadigmResolutionState) -> None:
 def _enrich_dimension_value_hints(state: ParadigmResolutionState) -> None:
     """对 select/groupBy 的关键词做维度值子词匹配，结果写入 state.dimension_value_hints。"""
     try:
-        from .dimension_values import DimensionValueResolver  # noqa: PLC0415
+        from .dimension_values import DimensionValueResolver
 
         resolver = DimensionValueResolver.get_instance()
     except Exception:

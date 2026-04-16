@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # ── 描述文档生成（§6 / §7 模板）────────────────────────────────────────────────
 
 
@@ -87,7 +86,14 @@ def _infer_value_type(f: Any) -> str:
         return "date"
 
     kind = getattr(f, "analytic_kind", None)
-    if kind in ("numeric", "raw_number", "basic_metric", "snapshot_metric", "derived_metric", "formula_metric"):
+    if kind in (
+        "numeric",
+        "raw_number",
+        "basic_metric",
+        "snapshot_metric",
+        "derived_metric",
+        "formula_metric",
+    ):
         return "number"
     if kind in ("datetime", "period"):
         return "date"
@@ -125,7 +131,9 @@ def _value_schema_for_field(f: Any) -> dict[str, Any]:
 def _filter_item_schema(f: Any) -> dict[str, Any]:
     """为单字段生成 filters 数组元素 schema（field const 使用 field_code）。"""
     field_code = f.field_code if hasattr(f, "field_code") else f.property_code
-    field_name = f.field_name if hasattr(f, "field_name") else getattr(f, "property_name", field_code)
+    field_name = (
+        f.field_name if hasattr(f, "field_name") else getattr(f, "property_name", field_code)
+    )
     filter_ops = getattr(f, "filter_ops", ["eq", "in", "is_null", "is_not_null"])
     role = getattr(f, "analytic_role", None)
     kind = getattr(f, "analytic_kind", None)
@@ -221,9 +229,7 @@ def build_query_schema(
                 "type": "array",
                 "items": {"type": "string", "enum": all_codes},
                 "description": "返回字段列表（填 field_code），为空时返回全部非关联字段",
-                "x-dc-field-catalog": [
-                    {"name": _fn(f), "code": _fc(f)} for f in queryable
-                ],
+                "x-dc-field-catalog": [{"name": _fn(f), "code": _fc(f)} for f in queryable],
             },
             "filters": filters_schema,
             "filter_relation": {
@@ -320,10 +326,7 @@ def build_compute_schema(
     msr_fields = [
         f
         for f in fields
-        if (
-            getattr(f, "analytic_role", None) == "measure"
-            and getattr(f, "aggregate_ops", [])
-        )
+        if (getattr(f, "analytic_role", None) == "measure" and getattr(f, "aggregate_ops", []))
         or getattr(f, "secondary_role", None) == "measure"
     ]
     filters_schema = _build_filters_schema(fields)
@@ -532,9 +535,7 @@ def build_compute_description(
         lines.append("- `metrics` 不能为空")
 
     # 拍照指标特殊说明
-    snapshot_fields = [
-        f for f in fields if getattr(f, "analytic_kind", None) == "snapshot_metric"
-    ]
+    snapshot_fields = [f for f in fields if getattr(f, "analytic_kind", None) == "snapshot_metric"]
     if snapshot_fields:
         names = "、".join(_fn(f) for f in snapshot_fields)
         lines.append(f"- 拍照指标（{names}）跨账期时不支持 SUM，请改用 MAX/MIN")
@@ -549,7 +550,9 @@ def build_compute_description(
     lines.append("")
     lines.append("**常见错误**：")
     lines.append("- `metrics` 为空（必须至少一个指标）")
-    lines.append("- `metrics` 项误用 `func` 表示聚合：必须使用键名 **`agg`**（如 `\"agg\": \"count_distinct\"`）")
+    lines.append(
+        '- `metrics` 项误用 `func` 表示聚合：必须使用键名 **`agg`**（如 `"agg": "count_distinct"`）'
+    )
     lines.append("- field 填了字段中文名而非字段编码（field_code）")
     lines.append("- `having.field` 未使用 `metrics` 中的 `as` 别名")
     if req_groups:

@@ -54,4 +54,3 @@ class ExtCommandDispatcherPlugin:
             session_id=context["session_id"],
             workspace_dir=context["workspace_dir"],
         )
-

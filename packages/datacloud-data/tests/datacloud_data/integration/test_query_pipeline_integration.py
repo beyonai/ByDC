@@ -1,9 +1,10 @@
-import pytest
 from pathlib import Path
+
+import pytest
+from datacloud_data_sdk.context import InvocationContext
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.plan.query_plan_generator import MockPlanGenerator
 from datacloud_data_sdk.sql_executor.models import DataSourceConfig
-from datacloud_data_sdk.context import InvocationContext
 
 REGISTRY = {
     "functions": [],

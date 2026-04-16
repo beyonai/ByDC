@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from datacloud_data_sdk.ontology.term_loader import TermLoader
 from datacloud_data_sdk.plan.models import (
     ObjectViewField,

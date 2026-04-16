@@ -20,7 +20,6 @@
 """
 
 from __future__ import annotations
-from typing import Any
 
 from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
 from datacloud_data_sdk.executor.api_executor import ApiExecutor
@@ -102,8 +101,8 @@ class Executor:
             RuntimeError: 当任务类型对应的执行器未配置时抛出
             asyncio.TimeoutError: 当执行超时时抛出
         """
-        import logging
         import asyncio
+        import logging
 
         logger = logging.getLogger(__name__)
 

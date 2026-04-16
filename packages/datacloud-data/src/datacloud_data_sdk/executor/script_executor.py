@@ -117,7 +117,7 @@ class ScriptExecutor:
                 loop.run_in_executor(None, execute_fn, params),
                 timeout=timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise ScriptExecutionError(action_code, f"Script timed out after {timeout}s")
         except ScriptExecutionError:
             raise

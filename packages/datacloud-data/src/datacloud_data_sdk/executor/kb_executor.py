@@ -23,10 +23,10 @@ import httpx
 
 from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError, KbExecutionError
-from datacloud_data_sdk.utils.curl_logger import log_curl
 from datacloud_data_sdk.executor.models import KbExecTask
 from datacloud_data_sdk.executor.step_results import StepResults
 from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
+from datacloud_data_sdk.utils.curl_logger import log_curl
 
 
 class KbExecutor:

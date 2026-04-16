@@ -3,24 +3,22 @@ OQL 原子翻译层和策略 A 测试
 """
 
 import pytest
+from datacloud_data_sdk.oql import OQLError, OQLErrorCode
 from datacloud_data_sdk.oql.adapter import (
-    resolve_object,
-    resolve_column,
+    OqlAdapter,
     build_field_map,
+    expand_relative_date,
     get_quoting,
     inline_value,
-    expand_relative_date,
-    translate_simple_condition,
-    translate_logic_condition,
+    resolve_column,
+    resolve_object,
     translate_conditions,
-    preprocess_where_terms,
-    OqlAdapter,
+    translate_simple_condition,
 )
-from datacloud_data_sdk.oql import OQLError, OQLErrorCode
+
 from tests.datacloud_data.fixtures.oql_test_data import (
     MockRegistry,
     MockTermResolver,
-    TEST_FLIGHT_RECORDS,
 )
 
 
@@ -209,7 +207,7 @@ class TestTranslateSimpleCondition:
         assert exc_info.value.code == OQLErrorCode.OQL_ERR_INVALID_OPERATOR
 
 
-class TestTranslateConditions:
+class TestTranslateConditionsDuplicateCoverage:
     """测试条件数组翻译"""
 
     def test_single_condition(self):

@@ -1,4 +1,3 @@
-# ruff: noqa: S101, RUF001
 from __future__ import annotations
 
 import uuid

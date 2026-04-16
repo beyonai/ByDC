@@ -121,7 +121,9 @@ class ArtifactRef:
                 size = int(size_value)
             except (TypeError, ValueError):
                 size = None
-        return cls(todo_id=todo_id, path=path, name=name, mime=str(mime) if mime else None, size=size)
+        return cls(
+            todo_id=todo_id, path=path, name=name, mime=str(mime) if mime else None, size=size
+        )
 
 
 @dataclass(slots=True)

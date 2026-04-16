@@ -1,4 +1,3 @@
-﻿# ruff: noqa: S101
 from __future__ import annotations
 
 import json
@@ -122,4 +121,3 @@ def test_recalculate_score_uses_decay_adjusted_ratio() -> None:
     recalculate_score = score_update_module._recalculate_score
 
     assert recalculate_score(confirmed_count=3, use_count=5, decay=0.8) == pytest.approx(0.4)
-

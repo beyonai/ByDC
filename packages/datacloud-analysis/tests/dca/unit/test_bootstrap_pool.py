@@ -4,9 +4,8 @@ from collections.abc import Generator
 from types import SimpleNamespace
 from typing import Any
 
-import pytest
-
 import datacloud_analysis.bootstrap as bootstrap
+import pytest
 
 
 class _FakePool:

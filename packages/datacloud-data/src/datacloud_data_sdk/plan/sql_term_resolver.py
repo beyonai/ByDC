@@ -14,7 +14,7 @@ def resolve_sql_literals(
     sql_template: str,
     payload: ObjectViewPayload | None,
     datasource_alias: str,
-    term_loader: "TermLoader | None",
+    term_loader: TermLoader | None,
 ) -> str:
     """解析 SQL 中绑定术语字段的字面量，将标签/名称替换为 code。无 payload 或 loader 时原样返回。"""
     if not payload or not term_loader:
@@ -66,7 +66,7 @@ def _resolve_with_sqlparse(
     sql: str,
     col_to_field: dict[str, ObjectViewField],
     table_col_to_field: dict[tuple[str, str], ObjectViewField],
-    term_loader: "TermLoader",
+    term_loader: TermLoader,
 ) -> str:
     import sqlparse
     from sqlparse import sql as sql_ast
@@ -101,11 +101,12 @@ def _resolve_with_sqlparse(
                 k = _next_non_ws(tokens, j + 1)
                 if j < len(tokens) and k < len(tokens):
                     kw, paren = tokens[j], tokens[k]
-                    if getattr(kw, "value", "").upper() == "IN" and isinstance(
-                        paren, sql_ast.Parenthesis
+                    if (
+                        getattr(kw, "value", "").upper() == "IN"
+                        and isinstance(paren, sql_ast.Parenthesis)
+                        and _replace_in_list(t, paren, _resolve_field, term_loader)
                     ):
-                        if _replace_in_list(t, paren, _resolve_field, term_loader):
-                            modified = True
+                        modified = True
             if hasattr(t, "tokens"):
                 _process_where(t)
             i += 1
@@ -120,7 +121,6 @@ def _resolve_with_sqlparse(
 
 def _extract_alias_to_table(stmt: object) -> dict[str, str]:
     """从 FROM/JOIN 子句提取 alias -> table_name。"""
-    from sqlparse import sql as sql_ast
 
     result: dict[str, str] = {}
     tokens = getattr(stmt, "tokens", [])
@@ -214,7 +214,7 @@ def _get_string_value(token: object) -> str | None:
 def _replace_comparison(
     comparison: object,
     resolve_field: object,
-    term_loader: "TermLoader",
+    term_loader: TermLoader,
 ) -> bool:
     """替换 Comparison 中的字面量。"""
     tokens = getattr(comparison, "tokens", [])
@@ -252,7 +252,7 @@ def _replace_in_list(
     ident: object,
     paren: object,
     resolve_field: object,
-    term_loader: "TermLoader",
+    term_loader: TermLoader,
 ) -> bool:
     """替换 IN ('v1','v2') 中的字面量。"""
     table_or_alias, col = _get_qualified_column(ident)

@@ -1,16 +1,13 @@
 """TC-26, TC-28: ToolHookPluginManager GraphBubbleUp 透传修复测试。"""
+
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
-
 from datacloud_analysis.tool_hook_plugins.manager import (
     ToolHookPluginManager,
     _LoadedToolHookPlugin,
 )
 from datacloud_analysis.tool_hook_plugins.types import HookContext
-
 
 # ---------------------------------------------------------------------------
 # 辅助：尝试导入 GraphBubbleUp，不可用时用自定义类代替
@@ -18,8 +15,11 @@ from datacloud_analysis.tool_hook_plugins.types import HookContext
 try:
     from langgraph.errors import GraphBubbleUp
 except ImportError:
-    class GraphBubbleUp(Exception):  # type: ignore[no-redef]
+
+    class GraphBubbleUpError(Exception):
         """Placeholder for langgraph.errors.GraphBubbleUp."""
+
+    GraphBubbleUp = GraphBubbleUpError
 
 
 def _make_plugin(before_cb) -> _LoadedToolHookPlugin:
@@ -73,13 +73,16 @@ async def test_tc28_ordinary_exception_is_swallowed_and_logged(
     manager = ToolHookPluginManager([plugin])
 
     import logging
+
     with caplog.at_level(logging.WARNING):
         ctx, decision = await manager.run_before(_make_ctx())
 
     assert decision is None, "普通异常不应导致 fail decision（非 strict 模式）"
     # 日志应有警告
-    assert any("plugin error" in r.message or "bad_callback" in r.message or "test.plugin" in r.message
-                for r in caplog.records), f"应有警告日志，实际：{[r.message for r in caplog.records]}"
+    assert any(
+        "plugin error" in r.message or "bad_callback" in r.message or "test.plugin" in r.message
+        for r in caplog.records
+    ), f"应有警告日志，实际：{[r.message for r in caplog.records]}"
 
 
 # ---------------------------------------------------------------------------

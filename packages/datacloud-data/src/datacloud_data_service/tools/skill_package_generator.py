@@ -81,5 +81,5 @@ class SkillPackageGenerator:
         props = schema.get("properties", {})
         if not props:
             return []
-        example = {k: "示例值" for k in props}
+        example = dict.fromkeys(props, "示例值")
         return [example]

@@ -68,19 +68,19 @@ def vector_search(
     vector_str = "[" + ",".join(map(str, query_vector)) + "]"
 
     sql = text("""
-        SELECT 
+        SELECT
             tn.term_id,
             tn.name_text AS term_name,
             tn.name_id,
             t.term_type_code,
             1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS similarity
-        FROM 
+        FROM
             whale_datacloud.term_name tn,
             whale_datacloud.term t
-        WHERE 
+        WHERE
             tn.name_embedding IS NOT NULL
             AND tn.term_id = t.term_id
-        ORDER BY 
+        ORDER BY
             tn.name_embedding <=> CAST(:vector AS vector)
         LIMIT :limit
     """)
@@ -131,19 +131,19 @@ def vector_search_by_vector(
     vector_str = "[" + ",".join(map(str, query_vector)) + "]"
 
     sql = text("""
-        SELECT 
+        SELECT
             tn.term_id,
             tn.name_text AS term_name,
             tn.name_id,
             t.term_type_code,
             1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS similarity
-        FROM 
+        FROM
             whale_datacloud.term_name tn,
             whale_datacloud.term t
-        WHERE 
+        WHERE
             tn.name_embedding IS NOT NULL
             AND tn.term_id = t.term_id
-        ORDER BY 
+        ORDER BY
             tn.name_embedding <=> CAST(:vector AS vector)
         LIMIT :limit
     """)

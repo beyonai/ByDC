@@ -7,18 +7,18 @@ OQL 原子翻译层 + 策略 A 执行器
 """
 
 from __future__ import annotations
+
 import logging
-from typing import Any, Optional
-from datetime import datetime, timedelta
-import re
 import sys
+from datetime import datetime, timedelta
+from typing import Any
 
 if sys.version_info >= (3, 8):
-    from typing import Literal
+    pass
 else:
-    from typing_extensions import Literal
+    pass
 
-from datacloud_data_sdk.executor.models import SqlExecTask, ApiExecTask
+from datacloud_data_sdk.executor.models import ApiExecTask, SqlExecTask
 from datacloud_data_sdk.oql.models import OQLError, OQLErrorCode
 
 logger = logging.getLogger(__name__)
@@ -442,7 +442,7 @@ def resolve_table(cls: Any) -> str:
     return cls.object_code
 
 
-def build_limit_clause(limit: int, offset: Optional[int], db_type: str) -> str:
+def build_limit_clause(limit: int, offset: int | None, db_type: str) -> str:
     """
     构建 LIMIT 子句。
 

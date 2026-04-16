@@ -10,12 +10,11 @@ import json
 import logging
 from typing import Any
 
+from datacloud_data_sdk.utils.json_utils import dump_json
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import Resource, TextContent, Tool
 from starlette.types import Message, Receive, Scope, Send
-
-from datacloud_data_sdk.utils.json_utils import dump_json
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +135,7 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
             if loader is None:
                 return [_unified_query_tool_fallback()]
             from datacloud_data_sdk.context import get_current_context
+
             from datacloud_data_service.tools.registry import ToolRegistry
 
             registry = ToolRegistry(loader)

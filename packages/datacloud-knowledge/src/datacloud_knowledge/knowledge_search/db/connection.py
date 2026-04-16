@@ -7,7 +7,10 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.dialects.postgresql.base import PGDialect
 from sqlalchemy.orm import Session, sessionmaker
 
-from datacloud_knowledge.db_url import build_sqlalchemy_database_config, infer_database_type_from_url
+from datacloud_knowledge.db_url import (
+    build_sqlalchemy_database_config,
+    infer_database_type_from_url,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator

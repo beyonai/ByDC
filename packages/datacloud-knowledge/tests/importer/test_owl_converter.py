@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import pytest
-
 from datacloud_knowledge.knowledge_build.importer.owl_converter import (
     RELATION_TYPE_TO_CARDINALITY,
     convert_domain,

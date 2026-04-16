@@ -6,13 +6,13 @@ distinct from the env-var ``Settings`` in ``env.py``.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class LLMRole(str, Enum):
+class LLMRole(StrEnum):
     """The four LLM roles understood by the SDK."""
 
     QUICK = "quick"

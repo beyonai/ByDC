@@ -1,16 +1,15 @@
 """TC-13 ~ TC-16, TC-23 ~ TC-25: QueryClarificationPlugin before_call_back 测试。"""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 # 直接导入插件模块（实现后才会通过）
 from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
-    before_call_back,
-    _is_data_tool,
-    _is_data_query_tool,
     _format_knowledge_for_prompt,
+    _is_data_query_tool,
+    _is_data_tool,
+    before_call_back,
 )
 from datacloud_analysis.tool_hook_plugins.types import HookContext
 
@@ -197,9 +196,7 @@ async def test_tc25_fallback_when_no_cache() -> None:
 # _format_knowledge_for_prompt 单元测试
 # ---------------------------------------------------------------------------
 def test_format_knowledge_extracts_readable_text() -> None:
-    from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
-        _format_knowledge_for_prompt,
-    )
+
     knowledge_json = '{"paradigmList":[{"name":"营收","fieldName":"企业总营收（万元）"},{"name":"利润","fieldName":"企业总利润（万元）"}]}'
     result = _format_knowledge_for_prompt(knowledge_json)
     assert "营收 → 企业总营收（万元）" in result
@@ -208,9 +205,7 @@ def test_format_knowledge_extracts_readable_text() -> None:
 
 
 def test_format_knowledge_returns_original_on_parse_error() -> None:
-    from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
-        _format_knowledge_for_prompt,
-    )
+
     bad_json = "not-json"
     result = _format_knowledge_for_prompt(bad_json)
     assert result == bad_json

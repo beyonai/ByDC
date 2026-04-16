@@ -5,15 +5,16 @@ OQL 数据模型
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import Any, Optional
-from enum import Enum
+
 import sys
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
 
 if sys.version_info >= (3, 8):
     from typing import Literal
 else:
-    from typing_extensions import Literal
+    from typing import Literal
 
 
 class OQLErrorCode(str, Enum):
@@ -45,7 +46,7 @@ class OQLError(Exception):
     """OQL 执行异常"""
 
     def __init__(
-        self, code: OQLErrorCode | str, message: str, details: Optional[dict[str, Any]] = None
+        self, code: OQLErrorCode | str, message: str, details: dict[str, Any] | None = None
     ):
         self.code = code
         self.message = message
@@ -69,8 +70,8 @@ class OQLObject:
     object_code: str
     object_name: str
     source_type: Literal["DB", "API"]
-    datasource_alias: Optional[str] = None
-    table_name: Optional[str] = None
+    datasource_alias: str | None = None
+    table_name: str | None = None
     fields: list[OQLField] = field(default_factory=list)
 
 
@@ -91,7 +92,7 @@ class OQLCondition:
     field: str
     operator: str  # in, nin, eq, neq, gt, gte, lt, lte, like, between, relativeDate
     value: Any
-    logic: Optional[Literal["and", "or"]] = None
+    logic: Literal["and", "or"] | None = None
 
 
 @dataclass
@@ -116,17 +117,15 @@ class OQLRequest:
 
     object: str
     fields: list[str]
-    where: Optional[list[OQLCondition]] = None
-    include_links: Optional[list[OQLIncludeLink]] = None
-    metrics: Optional[list[OQLMetric]] = None
-    group_by: Optional[list[str]] = None
-    having: Optional[list[OQLCondition]] = None
-    order_by: Optional[list[dict[str, str]]] = None  # [{field: str, direction: "asc"|"desc"}]
+    where: list[OQLCondition] | None = None
+    include_links: list[OQLIncludeLink] | None = None
+    metrics: list[OQLMetric] | None = None
+    group_by: list[str] | None = None
+    having: list[OQLCondition] | None = None
+    order_by: list[dict[str, str]] | None = None  # [{field: str, direction: "asc"|"desc"}]
     limit: int = 100
     offset: int = 0
-    execution_strategy: Optional[Literal["auto", "single_source", "cross_source", "pipeline"]] = (
-        "auto"
-    )
+    execution_strategy: Literal["auto", "single_source", "cross_source", "pipeline"] | None = "auto"
 
 
 @dataclass
@@ -144,10 +143,10 @@ class OQLResponse:
 
     code: int  # 0 = success, non-zero = error
     message: str
-    data: Optional[list[dict[str, Any]]] = None
-    pagination: Optional[OQLPagination] = None
-    error_code: Optional[str] = None
-    error_details: Optional[dict[str, Any]] = None
+    data: list[dict[str, Any]] | None = None
+    pagination: OQLPagination | None = None
+    error_code: str | None = None
+    error_details: dict[str, Any] | None = None
 
 
 @dataclass
@@ -157,10 +156,10 @@ class PipelineStep:
     step_id: str
     object: str
     fields: list[str]
-    where: Optional[list[OQLCondition]] = None
-    include_links: Optional[list[OQLIncludeLink]] = None
-    metrics: Optional[list[OQLMetric]] = None
-    group_by: Optional[list[str]] = None
+    where: list[OQLCondition] | None = None
+    include_links: list[OQLIncludeLink] | None = None
+    metrics: list[OQLMetric] | None = None
+    group_by: list[str] | None = None
     limit: int = 100
     offset: int = 0
 

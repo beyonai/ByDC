@@ -10,14 +10,13 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
-
 import datacloud_knowledge.knowledge_build.ontology.service as svc_module
+import pytest
 from datacloud_knowledge.file_store.types import UploadResult
 from datacloud_knowledge.knowledge_build.deps import get_file_manager
 from datacloud_knowledge.knowledge_build.ontology.router import router
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 
 _FAKE_MD5 = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
 _OWL_CONTENT = b"<owl:Ontology>...</owl:Ontology>"

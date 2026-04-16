@@ -1,5 +1,4 @@
 import pytest
-
 from datacloud_data_sdk.events.bus import EventBus
 from datacloud_data_sdk.events.events import ObjectViewBuilt, QueryPlanGenerated
 from datacloud_data_sdk.events.tracing import EventSpan, TracingMiddleware

@@ -315,9 +315,7 @@ class ComputeExecutor:
 
         # ── 3. 参数校验（直接用 field_code，无需翻译） ─────────────────────────
         required_groups = [
-            f.required_filter_group
-            for f in cls.fields
-            if getattr(f, "required_filter_group", None)
+            f.required_filter_group for f in cls.fields if getattr(f, "required_filter_group", None)
         ]
         filter_relation = (arguments.get("filter_relation") or "AND").upper()
         if filter_relation == "OR" and required_groups and "period_required" in required_groups:
@@ -465,8 +463,7 @@ class ComputeExecutor:
 
         # ── 6. 构建返回值 ──────────────────────────────────────────────────────
         records = [
-            dict(zip(col_keys, row)) if isinstance(row, (list, tuple)) else row
-            for row in rows
+            dict(zip(col_keys, row)) if isinstance(row, (list, tuple)) else row for row in rows
         ]
 
         columns: list[dict[str, str]] = []

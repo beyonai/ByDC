@@ -8,15 +8,16 @@ OQL Pipeline 执行器（策略 C）
 """
 
 from __future__ import annotations
+
 import logging
 import re
-from typing import Any
 import sys
+from typing import Any
 
 if sys.version_info >= (3, 8):
-    from typing import Literal
+    pass
 else:
-    from typing_extensions import Literal
+    pass
 
 from datacloud_data_sdk.oql.models import OQLError, OQLErrorCode
 

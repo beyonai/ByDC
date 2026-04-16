@@ -247,7 +247,6 @@ def _record_to_strawberry(
     loader: OntologyLoader | None = None,
 ) -> Any:
     """将 record dict 映射为 Strawberry 类型实例。linked 嵌套 list 会转换为 target 类型。"""
-    import strawberry
 
     ann = getattr(strawberry_type, "__annotations__", {})
     type_map = type_map or {}

@@ -1,13 +1,14 @@
 """DirectAggregator: 直接返回 final step 的 CSV 结果。"""
 
 from __future__ import annotations
+
 import csv
 from pathlib import Path
 from typing import Any
-from datacloud_data_sdk.aggregator.base import BaseAggregator
-from datacloud_data_sdk.plan.models import PlanAggregation
 
+from datacloud_data_sdk.aggregator.base import BaseAggregator
 from datacloud_data_sdk.executor.step_results import StepResults
+from datacloud_data_sdk.plan.models import PlanAggregation
 
 
 class DirectAggregator(BaseAggregator):

@@ -1,10 +1,8 @@
 from datacloud_data_sdk.ontology.models import (
-    FieldPhysicalMapping,
-    OntologyField,
-    OntologyActionParam,
     OntologyAction,
-    OntologyRelation,
     OntologyClass,
+    OntologyField,
+    OntologyRelation,
 )
 
 

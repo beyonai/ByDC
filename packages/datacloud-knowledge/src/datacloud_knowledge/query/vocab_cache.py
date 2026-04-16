@@ -25,7 +25,7 @@ import mmap
 import os
 import pickle
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -122,13 +122,13 @@ class VocabularyCache:
             # Get relfilenode and reltuples from pg_class
             cur.execute(
                 """
-                SELECT 
+                SELECT
                     c.relname,
                     c.relfilenode,
                     c.reltuples
                 FROM pg_class c
                 JOIN pg_namespace n ON c.relnamespace = n.oid
-                WHERE n.nspname = %s 
+                WHERE n.nspname = %s
                 AND c.relname IN ('term', 'term_name', 'term_vocabulary')
             """,
                 (self.schema,),
@@ -138,7 +138,7 @@ class VocabularyCache:
 
             # Get counts and max updated times
             cur.execute(f"""
-                SELECT 
+                SELECT
                     (SELECT COUNT(*) FROM {self.schema}.term) as count_term,
                     (SELECT COUNT(*) FROM {self.schema}.term_name) as count_name,
                     (SELECT COUNT(*) FROM {self.schema}.term_vocabulary) as count_vocab,
@@ -215,38 +215,39 @@ class VocabularyCache:
             return None, None
 
         try:
-            with open(self.cache_file, "rb") as f:
-                # Use mmap for efficient reading
-                with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-                    # Read header
-                    header_bytes = mm[:HEADER_SIZE]
-                    header_json = header_bytes.split(b"\x00")[0].decode("utf-8")
-                    cached_meta = CacheMetadata(**json.loads(header_json))
+            with (
+                self.cache_file.open("rb") as cache_fp,
+                mmap.mmap(cache_fp.fileno(), 0, access=mmap.ACCESS_READ) as mm,
+            ):
+                # Read header
+                header_bytes = mm[:HEADER_SIZE]
+                header_json = header_bytes.split(b"\x00")[0].decode("utf-8")
+                cached_meta = CacheMetadata(**json.loads(header_json))
 
-                    # Get current DB state
-                    current_meta = self._fetch_db_state(conn)
+                # Get current DB state
+                current_meta = self._fetch_db_state(conn)
 
-                    # Check validity
-                    if not self._check_cache_valid(cached_meta, current_meta):
-                        return None, None
+                # Check validity
+                if not self._check_cache_valid(cached_meta, current_meta):
+                    return None, None
 
-                    # Read vocabulary_set
-                    vocab_offset = cached_meta.vocab_offset
-                    vocab_size = cached_meta.vocab_size
-                    vocab_bytes = mm[vocab_offset : vocab_offset + vocab_size]
-                    vocabulary_set = pickle.loads(vocab_bytes)
+                # Read vocabulary_set
+                vocab_offset = cached_meta.vocab_offset
+                vocab_size = cached_meta.vocab_size
+                vocab_bytes = mm[vocab_offset : vocab_offset + vocab_size]
+                vocabulary_set = pickle.loads(vocab_bytes)
 
-                    # Read name_index
-                    index_offset = cached_meta.index_offset
-                    index_size = cached_meta.index_size
-                    index_bytes = mm[index_offset : index_offset + index_size]
-                    name_index = pickle.loads(index_bytes)
+                # Read name_index
+                index_offset = cached_meta.index_offset
+                index_size = cached_meta.index_size
+                index_bytes = mm[index_offset : index_offset + index_size]
+                name_index = pickle.loads(index_bytes)
 
-                    self._metadata = cached_meta
-                    self._vocabulary_set = vocabulary_set
-                    self._name_index = name_index
+                self._metadata = cached_meta
+                self._vocabulary_set = vocabulary_set
+                self._name_index = name_index
 
-                    return vocabulary_set, name_index
+                return vocabulary_set, name_index
 
         except Exception:
             # Cache corrupted or unreadable, rebuild
@@ -270,30 +271,32 @@ class VocabularyCache:
             return None, None
 
         try:
-            with open(self.cache_file, "rb") as f:
-                with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-                    # Read header
-                    header_bytes = mm[:HEADER_SIZE]
-                    header_json = header_bytes.split(b"\x00")[0].decode("utf-8")
-                    cached_meta = CacheMetadata(**json.loads(header_json))
+            with (
+                self.cache_file.open("rb") as cache_fp,
+                mmap.mmap(cache_fp.fileno(), 0, access=mmap.ACCESS_READ) as mm,
+            ):
+                # Read header
+                header_bytes = mm[:HEADER_SIZE]
+                header_json = header_bytes.split(b"\x00")[0].decode("utf-8")
+                cached_meta = CacheMetadata(**json.loads(header_json))
 
-                    # Read vocabulary_set (skip validation)
-                    vocab_offset = cached_meta.vocab_offset
-                    vocab_size = cached_meta.vocab_size
-                    vocab_bytes = mm[vocab_offset : vocab_offset + vocab_size]
-                    vocabulary_set = pickle.loads(vocab_bytes)
+                # Read vocabulary_set (skip validation)
+                vocab_offset = cached_meta.vocab_offset
+                vocab_size = cached_meta.vocab_size
+                vocab_bytes = mm[vocab_offset : vocab_offset + vocab_size]
+                vocabulary_set = pickle.loads(vocab_bytes)
 
-                    # Read name_index
-                    index_offset = cached_meta.index_offset
-                    index_size = cached_meta.index_size
-                    index_bytes = mm[index_offset : index_offset + index_size]
-                    name_index = pickle.loads(index_bytes)
+                # Read name_index
+                index_offset = cached_meta.index_offset
+                index_size = cached_meta.index_size
+                index_bytes = mm[index_offset : index_offset + index_size]
+                name_index = pickle.loads(index_bytes)
 
-                    self._metadata = cached_meta
-                    self._vocabulary_set = vocabulary_set
-                    self._name_index = name_index
+                self._metadata = cached_meta
+                self._vocabulary_set = vocabulary_set
+                self._name_index = name_index
 
-                    return vocabulary_set, name_index
+                return vocabulary_set, name_index
 
         except Exception:
             # Cache corrupted or unreadable, rebuild
@@ -308,7 +311,7 @@ class VocabularyCache:
         """Save vocabulary and name index to cache file."""
         # Get current DB state
         meta = self._fetch_db_state(conn)
-        meta.created_at = datetime.now().isoformat()
+        meta.created_at = datetime.now(tz=UTC).isoformat()
 
         # Serialize data
         vocab_bytes = pickle.dumps(vocabulary_set, protocol=pickle.HIGHEST_PROTOCOL)
@@ -326,7 +329,7 @@ class VocabularyCache:
         # Write to temp file first (atomic write)
         temp_file = self.cache_file.with_suffix(".tmp")
         try:
-            with open(temp_file, "wb") as f:
+            with temp_file.open("wb") as f:
                 # Pre-allocate file
                 f.seek(total_size - 1)
                 f.write(b"\x00")

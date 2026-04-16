@@ -11,8 +11,6 @@
     result = analyze_query_clarification("202602龙头、骨干企业的数量、营收")
 """
 
-# ruff: noqa: RUF001
-
 from __future__ import annotations
 
 import json

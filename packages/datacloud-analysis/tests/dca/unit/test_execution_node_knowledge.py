@@ -1,9 +1,9 @@
 """TC-06 ~ TC-07: execution_node 知识增强注入 system_prompt（层 A）测试。"""
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
-import pytest
 from langchain_core.messages import HumanMessage
 
 
@@ -45,6 +45,7 @@ async def test_tc06_knowledge_snippets_injected_as_readable_text() -> None:
         side_effect=mock_react_loop,
     ):
         from datacloud_analysis.orchestration.execution.node import execution_node
+
         await execution_node(state, _make_config())
 
     assert captured_prompts, "run_react_loop 应被调用"
@@ -73,6 +74,7 @@ async def test_tc07_empty_snippets_system_prompt_unchanged() -> None:
         side_effect=mock_react_loop,
     ):
         from datacloud_analysis.orchestration.execution.node import execution_node
+
         await execution_node(state_with, _make_config())
         await execution_node(state_without, _make_config())
 
@@ -117,6 +119,7 @@ async def test_tc08_runtime_section_contains_user_info() -> None:
         side_effect=mock_react_loop,
     ):
         from datacloud_analysis.orchestration.execution.node import execution_node
+
         await execution_node(state, config)
 
     assert captured
@@ -153,6 +156,7 @@ async def test_tc09_runtime_section_no_user_info_when_metadata_empty() -> None:
         side_effect=mock_react_loop,
     ):
         from datacloud_analysis.orchestration.execution.node import execution_node
+
         await execution_node(state, config)
 
     assert captured

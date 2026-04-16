@@ -9,8 +9,8 @@ SQL 执行器相关模型
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import Any
+
+from dataclasses import dataclass
 
 
 @dataclass

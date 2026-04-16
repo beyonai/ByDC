@@ -24,7 +24,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from datacloud_data_sdk.executor.compute_executor import ComputeExecutor
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
@@ -138,9 +137,9 @@ ONTOLOGY_CONTENT = {
 
 @pytest.fixture
 def loader() -> OntologyLoader:
-    l = OntologyLoader()
-    l.load_from_content(ONTOLOGY_CONTENT)
-    return l
+    loader_instance = OntologyLoader()
+    loader_instance.load_from_content(ONTOLOGY_CONTENT)
+    return loader_instance
 
 
 @pytest.fixture
@@ -184,11 +183,11 @@ async def test_basic_group_stats(executor_with_data: ComputeExecutor) -> None:
         {
             # ★ 新协议：field 传 field_code
             "dimensions": [
-                {"field": "period",      "group_op": "month"},
+                {"field": "period", "group_op": "month"},
                 {"field": "region_name", "group_op": "self"},
             ],
             "metrics": [
-                {"field": "revenue",  "agg": "sum", "as": "total_revenue"},
+                {"field": "revenue", "agg": "sum", "as": "total_revenue"},
                 {"agg": "count_all", "as": "ent_count"},
             ],
             "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
@@ -342,7 +341,9 @@ async def test_range_bucket_grouping(executor_with_data: ComputeExecutor) -> Non
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-async def test_compute_accepts_json_null_having_and_dimensions(executor_with_data: ComputeExecutor) -> None:
+async def test_compute_accepts_json_null_having_and_dimensions(
+    executor_with_data: ComputeExecutor,
+) -> None:
     """JSON null 映射为 Python None 时，不得对 having/dimensions 做 ``for ... in None``。
     metrics[i].field / filters[i].field 传 field_code。
     """
@@ -490,7 +491,7 @@ async def test_global_aggregation_no_dimensions(executor_with_data: ComputeExecu
         {
             # ★ field_code
             "metrics": [
-                {"field": "revenue",  "agg": "sum", "as": "total_revenue"},
+                {"field": "revenue", "agg": "sum", "as": "total_revenue"},
                 {"agg": "count_all", "as": "ent_count"},
             ],
             "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
@@ -518,9 +519,7 @@ async def test_snapshot_metric_cross_period_sum_raises(executor_with_data: Compu
                 # ★ field_code
                 "dimensions": [{"field": "period", "group_op": "month"}],
                 "metrics": [{"field": "beginning_users", "agg": "sum", "as": "total_users"}],
-                "filters": [
-                    {"field": "period", "op": "between", "value": ["2026-01", "2026-02"]}
-                ],
+                "filters": [{"field": "period", "op": "between", "value": ["2026-01", "2026-02"]}],
             },
         )
     assert exc_info.value.error_code == "VIRTUAL_ACTION_ERR_UNSUPPORTED_OP"
@@ -531,6 +530,7 @@ async def test_snapshot_metric_cross_period_sum_raises(executor_with_data: Compu
 # ─────────────────────────────────────────────────────────────────────────────
 # 协议边界：中文名不再被接受（§3.2.3 改动点 核心约束）
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 async def test_chinese_name_in_dimensions_rejected(executor_with_data: ComputeExecutor) -> None:
     """协议边界：dimensions[i].field 传中文名（旧协议）→ UNSUPPORTED_FIELD 或 UNSUPPORTED_OP。

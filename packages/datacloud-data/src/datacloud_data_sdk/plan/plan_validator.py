@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, TypedDict
+from typing import Any, TypedDict
 
 from datacloud_data_sdk.plan.models import (
     ObjectViewPayload,

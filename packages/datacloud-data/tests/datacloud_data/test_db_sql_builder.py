@@ -1,7 +1,5 @@
 """Tests for db_sql_builder."""
 
-import pytest
-
 from datacloud_data_sdk.executor.db_sql_builder import build_select_sql, build_where_clause
 
 

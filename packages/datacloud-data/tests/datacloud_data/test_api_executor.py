@@ -1,10 +1,11 @@
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 from pathlib import Path
-from datacloud_data_sdk.executor.models import ApiExecTask
-from datacloud_data_sdk.executor.api_executor import ApiExecutor
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from datacloud_data_sdk.context import InvocationContext
 from datacloud_data_sdk.exceptions import ApiExecutionError
+from datacloud_data_sdk.executor.api_executor import ApiExecutor
+from datacloud_data_sdk.executor.models import ApiExecTask
 
 MOCK_RESPONSE = {
     "records": [{"userId": "U001", "userName": "test_user"}],

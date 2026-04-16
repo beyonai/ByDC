@@ -11,9 +11,9 @@
 注：mock enhancer 的返回数据与 datacloud-knowledge 包的 rule-based 实现一致，
     因此本测试既不依赖特定包版本，也不需要网络。
 """
+
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -21,25 +21,30 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import HumanMessage
 
-
 # ---------------------------------------------------------------------------
 # 辅助：模拟 knowledge enhancer 的返回对象
 # ---------------------------------------------------------------------------
 
-_GRID_KNOWLEDGE_JSON = json.dumps({
-    "paradigmList": [
-        {"name": "营收", "fieldName": "企业总营收（万元）"},
-        {"name": "利润", "fieldName": "企业总利润（万元）"},
-        {"name": "亩产", "fieldName": "物理网格亩产效益（万元/亩）"},
-    ]
-}, ensure_ascii=False)
+_GRID_KNOWLEDGE_JSON = json.dumps(
+    {
+        "paradigmList": [
+            {"name": "营收", "fieldName": "企业总营收（万元）"},
+            {"name": "利润", "fieldName": "企业总利润（万元）"},
+            {"name": "亩产", "fieldName": "物理网格亩产效益（万元/亩）"},
+        ]
+    },
+    ensure_ascii=False,
+)
 
-_INDUSTRY_FORM_JSON = json.dumps({
-    "paradigmList": [
-        {"name": "产业链", "fieldName": ""},
-        {"name": "环节", "fieldName": "所属产业环节名称"},
-    ]
-}, ensure_ascii=False)
+_INDUSTRY_FORM_JSON = json.dumps(
+    {
+        "paradigmList": [
+            {"name": "产业链", "fieldName": ""},
+            {"name": "环节", "fieldName": "所属产业环节名称"},
+        ]
+    },
+    ensure_ascii=False,
+)
 
 
 def _make_knowledge_result(
@@ -58,7 +63,9 @@ def _make_knowledge_result(
     return result
 
 
-async def _grid_knowledge_enhancer(query: str, gateway_context: Any = None, message_pid: str = "") -> Any:
+async def _grid_knowledge_enhancer(
+    query: str, gateway_context: Any = None, message_pid: str = ""
+) -> Any:
     """模拟高效益网格知识查询的 enhancer（有 knowledge，无歧义）。"""
     return _make_knowledge_result(
         needs_clarification=False,
@@ -67,7 +74,9 @@ async def _grid_knowledge_enhancer(query: str, gateway_context: Any = None, mess
     )
 
 
-async def _industry_clarification_enhancer(query: str, gateway_context: Any = None, message_pid: str = "") -> Any:
+async def _industry_clarification_enhancer(
+    query: str, gateway_context: Any = None, message_pid: str = ""
+) -> Any:
     """模拟产业链查询的 enhancer（有歧义，无 knowledge）。"""
     return _make_knowledge_result(
         needs_clarification=True,
@@ -77,7 +86,9 @@ async def _industry_clarification_enhancer(query: str, gateway_context: Any = No
     )
 
 
-async def _passthrough_enhancer(query: str, gateway_context: Any = None, message_pid: str = "") -> Any:
+async def _passthrough_enhancer(
+    query: str, gateway_context: Any = None, message_pid: str = ""
+) -> Any:
     """模拟透传查询的 enhancer（无知识，无歧义）。"""
     return _make_knowledge_result(
         needs_clarification=False,
@@ -105,6 +116,7 @@ def _make_config() -> dict:
 # ---------------------------------------------------------------------------
 # TC-10: enhancer 返回 knowledge → intend_node 写入 knowledge_snippets
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_tc10_knowledge_enhancer_produces_snippets() -> None:
@@ -145,6 +157,7 @@ async def test_tc10_knowledge_payload_written_by_intend_node() -> None:
 # TC-11: knowledge_snippets 格式为可读中文字段映射
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_tc11_knowledge_snippets_are_readable_field_mapping() -> None:
     """TC-11: knowledge_snippets 为可读字段映射格式（含 →），不含 JSON 键。"""
@@ -176,9 +189,7 @@ async def test_tc11_knowledge_snippets_contain_chinese_field_names() -> None:
 
     snippets = result.get("knowledge_snippets") or []
     combined = "\n".join(str(s) for s in snippets)
-    assert "营收 → 企业总营收（万元）" in combined, (
-        f"snippets 应含中文字段映射：{combined!r}"
-    )
+    assert "营收 → 企业总营收（万元）" in combined, f"snippets 应含中文字段映射：{combined!r}"
     assert "利润 → 企业总利润（万元）" in combined
 
 
@@ -186,20 +197,19 @@ async def test_tc11_knowledge_snippets_contain_chinese_field_names() -> None:
 # TC-10/11 full pipeline: intend_node → state → execution_node system_prompt
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_tc10_tc11_full_pipeline_system_prompt_contains_knowledge() -> None:
     """TC-10/11 集成：intend_node 写入 snippets → execution_node 将其注入 system_prompt。"""
-    from datacloud_analysis.orchestration.intend.node import intend_node
     from datacloud_analysis.orchestration.execution.node import execution_node
+    from datacloud_analysis.orchestration.intend.node import intend_node
 
     query = "高效益网格的营收利润"
     state = _make_state(query)
     config = _make_config()
 
     # Step 1: intend_node with mock enhancer
-    intend_updates = await intend_node(
-        state, config, knowledge_enhancer=_grid_knowledge_enhancer
-    )
+    intend_updates = await intend_node(state, config, knowledge_enhancer=_grid_knowledge_enhancer)
 
     # Step 2: 合并 state
     merged_state = {
@@ -250,16 +260,14 @@ async def test_tc10_tc11_full_pipeline_system_prompt_contains_knowledge() -> Non
 @pytest.mark.asyncio
 async def test_tc10_passthrough_query_no_knowledge_in_system_prompt() -> None:
     """TC-10 对照组：透传查询（无 knowledge）→ system_prompt 不含知识增强段落。"""
-    from datacloud_analysis.orchestration.intend.node import intend_node
     from datacloud_analysis.orchestration.execution.node import execution_node
+    from datacloud_analysis.orchestration.intend.node import intend_node
 
     query = "帮我查看最新进展"
     state = _make_state(query)
     config = _make_config()
 
-    intend_updates = await intend_node(
-        state, config, knowledge_enhancer=_passthrough_enhancer
-    )
+    intend_updates = await intend_node(state, config, knowledge_enhancer=_passthrough_enhancer)
 
     merged_state = {
         **state,
@@ -276,7 +284,11 @@ async def test_tc10_passthrough_query_no_knowledge_in_system_prompt() -> None:
 
     async def _mock_react_loop(state, tools_list, system_prompt, max_rounds, gateway_context=None):
         captured_prompts.append(system_prompt)
-        return {"react_rounds": 0, "react_final": {"answer": "", "result_type": "text"}, "messages": []}
+        return {
+            "react_rounds": 0,
+            "react_final": {"answer": "", "result_type": "text"},
+            "messages": [],
+        }
 
     with patch(
         "datacloud_analysis.orchestration.execution.node.run_react_loop",
@@ -285,14 +297,13 @@ async def test_tc10_passthrough_query_no_knowledge_in_system_prompt() -> None:
         await execution_node(merged_state, config)
 
     assert captured_prompts
-    assert "数据查询知识增强" not in captured_prompts[0], (
-        "透传查询 system_prompt 不应含增强段落"
-    )
+    assert "数据查询知识增强" not in captured_prompts[0], "透传查询 system_prompt 不应含增强段落"
 
 
 # ---------------------------------------------------------------------------
 # TC-36: knowledge_payload 缓存 → dispatch_tool 不重复调用 enhancer
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_tc36_knowledge_payload_cache_prevents_fallback_in_plugin() -> None:
@@ -300,11 +311,11 @@ async def test_tc36_knowledge_payload_cache_prevents_fallback_in_plugin() -> Non
 
     验证：_call_fallback_enhancer 调用次数 = 0（缓存命中）。
     """
-    from datacloud_analysis.orchestration.intend.node import intend_node
     from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
+    from datacloud_analysis.orchestration.intend.node import intend_node
     from datacloud_analysis.tool_hook_plugins.manager import get_tool_hook_plugin_manager
     from langchain_core.tools import StructuredTool
-    from pydantic import BaseModel
+    from pydantic import BaseModel, ConfigDict, Field
 
     # --- Step 1: intend_node → 生成 knowledge_payload ---
     intend_updates = await intend_node(
@@ -327,8 +338,10 @@ async def test_tc36_knowledge_payload_cache_prevents_fallback_in_plugin() -> Non
 
     # --- Step 3: 构造 mock 工具 ---
     class _Schema(BaseModel):
+        model_config = ConfigDict(populate_by_name=True)
+
         query: str
-        contextKnowledge: str = ""
+        context_knowledge: str = Field(default="", alias="contextKnowledge")
 
     tool = StructuredTool(
         name="data_query_grid",
@@ -368,11 +381,11 @@ async def test_tc36_multiple_tool_calls_same_state_no_repeated_enhancer_call() -
 
     验证：dispatch_tool 调用两次，fallback 均不触发（同一个 knowledge_payload）。
     """
-    from datacloud_analysis.orchestration.intend.node import intend_node
     from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
+    from datacloud_analysis.orchestration.intend.node import intend_node
     from datacloud_analysis.tool_hook_plugins.manager import get_tool_hook_plugin_manager
     from langchain_core.tools import StructuredTool
-    from pydantic import BaseModel
+    from pydantic import BaseModel, ConfigDict, Field
 
     intend_updates = await intend_node(
         _make_state("营收利润查询"),
@@ -391,8 +404,10 @@ async def test_tc36_multiple_tool_calls_same_state_no_repeated_enhancer_call() -
     }
 
     class _Schema(BaseModel):
+        model_config = ConfigDict(populate_by_name=True)
+
         query: str
-        contextKnowledge: str = ""
+        context_knowledge: str = Field(default="", alias="contextKnowledge")
 
     tool = StructuredTool(
         name="data_query_grid",
@@ -443,14 +458,17 @@ async def test_tc36_empty_knowledge_payload_triggers_fallback_attempt(
     本测试验证"fallback 路径被进入"这一事实（而非 fallback 成功）。
     """
     import logging
+
     from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
     from datacloud_analysis.tool_hook_plugins.manager import get_tool_hook_plugin_manager
     from langchain_core.tools import StructuredTool
-    from pydantic import BaseModel
+    from pydantic import BaseModel, ConfigDict, Field
 
     class _Schema(BaseModel):
+        model_config = ConfigDict(populate_by_name=True)
+
         query: str
-        contextKnowledge: str = ""
+        context_knowledge: str = Field(default="", alias="contextKnowledge")
 
     tool = StructuredTool(
         name="data_query_grid",
@@ -473,7 +491,11 @@ async def test_tc36_empty_knowledge_payload_triggers_fallback_attempt(
     try:
         with caplog.at_level(logging.WARNING):
             await dispatch_tool(
-                tool_call={"id": "tc36c-call", "name": "data_query_grid", "args": {"query": "营收"}},
+                tool_call={
+                    "id": "tc36c-call",
+                    "name": "data_query_grid",
+                    "args": {"query": "营收"},
+                },
                 tools_map=tools_map,
                 state=state_no_payload,
                 gateway_context=None,
@@ -485,9 +507,5 @@ async def test_tc36_empty_knowledge_payload_triggers_fallback_attempt(
     # 验证：要么 fallback 触发了警告日志，要么工具正常执行（fallback 成功返回空结果）
     # 关键验证：有 knowledge_payload 的测试（test_tc36_knowledge_payload_cache_prevents_fallback_in_plugin）
     # 证明了有缓存时不走此路径，本测试只验证"无缓存路径存在"（日志验证）
-    fallback_log_emitted = any(
-        "fallback" in r.message.lower() or "query_clarification_plugin" in r.name
-        for r in caplog.records
-    )
     # 工具应正常返回（fallback 失败被 plugin 优雅处理，不抛异常）
     assert True  # dispatch_tool 不抛异常即可（上面已执行成功）
