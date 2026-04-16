@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import logging
 import os
+from datetime import datetime
 from typing import Any
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
@@ -158,6 +159,28 @@ async def execution_node(
             s if isinstance(s, str) else str(s) for s in knowledge_snippets
         )
         system_prompt = system_prompt + knowledge_section
+
+    # 层 B：运行时会话信息（用户 + 当前时间）——放最末尾，不破坏前缀缓存
+    # 从 gateway_context.current_command.header.metadata 取用户信息，无需 worker.py 传参
+    _gateway_context_for_meta = (config.get("configurable") or {}).get("gateway_context")
+    try:
+        _header_meta: dict = (
+            _gateway_context_for_meta.current_command.header.metadata or {}
+        )
+    except AttributeError:
+        _header_meta = {}
+    _user_code = str(_header_meta.get("user_code") or "").strip()
+    _user_name = str(_header_meta.get("user_name") or "").strip()
+    _now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
+
+    _runtime_lines = ["\n\n## 当前会话信息", f"- 当前时间：{_now_str}"]
+    if _user_name and _user_code:
+        _runtime_lines.append(f"- 当前用户：{_user_name}（工号：{_user_code}）")
+    elif _user_name:
+        _runtime_lines.append(f"- 当前用户：{_user_name}")
+    elif _user_code:
+        _runtime_lines.append(f"- 当前用户工号：{_user_code}")
+    system_prompt = system_prompt + "\n".join(_runtime_lines)
 
     tools_list = _build_tools_list(default_tools)
     max_rounds = int(os.getenv("DATACLOUD_REACT_MAX_ROUNDS", "10"))
