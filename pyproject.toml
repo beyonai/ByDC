@@ -115,6 +115,7 @@ datacloud-knowledge = { workspace = true }
 datacloud-service = { workspace = true }
 
 [tool.uv]
+package = false
 default-groups = ["dev"]
 
 [[tool.uv.index]]
