@@ -32,9 +32,6 @@ _EXECUTION_REASONING_TITLE = "任务执行"
 _BUILTIN_TOOLS: list[BaseTool] = [
     ask_user,
     read_file,
-    write_file,
-    write_code,
-    execute_code,
 ]
 
 
