@@ -34,6 +34,7 @@ class BM25Result:
     name_id: str
     term_type_code: str
     score: float
+    term_code: str = ""
 
 
 def _rollback_quietly(session: Session) -> None:
@@ -84,7 +85,8 @@ def _build_search_sql(*, with_type_filter: bool = False) -> object:
             tn.name_text AS term_name,
             tn.name_id,
             t.term_type_code,
-            ts_rank_cd(tn.name_keywords, query, 32) AS score
+            ts_rank_cd(tn.name_keywords, query, 32) AS score,
+            t.term_code
         FROM
             whale_datacloud.term_name tn,
             whale_datacloud.term t,
@@ -124,8 +126,9 @@ def _run_search(
             name_id=name_id,
             term_type_code=term_type_code,
             score=float(score),
+            term_code=str(term_code) if term_code else "",
         )
-        for term_id, term_name, name_id, term_type_code, score in rows
+        for term_id, term_name, name_id, term_type_code, score, term_code in rows
         if score >= min_score
     ]
 
@@ -204,7 +207,7 @@ def bm25_search_with_or(
 def _build_partitioned_search_sql(*, with_type_filter: bool = True) -> object:
     """BM25 查询 + ``ROW_NUMBER() OVER (PARTITION BY term_type_code)`` 分区取 top-N。"""
     sql_text = """
-        SELECT term_id, term_name, name_id, term_type_code, score
+        SELECT term_id, term_name, name_id, term_type_code, score, term_code
         FROM (
             SELECT
                 tn.term_id,
@@ -215,7 +218,8 @@ def _build_partitioned_search_sql(*, with_type_filter: bool = True) -> object:
                 ROW_NUMBER() OVER (
                     PARTITION BY t.term_type_code
                     ORDER BY ts_rank_cd(tn.name_keywords, query, 32) DESC
-                ) AS rn
+                ) AS rn,
+                t.term_code
             FROM
                 whale_datacloud.term_name tn,
                 whale_datacloud.term t,
@@ -257,8 +261,9 @@ def _run_partitioned_search(
             name_id=name_id,
             term_type_code=term_type_code,
             score=float(score),
+            term_code=str(term_code) if term_code else "",
         )
-        for term_id, term_name, name_id, term_type_code, score in rows
+        for term_id, term_name, name_id, term_type_code, score, term_code in rows
         if score >= min_score
     ]
 
@@ -372,7 +377,8 @@ def _build_jieba_search_sql(*, with_type_filter: bool = False) -> object:
             tn.name_text AS term_name,
             tn.name_id,
             t.term_type_code,
-            ts_rank_cd(tn.name_keywords_jieba, query, 32) AS score
+            ts_rank_cd(tn.name_keywords_jieba, query, 32) AS score,
+            t.term_code
         FROM
             whale_datacloud.term_name tn,
             whale_datacloud.term t,
@@ -412,8 +418,9 @@ def _run_jieba_search(
             name_id=name_id,
             term_type_code=term_type_code,
             score=float(score),
+            term_code=str(term_code) if term_code else "",
         )
-        for term_id, term_name, name_id, term_type_code, score in rows
+        for term_id, term_name, name_id, term_type_code, score, term_code in rows
         if score >= min_score
     ]
 
@@ -454,7 +461,7 @@ def bm25_search_jieba(
 def _build_jieba_partitioned_sql() -> object:
     """jieba 分词 BM25 + PARTITION BY term_type_code 分区取 top-N。"""
     sql_text = """
-        SELECT term_id, term_name, name_id, term_type_code, score
+        SELECT term_id, term_name, name_id, term_type_code, score, term_code
         FROM (
             SELECT
                 tn.term_id,
@@ -465,7 +472,8 @@ def _build_jieba_partitioned_sql() -> object:
                 ROW_NUMBER() OVER (
                     PARTITION BY t.term_type_code
                     ORDER BY ts_rank_cd(tn.name_keywords_jieba, query, 32) DESC
-                ) AS rn
+                ) AS rn,
+                t.term_code
             FROM
                 whale_datacloud.term_name tn,
                 whale_datacloud.term t,
@@ -514,8 +522,9 @@ def bm25_search_jieba_partitioned(
                 name_id=name_id,
                 term_type_code=term_type_code,
                 score=float(score),
+                term_code=str(term_code) if term_code else "",
             )
-            for term_id, term_name, name_id, term_type_code, score in rows
+            for term_id, term_name, name_id, term_type_code, score, term_code in rows
             if score >= min_score
         ]
     except Exception:

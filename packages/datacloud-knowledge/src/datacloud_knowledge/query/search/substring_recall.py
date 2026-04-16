@@ -25,7 +25,7 @@ def substring_recall(
     *,
     top_k: int = 20,
     term_type_codes: set[str] | None = None,
-) -> list[tuple[str, str, str, str]]:
+) -> list[tuple[str, str, str, str, str]]:
     """执行双向子串匹配召回。
 
     匹配逻辑：
@@ -41,7 +41,7 @@ def substring_recall(
         term_type_codes: 可选的 term_type_code 白名单过滤。
 
     Returns:
-        ``(term_id, term_name, name_id, term_type_code)`` 列表，按名称长度降序。
+        ``(term_id, term_name, name_id, term_type_code, term_code)`` 列表，按名称长度降序。
     """
     query_text = query_text.strip()
     if not query_text:
@@ -54,7 +54,8 @@ def substring_recall(
                 tn.term_id,
                 tn.name_text AS term_name,
                 tn.name_id,
-                t.term_type_code
+                t.term_type_code,
+                t.term_code
             FROM
                 {_SCHEMA}.term_name tn
                 JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
@@ -81,7 +82,8 @@ def substring_recall(
                 tn.term_id,
                 tn.name_text AS term_name,
                 tn.name_id,
-                t.term_type_code
+                t.term_type_code,
+                t.term_code
             FROM
                 {_SCHEMA}.term_name tn
                 JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
@@ -98,7 +100,10 @@ def substring_recall(
 
     try:
         rows = session.execute(sql, params).fetchall()
-        return [(str(row[0]), str(row[1]), str(row[2]), str(row[3])) for row in rows]
+        return [
+            (str(row[0]), str(row[1]), str(row[2]), str(row[3]), str(row[4]) if row[4] else "")
+            for row in rows
+        ]
     except Exception:
         log.exception("Substring recall failed for '%s'", query_text)
         raise
@@ -110,7 +115,7 @@ def substring_recall_partitioned(
     *,
     per_type_limit: int = 3,
     term_type_codes: set[str] | None = None,
-) -> list[tuple[str, str, str, str]]:
+) -> list[tuple[str, str, str, str, str]]:
     """双向子串匹配召回，按 term_type_code 分区取 top per_type_limit。"""
     query_text = query_text.strip()
     if not query_text or not term_type_codes:
@@ -118,13 +123,14 @@ def substring_recall_partitioned(
 
     type_codes_list = sorted(term_type_codes)
     sql = text(f"""
-        SELECT term_id, term_name, name_id, term_type_code
+        SELECT term_id, term_name, name_id, term_type_code, term_code
         FROM (
             SELECT
                 tn.term_id,
                 tn.name_text AS term_name,
                 tn.name_id,
                 t.term_type_code,
+                t.term_code,
                 ROW_NUMBER() OVER (
                     PARTITION BY t.term_type_code
                     ORDER BY LENGTH(tn.name_text) DESC
@@ -151,7 +157,10 @@ def substring_recall_partitioned(
     }
     try:
         rows = session.execute(sql, params).fetchall()
-        return [(str(row[0]), str(row[1]), str(row[2]), str(row[3])) for row in rows]
+        return [
+            (str(row[0]), str(row[1]), str(row[2]), str(row[3]), str(row[4]) if row[4] else "")
+            for row in rows
+        ]
     except Exception:
         log.exception("Substring partitioned recall failed for '%s'", query_text)
         raise
