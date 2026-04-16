@@ -131,13 +131,21 @@ def stream_invoke_with_thinking(
     return full
 
 
-def extract_json_from_text(text: str) -> dict[str, Any] | None:
+def extract_json_from_text(text: str | list[Any]) -> dict[str, Any] | None:
     """从 LLM 文本输出中兜底提取 JSON 对象。
 
     解析策略（按优先级）：
     1. 提取 ```json ... ``` 代码块
     2. 查找最后一个含 select/query/decisions 关键字的 {...} 对象
+
+    Args:
+        text: LLM 输出文本。MiniMax reasoning 模式下 content 可能是 list，
+              此处自动拼接为字符串。
     """
+    if isinstance(text, list):
+        text = "\n".join(str(part) for part in text)
+    if not isinstance(text, str):
+        text = str(text)
     # 策略 1：```json ... ``` 块
     m = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
     if m:

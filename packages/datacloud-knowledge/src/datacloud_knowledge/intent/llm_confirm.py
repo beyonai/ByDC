@@ -242,7 +242,7 @@ def llm_confirm(
         llm = build_llm()
         llm_with_tool = llm.bind_tools(
             [ConfirmedQuery],
-            tool_choice="ConfirmedQuery",
+            # tool_choice="ConfirmedQuery",
         )
         response = stream_invoke_with_thinking(
             llm_with_tool,
@@ -263,7 +263,12 @@ def llm_confirm(
             return result
 
         # 兜底：从 content 文本中提取 JSON
-        content = response.content if hasattr(response, "content") else str(response)
+        raw_content = response.content if hasattr(response, "content") else str(response)
+        content = (
+            "\n".join(str(part) for part in raw_content)
+            if isinstance(raw_content, list)
+            else str(raw_content)
+        )
         logger.warning("[llm_confirm] LLM 未返回 tool call，尝试从文本提取 JSON")
         fallback = extract_json_from_text(content)
         if fallback is not None:
