@@ -213,7 +213,9 @@ async def _stream_llm_call(
                 # ① 推送 thinking block（MiniMax reasoning_split=true / Claude extended_thinking）
                 _thinking_delta = _extract_thinking_text(chunk.content)
                 if _thinking_delta:
-                    await _emit_thinking_token(gateway_context, _thinking_delta, message_id=thinking_message_id)
+                    await _emit_thinking_token(
+                        gateway_context, _thinking_delta, message_id=thinking_message_id
+                    )
 
                 # ② 推送 LLM content 文字 token（ReAct 思考过程）
                 # 仅在无 tool_call_chunks 时推送：部分模型生成 tool_call 时 content 里会带工具名，
@@ -226,7 +228,9 @@ async def _stream_llm_call(
                 if not _has_tool_calls:
                     _content_delta = _extract_content_text(chunk.content)
                     if _content_delta:
-                        await _emit_stream_token(gateway_context, _content_delta, message_id=thinking_message_id)
+                        await _emit_stream_token(
+                            gateway_context, _content_delta, message_id=thinking_message_id
+                        )
                         # 不设 did_stream_text = True，保证 formatter 仍走 _emit_text → ANSWER_DELTA
 
                 # 实时推送 finish_react.answer 参数的增量内容（→ 答案区 ANSWER_DELTA）
@@ -297,7 +301,10 @@ async def _invoke_llm_with_fallback(
     last_exc: Exception
     try:
         return await stream_llm_call_with_retry(
-            _stream_llm_call, primary_llm_with_tools, messages_window, gateway_context,
+            _stream_llm_call,
+            primary_llm_with_tools,
+            messages_window,
+            gateway_context,
             thinking_message_id=thinking_message_id,
         )
     except Exception as primary_exc:
@@ -309,7 +316,10 @@ async def _invoke_llm_with_fallback(
         try:
             logger.warning("[LLM] 主模型失败，切换到备用模型")
             return await stream_llm_call_with_retry(
-                _stream_llm_call, fallback_llm_with_tools, messages_window, gateway_context,
+                _stream_llm_call,
+                fallback_llm_with_tools,
+                messages_window,
+                gateway_context,
                 thinking_message_id=thinking_message_id,
             )
         except Exception as fallback_exc:
@@ -751,7 +761,9 @@ async def run_react_loop(
     else:
         # 首次执行：初始化messages
         # Prompt Caching：仅 Anthropic 协议支持 cache_control，OpenAI 兼容协议退回纯字符串
-        messages: list = [_build_system_message(system_prompt, stable_system_prompt, dynamic_prompt)]
+        messages: list = [
+            _build_system_message(system_prompt, stable_system_prompt, dynamic_prompt)
+        ]
         conv = _conversation_messages_for_llm(state)
         if conv:
             messages.extend(conv)
