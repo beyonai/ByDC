@@ -1,6 +1,22 @@
+minimum_pre_commit_version: 3.8.0
+default_install_hook_types:
+  - pre-commit
+
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+  - repo: local
     hooks:
-      - id: ruff
-      - id: ruff-format
+      - id: ci-ruff-format
+        name: ci / ruff format --check
+        entry: uv run --frozen --all-packages ruff format src/by_datacloud packages --check
+        language: system
+        pass_filenames: false
+      - id: ci-ruff-check
+        name: ci / ruff check
+        entry: uv run --frozen --all-packages ruff check src/by_datacloud packages
+        language: system
+        pass_filenames: false
+      - id: ci-mypy
+        name: ci / mypy
+        entry: uv run --frozen --all-packages mypy src/by_datacloud packages
+        language: system
+        pass_filenames: false
