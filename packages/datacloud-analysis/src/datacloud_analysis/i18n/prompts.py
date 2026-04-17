@@ -19,12 +19,15 @@ _SYSTEM_PROMPTS: dict[str, str] = {
     ),
 }
 
+
 _FALLBACK_LOCALE = "zh_CN"
 
 
 def _get_query_tool_hint_zh() -> str:
     """根据 DATACLOUD_ONTOLOGY_LOAD_MODE 返回当前查询工具命名格式的提示段。"""
+
     mode = os.environ.get("DATACLOUD_ONTOLOGY_LOAD_MODE", "").strip()
+
     if mode == "ontology_query":
         return (
             "## 查询工具命名规则\n"
@@ -32,18 +35,22 @@ def _get_query_tool_hint_zh() -> str:
             "聚合计算工具格式为 compute_{对象编码}（如 compute_Order）。\n"
             "- 禁止调用不含对象编码的裸工具名（如直接调用 query 或 compute）。\n"
         )
+
     if mode == "db_query":
         return (
             "## 查询工具命名规则\n"
             "- 当前模式下，查询工具名称格式为 data_query_{对象编码}（如 data_query_Order）。\n"
             "- 禁止调用不含对象编码的裸工具名 data_query，必须带上对象编码后缀。\n"
         )
+
     return ""
 
 
 def _get_query_tool_hint_en() -> str:
     """English version of query tool naming hint."""
+
     mode = os.environ.get("DATACLOUD_ONTOLOGY_LOAD_MODE", "").strip()
+
     if mode == "ontology_query":
         return (
             "## Query tool naming\n"
@@ -51,12 +58,14 @@ def _get_query_tool_hint_en() -> str:
             "compute_{object_code} (e.g. compute_Order).\n"
             "- Do NOT call bare names like 'query' or 'compute' without the object suffix.\n"
         )
+
     if mode == "db_query":
         return (
             "## Query tool naming\n"
             "- Tool format: data_query_{object_code} (e.g. data_query_Order).\n"
             "- Do NOT call bare 'data_query' — always append the object code suffix.\n"
         )
+
     return ""
 
 
@@ -72,13 +81,17 @@ def _disable_ask_user_tool() -> bool:
 
 def get_system_prompt(locale: str | None = None) -> str:
     """Return locale-specific system prompt with fallback support."""
+
     resolved_locale_raw = locale or os.getenv("DATACLOUD_AGENT_LOCALE", _FALLBACK_LOCALE)
+
     resolved_locale = resolved_locale_raw or _FALLBACK_LOCALE
+
     return _SYSTEM_PROMPTS.get(resolved_locale, _SYSTEM_PROMPTS[_FALLBACK_LOCALE])
 
 
 def get_supported_locales() -> list[str]:
     """Return all supported locale codes."""
+
     return list(_SYSTEM_PROMPTS.keys())
 
 
@@ -100,7 +113,6 @@ def _build_exec_zh() -> str:
         )
     parts.extend(
         [
-            "- 代码执行前请先使用 write_code 写入文件，再用 execute_code 运行。\n",
             "- 每次工具调用必须填写 reason 字段，说明选择该工具的理由。\n",
             "- 工具返回 [工具调用失败] 时，必须分析错误原因并用正确参数重新调用该工具，禁止直接调用 finish_react 放弃。\n",
         ]
@@ -158,37 +170,23 @@ def _build_exec_zh() -> str:
             "  · **extraction_confidence**（float，0.0～1.0）：你对本次参数提取正确性的自信度。"
             "若字段名、时间范围、过滤条件等存在任何不确定性，请填写较低值（建议 0.6～0.8）；"
             "所有参数均有明确依据时填 1.0。\n",
-            "  · **ambiguous_params**（List[str]）：【高优先级，默认应填写】\n"
-            "    满足以下任一条件时，必须将对应参数名加入此列表：\n"
-            "    1. 维度名/指标名/字段名不是用户原话，而是你根据业务语义猜测/映射的；\n"
-            "    2. 同一业务概念可能对应多个字段（如'营收'可能是 revenue/net_revenue/gmv）；\n"
-            "    3. 时间范围含相对表达（如'最近'、'今年'、'上季度'、'2月'未指定年份）；\n"
-            "    4. 过滤条件的枚举值不确定（如地区、街道、状态等名称拼写不确定）；\n"
-            "    5. 用户未明确说明分组维度，你是根据问题推断填写的。\n"
-            "    **只有当用户原话中明确给出了所有字段名且无任何歧义时，才填空列表 []。**\n"
-            "    大多数业务查询应填写 1 个以上的歧义参数。\n",
-            "- 填写示例（compute_场景企业分析）：\n",
-            '  intent_reason="用户想查2026年2月各街道的亩产效益，按街道维度分组，时间过滤为2026年2月"\n',
-            "  extraction_confidence=0.7\n",
-            '  ambiguous_params=["dimensions", "metrics", "filters"]'
-            "  # 街道对应的维度字段名不确定；亩产效益对应哪个指标字段不确定；2月时间过滤字段名不确定\n",
+            "  · **ambiguous_params**（List[str]）：当用户意图存在真实歧义时填写，"
+            "如用户表达模糊、同一业务概念对应多个候选字段、时间范围语义不明确等。"
+            "参数已有明确依据则填空列表 []。\n",
+            "- 填写示例：\n",
+            '  intent_reason="用户想查本季度各大区企业总营收汇总，按大区分组"\n',
+            "  extraction_confidence=0.85\n",
+            '  ambiguous_params=["time_range"]  # 本季度具体起止日期不确定\n',
             "## data_query 返回结构规则\n",
             "- data_query 返回结构：{data: {result_type, records, file: {file_url}, meta}}。\n",
-            "- 如果返回中包含 file_url 字段或顶层 _hint 字段，说明数据已存入本地文件，禁止再调用 write_file，直接使用该文件路径。\n",
+            "- 如果返回中包含 file_url 字段或顶层 _hint 字段，说明数据已存入本地文件，直接使用该文件路径。\n",
             "- 如果 result_type=rejected，数据查询被拒绝，应告知用户并说明原因。\n",
             ask_user_result_line,
-            "## 多步分析工作流\n",
-            "- 如需多次查询后再编码分析：\n",
-            "  1. 如果查询返回了 file_url，直接用该路径；否则用 write_file 保存 records。\n",
-            "  2. 用 write_code 编写分析代码，代码中用 open() 读取 JSON 文件。\n",
-            "  3. 代码必须将最终结果赋值给变量 _result，execute_code 会自动保存为同名 .json。\n",
-            "  4. 调用 finish_react 使用 result_type=json_file，csv_file_path 填 result_file 路径。\n",
             "## 结果类型规则\n",
             "- 调用 data_query 类工具后，返回中含 _hint 字段：必须使用 result_type=query_result，"
             "系统会自动透传完整的 records/pagination/meta/file 结构。\n",
             "- 如需同时返回文字分析+结构化数据：result_type=query_result，answer 填写文字分析，系统会先推文字再推 6001 内容。\n",
             "- 禁止将 data_query 返回的 records 序列化后填入 data 字段，会丢失 meta/pagination/file 信息。\n",
-            "- 代码生成数据（execute_code 保存的 .json）：result_type=json_file，csv_file_path 填 result_file 路径。\n",
             "- CSV 文件：result_type=csv_file。\n",
             "- 纯文字结论：result_type=text。",
         ]
@@ -197,7 +195,9 @@ def _build_exec_zh() -> str:
 
 
 def _build_exec_en() -> str:
+
     hint = _get_query_tool_hint_en()
+
     return (
         "## Execution rules\n"
         "- Use tools to complete tasks. Call finish_react when done.\n"
@@ -217,11 +217,17 @@ def _build_exec_en() -> str:
 def get_execution_prompt(locale: str | None = None) -> str:
     """Return locale-specific execution rules prompt with fallback support.
 
+
+
     Chinese rules are built per call so ``DATACLOUD_DISABLE_ASK_USER_TOOL`` reflects
+
     the current process environment (after ``load_dotenv``), not import-time env.
+
     """
 
     resolved_locale = locale or os.getenv("DATACLOUD_AGENT_LOCALE", _FALLBACK_LOCALE)
+
     if resolved_locale == "en_US":
         return _build_exec_en()
+
     return _build_exec_zh()
