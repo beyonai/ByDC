@@ -158,12 +158,20 @@ def _build_exec_zh() -> str:
             "  · **extraction_confidence**（float，0.0～1.0）：你对本次参数提取正确性的自信度。"
             "若字段名、时间范围、过滤条件等存在任何不确定性，请填写较低值（建议 0.6～0.8）；"
             "所有参数均有明确依据时填 1.0。\n",
-            "  · **ambiguous_params**（List[str]）：列出你认为存在歧义或不确定的参数名，"
-            '如 ["time_range", "target_object"]。若所有参数均已明确，填写空列表 []。\n',
-            "- 填写示例（data_query_grid）：\n",
-            '  intent_reason="用户想查本季度各大区企业总营收汇总，时间为本季度，按大区分组"\n',
-            "  extraction_confidence=0.9\n",
-            '  ambiguous_params=["time_range"]  # 本季度的具体起止日期不确定\n',
+            "  · **ambiguous_params**（List[str]）：【高优先级，默认应填写】\n"
+            "    满足以下任一条件时，必须将对应参数名加入此列表：\n"
+            "    1. 维度名/指标名/字段名不是用户原话，而是你根据业务语义猜测/映射的；\n"
+            "    2. 同一业务概念可能对应多个字段（如'营收'可能是 revenue/net_revenue/gmv）；\n"
+            "    3. 时间范围含相对表达（如'最近'、'今年'、'上季度'、'2月'未指定年份）；\n"
+            "    4. 过滤条件的枚举值不确定（如地区、街道、状态等名称拼写不确定）；\n"
+            "    5. 用户未明确说明分组维度，你是根据问题推断填写的。\n"
+            "    **只有当用户原话中明确给出了所有字段名且无任何歧义时，才填空列表 []。**\n"
+            "    大多数业务查询应填写 1 个以上的歧义参数。\n",
+            "- 填写示例（compute_场景企业分析）：\n",
+            '  intent_reason="用户想查2026年2月各街道的亩产效益，按街道维度分组，时间过滤为2026年2月"\n',
+            "  extraction_confidence=0.7\n",
+            '  ambiguous_params=["dimensions", "metrics", "filters"]'
+            "  # 街道对应的维度字段名不确定；亩产效益对应哪个指标字段不确定；2月时间过滤字段名不确定\n",
             "## data_query 返回结构规则\n",
             "- data_query 返回结构：{data: {result_type, records, file: {file_url}, meta}}。\n",
             "- 如果返回中包含 file_url 字段或顶层 _hint 字段，说明数据已存入本地文件，禁止再调用 write_file，直接使用该文件路径。\n",
