@@ -4,10 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
-
-_IGNORED_QUERY_KEYS = frozenset({"characterEncoding", "serverTimezone", "timeZone"})
-_SCHEMA_QUERY_KEYS = ("currentSchema", "schema")
+from urllib.parse import quote, urlencode, urlunparse
 
 
 @dataclass(frozen=True)
@@ -23,13 +20,34 @@ class ParsedDatabaseUrl:
     query_params: tuple[tuple[str, str], ...]
 
 
-def _load_raw_database_url() -> str:
-    raw_url = os.getenv("DATACLOUD_DB_URL", "").strip()
-    if not raw_url:
-        return ""
-    if raw_url.startswith("jdbc:"):
-        return raw_url[5:]
-    return raw_url
+def _has_split_database_env() -> bool:
+    return all(
+        _read_text_env(name)
+        for name in ("DATACLOUD_DB_HOST", "DATACLOUD_DB_DATABASE", "DATACLOUD_DB_USER")
+    )
+    # Password is allowed to be empty for local/trust-auth deployments.
+
+
+def _read_text_env(*names: str) -> str:
+    for name in names:
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _read_password_env() -> str:
+    return os.getenv("DATACLOUD_DB_PASS", "")
+
+
+def _read_port_env(default: int) -> int:
+    raw_port = os.getenv("DATACLOUD_DB_PORT", "").strip()
+    if not raw_port:
+        return default
+    try:
+        return int(raw_port)
+    except ValueError:
+        return default
 
 
 def _build_netloc(user: str, password: str, host: str, port: int) -> str:
@@ -42,38 +60,23 @@ def _build_netloc(user: str, password: str, host: str, port: int) -> str:
 
 
 def parse_env_database_url() -> ParsedDatabaseUrl | None:
-    """Parse DATACLOUD_DB_* into a normalized connection target."""
+    """Parse split DATACLOUD_DB_* env vars into a normalized connection target."""
 
-    raw_database_url = _load_raw_database_url()
-    if not raw_database_url:
+    if not _has_split_database_env():
         return None
 
-    parsed = urlparse(raw_database_url)
-    raw_query = parse_qsl(parsed.query, keep_blank_values=True)
-
-    schema: str | None = None
-    query_params: list[tuple[str, str]] = []
-    for key, value in raw_query:
-        if key in _SCHEMA_QUERY_KEYS and value and schema is None:
-            schema = value
-            continue
-        if key in _IGNORED_QUERY_KEYS:
-            continue
-        query_params.append((key, value))
-
-    user = os.getenv("DATACLOUD_DB_USER", "").strip() or parsed.username or "postgres"
-    password = os.getenv("DATACLOUD_DB_PASSWORD", "")
-    if not password and parsed.password:
-        password = parsed.password
+    user = _read_text_env("DATACLOUD_DB_USER")
+    password = _read_password_env()
+    schema = _read_text_env("DATACLOUD_DB_SCHEMA") or None
 
     return ParsedDatabaseUrl(
-        host=parsed.hostname or "localhost",
-        port=parsed.port or 5432,
-        database=parsed.path.lstrip("/") or "postgres",
+        host=_read_text_env("DATACLOUD_DB_HOST"),
+        port=_read_port_env(5432),
+        database=_read_text_env("DATACLOUD_DB_DATABASE"),
         user=user,
         password=password,
         schema=schema,
-        query_params=tuple(query_params),
+        query_params=(),
     )
 
 
@@ -98,7 +101,7 @@ def build_postgres_connection_uri() -> str:
 
 
 def resolve_checkpoint_schema(default: str = "public") -> str:
-    """Resolve checkpoint schema from DATACLOUD_DB_URL query params."""
+    """Resolve checkpoint schema from DATACLOUD_DB_SCHEMA."""
 
     parsed = parse_env_database_url()
     if parsed is None:

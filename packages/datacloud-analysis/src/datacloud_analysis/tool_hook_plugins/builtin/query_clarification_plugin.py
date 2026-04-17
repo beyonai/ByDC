@@ -67,13 +67,13 @@ async def _call_query_clarification(
     - knowledge: str（知识摘要，needs_clarification=False 时有效）
     """
     from datacloud_knowledge.intent import analyze_query_clarification  # type: ignore[import]
+
     return await analyze_query_clarification(
         user_query,
         ambiguous_params=ambiguous_params,
         tool_name=tool_name,
         tool_params=tool_params,
     )
-
 
 
 async def before_call_back(ctx: HookContext) -> HookDecision | None:
@@ -139,13 +139,15 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             paradigm_list = json.loads(form_str).get("paradigmList", [])
         except Exception:
             paradigm_list = []
-        resume_value = interrupt({
-            "prompt": "查询条件存在歧义，请确认查询维度",
-            "reason_code": "PARADIGM_CLARIFICATION",
-            "ask_user_payload": {
-                "paradigmList": paradigm_list,
-            },
-        })
+        resume_value = interrupt(
+            {
+                "prompt": "查询条件存在歧义，请确认查询维度",
+                "reason_code": "PARADIGM_CLARIFICATION",
+                "ask_user_payload": {
+                    "paradigmList": paradigm_list,
+                },
+            }
+        )
         # interrupt 恢复后：重建 tool_params，避免死循环
         _apply_resume_to_params(ctx, tool_name, resume_value, ctx.get("user_query", ""))
         return {"action": "patch", "patch": {"tool_params": dict(ctx["tool_params"])}}

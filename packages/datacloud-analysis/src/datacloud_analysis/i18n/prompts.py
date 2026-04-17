@@ -159,11 +159,11 @@ def _build_exec_zh() -> str:
             "若字段名、时间范围、过滤条件等存在任何不确定性，请填写较低值（建议 0.6～0.8）；"
             "所有参数均有明确依据时填 1.0。\n",
             "  · **ambiguous_params**（List[str]）：列出你认为存在歧义或不确定的参数名，"
-            "如 [\"time_range\", \"target_object\"]。若所有参数均已明确，填写空列表 []。\n",
+            '如 ["time_range", "target_object"]。若所有参数均已明确，填写空列表 []。\n',
             "- 填写示例（data_query_grid）：\n",
-            "  intent_reason=\"用户想查本季度各大区企业总营收汇总，时间为本季度，按大区分组\"\n",
+            '  intent_reason="用户想查本季度各大区企业总营收汇总，时间为本季度，按大区分组"\n',
             "  extraction_confidence=0.9\n",
-            "  ambiguous_params=[\"time_range\"]  # 本季度的具体起止日期不确定\n",
+            '  ambiguous_params=["time_range"]  # 本季度的具体起止日期不确定\n',
             "## data_query 返回结构规则\n",
             "- data_query 返回结构：{data: {result_type, records, file: {file_url}, meta}}。\n",
             "- 如果返回中包含 file_url 字段或顶层 _hint 字段，说明数据已存入本地文件，禁止再调用 write_file，直接使用该文件路径。\n",

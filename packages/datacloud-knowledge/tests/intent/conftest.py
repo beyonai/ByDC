@@ -26,7 +26,12 @@ _KB_SRC = _REPO_ROOT / "packages" / "datacloud-knowledge" / "src"
 if str(_KB_SRC) not in sys.path:
     sys.path.insert(0, str(_KB_SRC))
 
-_REQUIRED_DB_ENV_VARS = ("DATACLOUD_DB_URL", "DATACLOUD_DB_USER")
+_REQUIRED_DB_ENV_VARS = (
+    "DATACLOUD_DB_HOST",
+    "DATACLOUD_DB_DATABASE",
+    "DATACLOUD_DB_USER",
+    "DATACLOUD_DB_PASS",
+)
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -44,9 +49,11 @@ def integration_enabled() -> bool:
 
 @pytest.fixture
 def db_session(integration_enabled: bool) -> Iterator[Session]:
-    missing = [name for name in _REQUIRED_DB_ENV_VARS if not os.getenv(name)]
-    if missing:
-        pytest.skip(f"Missing DB env vars: {', '.join(missing)}")
+    if not any(os.getenv(name, "").strip() for name in _REQUIRED_DB_ENV_VARS):
+        pytest.skip(
+            "Missing DB env vars: DATACLOUD_DB_HOST / DATACLOUD_DB_DATABASE / "
+            "DATACLOUD_DB_USER / DATACLOUD_DB_PASS"
+        )
 
     if not integration_enabled:
         pytest.skip("DATACLOUD_ENABLE_INTEGRATION_TESTS is not enabled")

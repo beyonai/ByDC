@@ -17,13 +17,12 @@ from __future__ import annotations
 import json
 import sys
 import types
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import HumanMessage
-
 
 
 @contextmanager
@@ -62,15 +61,12 @@ def _patch_analyze_query_clarification(mock_result: Any):
         if had_attr and original is not None:
             intent_mod.analyze_query_clarification = original  # type: ignore[attr-defined]
         else:
-            try:
+            with suppress(AttributeError):
                 delattr(intent_mod, "analyze_query_clarification")
-            except AttributeError:
-                pass
         if created_intent:
             sys.modules.pop(intent_key, None)
         if created_dk:
             sys.modules.pop(dk_key, None)
-
 
 
 # ---------------------------------------------------------------------------
@@ -365,7 +361,6 @@ async def test_tc36_empty_ambiguous_params_skips_query_clarification() -> None:
     插件不调用澄清接口，直接放行。
     """
     from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
-    from datacloud_analysis.orchestration.intend.node import intend_node
     from datacloud_analysis.tool_hook_plugins.manager import get_tool_hook_plugin_manager
     from langchain_core.tools import StructuredTool
     from pydantic import BaseModel, ConfigDict, Field
@@ -428,7 +423,6 @@ async def test_tc36_empty_ambiguous_params_skips_query_clarification() -> None:
 async def test_tc36_multiple_tool_calls_no_ambiguity_skip_clarification() -> None:
     """TC-36 v2：同一请求多次工具调用，ambiguous_params=[] → 均跳过澄清接口。"""
     from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
-    from datacloud_analysis.orchestration.intend.node import intend_node
     from datacloud_analysis.tool_hook_plugins.manager import get_tool_hook_plugin_manager
     from langchain_core.tools import StructuredTool
     from pydantic import BaseModel, ConfigDict, Field
@@ -467,14 +461,22 @@ async def test_tc36_multiple_tool_calls_no_ambiguity_skip_clarification() -> Non
         try:
             # 第一次工具调用（ambiguous_params=[]）
             await dispatch_tool(
-                tool_call={"id": "c1", "name": "data_query_grid", "args": {"query": "营收", "ambiguous_params": []}},
+                tool_call={
+                    "id": "c1",
+                    "name": "data_query_grid",
+                    "args": {"query": "营收", "ambiguous_params": []},
+                },
                 tools_map=tools_map,
                 state=state,
                 gateway_context=None,
             )
             # 第二次工具调用（同样无歧义）
             await dispatch_tool(
-                tool_call={"id": "c2", "name": "data_query_grid", "args": {"query": "利润", "ambiguous_params": []}},
+                tool_call={
+                    "id": "c2",
+                    "name": "data_query_grid",
+                    "args": {"query": "利润", "ambiguous_params": []},
+                },
                 tools_map=tools_map,
                 state=state,
                 gateway_context=None,
@@ -495,7 +497,6 @@ async def test_tc36_non_empty_ambiguous_params_triggers_query_clarification(
     使用 _patch_analyze_query_clarification 直接 patch sys.modules 里的函数，
     绕过 ToolHookPluginManager 动态加载导致正式模块 patch 无效的问题。
     """
-    import logging
 
     from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
     from datacloud_analysis.tool_hook_plugins.manager import get_tool_hook_plugin_manager

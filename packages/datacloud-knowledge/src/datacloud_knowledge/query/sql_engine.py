@@ -123,7 +123,7 @@ class SQLKnowledgeGraphQuery:
 
         Args:
             db_config: Dict with explicit psycopg connection kwargs.
-                      If None, reads from DATACLOUD_DB_URL/USER/PASSWORD
+                      If None, reads from DATACLOUD_DB_HOST/PORT/DATABASE/USER/PASS
             schema: Database schema name (default: whale_datacloud)
             default_hops: Default number of hops for queries
             pool_min: Minimum connection pool size

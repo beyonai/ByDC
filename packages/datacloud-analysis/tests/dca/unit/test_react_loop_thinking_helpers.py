@@ -3,25 +3,24 @@
 覆盖设计文档 §4.3 单元测试 13 条：
   _extract_content_text / _extract_thinking_text / _is_meaningful_thinking / _emit_thinking_token
 """
+
 from __future__ import annotations
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 # ── 被测目标（尚未实现，导入会失败 → 红）────────────────────────────────────
 from datacloud_analysis.orchestration.execution.react_loop import (
+    _emit_thinking_token,
     _extract_content_text,
     _extract_thinking_text,
     _is_meaningful_thinking,
-    _emit_thinking_token,
 )
-
 
 # ===========================================================================
 # _extract_content_text
 # ===========================================================================
+
 
 class TestExtractContentText:
     # B-TC-04 & 单测1
@@ -79,6 +78,7 @@ class TestExtractContentText:
 # _extract_thinking_text
 # ===========================================================================
 
+
 class TestExtractThinkingText:
     # B-TC-06 & 单测6：str 输入（非 list）→ 返回空
     def test_str_input_returns_empty(self) -> None:
@@ -123,6 +123,7 @@ class TestExtractThinkingText:
 # _is_meaningful_thinking
 # ===========================================================================
 
+
 class TestIsMeaningfulThinking:
     # 单测10：空字符串
     def test_empty_string(self) -> None:
@@ -162,19 +163,16 @@ class TestIsMeaningfulThinking:
 # _emit_thinking_token
 # ===========================================================================
 
+
 class TestEmitThinkingToken:
     # 单测：gateway 为 None → 不报错
     def test_no_gateway_no_error(self) -> None:
-        asyncio.get_event_loop().run_until_complete(
-            _emit_thinking_token(None, "some thought")
-        )
+        asyncio.get_event_loop().run_until_complete(_emit_thinking_token(None, "some thought"))
 
     # 单测：token 为空 → 不调用 emit_chunk
     def test_empty_token_no_emit(self) -> None:
         gw = AsyncMock()
-        asyncio.get_event_loop().run_until_complete(
-            _emit_thinking_token(gw, "")
-        )
+        asyncio.get_event_loop().run_until_complete(_emit_thinking_token(gw, ""))
         gw.emit_chunk.assert_not_called()
 
     # 单测：emit_chunk 抛异常 → 静默降级，不向上传播（B-TC-07）
@@ -183,18 +181,14 @@ class TestEmitThinkingToken:
         gw.emit_chunk = AsyncMock(side_effect=RuntimeError("network error"))
 
         # 不应抛出异常
-        asyncio.get_event_loop().run_until_complete(
-            _emit_thinking_token(gw, "some thought")
-        )
+        asyncio.get_event_loop().run_until_complete(_emit_thinking_token(gw, "some thought"))
 
     # 正常推送：emit_chunk 被调用一次
     def test_normal_emit_called(self) -> None:
         gw = MagicMock()
         gw.emit_chunk = AsyncMock(return_value=None)
 
-        asyncio.get_event_loop().run_until_complete(
-            _emit_thinking_token(gw, "用户想查营收数据")
-        )
+        asyncio.get_event_loop().run_until_complete(_emit_thinking_token(gw, "用户想查营收数据"))
         gw.emit_chunk.assert_called_once()
 
     # 推送时使用正确的 event_type
@@ -208,8 +202,6 @@ class TestEmitThinkingToken:
 
         gw.emit_chunk = _capture_emit
 
-        asyncio.get_event_loop().run_until_complete(
-            _emit_thinking_token(gw, "推理过程文字")
-        )
+        asyncio.get_event_loop().run_until_complete(_emit_thinking_token(gw, "推理过程文字"))
         assert call_kwargs.get("event_type") == "reasoningLogDelta"
         assert call_kwargs.get("content_type") == "1002"

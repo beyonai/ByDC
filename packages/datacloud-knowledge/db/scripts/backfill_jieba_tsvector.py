@@ -10,7 +10,7 @@
     python db/scripts/backfill_jieba_tsvector.py --force   # 全量重新填充
 
 环境变量:
-    DATACLOUD_DB_URL, DATACLOUD_DB_USER, DATACLOUD_DB_PASSWORD — 数据库连接
+    DATACLOUD_DB_HOST/PORT/DATABASE/SCHEMA/USER/PASS/TYPE — 数据库连接
     DATACLOUD_KNOWLEDGE_BACKFILL_BATCH_SIZE — 每批处理行数，默认 1000
 
 索引侧使用 jieba.lcut_for_search（搜索引擎模式，宽分词提高召回率）；
@@ -46,10 +46,17 @@ KB_SRC = REPO_ROOT / "packages" / "datacloud-knowledge" / "src"
 if str(KB_SRC) not in sys.path:
     sys.path.insert(0, str(KB_SRC))
 
+_DB_CONFIG_TRIGGER_ENV_VARS = (
+    "DATACLOUD_DB_HOST",
+    "DATACLOUD_DB_DATABASE",
+    "DATACLOUD_DB_USER",
+    "DATACLOUD_DB_PASS",
+)
+
 
 def load_env() -> None:
-    """从 .env 文件加载环境变量（如果 DATACLOUD_DB_URL 未设置）。"""
-    if os.getenv("DATACLOUD_DB_URL"):
+    """从 .env 文件加载环境变量（如果尚未提供显式数据库配置）。"""
+    if any(os.getenv(name, "").strip() for name in _DB_CONFIG_TRIGGER_ENV_VARS):
         return
 
     for env_file in ENV_FILES:
@@ -179,10 +186,13 @@ def main() -> None:
     args = parser.parse_args()
 
     load_env()
-    for var in ("DATACLOUD_DB_URL", "DATACLOUD_DB_USER"):
-        if var not in os.environ:
-            log.error("缺少环境变量 %s", var)
-            sys.exit(1)
+    if not any(os.getenv(name, "").strip() for name in _DB_CONFIG_TRIGGER_ENV_VARS):
+        log.error(
+            "缺少数据库环境变量，请设置 DATACLOUD_DB_HOST / DATACLOUD_DB_PORT / "
+            "DATACLOUD_DB_DATABASE / DATACLOUD_DB_SCHEMA / DATACLOUD_DB_USER / "
+            "DATACLOUD_DB_PASS / DATACLOUD_DB_TYPE"
+        )
+        sys.exit(1)
 
     conn = _connect()
     try:

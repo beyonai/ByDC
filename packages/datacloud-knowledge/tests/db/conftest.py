@@ -6,7 +6,6 @@ import os
 import sys
 from importlib import import_module
 from pathlib import Path
-from urllib.parse import parse_qsl, urlparse
 
 import pytest
 
@@ -29,6 +28,13 @@ def _load_defaults() -> None:
 _load_defaults()
 configure_test_database_env("test", require_complete=False)
 
+_DB_CONFIG_TRIGGER_ENV_VARS = (
+    "DATACLOUD_DB_HOST",
+    "DATACLOUD_DB_DATABASE",
+    "DATACLOUD_DB_USER",
+    "DATACLOUD_DB_PASS",
+)
+
 
 @pytest.fixture(scope="session")
 def package_root() -> Path:
@@ -45,25 +51,20 @@ def ddl_dir(package_root: Path) -> Path:
 @pytest.fixture(scope="session")
 def db_config() -> dict[str, str | int]:
     """Load required DB config from environment variables."""
-    required_keys = ["DATACLOUD_DB_URL", "DATACLOUD_DB_USER"]
-    missing = [key for key in required_keys if not os.getenv(key)]
-    if missing:
-        pytest.skip(f"db_integration: missing env vars: {', '.join(missing)}")
+    if not any(os.getenv(name, "").strip() for name in _DB_CONFIG_TRIGGER_ENV_VARS):
+        pytest.skip(
+            "db_integration: missing env vars: "
+            "DATACLOUD_DB_HOST / DATACLOUD_DB_DATABASE / DATACLOUD_DB_USER / "
+            "DATACLOUD_DB_PASS"
+        )
 
-    parsed = urlparse(os.environ["DATACLOUD_DB_URL"].removeprefix("jdbc:"))
-    schema = next(
-        (
-            value
-            for key, value in parse_qsl(parsed.query, keep_blank_values=True)
-            if key in {"currentSchema", "schema"} and value
-        ),
-        "whale_datacloud",
-    )
+    db_url_module = import_module("datacloud_knowledge.db_url")
+    parsed = db_url_module.parse_env_database_url()
     return {
-        "host": parsed.hostname or "localhost",
-        "port": parsed.port or 5432,
-        "user": str(os.environ["DATACLOUD_DB_USER"]),
-        "password": os.getenv("DATACLOUD_DB_PASSWORD", ""),
-        "database": parsed.path.lstrip("/") or "postgres",
-        "schema": schema,
+        "host": parsed.host,
+        "port": parsed.port,
+        "user": parsed.user,
+        "password": parsed.password,
+        "database": parsed.database,
+        "schema": parsed.schema or "whale_datacloud",
     }
