@@ -414,28 +414,32 @@ async def test_tc_r06_resume_replay_strips_ambiguity_meta_fields() -> None:
         HumanMessage(content="查询营收"),
         AIMessage(
             content="",
-            tool_calls=[{
-                "id": "tc_0",
-                "name": "query_revenue",
-                "args": {
-                    "select": ["stat_date", "revenue"],
-                    "ambiguous_params": ["stat_date"],       # ← 歧义字段
-                    "intent_reason": "用户想查营收",
-                    "extraction_confidence": 0.7,
-                },
-            }],
+            tool_calls=[
+                {
+                    "id": "tc_0",
+                    "name": "query_revenue",
+                    "args": {
+                        "select": ["stat_date", "revenue"],
+                        "ambiguous_params": ["stat_date"],  # ← 歧义字段
+                        "intent_reason": "用户想查营收",
+                        "extraction_confidence": 0.7,
+                    },
+                }
+            ],
         ),
     ]
-    pending_calls = [{
-        "id": "tc_0",
-        "name": "query_revenue",
-        "args": {
-            "select": ["stat_date", "revenue"],
-            "ambiguous_params": ["stat_date"],               # ← resume 时仍含元字段
-            "intent_reason": "用户想查营收",
-            "extraction_confidence": 0.7,
-        },
-    }]
+    pending_calls = [
+        {
+            "id": "tc_0",
+            "name": "query_revenue",
+            "args": {
+                "select": ["stat_date", "revenue"],
+                "ambiguous_params": ["stat_date"],  # ← resume 时仍含元字段
+                "intent_reason": "用户想查营收",
+                "extraction_confidence": 0.7,
+            },
+        }
+    ]
 
     state = _make_state(
         react_messages=_serialize_messages(prior_messages),
@@ -500,9 +504,7 @@ async def test_tc_r06_resume_replay_strips_ambiguity_meta_fields() -> None:
         f"实际收到的 args: {args_sent}"
     )
     # 业务参数保留
-    assert args_sent.get("select") == ["stat_date", "revenue"], (
-        "业务参数 select 不应被剥除"
-    )
+    assert args_sent.get("select") == ["stat_date", "revenue"], "业务参数 select 不应被剥除"
 
 
 # ---------------------------------------------------------------------------
@@ -525,11 +527,13 @@ async def test_tc_r07_resume_replay_without_meta_fields_passes_through() -> None
         HumanMessage(content="查询营收"),
         AIMessage(
             content="",
-            tool_calls=[{
-                "id": "tc_0",
-                "name": "query_revenue",
-                "args": {"select": ["revenue"]},             # ← 无元字段
-            }],
+            tool_calls=[
+                {
+                    "id": "tc_0",
+                    "name": "query_revenue",
+                    "args": {"select": ["revenue"]},  # ← 无元字段
+                }
+            ],
         ),
     ]
     pending_calls = [{"id": "tc_0", "name": "query_revenue", "args": {"select": ["revenue"]}}]
