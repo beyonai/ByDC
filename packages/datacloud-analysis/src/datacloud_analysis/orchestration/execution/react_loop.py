@@ -820,6 +820,16 @@ async def run_react_loop(
             _resume_token = is_resume_replay.set(True)
             try:
                 for tc in pending_tool_calls:
+                    # resume replay 时剥除三个歧义元字段：
+                    # 这三个字段是 LLM 在首次调用时填写的，query_clarification_plugin
+                    # 的 before_call_back 会根据 ambiguous_params 非空再次触发 interrupt，
+                    # 造成无限循环。replay 阶段用户已完成澄清，无需再次触发，直接剥除放行。
+                    _tc_args = dict(tc.get("args") or {})
+                    _tc_args.pop("ambiguous_params", None)
+                    _tc_args.pop("intent_reason", None)
+                    _tc_args.pop("extraction_confidence", None)
+                    tc = {**tc, "args": _tc_args}
+
                     _t0 = time.monotonic()
                     tool_id, result = await dispatch_tool(
                         tc, tools_map, state, gateway_context=gateway_context

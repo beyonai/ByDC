@@ -388,3 +388,191 @@ def test_tc_r05_serialize_deserialize_all_message_types() -> None:
     assert isinstance(restored[3], ToolMessage), "第 3 条应为 ToolMessage"
     assert restored[3].tool_call_id == "tc_x"
     assert '{"records": []}' in restored[3].content
+
+
+# ---------------------------------------------------------------------------
+# TC-R06: resume replay 时，tc["args"] 中的三个元字段被自动剥除，
+#         before_call_back 不会再次触发 interrupt（防死循环）
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_tc_r06_resume_replay_strips_ambiguity_meta_fields() -> None:
+    """TC-R06: pending_tool_calls 中的 tc["args"] 含 ambiguous_params 时，
+    resume replay 阶段应在调用 dispatch_tool 前将三个元字段清除，
+    确保 before_call_back 走 ambiguous_params==[] 分支直接放行，
+    不会再次触发 interrupt 造成死循环。
+    """
+    from datacloud_analysis.orchestration.execution.react_loop import (
+        _serialize_messages,
+        run_react_loop,
+    )
+
+    # 模拟中断时保存的 pending_tool_calls：tc["args"] 含原始元字段
+    prior_messages = [
+        SystemMessage(content="sys"),
+        HumanMessage(content="查询营收"),
+        AIMessage(
+            content="",
+            tool_calls=[{
+                "id": "tc_0",
+                "name": "query_revenue",
+                "args": {
+                    "select": ["stat_date", "revenue"],
+                    "ambiguous_params": ["stat_date"],       # ← 歧义字段
+                    "intent_reason": "用户想查营收",
+                    "extraction_confidence": 0.7,
+                },
+            }],
+        ),
+    ]
+    pending_calls = [{
+        "id": "tc_0",
+        "name": "query_revenue",
+        "args": {
+            "select": ["stat_date", "revenue"],
+            "ambiguous_params": ["stat_date"],               # ← resume 时仍含元字段
+            "intent_reason": "用户想查营收",
+            "extraction_confidence": 0.7,
+        },
+    }]
+
+    state = _make_state(
+        react_messages=_serialize_messages(prior_messages),
+        react_pending_tool_calls=pending_calls,
+        react_round_idx=0,
+    )
+
+    # 记录 dispatch_tool 实际收到的 tc["args"]
+    dispatched_args: list[dict] = []
+
+    async def _capturing_dispatch(tc: dict, tools_map: Any, state: Any, **kw: Any):
+        dispatched_args.append(dict(tc.get("args") or {}))
+        return "tc_0", {"__finish__": True, "answer": "ok", "result_type": "text"}
+
+    class _AmbiguousSchema(BaseModel):
+        select: list[str] = []
+        ambiguous_params: list[str] = []
+        intent_reason: str = ""
+        extraction_confidence: float = 1.0
+
+    tool = StructuredTool(
+        name="query_revenue",
+        description="test",
+        args_schema=_AmbiguousSchema,
+        coroutine=AsyncMock(return_value={"records": [], "meta": {}}),
+    )
+
+    with (
+        patch(
+            "datacloud_analysis.orchestration.execution.react_loop._build_llm",
+            return_value=_fake_llm_with_tools(),
+        ),
+        patch(
+            "datacloud_analysis.orchestration.execution.react_loop._invoke_llm_with_fallback",
+            new_callable=AsyncMock,
+            return_value=(AIMessage(content="ok"), False),
+        ),
+        patch(
+            "datacloud_analysis.orchestration.execution.react_loop.dispatch_tool",
+            side_effect=_capturing_dispatch,
+        ),
+    ):
+        await run_react_loop(
+            state=state,
+            tools_list=[tool],
+            system_prompt="sys",
+        )
+
+    assert dispatched_args, "dispatch_tool 应被调用"
+    args_sent = dispatched_args[0]
+
+    assert "ambiguous_params" not in args_sent, (
+        "resume replay 时 ambiguous_params 应在传入 dispatch_tool 前被剥除，"
+        f"实际收到的 args: {args_sent}"
+    )
+    assert "intent_reason" not in args_sent, (
+        "resume replay 时 intent_reason 应在传入 dispatch_tool 前被剥除，"
+        f"实际收到的 args: {args_sent}"
+    )
+    assert "extraction_confidence" not in args_sent, (
+        "resume replay 时 extraction_confidence 应在传入 dispatch_tool 前被剥除，"
+        f"实际收到的 args: {args_sent}"
+    )
+    # 业务参数保留
+    assert args_sent.get("select") == ["stat_date", "revenue"], (
+        "业务参数 select 不应被剥除"
+    )
+
+
+# ---------------------------------------------------------------------------
+# TC-R07: resume replay 时，tc["args"] 不含元字段 → 正常透传，不报错
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_tc_r07_resume_replay_without_meta_fields_passes_through() -> None:
+    """TC-R07: pending_tool_calls 的 tc["args"] 不含元字段时，
+    resume replay 正常执行，业务参数原样透传，不报错。
+    """
+    from datacloud_analysis.orchestration.execution.react_loop import (
+        _serialize_messages,
+        run_react_loop,
+    )
+
+    prior_messages = [
+        SystemMessage(content="sys"),
+        HumanMessage(content="查询营收"),
+        AIMessage(
+            content="",
+            tool_calls=[{
+                "id": "tc_0",
+                "name": "query_revenue",
+                "args": {"select": ["revenue"]},             # ← 无元字段
+            }],
+        ),
+    ]
+    pending_calls = [{"id": "tc_0", "name": "query_revenue", "args": {"select": ["revenue"]}}]
+
+    state = _make_state(
+        react_messages=_serialize_messages(prior_messages),
+        react_pending_tool_calls=pending_calls,
+        react_round_idx=0,
+    )
+
+    dispatched_args: list[dict] = []
+
+    async def _capturing_dispatch(tc: dict, tools_map: Any, state: Any, **kw: Any):
+        dispatched_args.append(dict(tc.get("args") or {}))
+        return "tc_0", {"__finish__": True, "answer": "ok", "result_type": "text"}
+
+    tool = StructuredTool(
+        name="query_revenue",
+        description="test",
+        args_schema=_SimpleSchema,
+        coroutine=AsyncMock(return_value={}),
+    )
+
+    with (
+        patch(
+            "datacloud_analysis.orchestration.execution.react_loop._build_llm",
+            return_value=_fake_llm_with_tools(),
+        ),
+        patch(
+            "datacloud_analysis.orchestration.execution.react_loop._invoke_llm_with_fallback",
+            new_callable=AsyncMock,
+            return_value=(AIMessage(content="ok"), False),
+        ),
+        patch(
+            "datacloud_analysis.orchestration.execution.react_loop.dispatch_tool",
+            side_effect=_capturing_dispatch,
+        ),
+    ):
+        await run_react_loop(
+            state=state,
+            tools_list=[tool],
+            system_prompt="sys",
+        )
+
+    assert dispatched_args, "dispatch_tool 应被调用"
+    assert dispatched_args[0].get("select") == ["revenue"], "业务参数应原样透传"
