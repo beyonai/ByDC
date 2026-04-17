@@ -115,31 +115,31 @@ async def _emit_thinking_token(gateway_context: Any, token: str) -> None:
     if not gateway_context or not token:
         return
     try:
-        from by_framework import StreamChunkEvent  # type: ignore
-        from by_framework.core.protocol.content_type import SseMessageType  # type: ignore
+        from by_framework import EventType, StreamChunkEvent  # type: ignore
+        from by_framework.core.protocol.content_type import SseReasonMessageType  # type: ignore
         from datacloud_data_sdk.stream_text import coerce_stream_chunk_text  # type: ignore
         await gateway_context.emit_chunk(
             StreamChunkEvent(content=coerce_stream_chunk_text(token)),
-            event_type="reasoningLogDelta",
-            content_type="1002",
+            event_type=EventType.REASONING_LOG_DELTA.value,
+            content_type=SseReasonMessageType.think_text.value,
         )
     except Exception as exc:
         logger.debug("[react_loop] thinking_token emit failed: %s", exc)
 
 
 async def _emit_stream_token(gateway_context: Any, token: str) -> None:
-    """向 gateway_context 推送单个流式文字 token。"""
+    """向 gateway_context 推送单个流式文字 token（ReAct 思考过程）。"""
     if not gateway_context or not token:
         return
     try:
         from by_framework import EventType, StreamChunkEvent  # type: ignore
-        from by_framework.core.protocol.content_type import SseMessageType  # type: ignore
+        from by_framework.core.protocol.content_type import SseReasonMessageType  # type: ignore
         from datacloud_data_sdk.stream_text import coerce_stream_chunk_text  # type: ignore
 
         await gateway_context.emit_chunk(
             StreamChunkEvent(content=coerce_stream_chunk_text(token)),
-            event_type=EventType.ANSWER_DELTA.value,
-            content_type=SseMessageType.text.value,
+            event_type=EventType.REASONING_LOG_DELTA.value,
+            content_type=SseReasonMessageType.think_text.value,
         )
     except Exception as exc:
         logger.debug("[react_loop] stream_token emit failed: %s", exc)
@@ -181,11 +181,15 @@ async def _stream_llm_call(
                     full_msg = chunk
 
             if gateway_context is not None:
-                # 注意：不在此处推送 LLM content 文字 token。
-                # 部分 LLM（尤其是国产模型）在生成 tool_calls 的同时也输出 content 文字
-                # （如"我来查询..."），若在此处推送则会出现不必要的客套话。
-                # 纯文字答案（无 tool_calls 的最终轮）由 finish_react.answer 流式推送，
-                # 或由 formatter 在 answer_streamed=False 时一次性推送。
+                # 推送 LLM content 文字 token（ReAct 思考过程）
+                # 仅在无 tool_call_chunks 时推送：部分模型生成 tool_call 时 content 里会带工具名，
+                # 这类内容由 worker.py on_tool_start 的 sub_step 处理，避免重复推送。
+                _has_tool_calls = bool(getattr(chunk, "tool_call_chunks", None))
+                if not _has_tool_calls:
+                    _content_delta = _extract_content_text(chunk.content)
+                    if _content_delta:
+                        await _emit_stream_token(gateway_context, _content_delta)
+                        did_stream_text = True
 
                 # 实时推送 finish_react.answer 参数的增量内容
                 for tcc in getattr(chunk, "tool_call_chunks", None) or []:

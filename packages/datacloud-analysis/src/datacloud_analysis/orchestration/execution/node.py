@@ -297,17 +297,14 @@ async def execution_node(
             getattr(gateway_context, "current_command", None)
         )
         gateway_context._datacloud_skip_delegate_resume_replay_output = is_delegate_resume_replay
-        _is_paradigm_resume = bool((config.get("configurable") or {}).get("_is_paradigm_resume"))
-        _exec_title = "恢复执行" if _is_paradigm_resume else _EXECUTION_REASONING_TITLE
         if not is_delegate_resume_replay:
-            async with gateway_context.sub_step(_exec_title):
-                result = await run_react_loop(
-                    state=state,
-                    tools_list=tools_list,
-                    system_prompt=system_prompt,
-                    max_rounds=max_rounds,
-                    gateway_context=gateway_context,
-                )
+            result = await run_react_loop(
+                state=state,
+                tools_list=tools_list,
+                system_prompt=system_prompt,
+                max_rounds=max_rounds,
+                gateway_context=gateway_context,
+            )
         else:
             result = await run_react_loop(
                 state=state,
