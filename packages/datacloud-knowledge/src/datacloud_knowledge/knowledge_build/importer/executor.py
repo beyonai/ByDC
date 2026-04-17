@@ -212,19 +212,7 @@ def _connect() -> Connection:
     try:
         conn = psycopg.connect(**_kw, application_name=app_name)
     except TypeError:
-        # 极旧 psycopg2 / 部分驱动不支持 application_name
         conn = psycopg.connect(**_kw)
-
-    lock_raw = os.getenv("DATACLOUD_DB_LOCK_TIMEOUT_MS", "").strip()
-    if lock_raw.isdigit() and int(lock_raw) > 0:
-        lock_ms = int(lock_raw)
-        prev_autocommit = conn.autocommit
-        conn.autocommit = True
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SET lock_timeout = %s", (lock_ms,))
-        finally:
-            conn.autocommit = prev_autocommit
 
     return conn
 
