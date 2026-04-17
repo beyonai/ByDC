@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 # ── 数据工具识别 ─────────────────────────────────────────────────────────────
 _DATA_TOOL_PREFIXES = ("query_", "compute_", "data_query_")
 
+# ── 禁止挂载的工具名（黑名单）────────────────────────────────────────────────
+_BLOCKED_TOOL_NAMES: frozenset[str] = frozenset({"write_code", "execute_code"})
+
 
 def _is_data_tool_name(name: str) -> bool:
     """判断工具名是否属于数据类工具（query_/compute_/data_query_ 前缀）。"""
@@ -172,6 +175,9 @@ def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
     # Dynamic tools from agent config
     if default_tools:
         for name, callable_or_tool in default_tools.items():
+            if name in _BLOCKED_TOOL_NAMES:
+                logger.info("tool %r skipped (blocked by _BLOCKED_TOOL_NAMES)", name)
+                continue
             if isinstance(callable_or_tool, BaseTool):
                 runtime_context_param = _resolve_runtime_context_param(
                     getattr(callable_or_tool, "coroutine", None)
@@ -255,15 +261,18 @@ async def execution_node(
     system_parts = [custom_system if custom_system else base_system, base_execution]
     if custom_task:
         system_parts.append(custom_task)
-    system_prompt = "\n\n".join(p for p in system_parts if p)
+    # stable_system_prompt：稳定部分，用于 Prompt Caching 的缓存前缀
+    stable_system_prompt = "\n\n".join(p for p in system_parts if p)
+    system_prompt = stable_system_prompt
 
     # 层 A：知识增强注入（knowledge_snippets 由 intend_node 写入，格式已经是可读文本）
     knowledge_snippets = state.get("knowledge_snippets") or []
+    dynamic_parts: list[str] = []
     if knowledge_snippets:
         knowledge_section = "\n\n## 数据查询知识增强\n" + "\n".join(
             s if isinstance(s, str) else str(s) for s in knowledge_snippets
         )
-        system_prompt = system_prompt + knowledge_section
+        dynamic_parts.append(knowledge_section)
 
     # 层 B：运行时会话信息（用户 + 当前时间）——放最末尾，不破坏前缀缓存
     # 从 gateway_context.current_command.header.metadata 取用户信息，无需 worker.py 传参
@@ -283,7 +292,11 @@ async def execution_node(
         _runtime_lines.append(f"- 当前用户：{_user_name}")
     elif _user_code:
         _runtime_lines.append(f"- 当前用户工号：{_user_code}")
-    system_prompt = system_prompt + "\n".join(_runtime_lines)
+    dynamic_parts.append("\n".join(_runtime_lines))
+
+    # 拼接完整 system_prompt（用于不支持 cache_control 的回退路径）
+    dynamic_prompt = "".join(dynamic_parts)
+    system_prompt = stable_system_prompt + dynamic_prompt
 
     tools_list = _build_tools_list(default_tools)
     max_rounds = int(os.getenv("DATACLOUD_REACT_MAX_ROUNDS", "10"))
@@ -300,22 +313,23 @@ async def execution_node(
             getattr(gateway_context, "current_command", None)
         )
         gateway_context._datacloud_skip_delegate_resume_replay_output = is_delegate_resume_replay
-        _is_paradigm_resume = bool((config.get("configurable") or {}).get("_is_paradigm_resume"))
-        _exec_title = "恢复执行" if _is_paradigm_resume else _EXECUTION_REASONING_TITLE
         if not is_delegate_resume_replay:
-            async with gateway_context.sub_step(_exec_title):
-                result = await run_react_loop(
-                    state=state,
-                    tools_list=tools_list,
-                    system_prompt=system_prompt,
-                    max_rounds=max_rounds,
-                    gateway_context=gateway_context,
-                )
+            result = await run_react_loop(
+                state=state,
+                tools_list=tools_list,
+                system_prompt=system_prompt,
+                stable_system_prompt=stable_system_prompt,
+                dynamic_prompt=dynamic_prompt,
+                max_rounds=max_rounds,
+                gateway_context=gateway_context,
+            )
         else:
             result = await run_react_loop(
                 state=state,
                 tools_list=tools_list,
                 system_prompt=system_prompt,
+                stable_system_prompt=stable_system_prompt,
+                dynamic_prompt=dynamic_prompt,
                 max_rounds=max_rounds,
                 gateway_context=gateway_context,
             )
@@ -324,6 +338,8 @@ async def execution_node(
             state=state,
             tools_list=tools_list,
             system_prompt=system_prompt,
+            stable_system_prompt=stable_system_prompt,
+            dynamic_prompt=dynamic_prompt,
             max_rounds=max_rounds,
             gateway_context=gateway_context,
         )
