@@ -1,5 +1,8 @@
-"""TC-13 ~ TC-16, TC-23 ~ TC-25: QueryClarificationPlugin before_call_back 测试。"""
+"""TC-13 ~ TC-16, TC-23 ~ TC-25: QueryClarificationPlugin before_call_back 测试。
 
+v2 设计：插件从 tool_params["ambiguous_params"] 读取歧义字段列表，
+不再读取 ctx["knowledge_payload"]。
+"""
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -28,6 +31,20 @@ def _make_ctx(
         "term_context": [],
         "knowledge_payload": dict(knowledge_payload or {}),
     }
+
+
+def _make_clarification_result(
+    *,
+    needs_clarification: bool,
+    form: str = "",
+    knowledge: str = "",
+) -> MagicMock:
+    """构造 mock _call_query_clarification 返回值。"""
+    result = MagicMock()
+    result.needs_clarification = needs_clarification
+    result.form = form
+    result.knowledge = knowledge
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -73,22 +90,32 @@ async def test_tc24_query_intent_matches_query_prefix() -> None:
 
 
 # ---------------------------------------------------------------------------
-# TC-13: data_query_* + knowledge 非空 → contextKnowledge 被无条件覆盖
+# TC-13: data_query_* + ambiguous_params 非空 + knowledge 返回 → contextKnowledge 被注入
 # ---------------------------------------------------------------------------
 async def test_tc13_data_query_with_knowledge_patches_context_knowledge() -> None:
+    """TC-13 v2：ambiguous_params 非空 → 调用 _call_query_clarification → knowledge 非空
+    → contextKnowledge 被注入（无歧义分支：needs_clarification=False）。
+    """
     knowledge_str = '{"paradigmList":[{"name":"营收","fieldName":"企业总营收（万元）"}]}'
-    payload = {
-        "needs_clarification": False,
-        "form": "",
-        "knowledge": knowledge_str,
-        "query": "营收查询",
-    }
+    mock_result = _make_clarification_result(
+        needs_clarification=False,
+        knowledge=knowledge_str,
+    )
+
     ctx = _make_ctx(
         tool_name="data_query_grid",
-        tool_params={"query": "查询营收", "contextKnowledge": ""},
-        knowledge_payload=payload,
+        tool_params={
+            "query": "查询营收",
+            "contextKnowledge": "",
+            "ambiguous_params": ["metric_field"],  # 触发澄清流程
+        },
     )
-    result = await before_call_back(ctx)
+
+    with patch(
+        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._call_query_clarification",
+        new=AsyncMock(return_value=mock_result),
+    ):
+        result = await before_call_back(ctx)
 
     assert result is not None
     assert result.get("action") == "patch"
@@ -98,42 +125,50 @@ async def test_tc13_data_query_with_knowledge_patches_context_knowledge() -> Non
 
 
 # ---------------------------------------------------------------------------
-# TC-14: data_query_* + knowledge 为空 → contextKnowledge 不被 patch
+# TC-14: data_query_* + ambiguous_params=[] → contextKnowledge 不被 patch
 # ---------------------------------------------------------------------------
 async def test_tc14_data_query_empty_knowledge_no_patch() -> None:
-    payload = {
-        "needs_clarification": False,
-        "form": "",
-        "knowledge": "",
-        "query": "查询所有客户",
-    }
+    """TC-14 v2：ambiguous_params=[] → 插件直接跳过，返回 None。"""
     ctx = _make_ctx(
         tool_name="data_query_grid",
-        tool_params={"query": "查询所有客户", "contextKnowledge": ""},
-        knowledge_payload=payload,
+        tool_params={
+            "query": "查询所有客户",
+            "contextKnowledge": "",
+            "ambiguous_params": [],  # 空歧义列表 → 直接跳过
+        },
     )
     result = await before_call_back(ctx)
 
-    assert result is None, f"knowledge 为空时应返回 None（不 patch），实际：{result}"
+    assert result is None, f"ambiguous_params=[] 时应返回 None（不 patch），实际：{result}"
 
 
 # ---------------------------------------------------------------------------
-# TC-15: LLM 已填 contextKnowledge → 被系统值无条件覆盖
+# TC-15: data_query_* + ambiguous_params 非空 → 系统 knowledge 覆盖 LLM 旧值
 # ---------------------------------------------------------------------------
 async def test_tc15_llm_filled_context_knowledge_is_overwritten() -> None:
+    """TC-15 v2：ambiguous_params 非空 → _call_query_clarification 返回系统 knowledge
+    → 无条件覆盖 LLM 填写的 contextKnowledge 旧值。
+    """
     knowledge_str = "系统注入的知识"
-    payload = {
-        "needs_clarification": False,
-        "form": "",
-        "knowledge": knowledge_str,
-        "query": "营收查询",
-    }
+    mock_result = _make_clarification_result(
+        needs_clarification=False,
+        knowledge=knowledge_str,
+    )
+
     ctx = _make_ctx(
         tool_name="data_query_grid",
-        tool_params={"query": "查询营收", "contextKnowledge": "LLM自己填写的内容"},
-        knowledge_payload=payload,
+        tool_params={
+            "query": "查询营收",
+            "contextKnowledge": "LLM自己填写的内容",
+            "ambiguous_params": ["metric_field"],  # 触发澄清
+        },
     )
-    result = await before_call_back(ctx)
+
+    with patch(
+        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._call_query_clarification",
+        new=AsyncMock(return_value=mock_result),
+    ):
+        result = await before_call_back(ctx)
 
     assert result is not None
     patched_params = result["patch"]["tool_params"]
@@ -143,21 +178,36 @@ async def test_tc15_llm_filled_context_knowledge_is_overwritten() -> None:
 
 
 # ---------------------------------------------------------------------------
-# TC-16: query_* 工具 → 不触发层 B patch（contextKnowledge 不写入）
+# TC-16: query_* 工具 + ambiguous_params 非空 → 不触发层 B patch（contextKnowledge 不写入）
 # ---------------------------------------------------------------------------
 async def test_tc16_query_star_tool_skips_layer_b_patch() -> None:
-    payload = {
-        "needs_clarification": False,
-        "form": "",
-        "knowledge": "系统注入的知识",
-        "query": "查询营收",
-    }
+    """TC-16 v2：query_* 工具无 contextKnowledge 参数，即使澄清返回 knowledge 也不注入。
+
+    新插件：needs_clarification=False + knowledge 非空 时，只有 data_query_* 工具才注入
+    contextKnowledge；query_* 工具不注入。
+    """
+    knowledge_str = "系统注入的知识"
+    mock_result = _make_clarification_result(
+        needs_clarification=False,
+        knowledge=knowledge_str,
+    )
+
     ctx = _make_ctx(
         tool_name="query_grid",
-        tool_params={"select": ["营收"], "where": [], "group_by": [], "order_by": []},
-        knowledge_payload=payload,
+        tool_params={
+            "select": ["营收"],
+            "where": [],
+            "group_by": [],
+            "order_by": [],
+            "ambiguous_params": ["metric_field"],  # 触发澄清但工具不支持 contextKnowledge
+        },
     )
-    result = await before_call_back(ctx)
+
+    with patch(
+        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._call_query_clarification",
+        new=AsyncMock(return_value=mock_result),
+    ):
+        result = await before_call_back(ctx)
 
     # query_* 工具无第二 LLM，不触发层 B patch
     if result is not None:
@@ -166,27 +216,33 @@ async def test_tc16_query_star_tool_skips_layer_b_patch() -> None:
 
 
 # ---------------------------------------------------------------------------
-# TC-25: knowledge_payload 缓存为空时走兜底分支（fallback analyze_query_clarification）
+# TC-25: ambiguous_params 非空 → 调用 _call_query_clarification（不再有 fallback 概念）
 # ---------------------------------------------------------------------------
-async def test_tc25_fallback_when_no_cache() -> None:
+async def test_tc25_ambiguous_params_triggers_query_clarification() -> None:
+    """TC-25 v2：ambiguous_params 非空 → 调用 _call_query_clarification → 根据结果决定是否 patch。
+
+    新设计无 fallback 概念：有 ambiguous_params 就调用澄清接口，结果决定后续动作。
+    """
     ctx = _make_ctx(
         tool_name="data_query_grid",
-        tool_params={"query": "查询营收"},
-        knowledge_payload={},  # 空缓存
+        tool_params={
+            "query": "查询营收",
+            "ambiguous_params": ["metric_field"],  # 触发澄清
+        },
     )
 
-    mock_result = MagicMock()
-    mock_result.needs_clarification = False
-    mock_result.form = ""
-    mock_result.knowledge = "fallback_knowledge"
+    mock_result = _make_clarification_result(
+        needs_clarification=False,
+        knowledge="fallback_knowledge",
+    )
 
     with patch(
-        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._call_fallback_enhancer",
+        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._call_query_clarification",
         new=AsyncMock(return_value=mock_result),
     ):
         result = await before_call_back(ctx)
 
-    # 兜底调用后，应根据返回结果决定是否 patch
+    # 澄清调用后，应根据返回结果决定是否 patch
     assert result is not None
     patched_params = result.get("patch", {}).get("tool_params", {})
     assert patched_params.get("contextKnowledge") == "fallback_knowledge"

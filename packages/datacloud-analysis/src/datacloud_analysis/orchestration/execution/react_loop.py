@@ -22,6 +22,110 @@ from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_too
 
 logger = logging.getLogger(__name__)
 
+# ── Thinking token 辅助函数 ──────────────────────────────────────────────────
+
+# 过短或客套话前缀，对用户没有信息量的 thinking 内容
+_FILLER_PREFIXES = ("好的", "当然", "根据", "明白", "OK", "Sure", "Of course")
+_MEANINGFUL_THINKING_MIN_LEN = 10   # 少于此字符数的 thinking 直接过滤
+_FILLER_SHORT_THRESHOLD = 30        # 以客套前缀开头且短于此长度则过滤
+
+
+def _extract_content_text(content: Any) -> str:
+    """从 AIMessage.content 提取纯文字（TextBlock）内容。
+
+    - str → 直接返回
+    - None → 返回 ""
+    - list → 拼接所有 type=="text" 的 TextBlock（dict 或对象）
+    - 其他意外类型 → 安全返回 ""（不抛异常）
+    """
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            try:
+                # dict 形式
+                if isinstance(block, dict):
+                    if block.get("type") == "text":
+                        parts.append(str(block.get("text", "")))
+                else:
+                    # 对象形式（ThinkingBlock / TextBlock attr 访问）
+                    if getattr(block, "type", None) == "text":
+                        parts.append(str(getattr(block, "text", "")))
+            except Exception:
+                pass
+        return "".join(parts)
+    # 意外类型：尽力转 str，不抛异常
+    try:
+        return str(content)
+    except Exception:
+        return ""
+
+
+def _extract_thinking_text(content: Any) -> str:
+    """从 AIMessage.content 提取 thinking（ThinkingBlock）内容。
+
+    - str / None → 返回 ""（非 extended_thinking 模型不包含 ThinkingBlock）
+    - list → 拼接所有 type=="thinking" 的 ThinkingBlock（dict 或对象）
+    - 其他类型 → 返回 ""
+    """
+    if not isinstance(content, list):
+        return ""
+    parts: list[str] = []
+    for block in content:
+        try:
+            if isinstance(block, dict):
+                if block.get("type") == "thinking":
+                    parts.append(str(block.get("thinking", "")))
+            else:
+                if getattr(block, "type", None) == "thinking":
+                    parts.append(str(getattr(block, "thinking", "")))
+        except Exception:
+            pass
+    return "".join(parts)
+
+
+def _is_meaningful_thinking(text: str) -> bool:
+    """判断 thinking 文本是否有推送价值。
+
+    过滤规则：
+    1. 空字符串 → False
+    2. 长度 < _MEANINGFUL_THINKING_MIN_LEN → False
+    3. 以客套前缀开头 且 长度 < _FILLER_SHORT_THRESHOLD → False
+    4. 其他 → True
+    """
+    if not text:
+        return False
+    if len(text) < _MEANINGFUL_THINKING_MIN_LEN:
+        return False
+    if len(text) < _FILLER_SHORT_THRESHOLD and any(text.startswith(p) for p in _FILLER_PREFIXES):
+        return False
+    return True
+
+
+async def _emit_thinking_token(gateway_context: Any, token: str) -> None:
+    """向 gateway_context 推送单个 thinking token（静默降级，不抛异常）。
+
+    - gateway_context 为 None → 静默跳过
+    - token 为空 → 不调用 emit_chunk
+    - emit_chunk 抛异常 → 捕获并记录 debug 日志，不向上传播
+    """
+    if not gateway_context or not token:
+        return
+    try:
+        from by_framework import StreamChunkEvent  # type: ignore
+        from by_framework.core.protocol.content_type import SseMessageType  # type: ignore
+        from datacloud_data_sdk.stream_text import coerce_stream_chunk_text  # type: ignore
+        await gateway_context.emit_chunk(
+            StreamChunkEvent(content=coerce_stream_chunk_text(token)),
+            event_type="reasoningLogDelta",
+            content_type="1002",
+        )
+    except Exception as exc:
+        logger.debug("[react_loop] thinking_token emit failed: %s", exc)
+
 
 async def _emit_stream_token(gateway_context: Any, token: str) -> None:
     """向 gateway_context 推送单个流式文字 token。"""
