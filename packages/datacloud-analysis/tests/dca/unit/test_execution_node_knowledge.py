@@ -1,4 +1,4 @@
-"""TC-06 ~ TC-07: execution_node 知识增强注入 system_prompt（层 A）测试。"""
+"""TC-06 ~ TC-09: execution_node 知识增强注入 system_prompt（层 A）测试。"""
 
 from __future__ import annotations
 
@@ -27,6 +27,25 @@ def _make_config() -> dict:
     return {"configurable": {}}
 
 
+def _make_mock_react_loop(captured: list[str]):
+    """返回兼容 run_react_loop 关键字参数签名的 mock。"""
+
+    async def mock_react_loop(
+        *,
+        state,
+        tools_list,
+        system_prompt,
+        stable_system_prompt=None,
+        dynamic_prompt=None,
+        max_rounds=None,
+        gateway_context=None,
+    ):
+        captured.append(system_prompt)
+        return {"react_rounds": 0, "react_final": {}, "messages": [], "results": []}
+
+    return mock_react_loop
+
+
 # ---------------------------------------------------------------------------
 # TC-06: knowledge_snippets 非空 → system_prompt 含可读字段映射段落，不含原始 JSON
 # ---------------------------------------------------------------------------
@@ -36,13 +55,9 @@ async def test_tc06_knowledge_snippets_injected_as_readable_text() -> None:
 
     captured_prompts: list[str] = []
 
-    async def mock_react_loop(state, tools_list, system_prompt, max_rounds, gateway_context=None):
-        captured_prompts.append(system_prompt)
-        return {"react_rounds": 0, "react_final": {}, "messages": [], "results": []}
-
     with patch(
         "datacloud_analysis.orchestration.execution.node.run_react_loop",
-        side_effect=mock_react_loop,
+        side_effect=_make_mock_react_loop(captured_prompts),
     ):
         from datacloud_analysis.orchestration.execution.node import execution_node
 
@@ -65,13 +80,9 @@ async def test_tc07_empty_snippets_system_prompt_unchanged() -> None:
 
     captured: list[str] = []
 
-    async def mock_react_loop(state, tools_list, system_prompt, max_rounds, gateway_context=None):
-        captured.append(system_prompt)
-        return {"react_rounds": 0, "react_final": {}, "messages": [], "results": []}
-
     with patch(
         "datacloud_analysis.orchestration.execution.node.run_react_loop",
-        side_effect=mock_react_loop,
+        side_effect=_make_mock_react_loop(captured),
     ):
         from datacloud_analysis.orchestration.execution.node import execution_node
 
@@ -108,15 +119,11 @@ async def test_tc08_runtime_section_contains_user_info() -> None:
 
     captured: list[str] = []
 
-    async def mock_react_loop(state, tools_list, system_prompt, max_rounds, gateway_context=None):
-        captured.append(system_prompt)
-        return {"react_rounds": 0, "react_final": {}, "messages": [], "results": []}
-
     config = {"configurable": {"gateway_context": mock_ctx}}
 
     with patch(
         "datacloud_analysis.orchestration.execution.node.run_react_loop",
-        side_effect=mock_react_loop,
+        side_effect=_make_mock_react_loop(captured),
     ):
         from datacloud_analysis.orchestration.execution.node import execution_node
 
@@ -145,15 +152,11 @@ async def test_tc09_runtime_section_no_user_info_when_metadata_empty() -> None:
 
     captured: list[str] = []
 
-    async def mock_react_loop(state, tools_list, system_prompt, max_rounds, gateway_context=None):
-        captured.append(system_prompt)
-        return {"react_rounds": 0, "react_final": {}, "messages": [], "results": []}
-
     config = {"configurable": {"gateway_context": mock_ctx}}
 
     with patch(
         "datacloud_analysis.orchestration.execution.node.run_react_loop",
-        side_effect=mock_react_loop,
+        side_effect=_make_mock_react_loop(captured),
     ):
         from datacloud_analysis.orchestration.execution.node import execution_node
 

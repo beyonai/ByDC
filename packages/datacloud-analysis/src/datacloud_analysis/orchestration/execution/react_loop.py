@@ -105,12 +105,13 @@ def _is_meaningful_thinking(text: str) -> bool:
     return True
 
 
-async def _emit_thinking_token(gateway_context: Any, token: str) -> None:
+async def _emit_thinking_token(gateway_context: Any, token: str, *, message_id: str) -> None:
     """向 gateway_context 推送单个 thinking token（静默降级，不抛异常）。
 
     - gateway_context 为 None → 静默跳过
     - token 为空 → 不调用 emit_chunk
     - emit_chunk 抛异常 → 捕获并记录 debug 日志，不向上传播
+    - message_id：由调用方按轮次生成，同一轮 LLM 思考共享同一个 ID
     """
     if not gateway_context or not token:
         return
@@ -122,13 +123,17 @@ async def _emit_thinking_token(gateway_context: Any, token: str) -> None:
             StreamChunkEvent(content=coerce_stream_chunk_text(token)),
             event_type=EventType.REASONING_LOG_DELTA.value,
             content_type=SseReasonMessageType.think_text.value,
+            message_id=message_id,
         )
     except Exception as exc:
         logger.debug("[react_loop] thinking_token emit failed: %s", exc)
 
 
-async def _emit_stream_token(gateway_context: Any, token: str) -> None:
-    """向 gateway_context 推送单个流式文字 token（ReAct 思考过程）。"""
+async def _emit_stream_token(gateway_context: Any, token: str, *, message_id: str) -> None:
+    """向 gateway_context 推送单个流式文字 token（ReAct 中间思考过程 → 思考区）。
+
+    - message_id：由调用方按轮次生成，同一轮 LLM 思考共享同一个 ID
+    """
     if not gateway_context or not token:
         return
     try:
@@ -140,15 +145,36 @@ async def _emit_stream_token(gateway_context: Any, token: str) -> None:
             StreamChunkEvent(content=coerce_stream_chunk_text(token)),
             event_type=EventType.REASONING_LOG_DELTA.value,
             content_type=SseReasonMessageType.think_text.value,
+            message_id=message_id,
         )
     except Exception as exc:
         logger.debug("[react_loop] stream_token emit failed: %s", exc)
+
+
+async def _emit_answer_token(gateway_context: Any, token: str) -> None:
+    """向 gateway_context 推送 finish_react.answer 增量 token（→ 答案区 ANSWER_DELTA）。"""
+    if not gateway_context or not token:
+        return
+    try:
+        from by_framework import EventType, StreamChunkEvent  # type: ignore
+        from by_framework.core.protocol.content_type import SseMessageType  # type: ignore
+        from datacloud_data_sdk.stream_text import coerce_stream_chunk_text  # type: ignore
+
+        await gateway_context.emit_chunk(
+            StreamChunkEvent(content=coerce_stream_chunk_text(token)),
+            event_type=EventType.ANSWER_DELTA.value,
+            content_type=SseMessageType.text.value,
+        )
+    except Exception as exc:
+        logger.debug("[react_loop] answer_token emit failed: %s", exc)
 
 
 async def _stream_llm_call(
     llm_with_tools: Any,
     messages_window: list,
     gateway_context: Any = None,
+    *,
+    thinking_message_id: str = "model_thinking",
 ) -> tuple[Any, bool]:
     """流式调用 LLM，实时向 gateway_context 推送文字 token。
 
@@ -159,6 +185,8 @@ async def _stream_llm_call(
     注意事项：
     - tool_calls（包括多个并行调用）在全部 chunk 收集完后统一读取，不影响推送
     - 若 astream 返回空或累加失败，自动 fallback 至 ainvoke
+    - thinking_message_id：由 run_react_loop 每轮生成，同一轮 LLM 思考段共享同一个 ID，
+      下一轮或工具调用时切换为新 ID，实现思考气泡分段隔离
     """
     full_msg = None
     did_stream_text = False
@@ -181,17 +209,26 @@ async def _stream_llm_call(
                     full_msg = chunk
 
             if gateway_context is not None:
-                # 推送 LLM content 文字 token（ReAct 思考过程）
+                # ① 推送 thinking block（MiniMax reasoning_split=true / Claude extended_thinking）
+                _thinking_delta = _extract_thinking_text(chunk.content)
+                if _thinking_delta:
+                    await _emit_thinking_token(gateway_context, _thinking_delta, message_id=thinking_message_id)
+
+                # ② 推送 LLM content 文字 token（ReAct 思考过程）
                 # 仅在无 tool_call_chunks 时推送：部分模型生成 tool_call 时 content 里会带工具名，
                 # 这类内容由 worker.py on_tool_start 的 sub_step 处理，避免重复推送。
+                # 注意：did_stream_text 不在此处设为 True——
+                # 此处推送的是 REASONING_LOG_DELTA（思考区），不是 ANSWER_DELTA（答案区）。
+                # 若 LLM 绕过 finish_react 直接输出 content，formatter 仍需通过 _emit_text
+                # 走 ANSWER_DELTA 正式推送，answer_streamed 必须保持 False 才能触发该路径。
                 _has_tool_calls = bool(getattr(chunk, "tool_call_chunks", None))
                 if not _has_tool_calls:
                     _content_delta = _extract_content_text(chunk.content)
                     if _content_delta:
-                        await _emit_stream_token(gateway_context, _content_delta)
-                        did_stream_text = True
+                        await _emit_stream_token(gateway_context, _content_delta, message_id=thinking_message_id)
+                        # 不设 did_stream_text = True，保证 formatter 仍走 _emit_text → ANSWER_DELTA
 
-                # 实时推送 finish_react.answer 参数的增量内容
+                # 实时推送 finish_react.answer 参数的增量内容（→ 答案区 ANSWER_DELTA）
                 for tcc in getattr(chunk, "tool_call_chunks", None) or []:
                     # 第一个 chunk 上有 name，后续 chunk name 为 None
                     if tcc.get("name") == "finish_react":
@@ -203,7 +240,7 @@ async def _stream_llm_call(
                             current = m.group(1)
                             if len(current) > _fr_answer_emitted:
                                 delta = current[_fr_answer_emitted:]
-                                await _emit_stream_token(gateway_context, delta)
+                                await _emit_answer_token(gateway_context, delta)
                                 did_stream_text = True
                                 _fr_answer_emitted = len(current)
     except Exception as exc:
@@ -238,12 +275,16 @@ async def _invoke_llm_with_fallback(
     *,
     state: Any,
     round_idx: int,
+    thinking_message_id: str,
 ) -> tuple[Any, bool]:
     """调用 LLM，内置三层容错：
 
     1. 主模型 + 指数退避重试（使用代码内默认策略）
     2. 备用模型 + 指数退避重试（若运行时显式注入备用模型实例）
     3. 全部不可用 → 保存断点到 Redis + 向用户推送引导文案 + 抛 _LlmUnavailableError
+
+    thinking_message_id：本轮 LLM 思考段的消息 ID，穿透传给 _stream_llm_call，
+    确保同一轮思考输出归属同一条消息气泡。
     """
     from datacloud_analysis.orchestration.execution.llm_checkpoint import (
         CHECKPOINT_REPLY,
@@ -255,7 +296,8 @@ async def _invoke_llm_with_fallback(
     last_exc: Exception
     try:
         return await stream_llm_call_with_retry(
-            _stream_llm_call, primary_llm_with_tools, messages_window, gateway_context
+            _stream_llm_call, primary_llm_with_tools, messages_window, gateway_context,
+            thinking_message_id=thinking_message_id,
         )
     except Exception as primary_exc:
         logger.warning("[LLM] 主模型全部重试失败 round=%d: %s", round_idx + 1, primary_exc)
@@ -266,7 +308,8 @@ async def _invoke_llm_with_fallback(
         try:
             logger.warning("[LLM] 主模型失败，切换到备用模型")
             return await stream_llm_call_with_retry(
-                _stream_llm_call, fallback_llm_with_tools, messages_window, gateway_context
+                _stream_llm_call, fallback_llm_with_tools, messages_window, gateway_context,
+                thinking_message_id=thinking_message_id,
             )
         except Exception as fallback_exc:
             logger.error("[LLM] 备用模型也失败 round=%d: %s", round_idx + 1, fallback_exc)
@@ -278,7 +321,7 @@ async def _invoke_llm_with_fallback(
         gateway_context, "_redis_client", None
     )
     await save_llm_failure_checkpoint(redis_client, session_id, state, round_idx, last_exc)
-    await _emit_stream_token(gateway_context, CHECKPOINT_REPLY)
+    await _emit_stream_token(gateway_context, CHECKPOINT_REPLY, message_id=thinking_message_id)
     raise _LlmUnavailableError(CHECKPOINT_REPLY) from last_exc
 
 
@@ -487,6 +530,34 @@ def _build_llm(state: Any) -> Any:
         return init_chat_model(model_provider="openai", **kwargs)
 
 
+def _build_system_message(
+    system_prompt: str,
+    stable_system_prompt: str | None = None,
+    dynamic_prompt: str | None = None,
+) -> SystemMessage:
+    """构建 SystemMessage，按 LLM provider 自动选择是否注入 cache_control。
+
+    - provider=anthropic：使用结构化 content list，stable 前缀附带
+      ``cache_control: {"type": "ephemeral"}`` 以启用 Prompt Caching。
+    - 其他 provider（openai 兼容等）：使用纯字符串，避免 OpenAI API
+      因未知字段 ``cache_control`` 报 400 错误。
+    - stable_system_prompt=None：始终退回纯字符串（兼容旧调用方）。
+    """
+    _provider = os.getenv("DATACLOUD_LLM_MODEL_PROVIDER", "openai").strip().lower()
+    if stable_system_prompt is not None and _provider == "anthropic":
+        _content: list[dict] = [
+            {
+                "type": "text",
+                "text": stable_system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            },
+        ]
+        if dynamic_prompt:
+            _content.append({"type": "text", "text": dynamic_prompt})
+        return SystemMessage(content=_content)
+    return SystemMessage(content=system_prompt)
+
+
 def _compress_tool_result(result: Any, tool_name: str) -> str:
     """将工具返回值压缩为 ToolMessage 内容，避免大数据撑爆上下文。
 
@@ -571,6 +642,8 @@ async def run_react_loop(
     state: Any,
     tools_list: list[BaseTool],
     system_prompt: str,
+    stable_system_prompt: str | None = None,
+    dynamic_prompt: str | None = None,
     max_rounds: int | None = None,
     gateway_context: Any = None,
 ) -> dict[str, Any]:
@@ -676,7 +749,8 @@ async def run_react_loop(
         )
     else:
         # 首次执行：初始化messages
-        messages: list = [SystemMessage(content=system_prompt)]
+        # Prompt Caching：仅 Anthropic 协议支持 cache_control，OpenAI 兼容协议退回纯字符串
+        messages: list = [_build_system_message(system_prompt, stable_system_prompt, dynamic_prompt)]
         conv = _conversation_messages_for_llm(state)
         if conv:
             messages.extend(conv)
@@ -793,6 +867,11 @@ async def run_react_loop(
     for round_idx in range(start_round, max_rounds):
         logger.info("[react_loop] round=%d/%d", round_idx + 1, max_rounds)
 
+        # 每轮 LLM 思考段生成独立 message_id：
+        # 同一轮内的所有 thinking/stream token 归属同一条消息气泡；
+        # 工具调用完成后进入下一轮时切换新 ID，实现消息分段隔离。
+        _thinking_message_id = uuid.uuid4().hex[:12]
+
         # Resume时跳过LLM调用，直接用checkpoint里的ai_msg
         _skip_checkpoint_this_round = False  # 本轮是否跳过checkpoint存储（resume时）
         try:
@@ -822,6 +901,7 @@ async def run_react_loop(
                         gateway_context,
                         state=state,
                         round_idx=round_idx,
+                        thinking_message_id=_thinking_message_id,
                     )
                     messages.append(ai_msg)
                 react_checkpoint = None  # 清除局部变量，后续轮次正常执行
@@ -835,6 +915,7 @@ async def run_react_loop(
                     gateway_context,
                     state=state,
                     round_idx=round_idx,
+                    thinking_message_id=_thinking_message_id,
                 )
                 messages.append(ai_msg)
         except _LlmUnavailableError as _llm_err:
