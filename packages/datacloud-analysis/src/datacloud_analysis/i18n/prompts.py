@@ -151,6 +151,19 @@ def _build_exec_zh() -> str:
             "- 过滤条件：主要是维度名称下具体维度取值，或指标的数值条件限定\n",
             "- 排序目标：可排序的指标或维度名称字段\n",
             "- 统计函数：聚合函数，数据计算的相关运算,统计相关的动词\n",
+            "## 参数提取自检字段（必填）\n",
+            "- 调用 query_*/compute_*/data_query_* 类工具时，除业务参数外，必须同时填写以下三个自检字段：\n",
+            "  · **intent_reason**（str）：用一句话完整描述你对用户本次查询意图的理解，"
+            "包括查询对象、时间范围、分组维度、过滤条件等关键要素。不得为空。\n",
+            "  · **extraction_confidence**（float，0.0～1.0）：你对本次参数提取正确性的自信度。"
+            "若字段名、时间范围、过滤条件等存在任何不确定性，请填写较低值（建议 0.6～0.8）；"
+            "所有参数均有明确依据时填 1.0。\n",
+            "  · **ambiguous_params**（List[str]）：列出你认为存在歧义或不确定的参数名，"
+            "如 [\"time_range\", \"target_object\"]。若所有参数均已明确，填写空列表 []。\n",
+            "- 填写示例（data_query_grid）：\n",
+            "  intent_reason=\"用户想查本季度各大区企业总营收汇总，时间为本季度，按大区分组\"\n",
+            "  extraction_confidence=0.9\n",
+            "  ambiguous_params=[\"time_range\"]  # 本季度的具体起止日期不确定\n",
             "## data_query 返回结构规则\n",
             "- data_query 返回结构：{data: {result_type, records, file: {file_url}, meta}}。\n",
             "- 如果返回中包含 file_url 字段或顶层 _hint 字段，说明数据已存入本地文件，禁止再调用 write_file，直接使用该文件路径。\n",

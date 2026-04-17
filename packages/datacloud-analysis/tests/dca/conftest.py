@@ -8,6 +8,7 @@ initialized_sdk     Session-scoped: call bootstrap.setup() once for the whole
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import uuid
 from pathlib import Path
@@ -24,6 +25,26 @@ def _ensure_backend_demo_import_path() -> None:
 
 
 _ensure_backend_demo_import_path()
+
+
+@pytest.fixture(autouse=True)
+def _ensure_event_loop_for_sync_tests() -> None:
+    """确保每个同步测试执行时存在可用的 event loop。
+
+    Python 3.12+ 中 asyncio.get_event_loop() 在没有 running loop 时会抛
+    RuntimeError（3.13 尤其明显）。pytest-asyncio AUTO 模式在每个 async 测试
+    结束后会关闭 loop，导致后续同步测试用 asyncio.get_event_loop() 时失败。
+
+    本 fixture 在每个同步测试前检查并恢复 event loop，使旧式写法
+    `asyncio.get_event_loop().run_until_complete(...)` 可以正常工作。
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            raise RuntimeError("loop is closed")
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
 
 @pytest.fixture

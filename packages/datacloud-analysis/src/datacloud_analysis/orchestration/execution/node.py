@@ -6,7 +6,7 @@ import inspect
 import logging
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, List
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
@@ -22,6 +22,99 @@ from datacloud_analysis.tools.ask_user import ask_user
 from datacloud_analysis.tools.file_io import read_file
 
 logger = logging.getLogger(__name__)
+
+# ── 数据工具识别 ─────────────────────────────────────────────────────────────
+_DATA_TOOL_PREFIXES = ("query_", "compute_", "data_query_")
+
+
+def _is_data_tool_name(name: str) -> bool:
+    """判断工具名是否属于数据类工具（query_/compute_/data_query_ 前缀）。"""
+    return any(name.startswith(p) for p in _DATA_TOOL_PREFIXES)
+
+
+def inject_ambiguity_fields(t: BaseTool) -> BaseTool:
+    """往数据类工具 Schema 注入三个元字段，由 LLM 在调用时填写，执行前自动剥除。
+
+    注入字段：
+    - intent_reason: str        — LLM 对本次查询意图的完整理解描述
+    - extraction_confidence: float — LLM 对参数提取正确性的自信度 [0.0, 1.0]
+    - ambiguous_params: List[str]  — LLM 认为有歧义/不确定的参数名列表
+
+    底层 coroutine 不会收到这三个字段（调用前自动剥除）。
+    """
+    try:
+        from pydantic import Field, create_model  # noqa: PLC0415
+
+        original_schema = t.args_schema
+        if original_schema is None:
+            return t
+
+        NewSchema = create_model(
+            f"{original_schema.__name__}WithAmbiguity",
+            __base__=original_schema,
+            intent_reason=(
+                str,
+                Field(
+                    default="",
+                    description=(
+                        "你对用户本次查询意图的完整理解描述。"
+                        "请用一句话说明用户真正想查什么、时间范围、分组维度等关键要素。"
+                    ),
+                ),
+            ),
+            extraction_confidence=(
+                float,
+                Field(
+                    default=1.0,
+                    ge=0.0,
+                    le=1.0,
+                    description=(
+                        "你对本次参数提取正确性的自信度，范围 [0.0, 1.0]。"
+                        "若字段名、时间范围、过滤条件等存在不确定性，请填写较低值（如 0.6~0.8）。"
+                    ),
+                ),
+            ),
+            ambiguous_params=(
+                List[str],
+                Field(
+                    default_factory=list,
+                    description=(
+                        "你认为存在歧义或不确定的参数名列表（如 [\"time_range\", \"target_object\"]）。"
+                        "若所有参数均已明确，填写空列表 []。"
+                    ),
+                ),
+            ),
+        )
+        t.args_schema = NewSchema
+
+        # 包装 coroutine：调用前剥除三个元字段
+        if hasattr(t, "coroutine") and t.coroutine is not None:
+            _orig_coro = t.coroutine
+
+            async def _coro_strip_ambiguity(**kw: Any) -> Any:
+                kw.pop("intent_reason", None)
+                kw.pop("extraction_confidence", None)
+                kw.pop("ambiguous_params", None)
+                return await _orig_coro(**kw)
+
+            t.coroutine = _coro_strip_ambiguity
+
+        # 包装 func（同步工具）
+        if hasattr(t, "func") and t.func is not None:
+            _orig_func = t.func
+
+            def _func_strip_ambiguity(**kw: Any) -> Any:
+                kw.pop("intent_reason", None)
+                kw.pop("extraction_confidence", None)
+                kw.pop("ambiguous_params", None)
+                return _orig_func(**kw)
+
+            t.func = _func_strip_ambiguity
+
+    except Exception as exc:  # pragma: no cover
+        logger.warning("[inject_ambiguity_fields] failed for tool=%s: %s", getattr(t, "name", "?"), exc)
+
+    return t
 
 # Set to 1/true/yes to omit ask_user from the execution agent (e.g. local debugging).
 _DISABLE_ASK_USER_TOOL = os.environ.get("DATACLOUD_DISABLE_ASK_USER_TOOL", "1").lower() in (
@@ -81,6 +174,9 @@ def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
                     getattr(callable_or_tool, "coroutine", None)
                 ) or _resolve_runtime_context_param(getattr(callable_or_tool, "func", None))
                 tool = inject_reason_field(callable_or_tool)
+                # 数据类工具：注入歧义元字段（在 inject_reason_field 之后）
+                if _is_data_tool_name(name):
+                    tool = inject_ambiguity_fields(tool)
                 if runtime_context_param:
                     tool._datacloud_runtime_context_param = runtime_context_param
                 tools.append(tool)
@@ -121,6 +217,9 @@ def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
                         coroutine=callable_or_tool if is_async else None,
                     )
                 tool = inject_reason_field(t)
+                # 数据类工具：注入歧义元字段（在 inject_reason_field 之后）
+                if _is_data_tool_name(name):
+                    tool = inject_ambiguity_fields(tool)
                 if runtime_context_param:
                     tool._datacloud_runtime_context_param = runtime_context_param
                 if getattr(callable_or_tool, "_is_agent_delegate", False):

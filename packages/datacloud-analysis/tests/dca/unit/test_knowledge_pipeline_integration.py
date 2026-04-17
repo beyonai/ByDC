@@ -5,8 +5,8 @@
          execution_node 将其注入 system_prompt；用 mock enhancer 模拟真实返回值
 - TC-11: knowledge_snippets 格式为可读中文字段映射（"营收 → 企业总营收（万元）"），
          不含原始 JSON 结构
-- TC-36: intend_node 调用 enhancer 一次后将结果缓存到 knowledge_payload；
-         后续 dispatch_tool 时 plugin 直接读缓存，不再触发 fallback
+- TC-36: v2 设计：ambiguous_params=[] → 插件跳过，_call_query_clarification 不触发；
+         ambiguous_params 非空 → _call_query_clarification 被调用
 
 注：mock enhancer 的返回数据与 datacloud-knowledge 包的 rule-based 实现一致，
     因此本测试既不依赖特定包版本，也不需要网络。
@@ -15,11 +15,63 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
+from contextlib import contextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import HumanMessage
+
+
+
+@contextmanager
+def _patch_analyze_query_clarification(mock_result: Any):
+    """临时注入 datacloud_knowledge.intent.analyze_query_clarification 的 mock。
+
+    插件通过动态 import 调用此函数，直接 patch sys.modules 里的模块属性
+    可以覆盖正式加载和动态加载两种场景。
+
+    注意：仅在模块已存在时修改属性；如需创建假模块则在退出时删除，避免污染后续测试。
+    """
+    dk_key = "datacloud_knowledge"
+    intent_key = "datacloud_knowledge.intent"
+
+    created_dk = dk_key not in sys.modules
+    created_intent = intent_key not in sys.modules
+
+    if created_dk:
+        sys.modules[dk_key] = types.ModuleType(dk_key)
+    if created_intent:
+        sys.modules[intent_key] = types.ModuleType(intent_key)
+
+    intent_mod = sys.modules[intent_key]
+    had_attr = hasattr(intent_mod, "analyze_query_clarification")
+    original = getattr(intent_mod, "analyze_query_clarification", None)
+    call_count = [0]
+
+    async def _fake_analyze(*args: Any, **kwargs: Any) -> Any:
+        call_count[0] += 1
+        return mock_result
+
+    intent_mod.analyze_query_clarification = _fake_analyze  # type: ignore[attr-defined]
+    try:
+        yield call_count
+    finally:
+        if had_attr and original is not None:
+            intent_mod.analyze_query_clarification = original  # type: ignore[attr-defined]
+        else:
+            try:
+                delattr(intent_mod, "analyze_query_clarification")
+            except AttributeError:
+                pass
+        if created_intent:
+            sys.modules.pop(intent_key, None)
+        if created_dk:
+            sys.modules.pop(dk_key, None)
+
+
 
 # ---------------------------------------------------------------------------
 # 辅助：模拟 knowledge enhancer 的返回对象
@@ -301,15 +353,16 @@ async def test_tc10_passthrough_query_no_knowledge_in_system_prompt() -> None:
 
 
 # ---------------------------------------------------------------------------
-# TC-36: knowledge_payload 缓存 → dispatch_tool 不重复调用 enhancer
+# TC-36: v2 设计 — ambiguous_params 控制澄清触发
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_tc36_knowledge_payload_cache_prevents_fallback_in_plugin() -> None:
-    """TC-36: intend_node 缓存 knowledge_payload → dispatch_tool 时 plugin 不触发 fallback。
+async def test_tc36_empty_ambiguous_params_skips_query_clarification() -> None:
+    """TC-36 v2：ambiguous_params=[] → 插件直接跳过，_call_query_clarification 不触发。
 
-    验证：_call_fallback_enhancer 调用次数 = 0（缓存命中）。
+    这是 v2 设计的核心行为：工具调用时 LLM 若无歧义（ambiguous_params=[]），
+    插件不调用澄清接口，直接放行。
     """
     from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
     from datacloud_analysis.orchestration.intend.node import intend_node
@@ -317,26 +370,6 @@ async def test_tc36_knowledge_payload_cache_prevents_fallback_in_plugin() -> Non
     from langchain_core.tools import StructuredTool
     from pydantic import BaseModel, ConfigDict, Field
 
-    # --- Step 1: intend_node → 生成 knowledge_payload ---
-    intend_updates = await intend_node(
-        _make_state("高效益网格的营收"),
-        _make_config(),
-        knowledge_enhancer=_grid_knowledge_enhancer,
-    )
-    knowledge_payload = intend_updates.get("knowledge_payload") or {}
-    assert knowledge_payload, "intend_node 应写入 knowledge_payload"
-
-    # --- Step 2: 构造 dispatch state（模拟 tool_wrapper 从 state 读取的上下文）---
-    state_for_dispatch = {
-        "agent_id": "tc36-agent",
-        "user_query": "高效益网格的营收",
-        "workspace_dir": None,
-        "knowledge_snippets": intend_updates.get("knowledge_snippets"),
-        "confirmed_terms": None,
-        "knowledge_payload": knowledge_payload,  # ← 来自 intend_node
-    }
-
-    # --- Step 3: 构造 mock 工具 ---
     class _Schema(BaseModel):
         model_config = ConfigDict(populate_by_name=True)
 
@@ -350,58 +383,55 @@ async def test_tc36_knowledge_payload_cache_prevents_fallback_in_plugin() -> Non
         coroutine=AsyncMock(return_value={"records": [], "meta": {}}),
     )
     tools_map = {"data_query_grid": tool}
-    tool_call = {"id": "tc36-call", "name": "data_query_grid", "args": {"query": "营收"}}
+    # ambiguous_params=[] → 插件 skip
+    tool_call = {
+        "id": "tc36-call",
+        "name": "data_query_grid",
+        "args": {
+            "query": "营收",
+            "ambiguous_params": [],  # 空：无歧义，跳过澄清
+        },
+    }
 
-    # --- Step 4: dispatch_tool，验证 fallback 不被触发 ---
-    fallback_spy = AsyncMock(
-        return_value=MagicMock(needs_clarification=False, form="", knowledge="", query="")
+    state = {
+        "agent_id": "tc36-agent",
+        "user_query": "高效益网格的营收",
+        "workspace_dir": None,
+        "knowledge_snippets": None,
+        "confirmed_terms": None,
+    }
+
+    clarification_spy = AsyncMock(
+        return_value=MagicMock(needs_clarification=False, form="", knowledge="")
     )
 
     with patch(
-        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._call_fallback_enhancer",
-        new=fallback_spy,
+        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._call_query_clarification",
+        new=clarification_spy,
     ):
         get_tool_hook_plugin_manager.cache_clear()
         try:
             await dispatch_tool(
                 tool_call=tool_call,
                 tools_map=tools_map,
-                state=state_for_dispatch,
+                state=state,
                 gateway_context=None,
             )
         finally:
             get_tool_hook_plugin_manager.cache_clear()
 
-    fallback_spy.assert_not_called()
+    # ambiguous_params=[] → 插件跳过，_call_query_clarification 不应被调用
+    clarification_spy.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_tc36_multiple_tool_calls_same_state_no_repeated_enhancer_call() -> None:
-    """TC-36: 同一请求的多次工具调用，知识增强 API 只在 intend_node 调用一次。
-
-    验证：dispatch_tool 调用两次，fallback 均不触发（同一个 knowledge_payload）。
-    """
+async def test_tc36_multiple_tool_calls_no_ambiguity_skip_clarification() -> None:
+    """TC-36 v2：同一请求多次工具调用，ambiguous_params=[] → 均跳过澄清接口。"""
     from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
     from datacloud_analysis.orchestration.intend.node import intend_node
     from datacloud_analysis.tool_hook_plugins.manager import get_tool_hook_plugin_manager
     from langchain_core.tools import StructuredTool
     from pydantic import BaseModel, ConfigDict, Field
-
-    intend_updates = await intend_node(
-        _make_state("营收利润查询"),
-        _make_config(),
-        knowledge_enhancer=_grid_knowledge_enhancer,
-    )
-    knowledge_payload = intend_updates.get("knowledge_payload") or {}
-
-    state = {
-        "agent_id": "tc36b",
-        "user_query": "营收利润查询",
-        "workspace_dir": None,
-        "knowledge_snippets": intend_updates.get("knowledge_snippets"),
-        "confirmed_terms": None,
-        "knowledge_payload": knowledge_payload,
-    }
 
     class _Schema(BaseModel):
         model_config = ConfigDict(populate_by_name=True)
@@ -417,26 +447,34 @@ async def test_tc36_multiple_tool_calls_same_state_no_repeated_enhancer_call() -
     )
     tools_map = {"data_query_grid": tool}
 
-    fallback_spy = AsyncMock(
-        return_value=MagicMock(needs_clarification=False, form="", knowledge="", query="")
+    state = {
+        "agent_id": "tc36b",
+        "user_query": "营收利润查询",
+        "workspace_dir": None,
+        "knowledge_snippets": None,
+        "confirmed_terms": None,
+    }
+
+    clarification_spy = AsyncMock(
+        return_value=MagicMock(needs_clarification=False, form="", knowledge="")
     )
 
     with patch(
-        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._call_fallback_enhancer",
-        new=fallback_spy,
+        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._call_query_clarification",
+        new=clarification_spy,
     ):
         get_tool_hook_plugin_manager.cache_clear()
         try:
-            # 第一次工具调用
+            # 第一次工具调用（ambiguous_params=[]）
             await dispatch_tool(
-                tool_call={"id": "c1", "name": "data_query_grid", "args": {"query": "营收"}},
+                tool_call={"id": "c1", "name": "data_query_grid", "args": {"query": "营收", "ambiguous_params": []}},
                 tools_map=tools_map,
                 state=state,
                 gateway_context=None,
             )
-            # 第二次工具调用（同一个 state/knowledge_payload）
+            # 第二次工具调用（同样无歧义）
             await dispatch_tool(
-                tool_call={"id": "c2", "name": "data_query_grid", "args": {"query": "利润"}},
+                tool_call={"id": "c2", "name": "data_query_grid", "args": {"query": "利润", "ambiguous_params": []}},
                 tools_map=tools_map,
                 state=state,
                 gateway_context=None,
@@ -444,18 +482,18 @@ async def test_tc36_multiple_tool_calls_same_state_no_repeated_enhancer_call() -
         finally:
             get_tool_hook_plugin_manager.cache_clear()
 
-    # 两次工具调用均不触发 fallback
-    fallback_spy.assert_not_called()
+    # 两次工具调用均不触发澄清接口
+    clarification_spy.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_tc36_empty_knowledge_payload_triggers_fallback_attempt(
+async def test_tc36_non_empty_ambiguous_params_triggers_query_clarification(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """TC-36 对照组：state 无 knowledge_payload → plugin 进入 fallback 路径。
+    """TC-36 v2 对照组：ambiguous_params 非空 → analyze_query_clarification 被触发。
 
-    由于测试环境无真实 API，fallback 会失败并输出警告日志；
-    本测试验证"fallback 路径被进入"这一事实（而非 fallback 成功）。
+    使用 _patch_analyze_query_clarification 直接 patch sys.modules 里的函数，
+    绕过 ToolHookPluginManager 动态加载导致正式模块 patch 无效的问题。
     """
     import logging
 
@@ -478,34 +516,34 @@ async def test_tc36_empty_knowledge_payload_triggers_fallback_attempt(
     )
     tools_map = {"data_query_grid": tool}
 
-    state_no_payload = {
+    state = {
         "agent_id": "tc36c",
         "user_query": "营收",
         "workspace_dir": None,
         "knowledge_snippets": None,
         "confirmed_terms": None,
-        # 无 knowledge_payload → 触发 fallback 路径
     }
 
-    get_tool_hook_plugin_manager.cache_clear()
-    try:
-        with caplog.at_level(logging.WARNING):
+    mock_result = MagicMock(needs_clarification=False, form="", knowledge="")
+
+    with _patch_analyze_query_clarification(mock_result) as call_count:
+        get_tool_hook_plugin_manager.cache_clear()
+        try:
             await dispatch_tool(
                 tool_call={
                     "id": "tc36c-call",
                     "name": "data_query_grid",
-                    "args": {"query": "营收"},
+                    "args": {
+                        "query": "营收",
+                        "ambiguous_params": ["metric_field"],  # 非空 → 触发澄清
+                    },
                 },
                 tools_map=tools_map,
-                state=state_no_payload,
+                state=state,
                 gateway_context=None,
             )
-    finally:
-        get_tool_hook_plugin_manager.cache_clear()
+        finally:
+            get_tool_hook_plugin_manager.cache_clear()
 
-    # 无 knowledge_payload 时 fallback 被尝试（但在测试环境中可能失败）
-    # 验证：要么 fallback 触发了警告日志，要么工具正常执行（fallback 成功返回空结果）
-    # 关键验证：有 knowledge_payload 的测试（test_tc36_knowledge_payload_cache_prevents_fallback_in_plugin）
-    # 证明了有缓存时不走此路径，本测试只验证"无缓存路径存在"（日志验证）
-    # 工具应正常返回（fallback 失败被 plugin 优雅处理，不抛异常）
-    assert True  # dispatch_tool 不抛异常即可（上面已执行成功）
+    # ambiguous_params 非空 → analyze_query_clarification 应被调用一次
+    assert call_count[0] == 1, f"ambiguous_params 非空应触发澄清接口，实际调用次数：{call_count[0]}"
