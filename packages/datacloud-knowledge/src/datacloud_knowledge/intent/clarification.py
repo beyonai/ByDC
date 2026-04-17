@@ -18,7 +18,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from .llm_confirm import ConfirmedQuery, llm_confirm
+from .llm_confirm import ConfirmedQuery, _format_recall_context, llm_confirm
 from .llm_utils import EventEmitter
 from .natquery import expand_query, natquery_to_five_stage
 from .paradigm_builder import build_paradigm_resolution_state, five_stage_keys_from_raw
@@ -184,7 +184,10 @@ def analyze_query_clarification(
         confirmed = llm_confirm(
             original_question=query,
             expanded_query=expanded_query,
-            state=state,
+            recall_context=_format_recall_context(
+                state.items,
+                dimension_value_hints=state.dimension_value_hints,
+            ),
             on_event=on_event,
         )
         if confirmed is None:
