@@ -1,7 +1,13 @@
 """Integration test: bootstrap.setup() creates PG checkpoint tables.
 
-Requires a running PostgreSQL instance.  Set the env var:
-    DATACLOUD_DB_URL=jdbc:postgresql://...
+Requires a running PostgreSQL instance. Set:
+    DATACLOUD_DB_HOST=...
+    DATACLOUD_DB_PORT=5432
+    DATACLOUD_DB_DATABASE=...
+    DATACLOUD_DB_SCHEMA=byai
+    DATACLOUD_DB_USER=...
+    DATACLOUD_DB_PASS=...
+    DATACLOUD_DB_TYPE=opengauss
 
 Run selectively:
     pytest tests/integration/test_bootstrap_pg.py -v -m integration
@@ -18,7 +24,10 @@ pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(
         not _PG_CHECKPOINT_URI,
-        reason="DATACLOUD_DB_URL is required for integration bootstrap tests",
+        reason=(
+            "DATACLOUD_DB_HOST / DATACLOUD_DB_DATABASE / DATACLOUD_DB_USER / "
+            "DATACLOUD_DB_PASS is required for integration bootstrap tests"
+        ),
     ),
 ]
 

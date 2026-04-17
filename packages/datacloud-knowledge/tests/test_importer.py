@@ -22,7 +22,6 @@ import logging
 import os
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
 
 import psycopg2
 from psycopg2.extras import execute_values
@@ -53,13 +52,20 @@ TRUNCATE_ORDER = [
     "whale_datacloud.domain",
 ]
 
+_DB_CONFIG_TRIGGER_ENV_VARS = (
+    "DATACLOUD_DB_HOST",
+    "DATACLOUD_DB_DATABASE",
+    "DATACLOUD_DB_USER",
+    "DATACLOUD_DB_PASS",
+)
+
 
 # === 数据库连接 ===
 
 
 def load_env() -> None:
-    """从 .env 文件加载环境变量（如果 DATACLOUD_DB_URL 未设置）。"""
-    if os.getenv("DATACLOUD_DB_URL"):
+    """从 .env 文件加载环境变量（如果尚未提供显式数据库配置）。"""
+    if any(os.getenv(name, "").strip() for name in _DB_CONFIG_TRIGGER_ENV_VARS):
         return
 
     for env_file in ENV_FILES:
@@ -80,18 +86,18 @@ def load_env() -> None:
 
 def get_db_connection() -> psycopg2.extensions.connection:
     """创建数据库连接。"""
-    required = ["DATACLOUD_DB_URL", "DATACLOUD_DB_USER"]
-    missing = [k for k in required if not os.getenv(k)]
-    if missing:
-        raise ValueError(f"缺少环境变量: {missing}")
+    from datacloud_knowledge.db_url import parse_env_database_url
 
-    parsed = urlparse(os.getenv("DATACLOUD_DB_URL", "").removeprefix("jdbc:"))
+    if not any(os.getenv(name, "").strip() for name in _DB_CONFIG_TRIGGER_ENV_VARS):
+        raise ValueError(f"缺少环境变量: {list(_DB_CONFIG_TRIGGER_ENV_VARS)}")
+
+    parsed = parse_env_database_url()
     return psycopg2.connect(
-        host=parsed.hostname or "localhost",
-        port=parsed.port or 5432,
-        user=os.getenv("DATACLOUD_DB_USER", ""),
-        password=os.getenv("DATACLOUD_DB_PASSWORD", ""),
-        dbname=parsed.path.lstrip("/") or "postgres",
+        host=parsed.host,
+        port=parsed.port,
+        user=parsed.user,
+        password=parsed.password,
+        dbname=parsed.database,
     )
 
 

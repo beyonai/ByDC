@@ -83,9 +83,12 @@ def test_settings_propagates_unexpected_llm_loader_errors(monkeypatch: pytest.Mo
     """Unexpected runtime errors in LLM role loading must not be silently swallowed."""
     from datacloud_analysis.config import env as env_module
 
-    monkeypatch.setenv("DATACLOUD_DB_URL", "jdbc:postgresql://localhost:5432/demo")
+    monkeypatch.setenv("DATACLOUD_DB_HOST", "10.10.168.204")
+    monkeypatch.setenv("DATACLOUD_DB_PORT", "5432")
+    monkeypatch.setenv("DATACLOUD_DB_DATABASE", "postgres")
+    monkeypatch.setenv("DATACLOUD_DB_SCHEMA", "byai")
     monkeypatch.setenv("DATACLOUD_DB_USER", "demo")
-    monkeypatch.setenv("DATACLOUD_DB_PASSWORD", "demo")
+    monkeypatch.setenv("DATACLOUD_DB_PASS", "demo")
 
     def _raise_runtime_error(_cls: type[object], _role: str) -> env_module.LLMGroupSettings:
         raise RuntimeError("boom")
@@ -98,3 +101,21 @@ def test_settings_propagates_unexpected_llm_loader_errors(monkeypatch: pytest.Mo
 
     with pytest.raises(RuntimeError, match="boom"):
         env_module.Settings()
+
+
+def test_pg_settings_support_split_db_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PG settings should build the checkpoint DSN from split DATACLOUD_DB_* vars."""
+    from datacloud_analysis.config.env import PGSettings
+
+    monkeypatch.setenv("DATACLOUD_DB_HOST", "10.10.168.204")
+    monkeypatch.setenv("DATACLOUD_DB_PORT", "5432")
+    monkeypatch.setenv("DATACLOUD_DB_DATABASE", "postgres")
+    monkeypatch.setenv("DATACLOUD_DB_SCHEMA", "byai")
+    monkeypatch.setenv("DATACLOUD_DB_USER", "gaussdb")
+    monkeypatch.setenv("DATACLOUD_DB_PASS", "Admin@123")
+    monkeypatch.setenv("DATACLOUD_DB_TYPE", "opengauss")
+
+    settings = PGSettings()
+
+    assert settings.checkpoint_uri == "postgresql://gaussdb:Admin%40123@10.10.168.204:5432/postgres"
+    assert settings.checkpoint_schema == "byai"

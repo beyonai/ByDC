@@ -3,6 +3,7 @@
 v2 设计：插件从 tool_params["ambiguous_params"] 读取歧义字段列表，
 不再读取 ctx["knowledge_payload"]。
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch

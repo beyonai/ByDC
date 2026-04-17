@@ -47,11 +47,13 @@ class PGSettings(BaseSettings):
 
     checkpoint_uri: str = Field(
         default_factory=build_postgres_connection_uri,
-        description="PostgreSQL DSN derived from DATACLOUD_DB_URL / USER / PASSWORD.",
+        description=(
+            "PostgreSQL DSN derived from DATACLOUD_DB_HOST / PORT / DATABASE / USER / PASS."
+        ),
     )
     checkpoint_schema: str = Field(
         default_factory=resolve_checkpoint_schema,
-        description="Schema inferred from DATACLOUD_DB_URL query params. Defaults to 'public'.",
+        description="Schema inferred from DATACLOUD_DB_SCHEMA. Defaults to 'public'.",
     )
 
     @field_validator("checkpoint_uri")
@@ -59,8 +61,8 @@ class PGSettings(BaseSettings):
     def _validate_checkpoint_uri(cls, value: str) -> str:
         if not value.strip():
             raise ValueError(
-                "Missing DATACLOUD DB env vars: "
-                "DATACLOUD_DB_URL / DATACLOUD_DB_USER / DATACLOUD_DB_PASSWORD"
+                "Missing DATACLOUD DB env vars: DATACLOUD_DB_HOST / DATACLOUD_DB_PORT / "
+                "DATACLOUD_DB_DATABASE / DATACLOUD_DB_USER / DATACLOUD_DB_PASS"
             )
         return value
 

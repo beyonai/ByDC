@@ -3,25 +3,24 @@
 覆盖设计文档 §4.3 单元测试 13 条：
   _extract_content_text / _extract_thinking_text / _is_meaningful_thinking / _emit_thinking_token
 """
+
 from __future__ import annotations
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 # ── 被测目标（尚未实现，导入会失败 → 红）────────────────────────────────────
 from datacloud_analysis.orchestration.execution.react_loop import (
+    _emit_thinking_token,
     _extract_content_text,
     _extract_thinking_text,
     _is_meaningful_thinking,
-    _emit_thinking_token,
 )
-
 
 # ===========================================================================
 # _extract_content_text
 # ===========================================================================
+
 
 class TestExtractContentText:
     # B-TC-04 & 单测1
@@ -79,6 +78,7 @@ class TestExtractContentText:
 # _extract_thinking_text
 # ===========================================================================
 
+
 class TestExtractThinkingText:
     # B-TC-06 & 单测6：str 输入（非 list）→ 返回空
     def test_str_input_returns_empty(self) -> None:
@@ -123,6 +123,7 @@ class TestExtractThinkingText:
 # _is_meaningful_thinking
 # ===========================================================================
 
+
 class TestIsMeaningfulThinking:
     # 单测10：空字符串
     def test_empty_string(self) -> None:
@@ -161,6 +162,7 @@ class TestIsMeaningfulThinking:
 # ===========================================================================
 # _emit_thinking_token
 # ===========================================================================
+
 
 class TestEmitThinkingToken:
     # 单测：gateway 为 None → 不报错

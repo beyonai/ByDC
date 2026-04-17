@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 
 # 过短或客套话前缀，对用户没有信息量的 thinking 内容
 _FILLER_PREFIXES = ("好的", "当然", "根据", "明白", "OK", "Sure", "Of course")
-_MEANINGFUL_THINKING_MIN_LEN = 10   # 少于此字符数的 thinking 直接过滤
-_FILLER_SHORT_THRESHOLD = 30        # 以客套前缀开头且短于此长度则过滤
+_MEANINGFUL_THINKING_MIN_LEN = 10  # 少于此字符数的 thinking 直接过滤
+_FILLER_SHORT_THRESHOLD = 30  # 以客套前缀开头且短于此长度则过滤
 
 
 def _extract_content_text(content: Any) -> str:
@@ -100,9 +100,9 @@ def _is_meaningful_thinking(text: str) -> bool:
         return False
     if len(text) < _MEANINGFUL_THINKING_MIN_LEN:
         return False
-    if len(text) < _FILLER_SHORT_THRESHOLD and any(text.startswith(p) for p in _FILLER_PREFIXES):
-        return False
-    return True
+    return not (
+        len(text) < _FILLER_SHORT_THRESHOLD and any(text.startswith(p) for p in _FILLER_PREFIXES)
+    )
 
 
 async def _emit_thinking_token(gateway_context: Any, token: str, *, message_id: str) -> None:
@@ -119,6 +119,7 @@ async def _emit_thinking_token(gateway_context: Any, token: str, *, message_id: 
         from by_framework import EventType, StreamChunkEvent  # type: ignore
         from by_framework.core.protocol.content_type import SseReasonMessageType  # type: ignore
         from datacloud_data_sdk.stream_text import coerce_stream_chunk_text  # type: ignore
+
         await gateway_context.emit_chunk(
             StreamChunkEvent(content=coerce_stream_chunk_text(token)),
             event_type=EventType.REASONING_LOG_DELTA.value,
@@ -212,7 +213,9 @@ async def _stream_llm_call(
                 # ① 推送 thinking block（MiniMax reasoning_split=true / Claude extended_thinking）
                 _thinking_delta = _extract_thinking_text(chunk.content)
                 if _thinking_delta:
-                    await _emit_thinking_token(gateway_context, _thinking_delta, message_id=thinking_message_id)
+                    await _emit_thinking_token(
+                        gateway_context, _thinking_delta, message_id=thinking_message_id
+                    )
 
                 # ② 推送 LLM content 文字 token（ReAct 思考过程）
                 # 仅在无 tool_call_chunks 时推送：部分模型生成 tool_call 时 content 里会带工具名，
@@ -225,7 +228,9 @@ async def _stream_llm_call(
                 if not _has_tool_calls:
                     _content_delta = _extract_content_text(chunk.content)
                     if _content_delta:
-                        await _emit_stream_token(gateway_context, _content_delta, message_id=thinking_message_id)
+                        await _emit_stream_token(
+                            gateway_context, _content_delta, message_id=thinking_message_id
+                        )
                         # 不设 did_stream_text = True，保证 formatter 仍走 _emit_text → ANSWER_DELTA
 
                 # 实时推送 finish_react.answer 参数的增量内容（→ 答案区 ANSWER_DELTA）
@@ -296,7 +301,10 @@ async def _invoke_llm_with_fallback(
     last_exc: Exception
     try:
         return await stream_llm_call_with_retry(
-            _stream_llm_call, primary_llm_with_tools, messages_window, gateway_context,
+            _stream_llm_call,
+            primary_llm_with_tools,
+            messages_window,
+            gateway_context,
             thinking_message_id=thinking_message_id,
         )
     except Exception as primary_exc:
@@ -308,7 +316,10 @@ async def _invoke_llm_with_fallback(
         try:
             logger.warning("[LLM] 主模型失败，切换到备用模型")
             return await stream_llm_call_with_retry(
-                _stream_llm_call, fallback_llm_with_tools, messages_window, gateway_context,
+                _stream_llm_call,
+                fallback_llm_with_tools,
+                messages_window,
+                gateway_context,
                 thinking_message_id=thinking_message_id,
             )
         except Exception as fallback_exc:
@@ -750,7 +761,9 @@ async def run_react_loop(
     else:
         # 首次执行：初始化messages
         # Prompt Caching：仅 Anthropic 协议支持 cache_control，OpenAI 兼容协议退回纯字符串
-        messages: list = [_build_system_message(system_prompt, stable_system_prompt, dynamic_prompt)]
+        messages: list = [
+            _build_system_message(system_prompt, stable_system_prompt, dynamic_prompt)
+        ]
         conv = _conversation_messages_for_llm(state)
         if conv:
             messages.extend(conv)

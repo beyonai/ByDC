@@ -16,9 +16,8 @@ from __future__ import annotations
 import os
 from unittest.mock import patch
 
-from langchain_core.messages import SystemMessage
-
 from datacloud_analysis.orchestration.execution.react_loop import _build_system_message
+from langchain_core.messages import SystemMessage
 
 _STABLE = "你是一个数据分析助手。\n\n## 执行规则\n规则内容..."
 _DYNAMIC = "\n\n## 当前会话信息\n- 当前时间：2026年04月17日 10:00"
@@ -33,7 +32,9 @@ def test_tc_pc01_anthropic_system_message_has_cache_control() -> None:
         msg = _build_system_message(_FULL, stable_system_prompt=_STABLE, dynamic_prompt=_DYNAMIC)
 
     assert isinstance(msg, SystemMessage)
-    assert isinstance(msg.content, list), f"anthropic 路径 content 应为列表，实际为 {type(msg.content)}"
+    assert isinstance(msg.content, list), (
+        f"anthropic 路径 content 应为列表，实际为 {type(msg.content)}"
+    )
     first_block = msg.content[0]
     assert isinstance(first_block, dict)
     assert first_block.get("type") == "text"
@@ -87,7 +88,9 @@ def test_tc_pc04_openai_system_message_is_plain_string() -> None:
 # TC-PC-05: provider 未配置（默认 openai）→ 同 TC-PC-04
 # ===========================================================================
 def test_tc_pc05_default_provider_is_openai_compatible() -> None:
-    env_without_provider = {k: v for k, v in os.environ.items() if k != "DATACLOUD_LLM_MODEL_PROVIDER"}
+    env_without_provider = {
+        k: v for k, v in os.environ.items() if k != "DATACLOUD_LLM_MODEL_PROVIDER"
+    }
     with patch.dict(os.environ, env_without_provider, clear=True):
         msg = _build_system_message(_FULL, stable_system_prompt=_STABLE, dynamic_prompt=_DYNAMIC)
 
@@ -116,8 +119,7 @@ def test_tc_pc07_anthropic_content_completeness() -> None:
     assert isinstance(msg.content, list)
     full_text = "".join(b.get("text", "") for b in msg.content if isinstance(b, dict))
     assert full_text == _FULL, (
-        f"anthropic 路径内容拼接应与原 system_prompt 相同\n"
-        f"期望: {_FULL!r}\n实际: {full_text!r}"
+        f"anthropic 路径内容拼接应与原 system_prompt 相同\n期望: {_FULL!r}\n实际: {full_text!r}"
     )
 
 

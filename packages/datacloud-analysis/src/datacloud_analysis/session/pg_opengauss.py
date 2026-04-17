@@ -628,11 +628,12 @@ async def get_checkpointer(
     ----------
     checkpoint_uri:
         psycopg-format connection string. Falls back to a DSN built from
-        ``DATACLOUD_DB_URL`` / ``DATACLOUD_DB_USER`` / ``DATACLOUD_DB_PASSWORD``
+        ``DATACLOUD_DB_HOST`` / ``DATACLOUD_DB_PORT`` / ``DATACLOUD_DB_DATABASE`` /
+        ``DATACLOUD_DB_USER`` / ``DATACLOUD_DB_PASS``
         when not provided (e.g. when called directly from ``langgraph.json``).
     checkpoint_schema:
         Schema to use for checkpoint tables. Falls back to the schema inferred
-        from ``DATACLOUD_DB_URL`` when ``None`` (not provided).
+        from ``DATACLOUD_DB_SCHEMA`` when ``None`` (not provided).
         Pass ``""`` to explicitly use the default ``public`` schema without
         reading the environment variable.
     """
@@ -648,10 +649,10 @@ async def get_checkpointer(
 
     if not checkpoint_uri:
         raise RuntimeError(
-            "DATACLOUD_DB_URL is not set. "
-            "Set DATACLOUD_DB_URL / DATACLOUD_DB_USER / DATACLOUD_DB_PASSWORD in .env "
-            "or remove the checkpointer from langgraph.json "
-            "to fall back to in-memory storage."
+            "Database checkpoint env vars are not set. "
+            "Set DATACLOUD_DB_HOST / DATACLOUD_DB_PORT / DATACLOUD_DB_DATABASE / "
+            "DATACLOUD_DB_USER / DATACLOUD_DB_PASS in .env, "
+            "or remove the checkpointer from langgraph.json to fall back to in-memory storage."
         )
 
     logger.info(

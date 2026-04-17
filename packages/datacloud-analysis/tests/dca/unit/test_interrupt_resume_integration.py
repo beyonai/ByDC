@@ -27,7 +27,7 @@ from __future__ import annotations
 import json
 import sys
 import types
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -74,6 +74,7 @@ def _ensure_sdk_context_mock() -> None:  # type: ignore[return]
 # 因此 patch 这个路径能同时覆盖两种加载场景。
 # ---------------------------------------------------------------------------
 
+
 @contextmanager
 def _patch_analyze_query_clarification(mock_result: Any):
     """临时注入 datacloud_knowledge.intent.analyze_query_clarification 的 mock。
@@ -111,10 +112,8 @@ def _patch_analyze_query_clarification(mock_result: Any):
         if had_attr and original is not None:
             intent_mod.analyze_query_clarification = original  # type: ignore[attr-defined]
         else:
-            try:
+            with suppress(AttributeError):
                 delattr(intent_mod, "analyze_query_clarification")
-            except AttributeError:
-                pass
         if created_intent:
             sys.modules.pop(intent_key, None)
         if created_dk:
@@ -238,12 +237,14 @@ async def test_tc27_interrupt_first_call_raises_graph_bubble_up() -> None:
 
     get_tool_hook_plugin_manager.cache_clear()
     try:
-        with _patch_analyze_query_clarification(mock_result):
-            with patch("langgraph.types.interrupt", side_effect=_raising_interrupt):
-                with pytest.raises(GraphBubbleUp):
-                    await dispatch_tool(
-                        tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
-                    )
+        with (
+            _patch_analyze_query_clarification(mock_result),
+            patch("langgraph.types.interrupt", side_effect=_raising_interrupt),
+            pytest.raises(GraphBubbleUp),
+        ):
+            await dispatch_tool(
+                tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
+            )
     finally:
         get_tool_hook_plugin_manager.cache_clear()
 
@@ -291,16 +292,22 @@ async def test_tc27_interrupt_resume_second_call_returns_value_and_tool_receives
 
     get_tool_hook_plugin_manager.cache_clear()
     try:
-        with _patch_analyze_query_clarification(mock_result):
-            with patch("langgraph.types.interrupt", return_value=resume_value):
-                await dispatch_tool(tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None)
+        with (
+            _patch_analyze_query_clarification(mock_result),
+            patch("langgraph.types.interrupt", return_value=resume_value),
+        ):
+            await dispatch_tool(
+                tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
+            )
     finally:
         get_tool_hook_plugin_manager.cache_clear()
 
     assert len(captured_calls) == 1, f"工具应被调用一次，实际：{len(captured_calls)}"
     call = captured_calls[0]
     # resume 后 query 取自 state["user_query"]
-    assert call["query"] == "高效益网格营收利润", f"query 应来自 state.user_query，实际：{call['query']!r}"
+    assert call["query"] == "高效益网格营收利润", (
+        f"query 应来自 state.user_query，实际：{call['query']!r}"
+    )
     assert "营收 → 企业总营收（万元）" in call["contextKnowledge"], (
         f"contextKnowledge 应含字段映射，实际：{call['contextKnowledge']!r}"
     )
@@ -358,9 +365,13 @@ async def test_tc18_query_star_resume_produces_oql_params() -> None:
 
     get_tool_hook_plugin_manager.cache_clear()
     try:
-        with _patch_analyze_query_clarification(mock_result):
-            with patch("langgraph.types.interrupt", return_value=resume_value):
-                await dispatch_tool(tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None)
+        with (
+            _patch_analyze_query_clarification(mock_result),
+            patch("langgraph.types.interrupt", return_value=resume_value),
+        ):
+            await dispatch_tool(
+                tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
+            )
     finally:
         get_tool_hook_plugin_manager.cache_clear()
 
@@ -385,9 +396,7 @@ async def test_tc19_data_query_star_resume_produces_query_and_context_knowledge(
     """TC-19: data_query_* 工具 resume 后收到 query（来自 state.user_query）和 contextKnowledge（字段映射）。"""
     from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
 
-    resume_value = {
-        "paradigmList": [_paradigm_revenue(), _paradigm_profit()]
-    }
+    resume_value = {"paradigmList": [_paradigm_revenue(), _paradigm_profit()]}
     mock_result = _make_clarification_result(
         needs_clarification=True,
         form=json.dumps(resume_value),
@@ -420,9 +429,13 @@ async def test_tc19_data_query_star_resume_produces_query_and_context_knowledge(
 
     get_tool_hook_plugin_manager.cache_clear()
     try:
-        with _patch_analyze_query_clarification(mock_result):
-            with patch("langgraph.types.interrupt", return_value=resume_value):
-                await dispatch_tool(tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None)
+        with (
+            _patch_analyze_query_clarification(mock_result),
+            patch("langgraph.types.interrupt", return_value=resume_value),
+        ):
+            await dispatch_tool(
+                tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
+            )
     finally:
         get_tool_hook_plugin_manager.cache_clear()
 
@@ -474,9 +487,13 @@ async def test_tc19_original_llm_params_are_discarded_on_resume() -> None:
 
     get_tool_hook_plugin_manager.cache_clear()
     try:
-        with _patch_analyze_query_clarification(mock_result):
-            with patch("langgraph.types.interrupt", return_value=resume_value):
-                await dispatch_tool(tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None)
+        with (
+            _patch_analyze_query_clarification(mock_result),
+            patch("langgraph.types.interrupt", return_value=resume_value),
+        ):
+            await dispatch_tool(
+                tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
+            )
     finally:
         get_tool_hook_plugin_manager.cache_clear()
 
@@ -537,9 +554,13 @@ async def test_tc20_compute_star_resume_produces_dimensions_and_metrics() -> Non
 
     get_tool_hook_plugin_manager.cache_clear()
     try:
-        with _patch_analyze_query_clarification(mock_result):
-            with patch("langgraph.types.interrupt", return_value=resume_value):
-                await dispatch_tool(tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None)
+        with (
+            _patch_analyze_query_clarification(mock_result),
+            patch("langgraph.types.interrupt", return_value=resume_value),
+        ):
+            await dispatch_tool(
+                tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
+            )
     finally:
         get_tool_hook_plugin_manager.cache_clear()
 
@@ -586,7 +607,9 @@ async def test_tc20_compute_empty_paradigm_list_produces_empty_dims_metrics() ->
 
     get_tool_hook_plugin_manager.cache_clear()
     try:
-        await dispatch_tool(tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None)
+        await dispatch_tool(
+            tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
+        )
     finally:
         get_tool_hook_plugin_manager.cache_clear()
 
@@ -647,9 +670,13 @@ async def test_tc21_needs_clarification_takes_priority_over_knowledge_injection(
 
     get_tool_hook_plugin_manager.cache_clear()
     try:
-        with _patch_analyze_query_clarification(mock_result):
-            with patch("langgraph.types.interrupt", return_value=resume_value):
-                await dispatch_tool(tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None)
+        with (
+            _patch_analyze_query_clarification(mock_result),
+            patch("langgraph.types.interrupt", return_value=resume_value),
+        ):
+            await dispatch_tool(
+                tool_call=tool_call, tools_map=tools_map, state=state, gateway_context=None
+            )
     finally:
         get_tool_hook_plugin_manager.cache_clear()
 

@@ -6,7 +6,7 @@ import inspect
 import logging
 import os
 from datetime import datetime
-from typing import Any, List
+from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
@@ -52,7 +52,7 @@ def inject_ambiguity_fields(t: BaseTool) -> BaseTool:
         if original_schema is None:
             return t
 
-        NewSchema = create_model(
+        new_schema = create_model(
             f"{original_schema.__name__}WithAmbiguity",
             __base__=original_schema,
             intent_reason=(
@@ -78,17 +78,17 @@ def inject_ambiguity_fields(t: BaseTool) -> BaseTool:
                 ),
             ),
             ambiguous_params=(
-                List[str],
+                list[str],
                 Field(
                     default_factory=list,
                     description=(
-                        "你认为存在歧义或不确定的参数名列表（如 [\"time_range\", \"target_object\"]）。"
+                        '你认为存在歧义或不确定的参数名列表（如 ["time_range", "target_object"]）。'
                         "若所有参数均已明确，填写空列表 []。"
                     ),
                 ),
             ),
         )
-        t.args_schema = NewSchema
+        t.args_schema = new_schema
 
         # 包装 coroutine：调用前剥除三个元字段
         if hasattr(t, "coroutine") and t.coroutine is not None:
@@ -115,9 +115,12 @@ def inject_ambiguity_fields(t: BaseTool) -> BaseTool:
             t.func = _func_strip_ambiguity
 
     except Exception as exc:  # pragma: no cover
-        logger.warning("[inject_ambiguity_fields] failed for tool=%s: %s", getattr(t, "name", "?"), exc)
+        logger.warning(
+            "[inject_ambiguity_fields] failed for tool=%s: %s", getattr(t, "name", "?"), exc
+        )
 
     return t
+
 
 # Set to 1/true/yes to omit ask_user from the execution agent (e.g. local debugging).
 _DISABLE_ASK_USER_TOOL = os.environ.get("DATACLOUD_DISABLE_ASK_USER_TOOL", "1").lower() in (

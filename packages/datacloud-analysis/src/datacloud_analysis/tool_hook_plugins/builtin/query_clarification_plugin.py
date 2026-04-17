@@ -80,7 +80,6 @@ async def _call_query_clarification(
     return await asyncio.to_thread(analyze_query_clarification, user_query)
 
 
-
 async def before_call_back(ctx: HookContext) -> HookDecision | None:
     """层 B 知识增强：读取 LLM 填写的 ambiguous_params，按需触发知识增强或追问中断。
 
@@ -144,13 +143,15 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             paradigm_list = json.loads(form_str).get("paradigmList", [])
         except Exception:
             paradigm_list = []
-        resume_value = interrupt({
-            "prompt": "查询条件存在歧义，请确认查询维度",
-            "reason_code": "PARADIGM_CLARIFICATION",
-            "ask_user_payload": {
-                "paradigmList": paradigm_list,
-            },
-        })
+        resume_value = interrupt(
+            {
+                "prompt": "查询条件存在歧义，请确认查询维度",
+                "reason_code": "PARADIGM_CLARIFICATION",
+                "ask_user_payload": {
+                    "paradigmList": paradigm_list,
+                },
+            }
+        )
         # interrupt 恢复后：重建 tool_params，避免死循环
         _apply_resume_to_params(ctx, tool_name, resume_value, ctx.get("user_query", ""))
         return {"action": "patch", "patch": {"tool_params": dict(ctx["tool_params"])}}

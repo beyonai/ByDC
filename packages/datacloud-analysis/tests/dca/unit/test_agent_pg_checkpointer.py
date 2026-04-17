@@ -25,15 +25,18 @@ def test_get_checkpointer_raises_when_uri_missing(monkeypatch: pytest.MonkeyPatc
     """pg_opengauss.get_checkpointer() should raise RuntimeError if URI is unset."""
     from datacloud_analysis.session.pg_opengauss import get_checkpointer
 
-    monkeypatch.delenv("DATACLOUD_DB_URL", raising=False)
+    monkeypatch.delenv("DATACLOUD_DB_HOST", raising=False)
+    monkeypatch.delenv("DATACLOUD_DB_PORT", raising=False)
+    monkeypatch.delenv("DATACLOUD_DB_DATABASE", raising=False)
+    monkeypatch.delenv("DATACLOUD_DB_SCHEMA", raising=False)
     monkeypatch.delenv("DATACLOUD_DB_USER", raising=False)
-    monkeypatch.delenv("DATACLOUD_DB_PASSWORD", raising=False)
+    monkeypatch.delenv("DATACLOUD_DB_PASS", raising=False)
 
     async def _run() -> None:
         async with get_checkpointer():
             pass
 
-    with pytest.raises(RuntimeError, match="DATACLOUD_DB_URL"):
+    with pytest.raises(RuntimeError, match="DATACLOUD_DB_HOST|DATACLOUD_DB_DATABASE"):
         asyncio.run(_run())
 
 

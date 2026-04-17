@@ -2,17 +2,14 @@
 
 新行为：读取 ambiguous_params 而非 knowledge_payload，按需触发知识增强。
 """
+
 from __future__ import annotations
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
     before_call_back,
-    _is_data_tool,
-    _is_data_query_tool,
 )
 from datacloud_analysis.tool_hook_plugins.types import HookContext
 
@@ -46,6 +43,7 @@ def _make_ctx(
 # A-TC-01：ambiguous_params=[] → 直接跳过，不触发知识增强
 # ---------------------------------------------------------------------------
 
+
 def test_atc01_no_ambiguous_params_skips_clarification() -> None:
     ctx = _make_ctx(ambiguous_params=[])
 
@@ -63,6 +61,7 @@ def test_atc01_no_ambiguous_params_skips_clarification() -> None:
 # ---------------------------------------------------------------------------
 # A-TC-05：元字段被 pop 剔除，tool_params 不含三个元字段
 # ---------------------------------------------------------------------------
+
 
 def test_atc05_meta_fields_popped_from_tool_params() -> None:
     ctx = _make_ctx(
@@ -82,6 +81,7 @@ def test_atc05_meta_fields_popped_from_tool_params() -> None:
 # A-TC-02：ambiguous_params 非空 → 触发 _call_query_clarification
 #          needs_clarification=False → 注入 contextKnowledge
 # ---------------------------------------------------------------------------
+
 
 def test_atc02_ambiguous_triggers_clarification_and_injects_knowledge() -> None:
     ctx = _make_ctx(
@@ -112,6 +112,7 @@ def test_atc02_ambiguous_triggers_clarification_and_injects_knowledge() -> None:
 # A-TC-03：ambiguous_params 非空 + needs_clarification=True → interrupt
 # ---------------------------------------------------------------------------
 
+
 def test_atc03_ambiguous_triggers_interrupt_when_needs_clarification() -> None:
     ctx = _make_ctx(
         tool_name="data_query_grid",
@@ -119,23 +120,24 @@ def test_atc03_ambiguous_triggers_interrupt_when_needs_clarification() -> None:
     )
 
     paradigm_list = [{"name": "营收", "fieldName": "企业总营收（万元）"}]
-    form_json = f'{{"paradigmList": {paradigm_list}}}'
 
     mock_result = MagicMock()
     mock_result.needs_clarification = True
     mock_result.form = '{"paradigmList": [{"name": "营收", "fieldName": "企业总营收（万元）"}]}'
     mock_result.knowledge = ""
 
-    with patch(
-        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin"
-        "._call_query_clarification",
-        new=AsyncMock(return_value=mock_result),
-    ):
-        with patch(
+    with (
+        patch(
+            "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin"
+            "._call_query_clarification",
+            new=AsyncMock(return_value=mock_result),
+        ),
+        patch(
             "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin.interrupt",
             return_value={"paradigmList": paradigm_list},
-        ):
-            result = asyncio.get_event_loop().run_until_complete(before_call_back(ctx))
+        ),
+    ):
+        result = asyncio.get_event_loop().run_until_complete(before_call_back(ctx))
 
     # 追问场景：返回 patch（重建 tool_params）
     assert result is not None
@@ -146,8 +148,10 @@ def test_atc03_ambiguous_triggers_interrupt_when_needs_clarification() -> None:
 # 日志记录：ambiguous_params 信息应写入日志（A-TC-05）
 # ---------------------------------------------------------------------------
 
+
 def test_atc05_log_contains_ambiguous_info(caplog) -> None:
     import logging
+
     ctx = _make_ctx(
         ambiguous_params=["time_range"],
         intent_reason="查本季度营收",
@@ -159,22 +163,26 @@ def test_atc05_log_contains_ambiguous_info(caplog) -> None:
     mock_result.form = ""
     mock_result.knowledge = ""
 
-    with patch(
-        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin"
-        "._call_query_clarification",
-        new=AsyncMock(return_value=mock_result),
+    with (
+        patch(
+            "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin"
+            "._call_query_clarification",
+            new=AsyncMock(return_value=mock_result),
+        ),
+        caplog.at_level(logging.INFO, logger="datacloud_analysis"),
     ):
-        with caplog.at_level(logging.INFO, logger="datacloud_analysis"):
-            asyncio.get_event_loop().run_until_complete(before_call_back(ctx))
+        asyncio.get_event_loop().run_until_complete(before_call_back(ctx))
 
     combined = " ".join(caplog.messages)
-    assert "time_range" in combined or "ambiguous" in combined.lower() or "triggered" in combined, \
+    assert "time_range" in combined or "ambiguous" in combined.lower() or "triggered" in combined, (
         f"日志应包含歧义参数信息，实际日志：{combined}"
+    )
 
 
 # ---------------------------------------------------------------------------
 # 非数据工具：不处理（兼容现有行为）
 # ---------------------------------------------------------------------------
+
 
 def test_non_data_tool_returns_none_with_ambiguous_fields() -> None:
     ctx = _make_ctx(tool_name="send_email", ambiguous_params=["recipient"])
@@ -185,6 +193,7 @@ def test_non_data_tool_returns_none_with_ambiguous_fields() -> None:
 # ---------------------------------------------------------------------------
 # _call_query_clarification 异常：静默降级，返回 None
 # ---------------------------------------------------------------------------
+
 
 def test_clarification_exception_silent_fallback() -> None:
     ctx = _make_ctx(ambiguous_params=["time_range"])
@@ -203,6 +212,7 @@ def test_clarification_exception_silent_fallback() -> None:
 # ---------------------------------------------------------------------------
 # query_* 工具（非 data_query_*）：有歧义时触发澄清，但不注入 contextKnowledge
 # ---------------------------------------------------------------------------
+
 
 def test_query_star_tool_no_context_knowledge_injection() -> None:
     ctx = _make_ctx(

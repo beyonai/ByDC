@@ -27,8 +27,16 @@ if str(_SRC_DIR) not in sys.path:
 
 
 def _load_env_if_needed() -> None:
-    """若 DATACLOUD_DB_URL 未设置，尝试从真实 .env 文件加载。"""
-    if os.getenv("DATACLOUD_DB_URL"):
+    """若尚未提供显式数据库配置，尝试从真实 .env 文件加载。"""
+    if any(
+        os.getenv(name, "").strip()
+        for name in (
+            "DATACLOUD_DB_HOST",
+            "DATACLOUD_DB_DATABASE",
+            "DATACLOUD_DB_USER",
+            "DATACLOUD_DB_PASS",
+        )
+    ):
         return
     for candidate in (_REPO_ROOT / ".env",):
         if not candidate.exists():
@@ -123,7 +131,8 @@ def main() -> None:
         python apply_whale_datacloud.py            # 完整初始化（DDL + Seed）
         python apply_whale_datacloud.py --seed-only  # 仅执行 Seed（幂等，不 drop 表）
 
-    环境变量 DATACLOUD_DB_URL/USER/PASSWORD 可从导出的环境变量或仓库根 .env 提供。
+    环境变量 DATACLOUD_DB_HOST/PORT/DATABASE/SCHEMA/USER/PASS/TYPE
+    可从导出的环境变量或仓库根 .env 提供。
     """
     _load_env_if_needed()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
