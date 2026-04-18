@@ -1,14 +1,14 @@
-"""T9-1 ~ T9-8：field → field_name_cn 改名 + plugin 翻译逻辑验收。
+"""T9-1 ~ T9-8：field 键名（兼容字段编码与中文名）+ plugin 翻译逻辑验收。
 
 覆盖：
-  T9-1  query_* filters.field_name_cn 存在，旧 field 不存在
-  T9-2  compute_* dimensions.field_name_cn 存在，旧 field 不存在
-  T9-3  compute_* metrics.field_name_cn 存在，旧 field 不存在
-  T9-4  query_* / compute_* order_by.field_name_cn 存在，旧 field 不存在
-  T9-5  field_name_cn description 含"中文名"字样
+  T9-1  query_* filters.field 存在，旧 field_name_cn 不存在
+  T9-2  compute_* dimensions.field 存在，旧 field_name_cn 不存在
+  T9-3  compute_* metrics.field 存在，旧 field_name_cn 不存在
+  T9-4  query_* / compute_* order_by.field 存在，旧 field_name_cn 不存在
+  T9-5  field description 含"中文名或字段编码"字样
   T9-6  dimensions / metrics arrays 带 examples（防 JSON string 混淆）
-  T9-7  _collect_terms_from_params 读 field_name_cn
-  T9-8  _apply_resolved_to_params 翻译 field_name_cn → field(field_code)
+  T9-7  _collect_terms_from_params 读 field_name_cn（优先）及 field（fallback）
+  T9-8  _apply_resolved_to_params 翻译 field_name_cn/field → field(field_code)
 """
 
 from __future__ import annotations
@@ -78,11 +78,11 @@ def _compute_fields() -> list[_FakeField]:
     ]
 
 
-# ── T9-1：query_* filters 使用 field_name_cn ─────────────────────────────────
+# ── T9-1：query_* filters 使用 field ─────────────────────────────────────────
 
 
-def test_T9_1_query_filter_item_uses_field_name_cn() -> None:
-    """T9-1：build_query_schema 的 filters.items.oneOf[*].properties 含 field_name_cn，不含旧 field。"""
+def test_T9_1_query_filter_item_uses_field() -> None:
+    """T9-1：build_query_schema 的 filters.items.oneOf[*].properties 含 field，不含 field_name_cn。"""
     from datacloud_data_sdk.virtual_action.generator import build_query_schema
 
     schema = build_query_schema("企业分析", _query_fields())
@@ -90,18 +90,18 @@ def test_T9_1_query_filter_item_uses_field_name_cn() -> None:
 
     for item in filter_items:
         props = item.get("properties", {})
-        assert "field_name_cn" in props, f"filters item 缺少 field_name_cn: {list(props.keys())}"
-        assert "field" not in props, f"filters item 仍含旧 field 键: {list(props.keys())}"
+        assert "field" in props, f"filters item 缺少 field: {list(props.keys())}"
+        assert "field_name_cn" not in props, f"filters item 仍含旧 field_name_cn 键: {list(props.keys())}"
         required = item.get("required", [])
-        assert "field_name_cn" in required, "filters item required 应含 field_name_cn"
-        assert "field" not in required, "filters item required 不应含旧 field"
+        assert "field" in required, "filters item required 应含 field"
+        assert "field_name_cn" not in required, "filters item required 不应含 field_name_cn"
 
 
-# ── T9-2：compute_* dimensions 使用 field_name_cn ────────────────────────────
+# ── T9-2：compute_* dimensions 使用 field ────────────────────────────────────
 
 
-def test_T9_2_compute_dim_item_uses_field_name_cn() -> None:
-    """T9-2：build_compute_schema 的 dimensions.items.oneOf[*].properties 含 field_name_cn，不含旧 field。"""
+def test_T9_2_compute_dim_item_uses_field() -> None:
+    """T9-2：build_compute_schema 的 dimensions.items.oneOf[*].properties 含 field，不含 field_name_cn。"""
     from datacloud_data_sdk.virtual_action.generator import build_compute_schema
 
     schema = build_compute_schema("企业分析", _compute_fields())
@@ -112,21 +112,21 @@ def test_T9_2_compute_dim_item_uses_field_name_cn() -> None:
     assert one_of, "dimensions.items.oneOf 为空"
     for item in one_of:
         props = item.get("properties", {})
-        assert "field_name_cn" in props, f"dimensions item 缺少 field_name_cn: {list(props.keys())}"
-        assert "field" not in props, f"dimensions item 仍含旧 field 键: {list(props.keys())}"
+        assert "field" in props, f"dimensions item 缺少 field: {list(props.keys())}"
+        assert "field_name_cn" not in props, f"dimensions item 仍含 field_name_cn: {list(props.keys())}"
 
 
-# ── T9-3：compute_* metrics 使用 field_name_cn ───────────────────────────────
+# ── T9-3：compute_* metrics 使用 field ───────────────────────────────────────
 
 
-def test_T9_3_compute_metric_item_uses_field_name_cn() -> None:
-    """T9-3：build_compute_schema 的 metrics.items.oneOf 普通指标项含 field_name_cn，不含旧 field。"""
+def test_T9_3_compute_metric_item_uses_field() -> None:
+    """T9-3：build_compute_schema 的 metrics.items.oneOf 普通指标项含 field，不含 field_name_cn。"""
     from datacloud_data_sdk.virtual_action.generator import build_compute_schema
 
     schema = build_compute_schema("企业分析", _compute_fields())
     metric_items = schema["properties"]["metrics"]["items"]["oneOf"]
 
-    # 排除 count_all_item（它不需要 field_name_cn，通过 agg.const 识别）
+    # 排除 count_all_item（它不需要 field，通过 agg.const 识别）
     regular_items = [
         item
         for item in metric_items
@@ -136,15 +136,15 @@ def test_T9_3_compute_metric_item_uses_field_name_cn() -> None:
 
     for item in regular_items:
         props = item.get("properties", {})
-        assert "field_name_cn" in props, f"metrics item 缺少 field_name_cn: {list(props.keys())}"
-        assert "field" not in props, f"metrics item 仍含旧 field 键: {list(props.keys())}"
+        assert "field" in props, f"metrics item 缺少 field: {list(props.keys())}"
+        assert "field_name_cn" not in props, f"metrics item 仍含 field_name_cn: {list(props.keys())}"
 
 
-# ── T9-4：query_* / compute_* order_by 使用 field_name_cn ───────────────────
+# ── T9-4：query_* / compute_* order_by 使用 field ───────────────────────────
 
 
-def test_T9_4_order_by_uses_field_name_cn() -> None:
-    """T9-4：query_* / compute_* 的 order_by.items.properties 含 field_name_cn，不含旧 field。"""
+def test_T9_4_order_by_uses_field() -> None:
+    """T9-4：query_* / compute_* 的 order_by.items.properties 含 field，不含 field_name_cn。"""
     from datacloud_data_sdk.virtual_action.generator import (
         build_compute_schema,
         build_query_schema,
@@ -157,17 +157,19 @@ def test_T9_4_order_by_uses_field_name_cn() -> None:
         ob_schema = schema["properties"].get("order_by", {})
         ob_item = ob_schema.get("items", {})
         ob_props = ob_item.get("properties", {})
-        assert "field_name_cn" in ob_props, (
-            f"order_by item 缺少 field_name_cn: {list(ob_props.keys())}"
+        assert "field" in ob_props, (
+            f"order_by item 缺少 field: {list(ob_props.keys())}"
         )
-        assert "field" not in ob_props, f"order_by item 仍含旧 field: {list(ob_props.keys())}"
+        assert "field_name_cn" not in ob_props, (
+            f"order_by item 仍含 field_name_cn: {list(ob_props.keys())}"
+        )
 
 
-# ── T9-5：field_name_cn description 含"中文名"字样 ───────────────────────────
+# ── T9-5：field description 含"中文名或字段编码"字样 ─────────────────────────
 
 
-def test_T9_5_field_name_cn_description_mentions_chinese_name() -> None:
-    """T9-5：field_name_cn 的 description 须提示"中文名"，引导 LLM 填中文。"""
+def test_T9_5_field_description_mentions_both_formats() -> None:
+    """T9-5：field 的 description 须同时提示中文名和字段编码两种填法均接受。"""
     from datacloud_data_sdk.virtual_action.generator import (
         build_compute_schema,
         build_query_schema,
@@ -176,17 +178,17 @@ def test_T9_5_field_name_cn_description_mentions_chinese_name() -> None:
     # query filters
     q_schema = build_query_schema("企业分析", _query_fields())
     q_filter_item = q_schema["properties"]["filters"]["items"]["oneOf"][0]
-    q_fn_cn_desc = q_filter_item["properties"]["field_name_cn"].get("description", "")
-    assert "中文名" in q_fn_cn_desc, (
-        f"query filters.field_name_cn description 缺少'中文名': {q_fn_cn_desc!r}"
+    q_field_desc = q_filter_item["properties"]["field"].get("description", "")
+    assert "中文名" in q_field_desc or "字段编码" in q_field_desc, (
+        f"query filters.field description 缺少格式说明: {q_field_desc!r}"
     )
 
     # compute dimensions
     c_schema = build_compute_schema("企业分析", _compute_fields())
     c_dim_item = c_schema["properties"]["dimensions"]["items"]["oneOf"][0]
-    c_dim_desc = c_dim_item["properties"]["field_name_cn"].get("description", "")
-    assert "中文名" in c_dim_desc, (
-        f"compute dimensions.field_name_cn description 缺少'中文名': {c_dim_desc!r}"
+    c_dim_desc = c_dim_item["properties"]["field"].get("description", "")
+    assert "中文名" in c_dim_desc or "字段编码" in c_dim_desc, (
+        f"compute dimensions.field description 缺少格式说明: {c_dim_desc!r}"
     )
 
 
@@ -211,13 +213,13 @@ def test_T9_6_arrays_have_examples_to_prevent_json_string_confusion() -> None:
     assert isinstance(mets["examples"][0], list), (
         f"metrics examples[0] 应为 list，实际为 {type(mets['examples'][0])}"
     )
-    # examples 中的 item 必须含 field_name_cn（不是 JSON string）
+    # examples 中的 item 必须含 field（不是 field_name_cn，不是 JSON string）
     dim_example_item = dims["examples"][0][0]
     assert isinstance(dim_example_item, dict), "dimensions examples[0][0] 应为 dict"
-    assert "field_name_cn" in dim_example_item, "dimensions examples[0][0] 应含 field_name_cn"
+    assert "field" in dim_example_item, "dimensions examples[0][0] 应含 field"
 
 
-# ── T9-7：_collect_terms_from_params 读 field_name_cn ────────────────────────
+# ── T9-7：_collect_terms_from_params 读 field_name_cn（优先）及 field（fallback）
 
 
 def test_T9_7_collect_terms_reads_field_name_cn() -> None:

@@ -123,9 +123,9 @@ def _build_exec_zh() -> str:
     parts.extend(
         [
             "## compute 统计工具参数规则\n",
-            "- 调用 compute_{对象编码} 时，`metrics` 数组每项必须包含：`field_name_cn`（字段中文名，如'企业总营收（万元）'）、"
+            "- 调用 compute_{对象编码} 时，`metrics` 数组每项必须包含：`field`（字段中文名如'企业总营收（万元）'或字段编码如 total_revenue，系统自动识别映射）、"
             "**`agg`**（聚合名，如 count、sum、count_distinct）、`as`（结果列别名）。\n",
-            "- metrics 和 dimensions 中指定字段必须使用 `field_name_cn` 键（禁止使用旧键名 `field`）。\n",
+            "- metrics 和 dimensions 中指定字段使用 `field` 键，可填中文名或字段编码，系统自动映射。\n",
             "- 禁止使用 `func` 作为聚合键名；协议与校验只识别 **`agg`**。\n",
             "## 查询工具参数规则\n",
             "- 调用数据查询工具时，query 参数必须是完整的自然语言问题，描述用户真正想查询的内容，例如「查询企业分析表的全部字段」。\n",
