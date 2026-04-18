@@ -5,10 +5,8 @@
 
 from __future__ import annotations
 
-import pytest
-
-
 # ── 辅助：构造最简字段对象 ────────────────────────────────────────────────────
+
 
 class _FakeField:
     def __init__(
@@ -57,6 +55,7 @@ def _make_fields() -> list[_FakeField]:
 
 # ── T1-1：build_query_schema 包含 query(required) + complex_conditions ────────
 
+
 def test_T1_1_query_schema_has_query_and_complex_conditions() -> None:
     """T1-1：query_{code} Schema 包含 query 必填字段和 complex_conditions。"""
     from datacloud_data_sdk.virtual_action.generator import build_query_schema
@@ -82,6 +81,7 @@ def test_T1_1_query_schema_has_query_and_complex_conditions() -> None:
 
 
 # ── T1-2：build_compute_schema 包含 query(required) + MetricItem 扩展 ─────────
+
 
 def test_T1_2_compute_schema_has_query_and_metric_extensions() -> None:
     """T1-2：compute_{code} Schema 包含 query 必填、MetricItem 包含 expr/filters。"""
@@ -132,6 +132,7 @@ def test_T1_2_compute_schema_has_query_and_metric_extensions() -> None:
 
 # ── T1-3：Schema 字段约束放开，允许填中文 ─────────────────────────────────────
 
+
 def test_T1_3_schema_constraints_relaxed() -> None:
     """T1-3：filters.field_name_cn 无 const；select 无 enum；x-dc-field-catalog 保留。"""
     from datacloud_data_sdk.virtual_action.generator import build_query_schema
@@ -144,9 +145,7 @@ def test_T1_3_schema_constraints_relaxed() -> None:
     items = filters_schema.get("items", {})
     for fitem in items.get("oneOf", []):
         fn_cn_prop = fitem.get("properties", {}).get("field_name_cn", {})
-        assert "const" not in fn_cn_prop, (
-            f"filters.field_name_cn 仍含 const 约束: {fn_cn_prop}"
-        )
+        assert "const" not in fn_cn_prop, f"filters.field_name_cn 仍含 const 约束: {fn_cn_prop}"
 
     # select：无 enum 约束
     select_schema = props.get("select", {})
@@ -154,9 +153,7 @@ def test_T1_3_schema_constraints_relaxed() -> None:
     assert "enum" not in select_items, "select.items 仍含 enum 约束，应放开"
 
     # x-dc-field-catalog 保留
-    assert "x-dc-field-catalog" in select_schema, (
-        "select 缺少 x-dc-field-catalog 字段目录"
-    )
+    assert "x-dc-field-catalog" in select_schema, "select 缺少 x-dc-field-catalog 字段目录"
 
     # order_by.field_name_cn 无 enum（已改名）
     order_by = props.get("order_by", {})
@@ -166,6 +163,7 @@ def test_T1_3_schema_constraints_relaxed() -> None:
 
 
 # ── T1-4：inject_query_fields 替代 inject_ambiguity_fields ────────────────────
+
 
 def test_T1_4_inject_query_fields_replaces_inject_ambiguity_fields() -> None:
     """T1-4：inject_query_fields 注入 query/complex_conditions；底层不收到这两个字段。"""
@@ -178,7 +176,8 @@ def test_T1_4_inject_query_fields_replaces_inject_ambiguity_fields() -> None:
         return "ok"
 
     from langchain_core.tools import StructuredTool
-    from pydantic import BaseModel, Field as PydanticField
+    from pydantic import BaseModel
+    from pydantic import Field as PydanticField
 
     class _BaseSchema(BaseModel):
         select: list[str] = PydanticField(default_factory=list)

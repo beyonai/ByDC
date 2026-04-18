@@ -12,7 +12,6 @@ Bug 描述：
 
 from __future__ import annotations
 
-
 # ── T12-1：Prompt 含明确禁止 `field` 键名的规则 ───────────────────────────────
 
 
@@ -70,9 +69,5 @@ def test_T12_3_prohibition_mentions_metrics_and_dimensions() -> None:
             prohibition_line = line
             break
 
-    assert "metrics" in prohibition_line, (
-        f"禁令行应覆盖 metrics，实际：{prohibition_line!r}"
-    )
-    assert "dimensions" in prohibition_line, (
-        f"禁令行应覆盖 dimensions，实际：{prohibition_line!r}"
-    )
+    assert "metrics" in prohibition_line, f"禁令行应覆盖 metrics，实际：{prohibition_line!r}"
+    assert "dimensions" in prohibition_line, f"禁令行应覆盖 dimensions，实际：{prohibition_line!r}"

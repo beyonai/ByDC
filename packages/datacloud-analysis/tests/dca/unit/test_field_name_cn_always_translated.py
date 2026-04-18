@@ -18,8 +18,8 @@ from unittest.mock import patch
 
 import pytest
 
-
 # ── 辅助 ──────────────────────────────────────────────────────────────────────
+
 
 def _make_ctx(tool_name: str, tool_params: dict[str, Any], loader: Any = None) -> dict[str, Any]:
     return {
@@ -35,6 +35,7 @@ def _make_ctx(tool_name: str, tool_params: dict[str, Any], loader: Any = None) -
 
 
 # ── T10-1：loader=None，filters 含 field_name_cn → 必须翻译为 field ─────────
+
 
 @pytest.mark.asyncio
 async def test_T10_1_loader_none_filter_field_name_cn_translated() -> None:
@@ -76,9 +77,7 @@ async def test_T10_1_loader_none_filter_field_name_cn_translated() -> None:
         "Bug: `if catalog and terms:` 短路跳过了 _apply_resolved_to_params"
     )
     # field_name_cn 必须被移除（已翻译，不应残留）
-    assert "field_name_cn" not in f, (
-        f"翻译后 field_name_cn 未被移除，filters[0]={f}"
-    )
+    assert "field_name_cn" not in f, f"翻译后 field_name_cn 未被移除，filters[0]={f}"
     # catalog 为空时，field 值等于原始 field_name_cn（原样透传，至少结构正确）
     assert f["field"] == "管理网格名称", (
         f"catalog 为空时 field 值应等于原始中文名（原样透传），实际={f['field']!r}"
@@ -86,6 +85,7 @@ async def test_T10_1_loader_none_filter_field_name_cn_translated() -> None:
 
 
 # ── T10-2：loader=None，dimensions + metrics 含 field_name_cn → 全部翻译 ─────
+
 
 @pytest.mark.asyncio
 async def test_T10_2_loader_none_dim_and_metric_field_name_cn_translated() -> None:
@@ -99,9 +99,7 @@ async def test_T10_2_loader_none_dim_and_metric_field_name_cn_translated() -> No
         {
             "query": "统计各等级企业数量",
             "dimensions": [{"field_name_cn": "企业等级", "group_op": "direct"}],
-            "metrics": [
-                {"field_name_cn": "企业唯一ID", "agg": "count_distinct", "as": "企业数量"}
-            ],
+            "metrics": [{"field_name_cn": "企业唯一ID", "agg": "count_distinct", "as": "企业数量"}],
             "complex_conditions": [],
         },
         loader=None,
@@ -126,6 +124,7 @@ async def test_T10_2_loader_none_dim_and_metric_field_name_cn_translated() -> No
 
 # ── T10-3：catalog 有值但 field_name_cn 不在 catalog → 原样透传（不崩溃）──
 
+
 @pytest.mark.asyncio
 async def test_T10_3_catalog_populated_unknown_term_passthrough() -> None:
     """T10-3：catalog 有其他字段，但 field_name_cn 值不在 catalog 中 → NEED_CONFIRM 路径。
@@ -133,10 +132,11 @@ async def test_T10_3_catalog_populated_unknown_term_passthrough() -> None:
     NEED_CONFIRM 路径由 interrupt 处理，测试仅验证当 interrupt 返回空结果时
     翻译仍然发生（field_name_cn → field 原样透传），不产生 SQL 语法错误。
     """
+    from unittest.mock import MagicMock
+
     from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
         before_call_back,
     )
-    from unittest.mock import MagicMock
 
     loader = MagicMock()
     f = MagicMock()
@@ -176,12 +176,11 @@ async def test_T10_3_catalog_populated_unknown_term_passthrough() -> None:
 
     # 无论如何，filters[0] 必须有 field 键（不能缺失导致 SQL 语法错误）
     result_f = ctx["tool_params"]["filters"][0]
-    assert "field" in result_f, (
-        f"interrupt 返回空 paradigmList 后仍缺少 field 键: {result_f}"
-    )
+    assert "field" in result_f, f"interrupt 返回空 paradigmList 后仍缺少 field 键: {result_f}"
 
 
 # ── T10-4：无 field_name_cn 的场景不受影响（回归保护）────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_T10_4_no_field_name_cn_no_regression() -> None:
@@ -207,6 +206,4 @@ async def test_T10_4_no_field_name_cn_no_regression() -> None:
         f"空 filters 不应被修改: {ctx['tool_params']['filters']}"
     )
     # 非 complex → 返回 None（CLEAR 放行）
-    assert decision is None or decision.get("action") != "redirect", (
-        "无复杂条件时不应 redirect"
-    )
+    assert decision is None or decision.get("action") != "redirect", "无复杂条件时不应 redirect"

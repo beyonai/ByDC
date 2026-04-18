@@ -170,7 +170,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**/*.py" = ["S101", "S108", "T201", "TRY301"]
+"**/tests/**/*.py" = ["S101", "S108", "T201", "TRY301", "N802"]
 "packages/datacloud-analysis/**/*.py" = [
     "A",
     "ARG",

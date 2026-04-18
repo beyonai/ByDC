@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # ── T14-1：_collect_terms 收集 order_by.field_name_cn ────────────────────────
 
 
@@ -58,9 +57,7 @@ def test_T14_2_apply_resolved_translates_order_by_field_name_cn() -> None:
     assert ob.get("field") == "total_revenue", (
         f"order_by 翻译后 field 应为 total_revenue，实际: {ob}"
     )
-    assert "field_name_cn" not in ob, (
-        f"order_by 翻译后不应保留 field_name_cn: {ob}"
-    )
+    assert "field_name_cn" not in ob, f"order_by 翻译后不应保留 field_name_cn: {ob}"
 
 
 # ── T14-3：_apply_resolved 翻译 having.field_name_cn → field ─────────────────
@@ -85,9 +82,7 @@ def test_T14_3_apply_resolved_translates_having_field_name_cn() -> None:
     assert hv.get("field") == "enterprise_count", (
         f"having 翻译后 field 应为 enterprise_count，实际: {hv}"
     )
-    assert "field_name_cn" not in hv, (
-        f"having 翻译后不应保留 field_name_cn: {hv}"
-    )
+    assert "field_name_cn" not in hv, f"having 翻译后不应保留 field_name_cn: {hv}"
 
 
 # ── T14-4：before_call_back 端到端 order_by 翻译（loader=None 场景）────────────
@@ -117,6 +112,4 @@ def test_T14_4_before_callback_order_by_translated_without_loader() -> None:
     assert ob.get("field") is not None and ob.get("field") != "", (
         f"loader=None 时 order_by field 不应为空，实际: {ob}"
     )
-    assert "field_name_cn" not in ob, (
-        f"翻译后不应保留 field_name_cn: {ob}"
-    )
+    assert "field_name_cn" not in ob, f"翻译后不应保留 field_name_cn: {ob}"

@@ -5,8 +5,8 @@
 
 from __future__ import annotations
 
-
 # ── T2-1：旧元字段规则已移除，新规则存在 ────────────────────────────────────────
+
 
 def test_T2_1_old_meta_fields_removed_new_rules_present() -> None:
     """T2-1：执行 Prompt 不再包含旧三元字段说明，包含 query/complex_conditions 规则。"""
@@ -26,6 +26,7 @@ def test_T2_1_old_meta_fields_removed_new_rules_present() -> None:
 
 
 # ── T2-2：工具命名规则固定，不依赖环境变量 ─────────────────────────────────────
+
 
 def test_T2_2_tool_naming_hint_fixed_not_env_dependent() -> None:
     """T2-2：_get_query_tool_hint_zh 固定返回统一入口提示，不再读 DATACLOUD_ONTOLOGY_LOAD_MODE。"""

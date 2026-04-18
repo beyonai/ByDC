@@ -14,8 +14,6 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
-
 
 # ── 辅助 ──────────────────────────────────────────────────────────────────────
 
@@ -92,12 +90,8 @@ def test_T9_1_query_filter_item_uses_field_name_cn() -> None:
 
     for item in filter_items:
         props = item.get("properties", {})
-        assert "field_name_cn" in props, (
-            f"filters item 缺少 field_name_cn: {list(props.keys())}"
-        )
-        assert "field" not in props, (
-            f"filters item 仍含旧 field 键: {list(props.keys())}"
-        )
+        assert "field_name_cn" in props, f"filters item 缺少 field_name_cn: {list(props.keys())}"
+        assert "field" not in props, f"filters item 仍含旧 field 键: {list(props.keys())}"
         required = item.get("required", [])
         assert "field_name_cn" in required, "filters item required 应含 field_name_cn"
         assert "field" not in required, "filters item required 不应含旧 field"
@@ -118,12 +112,8 @@ def test_T9_2_compute_dim_item_uses_field_name_cn() -> None:
     assert one_of, "dimensions.items.oneOf 为空"
     for item in one_of:
         props = item.get("properties", {})
-        assert "field_name_cn" in props, (
-            f"dimensions item 缺少 field_name_cn: {list(props.keys())}"
-        )
-        assert "field" not in props, (
-            f"dimensions item 仍含旧 field 键: {list(props.keys())}"
-        )
+        assert "field_name_cn" in props, f"dimensions item 缺少 field_name_cn: {list(props.keys())}"
+        assert "field" not in props, f"dimensions item 仍含旧 field 键: {list(props.keys())}"
 
 
 # ── T9-3：compute_* metrics 使用 field_name_cn ───────────────────────────────
@@ -138,19 +128,16 @@ def test_T9_3_compute_metric_item_uses_field_name_cn() -> None:
 
     # 排除 count_all_item（它不需要 field_name_cn，通过 agg.const 识别）
     regular_items = [
-        item for item in metric_items
+        item
+        for item in metric_items
         if item.get("properties", {}).get("agg", {}).get("const") != "count_all"
     ]
     assert regular_items, "没有普通指标项（非 count_all）"
 
     for item in regular_items:
         props = item.get("properties", {})
-        assert "field_name_cn" in props, (
-            f"metrics item 缺少 field_name_cn: {list(props.keys())}"
-        )
-        assert "field" not in props, (
-            f"metrics item 仍含旧 field 键: {list(props.keys())}"
-        )
+        assert "field_name_cn" in props, f"metrics item 缺少 field_name_cn: {list(props.keys())}"
+        assert "field" not in props, f"metrics item 仍含旧 field 键: {list(props.keys())}"
 
 
 # ── T9-4：query_* / compute_* order_by 使用 field_name_cn ───────────────────
@@ -173,9 +160,7 @@ def test_T9_4_order_by_uses_field_name_cn() -> None:
         assert "field_name_cn" in ob_props, (
             f"order_by item 缺少 field_name_cn: {list(ob_props.keys())}"
         )
-        assert "field" not in ob_props, (
-            f"order_by item 仍含旧 field: {list(ob_props.keys())}"
-        )
+        assert "field" not in ob_props, f"order_by item 仍含旧 field: {list(ob_props.keys())}"
 
 
 # ── T9-5：field_name_cn description 含"中文名"字样 ───────────────────────────
@@ -192,13 +177,17 @@ def test_T9_5_field_name_cn_description_mentions_chinese_name() -> None:
     q_schema = build_query_schema("企业分析", _query_fields())
     q_filter_item = q_schema["properties"]["filters"]["items"]["oneOf"][0]
     q_fn_cn_desc = q_filter_item["properties"]["field_name_cn"].get("description", "")
-    assert "中文名" in q_fn_cn_desc, f"query filters.field_name_cn description 缺少'中文名': {q_fn_cn_desc!r}"
+    assert "中文名" in q_fn_cn_desc, (
+        f"query filters.field_name_cn description 缺少'中文名': {q_fn_cn_desc!r}"
+    )
 
     # compute dimensions
     c_schema = build_compute_schema("企业分析", _compute_fields())
     c_dim_item = c_schema["properties"]["dimensions"]["items"]["oneOf"][0]
     c_dim_desc = c_dim_item["properties"]["field_name_cn"].get("description", "")
-    assert "中文名" in c_dim_desc, f"compute dimensions.field_name_cn description 缺少'中文名': {c_dim_desc!r}"
+    assert "中文名" in c_dim_desc, (
+        f"compute dimensions.field_name_cn description 缺少'中文名': {c_dim_desc!r}"
+    )
 
 
 # ── T9-6：dimensions / metrics arrays 带 examples ────────────────────────────
@@ -225,9 +214,7 @@ def test_T9_6_arrays_have_examples_to_prevent_json_string_confusion() -> None:
     # examples 中的 item 必须含 field_name_cn（不是 JSON string）
     dim_example_item = dims["examples"][0][0]
     assert isinstance(dim_example_item, dict), "dimensions examples[0][0] 应为 dict"
-    assert "field_name_cn" in dim_example_item, (
-        "dimensions examples[0][0] 应含 field_name_cn"
-    )
+    assert "field_name_cn" in dim_example_item, "dimensions examples[0][0] 应含 field_name_cn"
 
 
 # ── T9-7：_collect_terms_from_params 读 field_name_cn ────────────────────────
@@ -242,9 +229,7 @@ def test_T9_7_collect_terms_reads_field_name_cn() -> None:
     params: dict[str, Any] = {
         "filters": [{"field_name_cn": "营收", "op": "gt", "value": 100}],
         "dimensions": [{"field_name_cn": "企业等级", "group_op": "direct"}],
-        "metrics": [
-            {"field_name_cn": "企业唯一ID", "agg": "count_distinct", "as": "企业数量"}
-        ],
+        "metrics": [{"field_name_cn": "企业唯一ID", "agg": "count_distinct", "as": "企业数量"}],
     }
 
     terms = _collect_terms_from_params(params)
@@ -297,7 +282,9 @@ def test_T9_8_apply_resolved_translates_field_name_cn_to_field() -> None:
 
     # dimensions
     d = new_params["dimensions"][0]
-    assert d.get("field") == "enterprise_level_name", f"dimensions.field 应为 enterprise_level_name，实际: {d}"
+    assert d.get("field") == "enterprise_level_name", (
+        f"dimensions.field 应为 enterprise_level_name，实际: {d}"
+    )
     assert "field_name_cn" not in d, f"dimensions 翻译后不应保留 field_name_cn: {d}"
 
     # metrics

@@ -13,8 +13,8 @@ Bug 描述：
 
 from __future__ import annotations
 
-
 # ── 辅助 ──────────────────────────────────────────────────────────────────────
+
 
 class _FakeField:
     def __init__(
@@ -63,7 +63,7 @@ def test_T11_1_execution_prompt_no_bare_field_in_metrics_rule() -> None:
     # 精确匹配问题文字
     assert "`field`（字段中文名）" not in prompt, (
         "执行 Prompt 仍含 '`field`（字段中文名）' — LLM 会优先遵循 Prompt 而忽略 Schema 改名\n"
-        f"出现位置: prompts.py compute metrics 规则行"
+        "出现位置: prompts.py compute metrics 规则行"
     )
 
     # 应改为 field_name_cn
@@ -100,10 +100,7 @@ def test_T11_2_msr_item_expr_description_no_bare_field() -> None:
     metric_items = schema["properties"]["metrics"]["items"]["oneOf"]
 
     # 找普通指标项（有 expr 属性的）
-    items_with_expr = [
-        item for item in metric_items
-        if "expr" in item.get("properties", {})
-    ]
+    items_with_expr = [item for item in metric_items if "expr" in item.get("properties", {})]
     assert items_with_expr, "没有含 expr 的 MetricItem"
 
     for item in items_with_expr:
@@ -130,10 +127,7 @@ def test_T11_3_msr_item_filters_description_no_bare_field() -> None:
     schema = build_compute_schema("网格分析", _metric_fields())
     metric_items = schema["properties"]["metrics"]["items"]["oneOf"]
 
-    items_with_filters = [
-        item for item in metric_items
-        if "filters" in item.get("properties", {})
-    ]
+    items_with_filters = [item for item in metric_items if "filters" in item.get("properties", {})]
     assert items_with_filters, "没有含 filters 的 MetricItem"
 
     for item in items_with_filters:
@@ -163,16 +157,15 @@ def test_T11_4_count_all_item_description_no_bare_field() -> None:
 
     # count_all_item: agg 有 const: "count_all"
     count_all_items = [
-        item for item in metric_items
+        item
+        for item in metric_items
         if item.get("properties", {}).get("agg", {}).get("const") == "count_all"
     ]
     assert count_all_items, "没有找到 count_all_item"
 
     for item in count_all_items:
         desc = item.get("description", "")
-        assert "不需要 field" not in desc, (
-            f"count_all description 仍含 '不需要 field': {desc!r}"
-        )
+        assert "不需要 field" not in desc, f"count_all description 仍含 '不需要 field': {desc!r}"
         # 改为 field_name_cn 或表述为"无需指定字段"
         assert "field_name_cn" in desc or "无需指定字段" in desc, (
             f"count_all description 应写 field_name_cn 或'无需指定字段': {desc!r}"
