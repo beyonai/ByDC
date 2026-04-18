@@ -169,14 +169,21 @@ def build_paradigm_list(
     # 收集需要澄清的 keyword 集合
     clarify_keywords = {ci.keyword for ci in confirmed.clarify_items}
 
-    # paradigmId=1: 查询值
+    # paradigmId=1: 查询值（按 raw_text 去重，同名术语合并 path）
     select_result: list[dict[str, Any]] = []
     kid = 0
+    seen_select: dict[str, int] = {}  # raw_text → kid，用于去重 + path 合并
     select_terms = [t for t in terms if t.ktype == "select" and t.source == "main"]
     for term in select_terms:
         if term.raw_text in clarify_keywords:
             continue
+        if term.raw_text in seen_select:
+            # 同名术语：追加 path（逗号分隔），不生成新行
+            existing_kid = seen_select[term.raw_text]
+            path_mapping[str(existing_kid)] += f",{term.path}"
+            continue
         kid += 1
+        seen_select[term.raw_text] = kid
         key = f"{term.ktype}:{term.raw_text}"
         candidates = recall_map.get(key, [])
         recall_names = [str(c.get("term_name", "")) for c in candidates[:5]]
@@ -192,21 +199,30 @@ def build_paradigm_list(
         path_mapping[str(kid)] = term.path
         select_result.append(item)
 
-    # clarify_items → 加入对应 paradigm
+    # clarify_items → 按 source 分发到对应 paradigm（延迟追加，先收集）
+    _clarify_for_group: list[dict[str, Any]] = []
+    _clarify_for_filter: list[dict[str, Any]] = []
+    _clarify_for_order: list[dict[str, Any]] = []
     for ci in confirmed.clarify_items:
         kid += 1
-        target = select_result  # 默认 select
-        ktype = ci.source or "select"
-        target.append(
-            {
-                "keyword": ci.keyword,
-                "recall": ci.candidates,
-                "kid": kid,
-                "ktype": ktype,
-                "source": ci.source,
-            }
-        )
+        ci_source = ci.source or "select"
+        ci_item: dict[str, Any] = {
+            "keyword": ci.keyword,
+            "recall": ci.candidates,
+            "kid": kid,
+            "ktype": ci_source,
+            "source": ci.source,
+        }
         path_mapping[str(kid)] = ci.path
+        if ci_source in ("where", "whereKey", "whereValue"):
+            _clarify_for_filter.append(ci_item)
+        elif ci_source in ("group_by", "groupBy"):
+            _clarify_for_group.append(ci_item)
+        elif ci_source in ("order_by", "orderBy"):
+            _clarify_for_order.append(ci_item)
+        else:
+            # select 或未知 → 默认查询值
+            select_result.append(ci_item)
 
     # paradigmId=2: 分组条件
     group_result: list[dict[str, Any]] = []
@@ -225,6 +241,7 @@ def build_paradigm_list(
             item["choiceKeyword"] = recall_names[0]
         path_mapping[f"g{i}"] = term.path
         group_result.append(item)
+    group_result.extend(_clarify_for_group)
 
     # paradigmId=3: 过滤条件
     filter_result: list[dict[str, Any]] = []
@@ -245,6 +262,7 @@ def build_paradigm_list(
                     "ktype": "complexCondition",
                 }
             )
+    filter_result.extend(_clarify_for_filter)
 
     # paradigmId=4: 排序目标
     order_result: list[dict[str, Any]] = []
@@ -263,6 +281,7 @@ def build_paradigm_list(
             item["choiceKeyword"] = recall_names[0]
         path_mapping[f"o{i}"] = term.path
         order_result.append(item)
+    order_result.extend(_clarify_for_order)
 
     # paradigmId=5: 统计函数（空）
     agg_result: list[dict[str, Any]] = []
