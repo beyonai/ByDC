@@ -205,7 +205,7 @@ def _build_confirm_user_prompt(
 def llm_confirm(
     original_question: str,
     expanded_query: str,
-    state: Any,
+    recall_context: str,
     on_event: Callable[[Any], None] | None = None,
 ) -> ConfirmedQuery | None:
     """基于召回结果，调 LLM 生成真实 schema 的确认查询。
@@ -213,16 +213,12 @@ def llm_confirm(
     Args:
         original_question: 用户原始查询。
         expanded_query: NatQuery 展开后的查询文本。
-        state: ParadigmResolutionState（含 items + candidates）。
+        recall_context: 外部构建的召回上下文文本。
         on_event: 可选回调，接收 StreamEvent 实例。
 
     Returns:
         ConfirmedQuery 实例，LLM 失败时返回 None。
     """
-    items = getattr(state, "items", [])
-    dim_hints = getattr(state, "dimension_value_hints", None)
-    recall_context = _format_recall_context(items, dimension_value_hints=dim_hints)
-
     if not recall_context.strip():
         logger.info("[llm_confirm] 召回结果为空，跳过 LLM 确认")
         return None

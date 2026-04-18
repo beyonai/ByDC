@@ -61,19 +61,23 @@ async def _call_query_clarification(
 ) -> Any:
     """调用知识增强/澄清接口，返回结构化结果。
 
-    返回对象应含：
+    analyze_query_clarification 签名为 (query, on_event=None)，内部自行完成
+    NL→展开→召回→LLM确认全流程，不接受 ambiguous_params/tool_name/tool_params。
+    这三个字段仅供 plugin 层判断是否触发，不透传给底层函数。
+
+    analyze_query_clarification 是同步函数，通过 asyncio.to_thread 在线程池执行，
+    避免阻塞 async 事件循环。
+
+    返回对象（ClarificationResult）含：
     - needs_clarification: bool
     - form: str（JSON 格式的追问表单，needs_clarification=True 时有效）
     - knowledge: str（知识摘要，needs_clarification=False 时有效）
     """
+    import asyncio  # noqa: PLC0415
+
     from datacloud_knowledge.intent import analyze_query_clarification  # type: ignore[import]
 
-    return await analyze_query_clarification(
-        user_query,
-        ambiguous_params=ambiguous_params,
-        tool_name=tool_name,
-        tool_params=tool_params,
-    )
+    return await asyncio.to_thread(analyze_query_clarification, user_query)
 
 
 async def before_call_back(ctx: HookContext) -> HookDecision | None:

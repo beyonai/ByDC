@@ -85,6 +85,83 @@ def _to_json(obj: Any) -> str:
     return json.dumps(obj, ensure_ascii=False)
 
 
+# ---------------------------------------------------------------------------
+# Thinking 关键字本地化 — 将 SQL/schema 英文关键字替换为中文
+# ---------------------------------------------------------------------------
+
+# 完整关键字 → 中文（长词优先匹配）
+_KW_TABLE: dict[str, str] = {
+    "group_by": "分组",
+    "order_by": "排序",
+    "field_alias": "字段别名",
+    "select": "查询字段",
+    "where": "筛选条件",
+    "limit": "行数限制",
+    "query": "查询",
+    "expr": "表达式",
+    "alias": "别名",
+    "field": "字段",
+    "value": "值",
+    "op": "运算符",
+}
+
+# 所有关键字集合（小写），用于判断尾部 token
+_KW_SET: set[str] = {k.lower() for k in _KW_TABLE}
+
+# 可能变成更长关键字的 token（含完整短关键字，如 field → field_alias）
+_KW_GROWABLE: set[str] = set()
+for _kw in _KW_TABLE:
+    for _i in range(1, len(_kw)):
+        prefix = _kw[:_i].lower()
+        # 这个前缀可以长成更长的关键字
+        _KW_GROWABLE.add(prefix)
+
+# 单次正则：匹配所有关键字（长词优先）
+# 使用 ASCII 词边界（(?<![A-Za-z_]) / (?![A-Za-z_])）而非 \b，
+# 因为 Python re 的 \b 将中文字符视为 \w，导致 "where里" 中 \bwhere\b 不匹配。
+_ASCII_LB = r"(?<![A-Za-z_])"  # ASCII left boundary
+_ASCII_RB = r"(?![A-Za-z_])"  # ASCII right boundary
+_KW_PATTERN = re.compile(
+    _ASCII_LB
+    + "("
+    + "|".join(re.escape(k) for k in sorted(_KW_TABLE, key=len, reverse=True))
+    + ")"
+    + _ASCII_RB,
+    re.IGNORECASE,
+)
+
+# 尾部英文 token（含下划线）：可能是未完成的关键字
+_TRAILING_TOKEN_RE = re.compile(r"[A-Za-z_]+$")
+
+
+def _localize_thinking(text: str) -> tuple[str, str]:
+    """将 thinking 文本中的 SQL/schema 英文关键字替换为中文。
+
+    Returns:
+        (safe, pending): safe 是可以安全输出的部分，pending 是尾部可能未完成的 token。
+    """
+    # 检查尾部是否有未完成的英文 token，且它是某个关键字的严格前缀
+    m = _TRAILING_TOKEN_RE.search(text)
+    if m:
+        tail = m.group().lower()
+        # pending 条件：tail 是某个关键字的严格前缀，后续 chunk 可能让它变成完整关键字
+        # 包括 tail 本身是完整短关键字但也是更长关键字前缀的情况（如 field → field_alias）
+        if tail in _KW_GROWABLE:
+            safe_text = text[: m.start()]
+            pending = text[m.start() :]
+        else:
+            safe_text = text
+            pending = ""
+    else:
+        safe_text = text
+        pending = ""
+
+    replaced = _KW_PATTERN.sub(
+        lambda match: _KW_TABLE.get(match.group().lower(), match.group()), safe_text
+    )
+    return replaced, pending
+
+
 def stream_invoke_with_thinking(
     llm_with_tool: Any,
     messages: list[dict[str, str]],
@@ -110,24 +187,50 @@ def stream_invoke_with_thinking(
     from .types import StreamEvent, StreamEventKind
 
     full = None
+    thinking_acc = ""  # 累积原始 thinking，统一两种格式为累积式
+    prev_emitted = ""  # 上次 emit 的安全文本，用于累积式 content
     for chunk in llm_with_tool.stream(messages):
-        thinking = ""
-
+        raw_delta = ""
         # Anthropic 格式: content 是 list，含 thinking block
         if isinstance(chunk.content, list):
             for block in chunk.content:
                 if isinstance(block, dict) and block.get("type") == "thinking":
-                    thinking = block.get("thinking", "")
+                    raw = block.get("thinking", "")
+                    if raw:
+                        # 判断是累积式还是增量式：如果 raw 以 thinking_acc 开头，则是累积式
+                        if raw.startswith(thinking_acc) and len(raw) > len(thinking_acc):
+                            raw_delta = raw[len(thinking_acc) :]
+                            thinking_acc = raw
+                        else:
+                            # 增量式：直接追加
+                            raw_delta = raw
+                            thinking_acc += raw
                     break
+        else:
+            # OpenAI 格式: reasoning_content 是增量的，手动累积
+            raw_delta = chunk.additional_kwargs.get("reasoning_content", "")
+            if raw_delta:
+                thinking_acc += raw_delta
 
-        # OpenAI 格式: additional_kwargs 里的 reasoning_content
-        if not thinking:
-            thinking = chunk.additional_kwargs.get("reasoning_content", "")
-
-        if thinking:
-            on_event(StreamEvent(kind=StreamEventKind.THINKING, content=thinking))
+        if thinking_acc:
+            safe, _pending = _localize_thinking(thinking_acc)
+            if safe != prev_emitted:
+                on_event(
+                    StreamEvent(
+                        kind=StreamEventKind.THINKING,
+                        content=safe,
+                    )
+                )
+                prev_emitted = safe
 
         full = chunk if full is None else full + chunk
+
+    # 流结束，flush 尾部 pending（不再有后续 chunk，直接替换输出）
+    if thinking_acc:
+        final = _KW_PATTERN.sub(lambda m: _KW_TABLE.get(m.group().lower(), m.group()), thinking_acc)
+        if final != prev_emitted:
+            on_event(StreamEvent(kind=StreamEventKind.THINKING, content=final))
+
     return full
 
 
