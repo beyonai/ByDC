@@ -17,6 +17,16 @@ if os.getenv("DATACLOUD_INTENT_DEBUG", "0").strip().lower() in {"1", "true", "ye
 from .cache import UserNameCache
 from .clarification import analyze_query_clarification
 from .disambiguation import build_shortest_path_tree, disambiguate
+from .llm_confirm import (
+    ConfirmedGroupBy,
+    ConfirmedOrderBy,
+    ConfirmedQuery,
+    ConfirmedSelectExpr,
+    ConfirmedWhereClause,
+    DimensionFilter,
+    semantic_to_display,
+    semantic_to_sql_expr,
+)
 from .matching import match_mentions, match_mentions_with_search
 from .natquery import NatQuery, SelectExpr, WhereClause, expand_query, natquery_to_five_stage
 from .paradigm_builder import (
@@ -66,6 +76,12 @@ __all__ = [
     "ORDER_BY_KEY",
     "QUERY_TARGETS_KEY",
     "ClarificationResult",
+    "ConfirmedGroupBy",
+    "ConfirmedOrderBy",
+    "ConfirmedQuery",
+    "ConfirmedSelectExpr",
+    "ConfirmedWhereClause",
+    "DimensionFilter",
     "DisambiguationResult",
     "MatchCandidate",
     "MatchResult",
@@ -104,6 +120,8 @@ __all__ = [
     "match_mentions_with_search",
     "natquery_to_five_stage",
     "search_all_candidates_with_name_id",
+    "semantic_to_display",
+    "semantic_to_sql_expr",
     "store_clarification_results",
     "typed_multi_recall_with_session",
     "update_score",

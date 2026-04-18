@@ -18,7 +18,13 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from .llm_confirm import ConfirmedQuery, _format_recall_context, llm_confirm
+from .llm_confirm import (
+    ConfirmedQuery,
+    _format_recall_context,
+    llm_confirm,
+    semantic_to_display,
+    semantic_to_sql_expr,
+)
 from .llm_utils import EventEmitter
 from .natquery import expand_query, natquery_to_five_stage
 from .paradigm_builder import build_paradigm_resolution_state, five_stage_keys_from_raw
@@ -37,7 +43,13 @@ def _serialize_payload(payload: Mapping[str, Any] | None) -> str:
 
 
 def _confirmed_query_to_paradigm_list(cq: ConfirmedQuery) -> list[dict[str, Any]]:
-    """将 ConfirmedQuery 转为 paradigmList 格式（兼容前端协议）。"""
+    """将 ConfirmedQuery 转为 paradigmList 格式（兼容前端协议）。
+
+    语义化 SELECT 项会同时输出：
+    - choiceKeyword: 还原后的 SQL 表达式（供下游执行）
+    - displayText: 用户可读的语义化描述（供前端展示）
+    - semantic: 结构化语义组件（供前端编辑/还原）
+    """
     # 收集需要澄清的 keyword 集合，用于避免重复
     clarify_keywords = {ci.keyword for ci in cq.clarify_items}
 
@@ -46,15 +58,24 @@ def _confirmed_query_to_paradigm_list(cq: ConfirmedQuery) -> list[dict[str, Any]
     select_result: list[dict[str, Any]] = []
     kid = 0
     for s in cq.select:
-        original = s.original_keyword or s.expr
+        original = s.original_keyword or s.measure
         if original in clarify_keywords:
             continue  # 会在 clarify_items 中展示，跳过
         kid += 1
+        sql_expr = semantic_to_sql_expr(s)
+        display_text = semantic_to_display(s)
         select_result.append(
             {
                 "keyword": original,
-                "recall": [s.expr] if s.expr != original else [],
-                "choiceKeyword": s.expr,
+                "recall": [sql_expr] if sql_expr != original else [],
+                "choiceKeyword": sql_expr,
+                "displayText": display_text,
+                "semantic": {
+                    "measure": s.measure,
+                    "denominator": s.denominator,
+                    "agg_func": s.agg_func,
+                    "filters": [f.model_dump() for f in s.filters],
+                },
                 "kid": kid,
                 "ktype": "select",
             }
@@ -62,18 +83,27 @@ def _confirmed_query_to_paradigm_list(cq: ConfirmedQuery) -> list[dict[str, Any]
     # clarify 项 — 展示候选列表供用户选择
     for ci in cq.clarify_items:
         kid += 1
-        select_result.append(
+        target_list = select_result  # 默认放 select
+        ktype = ci.source or "select"
+        target_list.append(
             {
                 "keyword": ci.keyword,
                 "recall": ci.candidates,
                 "kid": kid,
-                "ktype": "select",
+                "ktype": ktype,
+                "source": ci.source,
             }
         )
 
     # paradigmId=2: 分组条件 (GROUP BY)
     group_result = [
-        {"keyword": g, "recall": [], "kid": i, "ktype": "groupBy"}
+        {
+            "keyword": g.original_keyword or g.field,
+            "choiceKeyword": g.field,
+            "recall": [g.field] if g.original_keyword and g.original_keyword != g.field else [],
+            "kid": i,
+            "ktype": "groupBy",
+        }
         for i, g in enumerate(cq.group_by, start=1)
     ]
 
@@ -84,20 +114,32 @@ def _confirmed_query_to_paradigm_list(cq: ConfirmedQuery) -> list[dict[str, Any]
             display_value = ", ".join(str(v) for v in w.value)
         else:
             display_value = str(w.value)
+        # field: 展示名（用户原文 > 真实字段名）
+        # fieldRecall: 真实字段名候选（展示名≠真实名时才填）
+        display_field = w.original_field_keyword or w.field
+        field_recall: list[str] = [w.field] if display_field != w.field else []
+        # value: 展示值（用户原文 > 实际值）
+        display_val = w.original_value_keyword or display_value
+        value_recall: list[str] = [display_value] if display_val != display_value else []
         filter_result.append(
             {
-                "type": "predicate",
-                "field": w.field,
-                "fieldRecall": [],
+                "field": display_field,
+                "fieldRecall": field_recall,
                 "comparison": w.op if w.op != "=" else "eq",
-                "value": display_value,
-                "valueRecall": [],
+                "value": display_val,
+                "valueRecall": value_recall,
             }
         )
 
     # paradigmId=4: 排序目标
     order_result = [
-        {"keyword": o, "recall": [], "kid": i, "ktype": "orderBy"}
+        {
+            "keyword": o.original_keyword or o.field,
+            "choiceKeyword": f"{o.field} {o.direction}",
+            "recall": [o.field] if o.original_keyword and o.original_keyword != o.field else [],
+            "kid": i,
+            "ktype": "orderBy",
+        }
         for i, o in enumerate(cq.order_by, start=1)
     ]
 
@@ -208,11 +250,37 @@ def analyze_query_clarification(
 
         emit.result(
             {
-                "select": [s.expr for s in confirmed.select],
-                "where": [
-                    {"field": w.field, "op": w.op, "value": w.value} for w in confirmed.where
+                "select": [
+                    {
+                        "measure": s.measure,
+                        "agg_func": s.agg_func,
+                        "filters": [f.model_dump() for f in s.filters],
+                        "sql_expr": semantic_to_sql_expr(s),
+                    }
+                    for s in confirmed.select
                 ],
-                "group_by": confirmed.group_by,
+                "where": [
+                    {
+                        "field": w.field,
+                        "op": w.op,
+                        "value": w.value,
+                        "original_field_keyword": w.original_field_keyword,
+                        "original_value_keyword": w.original_value_keyword,
+                    }
+                    for w in confirmed.where
+                ],
+                "group_by": [
+                    {"field": g.field, "original_keyword": g.original_keyword}
+                    for g in confirmed.group_by
+                ],
+                "order_by": [
+                    {
+                        "field": o.field,
+                        "direction": o.direction,
+                        "original_keyword": o.original_keyword,
+                    }
+                    for o in confirmed.order_by
+                ],
                 "needs_clarification": confirmed.needs_clarification,
             }
         )
