@@ -123,14 +123,13 @@ def _get_field_catalog(
         # 尝试作为视图加载
         try:
             view = loader.get_view(scope_code)
-            for obj in getattr(view, "objects", []):
-                for f in getattr(obj, "fields", []):
-                    code = getattr(f, "field_code", None) or getattr(f, "property_code", None)
-                    name = getattr(f, "field_name", None) or getattr(f, "property_name", None)
-                    if code:
-                        catalog[code] = code
-                        if name and name != code:
-                            catalog[name] = code
+            for f in getattr(view, "fields", []):
+                code = getattr(f, "field_code", None) or getattr(f, "property_code", None)
+                name = getattr(f, "field_name", None) or getattr(f, "property_name", None)
+                if code:
+                    catalog[code] = code
+                    if name and name != code:
+                        catalog[name] = code
         except Exception:  # noqa: BLE001
             pass
 
