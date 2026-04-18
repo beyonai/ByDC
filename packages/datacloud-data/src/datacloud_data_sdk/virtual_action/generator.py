@@ -3,8 +3,8 @@
 为 lookup / analyze / search 三种动作族生成符合设计规范的 JSON Schema 及 Markdown 描述。
 
 协议版本（§3.2.2 / §3.2.3 字段映射版）：
-- dimensions[i].field / metrics[i].field / filters[i].field / select / order_by.field
-  支持 field_code（字段编码）或中文名，系统自动映射；不确定时优先填中文业务术语。
+- dimensions[i].field_name_cn / metrics[i].field_name_cn / filters[i].field_name_cn / select / order_by.field_name_cn
+  支持字段中文名（优先）或 field_code（字段编码），系统自动映射；不确定时优先填中文业务术语。
 """
 
 from __future__ import annotations
@@ -162,7 +162,7 @@ def _build_filters_schema(fields: list[Any]) -> dict[str, Any]:
         return {"type": "array", "items": {"type": "object"}, "description": "过滤条件列表"}
     return {
         "type": "array",
-        "description": "过滤条件列表，field 填字段编码（field_code）",
+        "description": "过滤条件列表，field_name_cn 填字段中文名",
         "items": {"oneOf": [_filter_item_schema(f) for f in filterable]},
         "x-dc-filterable-fields": [
             {
@@ -212,10 +212,10 @@ def build_query_schema(
     fields: list[Any],
     required_filter_groups: list[str] | None = None,
 ) -> dict[str, Any]:
-    """生成 query_ontology 动作 inputSchema（field 支持 field_code 或中文名）。
+    """生成 query_ontology 动作 inputSchema（field_name_cn 填字段中文名）。
 
     协议（§3.1 字段映射版）：
-    - select / filters.field / order_by.field 支持 field_code 或中文名，系统自动映射
+    - select / filters.field_name_cn / order_by.field_name_cn 填字段中文名，系统自动映射
     - 自动排除 property_kind=linked 的跨表关联字段
     - 支持 filter_relation 参数（AND/OR）
     """
@@ -227,7 +227,7 @@ def build_query_schema(
 
     schema: dict[str, Any] = {
         "type": "object",
-        "description": f"查询 {scope_name} 明细数据（field 填字段编码或中文名）{required_hint}",
+        "description": f"查询 {scope_name} 明细数据（field_name_cn 填字段中文名）{required_hint}",
         "properties": {
             "query": {
                 "type": "string",
@@ -264,13 +264,13 @@ def build_query_schema(
             },
             "order_by": {
                 "type": "array",
-                "description": "排序规则（field 填字段编码或中文名）",
+                "description": "排序规则（field_name_cn 填字段中文名或字段编码）",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "field": {
+                        "field_name_cn": {
                             "type": "string",
-                            "description": "字段编码或中文名，系统自动映射",
+                            "description": "字段中文名或字段编码，系统自动映射",
                         },
                         "direction": {
                             "type": "string",
@@ -278,7 +278,7 @@ def build_query_schema(
                             "default": "asc",
                         },
                     },
-                    "required": ["field"],
+                    "required": ["field_name_cn"],
                 },
             },
             "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 100},
@@ -368,16 +368,15 @@ def build_compute_schema(
             "type": "object",
             "description": f"{fname}（{fcode}）[{getattr(f, 'analytic_role', '')}-{kind}] 分组维度",
             "properties": {
-                "field": {
+                "field_name_cn": {
                     "type": "string",
                     "description": (
-                        f"可填字段编码 '{fcode}' 或中文名 '{fname}'，系统自动映射；"
-                        "不确定时优先填中文业务术语，由系统识别。"
+                        f"字段中文名，如 '{fname}'；也可填字段编码 '{fcode}'，系统自动识别。"
                     ),
                 },
                 "group_op": {"type": "string", "enum": gops, "description": "分组方式"},
             },
-            "required": ["field", "group_op"],
+            "required": ["field_name_cn", "group_op"],
         }
         if "range" in gops:
             item["properties"]["buckets"] = {
@@ -411,11 +410,10 @@ def build_compute_schema(
                 f"{fname}（{fcode}）[{getattr(f, 'analytic_role', '')}-{getattr(f, 'analytic_kind', '')}] 统计指标"
             ),
             "properties": {
-                "field": {
+                "field_name_cn": {
                     "type": "string",
                     "description": (
-                        f"可填字段编码 '{fcode}' 或中文名 '{fname}'，系统自动映射（与 expr 互斥）；"
-                        "不确定时优先填中文业务术语，由系统识别。"
+                        f"字段中文名，如 '{fname}'；也可填字段编码 '{fcode}'，与 expr 互斥。"
                     ),
                 },
                 "expr": {
@@ -479,10 +477,13 @@ def build_compute_schema(
             },
             "dimensions": {
                 "type": "array",
-                "description": "分组维度（field 填字段编码或中文名；时间类须指定粒度；range 须带 buckets）",
+                "description": "分组维度（field_name_cn 填字段中文名；时间类须指定粒度；range 须带 buckets）",
                 "items": {"oneOf": [_dim_item(f) for f in dim_fields]}
                 if dim_fields
                 else {"type": "object"},
+                "examples": [
+                    [{"field_name_cn": "企业等级", "group_op": "direct"}]
+                ],
                 "x-dc-dimension-fields": [
                     {
                         "field": _fc(f),
@@ -495,9 +496,12 @@ def build_compute_schema(
             },
             "metrics": {
                 "type": "array",
-                "description": "统计指标（field 填字段编码或中文名；至少一个；可用 count_all 统计行数）",
+                "description": "统计指标（field_name_cn 填字段中文名；至少一个；可用 count_all 统计行数）",
                 "items": {"oneOf": metrics_items},
                 "minItems": 1,
+                "examples": [
+                    [{"field_name_cn": "企业总营收（万元）", "agg": "sum", "as": "总营收"}]
+                ],
                 "x-dc-measure-fields": [
                     {
                         "field": _fc(f),
@@ -511,11 +515,11 @@ def build_compute_schema(
             "filters": filters_schema,
             "having": {
                 "type": "array",
-                "description": "聚合后过滤；field 必须是 metrics 中某项的 as 别名",
+                "description": "聚合后过滤；field_name_cn 必须是 metrics 中某项的 as 别名",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "field": {"type": "string", "description": "metrics.as 别名"},
+                        "field_name_cn": {"type": "string", "description": "metrics.as 别名"},
                         "op": {
                             "type": "string",
                             "enum": ["eq", "gt", "gte", "lt", "lte", "between"],
@@ -532,23 +536,23 @@ def build_compute_schema(
                             ]
                         },
                     },
-                    "required": ["field", "op", "value"],
+                    "required": ["field_name_cn", "op", "value"],
                 },
             },
             "order_by": {
                 "type": "array",
-                "description": "排序（field 可以是 metrics.as 别名或维度字段编码/中文名）",
+                "description": "排序（field_name_cn 可以是 metrics.as 别名或维度字段中文名/编码）",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "field": {"type": "string"},
+                        "field_name_cn": {"type": "string"},
                         "direction": {
                             "type": "string",
                             "enum": ["asc", "desc"],
                             "default": "desc",
                         },
                     },
-                    "required": ["field"],
+                    "required": ["field_name_cn"],
                 },
             },
             "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 100},
