@@ -172,6 +172,26 @@ def snake_to_camel(name: str) -> str:
     return components[0] + "".join(x.title() for x in components[1:])
 
 
+def _extract_text_from_chunk(chunk: Any) -> str:
+    """Extract plain text from an LLM streaming chunk.
+
+    Handles both string content (OpenAI / standard) and list-of-blocks format
+    (Anthropic with reasoning_split / extended_thinking enabled).
+    """
+    content = chunk.content if hasattr(chunk, "content") else str(chunk)
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text", "")))
+        return "".join(parts)
+    return str(content) if content is not None else ""
+
+
 def parse_json_response(content: str) -> dict[str, Any]:
     """从 LLM 响应中提取 JSON。"""
     content = content.strip()
@@ -489,9 +509,11 @@ class PlanAgent:
             await reporter.on_plan_generating(question)
 
         # 流式调用 LLM，逐 token 推送进度
+        # chunk.content 可能是字符串（OpenAI/普通 Anthropic）或内容块列表
+        # （Anthropic 开启 reasoning_split/extended_thinking 时返回 list of blocks）
         chunks: list[str] = []
         async for chunk in llm.astream(messages):
-            token = chunk.content if hasattr(chunk, "content") else str(chunk)
+            token = _extract_text_from_chunk(chunk)
             if token:
                 chunks.append(token)
                 if reporter:
