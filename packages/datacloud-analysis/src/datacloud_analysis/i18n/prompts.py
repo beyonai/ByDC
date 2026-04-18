@@ -24,49 +24,25 @@ _FALLBACK_LOCALE = "zh_CN"
 
 
 def _get_query_tool_hint_zh() -> str:
-    """根据 DATACLOUD_ONTOLOGY_LOAD_MODE 返回当前查询工具命名格式的提示段。"""
-
-    mode = os.environ.get("DATACLOUD_ONTOLOGY_LOAD_MODE", "").strip()
-
-    if mode == "ontology_query":
-        return (
-            "## 查询工具命名规则\n"
-            "- 当前模式下，查询工具名称格式为 query_{对象编码}（如 query_Order），"
-            "聚合计算工具格式为 compute_{对象编码}（如 compute_Order）。\n"
-            "- 禁止调用不含对象编码的裸工具名（如直接调用 query 或 compute）。\n"
-        )
-
-    if mode == "db_query":
-        return (
-            "## 查询工具命名规则\n"
-            "- 当前模式下，查询工具名称格式为 data_query_{对象编码}（如 data_query_Order）。\n"
-            "- 禁止调用不含对象编码的裸工具名 data_query，必须带上对象编码后缀。\n"
-        )
-
-    return ""
+    """返回统一查询工具命名规则提示（不再依赖 DATACLOUD_ONTOLOGY_LOAD_MODE）。"""
+    return (
+        "## 查询工具命名规则\n"
+        "- 查询工具名称格式为 query_{对象编码}（如 query_ads_enterprise_analysis），"
+        "聚合计算工具格式为 compute_{对象编码}（如 compute_ads_enterprise_analysis）。\n"
+        "- 复杂查询（complex_conditions 非空）系统自动路由到 data_query_{对象编码}，无需手动调用。\n"
+        "- 禁止调用不含对象编码的裸工具名（如直接调用 query 或 compute）。\n"
+    )
 
 
 def _get_query_tool_hint_en() -> str:
-    """English version of query tool naming hint."""
-
-    mode = os.environ.get("DATACLOUD_ONTOLOGY_LOAD_MODE", "").strip()
-
-    if mode == "ontology_query":
-        return (
-            "## Query tool naming\n"
-            "- Tool format: query_{object_code} (e.g. query_Order), "
-            "compute_{object_code} (e.g. compute_Order).\n"
-            "- Do NOT call bare names like 'query' or 'compute' without the object suffix.\n"
-        )
-
-    if mode == "db_query":
-        return (
-            "## Query tool naming\n"
-            "- Tool format: data_query_{object_code} (e.g. data_query_Order).\n"
-            "- Do NOT call bare 'data_query' — always append the object code suffix.\n"
-        )
-
-    return ""
+    """Return fixed query tool naming hint (no longer reads DATACLOUD_ONTOLOGY_LOAD_MODE)."""
+    return (
+        "## Query tool naming\n"
+        "- Tool format: query_{object_code} (e.g. query_ads_enterprise_analysis), "
+        "compute_{object_code} (e.g. compute_ads_enterprise_analysis).\n"
+        "- Complex queries (complex_conditions non-empty) are auto-routed to data_query_{code}.\n"
+        "- Do NOT call bare names like 'query' or 'compute' without the object suffix.\n"
+    )
 
 
 def _disable_ask_user_tool() -> bool:
@@ -163,20 +139,17 @@ def _build_exec_zh() -> str:
             "- 过滤条件：主要是维度名称下具体维度取值，或指标的数值条件限定\n",
             "- 排序目标：可排序的指标或维度名称字段\n",
             "- 统计函数：聚合函数，数据计算的相关运算,统计相关的动词\n",
-            "## 参数提取自检字段（必填）\n",
-            "- 调用 query_*/compute_*/data_query_* 类工具时，除业务参数外，必须同时填写以下三个自检字段：\n",
-            "  · **intent_reason**（str）：用一句话完整描述你对用户本次查询意图的理解，"
-            "包括查询对象、时间范围、分组维度、过滤条件等关键要素。不得为空。\n",
-            "  · **extraction_confidence**（float，0.0～1.0）：你对本次参数提取正确性的自信度。"
-            "若字段名、时间范围、过滤条件等存在任何不确定性，请填写较低值（建议 0.6～0.8）；"
-            "所有参数均有明确依据时填 1.0。\n",
-            "  · **ambiguous_params**（List[str]）：当用户意图存在真实歧义时填写，"
-            "如用户表达模糊、同一业务概念对应多个候选字段、时间范围语义不明确等。"
-            "参数已有明确依据则填空列表 []。\n",
-            "- 填写示例：\n",
-            '  intent_reason="用户想查本季度各大区企业总营收汇总，按大区分组"\n',
-            "  extraction_confidence=0.85\n",
-            '  ambiguous_params=["time_range"]  # 本季度具体起止日期不确定\n',
+            "## query_*/compute_* 核心参数规则\n",
+            "- **query（必填）**：完整自然语言问题，不得为空，不得使用 */%/ALL 等通配符。\n",
+            "  如用户原始问题较短，结合上下文改写为完整清晰的查询描述。\n",
+            "- **标准参数**（select / filters / dimensions / metrics）：\n",
+            "  填写时可使用 field_code 或中文字段名，系统自动映射；不确定时留空，结合 query 自动推断。\n",
+            "  filters 的 value 只填字面常量（已知的具体数值、日期、枚举值）。\n",
+            "- **complex_conditions（溢出过滤区）**：\n",
+            "  过滤条件的值在填参时无法确定为字面常量时，用自然语言描述该条件并放入此列表：\n",
+            "  示例：'亩产效益后30%的地块'、'营收高于行业平均值'、'排名前10名'。\n",
+            "  此列表非空时系统自动路由到全能查询路径，无需手动调用 data_query。\n",
+            "- **禁止**：同时将同一条件既写入 filters 又写入 complex_conditions。\n",
             "## data_query 返回结构规则\n",
             "- data_query 返回结构：{data: {result_type, records, file: {file_url}, meta}}。\n",
             "- 如果返回中包含 file_url 字段或顶层 _hint 字段，说明数据已存入本地文件，直接使用该文件路径。\n",

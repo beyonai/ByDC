@@ -505,6 +505,41 @@ async def dispatch_tool(
                 return
             if action == "fail":
                 raise ToolHookError(before_decision)
+            if action == "redirect":
+                redirect_tool_name = str(before_decision.get("tool") or "")
+                redirect_params = dict(before_decision.get("params") or {})
+                redirect_t = tools_map.get(redirect_tool_name)
+                if redirect_t is None:
+                    logger.warning(
+                        "dispatch_tool: redirect target '%s' not found in tools_map",
+                        redirect_tool_name,
+                    )
+                    ctx["tool_output"] = None
+                    ctx["tool_error"] = {
+                        "error_type": "ToolNotFound",
+                        "message": f"Redirect target '{redirect_tool_name}' not found",
+                    }
+                else:
+                    try:
+                        output = await _invoke_tool_with_runtime_context(
+                            redirect_t,
+                            redirect_params,
+                            gateway_context=gateway_context,
+                        )
+                        output = _normalize_mcp_output(output)
+                        ctx["tool_output"] = output
+                        ctx["tool_error"] = None
+                    except GraphBubbleUp:
+                        raise
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning(
+                            "dispatch_tool: redirect tool='%s' raised: %s",
+                            redirect_tool_name,
+                            exc,
+                        )
+                        ctx["tool_output"] = None
+                        ctx["tool_error"] = {"error_type": type(exc).__name__, "message": str(exc)}
+                return
 
         # --- 实际工具调用 ---
         t = tools_map.get(tool_name)

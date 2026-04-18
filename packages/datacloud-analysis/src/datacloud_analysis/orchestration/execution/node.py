@@ -129,6 +129,82 @@ def inject_ambiguity_fields(t: BaseTool) -> BaseTool:
     return t
 
 
+def inject_query_fields(t: BaseTool) -> BaseTool:
+    """往数据类工具 Schema 注入 query/complex_conditions 字段，由 LLM 在调用时填写，执行前自动剥除。
+
+    注入字段：
+    - query: str               — 必填，用户原始查询意图的完整自然语言描述
+    - complex_conditions: list[str] — 溢出过滤区，非空时路由到全能查询路径（data_query）
+
+    底层 coroutine 不会收到这两个字段（调用前自动剥除）。
+    """
+    try:
+        from pydantic import Field, create_model  # noqa: PLC0415
+
+        original_schema = t.args_schema
+        if original_schema is None:
+            return t
+
+        new_schema = create_model(
+            f"{original_schema.__name__}WithQuery",
+            __base__=original_schema,
+            query=(
+                str,
+                Field(
+                    default="",
+                    description=(
+                        "【必填】用户原始查询意图的完整自然语言描述。"
+                        "用于歧义判断、复杂查询路由及参数缺失时的兜底推断。"
+                    ),
+                ),
+            ),
+            complex_conditions=(
+                list[str],
+                Field(
+                    default_factory=list,
+                    description=(
+                        "溢出过滤区：填入过滤值无法在填参时确定为字面常量的条件（自然语言描述）。"
+                        "如 '亩产效益后30%的地块'、'营收高于行业平均'。"
+                        "非空时系统路由到全能查询路径（data_query）。"
+                    ),
+                ),
+            ),
+        )
+        t.args_schema = new_schema
+
+        # 包装 coroutine：调用前剥除两个元字段（before_callback 已消费）
+        if hasattr(t, "coroutine") and t.coroutine is not None:
+            _orig_coro = t.coroutine
+
+            async def _coro_strip_query_fields(**kw: Any) -> Any:
+                kw.pop("query", None)
+                kw.pop("complex_conditions", None)
+                # 兼容旧版元字段（过渡期）
+                kw.pop("intent_reason", None)
+                kw.pop("extraction_confidence", None)
+                kw.pop("ambiguous_params", None)
+                return await _orig_coro(**kw)
+
+            t.coroutine = _coro_strip_query_fields
+
+        if hasattr(t, "func") and t.func is not None:
+            _orig_func = t.func
+
+            def _func_strip_query_fields(**kw: Any) -> Any:
+                kw.pop("query", None)
+                kw.pop("complex_conditions", None)
+                kw.pop("intent_reason", None)
+                kw.pop("extraction_confidence", None)
+                kw.pop("ambiguous_params", None)
+                return _orig_func(**kw)
+
+            t.func = _func_strip_query_fields
+
+    except Exception as exc:  # pragma: no cover
+        logger.warning("[inject_query_fields] failed for tool=%s: %s", getattr(t, "name", "?"), exc)
+    return t
+
+
 # Set to 1/true/yes to omit ask_user from the execution agent (e.g. local debugging).
 _DISABLE_ASK_USER_TOOL = os.environ.get("DATACLOUD_DISABLE_ASK_USER_TOOL", "1").lower() in (
     "1",
@@ -190,9 +266,9 @@ def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
                     getattr(callable_or_tool, "coroutine", None)
                 ) or _resolve_runtime_context_param(getattr(callable_or_tool, "func", None))
                 tool = inject_reason_field(callable_or_tool)
-                # 数据类工具：注入歧义元字段（在 inject_reason_field 之后）
+                # 数据类工具：注入查询元字段（在 inject_reason_field 之后）
                 if _is_data_tool_name(name):
-                    tool = inject_ambiguity_fields(tool)
+                    tool = inject_query_fields(tool)
                 if runtime_context_param:
                     tool._datacloud_runtime_context_param = runtime_context_param
                 tools.append(tool)
@@ -233,9 +309,9 @@ def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
                         coroutine=callable_or_tool if is_async else None,
                     )
                 tool = inject_reason_field(t)
-                # 数据类工具：注入歧义元字段（在 inject_reason_field 之后）
+                # 数据类工具：注入查询元字段（在 inject_reason_field 之后）
                 if _is_data_tool_name(name):
-                    tool = inject_ambiguity_fields(tool)
+                    tool = inject_query_fields(tool)
                 if runtime_context_param:
                     tool._datacloud_runtime_context_param = runtime_context_param
                 if getattr(callable_or_tool, "_is_agent_delegate", False):

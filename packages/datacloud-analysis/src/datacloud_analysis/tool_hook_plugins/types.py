@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any, Literal, TypedDict
 
-HookAction = Literal["continue", "patch", "short_circuit", "interrupt", "fail", "recover"]
+HookAction = Literal[
+    "continue", "patch", "short_circuit", "interrupt", "fail", "recover", "redirect"
+]
 
 
 class HookError(TypedDict, total=False):
@@ -76,6 +78,8 @@ class HookDecision(TypedDict, total=False):
     """One hook decision returned by plugin callbacks."""
 
     action: HookAction
+    tool: str  # redirect 目标工具名，如 data_query_ads_enterprise_analysis
+    params: dict[str, Any]  # redirect 时透传给目标工具的参数
     patch: HookPatch
     result: HookResult
     interrupt: HookInterrupt

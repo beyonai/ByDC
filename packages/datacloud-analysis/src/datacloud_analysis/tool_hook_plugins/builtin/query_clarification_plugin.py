@@ -1,7 +1,19 @@
-"""Built-in tool hook: 知识增强与查询澄清（层 B 注入）。
+"""Built-in tool hook: Step1 复杂度判断 + Step2 双通道歧义判断（v3）。
 
-v2 改造：读取 LLM 填写的 ambiguous_params 元字段，按需触发知识增强/追问，
-不再依赖 intend_node 预注入的 knowledge_payload。
+流程：
+  1. 非 query_*/compute_* 工具 → 直接跳过
+  2. 剥除元字段（query, complex_conditions, 旧版三字段）
+  3. Step 1：complex_conditions 非空 → is_complex=True
+  4. Step 2：_get_field_catalog 参数术语映射检查
+     a. 全部 1:1 命中 → CLEAR
+        is_complex=False → 返回 None（OQL 直查）
+        is_complex=True  → redirect → data_query_*
+     b. 存在未命中项 → NEED_CONFIRM
+        → analyze_query_clarification_query/compute（TODO 待实现，现返回固定 stub）
+        → interrupt 追问
+        → 恢复后 _apply_resume_to_tool_params 写回 filters
+        is_complex=False → patch（OQL 直查）
+        is_complex=True  → redirect → data_query_*
 """
 
 from __future__ import annotations
@@ -12,19 +24,24 @@ from typing import Any
 
 from datacloud_analysis.tool_hook_plugins.types import HookContext, HookDecision
 
-# 模块级别别名，方便测试 patch；运行时由 before_call_back 内部延迟导入覆盖
 try:
     from langgraph.types import interrupt  # type: ignore[import]
 except ImportError:  # pragma: no cover
     interrupt = None  # type: ignore[assignment]
 
 PLUGIN_ID = "builtin.query_clarification"
-PRIORITY = 100  # 低于 semantic_param_enhancer(200)，优先执行
+PRIORITY = 100
 ENABLED = True
 
 logger = logging.getLogger(__name__)
 
+_QUERY_PREFIXES: frozenset[str] = frozenset({"query_", "compute_"})
 _DATA_TOOL_PREFIXES: frozenset[str] = frozenset({"query_", "data_query_", "compute_"})
+
+
+def _is_query_or_compute_tool(tool_name: str) -> bool:
+    """仅匹配 query_* / compute_*（不含 data_query_*）。"""
+    return any(tool_name.startswith(p) for p in _QUERY_PREFIXES)
 
 
 def _is_data_tool(tool_name: str) -> bool:
@@ -32,198 +49,402 @@ def _is_data_tool(tool_name: str) -> bool:
     return any(tool_name.startswith(p) for p in _DATA_TOOL_PREFIXES)
 
 
-def _is_data_query_tool(tool_name: str) -> bool:
-    """判断是否为 data_query_* 自然语言查询工具（支持 contextKnowledge 参数）。"""
-    return tool_name.startswith("data_query_")
+def _scope_code_from_tool(tool_name: str) -> str:
+    """从 query_ads_foo → ads_foo，compute_ads_foo → ads_foo。"""
+    for prefix in ("query_", "compute_"):
+        if tool_name.startswith(prefix):
+            return tool_name[len(prefix) :]
+    return tool_name
 
 
-def _format_knowledge_for_prompt(knowledge_json: str) -> str:
-    """将 knowledge JSON 转为人类可读字段映射文本。"""
-    try:
-        data = json.loads(knowledge_json)
-        items = data.get("paradigmList", [])
-        lines = []
-        for item in items:
-            name = item.get("name") or item.get("termName") or ""
-            desc = item.get("fieldName") or item.get("description") or ""
-            if name and desc:
-                lines.append(f"{name} → {desc}")
-        return "\n".join(lines) if lines else knowledge_json
-    except Exception:
-        return knowledge_json
-
-
-async def _call_query_clarification(
-    user_query: str,
-    ambiguous_params: list[str],
+def _get_field_catalog(
     tool_name: str,
+    ctx: HookContext,
+) -> dict[str, str]:
+    """从 OntologyLoader 读取当前工具的字段目录 {term → field_code}。
+
+    返回字典包含：
+    - field_code → field_code（field_code 本身）
+    - field_name（中文名）→ field_code
+    loader=None 时返回空 dict。
+    """
+    loader: Any = (ctx.get("metadata") or {}).get("loader")
+    if loader is None:
+        return {}
+
+    scope_code = _scope_code_from_tool(tool_name)
+    catalog: dict[str, str] = {}
+
+    try:
+        # 先尝试作为对象加载
+        ontology_class = loader.get_ontology_class(scope_code)
+        for f in ontology_class.fields:
+            code = getattr(f, "field_code", None) or getattr(f, "property_code", None)
+            name = getattr(f, "field_name", None) or getattr(f, "property_name", None)
+            if code:
+                catalog[code] = code
+                if name and name != code:
+                    catalog[name] = code
+    except Exception:  # noqa: BLE001
+        # 尝试作为视图加载
+        try:
+            view = loader.get_view(scope_code)
+            for obj in getattr(view, "objects", []):
+                for f in getattr(obj, "fields", []):
+                    code = getattr(f, "field_code", None) or getattr(f, "property_code", None)
+                    name = getattr(f, "field_name", None) or getattr(f, "property_name", None)
+                    if code:
+                        catalog[code] = code
+                        if name and name != code:
+                            catalog[name] = code
+        except Exception:  # noqa: BLE001
+            pass
+
+    return catalog
+
+
+def _collect_terms_from_params(tool_params: dict[str, Any]) -> list[str]:
+    """从 tool_params 收集需要映射的术语列表（filters.field、select 项等）。
+
+    优先读取 field_name_cn（LLM 填写的中文名），fallback 到 field（向后兼容）。
+    """
+
+    def _get_field_term(item: dict[str, Any]) -> str | None:
+        v = item.get("field_name_cn") or item.get("field")
+        return str(v) if v else None
+
+    terms: list[str] = []
+    for f in tool_params.get("filters", []):
+        if isinstance(f, dict):
+            t = _get_field_term(f)
+            if t:
+                terms.append(t)
+    for s in tool_params.get("select", []):
+        if s:
+            terms.append(str(s))
+    for d in tool_params.get("dimensions", []):
+        if isinstance(d, dict):
+            t = _get_field_term(d)
+            if t:
+                terms.append(t)
+    for m in tool_params.get("metrics", []):
+        if isinstance(m, dict):
+            t = _get_field_term(m)
+            if t:
+                terms.append(t)
+    return terms
+
+
+def _resolve_terms(
+    terms: list[str],
+    catalog: dict[str, str],
+) -> tuple[dict[str, str], list[str]]:
+    """将术语列表映射到 field_code。
+
+    Returns:
+        resolved: {term → field_code} 1:1 命中的映射
+        unresolved: 未命中 catalog 的术语列表
+    """
+    resolved: dict[str, str] = {}
+    unresolved: list[str] = []
+    for term in terms:
+        if term in catalog:
+            resolved[term] = catalog[term]
+        else:
+            unresolved.append(term)
+    return resolved, unresolved
+
+
+def _apply_resolved_to_params(
     tool_params: dict[str, Any],
-) -> Any:
-    """调用知识增强/澄清接口，返回结构化结果。
+    resolved: dict[str, str],
+) -> dict[str, Any]:
+    """将 resolved 映射写回 tool_params（中文名 → field_code）。
 
-    analyze_query_clarification 签名为 (query, on_event=None)，内部自行完成
-    NL→展开→召回→LLM确认全流程，不接受 ambiguous_params/tool_name/tool_params。
-    这三个字段仅供 plugin 层判断是否触发，不透传给底层函数。
-
-    analyze_query_clarification 是同步函数，通过 asyncio.to_thread 在线程池执行，
-    避免阻塞 async 事件循环。
-
-    返回对象（ClarificationResult）含：
-    - needs_clarification: bool
-    - form: str（JSON 格式的追问表单，needs_clarification=True 时有效）
-    - knowledge: str（知识摘要，needs_clarification=False 时有效）
+    优先处理 field_name_cn：解析后写入 field 键，并移除 field_name_cn。
+    fallback 到旧 field 键（向后兼容）。
     """
-    import asyncio  # noqa: PLC0415
+    patched = dict(tool_params)
 
-    from datacloud_knowledge.intent import analyze_query_clarification  # type: ignore[import]
+    def _map(term: str) -> str:
+        return resolved.get(term, term)
 
-    return await asyncio.to_thread(analyze_query_clarification, user_query)
+    def _translate_field(item: dict[str, Any]) -> dict[str, Any]:
+        """将 field_name_cn 解析为 field_code，写入 field 键，移除 field_name_cn。"""
+        if not isinstance(item, dict):
+            return item
+        cn_val = item.get("field_name_cn")
+        if cn_val:
+            resolved_code = _map(str(cn_val))
+            new_item = {k: v for k, v in item.items() if k != "field_name_cn"}
+            new_item["field"] = resolved_code
+            return new_item
+        old_field = item.get("field")
+        if old_field:
+            return {**item, "field": _map(str(old_field))}
+        return item
+
+    patched["filters"] = [
+        _translate_field(f) if isinstance(f, dict) else f for f in patched.get("filters", [])
+    ]
+    patched["select"] = [_map(s) for s in patched.get("select", [])]
+    patched["dimensions"] = [
+        _translate_field(d) if isinstance(d, dict) else d for d in patched.get("dimensions", [])
+    ]
+    patched["metrics"] = [
+        _translate_field(m) if isinstance(m, dict) else m for m in patched.get("metrics", [])
+    ]
+    return patched
 
 
-async def before_call_back(ctx: HookContext) -> HookDecision | None:
-    """层 B 知识增强：读取 LLM 填写的 ambiguous_params，按需触发知识增强或追问中断。
+def _build_redirect_decision(
+    tool_name: str,
+    query: str,
+    tool_params: dict[str, Any],
+) -> HookDecision:
+    """构建 redirect HookDecision，路由到 data_query_* 工具。"""
+    scope_code = _scope_code_from_tool(tool_name)
+    target_tool = f"data_query_{scope_code}"
 
-    流程：
-    1. 非数据工具 → 直接跳过（返回 None）
-    2. 从 tool_params 剥除三个元字段（intent_reason / extraction_confidence / ambiguous_params）
-    3. 记录运营日志（含 tool_params 参数提取信息）
-    4. ambiguous_params=[] → 直接返回 None（无需知识增强）
-    5. ambiguous_params 非空 → 调用 _call_query_clarification
-       a. needs_clarification=False → 注入 contextKnowledge（仅 data_query_* 工具）
-       b. needs_clarification=True  → interrupt 追问，恢复后重建 tool_params
-    """
-    tool_name = ctx.get("tool_name", "")
-
-    # 非数据工具不处理
-    if not _is_data_tool(tool_name):
-        return None
-
-    # ── 剥除三个元字段（LLM 填写，hook 层消费后不透传给底层实现）─────────────────
-    tool_params: dict[str, Any] = ctx.get("tool_params") or {}
-    intent_reason: str = str(tool_params.pop("intent_reason", "") or "")
-    extraction_confidence: float = float(tool_params.pop("extraction_confidence", 1.0) or 1.0)
-    ambiguous_params: list[str] = list(tool_params.pop("ambiguous_params", None) or [])
-
-    # ── 运营日志：记录参数提取情况 ───────────────────────────────────────────────
-    logger.info(
-        "[tool_intent] tool=%s | confidence=%.2f | ambiguous=%s | triggered=%s\n"
-        "  intent : %s\n"
-        "  params : %s",
-        tool_name,
-        extraction_confidence,
-        ambiguous_params,
-        bool(ambiguous_params),
-        intent_reason,
-        tool_params,
+    # 将已解析的参数序列化为 contextKnowledge 供 PlanAgent 使用
+    context_knowledge = json.dumps(
+        {
+            "query": query,
+            "resolved_params": {
+                k: v for k, v in tool_params.items() if k not in ("query", "complex_conditions")
+            },
+        },
+        ensure_ascii=False,
     )
 
-    # ── 无歧义：直接跳过知识增强 ─────────────────────────────────────────────────
-    if not ambiguous_params:
-        return None
-
-    # ── 有歧义：调用知识增强/澄清接口 ────────────────────────────────────────────
-    try:
-        result = await _call_query_clarification(
-            user_query=ctx.get("user_query", ""),
-            ambiguous_params=ambiguous_params,
-            tool_name=tool_name,
-            tool_params=tool_params,
-        )
-    except Exception as exc:
-        logger.warning("[query_clarification_plugin] _call_query_clarification failed: %s", exc)
-        return None
-
-    needs_clarification: bool = getattr(result, "needs_clarification", False)
-    knowledge_str: str = getattr(result, "knowledge", "") or ""
-    form_str: str = getattr(result, "form", "") or ""
-
-    if needs_clarification:
-        # 追问中断（§6.7 层 B 追问逻辑）
-        try:
-            paradigm_list = json.loads(form_str).get("paradigmList", [])
-        except Exception:
-            paradigm_list = []
-        resume_value = interrupt(
-            {
-                "prompt": "查询条件存在歧义，请确认查询维度",
-                "reason_code": "PARADIGM_CLARIFICATION",
-                "ask_user_payload": {
-                    "paradigmList": paradigm_list,
-                },
-            }
-        )
-        # interrupt 恢复后：重建 tool_params，避免死循环
-        _apply_resume_to_params(ctx, tool_name, resume_value, ctx.get("user_query", ""))
-        return {"action": "patch", "patch": {"tool_params": dict(ctx["tool_params"])}}
-
-    # 层 B 知识注入：仅对 data_query_* 工具注入 contextKnowledge
-    if knowledge_str and _is_data_query_tool(tool_name):
-        patched_params = dict(tool_params)
-        patched_params["contextKnowledge"] = knowledge_str
-        ctx["tool_params"] = patched_params
-        return {"action": "patch", "patch": {"tool_params": patched_params}}
-
-    return None
+    return {
+        "action": "redirect",
+        "tool": target_tool,
+        "params": {
+            "query": query,
+            "contextKnowledge": context_knowledge,
+        },
+    }
 
 
-def _apply_resume_to_params(
+# ── TODO 占位：澄清分析函数（罗同学实现）─────────────────────────────────────
+
+
+def analyze_query_clarification_query(
+    query: str,
+    ontology_code: str,
+    structured_query: dict[str, Any],
+) -> dict[str, Any]:
+    """TODO(罗同学): 分析 query_* 调用的歧义，返回 paradigmList 供 interrupt 使用。
+
+    当前 stub：固定返回 needsXX=True + 空 paradigmList，触发 interrupt 追问。
+    实现后需根据 ontology_code 的字段 Schema 做真实召回。
+    """
+    # STUB：固定返回，使流程可以跑通
+    return {
+        "needsClarification": True,
+        "form": json.dumps({"paradigmList": []}),
+    }
+
+
+def analyze_query_clarification_compute(
+    query: str,
+    ontology_code: str,
+    structured_compute: dict[str, Any],
+) -> dict[str, Any]:
+    """TODO(罗同学): 分析 compute_* 调用的歧义，返回 paradigmList 供 interrupt 使用。
+
+    当前 stub：固定返回 needsXX=True + 空 paradigmList，触发 interrupt 追问。
+    """
+    return {
+        "needsClarification": True,
+        "form": json.dumps({"paradigmList": []}),
+    }
+
+
+def format_clarification_query(
+    original_params: dict[str, Any],
+    form: dict[str, Any],
+) -> dict[str, Any]:
+    """TODO(罗同学): 将用户 paradigm 选择合并回 query_* 参数 dict。
+
+    当前 stub：原样返回 original_params，不做任何修改。
+    """
+    return dict(original_params)
+
+
+def format_clarification_compute(
+    original_params: dict[str, Any],
+    form: dict[str, Any],
+) -> dict[str, Any]:
+    """TODO(罗同学): 将用户 paradigm 选择合并回 compute_* 参数 dict。
+
+    当前 stub：原样返回 original_params，不做任何修改。
+    """
+    return dict(original_params)
+
+
+# ── 核心 resume 写回 ──────────────────────────────────────────────────────────
+
+
+def _apply_resume_to_tool_params(
     ctx: HookContext,
     tool_name: str,
     resume_value: Any,
-    user_query_or_payload: Any,
+    user_query: str,
 ) -> None:
-    """按工具类型从用户选择的 paradigm 重建 tool_params。
+    """将用户 paradigm 选择写回 tool_params，防止恢复时再次触发歧义。
 
-    user_query_or_payload 兼容两种形式：
-    - str：直接作为 user_query 使用（新接口）
-    - dict：取 payload["query"] 或 payload.get("query") 或 ctx["user_query"]（旧接口，保持向后兼容）
+    resume_value 结构：{"paradigmList": [{"keyword": "...", "choiceKeyword": "...", ...}]}
     """
     selected: list[dict[str, Any]] = []
     if isinstance(resume_value, dict):
         selected = resume_value.get("paradigmList", [])
 
-    # 兼容旧 payload dict 和新 user_query str
-    if isinstance(user_query_or_payload, dict):
-        payload = user_query_or_payload
-        user_query = payload.get("query") or ctx.get("user_query", "")
-    else:
-        user_query = str(user_query_or_payload or "") or ctx.get("user_query", "")
+    tool_params: dict[str, Any] = dict(ctx.get("tool_params") or {})
 
-    if _is_data_query_tool(tool_name):
-        ctx["tool_params"] = {
-            "query": user_query,
-            "contextKnowledge": _extract_knowledge_from_paradigm(selected),
-        }
-    elif tool_name.startswith("query_"):
-        ctx["tool_params"] = _build_oql_params_from_paradigm(selected)
-    elif tool_name.startswith("compute_"):
-        ctx["tool_params"] = _build_compute_params_from_paradigm(selected)
-
-
-def _extract_knowledge_from_paradigm(selected: list[dict[str, Any]]) -> str:
-    lines = []
+    # 构建 keyword → choiceKeyword 映射（用户的选择结果）
+    choice_map: dict[str, str] = {}
     for item in selected:
-        name = item.get("name") or item.get("termName") or ""
-        field = item.get("fieldName") or item.get("description") or ""
-        if name and field:
-            lines.append(f"{name} → {field}")
-    return "\n".join(lines)
+        kw = item.get("keyword") or ""
+        choice = item.get("choiceKeyword") or ""
+        if kw and choice:
+            choice_map[kw] = choice
 
+    if not choice_map:
+        return
 
-def _build_oql_params_from_paradigm(selected: list[dict[str, Any]]) -> dict[str, Any]:
-    return {
-        "select": [i.get("fieldName", "") for i in selected if i.get("fieldName")],
-        "where": [],
-        "group_by": [],
-        "order_by": [],
-    }
+    def _remap(term: str) -> str:
+        return choice_map.get(term, term)
 
+    def _resume_translate_field(item: dict[str, Any]) -> dict[str, Any]:
+        """将用户选择的 choiceKeyword 写回 field，支持 field_name_cn → field 翻译。"""
+        if not isinstance(item, dict):
+            return item
+        cn_val = item.get("field_name_cn")
+        if cn_val and str(cn_val) in choice_map:
+            new_item = {k: v for k, v in item.items() if k != "field_name_cn"}
+            new_item["field"] = choice_map[str(cn_val)]
+            return new_item
+        old_field = item.get("field")
+        if old_field:
+            return {**item, "field": _remap(str(old_field))}
+        return item
 
-def _build_compute_params_from_paradigm(selected: list[dict[str, Any]]) -> dict[str, Any]:
-    dims = [{"field": i["dimensionName"]} for i in selected if i.get("dimensionName")]
-    metrics = [
-        {"field": i["metricName"], "agg": i.get("agg", "sum")}
-        for i in selected
-        if i.get("metricName")
+    # 写回 filters.field
+    tool_params["filters"] = [
+        _resume_translate_field(f) if isinstance(f, dict) else f
+        for f in tool_params.get("filters", [])
     ]
-    return {"dimensions": dims, "metrics": metrics}
+    # 写回 select
+    tool_params["select"] = [_remap(s) for s in tool_params.get("select", [])]
+    # 写回 dimensions
+    tool_params["dimensions"] = [
+        _resume_translate_field(d) if isinstance(d, dict) else d
+        for d in tool_params.get("dimensions", [])
+    ]
+    # 写回 metrics
+    tool_params["metrics"] = [
+        _resume_translate_field(m) if isinstance(m, dict) else m
+        for m in tool_params.get("metrics", [])
+    ]
+    ctx["tool_params"] = tool_params
+
+
+# ── 主 hook 入口 ──────────────────────────────────────────────────────────────
+
+
+async def before_call_back(ctx: HookContext) -> HookDecision | None:
+    """Step1 复杂度判断 + Step2 双通道歧义判断。
+
+    Args:
+        ctx: HookContext，含 tool_name / tool_params / metadata(loader) 等。
+
+    Returns:
+        None               — 简单查询 CLEAR，放行给 QueryExecutor（OQL）
+        redirect decision  — 复杂查询 CLEAR，路由到 data_query_*
+        patch decision     — 歧义消除后恢复，更新 tool_params
+        redirect decision  — COMPLEX + 歧义消除后，路由到 data_query_*
+    """
+    tool_name: str = ctx.get("tool_name", "")
+
+    # 非 query_*/compute_* 工具直接跳过
+    if not _is_query_or_compute_tool(tool_name):
+        return None
+
+    # ── 剥除元字段（before_callback 消费，不透传给底层执行体）────────────────
+    tool_params: dict[str, Any] = dict(ctx.get("tool_params") or {})
+    query: str = str(tool_params.pop("query", "") or "")
+    complex_conditions: list[str] = list(tool_params.pop("complex_conditions", None) or [])
+
+    # 兼容旧版元字段（过渡期）
+    tool_params.pop("intent_reason", None)
+    tool_params.pop("extraction_confidence", None)
+    tool_params.pop("ambiguous_params", None)
+
+    ctx["tool_params"] = tool_params
+
+    logger.info(
+        "[query_clarification] tool=%s | is_complex=%s | query=%s",
+        tool_name,
+        bool(complex_conditions),
+        query[:80],
+    )
+
+    # ── Step 1：复杂度判断 ────────────────────────────────────────────────────
+    is_complex: bool = bool(complex_conditions)
+
+    # ── Step 2：双通道歧义判断 ────────────────────────────────────────────────
+    catalog = _get_field_catalog(tool_name, ctx)
+    terms = _collect_terms_from_params(tool_params)
+
+    if catalog and terms:
+        resolved, unresolved = _resolve_terms(terms, catalog)
+
+        if unresolved:
+            # 存在未命中术语 → NEED_CONFIRM
+            logger.info("[query_clarification] NEED_CONFIRM: unresolved=%s", unresolved)
+            # 调用澄清分析（当前 stub，TODO 待实现）
+            scope_code = _scope_code_from_tool(tool_name)
+            if tool_name.startswith("compute_"):
+                clarify_result = analyze_query_clarification_compute(query, scope_code, tool_params)
+            else:
+                clarify_result = analyze_query_clarification_query(query, scope_code, tool_params)
+
+            try:
+                paradigm_list = json.loads(clarify_result.get("form", "{}") or "{}").get(
+                    "paradigmList", []
+                )
+            except Exception:  # noqa: BLE001
+                paradigm_list = []
+
+            resume_value = interrupt(
+                {
+                    "prompt": "查询条件存在歧义，请确认查询维度",
+                    "reason_code": "PARADIGM_CLARIFICATION",
+                    "ask_user_payload": {"paradigmList": paradigm_list},
+                }
+            )
+            # 恢复后写回 tool_params
+            _apply_resume_to_tool_params(ctx, tool_name, resume_value, query)
+            tool_params = dict(ctx["tool_params"])
+
+            # 恢复后路由
+            if is_complex:
+                return _build_redirect_decision(tool_name, query, tool_params)
+            return {"action": "patch", "patch": {"tool_params": tool_params}}
+
+        # 全部 1:1 命中 → CLEAR，写回 field_code
+        patched_params = _apply_resolved_to_params(tool_params, resolved)
+        ctx["tool_params"] = patched_params
+        tool_params = patched_params
+    else:
+        # catalog 为空（loader=None）或无 terms → 视为 CLEAR，降级继续
+        logger.debug("[query_clarification] catalog empty or no terms, skip term resolution")
+
+    # ── 路由决策 ─────────────────────────────────────────────────────────────
+    if is_complex:
+        return _build_redirect_decision(tool_name, query, tool_params)
+
+    # SIMPLE + CLEAR → 放行
+    return None
