@@ -298,7 +298,7 @@ def build_query_description(
     required_filter_groups: list[str] | None = None,
     scope_type: str = "object",
 ) -> str:
-    """生成 query_ontology 动作 Markdown 描述（§3.2.2 字段编码版）。"""
+    """生成 query_ontology 动作 Markdown 描述（§3.2.2 field_name_cn 版）。"""
     queryable = [f for f in fields if getattr(f, "property_kind", "physical") != "linked"]
     req_groups = required_filter_groups or []
     req_hint = "必须包含账期过滤。" if "period_required" in req_groups else ""
@@ -308,7 +308,7 @@ def build_query_description(
         lines.append(scope_description)
         lines.append("")
     lines.append(
-        f"按条件查询{scope_name}明细。**field 统一使用字段编码（field_code）**；"
+        f"按条件查询{scope_name}明细。**参数字段统一使用 field_name_cn（字段中文名）**；"
         f"支持字段过滤、排序、分页；不支持聚合统计。{req_hint}"
     )
     lines.append("")
@@ -330,7 +330,7 @@ def build_query_description(
     lines.append("")
     lines.append("**常见错误**：")
     lines.append("- 使用了字段不支持的 op 操作符")
-    lines.append("- field 填了字段中文名而非字段编码（field_code）")
+    lines.append("- field_name_cn 填了字段编码而非字段中文名（系统自动映射，但中文名更准确）")
     if req_groups:
         lines.append("- 缺少账期（period）过滤条件")
 
@@ -576,7 +576,7 @@ def build_compute_description(
     required_filter_groups: list[str] | None = None,
     scope_type: str = "object",
 ) -> str:
-    """生成 compute_ontology 动作 Markdown 描述（§3.2.3 字段编码版）。"""
+    """生成 compute_ontology 动作 Markdown 描述（§3.2.3 field_name_cn 版）。"""
     req_groups = required_filter_groups or []
     req_hint = "必须满足账期等强制过滤规则。" if "period_required" in req_groups else ""
     view_hint = "结果来自多对象 JOIN。" if scope_type == "view" else ""
@@ -586,7 +586,7 @@ def build_compute_description(
         lines.append(scope_description)
         lines.append("")
     lines.append(
-        f"按规则对{scope_name}做分组统计。**field 统一使用字段编码（field_code）**；"
+        f"按规则对{scope_name}做分组统计。**参数字段统一使用 field_name_cn（字段中文名）**；"
         f"支持 dimensions + metrics + filters；不支持明细输出。{req_hint}{view_hint}"
     )
     lines.append("")
@@ -625,7 +625,7 @@ def build_compute_description(
     lines.append(
         '- `metrics` 项误用 `func` 表示聚合：必须使用键名 **`agg`**（如 `"agg": "count_distinct"`）'
     )
-    lines.append("- field 填了字段中文名而非字段编码（field_code）")
+    lines.append("- field_name_cn 填了字段编码而非字段中文名（系统自动映射，但中文名更准确）")
     lines.append("- `having.field` 未使用 `metrics` 中的 `as` 别名")
     if req_groups:
         lines.append("- 缺少账期（period）过滤条件")
