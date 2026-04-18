@@ -83,7 +83,7 @@ class ToolHookPluginManager:
             if action == "patch":
                 _apply_patch(ctx, normalized.get("patch"))
                 continue
-            if action in {"short_circuit", "interrupt", "fail"}:
+            if action in {"short_circuit", "interrupt", "fail", "redirect"}:
                 return ctx, normalized
         return ctx, None
 

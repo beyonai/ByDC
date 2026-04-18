@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import asdict
 from datetime import datetime
@@ -326,7 +327,17 @@ class PlanAgentState(TypedDict, total=False):
 
 
 class PlanAgent:
-    """计划生成与校验智能体。"""
+    """计划生成与校验智能体。
+
+    通过 ``provider`` 参数（或 ``DATACLOUD_LLM_MODEL_PROVIDER`` 环境变量）选择 LLM 客户端：
+    - ``"openai"``（默认）：使用 ``langchain_openai.ChatOpenAI``，``model_kwargs`` 中
+      Anthropic 专属字段（``betas`` 等）会被自动过滤。
+    - ``"anthropic"``：使用 ``langchain_anthropic.ChatAnthropic``，``betas`` 作为顶层
+      构造参数传递，``model_kwargs`` 中不应再包含 ``betas``。
+    """
+
+    # Anthropic 专属的顶层构造参数，不能透传给 OpenAI 客户端
+    _ANTHROPIC_ONLY_KWARGS: frozenset[str] = frozenset({"betas"})
 
     def __init__(
         self,
@@ -336,6 +347,7 @@ class PlanAgent:
         temperature: float = 0.0,
         max_retries: int = 2,
         model_kwargs: dict | None = None,
+        provider: str | None = None,
     ) -> None:
         self._model = model
         self._base_url = base_url
@@ -343,6 +355,10 @@ class PlanAgent:
         self._temperature = temperature
         self._max_retries = max_retries
         self._model_kwargs = model_kwargs or {}
+        # provider 优先取构造参数，其次读环境变量，默认 openai
+        self._provider: str = (
+            (provider or os.environ.get("DATACLOUD_LLM_MODEL_PROVIDER", "openai")).strip().lower()
+        )
         self._llm: Any = None
         self._validator = PlanValidator()
 
@@ -359,16 +375,58 @@ class PlanAgent:
         self._graph = graph.compile()
 
     def _get_llm(self) -> Any:
-        """懒加载并复用 LLM 实例。"""
-        if self._llm is None:
+        """懒加载并复用 LLM 实例。
+
+        根据 provider 选择客户端：
+        - anthropic：使用 ChatAnthropic，betas 作为顶层参数传递。
+        - openai（默认）：使用 ChatOpenAI，过滤掉 Anthropic 专属字段。
+        """
+        if self._llm is not None:
+            return self._llm
+
+        if self._provider == "anthropic":
             try:
-                from langchain_openai import ChatOpenAI
+                from langchain_anthropic import ChatAnthropic  # noqa: PLC0415
+            except ImportError as e:
+                raise PlanGenerationError(
+                    "",
+                    "langchain-anthropic not installed. Install with: pip install langchain-anthropic",
+                ) from e
+
+            # betas 是 ChatAnthropic 的顶层构造参数，从 model_kwargs 中提取
+            betas: list[str] | None = self._model_kwargs.get("betas")
+            # 过滤掉 betas，剩余部分作为 model_kwargs
+            remaining_kwargs = {
+                k: v for k, v in self._model_kwargs.items() if k not in self._ANTHROPIC_ONLY_KWARGS
+            }
+            anthropic_kwargs: dict[str, Any] = {}
+            if betas:
+                anthropic_kwargs["betas"] = betas
+            if remaining_kwargs:
+                anthropic_kwargs["model_kwargs"] = remaining_kwargs
+
+            self._llm = ChatAnthropic(
+                model=self._model,
+                base_url=self._base_url,
+                api_key=self._api_key,
+                temperature=self._temperature,
+                **anthropic_kwargs,
+            )
+        else:
+            # openai（默认）
+            try:
+                from langchain_openai import ChatOpenAI  # noqa: PLC0415
             except ImportError as e:
                 raise PlanGenerationError(
                     "",
                     "langchain-openai not installed. Install with: pip install langchain-openai",
                 ) from e
-            extra_kwargs: dict = {"model_kwargs": self._model_kwargs} if self._model_kwargs else {}
+
+            # 过滤掉 Anthropic 专属字段，避免传给 OpenAI 客户端报 TypeError
+            openai_kwargs = {
+                k: v for k, v in self._model_kwargs.items() if k not in self._ANTHROPIC_ONLY_KWARGS
+            }
+            extra_kwargs: dict[str, Any] = {"model_kwargs": openai_kwargs} if openai_kwargs else {}
             self._llm = ChatOpenAI(
                 model=self._model,
                 base_url=self._base_url,
@@ -376,6 +434,7 @@ class PlanAgent:
                 temperature=self._temperature,
                 **extra_kwargs,
             )
+
         return self._llm
 
     def _get_reporter(self) -> Any | None:

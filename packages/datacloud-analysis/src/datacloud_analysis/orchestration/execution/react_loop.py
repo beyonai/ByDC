@@ -658,6 +658,7 @@ async def run_react_loop(
     max_rounds: int | None = None,
     gateway_context: Any = None,
     loader: Any = None,
+    redirect_tools_map: dict[str, BaseTool] | None = None,
 ) -> dict[str, Any]:
     """执行 ReAct 主循环，返回 react_final 字典。
 
@@ -706,11 +707,12 @@ async def run_react_loop(
         # 消费后立即删除，避免影响后续正常请求
         await delete_llm_failure_checkpoint(_redis_client, _session_id)
 
-    # tools_map 包含 finish_react
+    # tools_map 包含 finish_react（LLM 可见工具集）
     tools_map: dict[str, BaseTool] = {t.name: t for t in tools_list}
     tools_map["finish_react"] = finish_react
 
     llm = _build_llm(state)
+    # bind_tools 仅绑定 LLM 可见工具（不含 redirect_tools，避免 LLM 直接调用内部路由工具）
     llm_with_tools = llm.bind_tools(list(tools_map.values()))
 
     # 备用模型（每次请求独立构建，不缓存；未配置时为 None）
@@ -720,6 +722,11 @@ async def run_react_loop(
     fallback_llm_with_tools = (
         _fallback_llm.bind_tools(list(tools_map.values())) if _fallback_llm else None
     )
+
+    # redirect_tools：仅供 before_callback redirect 使用，不暴露给 LLM
+    # 在 bind_tools 之后才合并，确保 LLM 看不到这些工具
+    if redirect_tools_map:
+        tools_map.update(redirect_tools_map)
 
     # 检测是否resume：state中有react_checkpoint标记
     react_checkpoint = state.get("react_checkpoint")

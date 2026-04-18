@@ -40,6 +40,7 @@ def build_analysis_graph(
     tools: dict[str, Any] | None = None,
     knowledge_enhancer: Callable[..., Any] | None = None,
     loader: Any = None,
+    redirect_tools: dict[str, Any] | None = None,
 ) -> StateGraph[AgentState]:
     """Return an uncompiled StateGraph for the DataCloud 3-node pipeline."""
     builder = StateGraph(AgentState)
@@ -55,6 +56,7 @@ def build_analysis_graph(
             default_tools=tools,
             prompts_overwrite=prompts_overwrite,
             loader=loader,
+            redirect_tools=redirect_tools,
         )
         return _as_state_update(result, node_name="execution")
 
@@ -79,10 +81,14 @@ def build_analysis_graph(
     builder.add_edge("respond", END)
 
     tool_keys = sorted((tools or {}).keys())
+    redirect_tool_keys = sorted((redirect_tools or {}).keys())
     logger.info(
-        "build_analysis_graph: 3-node pipeline wired — tools count=%d keys=%s knowledge_enhancer=%s",
+        "build_analysis_graph: 3-node pipeline wired — tools count=%d keys=%s "
+        "redirect_tools count=%d keys=%s knowledge_enhancer=%s",
         len(tool_keys),
         tool_keys,
+        len(redirect_tool_keys),
+        redirect_tool_keys,
         knowledge_enhancer is not None,
     )
 

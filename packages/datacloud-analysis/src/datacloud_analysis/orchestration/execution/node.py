@@ -327,6 +327,7 @@ async def execution_node(
     default_tools: dict[str, Any] | None = None,
     prompts_overwrite: dict[str, Any] | None = None,
     loader: Any = None,
+    redirect_tools: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Execute ReAct loop with tool dispatch and hook support."""
     locale = os.getenv("DATACLOUD_AGENT_LOCALE", "zh_CN")
@@ -385,9 +386,20 @@ async def execution_node(
     tools_list = _build_tools_list(default_tools)
     max_rounds = int(os.getenv("DATACLOUD_REACT_MAX_ROUNDS", "10"))
 
+    # redirect_tools：将 redirect_tools 中的 BaseTool 提取到 redirect_tools_map，
+    # 仅供 before_callback redirect 使用，不加入 tools_list（LLM 不可见）。
+    redirect_tools_map: dict[str, BaseTool] | None = None
+    if redirect_tools:
+        redirect_tools_map = {}
+        for _rt_name, _rt_callable in redirect_tools.items():
+            if isinstance(_rt_callable, BaseTool):
+                redirect_tools_map[_rt_name] = _rt_callable
+            # 非 BaseTool 的 callable 不处理（redirect 工具必须是 StructuredTool）
+
     logger.info(
-        "[execution_node] tools=%s max_rounds=%d",
+        "[execution_node] tools=%s redirect_tools=%s max_rounds=%d",
         [t.name for t in tools_list],
+        sorted(redirect_tools_map.keys()) if redirect_tools_map else [],
         max_rounds,
     )
 
@@ -407,6 +419,7 @@ async def execution_node(
                 max_rounds=max_rounds,
                 gateway_context=gateway_context,
                 loader=loader,
+                redirect_tools_map=redirect_tools_map,
             )
         else:
             result = await run_react_loop(
@@ -418,6 +431,7 @@ async def execution_node(
                 max_rounds=max_rounds,
                 gateway_context=gateway_context,
                 loader=loader,
+                redirect_tools_map=redirect_tools_map,
             )
     else:
         result = await run_react_loop(
@@ -429,6 +443,7 @@ async def execution_node(
             max_rounds=max_rounds,
             gateway_context=gateway_context,
             loader=loader,
+            redirect_tools_map=redirect_tools_map,
         )
 
     return result

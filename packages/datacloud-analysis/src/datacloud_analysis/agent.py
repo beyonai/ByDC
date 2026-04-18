@@ -182,8 +182,17 @@ def create_agent(
         skip_action_families=skip_action_families,
     ).load()
 
-    # 合并工具：本体工具为基础，caller 传入的 tools 优先覆盖同名工具
-    merged_tools: dict[str, Any] | None = {**ontology_tools, **(tools or {})} or None
+    # 合并工具：本体工具为基础，caller 传入的 tools 优先覆盖同名工具。
+    # data_query_* 工具（redirect_tools）不加入 LLM 可见的 merged_tools，
+    # 单独通过 redirect_tools 传入 graph，仅供 before_callback redirect 使用。
+    extra_tools = tools or {}
+    redirect_tools: dict[str, Any] = {
+        k: v for k, v in extra_tools.items() if k.startswith("data_query_")
+    }
+    llm_visible_tools: dict[str, Any] = {
+        k: v for k, v in extra_tools.items() if not k.startswith("data_query_")
+    }
+    merged_tools: dict[str, Any] | None = {**ontology_tools, **llm_visible_tools} or None
 
     question_ctx = _extract_question_context_for_log(
         user_message=user_message,
@@ -204,9 +213,11 @@ def create_agent(
     logger.info("create_agent: locale=%s (Custom StateGraph)", resolved_locale)
     logger.info(
         "create_agent: tools summary — "
-        "ontology=%d extra=%d merged=%d mounted_objects=%s prompts_overwrite_keys=%s",
+        "ontology=%d extra=%d llm_visible=%d redirect=%d merged=%d mounted_objects=%s prompts_overwrite_keys=%s",
         len(ontology_tools),
-        len(tools or {}),
+        len(extra_tools),
+        len(llm_visible_tools),
+        len(redirect_tools),
         len(merged_tools or {}),
         mounted_objects,
         sorted((prompts_overwrite or {}).keys()),
@@ -217,6 +228,7 @@ def create_agent(
         tools=merged_tools,
         knowledge_enhancer=knowledge_enhancer,
         loader=loader,
+        redirect_tools=redirect_tools or None,
     )
 
     # Inject checkpointer if bootstrap.setup() has already been called;
