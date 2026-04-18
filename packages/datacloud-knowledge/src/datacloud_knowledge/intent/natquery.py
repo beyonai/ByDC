@@ -35,7 +35,10 @@ class WhereClause(BaseModel):
         default_factory=list,
         description="字段名的同义别名列表，尽量列出该字段在数据库中可能的名称",
     )
-    op: str = Field(default="=", description="运算符: =, >, <, >=, <=, IN, BETWEEN")
+    op: str = Field(
+        default="=",
+        description="运算符: =, >, <, >=, <=, IN, BETWEEN, BOTTOM_PCT, TOP_PCT",
+    )
     value: Any = Field(description="值，IN 时为列表")
 
 
@@ -134,6 +137,7 @@ SYSTEM_PROMPT = """\
    - 明确的时间、阈值、实例名，进入 where。
    - 明确出现“各X”“按X”“分X”时，X 进入 group_by。
    - 只有在原句明确要求排序、前几名、后几名时，才填写 order_by / limit。
+   - 当用户表达"前/后 X%"时，这是百分位过滤，不是行数截断。使用 where 条件，op 为 TOP_PCT（前X%）或 BOTTOM_PCT（后X%），value 为 0 到 1 的小数。例如"后30%"→ op="BOTTOM_PCT", value=0.3。不要写入 limit。
 
 ## 四、输出要求
 
@@ -205,6 +209,13 @@ SYSTEM_PROMPT = """\
     {"query": "作文得分平均分", "select": [{"expr": "AVG(作文得分)", "alias": ["作文得分平均分", "作文平均分"]}], "where": [{"field": "时间", "op": "=", "value": "上周"}, {"field": "班级", "op": "IN", "value": ["甲班", "乙班"]}], "group_by": [], "order_by": [], "limit": null}
     </output>
   </example>
+  <example>
+    <doc>百分位过滤用 BOTTOM_PCT/TOP_PCT，不用 limit</doc>
+    <input>成绩排名后20%的学生</input>
+    <output>
+    {"query": "学生", "select": [{"expr": "学生", "alias": ["学生姓名", "学生编号"]}], "where": [{"field": "成绩", "field_alias": ["考试成绩", "总成绩"], "op": "BOTTOM_PCT", "value": 0.2}], "group_by": [], "order_by": [], "limit": null}
+    </output>
+  </example>
 </examples>
 """
 
@@ -217,6 +228,8 @@ _OP_MAP: dict[str, str] = {
     "<": "lt",
     ">=": "gte",
     "<=": "lte",
+    "BOTTOM_PCT": "bottom_pct",
+    "TOP_PCT": "top_pct",
 }
 
 # SQL 函数名（大小写不敏感），用于从 expr 中提取可召回的自然语言片段
