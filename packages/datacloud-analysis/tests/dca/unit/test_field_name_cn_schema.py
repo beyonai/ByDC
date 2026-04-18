@@ -91,7 +91,9 @@ def test_T9_1_query_filter_item_uses_field() -> None:
     for item in filter_items:
         props = item.get("properties", {})
         assert "field" in props, f"filters item 缺少 field: {list(props.keys())}"
-        assert "field_name_cn" not in props, f"filters item 仍含旧 field_name_cn 键: {list(props.keys())}"
+        assert "field_name_cn" not in props, (
+            f"filters item 仍含旧 field_name_cn 键: {list(props.keys())}"
+        )
         required = item.get("required", [])
         assert "field" in required, "filters item required 应含 field"
         assert "field_name_cn" not in required, "filters item required 不应含 field_name_cn"
@@ -113,7 +115,9 @@ def test_T9_2_compute_dim_item_uses_field() -> None:
     for item in one_of:
         props = item.get("properties", {})
         assert "field" in props, f"dimensions item 缺少 field: {list(props.keys())}"
-        assert "field_name_cn" not in props, f"dimensions item 仍含 field_name_cn: {list(props.keys())}"
+        assert "field_name_cn" not in props, (
+            f"dimensions item 仍含 field_name_cn: {list(props.keys())}"
+        )
 
 
 # ── T9-3：compute_* metrics 使用 field ───────────────────────────────────────
@@ -137,7 +141,9 @@ def test_T9_3_compute_metric_item_uses_field() -> None:
     for item in regular_items:
         props = item.get("properties", {})
         assert "field" in props, f"metrics item 缺少 field: {list(props.keys())}"
-        assert "field_name_cn" not in props, f"metrics item 仍含 field_name_cn: {list(props.keys())}"
+        assert "field_name_cn" not in props, (
+            f"metrics item 仍含 field_name_cn: {list(props.keys())}"
+        )
 
 
 # ── T9-4：query_* / compute_* order_by 使用 field ───────────────────────────
@@ -157,9 +163,7 @@ def test_T9_4_order_by_uses_field() -> None:
         ob_schema = schema["properties"].get("order_by", {})
         ob_item = ob_schema.get("items", {})
         ob_props = ob_item.get("properties", {})
-        assert "field" in ob_props, (
-            f"order_by item 缺少 field: {list(ob_props.keys())}"
-        )
+        assert "field" in ob_props, f"order_by item 缺少 field: {list(ob_props.keys())}"
         assert "field_name_cn" not in ob_props, (
             f"order_by item 仍含 field_name_cn: {list(ob_props.keys())}"
         )

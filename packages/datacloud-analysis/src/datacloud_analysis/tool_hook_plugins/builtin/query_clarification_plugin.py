@@ -9,9 +9,8 @@
         is_complex=False → 返回 None（OQL 直查）
         is_complex=True  → redirect → data_query_*
      b. 存在未命中项 → NEED_CONFIRM
-        → analyze_query_clarification_query/compute（TODO 待实现，现返回固定 stub）
-        → interrupt 追问
-        → 恢复后 _apply_resume_to_tool_params 写回 filters
+        → analyze_query_clarification → interrupt 追问
+        → 恢复后 format_clarification 写回参数
         is_complex=False → patch（OQL 直查）
         is_complex=True  → redirect → data_query_*
 """
@@ -22,6 +21,19 @@ import json
 import logging
 import re
 from typing import Any
+
+from datacloud_knowledge.intent.clarification import (
+    analyze_query_clarification_compute as _sdk_analyze_compute,
+)
+from datacloud_knowledge.intent.clarification import (
+    analyze_query_clarification_query as _sdk_analyze_query,
+)
+from datacloud_knowledge.intent.clarification import (
+    format_clarification_compute as _sdk_format_compute,
+)
+from datacloud_knowledge.intent.clarification import (
+    format_clarification_query as _sdk_format_query,
+)
 
 from datacloud_analysis.tool_hook_plugins.types import HookContext, HookDecision
 
@@ -183,23 +195,6 @@ def _resolve_terms(
     return resolved, unresolved
 
 
-def _normalize_sort_key(item: dict[str, Any]) -> dict[str, Any]:
-    """将 LLM 可能使用的 sort 键规范化为 Schema 定义的 direction 键。
-
-    LLM 有时发送 {"sort": "asc"} 而非 {"direction": "asc"}，
-    底层 SQL builder 不识别 sort，导致排序方向丢失（使用默认 DESC）。
-    - sort 存在且 direction 不存在 → 将 sort 值写入 direction，移除 sort
-    - direction 已存在 → 保留 direction，移除冗余的 sort
-    - 不含 sort → 原样返回
-    """
-    if not isinstance(item, dict) or "sort" not in item:
-        return item
-    new_item = {k: v for k, v in item.items() if k != "sort"}
-    if "direction" not in new_item:
-        new_item["direction"] = item["sort"]
-    return new_item
-
-
 def _apply_resolved_to_params(
     tool_params: dict[str, Any],
     resolved: dict[str, str],
@@ -247,8 +242,7 @@ def _apply_resolved_to_params(
         _translate_field(m) if isinstance(m, dict) else m for m in patched.get("metrics") or []
     ]
     patched["order_by"] = [
-        _normalize_sort_key(_translate_field(o) if isinstance(o, dict) else o)
-        for o in patched.get("order_by") or []
+        _translate_field(o) if isinstance(o, dict) else o for o in patched.get("order_by") or []
     ]
     patched["having"] = [
         _translate_field(h) if isinstance(h, dict) else h for h in patched.get("having") or []
@@ -286,140 +280,38 @@ def _build_redirect_decision(
     }
 
 
-# ── TODO 占位：澄清分析函数（罗同学实现）─────────────────────────────────────
+# ── 澄清 SDK 调用 ──────────────────────────────────────────────────────────────
 
 
-def analyze_query_clarification_query(
+def _analyze_clarification(
     query: str,
     ontology_code: str,
-    structured_query: dict[str, Any],
-) -> dict[str, Any]:
-    """TODO(罗同学): 分析 query_* 调用的歧义，返回 paradigmList 供 interrupt 使用。
+    structured_input: dict[str, Any],
+    *,
+    is_compute: bool,
+) -> tuple[list[dict[str, Any]], str]:
+    """调用 SDK 澄清分析，返回 (paradigmList, knowledge)。"""
+    if is_compute:
+        result = _sdk_analyze_compute(query, ontology_code, structured_input)
+    else:
+        result = _sdk_analyze_query(query, ontology_code, structured_input)
 
-    当前 stub：固定返回 needsXX=True + 空 paradigmList，触发 interrupt 追问。
-    实现后需根据 ontology_code 的字段 Schema 做真实召回。
-    """
-    # STUB：固定返回，使流程可以跑通
-    return {
-        "needsClarification": True,
-        "form": json.dumps({"paradigmList": []}),
-    }
+    paradigm_list = json.loads(result.form or "{}").get("paradigmList", [])
+    return paradigm_list, result.knowledge
 
 
-def analyze_query_clarification_compute(
+def _format_clarification(
     query: str,
-    ontology_code: str,
-    structured_compute: dict[str, Any],
+    structured_input: dict[str, Any],
+    form_str: str,
+    knowledge: str,
+    *,
+    is_compute: bool,
 ) -> dict[str, Any]:
-    """TODO(罗同学): 分析 compute_* 调用的歧义，返回 paradigmList 供 interrupt 使用。
-
-    当前 stub：固定返回 needsXX=True + 空 paradigmList，触发 interrupt 追问。
-    """
-    return {
-        "needsClarification": True,
-        "form": json.dumps({"paradigmList": []}),
-    }
-
-
-def format_clarification_query(
-    original_params: dict[str, Any],
-    form: dict[str, Any],
-) -> dict[str, Any]:
-    """TODO(罗同学): 将用户 paradigm 选择合并回 query_* 参数 dict。
-
-    当前 stub：原样返回 original_params，不做任何修改。
-    """
-    return dict(original_params)
-
-
-def format_clarification_compute(
-    original_params: dict[str, Any],
-    form: dict[str, Any],
-) -> dict[str, Any]:
-    """TODO(罗同学): 将用户 paradigm 选择合并回 compute_* 参数 dict。
-
-    当前 stub：原样返回 original_params，不做任何修改。
-    """
-    return dict(original_params)
-
-
-# ── 核心 resume 写回 ──────────────────────────────────────────────────────────
-
-
-def _apply_resume_to_tool_params(
-    ctx: HookContext,
-    tool_name: str,
-    resume_value: Any,
-    user_query: str,
-) -> None:
-    """将用户 paradigm 选择写回 tool_params，防止恢复时再次触发歧义。
-
-    resume_value 结构：{"paradigmList": [{"keyword": "...", "choiceKeyword": "...", ...}]}
-    """
-    selected: list[dict[str, Any]] = []
-    if isinstance(resume_value, dict):
-        selected = resume_value.get("paradigmList", [])
-
-    tool_params: dict[str, Any] = dict(ctx.get("tool_params") or {})
-
-    # 构建 keyword → choiceKeyword 映射（用户的选择结果）
-    choice_map: dict[str, str] = {}
-    for item in selected:
-        kw = item.get("keyword") or ""
-        choice = item.get("choiceKeyword") or ""
-        if kw and choice:
-            choice_map[kw] = choice
-
-    if not choice_map:
-        return
-
-    def _remap(term: str) -> str:
-        return choice_map.get(term, term)
-
-    def _resume_translate_field(item: dict[str, Any]) -> dict[str, Any]:
-        """将用户选择的 choiceKeyword 写回 field，支持 field_name_cn / field 两种键名。
-
-        字段编码直接透传；中文名走 choice_map 映射。
-        """
-        if not isinstance(item, dict):
-            return item
-        raw = item.get("field_name_cn") or item.get("field")
-        if raw:
-            s = str(raw)
-            resolved = s if _is_field_code(s) else choice_map.get(s, _remap(s))
-            new_item = {k: v for k, v in item.items() if k not in ("field_name_cn", "field")}
-            new_item["field"] = resolved
-            return new_item
-        return item
-
-    # 写回 filters.field
-    tool_params["filters"] = [
-        _resume_translate_field(f) if isinstance(f, dict) else f
-        for f in tool_params.get("filters") or []
-    ]
-    # 写回 select
-    tool_params["select"] = [_remap(s) for s in tool_params.get("select") or []]
-    # 写回 dimensions
-    tool_params["dimensions"] = [
-        _resume_translate_field(d) if isinstance(d, dict) else d
-        for d in tool_params.get("dimensions") or []
-    ]
-    # 写回 metrics
-    tool_params["metrics"] = [
-        _resume_translate_field(m) if isinstance(m, dict) else m
-        for m in tool_params.get("metrics") or []
-    ]
-    # 写回 order_by（同时规范化 sort → direction）
-    tool_params["order_by"] = [
-        _normalize_sort_key(_resume_translate_field(o) if isinstance(o, dict) else o)
-        for o in tool_params.get("order_by") or []
-    ]
-    # 写回 having
-    tool_params["having"] = [
-        _resume_translate_field(h) if isinstance(h, dict) else h
-        for h in tool_params.get("having") or []
-    ]
-    ctx["tool_params"] = tool_params
+    """调用 SDK 格式化，返回写回后的参数 dict。"""
+    if is_compute:
+        return _sdk_format_compute(query, structured_input, form_str, knowledge)
+    return _sdk_format_query(query, structured_input, form_str, knowledge)
 
 
 # ── 主 hook 入口 ──────────────────────────────────────────────────────────────
@@ -478,30 +370,56 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         if unresolved:
             # 存在未命中术语 → NEED_CONFIRM
             logger.info("[query_clarification] NEED_CONFIRM: unresolved=%s", unresolved)
-            # 调用澄清分析（当前 stub，TODO 待实现）
-            scope_code = _scope_code_from_tool(tool_name)
-            if tool_name.startswith("compute_"):
-                clarify_result = analyze_query_clarification_compute(query, scope_code, tool_params)
-            else:
-                clarify_result = analyze_query_clarification_query(query, scope_code, tool_params)
-
-            try:
-                paradigm_list = json.loads(clarify_result.get("form", "{}") or "{}").get(
-                    "paradigmList", []
+            if interrupt is None:
+                logger.warning(
+                    "[query_clarification] interrupt unavailable, skip clarification interrupt"
                 )
-            except Exception:  # noqa: BLE001
-                paradigm_list = []
+                tool_params = _apply_resolved_to_params(tool_params, resolved)
+                ctx["tool_params"] = tool_params
+                if is_complex:
+                    return _build_redirect_decision(tool_name, query, tool_params)
+                return None
+
+            scope_code = _scope_code_from_tool(tool_name)
+            structured_input = {**tool_params, "complex_conditions": complex_conditions}
+            is_compute = tool_name.startswith("compute_")
+
+            paradigm_list, clarify_knowledge = _analyze_clarification(
+                query,
+                scope_code,
+                structured_input,
+                is_compute=is_compute,
+            )
 
             resume_value = interrupt(
                 {
                     "prompt": "查询条件存在歧义，请确认查询维度",
                     "reason_code": "PARADIGM_CLARIFICATION",
                     "ask_user_payload": {"paradigmList": paradigm_list},
+                    "_clarify_knowledge": clarify_knowledge,
+                    "_clarify_query": query,
                 }
             )
-            # 恢复后写回 tool_params（_apply_resume_to_tool_params 内部已处理 field_name_cn → field）
-            _apply_resume_to_tool_params(ctx, tool_name, resume_value, query)
-            tool_params = dict(ctx["tool_params"])
+
+            # resume 后调 SDK format 写回参数
+            knowledge = ""
+            saved_query = query
+            if isinstance(resume_value, dict):
+                knowledge = str(resume_value.get("_clarify_knowledge", ""))
+                saved_query = str(resume_value.get("_clarify_query", query))
+
+            form_str = (
+                json.dumps(resume_value, ensure_ascii=False)
+                if isinstance(resume_value, dict)
+                else "{}"
+            )
+            tool_params = _format_clarification(
+                saved_query,
+                structured_input,
+                form_str,
+                knowledge,
+                is_compute=is_compute,
+            )
 
             # 兜底翻译：resume 后仍可能残留未命中的 field_name_cn（用户未选或选择为空）
             # 对这些残留项做原样透传（field_name_cn → field），确保 SQL builder 不报语法错误

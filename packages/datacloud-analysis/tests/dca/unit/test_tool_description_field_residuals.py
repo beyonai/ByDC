@@ -71,8 +71,7 @@ def test_T13_1_query_description_no_old_field_code_instruction() -> None:
     desc = build_query_description("企业分析", "企业综合分析视图", _sample_fields())
 
     assert "**field 统一使用字段编码（field_code）**" not in desc, (
-        "query description 仍含废弃的旧 field_code 引导\n"
-        f"出现位置:\n{desc[:300]}"
+        f"query description 仍含废弃的旧 field_code 引导\n出现位置:\n{desc[:300]}"
     )
 
 
@@ -101,8 +100,7 @@ def test_T13_3_compute_description_no_old_field_code_instruction() -> None:
     desc = build_compute_description("企业分析", "企业综合分析视图", _sample_fields())
 
     assert "**field 统一使用字段编码（field_code）**" not in desc, (
-        "compute description 仍含废弃的旧 field_code 引导\n"
-        f"出现位置:\n{desc[:300]}"
+        f"compute description 仍含废弃的旧 field_code 引导\n出现位置:\n{desc[:300]}"
     )
 
 

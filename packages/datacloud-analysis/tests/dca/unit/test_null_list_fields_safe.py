@@ -19,7 +19,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # ── T17-1：_collect_terms 对 None 列表不抛异常 ────────────────────────────────
 
 

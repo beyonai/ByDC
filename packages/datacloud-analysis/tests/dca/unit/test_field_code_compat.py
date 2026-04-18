@@ -20,7 +20,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # ── T16-1 / T16-2：_is_field_code 基础逻辑 ────────────────────────────────────
 
 
@@ -101,9 +100,7 @@ def test_T16_5_apply_resolved_passthrough_field_code_in_filter() -> None:
     new_params = _apply_resolved_to_params(params, {})
 
     f = new_params["filters"][0]
-    assert f.get("field") == "total_revenue", (
-        f"字段编码应透传，实际: {f}"
-    )
+    assert f.get("field") == "total_revenue", f"字段编码应透传，实际: {f}"
 
 
 def test_T16_6_apply_resolved_maps_chinese_field_in_filter() -> None:
@@ -120,9 +117,7 @@ def test_T16_6_apply_resolved_maps_chinese_field_in_filter() -> None:
     new_params = _apply_resolved_to_params(params, resolved)
 
     f = new_params["filters"][0]
-    assert f.get("field") == "total_revenue", (
-        f"中文名应映射为 total_revenue，实际: {f}"
-    )
+    assert f.get("field") == "total_revenue", f"中文名应映射为 total_revenue，实际: {f}"
     assert "field_name_cn" not in f, f"翻译后不应保留 field_name_cn: {f}"
 
 
@@ -182,13 +177,9 @@ def test_T16_9_order_by_field_code_passes_through() -> None:
 
     # 1. 不收入 terms
     terms = _collect_terms_from_params(params)
-    assert "total_revenue" not in terms, (
-        f"order_by 字段编码不应收入 terms，实际: {terms}"
-    )
+    assert "total_revenue" not in terms, f"order_by 字段编码不应收入 terms，实际: {terms}"
 
     # 2. 直接透传
     new_params = _apply_resolved_to_params(params, {})
     ob = new_params["order_by"][0]
-    assert ob.get("field") == "total_revenue", (
-        f"order_by 字段编码应透传，实际: {ob}"
-    )
+    assert ob.get("field") == "total_revenue", f"order_by 字段编码应透传，实际: {ob}"

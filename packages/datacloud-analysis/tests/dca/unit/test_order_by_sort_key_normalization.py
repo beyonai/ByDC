@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # ── T18-1：sort: "asc" → direction: "asc"，sort 键被移除 ─────────────────────
 
 
