@@ -15,7 +15,7 @@ if os.getenv("DATACLOUD_INTENT_DEBUG", "0").strip().lower() in {"1", "true", "ye
         _intent_logger.propagate = False  # 避免 root handler 重复输出
 
 from .cache import UserNameCache
-from .clarification import analyze_query_clarification
+from .clarification_legacy import analyze_query_clarification
 from .disambiguation import build_shortest_path_tree, disambiguate
 from .llm_confirm import (
     ConfirmedGroupBy,
