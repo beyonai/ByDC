@@ -183,6 +183,23 @@ def _resolve_terms(
     return resolved, unresolved
 
 
+def _normalize_sort_key(item: dict[str, Any]) -> dict[str, Any]:
+    """将 LLM 可能使用的 sort 键规范化为 Schema 定义的 direction 键。
+
+    LLM 有时发送 {"sort": "asc"} 而非 {"direction": "asc"}，
+    底层 SQL builder 不识别 sort，导致排序方向丢失（使用默认 DESC）。
+    - sort 存在且 direction 不存在 → 将 sort 值写入 direction，移除 sort
+    - direction 已存在 → 保留 direction，移除冗余的 sort
+    - 不含 sort → 原样返回
+    """
+    if not isinstance(item, dict) or "sort" not in item:
+        return item
+    new_item = {k: v for k, v in item.items() if k != "sort"}
+    if "direction" not in new_item:
+        new_item["direction"] = item["sort"]
+    return new_item
+
+
 def _apply_resolved_to_params(
     tool_params: dict[str, Any],
     resolved: dict[str, str],
@@ -230,7 +247,8 @@ def _apply_resolved_to_params(
         _translate_field(m) if isinstance(m, dict) else m for m in patched.get("metrics") or []
     ]
     patched["order_by"] = [
-        _translate_field(o) if isinstance(o, dict) else o for o in patched.get("order_by") or []
+        _normalize_sort_key(_translate_field(o) if isinstance(o, dict) else o)
+        for o in patched.get("order_by") or []
     ]
     patched["having"] = [
         _translate_field(h) if isinstance(h, dict) else h for h in patched.get("having") or []
@@ -391,9 +409,9 @@ def _apply_resume_to_tool_params(
         _resume_translate_field(m) if isinstance(m, dict) else m
         for m in tool_params.get("metrics") or []
     ]
-    # 写回 order_by
+    # 写回 order_by（同时规范化 sort → direction）
     tool_params["order_by"] = [
-        _resume_translate_field(o) if isinstance(o, dict) else o
+        _normalize_sort_key(_resume_translate_field(o) if isinstance(o, dict) else o)
         for o in tool_params.get("order_by") or []
     ]
     # 写回 having
