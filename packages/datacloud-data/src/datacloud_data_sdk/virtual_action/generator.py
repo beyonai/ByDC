@@ -345,10 +345,10 @@ def build_compute_schema(
     fields: list[Any],
     required_filter_groups: list[str] | None = None,
 ) -> dict[str, Any]:
-    """生成 compute_ontology 动作 inputSchema（field 支持 field_code 或中文名）。
+    """生成 compute_ontology 动作 inputSchema（field_name_cn 填字段中文名）。
 
     协议（§3.1 字段映射版）：
-    - dimensions[i].field / metrics[i].field / filters[i].field 支持 field_code 或中文名
+    - dimensions[i].field_name_cn / metrics[i].field_name_cn / filters[i].field_name_cn 填字段中文名
     """
     dim_fields = [f for f in fields if getattr(f, "group_ops", [])]
     msr_fields = [
@@ -453,7 +453,7 @@ def build_compute_schema(
 
     schema: dict[str, Any] = {
         "type": "object",
-        "description": f"统计分析 {scope_name}（field 填字段编码或中文名）{required_hint}",
+        "description": f"统计分析 {scope_name}（field_name_cn 填字段中文名）{required_hint}",
         "properties": {
             "query": {
                 "type": "string",

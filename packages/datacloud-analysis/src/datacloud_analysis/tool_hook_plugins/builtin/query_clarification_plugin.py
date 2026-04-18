@@ -398,6 +398,9 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
     catalog = _get_field_catalog(tool_name, ctx)
     terms = _collect_terms_from_params(tool_params)
 
+    # resolved 始终初始化为空 dict；catalog 有值时才做术语解析
+    resolved: dict[str, str] = {}
+
     if catalog and terms:
         resolved, unresolved = _resolve_terms(terms, catalog)
 
@@ -425,22 +428,36 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                     "ask_user_payload": {"paradigmList": paradigm_list},
                 }
             )
-            # 恢复后写回 tool_params
+            # 恢复后写回 tool_params（_apply_resume_to_tool_params 内部已处理 field_name_cn → field）
             _apply_resume_to_tool_params(ctx, tool_name, resume_value, query)
             tool_params = dict(ctx["tool_params"])
+
+            # 兜底翻译：resume 后仍可能残留未命中的 field_name_cn（用户未选或选择为空）
+            # 对这些残留项做原样透传（field_name_cn → field），确保 SQL builder 不报语法错误
+            tool_params = _apply_resolved_to_params(tool_params, resolved)
+            ctx["tool_params"] = tool_params
 
             # 恢复后路由
             if is_complex:
                 return _build_redirect_decision(tool_name, query, tool_params)
             return {"action": "patch", "patch": {"tool_params": tool_params}}
-
-        # 全部 1:1 命中 → CLEAR，写回 field_code
-        patched_params = _apply_resolved_to_params(tool_params, resolved)
-        ctx["tool_params"] = patched_params
-        tool_params = patched_params
     else:
-        # catalog 为空（loader=None）或无 terms → 视为 CLEAR，降级继续
-        logger.debug("[query_clarification] catalog empty or no terms, skip term resolution")
+        if not catalog and terms:
+            # loader 未注入时打警告：field_name_cn 无法映射到 field_code，将原样透传
+            logger.warning(
+                "[query_clarification] loader not available, "
+                "field_name_cn will be passed as-is to field (cannot resolve to field_code)"
+            )
+        else:
+            logger.debug("[query_clarification] no terms to resolve, skip term resolution")
+
+    # ── 字段名结构翻译（无条件执行）────────────────────────────────────────────
+    # 无论 catalog 是否为空，都必须将 field_name_cn 翻译为 field 键，
+    # 确保 SQL builder 能读到 field（resolved={} 时原样透传中文名值）。
+    # 若 catalog 有映射，则写入 field_code；否则写入原始中文名（至少避免 SQL 语法错误）。
+    patched_params = _apply_resolved_to_params(tool_params, resolved)
+    ctx["tool_params"] = patched_params
+    tool_params = patched_params
 
     # ── 路由决策 ─────────────────────────────────────────────────────────────
     if is_complex:
