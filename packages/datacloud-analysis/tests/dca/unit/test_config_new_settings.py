@@ -88,7 +88,7 @@ def test_settings_propagates_unexpected_llm_loader_errors(monkeypatch: pytest.Mo
     monkeypatch.setenv("DATACLOUD_DB_DATABASE", "postgres")
     monkeypatch.setenv("DATACLOUD_DB_SCHEMA", "byai")
     monkeypatch.setenv("DATACLOUD_DB_USER", "demo")
-    monkeypatch.setenv("DATACLOUD_DB_PASS", "demo")
+    monkeypatch.setenv("DATACLOUD_DB_PASSWORD", "demo")
 
     def _raise_runtime_error(_cls: type[object], _role: str) -> env_module.LLMGroupSettings:
         raise RuntimeError("boom")
@@ -112,7 +112,7 @@ def test_pg_settings_support_split_db_env_vars(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("DATACLOUD_DB_DATABASE", "postgres")
     monkeypatch.setenv("DATACLOUD_DB_SCHEMA", "byai")
     monkeypatch.setenv("DATACLOUD_DB_USER", "gaussdb")
-    monkeypatch.setenv("DATACLOUD_DB_PASS", "Admin@123")
+    monkeypatch.setenv("DATACLOUD_DB_PASSWORD", "Admin@123")
     monkeypatch.setenv("DATACLOUD_DB_TYPE", "opengauss")
 
     settings = PGSettings()

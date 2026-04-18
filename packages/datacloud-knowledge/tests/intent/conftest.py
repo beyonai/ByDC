@@ -30,7 +30,7 @@ _REQUIRED_DB_ENV_VARS = (
     "DATACLOUD_DB_HOST",
     "DATACLOUD_DB_DATABASE",
     "DATACLOUD_DB_USER",
-    "DATACLOUD_DB_PASS",
+    "DATACLOUD_DB_PASSWORD",
 )
 
 
@@ -52,7 +52,7 @@ def db_session(integration_enabled: bool) -> Iterator[Session]:
     if not any(os.getenv(name, "").strip() for name in _REQUIRED_DB_ENV_VARS):
         pytest.skip(
             "Missing DB env vars: DATACLOUD_DB_HOST / DATACLOUD_DB_DATABASE / "
-            "DATACLOUD_DB_USER / DATACLOUD_DB_PASS"
+            "DATACLOUD_DB_USER / DATACLOUD_DB_PASSWORD"
         )
 
     if not integration_enabled:

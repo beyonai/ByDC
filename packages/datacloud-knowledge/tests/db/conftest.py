@@ -32,7 +32,7 @@ _DB_CONFIG_TRIGGER_ENV_VARS = (
     "DATACLOUD_DB_HOST",
     "DATACLOUD_DB_DATABASE",
     "DATACLOUD_DB_USER",
-    "DATACLOUD_DB_PASS",
+    "DATACLOUD_DB_PASSWORD",
 )
 
 
@@ -55,7 +55,7 @@ def db_config() -> dict[str, str | int]:
         pytest.skip(
             "db_integration: missing env vars: "
             "DATACLOUD_DB_HOST / DATACLOUD_DB_DATABASE / DATACLOUD_DB_USER / "
-            "DATACLOUD_DB_PASS"
+            "DATACLOUD_DB_PASSWORD"
         )
 
     db_url_module = import_module("datacloud_knowledge.db_url")

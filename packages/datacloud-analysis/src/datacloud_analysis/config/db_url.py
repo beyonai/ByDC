@@ -37,7 +37,7 @@ def _read_text_env(*names: str) -> str:
 
 
 def _read_password_env() -> str:
-    return os.getenv("DATACLOUD_DB_PASS", "")
+    return os.getenv("DATACLOUD_DB_PASSWORD", "")
 
 
 def _read_port_env(default: int) -> int:
