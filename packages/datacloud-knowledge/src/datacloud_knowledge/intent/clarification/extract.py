@@ -67,7 +67,7 @@ def extract_terms_query(
     terms: list[ExtractedTerm] = []
 
     # select[]
-    for i, val in enumerate(structured_query.get("select", [])):
+    for i, val in enumerate(structured_query.get("select") or []):
         text = str(val).strip()
         terms.append(
             ExtractedTerm(
@@ -82,7 +82,7 @@ def extract_terms_query(
 
     # filters[]
     _extract_filters(
-        structured_query.get("filters", []),
+        structured_query.get("filters") or [],
         prefix="filters",
         terms=terms,
         source="main",
@@ -90,8 +90,8 @@ def extract_terms_query(
     )
 
     # order_by[]
-    metrics_aliases = _collect_metrics_aliases(structured_query.get("metrics", []))
-    for i, item in enumerate(structured_query.get("order_by", [])):
+    metrics_aliases = _collect_metrics_aliases(structured_query.get("metrics") or [])
+    for i, item in enumerate(structured_query.get("order_by") or []):
         field = str(item.get("field", "")).strip() if isinstance(item, dict) else str(item).strip()
         # 跳过引用 metrics[].as 别名的 order_by
         skip = _is_skippable(field) or field in metrics_aliases
@@ -121,10 +121,10 @@ def extract_terms_compute(
         ExtractedTerm 列表，按出现顺序排列。
     """
     terms: list[ExtractedTerm] = []
-    metrics_aliases = _collect_metrics_aliases(structured_compute.get("metrics", []))
+    metrics_aliases = _collect_metrics_aliases(structured_compute.get("metrics") or [])
 
     # dimensions[]
-    for i, dim in enumerate(structured_compute.get("dimensions", [])):
+    for i, dim in enumerate(structured_compute.get("dimensions") or []):
         field = str(dim.get("field", "")).strip() if isinstance(dim, dict) else str(dim).strip()
         terms.append(
             ExtractedTerm(
@@ -138,7 +138,7 @@ def extract_terms_compute(
         )
 
     # metrics[]
-    for i, metric in enumerate(structured_compute.get("metrics", [])):
+    for i, metric in enumerate(structured_compute.get("metrics") or []):
         if not isinstance(metric, dict):
             continue
         # metrics[].field
@@ -179,7 +179,7 @@ def extract_terms_compute(
 
     # filters[]
     _extract_filters(
-        structured_compute.get("filters", []),
+        structured_compute.get("filters") or [],
         prefix="filters",
         terms=terms,
         source="main",
@@ -187,7 +187,7 @@ def extract_terms_compute(
     )
 
     # having[] — field 引用 metrics[].as 别名，跳过
-    for i, h in enumerate(structured_compute.get("having", [])):
+    for i, h in enumerate(structured_compute.get("having") or []):
         if not isinstance(h, dict):
             continue
         field = str(h.get("field", "")).strip()
@@ -203,7 +203,7 @@ def extract_terms_compute(
         )
 
     # order_by[]
-    for i, item in enumerate(structured_compute.get("order_by", [])):
+    for i, item in enumerate(structured_compute.get("order_by") or []):
         field = str(item.get("field", "")).strip() if isinstance(item, dict) else str(item).strip()
         skip = _is_skippable(field) or field in metrics_aliases
         terms.append(

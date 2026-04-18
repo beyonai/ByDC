@@ -144,4 +144,3 @@ def test_T18_6_op_desc_mapped_to_direction() -> None:
 
     assert ob.get("direction") == "desc", f"op='desc' 应规范化为 direction='desc'，实际: {ob}"
     assert "op" not in ob, f"规范化后不应保留 op 键: {ob}"
-

@@ -73,34 +73,76 @@ class ClarifyItem(BaseModel):
 
 
 class ConfirmedStructuredQuery(BaseModel):
-    """LLM 确认后的 query 结果。"""
+    """提交查询确认结果。将中文术语映射到真实 schema 字段后，调用此工具提交确认结果。确定的术语直接替换，无法确定的放入 clarify_items。"""
 
-    select: list[str] = Field(default_factory=list)
-    filters: list[dict[str, Any]] = Field(default_factory=list)
-    order_by: list[dict[str, Any]] = Field(default_factory=list)
+    select: list[str] = Field(
+        default_factory=list,
+        description="确认后的查询字段列表，用召回候选中的真实字段名替换原始中文术语",
+    )
+    filters: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="确认后的过滤条件，field 用真实字段名替换",
+    )
+    order_by: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="确认后的排序条件",
+    )
     limit: int | None = None
     offset: int | None = None
     filter_relation: str = "AND"
 
-    confirmed_conditions: list[ConfirmedCondition] = Field(default_factory=list)
-    clarify_items: list[ClarifyItem] = Field(default_factory=list)
-    needs_clarification: bool = False
+    confirmed_conditions: list[ConfirmedCondition] = Field(
+        default_factory=list,
+        description="complex_conditions 中每条 NL 的术语确认结果",
+    )
+    clarify_items: list[ClarifyItem] = Field(
+        default_factory=list,
+        description="无法确定的术语，需要用户从候选中选择",
+    )
+    needs_clarification: bool = Field(
+        default=False,
+        description="true 表示存在无法确定的术语，需要用户澄清",
+    )
 
 
 class ConfirmedStructuredCompute(BaseModel):
-    """LLM 确认后的 compute 结果。"""
+    """提交统计分析确认结果。将中文术语映射到真实 schema 字段后，调用此工具提交确认结果。确定的术语直接替换，无法确定的放入 clarify_items。"""
 
-    dimensions: list[str | dict[str, Any]] = Field(default_factory=list)
-    metrics: list[dict[str, Any]] = Field(default_factory=list)
-    filters: list[dict[str, Any]] = Field(default_factory=list)
-    having: list[dict[str, Any]] = Field(default_factory=list)
-    order_by: list[dict[str, Any]] = Field(default_factory=list)
+    dimensions: list[str | dict[str, Any]] = Field(
+        default_factory=list,
+        description="确认后的分组维度，用真实字段名替换原始中文术语",
+    )
+    metrics: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="确认后的指标列表，field 用真实字段名替换",
+    )
+    filters: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="确认后的过滤条件，field 用真实字段名替换",
+    )
+    having: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="确认后的 having 条件",
+    )
+    order_by: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="确认后的排序条件",
+    )
     limit: int | None = None
     filter_relation: str = "AND"
 
-    confirmed_conditions: list[ConfirmedCondition] = Field(default_factory=list)
-    clarify_items: list[ClarifyItem] = Field(default_factory=list)
-    needs_clarification: bool = False
+    confirmed_conditions: list[ConfirmedCondition] = Field(
+        default_factory=list,
+        description="complex_conditions 中每条 NL 的术语确认结果",
+    )
+    clarify_items: list[ClarifyItem] = Field(
+        default_factory=list,
+        description="无法确定的术语，需要用户从候选中选择",
+    )
+    needs_clarification: bool = Field(
+        default=False,
+        description="true 表示存在无法确定的术语，需要用户澄清",
+    )
 
 
 # ── 内部元数据（存入 ClarificationResult.knowledge） ─────────────────

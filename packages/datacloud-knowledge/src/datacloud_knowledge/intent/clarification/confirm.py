@@ -244,8 +244,8 @@ def _build_user_prompt(
 ## 知识库召回结果
 {recall_context}
 
-## 请输出确认后的结构
-根据召回结果，将中文术语映射到真实 schema 字段。"""
+## 请确认并提交
+根据召回结果，将中文术语映射到真实 schema 字段，然后调用工具提交确认结果。"""
 
 
 def _check_needs_clarification(
