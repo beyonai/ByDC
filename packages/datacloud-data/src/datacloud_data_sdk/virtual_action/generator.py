@@ -434,7 +434,7 @@ def build_compute_schema(
                 },
                 "as": {"type": "string", "description": "结果列别名，用于 having/order_by 引用"},
             },
-            "required": ["agg", "as"],
+            "required": ["field_name_cn", "agg", "as"],
         }
 
     count_all_item: dict[str, Any] = {
