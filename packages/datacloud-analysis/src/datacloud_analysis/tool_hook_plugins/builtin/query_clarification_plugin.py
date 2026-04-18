@@ -132,6 +132,16 @@ def _collect_terms_from_params(tool_params: dict[str, Any]) -> list[str]:
             t = _get_field_term(m)
             if t:
                 terms.append(t)
+    for o in tool_params.get("order_by", []):
+        if isinstance(o, dict):
+            t = _get_field_term(o)
+            if t:
+                terms.append(t)
+    for h in tool_params.get("having", []):
+        if isinstance(h, dict):
+            t = _get_field_term(h)
+            if t:
+                terms.append(t)
     return terms
 
 
@@ -193,6 +203,12 @@ def _apply_resolved_to_params(
     ]
     patched["metrics"] = [
         _translate_field(m) if isinstance(m, dict) else m for m in patched.get("metrics", [])
+    ]
+    patched["order_by"] = [
+        _translate_field(o) if isinstance(o, dict) else o for o in patched.get("order_by", [])
+    ]
+    patched["having"] = [
+        _translate_field(h) if isinstance(h, dict) else h for h in patched.get("having", [])
     ]
     return patched
 
@@ -347,6 +363,16 @@ def _apply_resume_to_tool_params(
     tool_params["metrics"] = [
         _resume_translate_field(m) if isinstance(m, dict) else m
         for m in tool_params.get("metrics", [])
+    ]
+    # 写回 order_by
+    tool_params["order_by"] = [
+        _resume_translate_field(o) if isinstance(o, dict) else o
+        for o in tool_params.get("order_by", [])
+    ]
+    # 写回 having
+    tool_params["having"] = [
+        _resume_translate_field(h) if isinstance(h, dict) else h
+        for h in tool_params.get("having", [])
     ]
     ctx["tool_params"] = tool_params
 
