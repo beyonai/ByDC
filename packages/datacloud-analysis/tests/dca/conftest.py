@@ -60,7 +60,7 @@ async def initialized_sdk() -> None:
     Only for integration tests that require a live PostgreSQL database.
     Requires the following env vars to be set:
         DATACLOUD_DB_HOST / DATACLOUD_DB_DATABASE / DATACLOUD_DB_USER /
-        DATACLOUD_DB_PASS
+        DATACLOUD_DB_PASSWORD
     """
     import datacloud_analysis.bootstrap as boot  # noqa: PLC0415
 

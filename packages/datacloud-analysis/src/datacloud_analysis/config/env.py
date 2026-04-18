@@ -48,7 +48,7 @@ class PGSettings(BaseSettings):
     checkpoint_uri: str = Field(
         default_factory=build_postgres_connection_uri,
         description=(
-            "PostgreSQL DSN derived from DATACLOUD_DB_HOST / PORT / DATABASE / USER / PASS."
+            "PostgreSQL DSN derived from DATACLOUD_DB_HOST / PORT / DATABASE / USER / PASSWORD."
         ),
     )
     checkpoint_schema: str = Field(
@@ -62,7 +62,7 @@ class PGSettings(BaseSettings):
         if not value.strip():
             raise ValueError(
                 "Missing DATACLOUD DB env vars: DATACLOUD_DB_HOST / DATACLOUD_DB_PORT / "
-                "DATACLOUD_DB_DATABASE / DATACLOUD_DB_USER / DATACLOUD_DB_PASS"
+                "DATACLOUD_DB_DATABASE / DATACLOUD_DB_USER / DATACLOUD_DB_PASSWORD"
             )
         return value
 

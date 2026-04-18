@@ -6,7 +6,7 @@ Requires a running PostgreSQL instance. Set:
     DATACLOUD_DB_DATABASE=...
     DATACLOUD_DB_SCHEMA=byai
     DATACLOUD_DB_USER=...
-    DATACLOUD_DB_PASS=...
+    DATACLOUD_DB_PASSWORD=...
     DATACLOUD_DB_TYPE=opengauss
 
 Run selectively:
@@ -26,7 +26,7 @@ pytestmark = [
         not _PG_CHECKPOINT_URI,
         reason=(
             "DATACLOUD_DB_HOST / DATACLOUD_DB_DATABASE / DATACLOUD_DB_USER / "
-            "DATACLOUD_DB_PASS is required for integration bootstrap tests"
+            "DATACLOUD_DB_PASSWORD is required for integration bootstrap tests"
         ),
     ),
 ]

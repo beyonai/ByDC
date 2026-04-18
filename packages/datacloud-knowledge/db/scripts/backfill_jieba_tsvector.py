@@ -50,7 +50,7 @@ _DB_CONFIG_TRIGGER_ENV_VARS = (
     "DATACLOUD_DB_HOST",
     "DATACLOUD_DB_DATABASE",
     "DATACLOUD_DB_USER",
-    "DATACLOUD_DB_PASS",
+    "DATACLOUD_DB_PASSWORD",
 )
 
 
@@ -190,7 +190,7 @@ def main() -> None:
         log.error(
             "缺少数据库环境变量，请设置 DATACLOUD_DB_HOST / DATACLOUD_DB_PORT / "
             "DATACLOUD_DB_DATABASE / DATACLOUD_DB_SCHEMA / DATACLOUD_DB_USER / "
-            "DATACLOUD_DB_PASS / DATACLOUD_DB_TYPE"
+            "DATACLOUD_DB_PASSWORD / DATACLOUD_DB_TYPE"
         )
         sys.exit(1)
 

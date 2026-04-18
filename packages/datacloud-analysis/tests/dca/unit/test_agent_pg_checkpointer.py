@@ -30,7 +30,7 @@ def test_get_checkpointer_raises_when_uri_missing(monkeypatch: pytest.MonkeyPatc
     monkeypatch.delenv("DATACLOUD_DB_DATABASE", raising=False)
     monkeypatch.delenv("DATACLOUD_DB_SCHEMA", raising=False)
     monkeypatch.delenv("DATACLOUD_DB_USER", raising=False)
-    monkeypatch.delenv("DATACLOUD_DB_PASS", raising=False)
+    monkeypatch.delenv("DATACLOUD_DB_PASSWORD", raising=False)
 
     async def _run() -> None:
         async with get_checkpointer():

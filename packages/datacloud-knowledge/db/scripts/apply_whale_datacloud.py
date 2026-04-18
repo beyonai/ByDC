@@ -34,7 +34,7 @@ def _load_env_if_needed() -> None:
             "DATACLOUD_DB_HOST",
             "DATACLOUD_DB_DATABASE",
             "DATACLOUD_DB_USER",
-            "DATACLOUD_DB_PASS",
+            "DATACLOUD_DB_PASSWORD",
         )
     ):
         return
@@ -131,7 +131,7 @@ def main() -> None:
         python apply_whale_datacloud.py            # 完整初始化（DDL + Seed）
         python apply_whale_datacloud.py --seed-only  # 仅执行 Seed（幂等，不 drop 表）
 
-    环境变量 DATACLOUD_DB_HOST/PORT/DATABASE/SCHEMA/USER/PASS/TYPE
+    环境变量 DATACLOUD_DB_HOST/PORT/DATABASE/SCHEMA/USER/PASSWORD/TYPE
     可从导出的环境变量或仓库根 .env 提供。
     """
     _load_env_if_needed()
