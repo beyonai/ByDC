@@ -240,17 +240,21 @@ def test_T9_7_collect_terms_reads_field_name_cn() -> None:
 
 
 def test_T9_7b_collect_terms_fallback_to_field() -> None:
-    """T9-7b：无 field_name_cn 时 fallback 读 field（向后兼容）。"""
+    """T9-7b：无 field_name_cn 时 fallback 读 field（中文名）——向后兼容。
+
+    注意：field 值为字段编码（ASCII）时不收入 terms（T16-3 验证），
+    field 值为中文名时应正常收入 terms（本测试验证）。
+    """
     from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
         _collect_terms_from_params,
     )
 
     params: dict[str, Any] = {
-        "filters": [{"field": "total_revenue", "op": "gt", "value": 100}],
+        "filters": [{"field": "管理网格总营收（万元）", "op": "gt", "value": 100}],
     }
 
     terms = _collect_terms_from_params(params)
-    assert "total_revenue" in terms, f"fallback 未读到 field: {terms}"
+    assert "管理网格总营收（万元）" in terms, f"fallback 未读到 field 中的中文名: {terms}"
 
 
 # ── T9-8：_apply_resolved_to_params 翻译 field_name_cn → field ───────────────

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 from datacloud_analysis.tool_hook_plugins.types import HookContext, HookDecision
@@ -37,6 +38,18 @@ logger = logging.getLogger(__name__)
 
 _QUERY_PREFIXES: frozenset[str] = frozenset({"query_", "compute_"})
 _DATA_TOOL_PREFIXES: frozenset[str] = frozenset({"query_", "data_query_", "compute_"})
+
+# 字段编码识别：纯 ASCII identifier（snake_case / camelCase）
+_FIELD_CODE_RE: re.Pattern[str] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _is_field_code(term: str) -> bool:
+    """Return True if term looks like a field code (ASCII identifier, no Chinese).
+
+    字段编码（如 total_revenue）不需要 catalog 查询，直接透传；
+    中文名（如 '管理网格总营收（万元）'）需要 catalog 查询后映射。
+    """
+    return bool(_FIELD_CODE_RE.match(term))
 
 
 def _is_query_or_compute_tool(tool_name: str) -> bool:
@@ -111,7 +124,11 @@ def _collect_terms_from_params(tool_params: dict[str, Any]) -> list[str]:
 
     def _get_field_term(item: dict[str, Any]) -> str | None:
         v = item.get("field_name_cn") or item.get("field")
-        return str(v) if v else None
+        if not v:
+            return None
+        s = str(v)
+        # 字段编码不需要 catalog 查询，跳过；只收集需要映射的中文名
+        return None if _is_field_code(s) else s
 
     terms: list[str] = []
     for f in tool_params.get("filters", []):
@@ -120,7 +137,8 @@ def _collect_terms_from_params(tool_params: dict[str, Any]) -> list[str]:
             if t:
                 terms.append(t)
     for s in tool_params.get("select", []):
-        if s:
+        # select 是字符串列表：字段编码直通，只收集中文名
+        if s and not _is_field_code(str(s)):
             terms.append(str(s))
     for d in tool_params.get("dimensions", []):
         if isinstance(d, dict):
@@ -180,24 +198,31 @@ def _apply_resolved_to_params(
         return resolved.get(term, term)
 
     def _translate_field(item: dict[str, Any]) -> dict[str, Any]:
-        """将 field_name_cn 解析为 field_code，写入 field 键，移除 field_name_cn。"""
+        """将 field_name_cn 或 field（中文名/编码）解析为 field_code，写入 field 键。
+
+        - field_name_cn / field = 中文名 → catalog 映射 → field_code
+        - field_name_cn / field = 字段编码 → 直接透传（跳过 catalog）
+        """
         if not isinstance(item, dict):
             return item
-        cn_val = item.get("field_name_cn")
-        if cn_val:
-            resolved_code = _map(str(cn_val))
-            new_item = {k: v for k, v in item.items() if k != "field_name_cn"}
+        # 优先读 field_name_cn，fallback 到 field
+        raw = item.get("field_name_cn") or item.get("field")
+        if raw:
+            s = str(raw)
+            # 字段编码直接透传；中文名走 catalog 映射
+            resolved_code = s if _is_field_code(s) else _map(s)
+            new_item = {k: v for k, v in item.items() if k not in ("field_name_cn", "field")}
             new_item["field"] = resolved_code
             return new_item
-        old_field = item.get("field")
-        if old_field:
-            return {**item, "field": _map(str(old_field))}
         return item
 
     patched["filters"] = [
         _translate_field(f) if isinstance(f, dict) else f for f in patched.get("filters", [])
     ]
-    patched["select"] = [_map(s) for s in patched.get("select", [])]
+    # select 是字符串列表：字段编码直通，中文名走 _map 映射
+    patched["select"] = [
+        s if _is_field_code(str(s)) else _map(str(s)) for s in patched.get("select", [])
+    ]
     patched["dimensions"] = [
         _translate_field(d) if isinstance(d, dict) else d for d in patched.get("dimensions", [])
     ]
@@ -334,17 +359,19 @@ def _apply_resume_to_tool_params(
         return choice_map.get(term, term)
 
     def _resume_translate_field(item: dict[str, Any]) -> dict[str, Any]:
-        """将用户选择的 choiceKeyword 写回 field，支持 field_name_cn → field 翻译。"""
+        """将用户选择的 choiceKeyword 写回 field，支持 field_name_cn / field 两种键名。
+
+        字段编码直接透传；中文名走 choice_map 映射。
+        """
         if not isinstance(item, dict):
             return item
-        cn_val = item.get("field_name_cn")
-        if cn_val and str(cn_val) in choice_map:
-            new_item = {k: v for k, v in item.items() if k != "field_name_cn"}
-            new_item["field"] = choice_map[str(cn_val)]
+        raw = item.get("field_name_cn") or item.get("field")
+        if raw:
+            s = str(raw)
+            resolved = s if _is_field_code(s) else choice_map.get(s, _remap(s))
+            new_item = {k: v for k, v in item.items() if k not in ("field_name_cn", "field")}
+            new_item["field"] = resolved
             return new_item
-        old_field = item.get("field")
-        if old_field:
-            return {**item, "field": _remap(str(old_field))}
         return item
 
     # 写回 filters.field
