@@ -53,6 +53,7 @@ class LoaderConfig:
         datasource_configs: 数据源配置字典
         kb_source_configs: 知识库配置字典
         csv_base_dir: CSV 文件存储目录
+        result_file_storage: 最终结果文件存储实现
         sql_execution_mode: SQL 执行模式
         term_loader: 术语加载器实例
     """
@@ -62,6 +63,7 @@ class LoaderConfig:
     datasource_configs: dict[str, Any] = field(default_factory=dict)
     kb_source_configs: dict[str, dict] | None = None
     csv_base_dir: str | None = None  # None 表示使用系统临时目录
+    result_file_storage: Any = None
     sql_execution_mode: str = "internal"
     term_loader: Any = None
     query_result_csv_threshold: int = 10  # 0 = 不启用溢出截断
@@ -274,7 +276,7 @@ class OntologyLoader:
             self._scenes[view["view_id"]] = view
 
     def configure(self, **kwargs: Any) -> None:
-        """设置运行时配置（plan_generator、datasource_configs、csv_base_dir）。"""
+        """设置运行时配置（plan_generator、datasource_configs、csv_base_dir 等）。"""
         for k, v in kwargs.items():
             if hasattr(self._config, k):
                 setattr(self._config, k, v)

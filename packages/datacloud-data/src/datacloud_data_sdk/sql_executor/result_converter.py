@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import io
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,25 @@ class ResultConverter:
         return len(records)
 
     @staticmethod
+    def to_csv_text(
+        records: list[dict[str, Any]],
+        columns: list[str] | None = None,
+    ) -> str:
+        """Render records to CSV text."""
+        buffer = io.StringIO()
+        if not records:
+            if columns:
+                writer = csv.DictWriter(buffer, fieldnames=columns)
+                writer.writeheader()
+            return buffer.getvalue()
+
+        fieldnames = list(records[0].keys())
+        writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(records)
+        return buffer.getvalue()
+
+    @staticmethod
     def from_csv(path: str | Path) -> list[dict[str, Any]]:
         """
         从 CSV 文件读取记录
@@ -57,3 +77,11 @@ class ResultConverter:
             records = list(reader)
             logger.info("ResultConverter.from_csv: loaded %d records", len(records))
             return records
+
+    @staticmethod
+    def from_csv_text(content: str) -> list[dict[str, Any]]:
+        """Parse CSV text into records."""
+        if not content:
+            return []
+        reader = csv.DictReader(io.StringIO(content))
+        return [dict(row) for row in reader]

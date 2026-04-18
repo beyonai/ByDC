@@ -404,7 +404,10 @@ class Action:
         cfg = self._loader._config if self._loader else None
         threshold = cfg.query_result_csv_threshold if cfg else 0
         preview_rows = cfg.query_result_preview_rows if cfg else 5
-        csv_manager = CsvStorageManager(cfg.csv_base_dir if cfg else "/tmp/datacloud_csv")
+        csv_manager = CsvStorageManager(
+            cfg.csv_base_dir if cfg else "/tmp/datacloud_csv",
+            result_file_storage=getattr(cfg, "result_file_storage", None),
+        )
 
         if getattr(self._action, "is_virtual", False):
             result = await self._execute_virtual(params, term_loader=term_loader)

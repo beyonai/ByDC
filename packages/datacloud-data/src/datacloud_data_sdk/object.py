@@ -232,7 +232,10 @@ class Object:
 
         request_id = str(uuid.uuid4())
         trace_id = request_id[:8]
-        csv_manager = CsvStorageManager(config.csv_base_dir)
+        csv_manager = CsvStorageManager(
+            config.csv_base_dir,
+            result_file_storage=getattr(config, "result_file_storage", None),
+        )
         observer = None
         if config.event_bus:
             from datacloud_data_sdk.events.query_observer import QueryObserver

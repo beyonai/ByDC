@@ -33,6 +33,34 @@ class Settings(BaseSettings):
         validation_alias="DATACLOUD_ONTOLOGY_PATH",
     )
     csv_base_dir: str = Field(default="./tmp", validation_alias="DATACLOUD_CSV_BASE_DIR")
+    result_file_storage_type: str = Field(
+        default="local",
+        validation_alias="DATACLOUD_RESULT_FILE_STORAGE_TYPE",
+    )
+    result_file_base_dir: str = Field(
+        default="./tmp",
+        validation_alias="DATACLOUD_RESULT_FILE_BASE_DIR",
+    )
+    result_file_api_base_url: str = Field(
+        default="",
+        validation_alias="DATACLOUD_RESULT_FILE_API_BASE_URL",
+    )
+    result_file_api_write_txt_path: str = Field(
+        default="/writeTxt",
+        validation_alias="DATACLOUD_RESULT_FILE_API_WRITE_TXT_PATH",
+    )
+    result_file_api_append_txt_path: str = Field(
+        default="/appendTxt",
+        validation_alias="DATACLOUD_RESULT_FILE_API_APPEND_TXT_PATH",
+    )
+    result_file_api_read_path: str = Field(
+        default="/read",
+        validation_alias="DATACLOUD_RESULT_FILE_API_READ_PATH",
+    )
+    result_file_api_timeout: float = Field(
+        default=30.0,
+        validation_alias="DATACLOUD_RESULT_FILE_API_TIMEOUT",
+    )
     # 查询结果溢出：超过阈值时存 CSV 并提供下载，避免模型上下文超长
     query_result_csv_threshold: int = Field(
         default=5,
@@ -69,7 +97,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _resolve_relative_paths(self) -> Settings:
         root = _repo_root()
-        for name in ("ontology_path", "csv_base_dir", "trace_log_path"):
+        for name in ("ontology_path", "csv_base_dir", "result_file_base_dir", "trace_log_path"):
             raw = getattr(self, name)
             p = Path(raw).expanduser()
             if not p.is_absolute():

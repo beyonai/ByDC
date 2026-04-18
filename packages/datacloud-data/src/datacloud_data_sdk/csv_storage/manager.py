@@ -26,6 +26,9 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from datacloud_data_sdk.file_storage.base import ResultFileStorage
+from datacloud_data_sdk.file_storage.local import LocalResultFileStorage
+from datacloud_data_sdk.file_storage.scoped_paths import sanitize_path_segment, shared_workspace_dir
 from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
 
 logger = logging.getLogger(__name__)
@@ -46,7 +49,12 @@ class CsvStorageManager:
         manager.save_export(records, columns, meta)
     """
 
-    def __init__(self, base_dir: str | None = None) -> None:
+    def __init__(
+        self,
+        base_dir: str | None = None,
+        result_file_storage: ResultFileStorage | None = None,
+        export_root_dir: str = "/datacloud",
+    ) -> None:
         """
         初始化 CSV 存储管理器
 
@@ -57,11 +65,13 @@ class CsvStorageManager:
             # 使用系统临时目录，跨平台兼容
             base_dir = os.path.join(tempfile.gettempdir(), "datacloud_csv")
         self._base = Path(base_dir)
+        self._result_file_storage = result_file_storage or LocalResultFileStorage(self._base)
+        self._export_root_dir = export_root_dir.rstrip("/") or "/datacloud"
 
     @staticmethod
     def _sanitize_path_segment(value: str) -> str:
         """Sanitize a single path segment to avoid invalid or unsafe separators."""
-        return value.replace(":", "_").replace("\\", "_").replace("/", "_").strip()
+        return sanitize_path_segment(value)
 
     def _effective_base_dir(self) -> Path:
         """Resolve the CSV base dir for the current invocation.
@@ -93,11 +103,7 @@ class CsvStorageManager:
     @staticmethod
     def _shared_workspace_dir(workspace_dir: Path) -> Path:
         """Normalize to the nearest shared ``private/public`` workspace root."""
-        resolved = workspace_dir.resolve()
-        for candidate in (resolved, *resolved.parents):
-            if candidate.name in {"private", "public"}:
-                return candidate
-        return resolved
+        return shared_workspace_dir(workspace_dir)
 
     def get_path(self, request_id: str, output_ref: str) -> Path:
         """
@@ -137,27 +143,24 @@ class CsvStorageManager:
         Returns:
             tuple: (file_id, 文件路径)
         """
-        exports_dir = self._effective_base_dir() / "exports"
-        exports_dir.mkdir(parents=True, exist_ok=True)
         file_id = str(uuid.uuid4())
-        path = exports_dir / f"{file_id}.csv"
-        ResultConverter.to_csv(records, path, columns=columns)
+        file_path = self._export_file_path(file_id, ".csv")
+        csv_content = ResultConverter.to_csv_text(records, columns=columns)
+        self._result_file_storage.write_text(file_path, csv_content)
 
-        if meta:
-            meta_path = exports_dir / f"{file_id}_meta.json"
-            with open(meta_path, "w", encoding="utf-8") as f:
-                json.dump(meta, f, ensure_ascii=False, default=str)
+        stored_meta = dict(meta or {})
+        stored_meta.setdefault("file_url", file_path)
+        stored_meta["storage_type"] = self._result_file_storage.storage_type
+        meta_path = self._export_file_path(file_id, "_meta.json")
+        self._result_file_storage.write_text(
+            meta_path,
+            json.dumps(stored_meta, ensure_ascii=False, default=str),
+        )
 
-        return file_id, path
+        return file_id, Path(file_path)
 
-    def _export_candidates(self, file_id: str, suffix: str) -> list[Path]:
-        """Build candidate paths for scoped and legacy export files."""
-        effective_dir = self._effective_base_dir()
-        candidates = [effective_dir / "exports" / f"{file_id}{suffix}"]
-        legacy_path = self._base / "exports" / f"{file_id}{suffix}"
-        if legacy_path != candidates[0]:
-            candidates.append(legacy_path)
-        return candidates
+    def _export_file_path(self, file_id: str, suffix: str) -> str:
+        return f"{self._export_root_dir}/exports/{file_id}{suffix}"
 
     def get_export_path(self, file_id: str) -> Path | None:
         """
@@ -173,16 +176,10 @@ class CsvStorageManager:
         """
         if not re.match(r"^[a-f0-9\-]{36}$", file_id):
             return None
-        for candidate in self._export_candidates(file_id, ".csv"):
-            path = candidate.resolve()
-            base_resolved = candidate.parent.parent.resolve()
-            if not path.exists() or not path.is_file():
-                continue
-            try:
-                path.relative_to(base_resolved)
-            except ValueError:
-                continue
-            return path
+        if isinstance(self._result_file_storage, LocalResultFileStorage):
+            path = self._result_file_storage.resolve_path(self._export_file_path(file_id, ".csv"))
+            if path.exists() and path.is_file():
+                return path
         return None
 
     def get_export_meta(self, file_id: str) -> dict[str, Any] | None:
@@ -199,15 +196,22 @@ class CsvStorageManager:
         """
         if not re.match(r"^[a-f0-9\-]{36}$", file_id):
             return None
-        for meta_path in self._export_candidates(file_id, "_meta.json"):
-            if not meta_path.exists():
-                continue
-            try:
-                return json.loads(meta_path.read_text(encoding="utf-8"))
-            except Exception as exc:
-                logger.warning("get_export_meta: failed to read meta file %s: %s", meta_path, exc)
+        meta_path = self._export_file_path(file_id, "_meta.json")
+        try:
+            content = self._result_file_storage.read_text(meta_path)
+            if not content:
                 return None
-        return None
+            return json.loads(content)
+        except Exception as exc:
+            logger.warning("get_export_meta: failed to read meta file %s: %s", meta_path, exc)
+            return None
+
+    def read_export_csv(self, file_id: str) -> str | None:
+        """Read export CSV content as text."""
+        if not re.match(r"^[a-f0-9\-]{36}$", file_id):
+            return None
+        file_path = self._export_file_path(file_id, ".csv")
+        return self._result_file_storage.read_text(file_path)
 
     def cleanup(self, request_id: str) -> None:
         """

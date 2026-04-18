@@ -39,11 +39,9 @@ def _build_context_kwargs(request: Request) -> dict[str, str]:
     }
 
 
-def _load_csv_rows(path: str) -> list[dict[str, str]]:
-    """Load CSV rows in a worker thread to avoid blocking the event loop."""
-    with open(path, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        return [dict(row) for row in reader]
+def _load_csv_rows_from_text(content: str) -> list[dict[str, str]]:
+    """Load CSV rows from text content."""
+    return [dict(row) for row in csv.DictReader(content.splitlines())]
 
 
 def _parse_include_plan() -> bool:
@@ -160,12 +158,17 @@ async def query_endpoint(body: QueryRequest, request: Request) -> QueryResponse:
 
 async def _query_by_file_id(body: QueryRequest, request: Request) -> QueryResponse:
     settings = get_settings()
+    loader = getattr(request.app.state, "loader", None)
+    result_file_storage = getattr(getattr(loader, "_config", None), "result_file_storage", None)
     with InvocationContext(**_build_context_kwargs(request)):
-        csv_manager = CsvStorageManager(settings.csv_base_dir)
-        path = csv_manager.get_export_path(body.file_id)
+        csv_manager = CsvStorageManager(
+            settings.csv_base_dir,
+            result_file_storage=result_file_storage,
+        )
+        csv_content = csv_manager.read_export_csv(body.file_id)
         stored_meta = csv_manager.get_export_meta(body.file_id)
 
-    if path is None or not path.exists():
+    if csv_content is None:
         return QueryResponse(code=404, message="File not found or invalid file_id", data={})
 
     try:
@@ -173,7 +176,7 @@ async def _query_by_file_id(body: QueryRequest, request: Request) -> QueryRespon
         page_size = body.page_size if body.page_size > 0 else 100
         skip_rows = (page - 1) * page_size
 
-        all_rows = await anyio.to_thread.run_sync(_load_csv_rows, str(path))
+        all_rows = await anyio.to_thread.run_sync(_load_csv_rows_from_text, csv_content)
         total = len(all_rows)
         start_idx = skip_rows
         end_idx = skip_rows + page_size

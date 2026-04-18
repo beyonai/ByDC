@@ -138,6 +138,7 @@ def create_app(
         from datacloud_data_sdk.ontology.loader import OntologyLoader
 
         from datacloud_data_service.config import get_settings
+        from datacloud_data_service.file_storage import build_result_file_storage
 
         settings = get_settings()
         if loader_override is not None:
@@ -155,6 +156,8 @@ def create_app(
             if ontology_path.exists():
                 loader.load_from_owl_directory(ontology_path)
                 logger.info("Loaded ontology from %s", ontology_path)
+            result_file_storage = build_result_file_storage(settings)
+            loader.configure(result_file_storage=result_file_storage)
 
             # scene_path = Path(settings.scene_path)
             # if scene_path.exists():
@@ -213,14 +216,12 @@ def create_app(
         loader.configure(event_bus=bus)
 
         app.state.event_bus = bus  # 供测试在替换 loader 时注入 event_bus
-
         loader.configure(csv_base_dir=settings.csv_base_dir)
         loader.configure(sql_execution_mode=settings.sql_execution_mode)
         loader.configure(
             query_result_csv_threshold=settings.query_result_csv_threshold,
             query_result_preview_rows=settings.query_result_preview_rows,
         )
-
         app.state.loader = loader
         logger.info("OntologyLoader initialized and stored in app.state")
 

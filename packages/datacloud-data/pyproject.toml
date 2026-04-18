@@ -42,6 +42,7 @@ service = [
     "uvicorn>=0.32.0",
     "pydantic-settings>=2.0",
     "pandas>=2.0",
+    "httpx>=0.27",
     "pyyaml>=6.0",
     "mcp>=1.18.0",
     "strawberry-graphql[fastapi]>=0.260",
