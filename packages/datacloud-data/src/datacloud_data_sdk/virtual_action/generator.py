@@ -418,11 +418,11 @@ def build_compute_schema(
                 },
                 "expr": {
                     "type": "string",
-                    "description": "公式表达式（与 field 互斥），可填中文运算式，系统映射后生成 SQL。",
+                    "description": "公式表达式（与 field_name_cn 互斥），可填中文运算式，系统映射后生成 SQL。",
                 },
                 "filters": {
                     "type": "array",
-                    "description": "条件聚合过滤（CASE WHEN），field/value 可填中文，规则同行级 filters。",
+                    "description": "条件聚合过滤（CASE WHEN），field_name_cn/value 可填中文，规则同行级 filters。",
                     "items": {"type": "object"},
                 },
                 "agg": {
@@ -439,7 +439,7 @@ def build_compute_schema(
 
     count_all_item: dict[str, Any] = {
         "type": "object",
-        "description": "内建行数统计，不需要 field",
+        "description": "内建行数统计，无需指定 field_name_cn",
         "properties": {
             "agg": {"type": "string", "const": "count_all"},
             "as": {"type": "string", "description": "结果列别名"},
@@ -481,9 +481,7 @@ def build_compute_schema(
                 "items": {"oneOf": [_dim_item(f) for f in dim_fields]}
                 if dim_fields
                 else {"type": "object"},
-                "examples": [
-                    [{"field_name_cn": "企业等级", "group_op": "direct"}]
-                ],
+                "examples": [[{"field_name_cn": "企业等级", "group_op": "direct"}]],
                 "x-dc-dimension-fields": [
                     {
                         "field": _fc(f),

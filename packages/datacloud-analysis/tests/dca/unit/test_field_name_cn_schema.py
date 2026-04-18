@@ -136,9 +136,10 @@ def test_T9_3_compute_metric_item_uses_field_name_cn() -> None:
     schema = build_compute_schema("企业分析", _compute_fields())
     metric_items = schema["properties"]["metrics"]["items"]["oneOf"]
 
-    # 排除 count_all_item（它不需要 field_name_cn）
+    # 排除 count_all_item（它不需要 field_name_cn，通过 agg.const 识别）
     regular_items = [
-        item for item in metric_items if item.get("description", "") != "内建行数统计，不需要 field"
+        item for item in metric_items
+        if item.get("properties", {}).get("agg", {}).get("const") != "count_all"
     ]
     assert regular_items, "没有普通指标项（非 count_all）"
 
