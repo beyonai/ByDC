@@ -327,15 +327,20 @@ def _analyze_clarification(
     *,
     is_compute: bool,
 ) -> tuple[list[dict[str, Any]], str]:
-    """调用 SDK 澄清分析，返回 (paradigmList, knowledge)。SDK 不可用时返回空列表。"""
-    if not _HAS_SDK_CLARIFICATION:
-        return [], ""
+    """调用 SDK 澄清分析，返回 (paradigmList, knowledge)。"""
     if is_compute:
-        result = _sdk_analyze_compute(query, ontology_code, structured_input)  # type: ignore[misc]
+        result = _sdk_analyze_compute(query, ontology_code, structured_input)
     else:
-        result = _sdk_analyze_query(query, ontology_code, structured_input)  # type: ignore[misc]
+        result = _sdk_analyze_query(query, ontology_code, structured_input)
 
+    logger.info(
+        "[query_clarification] SDK result: needs=%s form_len=%d knowledge_len=%d",
+        result.needs_clarification,
+        len(result.form or ""),
+        len(result.knowledge or ""),
+    )
     paradigm_list = json.loads(result.form or "{}").get("paradigmList", [])
+    logger.info("[query_clarification] paradigmList count=%d", len(paradigm_list))
     return paradigm_list, result.knowledge
 
 
@@ -431,6 +436,15 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 structured_input,
                 is_compute=is_compute,
             )
+
+            if not paradigm_list:
+                # 澄清分析失败或无需澄清，跳过 interrupt，按原流程继续
+                logger.info("[query_clarification] paradigmList 为空，跳过澄清 interrupt")
+                tool_params = _apply_resolved_to_params(tool_params, resolved)
+                ctx["tool_params"] = tool_params
+                if is_complex:
+                    return _build_redirect_decision(tool_name, query, tool_params)
+                return {"action": "patch", "patch": {"tool_params": tool_params}}
 
             resume_value = interrupt(
                 {
