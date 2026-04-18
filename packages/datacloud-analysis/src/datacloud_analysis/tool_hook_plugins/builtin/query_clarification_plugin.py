@@ -203,20 +203,31 @@ def _resolve_terms(
     return resolved, unresolved
 
 
-def _normalize_sort_key(item: dict[str, Any]) -> dict[str, Any]:
-    """将 LLM 可能使用的 sort 键规范化为 Schema 定义的 direction 键。
+# LLM 可能使用的非标准排序方向键（都应规范化为 Schema 定义的 direction）
+_SORT_KEY_ALIASES: frozenset[str] = frozenset({"sort", "op", "order"})
 
-    LLM 有时发送 {"sort": "asc"} 而非 {"direction": "asc"}，
-    底层 SQL builder 不识别 sort，导致排序方向丢失（使用默认 DESC）。
-    - sort 存在且 direction 不存在 → 将 sort 值写入 direction，移除 sort
-    - direction 已存在 → 保留 direction，移除冗余的 sort
-    - 不含 sort → 原样返回
+
+def _normalize_sort_key(item: dict[str, Any]) -> dict[str, Any]:
+    """将 LLM 可能使用的非标准排序键规范化为 Schema 定义的 direction 键。
+
+    LLM 有时发送 {"sort": "asc"} / {"op": "asc"} / {"order": "asc"}
+    而非 Schema 定义的 {"direction": "asc"}，底层 SQL builder 不识别这些键，
+    导致排序方向丢失（使用默认 DESC）。
+
+    规则：
+    - 存在别名键且 direction 不存在 → 取第一个别名键的值写入 direction，移除所有别名键
+    - direction 已存在 → 保留 direction，仅移除冗余的别名键
+    - 不含任何别名键 → 原样返回
     """
-    if not isinstance(item, dict) or "sort" not in item:
+    if not isinstance(item, dict):
         return item
-    new_item = {k: v for k, v in item.items() if k != "sort"}
+    alias_keys = _SORT_KEY_ALIASES & item.keys()
+    if not alias_keys:
+        return item
+    new_item = {k: v for k, v in item.items() if k not in _SORT_KEY_ALIASES}
     if "direction" not in new_item:
-        new_item["direction"] = item["sort"]
+        # 取任一别名键的值（通常只有一个）
+        new_item["direction"] = next(item[k] for k in _SORT_KEY_ALIASES if k in item)
     return new_item
 
 

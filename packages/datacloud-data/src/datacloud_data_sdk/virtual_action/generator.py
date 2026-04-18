@@ -276,6 +276,7 @@ def build_query_schema(
                             "type": "string",
                             "enum": ["asc", "desc"],
                             "default": "asc",
+                            "description": "排序方向，只允许 'asc'（升序）或 'desc'（降序）。键名必须是 direction，不能用 sort/op/order。",
                         },
                     },
                     "required": ["field"],
@@ -331,6 +332,12 @@ def build_query_description(
     lines.append("**常见错误**：")
     lines.append("- 使用了字段不支持的 op 操作符")
     lines.append("- field 填了不存在的字段名（系统无法映射时会报错）")
+    lines.append("- order_by 中用了 sort/op/order 键名，应统一使用 direction")
+    lines.append(
+        "- 过滤条件的值无法确定为字面常量（如'后30%'、'高于平均'）时，"
+        "忘记放入 complex_conditions，导致系统无法路由到全能查询"
+    )
+    lines.append("- query 字段为空或未填写（query 为必填项，不可省略）")
     if req_groups:
         lines.append("- 缺少账期（period）过滤条件")
 
@@ -625,6 +632,12 @@ def build_compute_description(
     )
     lines.append("- field 填了不存在的字段名（系统无法映射时会报错）")
     lines.append("- `having.field` 未使用 `metrics` 中的 `as` 别名")
+    lines.append("- order_by 中用了 sort/op/order 键名，应统一使用 direction")
+    lines.append(
+        "- 过滤条件的值无法确定为字面常量（如'后30%'、'高于平均'）时，"
+        "忘记放入 complex_conditions，导致系统无法路由到全能查询"
+    )
+    lines.append("- query 字段为空或未填写（query 为必填项，不可省略）")
     if req_groups:
         lines.append("- 缺少账期（period）过滤条件")
 

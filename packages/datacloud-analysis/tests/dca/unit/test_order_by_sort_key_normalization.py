@@ -99,3 +99,49 @@ def test_T18_4_items_without_sort_unchanged() -> None:
 
     ob1 = new_params["order_by"][1]
     assert "sort" not in ob1 and "direction" not in ob1, f"无排序方向项不应改变: {ob1}"
+
+
+# ── T18-5：op: "asc" → direction: "asc"（实际日志中出现的键名）─────────────────
+
+
+def test_T18_5_op_asc_mapped_to_direction() -> None:
+    """T18-5：order_by 中 op='asc' 应被规范化为 direction='asc'，op 键被移除。
+
+    来源：真实日志中 LLM 使用 {"op": "asc", "field": "output_per_mu"}，
+    _normalize_sort_key 原版本只处理 sort，不处理 op，导致排序方向丢失。
+    """
+    from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
+        _apply_resolved_to_params,
+    )
+
+    params: dict = {
+        "order_by": [{"field": "output_per_mu", "op": "asc"}],
+    }
+
+    new_params = _apply_resolved_to_params(params, {})
+    ob = new_params["order_by"][0]
+
+    assert ob.get("direction") == "asc", f"op='asc' 应规范化为 direction='asc'，实际: {ob}"
+    assert "op" not in ob, f"规范化后不应保留 op 键: {ob}"
+    assert ob.get("field") == "output_per_mu", f"field 不应改变: {ob}"
+
+
+# ── T18-6：op: "desc" → direction: "desc" ────────────────────────────────────
+
+
+def test_T18_6_op_desc_mapped_to_direction() -> None:
+    """T18-6：order_by 中 op='desc' 应被规范化为 direction='desc'。"""
+    from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
+        _apply_resolved_to_params,
+    )
+
+    params: dict = {
+        "order_by": [{"field": "total_revenue", "op": "desc"}],
+    }
+
+    new_params = _apply_resolved_to_params(params, {})
+    ob = new_params["order_by"][0]
+
+    assert ob.get("direction") == "desc", f"op='desc' 应规范化为 direction='desc'，实际: {ob}"
+    assert "op" not in ob, f"规范化后不应保留 op 键: {ob}"
+
