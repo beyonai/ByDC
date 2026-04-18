@@ -39,6 +39,7 @@ def build_analysis_graph(
     prompts_overwrite: dict[str, Any] | None = None,
     tools: dict[str, Any] | None = None,
     knowledge_enhancer: Callable[..., Any] | None = None,
+    loader: Any = None,
 ) -> StateGraph[AgentState]:
     """Return an uncompiled StateGraph for the DataCloud 3-node pipeline."""
     builder = StateGraph(AgentState)
@@ -53,6 +54,7 @@ def build_analysis_graph(
             config,
             default_tools=tools,
             prompts_overwrite=prompts_overwrite,
+            loader=loader,
         )
         return _as_state_update(result, node_name="execution")
 

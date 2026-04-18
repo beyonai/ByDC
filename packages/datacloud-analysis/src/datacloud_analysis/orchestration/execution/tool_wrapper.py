@@ -356,6 +356,7 @@ async def dispatch_tool(
     state: Any,
     *,
     gateway_context: Any = None,
+    loader: Any = None,
 ) -> tuple[str, Any]:
     """调用工具，串联 before/after hook，记录 reason 日志。
 
@@ -473,6 +474,7 @@ async def dispatch_tool(
         "knowledge_snippets": list(state.get("knowledge_snippets") or []),
         "term_context": list(state.get("confirmed_terms") or []),
         "knowledge_payload": dict(state.get("knowledge_payload") or {}),
+        "metadata": {"loader": loader},
     }
 
     hook_manager = get_tool_hook_plugin_manager()

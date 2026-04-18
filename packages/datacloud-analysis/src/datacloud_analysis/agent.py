@@ -216,6 +216,7 @@ def create_agent(
         prompts_overwrite=prompts_overwrite,
         tools=merged_tools,
         knowledge_enhancer=knowledge_enhancer,
+        loader=loader,
     )
 
     # Inject checkpointer if bootstrap.setup() has already been called;

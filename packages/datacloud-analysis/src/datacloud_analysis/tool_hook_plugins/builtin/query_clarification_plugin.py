@@ -22,18 +22,27 @@ import logging
 import re
 from typing import Any
 
-from datacloud_knowledge.intent.clarification import (
-    analyze_query_clarification_compute as _sdk_analyze_compute,
-)
-from datacloud_knowledge.intent.clarification import (
-    analyze_query_clarification_query as _sdk_analyze_query,
-)
-from datacloud_knowledge.intent.clarification import (
-    format_clarification_compute as _sdk_format_compute,
-)
-from datacloud_knowledge.intent.clarification import (
-    format_clarification_query as _sdk_format_query,
-)
+try:
+    from datacloud_knowledge.intent.clarification import (
+        analyze_query_clarification_compute as _sdk_analyze_compute,
+    )
+    from datacloud_knowledge.intent.clarification import (
+        analyze_query_clarification_query as _sdk_analyze_query,
+    )
+    from datacloud_knowledge.intent.clarification import (
+        format_clarification_compute as _sdk_format_compute,
+    )
+    from datacloud_knowledge.intent.clarification import (
+        format_clarification_query as _sdk_format_query,
+    )
+
+    _HAS_SDK_CLARIFICATION = True
+except ImportError:  # pragma: no cover
+    _HAS_SDK_CLARIFICATION = False
+    _sdk_analyze_compute = None  # type: ignore[assignment]
+    _sdk_analyze_query = None  # type: ignore[assignment]
+    _sdk_format_compute = None  # type: ignore[assignment]
+    _sdk_format_query = None  # type: ignore[assignment]
 
 from datacloud_analysis.tool_hook_plugins.types import HookContext, HookDecision
 
@@ -195,6 +204,23 @@ def _resolve_terms(
     return resolved, unresolved
 
 
+def _normalize_sort_key(item: dict[str, Any]) -> dict[str, Any]:
+    """将 LLM 可能使用的 sort 键规范化为 Schema 定义的 direction 键。
+
+    LLM 有时发送 {"sort": "asc"} 而非 {"direction": "asc"}，
+    底层 SQL builder 不识别 sort，导致排序方向丢失（使用默认 DESC）。
+    - sort 存在且 direction 不存在 → 将 sort 值写入 direction，移除 sort
+    - direction 已存在 → 保留 direction，移除冗余的 sort
+    - 不含 sort → 原样返回
+    """
+    if not isinstance(item, dict) or "sort" not in item:
+        return item
+    new_item = {k: v for k, v in item.items() if k != "sort"}
+    if "direction" not in new_item:
+        new_item["direction"] = item["sort"]
+    return new_item
+
+
 def _apply_resolved_to_params(
     tool_params: dict[str, Any],
     resolved: dict[str, str],
@@ -242,7 +268,8 @@ def _apply_resolved_to_params(
         _translate_field(m) if isinstance(m, dict) else m for m in patched.get("metrics") or []
     ]
     patched["order_by"] = [
-        _translate_field(o) if isinstance(o, dict) else o for o in patched.get("order_by") or []
+        _normalize_sort_key(_translate_field(o) if isinstance(o, dict) else o)
+        for o in patched.get("order_by") or []
     ]
     patched["having"] = [
         _translate_field(h) if isinstance(h, dict) else h for h in patched.get("having") or []
@@ -290,11 +317,13 @@ def _analyze_clarification(
     *,
     is_compute: bool,
 ) -> tuple[list[dict[str, Any]], str]:
-    """调用 SDK 澄清分析，返回 (paradigmList, knowledge)。"""
+    """调用 SDK 澄清分析，返回 (paradigmList, knowledge)。SDK 不可用时返回空列表。"""
+    if not _HAS_SDK_CLARIFICATION:
+        return [], ""
     if is_compute:
-        result = _sdk_analyze_compute(query, ontology_code, structured_input)
+        result = _sdk_analyze_compute(query, ontology_code, structured_input)  # type: ignore[misc]
     else:
-        result = _sdk_analyze_query(query, ontology_code, structured_input)
+        result = _sdk_analyze_query(query, ontology_code, structured_input)  # type: ignore[misc]
 
     paradigm_list = json.loads(result.form or "{}").get("paradigmList", [])
     return paradigm_list, result.knowledge
@@ -308,10 +337,12 @@ def _format_clarification(
     *,
     is_compute: bool,
 ) -> dict[str, Any]:
-    """调用 SDK 格式化，返回写回后的参数 dict。"""
+    """调用 SDK 格式化，返回写回后的参数 dict。SDK 不可用时原样返回。"""
+    if not _HAS_SDK_CLARIFICATION:
+        return dict(structured_input)
     if is_compute:
-        return _sdk_format_compute(query, structured_input, form_str, knowledge)
-    return _sdk_format_query(query, structured_input, form_str, knowledge)
+        return _sdk_format_compute(query, structured_input, form_str, knowledge)  # type: ignore[misc]
+    return _sdk_format_query(query, structured_input, form_str, knowledge)  # type: ignore[misc]
 
 
 # ── 主 hook 入口 ──────────────────────────────────────────────────────────────

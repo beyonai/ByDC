@@ -326,6 +326,7 @@ async def execution_node(
     config: RunnableConfig,
     default_tools: dict[str, Any] | None = None,
     prompts_overwrite: dict[str, Any] | None = None,
+    loader: Any = None,
 ) -> dict[str, Any]:
     """Execute ReAct loop with tool dispatch and hook support."""
     locale = os.getenv("DATACLOUD_AGENT_LOCALE", "zh_CN")
@@ -405,6 +406,7 @@ async def execution_node(
                 dynamic_prompt=dynamic_prompt,
                 max_rounds=max_rounds,
                 gateway_context=gateway_context,
+                loader=loader,
             )
         else:
             result = await run_react_loop(
@@ -415,6 +417,7 @@ async def execution_node(
                 dynamic_prompt=dynamic_prompt,
                 max_rounds=max_rounds,
                 gateway_context=gateway_context,
+                loader=loader,
             )
     else:
         result = await run_react_loop(
@@ -425,6 +428,7 @@ async def execution_node(
             dynamic_prompt=dynamic_prompt,
             max_rounds=max_rounds,
             gateway_context=gateway_context,
+            loader=loader,
         )
 
     return result

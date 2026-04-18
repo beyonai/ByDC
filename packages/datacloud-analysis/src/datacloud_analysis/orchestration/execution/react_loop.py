@@ -657,6 +657,7 @@ async def run_react_loop(
     dynamic_prompt: str | None = None,
     max_rounds: int | None = None,
     gateway_context: Any = None,
+    loader: Any = None,
 ) -> dict[str, Any]:
     """执行 ReAct 主循环，返回 react_final 字典。
 
@@ -845,7 +846,7 @@ async def run_react_loop(
 
                     _t0 = time.monotonic()
                     tool_id, result = await dispatch_tool(
-                        tc, tools_map, state, gateway_context=gateway_context
+                        tc, tools_map, state, gateway_context=gateway_context, loader=loader
                     )
                     logger.info(
                         "[react_loop] resume replay: tool=%s elapsed=%.3fs",
@@ -1043,7 +1044,7 @@ async def run_react_loop(
 
             try:
                 tool_id, result = await dispatch_tool(
-                    tc, tools_map, state, gateway_context=gateway_context
+                    tc, tools_map, state, gateway_context=gateway_context, loader=loader
                 )
             except GraphBubbleUp:
                 # 方案 B：将中断上下文写入 LangGraph State（由 checkpoint 跨实例/重启持久化）
