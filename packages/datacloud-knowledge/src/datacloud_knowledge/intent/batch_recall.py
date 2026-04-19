@@ -36,7 +36,9 @@ log = logging.getLogger(__name__)
 
 _SCHEMA = "whale_datacloud"
 _BM25_MIN_SCORE = 0.001
-_VECTOR_MIN_SIMILARITY = 0.3
+# 向量召回不设最低相似度阈值，统一用 top_k 截断后交给 RRF 融合排序。
+# 低质量候选会在 RRF 融合时因排名靠后被自然淘汰。
+_VECTOR_MIN_SIMILARITY = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +56,30 @@ class PreparedBatch:
     requests: tuple[RecallRequest, ...]
     normal_requests: tuple[RecallRequest, ...]
     per_type_requests: tuple[RecallRequest, ...]
+
+
+# select/groupBy/orderBy/whereKey 不应召回表/视图/动作等非字段类型的术语。
+# 这些 ktype 需要的是可查询的字段（prop），而非数据实体定义（object/view/action）。
+# 例如："管理网格综合分析表"是 view 类型术语，不应出现在 select 字段候选中。
+_FIELD_ONLY_KTYPES: frozenset[str] = frozenset({"select", "groupBy", "orderBy", "whereKey"})
+_NON_FIELD_TYPE_CODES: frozenset[str] = frozenset({"view", "object", "action"})
+
+
+def _post_filter_non_field_types(
+    result: dict[str, list[CandidateDict]],
+) -> dict[str, list[CandidateDict]]:
+    """过滤掉 select/groupBy/orderBy/whereKey 候选中的非字段类型术语。"""
+    filtered: dict[str, list[CandidateDict]] = {}
+    for map_key, candidates in result.items():
+        # map_key 格式: "ktype:keyword"
+        ktype = map_key.split(":", 1)[0] if ":" in map_key else ""
+        if ktype in _FIELD_ONLY_KTYPES:
+            filtered[map_key] = [
+                c for c in candidates if c.get("term_type_code") not in _NON_FIELD_TYPE_CODES
+            ]
+        else:
+            filtered[map_key] = candidates
+    return filtered
 
 
 def typed_multi_recall_batch(
@@ -102,7 +128,7 @@ def typed_multi_recall_batch(
         result.setdefault(map_key, [])
 
     log.info("[recall_perf] batch_total: %.3fs", time.monotonic() - started_at)
-    return result
+    return _post_filter_non_field_types(result)
 
 
 def _prepare_batch(
