@@ -478,8 +478,12 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 {
                     "prompt": "查询条件存在歧义，请确认查询维度",
                     "reason_code": "PARADIGM_CLARIFICATION",
-                    "ask_user_payload": {"paradigmList": paradigm_list, "query": query},
-                    "_clarify_knowledge": clarify_knowledge,
+                    "ask_user_payload": {
+                        "paradigmList": paradigm_list,
+                        "query": query,
+                        # 前端需原样放入 metadata 传回，供 resume 后 format 使用
+                        "clarify_knowledge": clarify_knowledge,
+                    },
                 }
             )
 
