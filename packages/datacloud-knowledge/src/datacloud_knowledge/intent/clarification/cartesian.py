@@ -14,6 +14,7 @@ import logging
 from typing import Any
 
 from .models import (
+    ClarifyItem,
     ConditionTermMapping,
     ConfirmedCondition,
     ConfirmedStructuredCompute,
@@ -25,6 +26,52 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 MAX_COMBINATIONS = 20
+
+
+_POSITION_SEARCH_RADIUS = 3
+"""LLM start/end 校正搜索半径（字符数）。"""
+
+
+def _fix_term_positions(
+    sentence: str,
+    mappings: list[ConditionTermMapping],
+) -> None:
+    """校正 LLM 返回的 start/end 位置。
+
+    LLM 计算中文字符位置常有 ±1~2 偏差。以 LLM 给的 start 为锚点，
+    在 ±RADIUS 范围内搜索 original_term 的精确位置，就地修正。
+    """
+    used_positions: set[int] = set()
+    for tm in mappings:
+        term = tm.original_term
+        term_len = len(term)
+        best_pos: int | None = None
+
+        for offset in range(_POSITION_SEARCH_RADIUS + 1):
+            for delta in [0] if offset == 0 else [-offset, offset]:
+                pos = tm.start + delta
+                if pos < 0 or pos + term_len > len(sentence):
+                    continue
+                if sentence[pos : pos + term_len] == term and pos not in used_positions:
+                    best_pos = pos
+                    break
+            if best_pos is not None:
+                break
+
+        if best_pos is not None and (best_pos != tm.start or best_pos + term_len != tm.end):
+            logger.debug(
+                "[cartesian] 位置校正: '%s' (%d,%d) → (%d,%d)",
+                term,
+                tm.start,
+                tm.end,
+                best_pos,
+                best_pos + term_len,
+            )
+            tm.start = best_pos
+            tm.end = best_pos + term_len
+            used_positions.add(best_pos)
+        else:
+            used_positions.add(tm.start)
 
 
 # ── 笛卡尔积展开 ─────────────────────────────────────────────────────
@@ -97,6 +144,10 @@ def expand_condition_cartesian(
         elif tm.candidates:
             unconfirmed_mappings.append(tm)
 
+    # 校正 LLM 返回的 start/end（LLM 数字符位置常有 ±1~2 偏差）
+    _fix_term_positions(sentence, confirmed_mappings)
+    _fix_term_positions(sentence, unconfirmed_mappings)
+
     # 截断未确定术语的候选
     if unconfirmed_mappings:
         truncated = truncate_candidates(unconfirmed_mappings, max_combinations)
@@ -152,12 +203,22 @@ def build_paradigm_list(
     *,
     complex_conditions: list[str] | None = None,
 ) -> tuple[list[dict[str, Any]], KnowledgeMeta]:
-    """构建 paradigmList + 内部元数据。
+    """基于 LLM 确认结果构建 paradigmList + 内部元数据。
+
+    设计原则：
+        LLM confirm 的输出是唯一数据源。paradigmList 完全反映 LLM 的判断：
+        - 已确认的字段（confirmed 结构中已替换为真实字段名）→ 单候选自动选中
+        - 待澄清的字段（clarify_items）→ 展示 LLM 精选的候选列表让用户选
+        - complex_conditions（confirmed_conditions）→ 笛卡尔积展开到过滤条件
+
+        terms 和 recall_map 不参与候选列表构建，仅用于：
+        - terms: 提供 path_mapping（JSON pointer），供 format 阶段精确回写
+        - recall_map: 不再使用（保留参数签名以兼容调用方）
 
     Args:
-        confirmed: LLM 确认后的结构。
-        terms: 提取的术语列表。
-        recall_map: 召回结果。
+        confirmed: LLM 确认后的完整结构。
+        terms: 提取的术语列表（仅用于 path 查找）。
+        recall_map: 召回结果（不再使用，保留兼容）。
         complex_conditions: 原始 complex_conditions 列表。
 
     Returns:
@@ -166,88 +227,91 @@ def build_paradigm_list(
     mode = "query" if isinstance(confirmed, ConfirmedStructuredQuery) else "compute"
     path_mapping: dict[str, str] = {}
 
-    # 收集需要澄清的 keyword 集合
-    clarify_keywords = {ci.keyword for ci in confirmed.clarify_items}
+    # ── 构建 path 查找索引：raw_text+ktype → path ──
+    # terms 的唯一作用是提供 JSON pointer，供 format 阶段回写用户选择。
+    _path_index: dict[tuple[str, str], str] = {}
+    for t in terms:
+        if t.source == "main":
+            key = (t.raw_text, t.ktype)
+            if key not in _path_index:
+                _path_index[key] = t.path
 
-    # paradigmId=1: 查询值（按 raw_text 去重，同名术语合并 path）
-    select_result: list[dict[str, Any]] = []
-    kid = 0
-    seen_select: dict[str, int] = {}  # raw_text → kid，用于去重 + path 合并
-    select_terms = [t for t in terms if t.ktype == "select" and t.source == "main"]
-    for term in select_terms:
-        if term.raw_text in clarify_keywords:
-            continue
-        if term.raw_text in seen_select:
-            # 同名术语：追加 path（逗号分隔），不生成新行
-            existing_kid = seen_select[term.raw_text]
-            path_mapping[str(existing_kid)] += f",{term.path}"
-            continue
-        kid += 1
-        seen_select[term.raw_text] = kid
-        key = f"{term.ktype}:{term.raw_text}"
-        candidates = recall_map.get(key, [])
-        recall_names = [str(c.get("term_name", "")) for c in candidates[:5]]
-        item: dict[str, Any] = {
-            "keyword": term.raw_text,
-            "recall": recall_names,
-            "kid": kid,
-            "ktype": "select",
-        }
-        # 单候选 → 自动确认
-        if len(recall_names) == 1:
-            item["choiceKeyword"] = recall_names[0]
-        path_mapping[str(kid)] = term.path
-        select_result.append(item)
+    def _find_path(keyword: str, ktype: str, fallback: str = "") -> str:
+        return _path_index.get((keyword, ktype), fallback)
 
-    # clarify_items → 按 source 分发到对应 paradigm（延迟追加，先收集）
-    _clarify_for_group: list[dict[str, Any]] = []
-    _clarify_for_filter: list[dict[str, Any]] = []
-    _clarify_for_order: list[dict[str, Any]] = []
+    # ── clarify_items 按 keyword 索引（快速查找某术语是否需要澄清）──
+    clarify_map: dict[str, ClarifyItem] = {}
     for ci in confirmed.clarify_items:
-        kid += 1
-        ci_source = ci.source or "select"
-        ci_item: dict[str, Any] = {
-            "keyword": ci.keyword,
-            "recall": ci.candidates,
-            "kid": kid,
-            "ktype": ci_source,
-            "source": ci.source,
-        }
-        path_mapping[str(kid)] = ci.path
-        if ci_source in ("where", "whereKey", "whereValue"):
-            _clarify_for_filter.append(ci_item)
-        elif ci_source in ("group_by", "groupBy"):
-            _clarify_for_group.append(ci_item)
-        elif ci_source in ("order_by", "orderBy"):
-            _clarify_for_order.append(ci_item)
-        else:
-            # select 或未知 → 默认查询值
-            select_result.append(ci_item)
+        clarify_map[ci.keyword] = ci
 
-    # paradigmId=2: 分组条件
+    # ── paradigmId=1: 查询值 ──
+    # 数据源：ConfirmedStructuredQuery.select / ConfirmedStructuredCompute.dimensions
+    select_result: list[dict[str, Any]] = []
+    if isinstance(confirmed, ConfirmedStructuredQuery):
+        original_select = [t.raw_text for t in terms if t.ktype == "select" and t.source == "main"]
+        confirmed_select = confirmed.select
+        for kid, (orig, conf) in enumerate(
+            zip(original_select, confirmed_select, strict=False), start=1
+        ):
+            if orig in clarify_map:
+                # LLM 认为不确定 → 展示候选让用户选
+                ci = clarify_map[orig]
+                item: dict[str, Any] = {
+                    "keyword": orig,
+                    "recall": ci.candidates,
+                    "kid": kid,
+                    "ktype": "select",
+                }
+            else:
+                # LLM 已确认 → 单候选自动选中
+                item = {
+                    "keyword": orig,
+                    "recall": [conf],
+                    "kid": kid,
+                    "ktype": "select",
+                    "choiceKeyword": conf,
+                }
+            path_mapping[str(kid)] = _find_path(orig, "select", f"select.{kid - 1}")
+            select_result.append(item)
+
+    # ── paradigmId=2: 分组条件 ──
     group_result: list[dict[str, Any]] = []
-    group_terms = [t for t in terms if t.ktype == "groupBy" and t.source == "main"]
-    for i, term in enumerate(group_terms, start=1):
-        key = f"{term.ktype}:{term.raw_text}"
-        candidates = recall_map.get(key, [])
-        recall_names = [str(c.get("term_name", "")) for c in candidates[:5]]
-        item = {
-            "keyword": term.raw_text,
-            "recall": recall_names,
-            "kid": i,
-            "ktype": "groupBy",
-        }
-        if len(recall_names) == 1:
-            item["choiceKeyword"] = recall_names[0]
-        path_mapping[f"g{i}"] = term.path
-        group_result.append(item)
-    group_result.extend(_clarify_for_group)
+    if isinstance(confirmed, ConfirmedStructuredCompute):
+        original_dims = [t.raw_text for t in terms if t.ktype == "groupBy" and t.source == "main"]
+        confirmed_dims = [
+            str(d.get("field", "")) if isinstance(d, dict) else str(d) for d in confirmed.dimensions
+        ]
+        for i, (orig, conf) in enumerate(zip(original_dims, confirmed_dims, strict=False)):
+            if orig in clarify_map:
+                ci = clarify_map[orig]
+                item = {
+                    "keyword": orig,
+                    "recall": ci.candidates,
+                    "kid": i + 1,
+                    "ktype": "groupBy",
+                }
+            else:
+                item = {
+                    "keyword": orig,
+                    "recall": [conf],
+                    "kid": i + 1,
+                    "ktype": "groupBy",
+                    "choiceKeyword": conf,
+                }
+            path_mapping[f"g{i + 1}"] = _find_path(orig, "groupBy", f"dimensions.{i}")
+            group_result.append(item)
 
-    # paradigmId=3: 过滤条件
+    # ── paradigmId=3: 过滤条件 ──
     filter_result: list[dict[str, Any]] = []
-    _build_filter_paradigm(terms, recall_map, filter_result, path_mapping)
-
-    # complex_conditions → paradigmId=3 的 IFieldItem
+    # 主结构 filters：对比原始 vs LLM 确认
+    original_filters = [
+        t for t in terms if t.ktype in ("whereKey", "whereValue") and t.source == "main"
+    ]
+    # 按 path 前缀配对 key+value
+    _build_filter_paradigm_from_confirmed(
+        confirmed.filters, original_filters, clarify_map, filter_result, path_mapping
+    )
+    # complex_conditions → 笛卡尔积展开
     if complex_conditions and confirmed.confirmed_conditions:
         for idx, cc in enumerate(confirmed.confirmed_conditions):
             original = (
@@ -262,28 +326,34 @@ def build_paradigm_list(
                     "ktype": "complexCondition",
                 }
             )
-    filter_result.extend(_clarify_for_filter)
 
-    # paradigmId=4: 排序目标
+    # ── paradigmId=4: 排序目标 ──
     order_result: list[dict[str, Any]] = []
-    order_terms = [t for t in terms if t.ktype == "orderBy" and t.source == "main"]
-    for i, term in enumerate(order_terms, start=1):
-        key = f"{term.ktype}:{term.raw_text}"
-        candidates = recall_map.get(key, [])
-        recall_names = [str(c.get("term_name", "")) for c in candidates[:5]]
-        item = {
-            "keyword": term.raw_text,
-            "recall": recall_names,
-            "kid": i,
-            "ktype": "orderBy",
-        }
-        if len(recall_names) == 1:
-            item["choiceKeyword"] = recall_names[0]
-        path_mapping[f"o{i}"] = term.path
+    original_order = [t.raw_text for t in terms if t.ktype == "orderBy" and t.source == "main"]
+    confirmed_order = [
+        str(o.get("field", "")) if isinstance(o, dict) else str(o) for o in confirmed.order_by
+    ]
+    for i, (orig, conf) in enumerate(zip(original_order, confirmed_order, strict=False)):
+        if orig in clarify_map:
+            ci = clarify_map[orig]
+            item = {
+                "keyword": orig,
+                "recall": ci.candidates,
+                "kid": i + 1,
+                "ktype": "orderBy",
+            }
+        else:
+            item = {
+                "keyword": orig,
+                "recall": [conf],
+                "kid": i + 1,
+                "ktype": "orderBy",
+                "choiceKeyword": conf,
+            }
+        path_mapping[f"o{i + 1}"] = _find_path(orig, "orderBy", f"order_by.{i}.field")
         order_result.append(item)
-    order_result.extend(_clarify_for_order)
 
-    # paradigmId=5: 统计函数（空）
+    # ── paradigmId=5: 统计函数（空）──
     agg_result: list[dict[str, Any]] = []
 
     paradigm_list = [
@@ -303,21 +373,24 @@ def build_paradigm_list(
     return paradigm_list, meta
 
 
-def _build_filter_paradigm(
-    terms: list[ExtractedTerm],
-    recall_map: dict[str, list[dict[str, Any]]],
+def _build_filter_paradigm_from_confirmed(
+    confirmed_filters: list[dict[str, Any]],
+    original_filter_terms: list[ExtractedTerm],
+    clarify_map: dict[str, ClarifyItem],
     filter_result: list[dict[str, Any]],
     path_mapping: dict[str, str],
 ) -> None:
-    """构建过滤条件的 paradigmResult（IConditionItem 格式）。"""
-    # 按 path 前缀配对 whereKey + whereValue
-    key_terms = [t for t in terms if t.ktype == "whereKey" and t.source == "main"]
-    value_terms = [t for t in terms if t.ktype == "whereValue" and t.source == "main"]
+    """基于 LLM 确认的 filters 构建过滤条件 paradigm。
 
-    # 简单配对：按 filters 索引
+    对比原始 filter terms 和 LLM 确认后的 filters，
+    已确认的自动选中，待澄清的展示候选。
+    """
+    # 按 path 前缀配对原始 whereKey + whereValue
+    key_terms = [t for t in original_filter_terms if t.ktype == "whereKey"]
+    value_terms = [t for t in original_filter_terms if t.ktype == "whereValue"]
+
     paired: dict[str, dict[str, ExtractedTerm]] = {}
     for t in key_terms:
-        # path 如 "filters.0.field" → 提取 "filters.0"
         parts = t.path.rsplit(".", 1)
         prefix = parts[0] if len(parts) > 1 else t.path
         paired.setdefault(prefix, {})["key"] = t
@@ -326,33 +399,42 @@ def _build_filter_paradigm(
         prefix = parts[0] if len(parts) > 1 else t.path
         paired.setdefault(prefix, {})["value"] = t
 
-    for prefix in sorted(paired):
-        pair = paired[prefix]
+    for idx, (prefix, pair) in enumerate(sorted(paired.items())):
         key_term = pair.get("key")
         value_term = pair.get("value")
         if key_term is None:
             continue
 
-        key_key = f"{key_term.ktype}:{key_term.raw_text}"
-        key_candidates = recall_map.get(key_key, [])
-        key_names = [str(c.get("term_name", "")) for c in key_candidates[:5]]
+        # 从 LLM confirmed_filters 中找对应的确认结果
+        conf_filter = confirmed_filters[idx] if idx < len(confirmed_filters) else {}
+        conf_field = str(conf_filter.get("field", ""))
 
         item: dict[str, Any] = {
             "field": key_term.raw_text,
-            "fieldRecall": key_names,
             "comparison": "eq",
         }
-        if len(key_names) == 1:
-            item["choiceField"] = key_names[0]
 
+        # field 部分
+        if key_term.raw_text in clarify_map:
+            ci = clarify_map[key_term.raw_text]
+            item["fieldRecall"] = ci.candidates
+        else:
+            item["fieldRecall"] = [conf_field] if conf_field else []
+            if conf_field:
+                item["choiceField"] = conf_field
+
+        # value 部分
         if value_term:
-            val_key = f"{value_term.ktype}:{value_term.raw_text}"
-            val_candidates = recall_map.get(val_key, [])
-            val_names = [str(c.get("term_name", "")) for c in val_candidates[:5]]
+            conf_values = conf_filter.get("value", "")
             item["value"] = value_term.raw_text
-            item["valueRecall"] = val_names
-            if len(val_names) == 1:
-                item["choiceValue"] = val_names[0]
+            if value_term.raw_text in clarify_map:
+                ci = clarify_map[value_term.raw_text]
+                item["valueRecall"] = ci.candidates
+            else:
+                val_list = conf_values if isinstance(conf_values, list) else [conf_values]
+                item["valueRecall"] = [str(v) for v in val_list if v]
+                if len(item["valueRecall"]) == 1:
+                    item["choiceValue"] = item["valueRecall"][0]
         else:
             item["value"] = ""
             item["valueRecall"] = []
