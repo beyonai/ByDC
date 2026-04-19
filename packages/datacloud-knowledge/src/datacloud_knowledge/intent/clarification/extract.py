@@ -311,7 +311,8 @@ def _terms_from_natquery(
                         condition_index=condition_index,
                     )
                 )
-        # alias
+        # alias — parent_raw_text 指向 expr 原始词
+        parent_expr = str(s.expr).strip()
         for alias in s.alias:
             stripped_alias = alias.strip()
             if stripped_alias and not _is_skippable(stripped_alias):
@@ -322,6 +323,7 @@ def _terms_from_natquery(
                         path=f"{prefix}.select.{i}.alias",
                         source="complex_condition",
                         condition_index=condition_index,
+                        parent_raw_text=parent_expr,
                     )
                 )
 
@@ -338,7 +340,8 @@ def _terms_from_natquery(
                     condition_index=condition_index,
                 )
             )
-        # field_alias
+        # field_alias — parent_raw_text 指向 field 原始词
+        parent_field = str(w.field).strip()
         for alias in w.field_alias:
             stripped_alias = alias.strip()
             if stripped_alias and not _is_skippable(stripped_alias):
@@ -349,6 +352,7 @@ def _terms_from_natquery(
                         path=f"{prefix}.where.{i}.field_alias",
                         source="complex_condition",
                         condition_index=condition_index,
+                        parent_raw_text=parent_field,
                     )
                 )
         # value
@@ -379,6 +383,8 @@ def _terms_from_natquery(
                     condition_index=condition_index,
                 )
             )
+        # field_alias — parent_raw_text 指向 field 原始词
+        parent_gb_field = str(g.field).strip()
         for alias in g.field_alias:
             stripped_alias = alias.strip()
             if stripped_alias and not _is_skippable(stripped_alias):
@@ -389,6 +395,7 @@ def _terms_from_natquery(
                         path=f"{prefix}.group_by.{i}.alias",
                         source="complex_condition",
                         condition_index=condition_index,
+                        parent_raw_text=parent_gb_field,
                     )
                 )
 
