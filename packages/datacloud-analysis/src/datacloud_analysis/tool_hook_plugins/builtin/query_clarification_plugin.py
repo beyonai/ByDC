@@ -450,26 +450,26 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 {
                     "prompt": "查询条件存在歧义，请确认查询维度",
                     "reason_code": "PARADIGM_CLARIFICATION",
-                    "ask_user_payload": {"paradigmList": paradigm_list},
+                    "ask_user_payload": {"paradigmList": paradigm_list, "query": query},
                     "_clarify_knowledge": clarify_knowledge,
-                    "_clarify_query": query,
                 }
             )
 
             # resume 后调 SDK format 写回参数
             knowledge = ""
-            saved_query = query
+            paradigm_list_from_resume: list[dict[str, Any]] = []
             if isinstance(resume_value, dict):
-                knowledge = str(resume_value.get("_clarify_knowledge", ""))
-                saved_query = str(resume_value.get("_clarify_query", query))
+                meta = resume_value.get("metadata") or {}
+                knowledge = str(meta.get("clarify_knowledge") or "")
+                para_result = resume_value.get("paradigmResult") or []
+                if para_result and isinstance(para_result[0], dict):
+                    paradigm_list_from_resume = list(para_result[0].get("paradigmList") or [])
+                if not paradigm_list_from_resume:
+                    paradigm_list_from_resume = list(meta.get("paradigmList") or [])
 
-            form_str = (
-                json.dumps(resume_value, ensure_ascii=False)
-                if isinstance(resume_value, dict)
-                else "{}"
-            )
+            form_str = json.dumps({"paradigmList": paradigm_list_from_resume}, ensure_ascii=False)
             tool_params = _format_clarification(
-                saved_query,
+                query,
                 structured_input,
                 form_str,
                 knowledge,

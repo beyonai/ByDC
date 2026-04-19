@@ -189,3 +189,5 @@ pyrefly.toml
 # 本地备份包，不纳入版本库
 packages/datacloud-analysis-bak/
 packages/datacloud-analysis/src/datacloud_analysis/demo.py
+package.json
+package-lock.json
