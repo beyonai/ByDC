@@ -28,18 +28,15 @@ logger = logging.getLogger(__name__)
 MAX_COMBINATIONS = 20
 
 
-_POSITION_SEARCH_RADIUS = 3
-"""LLM start/end 校正搜索半径（字符数）。"""
-
-
 def _fix_term_positions(
     sentence: str,
     mappings: list[ConditionTermMapping],
 ) -> None:
     """校正 LLM 返回的 start/end 位置。
 
-    LLM 计算中文字符位置常有 ±1~2 偏差。以 LLM 给的 start 为锚点，
-    在 ±RADIUS 范围内搜索 original_term 的精确位置，就地修正。
+    策略：
+    - 术语在句子中只出现一次 → 直接 str.find，忽略 LLM 给的位置（LLM 偏差可能很大）
+    - 术语出现多次 → 以 LLM start 为锚点 ±RADIUS 搜索，用位置消歧
     """
     used_positions: set[int] = set()
     for tm in mappings:
@@ -47,16 +44,26 @@ def _fix_term_positions(
         term_len = len(term)
         best_pos: int | None = None
 
-        for offset in range(_POSITION_SEARCH_RADIUS + 1):
-            for delta in [0] if offset == 0 else [-offset, offset]:
-                pos = tm.start + delta
-                if pos < 0 or pos + term_len > len(sentence):
-                    continue
-                if sentence[pos : pos + term_len] == term and pos not in used_positions:
-                    best_pos = pos
-                    break
-            if best_pos is not None:
+        # 统计术语在句子中出现的所有位置
+        occurrences: list[int] = []
+        search_start = 0
+        while True:
+            idx = sentence.find(term, search_start)
+            if idx == -1:
                 break
+            occurrences.append(idx)
+            search_start = idx + 1
+
+        if len(occurrences) == 1:
+            # 唯一出现 → 直接采信，不看 LLM 位置
+            best_pos = occurrences[0]
+        elif len(occurrences) > 1:
+            # 多次出现 → 以 LLM start 为锚点，选最近且未占用的
+            for occ in sorted(occurrences, key=lambda p: abs(p - tm.start)):
+                if occ not in used_positions:
+                    best_pos = occ
+                    break
+        # occurrences 为空 → best_pos 保持 None（术语不在句子中）
 
         if best_pos is not None and (best_pos != tm.start or best_pos + term_len != tm.end):
             logger.debug(
