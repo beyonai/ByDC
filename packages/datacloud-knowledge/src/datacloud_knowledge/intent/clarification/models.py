@@ -35,6 +35,9 @@ class ExtractedTerm:
     search_enabled: bool = True
     """False → 跳过召回（纯数字/日期/非中文/别名引用）。"""
 
+    vector_only: bool = False
+    """True → 只走向量召回（英文标识符如 stat_date，文本匹配无意义）。"""
+
 
 # ── LLM 确认输出 ─────────────────────────────────────────────────────
 

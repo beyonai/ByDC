@@ -22,25 +22,48 @@ _HAS_CHINESE_RE = re.compile(r"[\u4e00-\u9fff]")
 # expr 分割：按 +-*/() 拆分
 _EXPR_SPLIT_RE = re.compile(r"[+\-*/()]+")
 
-# 纯数字 / 日期
+# 纯数字 / 日期 / 中文数值（如 "50万"、"30%"、"100万元"）
 _NUMERIC_RE = re.compile(r"^[\d.]+$")
+_NUMERIC_CN_RE = re.compile(r"^[\d.]+[万亿元%‰]+$")
 _DATE_RE = re.compile(
     r"^\d{4}[-/年]\d{1,2}[-/月]?(\d{1,2}日?)?$"
     r"|^\d{6,8}$"
     r"|^\d{4}年?$"
 )
 
+# 英文标识符（如 stat_date、total_revenue）— 需要走向量召回而非文本召回
+_ENGLISH_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
 
 def _is_skippable(value: str) -> bool:
-    """判断值是否应跳过召回。"""
+    """判断值是否应跳过召回。
+
+    跳过：空值、纯数字、日期、中文数值（50万/30%）、无中文的非标识符文本。
+    不跳过：含中文的术语、英文标识符（stat_date 等，走向量召回）。
+    """
     v = value.strip()
     if not v:
         return True
     if _NUMERIC_RE.match(v):
         return True
+    if _NUMERIC_CN_RE.match(v):
+        # "50万"、"100万元"、"30%" 等中文数值不需要知识库召回
+        return True
     if _DATE_RE.match(v):
         return True
+    # 英文标识符（如 stat_date）不跳过，后续走向量召回
+    if _ENGLISH_IDENT_RE.match(v):
+        return False
     return not bool(_HAS_CHINESE_RE.search(v))
+
+
+def _is_vector_only(value: str) -> bool:
+    """判断值是否应只走向量召回。
+
+    英文标识符（如 stat_date、total_revenue）无法通过 BM25/子串匹配
+    命中中文术语名，但向量语义检索可以匹配到对应的中文字段名。
+    """
+    return bool(_ENGLISH_IDENT_RE.match(value.strip()))
 
 
 def _extract_expr_tokens(expr: str) -> list[str]:
@@ -412,6 +435,7 @@ def _extract_filters(
                     source=source,  # type: ignore[arg-type]
                     condition_index=condition_index,
                     search_enabled=not _is_skippable(field),
+                    vector_only=_is_vector_only(field),
                 )
             )
         # value
@@ -427,6 +451,7 @@ def _extract_filters(
                     source=source,  # type: ignore[arg-type]
                     condition_index=condition_index,
                     search_enabled=not _is_skippable(v_str),
+                    vector_only=_is_vector_only(v_str),
                 )
             )
 
