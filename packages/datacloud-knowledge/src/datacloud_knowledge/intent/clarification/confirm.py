@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 CONFIRM_SYSTEM_PROMPT = """\
 你是数据查询确认助手。根据知识库召回结果，将结构化查询中的中文术语映射到真实 schema 字段。
+分析完成后，你必须调用工具提交确认结果，不要用文本回复。
 
 ## 输入
 - 用户原始查询
@@ -37,17 +38,72 @@ CONFIRM_SYSTEM_PROMPT = """\
 - 确定的术语直接替换为真实字段名
 - 无法确定的放入 clarify_items，标注 source 和 path
 - 候选列表中排在前面的通常更相关，但要结合语义判断
+- 如果召回候选第一名与原始术语语义高度匹配，直接确认，不需要澄清
+
+## 维度建模一致性规则
+- select / metrics 中的字段应来自相同粒度的数据实体
+- 如果候选中有多个不同粒度的字段（如企业级 vs 网格级），优先选择与 \
+dimensions / group_by 粒度一致的字段
+- 例：dimensions 按"管理网格"分组，则 metrics 优先选管理网格级别的字段
+- 例：查询"各班级的语文平均分和数学平均分"，dimensions 是班级，\
+metrics 应选班级级别的成绩字段而非学生级别的
+
+## 数值与量化条件规则
+- 纯数值（如 50、30%、100万、202602）直接保留原值，不需要召回确认
+- 数值型 whereValue 的 confirmed 直接填原值，不标记为需澄清
+
+## alias 引用规则
+- order_by / having 中如果引用了 metrics[].as 别名，保持别名不变，不做翻译
+- 如果 order_by.field 不是 metrics alias 引用，而是有对应的召回候选，则正常替换
+
+## 保持原始结构规则
+- limit / offset 保持原始输入的值，不做修改
+- 不要增删原始结构中的字段数量，只做术语→真实字段名的替换
+- filters 中已有的条件结构（field/op/value）保持不变，只替换 field 名为召回候选中的真实字段名
+- filters.field 如果是英文编码（如 stat_date），且召回候选中有对应的中文字段名，替换为中文字段名
 
 ## complex_conditions 确认规则
 - 对每条 NL 中的中文术语做确认
 - 输出 original_term / start / end / confirmed / candidates
 - 只有一个高置信候选 → confirmed 填值
-- 多候选无法区分 → confirmed = null，candidates 按相关度排序
+- 多候选无法区分 → confirmed = null，candidates 按相关度排序（仅从召回候选中选取）
 
 ## 关键规则
 - needs_clarification = true ⟺ clarify_items 非空 或任何 complex_condition 术语的 confirmed 为 null
 - clarify_items 中的 source 必须标明来源: "select" / "where" / "group_by" / "order_by"
-- 严禁编造不存在的字段名
+- clarify_items 中的 candidates 必须全部来自召回候选，严禁编造
+- 分析完成后必须调用工具提交结果，不要用文本回复
+
+## 示例
+
+用户查询: "查询语文成绩前10名的学生"
+结构化输入（StructuredQuery）:
+{
+  "select": ["学生姓名", "语文成绩"],
+  "order_by": [{"field": "语文成绩", "direction": "desc"}],
+  "limit": 10
+}
+知识库召回结果:
+== 查询值 ==
+  学生姓名 (select): ['学生姓名', '学生学号', '班级名称']
+  语文成绩 (select): ['语文期末成绩', '语文平时成绩', '数学期末成绩']
+== 排序目标 ==
+  语文成绩 (orderBy): ['语文期末成绩', '语文平时成绩', '数学期末成绩']
+
+正确的工具调用参数:
+{
+  "select": ["学生姓名", "语文期末成绩"],
+  "order_by": [{"field": "语文期末成绩", "direction": "desc"}],
+  "limit": 10,
+  "clarify_items": [],
+  "needs_clarification": false
+}
+说明：学生姓名精确命中；语文成绩→语文期末成绩（排名第一且语义匹配）；limit=10 保持不变。
+
+错误示例（不要这样做）:
+- candidates 中出现 "语文综合成绩" ← 不在召回结果中，属于编造
+- limit 被改为 null ← 不应修改原始值
+- 用文本回复而不调用工具 ← 必须调用工具提交
 """
 
 
@@ -200,9 +256,9 @@ def llm_confirm_structured(
         )
         if response and response.tool_calls:
             args = response.tool_calls[0]["args"]
-            logger.info(
+            logger.debug(
                 "[confirm] LLM 确认完成: %s",
-                json.dumps(args, ensure_ascii=False)[:500],
+                json.dumps(args, ensure_ascii=False),
             )
             result = model_cls.model_validate(args)
             result.needs_clarification = _check_needs_clarification(result)
