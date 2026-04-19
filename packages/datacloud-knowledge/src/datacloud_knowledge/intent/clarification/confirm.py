@@ -68,11 +68,18 @@ metrics 应选班级级别的成绩字段而非学生级别的
 - 对每条 NL 中的中文术语做确认
 - 输出 original_term / start / end / confirmed / candidates
 - 只有一个高置信候选 → confirmed 填值
-- 多候选无法区分 → confirmed = null，candidates 按相关度排序（仅从召回候选中选取）
+- 多候选无法区分 → confirmed = null，candidates 按语义相关度降序排列
+- candidates 必须精选：只保留与原始术语语义相关的候选（最多 5 个），\
+过滤掉明显不相关的
+- candidates 仅从召回候选中选取，严禁编造
+- 示例：术语"成绩"的召回候选为 ['数据来源', '语文期末成绩', '数学期末成绩', '统计日期', '班级平均分']，\
+精选后 candidates = ['语文期末成绩', '数学期末成绩', '班级平均分']，\
+过滤掉 '数据来源' 和 '统计日期'（与"成绩"语义无关）
 
 ## 关键规则
 - needs_clarification = true ⟺ clarify_items 非空 或任何 complex_condition 术语的 confirmed 为 null
 - clarify_items 中的 source 必须标明来源: "select" / "where" / "group_by" / "order_by"
+- clarify_items 中的 candidates 必须按语义相关度降序排列，最多 5 个，过滤明显不相关项
 - clarify_items 中的 candidates 必须全部来自召回候选，严禁编造
 - 分析完成后必须调用工具提交结果，不要用文本回复
 
@@ -203,6 +210,20 @@ def format_recall_context(
     return "\n".join(lines)
 
 
+# ── LLM 输出清洗 ──────────────────────────────────────────────────────
+
+# LLM 可能在列表字段中传 null（如 select: [null]），需要过滤
+_LIST_FIELDS_TO_SANITIZE = ("select", "filters", "order_by", "dimensions", "metrics", "having")
+
+
+def _sanitize_confirm_args(args: dict[str, Any]) -> None:
+    """清洗 LLM tool call 参数，过滤列表中的 None 值。"""
+    for field in _LIST_FIELDS_TO_SANITIZE:
+        val = args.get(field)
+        if isinstance(val, list):
+            args[field] = [item for item in val if item is not None]
+
+
 # ── LLM 调用 ─────────────────────────────────────────────────────────
 
 
@@ -264,6 +285,8 @@ def llm_confirm_structured(
         )
         if response and response.tool_calls:
             args = response.tool_calls[0]["args"]
+            # LLM 可能在列表字段中传 null（如 select: [null]），清洗后再校验
+            _sanitize_confirm_args(args)
             logger.debug(
                 "[confirm] LLM 确认完成: %s",
                 json.dumps(args, ensure_ascii=False),
