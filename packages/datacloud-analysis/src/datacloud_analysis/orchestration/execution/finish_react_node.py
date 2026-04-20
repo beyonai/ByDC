@@ -37,17 +37,29 @@ async def finish_react_node(state: AgentState, config: RunnableConfig) -> dict[s
     result_type = str(finish_args.get("result_type") or "text")
     answer = str(finish_args.get("answer") or last_content or "")
     stop_reason = status if status else "finish_react"
+    csv_file_path = str(finish_args.get("csv_file_path") or "")
+    answer_streamed = bool(state.get("answer_streamed"))
+
+    _last_query_data: dict[str, Any] | None = state.get("react_last_query_data")
 
     logger.info("[finish_react] result_type=%s stop_reason=%s", result_type, stop_reason)
 
+    react_final: dict[str, Any] = {
+        "result_type": result_type,
+        "answer": answer,
+        "stop_reason": stop_reason,
+        "csv_file_path": csv_file_path,
+        "answer_streamed": answer_streamed,
+    }
+    if _last_query_data is not None and result_type in {"query_result", "csv_file", "json_file"}:
+        react_final["query_data"] = _last_query_data
+
     return {
-        "react_final": {
-            "result_type": result_type,
-            "answer": answer,
-            "stop_reason": stop_reason,
-        },
+        "react_final": react_final,
         "react_rounds": int(state.get("react_round_idx") or 0),
         "react_messages_log": None,
         "react_round_idx": None,
+        "react_last_query_data": None,
+        "answer_streamed": None,
         "execution_status": None,
     }

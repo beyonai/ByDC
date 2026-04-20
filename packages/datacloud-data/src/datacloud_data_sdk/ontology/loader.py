@@ -145,14 +145,29 @@ class OntologyLoader:
         Example:
             loader.load_from_owl_directory("mock_env/resource/knowledge/import_package_owl")
         """
+        # from datacloud_data_sdk.ontology.owl_parser import OwlParser
+
+        # base_path = Path(base_dir)
+        # ontology_dir = base_path / "ontology"
+        # relations_dir = base_path / "relations"
+
+        # parser = OwlParser()
+        # content = parser.parse_directory(ontology_dir, relations_dir)
+        # self._load_from_owl_content(content)
+        self.load_from_owl_resource_directory(base_dir=base_dir)
+
+    def load_from_owl_resource_directory(self, base_dir: str | Path) -> None:
+        """
+        从新的 resource/object + resource/view 目录结构加载本体定义。
+
+        Args:
+            base_dir: resource 根目录，包含 object/ 和 view/ 子目录
+        """
         from datacloud_data_sdk.ontology.owl_parser import OwlParser
 
         base_path = Path(base_dir)
-        ontology_dir = base_path / "ontology"
-        relations_dir = base_path / "relations"
-
         parser = OwlParser()
-        content = parser.parse_directory(ontology_dir, relations_dir)
+        content = parser.parse_resource_directory(base_path)
         self._load_from_owl_content(content)
 
     def _load_from_owl_content(self, content: dict[str, Any]) -> None:

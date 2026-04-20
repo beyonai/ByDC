@@ -81,3 +81,30 @@ async def test_tc1_7c_max_rounds_exceeded_handled() -> None:
     rf = result.get("react_final") or {}
     assert rf.get("result_type") is not None, "应生成 react_final"
     assert result.get("react_messages_log") is None
+
+
+# ── TC-1-7d: query_data 注入 ──────────────────────────────────────────────────
+
+
+async def test_tc1_7d_query_data_injected_into_react_final() -> None:
+    """TC-1-7d: react_last_query_data 在 state 中时，应被注入 react_final["query_data"]。"""
+    import typing
+    _QUERY_DATA: dict[typing.Any, typing.Any] = {"records": [{"id": 1}], "meta": {"total": 1}}
+    state: dict[typing.Any, typing.Any] = {
+        "messages": _messages_with_finish_react(),
+        "react_round_idx": 1,
+        "react_last_query_data": _QUERY_DATA,
+    }
+    # Override result_type to query_result
+    call = {"name": "finish_react", "args": {**_FINISH_ARGS, "result_type": "query_result"}, "id": "tc_fr2"}
+    from langchain_core.messages import SystemMessage, HumanMessage, AIMessage as _AI
+    state["messages"] = [
+        SystemMessage(content="sys"),
+        HumanMessage(content="test"),
+        _AI(content="", tool_calls=[call]),
+    ]
+    result = await finish_react_node(state, None)  # type: ignore[arg-type]
+
+    rf = result.get("react_final") or {}
+    assert rf.get("query_data") == _QUERY_DATA, "query_data 应被注入 react_final"
+    assert result.get("react_last_query_data") is None, "react_last_query_data 应被清理"

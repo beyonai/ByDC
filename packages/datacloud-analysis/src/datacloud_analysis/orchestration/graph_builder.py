@@ -162,9 +162,12 @@ def build_analysis_graph(
             return "finish_react"
 
         # Per-tool Send 路由（各工具并行执行）
+        # Send(node, arg) 中 arg 是目标节点的完整 input state，必须传当前 state 而非 {}
         if _tool_node_names:
             sends = [
-                Send(tc["name"], {}) for tc in non_finish if tc.get("name") in _tool_node_names
+                Send(tc["name"], state)
+                for tc in non_finish
+                if tc.get("name") in _tool_node_names
             ]
             if sends:
                 return sends  # type: ignore[return-value]

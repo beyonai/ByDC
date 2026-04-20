@@ -135,6 +135,7 @@ def make_llm_call_node(
             "messages": [ai_msg],
             "react_round_idx": current_round + 1,
             "execution_status": None,
+            "answer_streamed": _did_stream,
         }
 
     return _llm_call
