@@ -29,7 +29,7 @@ def _get_query_tool_hint_zh() -> str:
         "## 查询工具命名规则\n"
         "- 查询工具名称格式为 query_{对象编码}（如 query_ads_enterprise_analysis），"
         "聚合计算工具格式为 compute_{对象编码}（如 compute_ads_enterprise_analysis）。\n"
-        "- 复杂查询（complex_conditions 非空）系统自动路由到 data_query_{对象编码}，无需手动调用。\n"
+        "- 复杂查询（complex_conditions 非空）系统后端自动处理，agent 无需手动调用其他工具。\n"
         "- 禁止调用不含对象编码的裸工具名（如直接调用 query 或 compute）。\n"
     )
 
@@ -40,7 +40,7 @@ def _get_query_tool_hint_en() -> str:
         "## Query tool naming\n"
         "- Tool format: query_{object_code} (e.g. query_ads_enterprise_analysis), "
         "compute_{object_code} (e.g. compute_ads_enterprise_analysis).\n"
-        "- Complex queries (complex_conditions non-empty) are auto-routed to data_query_{code}.\n"
+        "- Complex queries (complex_conditions non-empty) are handled automatically by the backend.\n"
         "- Do NOT call bare names like 'query' or 'compute' without the object suffix.\n"
     )
 
@@ -131,15 +131,11 @@ def _build_exec_zh() -> str:
             "- 调用数据查询工具时，query 参数必须是完整的自然语言问题，描述用户真正想查询的内容，例如「查询企业分析表的全部字段」。\n",
             "- 禁止使用 *、%、ALL 等通配符或占位符作为 query 参数。\n",
             "- 如果用户原始问题较短，应结合上下文将其改写为完整、清晰的自然语言查询。\n",
-            "- 理解用户提问的主要焦点和具体细节，分析出提问所代表的查询目标、分组条件、过滤条件、排序目标、统计函数中的关键字分别是什么\n",
-            "- 关键词是命名实体（如组织、地点等）、专业术语以及其他包含查询重要方面的短语\n",
-            "- 关键词只能是：名词或名词短语；不能是：常见的停用词，副词，表示数值的数量词,表示统计相关的动词\n",
-            "- 问题的相关术语可以作为关键词的一个重要参考\n",
-            "- 查询目标：包含指标(可统计的数值型术语)和维度名称(分类属性)，不包含统计相关的动词，如果用户的提问比较口语化请用较为专业的术语来表示\n",
-            "- 分组条件：主要是离散型维度名称\n",
-            "- 过滤条件：主要是维度名称下具体维度取值，或指标的数值条件限定\n",
-            "- 排序目标：可排序的指标或维度名称字段\n",
-            "- 统计函数：聚合函数，数据计算的相关运算,统计相关的动词\n",
+            "## 工具选择引导\n",
+            "- 调用工具前，先在心中完成贪心预判：\n",
+            "  1. 目标对象：从问题中识别要查询的本体（如'企业'→query_enterprise_view）。\n",
+            "  2. 任务类型：明细查询 → query_*；统计聚合 → compute_*。\n",
+            "  3. 参数预填：对照工具描述中的字段能力表，提前确定 select/filters/dimensions/metrics。\n",
             "## query_*/compute_* 核心参数规则\n",
             "- **query（必填）**：完整自然语言问题，不得为空，不得使用 */%/ALL 等通配符。\n",
             "  如用户原始问题较短，结合上下文改写为完整清晰的查询描述。\n",
@@ -149,25 +145,24 @@ def _build_exec_zh() -> str:
             "  ⚠️ **字段名不存在时必须透传原词**：若某个词（如'贡献率'、'地块'）在工具的字段列表中\n",
             "  找不到精确对应，禁止猜测替换为相近字段名；必须将用户的原始词直接填入对应参数\n",
             "  （如 select: ['贡献率']、order_by: [{'field': '贡献率', 'direction': 'asc'}]），\n",
-            "  系统后端会做语义解析。同时将该字段涉及的完整条件写入 complex_conditions。\n",
+            "  系统后端会做语义解析。字段透传与 complex_conditions 是独立规则，互不影响。\n",
             "- **complex_conditions（溢出过滤区）**：\n",
-            "  满足以下任一条件时，必须将该条件用自然语言写入此列表：\n",
-            "  1. 过滤条件的值在填参时无法确定为字面常量（如'后30%'、'高于平均'、'排名前10名'）；\n",
-            "  2. 查询/排序/返回所涉及的字段名在工具字段列表中找不到精确对应（如'贡献率'、'地块'等\n",
-            "     非标准词），需要系统做语义推断。\n",
-            "  示例：'贡献率后3的地块清单'、'亩产效益后30%的地块'、'营收高于行业平均值'。\n",
-            "  此列表非空时系统自动路由到全能查询路径，无需手动调用 data_query。\n",
+            "  满足以下条件时，必须将该条件用自然语言写入此列表：\n",
+            "  1. 过滤条件的值在填参时无法确定为字面常量（如'后30%'、'高于平均'、'排名前10名'）。\n",
+            "  ⚠️ 字段名在字段列表中找不到时，不触发 complex_conditions——直接透传原词到标准参数即可。\n",
+            "  示例：'亩产效益后30%的地块'、'营收高于行业平均值'。\n",
+            "  此列表非空时系统后端自动路由到全能查询路径，无需手动调用其他工具。\n",
             "- **禁止**：同时将同一条件既写入 filters 又写入 complex_conditions。\n",
-            "## data_query 返回结构规则\n",
-            "- data_query 返回结构：{data: {result_type, records, file: {file_url}, meta}}。\n",
+            "## 查询工具返回结构规则\n",
+            "- query_*/compute_* 返回结构：{data: {result_type, records, file: {file_url}, meta}}。\n",
             "- 如果返回中包含 file_url 字段或顶层 _hint 字段，说明数据已存入本地文件，直接使用该文件路径。\n",
             "- 如果 result_type=rejected，数据查询被拒绝，应告知用户并说明原因。\n",
             ask_user_result_line,
             "## 结果类型规则\n",
-            "- 调用 data_query 类工具后，返回中含 _hint 字段：必须使用 result_type=query_result，"
+            "- 调用 query_*/compute_* 工具后，返回中含 _hint 字段：必须使用 result_type=query_result，"
             "系统会自动透传完整的 records/pagination/meta/file 结构。\n",
             "- 如需同时返回文字分析+结构化数据：result_type=query_result，answer 填写文字分析，系统会先推文字再推 6001 内容。\n",
-            "- 禁止将 data_query 返回的 records 序列化后填入 data 字段，会丢失 meta/pagination/file 信息。\n",
+            "- 禁止将查询工具返回的 records 序列化后填入 data 字段，会丢失 meta/pagination/file 信息。\n",
             "- CSV 文件：result_type=csv_file。\n",
             "- 纯文字结论：result_type=text。",
         ]
@@ -186,8 +181,8 @@ def _build_exec_en() -> str:
         + (hint if hint else "")
         + "## Compute tool rules\n"
         "- For compute_{object}, each metrics item must use the key **`agg`** "
-        "(e.g. count_distinct), never `func`.\n" + "## Data query tool rules\n"
-        "- Returns {data: {result_type, records, file: {file_url}, meta}}.\n"
+        "(e.g. count_distinct), never `func`.\n" + "## Query tool return structure\n"
+        "- query_*/compute_* return: {data: {result_type, records, file: {file_url}, meta}}.\n"
         "- If file_url or _hint present, data is saved. Do NOT call write_file.\n"
         "## Result type rules\n"
         "- records: result_type=json. file_url or _result: result_type=json_file.\n"

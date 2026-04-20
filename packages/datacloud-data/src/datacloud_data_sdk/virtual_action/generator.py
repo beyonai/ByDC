@@ -145,7 +145,8 @@ def _filter_item_schema(f: Any) -> dict[str, Any]:
             "field": {
                 "type": "string",
                 "description": (
-                    f"字段中文名（如 '{field_name}'）或字段编码（如 '{field_code}'），系统自动识别映射。"
+                    f"字段中文名（如 '{field_name}'）或字段编码（如 '{field_code}'），系统自动识别映射；"
+                    "若字段名在当前对象中找不到精确对应，直接填用户原词，禁止猜测替换为相近字段名。"
                 ),
             },
             "op": {"type": "string", "enum": filter_ops, "description": "过滤操作符"},
@@ -153,6 +154,47 @@ def _filter_item_schema(f: Any) -> dict[str, Any]:
         },
         "required": ["field", "op"],
     }
+
+
+_FILTER_CATCHALL_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": "兜底条目：字段名在当前对象中找不到精确对应时使用",
+    "properties": {
+        "field": {
+            "type": "string",
+            "description": (
+                "直接填写用户原词（如'贡献率'），禁止猜测替换为相近字段名；系统后端负责语义解析。"
+            ),
+        },
+        "op": {
+            "type": "string",
+            "enum": [
+                "eq",
+                "neq",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "in",
+                "not_in",
+                "is_null",
+                "is_not_null",
+                "like",
+                "between",
+            ],
+            "description": "过滤操作符",
+        },
+        "value": {
+            "description": "过滤值",
+            "oneOf": [
+                {"type": "string"},
+                {"type": "number"},
+                {"type": "array", "items": {"oneOf": [{"type": "string"}, {"type": "number"}]}},
+            ],
+        },
+    },
+    "required": ["field", "op"],
+}
 
 
 def _build_filters_schema(fields: list[Any]) -> dict[str, Any]:
@@ -163,7 +205,9 @@ def _build_filters_schema(fields: list[Any]) -> dict[str, Any]:
     return {
         "type": "array",
         "description": "过滤条件列表，field 填字段中文名或字段编码",
-        "items": {"oneOf": [_filter_item_schema(f) for f in filterable]},
+        "items": {
+            "oneOf": [_filter_item_schema(f) for f in filterable] + [_FILTER_CATCHALL_SCHEMA]
+        },
         "x-dc-filterable-fields": [
             {
                 "field": f.field_code if hasattr(f, "field_code") else f.property_code,
@@ -242,11 +286,11 @@ def build_query_schema(
                 "items": {"type": "string"},
                 "default": [],
                 "description": (
-                    "溢出过滤区：满足以下任一条件时，必须将该条件用自然语言写入此列表：\n"
-                    "1. 过滤条件的值无法在填参时确定为字面常量（如'后30%'、'高于行业平均'）；\n"
-                    "2. 查询/排序/返回所涉及的字段名在当前对象字段列表中找不到精确对应"
-                    "（如'贡献率'、'地块'等非标准词），需系统做语义推断。\n"
-                    "例如：'贡献率后3的地块清单'、'亩产效益后30%的地块'、'营收高于行业平均'。\n"
+                    "溢出过滤区：满足以下条件时，必须将该条件用自然语言写入此列表：\n"
+                    "1. 过滤条件的值无法在填参时确定为字面常量（如'后30%'、'高于行业平均'）。\n"
+                    "⚠️ 字段透传与 complex_conditions 是独立规则：字段名在字段列表中找不到精确对应时，"
+                    "不写入此列表——直接将用户原词填入 filters/select/order_by，系统后端负责语义解析。\n"
+                    "例如：'亩产效益后30%的地块'、'营收高于行业平均'。\n"
                     "能写成字面值的过滤条件仍放入 filters；"
                     "此列表非空时系统自动路由到全能查询路径（data_query）。"
                 ),
@@ -341,7 +385,10 @@ def build_query_description(
     lines.append("")
     lines.append("**常见错误**：")
     lines.append("- 使用了字段不支持的 op 操作符")
-    lines.append("- field 填了不存在的字段名（系统无法映射时会报错）")
+    lines.append(
+        "- field 找不到精确对应时猜测替换为相近字段（如把'贡献率'改成'营收值'）"
+        "——应直接填用户原词，系统后端负责语义解析"
+    )
     lines.append("- order_by 中用了 sort/op/order 键名，应统一使用 direction")
     lines.append(
         "- 过滤条件的值无法确定为字面常量（如'后30%'、'高于平均'）时，"
@@ -485,11 +532,11 @@ def build_compute_schema(
                 "items": {"type": "string"},
                 "default": [],
                 "description": (
-                    "溢出过滤区：满足以下任一条件时，必须将该条件用自然语言写入此列表：\n"
-                    "1. 过滤条件的值无法在填参时确定为字面常量（如'后30%'、'高于行业平均'）；\n"
-                    "2. 查询/排序/统计所涉及的字段名在当前对象字段列表中找不到精确对应"
-                    "（如'贡献率'、'地块'等非标准词），需系统做语义推断。\n"
-                    "例如：'贡献率后3的地块清单'、'亩产效益后30%的地块'、'营收高于行业平均'。\n"
+                    "溢出过滤区：满足以下条件时，必须将该条件用自然语言写入此列表：\n"
+                    "1. 过滤条件的值无法在填参时确定为字面常量（如'后30%'、'高于行业平均'）。\n"
+                    "⚠️ 字段透传与 complex_conditions 是独立规则：字段名在字段列表中找不到精确对应时，"
+                    "不写入此列表——直接将用户原词填入 filters/dimensions/metrics，系统后端负责语义解析。\n"
+                    "例如：'亩产效益后30%的地块'、'营收高于行业平均'。\n"
                     "能写成字面值的过滤条件仍放入 filters；"
                     "此列表非空时系统自动路由到全能查询路径（data_query）。"
                 ),
@@ -642,7 +689,10 @@ def build_compute_description(
     lines.append(
         '- `metrics` 项误用 `func` 表示聚合：必须使用键名 **`agg`**（如 `"agg": "count_distinct"`）'
     )
-    lines.append("- field 填了不存在的字段名（系统无法映射时会报错）")
+    lines.append(
+        "- field 找不到精确对应时猜测替换为相近字段（如把'贡献率'改成'营收值'）"
+        "——应直接填用户原词，系统后端负责语义解析"
+    )
     lines.append("- `having.field` 未使用 `metrics` 中的 `as` 别名")
     lines.append("- order_by 中用了 sort/op/order 键名，应统一使用 direction")
     lines.append(
