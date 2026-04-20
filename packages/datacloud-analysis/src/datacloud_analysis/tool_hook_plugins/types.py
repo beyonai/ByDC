@@ -5,6 +5,15 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any, Literal, TypedDict
 
+
+class HookSignalError(Exception):
+    """Base class for exceptions that must propagate through the hook manager.
+
+    Subclass this when a hook callback needs to signal a control-flow change
+    (e.g. clarification required) that must not be swallowed by the manager's
+    generic exception handler.
+    """
+
 HookAction = Literal[
     "continue", "patch", "short_circuit", "interrupt", "fail", "recover", "redirect"
 ]
