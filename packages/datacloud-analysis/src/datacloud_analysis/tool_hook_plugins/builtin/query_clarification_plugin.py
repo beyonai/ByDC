@@ -58,6 +58,15 @@ ENABLED = True
 
 logger = logging.getLogger(__name__)
 
+
+class ClarificationNeededError(Exception):
+    """澄清插件检测到需要用户确认时抛出，替代直接调用 interrupt()。"""
+
+    def __init__(self, context: dict[str, Any]) -> None:
+        super().__init__("clarification required")
+        self.context = context
+
+
 _QUERY_PREFIXES: frozenset[str] = frozenset({"query_", "compute_"})
 _DATA_TOOL_PREFIXES: frozenset[str] = frozenset({"query_", "data_query_", "compute_"})
 
@@ -523,9 +532,25 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
     if not _is_query_or_compute_tool(tool_name):
         return None
 
+    # ── V0.3 早返回：clarification_formatted_params 已由 user_clarify_node 注入 ──
+    # tool_dispatcher resume 时，state 已含格式化后参数，直接应用并返回，跳过全部分析
+    _graph_state: dict[str, Any] | None = (ctx.get("metadata") or {}).get("state")
+    if _graph_state is not None:
+        _clarify_result = _graph_state.get("clarification_formatted_params")
+        if _clarify_result and _clarify_result.get("tool_name") == tool_name:
+            logger.info(
+                "[query_clarification] V0.3 early-return: clarification_formatted_params hit"
+            )
+            _raw_query_fp = str((ctx.get("tool_params") or {}).get("query", "") or "")
+            _fmt_params = dict(_clarify_result.get("params") or {})
+            _is_complex_fp: bool = bool(_clarify_result.get("is_complex"))
+            ctx["tool_params"] = _fmt_params
+            if _is_complex_fp:
+                return _build_redirect_decision(tool_name, _raw_query_fp, _fmt_params)
+            return {"action": "patch", "patch": {"tool_params": _fmt_params}}
+
     # ── CACHE HIT 早返回：跳过全部分析逻辑，直接进入 resume 路径 ─────────────
     # 注意：用 is not None 而非 bool 判断，state={} 是合法的可写空 dict
-    _graph_state: dict[str, Any] | None = (ctx.get("metadata") or {}).get("state")
     if _graph_state is not None:
         _raw_query = str((ctx.get("tool_params") or {}).get("query", "") or "")
         _ck = _make_cache_key(tool_name, _raw_query)
@@ -631,39 +656,20 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                     return _build_redirect_decision(tool_name, query, tool_params)
                 return {"action": "patch", "patch": {"tool_params": tool_params}}
 
-            # ── 哨兵 2：即将调用 interrupt() ──────────────────────────────────────
-            # 若恢复后此日志出现，说明恢复起点在 interrupt() 调用之前（错误）
-            logger.info(
-                "[query_clarification] PRE-INTERRUPT#2 about to call interrupt()"
-                " — if this prints on resume, resume restarts at/before interrupt() (WRONG)"
-            )
-            resume_value = interrupt(
+            # ── V0.3：改为抛出 ClarificationNeededError，由 tool_dispatcher 捕获 ──
+            logger.info("[query_clarification] NEED_CONFIRM: raising ClarificationNeededError")
+            raise ClarificationNeededError(
                 {
-                    "prompt": "查询条件存在歧义，请确认查询维度",
-                    "reason_code": "PARADIGM_CLARIFICATION",
-                    "ask_user_payload": {"paradigmList": paradigm_list, "query": query},
-                    "_clarify_knowledge": clarify_knowledge,
+                    "tool_name": tool_name,
+                    "query": query,
+                    "paradigm_list": paradigm_list,
+                    "clarify_knowledge": clarify_knowledge,
+                    "structured_input": structured_input,
+                    "ontology_code": scope_code,
+                    "is_compute": is_compute,
+                    "is_complex": is_complex,
                 }
             )
-
-            # ── RESUME 确认点：委托 _execute_resume 统一处理 ────────────────────
-            logger.info(
-                "[query_clarification] RESUME resume_value type=%s value=%s",
-                type(resume_value).__name__,
-                json.dumps(resume_value, ensure_ascii=False, default=str)[:800]
-                if resume_value is not None
-                else "None",
-            )
-            _full_cached: dict[str, Any] = {
-                "cache_key": _ck,
-                "paradigm_list": paradigm_list,
-                "clarify_knowledge": clarify_knowledge,
-                "structured_input": structured_input,
-                "is_compute": is_compute,
-                "resolved": resolved,
-                "is_complex": is_complex,
-            }
-            return _execute_resume(ctx, tool_name, query, _full_cached, _graph_state, resume_value)
     else:
         if not catalog and terms:
             # loader 未注入时打警告：field_name_cn 无法映射到 field_code，将原样透传

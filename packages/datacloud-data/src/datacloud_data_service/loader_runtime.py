@@ -281,6 +281,10 @@ class LoaderRuntimeManager:
 
         if ontology_path.is_dir() and (ontology_path / "ontology").exists():
             loader.load_from_owl_directory(ontology_path)
+        elif ontology_path.is_dir() and (
+            (ontology_path / "object").exists() or (ontology_path / "view").exists()
+        ):
+            loader.load_from_owl_resource_directory(ontology_path)
         else:
             loader.load_from_path(ontology_path)
         logger.info("Loaded ontology from %s", ontology_path)
@@ -395,6 +399,18 @@ class LoaderRuntimeManager:
         if ontology_path.is_file():
             return (ontology_path.parent,)
         if ontology_path.is_dir():
+            target_paths: list[Path] = []
+            for relative_dir in (
+                Path("ontology/objects"),
+                Path("ontology/views"),
+                Path("object"),
+                Path("view"),
+            ):
+                candidate = ontology_path / relative_dir
+                if candidate.is_dir():
+                    target_paths.append(candidate)
+            if target_paths:
+                return tuple(target_paths)
             return (ontology_path,)
         return ()
 

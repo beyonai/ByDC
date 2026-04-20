@@ -507,3 +507,22 @@ def test_get_views_returns_all_loaded_views() -> None:
 
     assert [view.view_id for view in views] == ["view_a", "view_b"]
     assert [view.view_name for view in views] == ["视图A", "视图B"]
+
+
+def test_load_from_owl_resource_directory_supports_new_resource_layout() -> None:
+    pytest.importorskip("rdflib")
+
+    resource_dir = (
+        Path(__file__).resolve().parents[2] / "src" / "datacloud_data_service" / "resource"
+    )
+
+    loader = OntologyLoader()
+    loader.load_from_owl_resource_directory(resource_dir)
+
+    po_users = loader.get_ontology_class("po_users")
+    assert po_users.object_name == "人员信息"
+    assert any(field.field_code == "userId" for field in po_users.fields)
+    assert any(action.action_code == "query_users_by_org_id" for action in po_users.actions)
+
+    scene = loader.get_view("scene_enterprise_analysis")
+    assert scene.view_id == "scene_enterprise_analysis"
