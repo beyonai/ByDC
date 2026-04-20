@@ -9,7 +9,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -104,6 +103,7 @@ def analyze_query_clarification_query(
             all_terms,
             recall_map,
             complex_conditions=complex_conditions,
+            original_structured=structured_query,
         )
         form_payload = serialize_paradigm_payload(paradigm_list)
         knowledge_payload = serialize_knowledge_meta(meta)
@@ -121,7 +121,9 @@ def analyze_query_clarification_query(
     logger.info("[clarification] 无需澄清")
     return ClarificationResult(
         query=query,
-        knowledge=json.dumps({"paradigmList": paradigm_list}, ensure_ascii=False),
+        needs_clarification=False,
+        form=form_payload,
+        knowledge=knowledge_payload,
     )
 
 
@@ -195,6 +197,7 @@ def analyze_query_clarification_compute(
             all_terms,
             recall_map,
             complex_conditions=complex_conditions,
+            original_structured=structured_compute,
         )
         form_payload = serialize_paradigm_payload(paradigm_list)
         knowledge_payload = serialize_knowledge_meta(meta)
@@ -212,7 +215,9 @@ def analyze_query_clarification_compute(
     logger.info("[clarification] 无需澄清")
     return ClarificationResult(
         query=query,
-        knowledge=json.dumps({"paradigmList": paradigm_list}, ensure_ascii=False),
+        needs_clarification=False,
+        form=form_payload,
+        knowledge=knowledge_payload,
     )
 
 

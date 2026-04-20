@@ -248,14 +248,32 @@ def format_recall_context(
 
 # ── LLM 输出清洗 ──────────────────────────────────────────────────────
 
-# LLM 可能在列表字段中传 null（如 select: [null]），需要过滤
-_LIST_FIELDS_TO_SANITIZE = ("select", "filters", "order_by", "dimensions", "metrics", "having")
+# LLM 可能在列表字段中传 null（如 select: [null]），或以 JSON 字符串传递列表
+_LIST_FIELDS_TO_SANITIZE = (
+    "select",
+    "filters",
+    "order_by",
+    "dimensions",
+    "metrics",
+    "having",
+    "clarify_items",
+    "confirmed_conditions",
+)
 
 
 def _sanitize_confirm_args(args: dict[str, Any]) -> None:
-    """清洗 LLM tool call 参数，过滤列表中的 None 值。"""
+    """清洗 LLM tool call 参数：JSON 字符串解码 + 过滤列表中的 None 值。"""
     for field in _LIST_FIELDS_TO_SANITIZE:
         val = args.get(field)
+        # LLM 有时以 JSON 字符串传递列表/对象
+        if isinstance(val, str):
+            try:
+                parsed = json.loads(val)
+                if isinstance(parsed, list):
+                    val = parsed
+                    args[field] = val
+            except (json.JSONDecodeError, ValueError):
+                pass
         if isinstance(val, list):
             args[field] = [item for item in val if item is not None]
 

@@ -30,6 +30,97 @@ MAX_COMBINATIONS = 20
 # 合法运算符候选（与 WhereClause.op 一致）
 _ALL_COMPARISON_OPS: list[str] = ["eq", "gt", "lt", "gte", "lte", "in", "between"]
 
+# op 值标准化映射
+_OP_NORMALIZE: dict[str, str] = {
+    "=": "eq",
+    "==": "eq",
+    "eq": "eq",
+    ">": "gt",
+    "gt": "gt",
+    "<": "lt",
+    "lt": "lt",
+    ">=": "gte",
+    "gte": "gte",
+    "<=": "lte",
+    "lte": "lte",
+    "in": "in",
+    "IN": "in",
+    "between": "between",
+    "BETWEEN": "between",
+}
+
+
+def _normalize_op(raw_op: str) -> str:
+    """将各种 op 表示标准化为前端 key。"""
+    return _OP_NORMALIZE.get(raw_op.strip(), "eq")
+
+
+def _build_comparison_recall(current_op: str) -> list[str]:
+    """构建运算符候选列表，当前 op 排第一。"""
+    result = [current_op]
+    for op in _ALL_COMPARISON_OPS:
+        if op != current_op:
+            result.append(op)
+    return result
+
+
+def _restore_clarify_to_confirmed(
+    confirmed: ConfirmedStructuredQuery | ConfirmedStructuredCompute,
+) -> None:
+    """将 clarify_items 按 path 还原回 confirmed 的各列表。
+
+    LLM 可能把不确定的术语从 select/filters/order_by 中移除，
+    只放在 clarify_items 里。这导致 confirmed 列表和 original 列表长度不一致。
+    此函数按 clarify_item.path 解析出位置，将占位符插回对应列表，
+    使 confirmed 列表和 original 列表长度一致，zip 配对不截断。
+    """
+    if not confirmed.clarify_items:
+        return
+
+    # 收集需要插入的位置：(target_list_name, index, keyword)
+    inserts: dict[str, list[tuple[int, str]]] = {}
+    for ci in confirmed.clarify_items:
+        path = ci.path.strip("/")
+        parts = path.split("/")
+        if len(parts) < 2:
+            continue
+        list_name = parts[0]
+        try:
+            idx = int(parts[1])
+        except ValueError:
+            continue
+        inserts.setdefault(list_name, []).append((idx, ci.keyword))
+
+    # 按 index 降序插入（从后往前，避免索引偏移）
+    for list_name, items in inserts.items():
+        items.sort(key=lambda x: x[0], reverse=True)
+        target: list[Any] | None = None
+        if list_name == "select" and isinstance(confirmed, ConfirmedStructuredQuery):
+            target = confirmed.select
+        elif list_name == "dimensions" and isinstance(confirmed, ConfirmedStructuredCompute):
+            target = confirmed.dimensions
+        elif list_name == "filters":
+            target = confirmed.filters
+        elif list_name == "order_by":
+            target = confirmed.order_by
+        if target is None:
+            continue
+        for idx, keyword in items:
+            # 用占位符标记：这个位置需要澄清，keyword 是原始术语
+            # filters/order_by 是 list[dict]，需要用 dict 占位符
+            if list_name in ("filters", "order_by"):
+                placeholder: Any = {"__clarify__": keyword}
+            else:
+                placeholder = f"__clarify__{keyword}"
+            if idx <= len(target):
+                target.insert(idx, placeholder)
+            else:
+                target.append(placeholder)
+
+
+# 合法运算符候选（与 WhereClause.op 一致）
+_ALL_COMPARISON_OPS: list[str] = ["eq", "gt", "lt", "gte", "lte", "in", "between"]
+
 
 def _build_comparison_recall(current_op: str) -> list[str]:
     """构建运算符候选列表，当前 op 排第一。"""
@@ -221,6 +312,7 @@ def build_paradigm_list(
     recall_map: dict[str, list[dict[str, Any]]],
     *,
     complex_conditions: list[str] | None = None,
+    original_structured: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], KnowledgeMeta]:
     """基于 LLM 确认结果构建 paradigmList + 内部元数据。
 
@@ -239,12 +331,17 @@ def build_paradigm_list(
         terms: 提取的术语列表（仅用于 path 查找）。
         recall_map: 召回结果（不再使用，保留兼容）。
         complex_conditions: 原始 complex_conditions 列表。
+        original_structured: 原始 StructuredQuery/StructuredCompute dict，用于读取 op 等元信息。
 
     Returns:
         (paradigmList, KnowledgeMeta) 元组。
     """
     mode = "query" if isinstance(confirmed, ConfirmedStructuredQuery) else "compute"
     path_mapping: dict[str, str] = {}
+    _orig = original_structured or {}
+
+    # ── 将 clarify_items 按 path 还原回 confirmed 列表 ──
+    _restore_clarify_to_confirmed(confirmed)
 
     # ── 构建 path 查找索引：raw_text+ktype → path ──
     # terms 的唯一作用是提供 JSON pointer，供 format 阶段回写用户选择。
@@ -328,7 +425,12 @@ def build_paradigm_list(
     ]
     # 按 path 前缀配对 key+value
     _build_filter_paradigm_from_confirmed(
-        confirmed.filters, original_filters, clarify_map, filter_result, path_mapping
+        confirmed.filters,
+        original_filters,
+        clarify_map,
+        filter_result,
+        path_mapping,
+        original_filters_raw=list(_orig.get("filters") or []),
     )
     # complex_conditions → 笛卡尔积展开
     if complex_conditions and confirmed.confirmed_conditions:
@@ -398,12 +500,14 @@ def _build_filter_paradigm_from_confirmed(
     clarify_map: dict[str, ClarifyItem],
     filter_result: list[dict[str, Any]],
     path_mapping: dict[str, str],
+    original_filters_raw: list[dict[str, Any]] | None = None,
 ) -> None:
     """基于 LLM 确认的 filters 构建过滤条件 paradigm。
 
     对比原始 filter terms 和 LLM 确认后的 filters，
     已确认的自动选中，待澄清的展示候选。
     """
+    _orig_filters = original_filters_raw or []
     # 按 path 前缀配对原始 whereKey + whereValue
     key_terms = [t for t in original_filter_terms if t.ktype == "whereKey"]
     value_terms = [t for t in original_filter_terms if t.ktype == "whereValue"]
@@ -428,8 +532,15 @@ def _build_filter_paradigm_from_confirmed(
         conf_filter = confirmed_filters[idx] if idx < len(confirmed_filters) else {}
         conf_field = str(conf_filter.get("field", ""))
 
-        # comparison 从 LLM 确认结果中读取 op，兜底 "eq"
-        comparison = str(conf_filter.get("op", "") or conf_filter.get("comparison", "") or "eq")
+        # comparison：优先 LLM 确认结果，其次原始 structured_query，兜底 "eq"
+        orig_filter = _orig_filters[idx] if idx < len(_orig_filters) else {}
+        raw_op = str(
+            conf_filter.get("op", "")
+            or conf_filter.get("comparison", "")
+            or orig_filter.get("op", "")
+            or "eq"
+        )
+        comparison = _normalize_op(raw_op)
 
         item: dict[str, Any] = {
             "field": key_term.raw_text,

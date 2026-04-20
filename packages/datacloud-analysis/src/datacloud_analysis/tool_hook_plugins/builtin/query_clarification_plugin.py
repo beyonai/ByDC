@@ -362,8 +362,8 @@ def _analyze_clarification(
     structured_input: dict[str, Any],
     *,
     is_compute: bool,
-) -> tuple[list[dict[str, Any]], str]:
-    """调用 SDK 澄清分析，返回 (paradigmList, knowledge)。"""
+) -> tuple[list[dict[str, Any]], str, bool]:
+    """调用 SDK 澄清分析，返回 (paradigmList, knowledge, needs_clarification)。"""
     if is_compute:
         result = _sdk_analyze_compute(query, ontology_code, structured_input)
     else:
@@ -377,7 +377,7 @@ def _analyze_clarification(
     )
     paradigm_list = json.loads(result.form or "{}").get("paradigmList", [])
     logger.info("[query_clarification] paradigmList count=%d", len(paradigm_list))
-    return paradigm_list, result.knowledge
+    return paradigm_list, result.knowledge, result.needs_clarification
 
 
 def _format_clarification(
@@ -586,7 +586,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             # CACHE MISS：首次执行，调用 SDK；interrupt 前写入完整缓存供 resume 命中
             _ck = _make_cache_key(tool_name, query)
             logger.info("[query_clarification] CACHE MISS — calling _analyze_clarification()")
-            paradigm_list, clarify_knowledge = _analyze_clarification(
+            paradigm_list, clarify_knowledge, needs_clarification = _analyze_clarification(
                 query,
                 scope_code,
                 structured_input,
@@ -604,9 +604,28 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 }
 
             if not paradigm_list:
-                # 澄清分析失败或无需澄清，跳过 interrupt，按原流程继续
+                # 澄清分析失败，跳过 interrupt，按原流程继续
                 logger.info("[query_clarification] paradigmList 为空，跳过澄清 interrupt")
                 tool_params = _apply_resolved_to_params(tool_params, resolved)
+                ctx["tool_params"] = tool_params
+                if is_complex:
+                    return _build_redirect_decision(tool_name, query, tool_params)
+                return {"action": "patch", "patch": {"tool_params": tool_params}}
+
+            if not needs_clarification:
+                # LLM 确认所有术语无歧义 → 直接应用替换，不弹表单
+                logger.info(
+                    "[query_clarification] needs_clarification=False, 直接应用 LLM 确认结果"
+                )
+                form_str = json.dumps({"paradigmList": paradigm_list}, ensure_ascii=False)
+                patched = _format_clarification(
+                    query,
+                    structured_input,
+                    form_str,
+                    clarify_knowledge or "",
+                    is_compute=is_compute,
+                )
+                tool_params = _apply_resolved_to_params(patched, resolved)
                 ctx["tool_params"] = tool_params
                 if is_complex:
                     return _build_redirect_decision(tool_name, query, tool_params)
