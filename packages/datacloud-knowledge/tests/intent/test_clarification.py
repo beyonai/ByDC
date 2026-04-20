@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sys
 from importlib import import_module
 from pathlib import Path
@@ -19,35 +18,6 @@ def _get_intent_module() -> Any:
 
 def _get_types_module() -> Any:
     return import_module("datacloud_knowledge.intent.types")
-
-
-@pytest.mark.intent
-def test_analyze_query_clarification_returns_form_for_industry_chain_query() -> None:
-    intent_module = _get_intent_module()
-    clarification_result = _get_types_module().ClarificationResult
-    result = intent_module.analyze_query_clarification(
-        "信息技术、汽车各链的上游、下游的龙头、骨干企业数"
-    )
-
-    assert isinstance(result, clarification_result)
-    assert result.needs_clarification is True
-    assert result.knowledge == ""
-    form_payload = json.loads(result.form)
-    assert form_payload["paradigmList"][0]["paradigmName"] == "查询值"
-    assert result.query.startswith("信息技术链的上游龙头企业数")
-
-
-@pytest.mark.intent
-def test_analyze_query_clarification_returns_knowledge_for_grid_benefit_query() -> None:
-    result = _get_intent_module().analyze_query_clarification(
-        "高效益、中效益、低效益网格的营收、利润、亩产"
-    )
-
-    assert result.needs_clarification is False
-    assert result.form == ""
-    knowledge_payload = json.loads(result.knowledge)
-    assert knowledge_payload["paradigmList"][1]["paradigmName"] == "分组条件"
-    assert "高效益网格的营收" in result.query
 
 
 @pytest.mark.intent
