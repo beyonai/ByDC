@@ -276,7 +276,10 @@ class LoaderRuntimeManager:
         if self._loader_override is not None:
             previous_loader = self._loader_override
         else:
-            previous_loader = self._snapshot.loader
+            snapshot = self._snapshot
+            if snapshot is None:
+                return
+            previous_loader = snapshot.loader
         previous_config = getattr(previous_loader, "_config", None)
         current_config = getattr(loader, "_config", None)
         if previous_config is None or current_config is None:
@@ -319,9 +322,10 @@ class LoaderRuntimeManager:
     def _configure_runtime_services(self, loader: OntologyLoader) -> None:
         config = getattr(loader, "_config", None)
         from datacloud_data_service.file_storage import build_result_file_storage
+
         result_file_storage = build_result_file_storage(self._settings)
-        if config is not None and getattr(config, "result_file_storage") :
-            result_file_storage = getattr(config, "result_file_storage")
+        if config is not None and config.result_file_storage:
+            result_file_storage = config.result_file_storage
         loader.configure(result_file_storage=result_file_storage)
         self._configure_plan_generator(loader)
         self._configure_event_bus(loader)
