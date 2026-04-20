@@ -24,6 +24,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from datacloud_data_service.config import get_settings
+from datacloud_data_service.loader_runtime import LoaderSnapshot, get_request_loader_snapshot
 
 router = APIRouter()
 
@@ -53,7 +54,10 @@ def _parse_include_plan() -> bool:
     Returns:
         bool: 是否包含计划
     """
-    v = os.environ.get("DATACLOUD_INCLUDE_PLAN_IN_RESPONSE", "true").lower()
+    raw = os.environ.get("DATACLOUD_INCLUDE_PLAN_IN_RESPONSE")
+    if raw is None:
+        raw = os.environ.get("DC_INCLUDE_PLAN_IN_RESPONSE", "true")
+    v = raw.lower()
     return v not in ("false", "0")
 
 
@@ -115,12 +119,13 @@ async def query_endpoint(body: QueryRequest, request: Request) -> QueryResponse:
     if not tenant_id:
         raise HTTPException(status_code=400, detail="X-Tenant-Id required")
 
-    loader = getattr(request.app.state, "loader", None)
-    if loader is None:
+    snapshot = await get_request_loader_snapshot(request, reason="rest_query")
+    if snapshot is None:
         return QueryResponse(code=500, message="OntologyLoader not initialized", data={})
+    loader = snapshot.loader
 
     if body.file_id:
-        return await _query_by_file_id(body, request)
+        return await _query_by_file_id(body, request, snapshot)
 
     ctx_kwargs = _build_context_kwargs(request)
 
@@ -156,9 +161,13 @@ async def query_endpoint(body: QueryRequest, request: Request) -> QueryResponse:
             return QueryResponse(code=500, message=str(e), data={})
 
 
-async def _query_by_file_id(body: QueryRequest, request: Request) -> QueryResponse:
+async def _query_by_file_id(
+    body: QueryRequest,
+    request: Request,
+    snapshot: LoaderSnapshot,
+) -> QueryResponse:
     settings = get_settings()
-    loader = getattr(request.app.state, "loader", None)
+    loader = snapshot.loader
     result_file_storage = getattr(getattr(loader, "_config", None), "result_file_storage", None)
     with InvocationContext(**_build_context_kwargs(request)):
         csv_manager = CsvStorageManager(
