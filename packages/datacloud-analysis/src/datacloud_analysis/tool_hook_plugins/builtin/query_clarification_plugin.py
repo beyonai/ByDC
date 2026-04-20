@@ -154,27 +154,35 @@ def _get_field_catalog(
     scope_code = _scope_code_from_tool(tool_name)
     catalog: dict[str, str] = {}
 
+    def _index_field(code: str, name: str | None, aliases: list[str]) -> None:
+        catalog[code] = code
+        if name and name != code:
+            catalog[name] = code
+        for alias in aliases:
+            if alias and alias != code:
+                catalog[alias] = code
+
     try:
         # 先尝试作为对象加载
         ontology_class = loader.get_ontology_class(scope_code)
         for f in ontology_class.fields:
             code = getattr(f, "field_code", None) or getattr(f, "property_code", None)
+            if not code:
+                continue
             name = getattr(f, "field_name", None) or getattr(f, "property_name", None)
-            if code:
-                catalog[code] = code
-                if name and name != code:
-                    catalog[name] = code
+            aliases: list[str] = list(getattr(f, "aliases", None) or [])
+            _index_field(str(code), str(name) if name else None, [str(a) for a in aliases])
     except Exception:  # noqa: BLE001
         # 尝试作为视图加载
         try:
             view = loader.get_view(scope_code)
             for f in getattr(view, "fields", []):
                 code = getattr(f, "field_code", None) or getattr(f, "property_code", None)
+                if not code:
+                    continue
                 name = getattr(f, "field_name", None) or getattr(f, "property_name", None)
-                if code:
-                    catalog[code] = code
-                    if name and name != code:
-                        catalog[name] = code
+                aliases = list(getattr(f, "aliases", None) or [])
+                _index_field(str(code), str(name) if name else None, [str(a) for a in aliases])
         except Exception:  # noqa: BLE001
             pass
 
@@ -470,6 +478,22 @@ def _execute_resume(
         graph_state.pop("_clarification_cache", None)
     logger.info("[query_clarification] _clarification_cache cleared from state")
 
+    # SDK 回填的可能是官方中文字段名（choiceKeyword），需用新鲜 catalog 做二次翻译
+    _fresh_catalog = _get_field_catalog(tool_name, ctx)
+    logger.info(
+        "[query_clarification] _execute_resume catalog: tool=%s catalog_size=%d",
+        tool_name,
+        len(_fresh_catalog),
+    )
+    if _fresh_catalog:
+        _fresh_terms = _collect_terms_from_params(tool_params)
+        _fresh_resolved, _ = _resolve_terms(_fresh_terms, _fresh_catalog)
+        logger.info(
+            "[query_clarification] _execute_resume fresh_resolved=%s",
+            _fresh_resolved,
+        )
+        resolved = {**resolved, **_fresh_resolved}
+
     tool_params = _apply_resolved_to_params(tool_params, resolved)
     ctx["tool_params"] = tool_params
 
@@ -544,6 +568,13 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             _raw_query_fp = str((ctx.get("tool_params") or {}).get("query", "") or "")
             _fmt_params = dict(_clarify_result.get("params") or {})
             _is_complex_fp: bool = bool(_clarify_result.get("is_complex"))
+            # SDK 回填可能含官方中文字段名，用 catalog 做二次翻译
+            _catalog_fp = _get_field_catalog(tool_name, ctx)
+            if _catalog_fp:
+                _terms_fp = _collect_terms_from_params(_fmt_params)
+                _resolved_fp, _ = _resolve_terms(_terms_fp, _catalog_fp)
+                if _resolved_fp:
+                    _fmt_params = _apply_resolved_to_params(_fmt_params, _resolved_fp)
             ctx["tool_params"] = _fmt_params
             if _is_complex_fp:
                 return _build_redirect_decision(tool_name, _raw_query_fp, _fmt_params)
