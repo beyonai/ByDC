@@ -35,6 +35,12 @@ class ExtractedTerm:
     search_enabled: bool = True
     """False → 跳过召回（纯数字/日期/非中文/别名引用）。"""
 
+    vector_only: bool = False
+    """True → 只走向量召回（英文标识符如 stat_date，文本匹配无意义）。"""
+
+    parent_raw_text: str | None = None
+    """别名扩展词的父术语。如 "地块名称" 的 parent 是 "地块"。原始词为 None。"""
+
 
 # ── LLM 确认输出 ─────────────────────────────────────────────────────
 

@@ -269,6 +269,7 @@ def _unified_recall(
 
     将 ExtractedTerm 转为 TypedKeywordState 协议对象，
     调用 typed_multi_recall_with_session 执行召回。
+    vector_only 术语（英文标识符如 stat_date）只走向量召回路径。
 
     Returns:
         dict["ktype:raw_text", list[CandidateDict]]。
@@ -277,7 +278,8 @@ def _unified_recall(
 
     # 去重：相同 ktype + raw_text 只召回一次
     seen: set[str] = set()
-    unique_items: list[_RecallItem] = []
+    normal_items: list[_RecallItem] = []
+    vector_only_items: list[_RecallItem] = []
     for term in terms:
         if not term.search_enabled:
             continue
@@ -285,18 +287,112 @@ def _unified_recall(
         if key in seen:
             continue
         seen.add(key)
-        unique_items.append(
-            _RecallItem(
-                keyword=term.raw_text,
-                ktype=term.ktype,
-                search_enabled=True,
-            )
+        item = _RecallItem(
+            keyword=term.raw_text,
+            ktype=term.ktype,
+            search_enabled=True,
         )
+        if term.vector_only:
+            vector_only_items.append(item)
+        else:
+            normal_items.append(item)
 
-    if not unique_items:
+    result: dict[str, list[dict[str, Any]]] = {}
+
+    # 常规术语：走全部 4 路召回（BM25 + Jieba + Substring + Vector）
+    if normal_items:
+        result.update(typed_multi_recall_with_session(normal_items, top_k=5))
+
+    # 英文标识符：只走向量召回（BM25/子串匹配对英文→中文无意义）
+    if vector_only_items:
+        result.update(_vector_only_recall(vector_only_items, top_k=5))
+
+    return result
+
+
+def _vector_only_recall(
+    items: list[_RecallItem],
+    *,
+    top_k: int,
+) -> dict[str, list[dict[str, Any]]]:
+    """对英文标识符术语只执行向量召回。
+
+    英文编码（如 stat_date）无法通过 BM25/子串匹配命中中文术语名，
+    但向量语义检索可以将 "stat_date" 匹配到 "统计日期"。
+    """
+    from datacloud_knowledge.intent.batch_recall import RecallRequest, _batch_vector
+    from datacloud_knowledge.intent.typed_recall import (
+        KTYPE_CATEGORY_MAP,
+        _load_type_codes_by_category,
+        _shape_candidates,
+    )
+    from datacloud_knowledge.knowledge_search.db.connection import get_session
+
+    # 构建 RecallRequest（需要 type_filter）
+    with get_session() as session:
+        category_cache: dict[frozenset[int], set[str]] = {}
+        requests: list[RecallRequest] = []
+        for item in items:
+            allowed_categories = KTYPE_CATEGORY_MAP.get(item.ktype)
+            if allowed_categories is None:
+                type_filter: set[str] | None = None
+            else:
+                cat_key = frozenset(allowed_categories)
+                if cat_key not in category_cache:
+                    category_cache[cat_key] = _load_type_codes_by_category(
+                        session, allowed_categories
+                    )
+                type_filter = category_cache[cat_key]
+                if not type_filter:
+                    continue
+
+            frozen_filter = frozenset(type_filter) if type_filter is not None else None
+            requests.append(
+                RecallRequest(
+                    map_key=f"{item.ktype}:{item.keyword}",
+                    keyword=item.keyword,
+                    ktype=item.ktype,
+                    type_filter=frozen_filter,
+                    is_per_type=False,
+                    per_type_limit=0,
+                )
+            )
+
+    if not requests:
         return {}
 
-    return typed_multi_recall_with_session(unique_items, top_k=5)
+    from datacloud_knowledge.intent.batch_recall import PreparedBatch
+
+    batch = PreparedBatch(
+        requests=tuple(requests),
+        normal_requests=tuple(requests),
+        per_type_requests=(),
+    )
+
+    # 只走向量路径
+    vector_hits = _batch_vector(batch, top_k=top_k)
+
+    # 整形为 CandidateDict
+    from datacloud_knowledge.query.search.rrf import rrf_fuse
+
+    result: dict[str, list[dict[str, Any]]] = {}
+    for req in requests:
+        hits = vector_hits.get(req.map_key, [])
+        if hits:
+            fused = rrf_fuse([hits], k=60, top_n=top_k * 3)
+            candidates = _shape_candidates(fused, req.type_filter, top_k=top_k)
+        else:
+            candidates = []
+        result[req.map_key] = candidates
+        if candidates:
+            logger.info(
+                "[clarification] vector_only recall %s -> %d 候选, top=%s",
+                req.map_key,
+                len(candidates),
+                candidates[0]["term_name"] if candidates else "",
+            )
+
+    return result
 
 
 class _RecallItem:

@@ -60,6 +60,11 @@ logger = logging.getLogger(__name__)
 _QUERY_PREFIXES: frozenset[str] = frozenset({"query_", "compute_"})
 _DATA_TOOL_PREFIXES: frozenset[str] = frozenset({"query_", "data_query_", "compute_"})
 
+# LLM 可能以 JSON 字符串形式传递的列表字段
+_JSON_LIST_FIELDS: frozenset[str] = frozenset(
+    {"select", "order_by", "filters", "dimensions", "metrics", "having"}
+)
+
 # 字段编码识别：纯 ASCII identifier（snake_case / camelCase）
 _FIELD_CODE_RE: re.Pattern[str] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -71,6 +76,29 @@ def _is_field_code(term: str) -> bool:
     中文名（如 '管理网格总营收（万元）'）需要 catalog 查询后映射。
     """
     return bool(_FIELD_CODE_RE.match(term))
+
+
+def _normalize_json_fields(params: dict[str, Any]) -> dict[str, Any]:
+    """将 LLM 以 JSON 字符串形式传递的列表字段解码为 list。
+
+    LLM tool call 有时将 select / order_by 等字段序列化为 JSON 字符串
+    （如 ``'["管理网格名称", "企业数量"]'``），而非原生 list。
+    逐字符迭代字符串会导致术语提取逐字拆分，产生 119 个单字"术语"。
+    """
+    normalized = dict(params)
+    for key in _JSON_LIST_FIELDS:
+        val = normalized.get(key)
+        if isinstance(val, str):
+            val = val.strip()
+            if val.startswith("["):
+                try:
+                    parsed = json.loads(val)
+                    if isinstance(parsed, list):
+                        normalized[key] = parsed
+                        logger.debug("[query_clarification] decoded JSON string field %s", key)
+                except (json.JSONDecodeError, ValueError):
+                    pass
+    return normalized
 
 
 def _is_query_or_compute_tool(tool_name: str) -> bool:
@@ -382,7 +410,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         return None
 
     # ── 剥除元字段（before_callback 消费，不透传给底层执行体）────────────────
-    tool_params: dict[str, Any] = dict(ctx.get("tool_params") or {})
+    tool_params: dict[str, Any] = _normalize_json_fields(dict(ctx.get("tool_params") or {}))
     query: str = str(tool_params.pop("query", "") or "")
     complex_conditions: list[str] = list(tool_params.pop("complex_conditions", None) or [])
 
@@ -458,6 +486,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             # resume 后调 SDK format 写回参数
             knowledge = ""
             paradigm_list_from_resume: list[dict[str, Any]] = []
+            paradigm_list_from_resume: list[dict[str, Any]] = []
             if isinstance(resume_value, dict):
                 meta = resume_value.get("metadata") or {}
                 knowledge = str(meta.get("clarify_knowledge") or "")
@@ -468,7 +497,17 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                     paradigm_list_from_resume = list(meta.get("paradigmList") or [])
 
             form_str = json.dumps({"paradigmList": paradigm_list_from_resume}, ensure_ascii=False)
+                meta = resume_value.get("metadata") or {}
+                knowledge = str(meta.get("clarify_knowledge") or "")
+                para_result = resume_value.get("paradigmResult") or []
+                if para_result and isinstance(para_result[0], dict):
+                    paradigm_list_from_resume = list(para_result[0].get("paradigmList") or [])
+                if not paradigm_list_from_resume:
+                    paradigm_list_from_resume = list(meta.get("paradigmList") or [])
+
+            form_str = json.dumps({"paradigmList": paradigm_list_from_resume}, ensure_ascii=False)
             tool_params = _format_clarification(
+                query,
                 query,
                 structured_input,
                 form_str,
