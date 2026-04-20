@@ -149,6 +149,7 @@ def _get_field_catalog(
 
     scope_code = _scope_code_from_tool(tool_name)
     catalog: dict[str, str] = {}
+    raw_fields: list[dict[str, Any]] = []  # 原始字段数据，用于调用链日志
 
     def _index_field(code: str, name: str | None, aliases: list[str]) -> None:
         catalog[code] = code
@@ -158,30 +159,43 @@ def _get_field_catalog(
             if alias and alias != code:
                 catalog[alias] = code
 
+    loader_path = "unknown"
     try:
         # 先尝试作为对象加载
         ontology_class = loader.get_ontology_class(scope_code)
+        loader_path = f"loader.get_ontology_class('{scope_code}')"
         for f in ontology_class.fields:
             code = getattr(f, "field_code", None) or getattr(f, "property_code", None)
             if not code:
                 continue
             name = getattr(f, "field_name", None) or getattr(f, "property_name", None)
             aliases: list[str] = list(getattr(f, "aliases", None) or [])
+            raw_fields.append({"field_code": str(code), "field_name": str(name) if name else None, "aliases": [str(a) for a in aliases]})
             _index_field(str(code), str(name) if name else None, [str(a) for a in aliases])
     except Exception:  # noqa: BLE001
         # 尝试作为视图加载
         try:
             view = loader.get_view(scope_code)
+            loader_path = f"loader.get_view('{scope_code}')"
             for f in getattr(view, "fields", []):
                 code = getattr(f, "field_code", None) or getattr(f, "property_code", None)
                 if not code:
                     continue
                 name = getattr(f, "field_name", None) or getattr(f, "property_name", None)
                 aliases = list(getattr(f, "aliases", None) or [])
+                raw_fields.append({"field_code": str(code), "field_name": str(name) if name else None, "aliases": [str(a) for a in aliases]})
                 _index_field(str(code), str(name) if name else None, [str(a) for a in aliases])
         except Exception:  # noqa: BLE001
             pass
 
+    logger.info(
+        "[ONTOLOGY-CHAIN] tool=%s scope=%s via=%s field_count=%d raw_fields=%s",
+        tool_name,
+        scope_code,
+        loader_path,
+        len(raw_fields),
+        raw_fields,
+    )
     return catalog
 
 
@@ -252,6 +266,7 @@ def _resolve_terms(
     return resolved, unresolved
 
 
+
 # LLM 可能使用的非标准排序方向键（都应规范化为 Schema 定义的 direction）
 _SORT_KEY_ALIASES: frozenset[str] = frozenset({"sort", "op", "order"})
 
@@ -279,31 +294,6 @@ def _normalize_sort_key(item: dict[str, Any]) -> dict[str, Any]:
         new_item["direction"] = next(item[k] for k in _SORT_KEY_ALIASES if k in item)
     return new_item
 
-
-def _build_keyword_map_from_paradigm(
-    paradigm_list: list[dict[str, Any]],
-    catalog: dict[str, str],
-) -> dict[str, str]:
-    """从 paradigm_list 构建 keyword → field_code 两步映射。
-
-    SDK _format_clarification 返回的 select/filter 值是原始 keyword（用户输入的短名），
-    而 catalog 只有 choiceKeyword（确认后的完整字段名）。
-    先用 keyword→choiceKeyword（来自 paradigm），再用 choiceKeyword→fieldCode（来自 catalog）。
-    """
-    keyword_map: dict[str, str] = {}
-    for paradigm in paradigm_list:
-        for item in list(paradigm.get("paradigmResult") or []):
-            if not isinstance(item, dict):
-                continue
-            keyword = str(item.get("keyword") or "").strip()
-            choice = str(item.get("choiceKeyword") or "").strip()
-            if not keyword or not choice or keyword == choice:
-                continue
-            # choice 可能已是 field_code（ASCII），也可能是中文 field_name → 走 catalog
-            field_code = catalog.get(choice) or (choice if _is_field_code(choice) else None)
-            if field_code:
-                keyword_map[keyword] = field_code
-    return keyword_map
 
 
 def _apply_resolved_to_params(
@@ -403,19 +393,46 @@ def _analyze_clarification(
     is_compute: bool,
 ) -> tuple[list[dict[str, Any]], str]:
     """调用 SDK 澄清分析，返回 (paradigmList, knowledge)。"""
+    sdk_fn_name = "analyze_query_clarification_compute" if is_compute else "analyze_query_clarification_query"
+    logger.info(
+        "[KG-CHAIN] call: datacloud_knowledge.intent.clarification.%s("
+        "query=%r, ontology_code=%r, structured_input=%s)",
+        sdk_fn_name,
+        query[:100],
+        ontology_code,
+        json.dumps(structured_input, ensure_ascii=False, default=str)[:300],
+    )
     if is_compute:
         result = _sdk_analyze_compute(query, ontology_code, structured_input)
     else:
         result = _sdk_analyze_query(query, ontology_code, structured_input)
 
     logger.info(
-        "[query_clarification] SDK result: needs=%s form_len=%d knowledge_len=%d",
+        "[KG-CHAIN] result: needs=%s form_len=%d knowledge_len=%d raw_form=%s",
         result.needs_clarification,
         len(result.form or ""),
         len(result.knowledge or ""),
+        result.form,
     )
     paradigm_list = json.loads(result.form or "{}").get("paradigmList", [])
-    logger.info("[query_clarification] paradigmList count=%d", len(paradigm_list))
+    for _p in paradigm_list:
+        _results = list(_p.get("paradigmResult") or [])
+        if _results:
+            logger.info(
+                "[KG-CHAIN] paradigm id=%s name=%s results=%s",
+                _p.get("paradigmId"),
+                _p.get("paradigmName"),
+                [
+                    {
+                        "keyword": _r.get("keyword"),
+                        "choiceKeyword": _r.get("choiceKeyword"),
+                        "recall": _r.get("recall"),
+                        "kid": _r.get("kid"),
+                        "ktype": _r.get("ktype"),
+                    }
+                    for _r in _results
+                ],
+            )
     return paradigm_list, result.knowledge
 
 
@@ -595,13 +612,33 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 _fmt_params.get("select"),
                 [f.get("field") for f in (_fmt_params.get("filters") or []) if isinstance(f, dict)],
             )
-            # SDK 回填可能含官方中文字段名，用 catalog 做二次翻译
+            # ── 打印知识图谱侧数据（paradigm_list 每条 paradigmResult）──
+            _paradigm_list_fp = list(_clarify_result.get("paradigm_list") or [])
+            if not _paradigm_list_fp:
+                _analyze_res = dict((_graph_state or {}).get("clarification_analyze_result") or {})
+                _paradigm_list_fp = list(_analyze_res.get("paradigm_list") or [])
+            for _p in _paradigm_list_fp:
+                _p_results = list(_p.get("paradigmResult") or [])
+                if _p_results:
+                    logger.info(
+                        "[query_clarification] KNOWLEDGE-GRAPH paradigm: id=%s name=%s "
+                        "results=%s",
+                        _p.get("paradigmId"),
+                        _p.get("paradigmName"),
+                        [
+                            {
+                                "keyword": _r.get("keyword"),
+                                "choiceKeyword": _r.get("choiceKeyword"),
+                                "recall": _r.get("recall"),
+                                "kid": _r.get("kid"),
+                                "ktype": _r.get("ktype"),
+                            }
+                            for _r in _p_results
+                        ],
+                    )
+            # choiceKeyword 应与本体 catalog 字段名严格对齐；
+            # 若未命中说明知识图谱数据或表单生成有误，需修数据，不做兜底。
             _catalog_fp = _get_field_catalog(tool_name, ctx)
-            logger.info(
-                "[query_clarification] V0.3 early-return DIAG: catalog_size=%d sample=%s",
-                len(_catalog_fp),
-                dict(list(_catalog_fp.items())[:10]),
-            )
             if _catalog_fp:
                 _terms_fp = _collect_terms_from_params(_fmt_params)
                 _resolved_fp, _unresolved_fp = _resolve_terms(_terms_fp, _catalog_fp)
@@ -611,27 +648,12 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                     _resolved_fp,
                     _unresolved_fp,
                 )
-                # 两步映射：keyword(用户原文) → choiceKeyword(SDK确认名) → fieldCode(catalog)
-                # SDK _format_clarification 返回 keyword（如"网格编码"），catalog 只有 choiceKeyword（如"企业所属物理网格编码"）
-                _paradigm_list_fp = list(_clarify_result.get("paradigm_list") or [])
-                # 兜底：若 clarification_formatted_params 不含 paradigm_list，尝试从 analyze_result 读
-                if not _paradigm_list_fp:
-                    _analyze_res = dict((_graph_state or {}).get("clarification_analyze_result") or {})
-                    _paradigm_list_fp = list(_analyze_res.get("paradigm_list") or [])
-                logger.info(
-                    "[query_clarification] V0.3 early-return DIAG:"
-                    " clarify_result_keys=%s paradigm_list_len=%d",
-                    sorted((_clarify_result or {}).keys()),
-                    len(_paradigm_list_fp),
-                )
-                if _paradigm_list_fp and _unresolved_fp:
-                    _kw_map = _build_keyword_map_from_paradigm(_paradigm_list_fp, _catalog_fp)
-                    if _kw_map:
-                        logger.info(
-                            "[query_clarification] V0.3 early-return DIAG: keyword_map=%s",
-                            _kw_map,
-                        )
-                        _resolved_fp = {**_kw_map, **_resolved_fp}
+                if _unresolved_fp:
+                    logger.warning(
+                        "[query_clarification] V0.3 DATA-MISMATCH: unresolved terms %s"
+                        " not found in ontology catalog — check KG choiceKeyword vs OWL field_name/aliases",
+                        _unresolved_fp,
+                    )
                 if _resolved_fp:
                     _fmt_params = _apply_resolved_to_params(_fmt_params, _resolved_fp)
                     logger.info(

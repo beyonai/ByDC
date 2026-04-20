@@ -138,7 +138,7 @@ async def test_tc2_10_empty_resume_value_does_not_raise() -> None:
     ):
         result = await user_clarify_node(state, MagicMock())  # type: ignore[arg-type]
 
-    # _format_clarification 应被调用，第三参数为 "{}" 或空字符串
+    # _format_clarification 应被调用，第三参数为 '{"paradigmList": []}' (resume_value=None 时)
     assert mock_fmt.called
     call_kwargs = mock_fmt.call_args
     form_str_arg = (
@@ -146,8 +146,11 @@ async def test_tc2_10_empty_resume_value_does_not_raise() -> None:
         if len(call_kwargs.args) >= 3
         else call_kwargs.kwargs.get("form_str", "")
     )
-    assert form_str_arg in ("{}", ""), (
-        f"form_str 应为空 JSON 对象或空字符串，实际: {form_str_arg!r}"
+    import json as _json
+
+    parsed = _json.loads(form_str_arg) if form_str_arg else {}
+    assert parsed.get("paradigmList") == [], (
+        f"form_str 应含空 paradigmList，实际: {form_str_arg!r}"
     )
 
     assert result.get("clarification_formatted_params") is not None

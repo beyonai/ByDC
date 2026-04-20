@@ -78,7 +78,14 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
         type(resume_value).__name__,
     )
 
-    form_str = json.dumps(resume_value, ensure_ascii=False) if resume_value is not None else "{}"
+    # resume_value 结构：{"paradigmList": [{"paradigmList": [...items...], ...}]}
+    # _format_clarification 期望：{"paradigmList": [...items...]}（一层展开）
+    paradigm_list_from_resume: list[dict[str, Any]] = []
+    if isinstance(resume_value, dict):
+        outer = list(resume_value.get("paradigmList") or [])
+        if outer and isinstance(outer[0], dict):
+            paradigm_list_from_resume = list(outer[0].get("paradigmList") or [])
+    form_str = json.dumps({"paradigmList": paradigm_list_from_resume}, ensure_ascii=False)
 
     formatted_params: dict[str, Any] = _format_clarification(
         query,
