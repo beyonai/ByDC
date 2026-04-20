@@ -54,7 +54,7 @@ def test_T15_1_regular_metric_item_required_includes_field_name_cn() -> None:
     regular_items = [
         item
         for item in metric_items
-        if item.get("properties", {}).get("agg", {}).get("const") != "count_all"
+        if item.get("properties", {}).get("agg", {}).get("enum") != ["count_all"]
     ]
     assert regular_items, "没有普通指标项（非 count_all）"
 
@@ -83,7 +83,7 @@ def test_T15_2_count_all_item_required_does_not_include_field_name_cn() -> None:
     count_all_items = [
         item
         for item in metric_items
-        if item.get("properties", {}).get("agg", {}).get("const") == "count_all"
+        if item.get("properties", {}).get("agg", {}).get("enum") == ["count_all"]
     ]
     assert count_all_items, "没有 count_all_item"
 

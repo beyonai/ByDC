@@ -66,7 +66,9 @@ def _make_state(
 # ── TC-2-2b: is_complex=False ─────────────────────────────────────────────────
 
 _INTERRUPT_PATCH = "datacloud_analysis.orchestration.clarification.user_clarify_node.interrupt"
-_FORMAT_PATCH = "datacloud_analysis.orchestration.clarification.user_clarify_node._format_clarification"
+_FORMAT_PATCH = (
+    "datacloud_analysis.orchestration.clarification.user_clarify_node._format_clarification"
+)
 
 
 async def test_tc2_2b_is_complex_false_in_formatted_params() -> None:
@@ -149,8 +151,6 @@ async def test_tc2_10_empty_resume_value_does_not_raise() -> None:
     import json as _json
 
     parsed = _json.loads(form_str_arg) if form_str_arg else {}
-    assert parsed.get("paradigmList") == [], (
-        f"form_str 应含空 paradigmList，实际: {form_str_arg!r}"
-    )
+    assert parsed.get("paradigmList") == [], f"form_str 应含空 paradigmList，实际: {form_str_arg!r}"
 
     assert result.get("clarification_formatted_params") is not None

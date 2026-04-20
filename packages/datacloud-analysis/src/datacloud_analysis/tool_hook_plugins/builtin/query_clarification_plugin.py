@@ -170,7 +170,13 @@ def _get_field_catalog(
                 continue
             name = getattr(f, "field_name", None) or getattr(f, "property_name", None)
             aliases: list[str] = list(getattr(f, "aliases", None) or [])
-            raw_fields.append({"field_code": str(code), "field_name": str(name) if name else None, "aliases": [str(a) for a in aliases]})
+            raw_fields.append(
+                {
+                    "field_code": str(code),
+                    "field_name": str(name) if name else None,
+                    "aliases": [str(a) for a in aliases],
+                }
+            )
             _index_field(str(code), str(name) if name else None, [str(a) for a in aliases])
     except Exception:  # noqa: BLE001
         # 尝试作为视图加载
@@ -183,7 +189,13 @@ def _get_field_catalog(
                     continue
                 name = getattr(f, "field_name", None) or getattr(f, "property_name", None)
                 aliases = list(getattr(f, "aliases", None) or [])
-                raw_fields.append({"field_code": str(code), "field_name": str(name) if name else None, "aliases": [str(a) for a in aliases]})
+                raw_fields.append(
+                    {
+                        "field_code": str(code),
+                        "field_name": str(name) if name else None,
+                        "aliases": [str(a) for a in aliases],
+                    }
+                )
                 _index_field(str(code), str(name) if name else None, [str(a) for a in aliases])
         except Exception:  # noqa: BLE001
             pass
@@ -266,7 +278,6 @@ def _resolve_terms(
     return resolved, unresolved
 
 
-
 # LLM 可能使用的非标准排序方向键（都应规范化为 Schema 定义的 direction）
 _SORT_KEY_ALIASES: frozenset[str] = frozenset({"sort", "op", "order"})
 
@@ -293,7 +304,6 @@ def _normalize_sort_key(item: dict[str, Any]) -> dict[str, Any]:
         # 取任一别名键的值（通常只有一个）
         new_item["direction"] = next(item[k] for k in _SORT_KEY_ALIASES if k in item)
     return new_item
-
 
 
 def _apply_resolved_to_params(
@@ -393,7 +403,9 @@ def _analyze_clarification(
     is_compute: bool,
 ) -> tuple[list[dict[str, Any]], str]:
     """调用 SDK 澄清分析，返回 (paradigmList, knowledge)。"""
-    sdk_fn_name = "analyze_query_clarification_compute" if is_compute else "analyze_query_clarification_query"
+    sdk_fn_name = (
+        "analyze_query_clarification_compute" if is_compute else "analyze_query_clarification_query"
+    )
     logger.info(
         "[KG-CHAIN] call: datacloud_knowledge.intent.clarification.%s("
         "query=%r, ontology_code=%r, structured_input=%s)",
@@ -621,8 +633,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 _p_results = list(_p.get("paradigmResult") or [])
                 if _p_results:
                     logger.info(
-                        "[query_clarification] KNOWLEDGE-GRAPH paradigm: id=%s name=%s "
-                        "results=%s",
+                        "[query_clarification] KNOWLEDGE-GRAPH paradigm: id=%s name=%s results=%s",
                         _p.get("paradigmId"),
                         _p.get("paradigmName"),
                         [

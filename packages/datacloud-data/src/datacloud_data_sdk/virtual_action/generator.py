@@ -2,9 +2,9 @@
 
 为 lookup / analyze / search 三种动作族生成符合设计规范的 JSON Schema 及 Markdown 描述。
 
-协议版本（§3.2.2 / §3.2.3 字段映射版）：
+协议版本（§3.2.2 / §3.2.3 属性编码版）：
 - dimensions[i].field / metrics[i].field / filters[i].field / select / order_by.field
-  可填字段中文名（如"企业总营收（万元）"）或字段编码（如 total_revenue），系统自动识别映射。
+  统一使用对象或视图的属性编码（如 ``total_revenue``）。
 """
 
 from __future__ import annotations
@@ -128,8 +128,26 @@ def _value_schema_for_field(f: Any) -> dict[str, Any]:
     }
 
 
-def _filter_item_schema(f: Any) -> dict[str, Any]:
-    """为单字段生成 filters 数组元素 schema（field 可填中文名或字段编码）。"""
+def _field_code_property(field_code: str, field_name: str) -> dict[str, Any]:
+    """构建只接受属性编码的 OpenAPI field 属性 schema。"""
+    return {
+        "type": "string",
+        "enum": [field_code],
+        "description": f"属性编码，固定为 `{field_code}`（{field_name}）",
+    }
+
+
+def _field_code_enum_property(fields: list[Any], description: str) -> dict[str, Any]:
+    """构建仅允许属性编码枚举的 field 属性 schema。"""
+    return {
+        "type": "string",
+        "enum": [_fc(f) for f in fields],
+        "description": description,
+    }
+
+
+def _filter_item_schema(f: Any, *, strict_field_code: bool) -> dict[str, Any]:
+    """为单字段生成 filters 数组元素 schema。"""
     field_code = f.field_code if hasattr(f, "field_code") else f.property_code
     field_name = (
         f.field_name if hasattr(f, "field_name") else getattr(f, "property_name", field_code)
@@ -142,7 +160,9 @@ def _filter_item_schema(f: Any) -> dict[str, Any]:
         "type": "object",
         "description": f"{field_name}（{field_code}）{role_hint}过滤条件",
         "properties": {
-            "field": {
+            "field": _field_code_property(field_code, field_name)
+            if strict_field_code
+            else {
                 "type": "string",
                 "description": (
                     f"字段中文名（如 '{field_name}'）或字段编码（如 '{field_code}'），系统自动识别映射；"
@@ -197,17 +217,23 @@ _FILTER_CATCHALL_SCHEMA: dict[str, Any] = {
 }
 
 
-def _build_filters_schema(fields: list[Any]) -> dict[str, Any]:
-    """构建 filters 数组 schema，oneOf 按 field_code 列出每个字段的过滤条目。"""
+def _build_filters_schema(fields: list[Any], *, strict_field_code: bool = False) -> dict[str, Any]:
+    """构建 filters 数组 schema。"""
     filterable = [f for f in fields if getattr(f, "filter_ops", [])]
     if not filterable:
         return {"type": "array", "items": {"type": "object"}, "description": "过滤条件列表"}
+    items = [_filter_item_schema(f, strict_field_code=strict_field_code) for f in filterable]
+    if not strict_field_code:
+        items.append(_FILTER_CATCHALL_SCHEMA)
+    description = (
+        "过滤条件列表，field 统一填写属性编码"
+        if strict_field_code
+        else "过滤条件列表，field 可填写字段中文名或字段编码"
+    )
     return {
         "type": "array",
-        "description": "过滤条件列表，field 填字段中文名或字段编码",
-        "items": {
-            "oneOf": [_filter_item_schema(f) for f in filterable] + [_FILTER_CATCHALL_SCHEMA]
-        },
+        "description": description,
+        "items": {"oneOf": items},
         "x-dc-filterable-fields": [
             {
                 "field": f.field_code if hasattr(f, "field_code") else f.property_code,
@@ -256,22 +282,22 @@ def build_query_schema(
     fields: list[Any],
     required_filter_groups: list[str] | None = None,
 ) -> dict[str, Any]:
-    """生成 query_ontology 动作 inputSchema（field 可填字段中文名或字段编码）。
+    """生成 query_ontology 动作 inputSchema（field 统一使用属性编码）。
 
-    协议（§3.1 字段映射版）：
-    - select / filters.field / order_by.field 可填中文名或字段编码，系统自动映射
+    协议（§3.1 属性编码版）：
+    - select / filters.field / order_by.field 必须使用属性编码
     - 自动排除 property_kind=linked 的跨表关联字段
     - 支持 filter_relation 参数（AND/OR）
     """
     queryable = [f for f in fields if getattr(f, "property_kind", "physical") != "linked"]
 
-    filters_schema = _build_filters_schema(queryable)
+    filters_schema = _build_filters_schema(queryable, strict_field_code=True)
     required_groups = required_filter_groups or []
     required_hint = f"；强制过滤字段：{', '.join(required_groups)}" if required_groups else ""
 
     schema: dict[str, Any] = {
         "type": "object",
-        "description": f"查询 {scope_name} 明细数据（field 可填字段中文名或字段编码）{required_hint}",
+        "description": f"查询 {scope_name} 明细数据（field 统一使用属性编码）{required_hint}",
         "properties": {
             "query": {
                 "type": "string",
@@ -288,8 +314,7 @@ def build_query_schema(
                 "description": (
                     "溢出过滤区：满足以下条件时，必须将该条件用自然语言写入此列表：\n"
                     "1. 过滤条件的值无法在填参时确定为字面常量（如'后30%'、'高于行业平均'）。\n"
-                    "⚠️ 字段透传与 complex_conditions 是独立规则：字段名在字段列表中找不到精确对应时，"
-                    "不写入此列表——直接将用户原词填入 filters/select/order_by，系统后端负责语义解析。\n"
+                    "2. 字段名未命中不是此列表的适用场景，不写入此列表；field 参数仍需使用属性编码。\n"
                     "例如：'亩产效益后30%的地块'、'营收高于行业平均'。\n"
                     "能写成字面值的过滤条件仍放入 filters；"
                     "此列表非空时系统自动路由到全能查询路径（data_query）。"
@@ -297,12 +322,8 @@ def build_query_schema(
             },
             "select": {
                 "type": "array",
-                "items": {"type": "string"},
-                "description": (
-                    "返回字段列表（可填 field_code 或中文名，系统自动映射）；为空时返回全部非关联字段。\n"
-                    "⚠️ 若某词在字段列表中找不到精确对应，直接填用户原始词（如 '贡献率'），"
-                    "禁止猜测替换为相近字段名，系统后端负责语义解析。"
-                ),
+                "items": {"type": "string", "enum": [_fc(f) for f in queryable]},
+                "description": ("返回字段列表，统一填写属性编码；为空时返回全部非关联字段。"),
                 "x-dc-field-catalog": [{"name": _fn(f), "code": _fc(f)} for f in queryable],
             },
             "filters": filters_schema,
@@ -314,18 +335,14 @@ def build_query_schema(
             },
             "order_by": {
                 "type": "array",
-                "description": "排序规则（field 填字段中文名或字段编码）",
+                "description": "排序规则（field 统一填写属性编码）",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "field": {
-                            "type": "string",
-                            "description": (
-                                "字段中文名或字段编码，系统自动映射；"
-                                "若字段名在当前对象中找不到精确对应，直接填用户原始词（如'贡献率'），"
-                                "禁止猜测替换为相近字段名。"
-                            ),
-                        },
+                        "field": _field_code_enum_property(
+                            queryable,
+                            "属性编码，只允许使用当前对象或视图中声明的属性编码。",
+                        ),
                         "direction": {
                             "type": "string",
                             "enum": ["asc", "desc"],
@@ -353,7 +370,7 @@ def build_query_description(
     required_filter_groups: list[str] | None = None,
     scope_type: str = "object",
 ) -> str:
-    """生成 query_ontology 动作 Markdown 描述（§3.2.2 field 兼容版）。"""
+    """生成 query_ontology 动作 Markdown 描述（§3.2.2 属性编码版）。"""
     queryable = [f for f in fields if getattr(f, "property_kind", "physical") != "linked"]
     req_groups = required_filter_groups or []
     req_hint = "必须包含账期过滤。" if "period_required" in req_groups else ""
@@ -363,7 +380,7 @@ def build_query_description(
         lines.append(scope_description)
         lines.append("")
     lines.append(
-        f"按条件查询{scope_name}明细。**field 可填字段中文名（如'企业总营收（万元）'）或字段编码（如 total_revenue），系统自动识别映射**；"
+        f"按条件查询{scope_name}明细。**select / filters.field / order_by.field 统一使用属性编码（如 `total_revenue`）**；"
         f"支持字段过滤、排序、分页；不支持聚合统计。{req_hint}"
     )
     lines.append("")
@@ -385,10 +402,8 @@ def build_query_description(
     lines.append("")
     lines.append("**常见错误**：")
     lines.append("- 使用了字段不支持的 op 操作符")
-    lines.append(
-        "- field 找不到精确对应时猜测替换为相近字段（如把'贡献率'改成'营收值'）"
-        "——应直接填用户原词，系统后端负责语义解析"
-    )
+    lines.append("- 将中文名、口语词或模糊概念猜测替换为相近属性编码")
+    lines.append("- 在 `select`、`filters.field`、`order_by.field` 中使用中文名而不是属性编码")
     lines.append("- order_by 中用了 sort/op/order 键名，应统一使用 direction")
     lines.append(
         "- 过滤条件的值无法确定为字面常量（如'后30%'、'高于平均'）时，"
@@ -409,10 +424,10 @@ def build_compute_schema(
     fields: list[Any],
     required_filter_groups: list[str] | None = None,
 ) -> dict[str, Any]:
-    """生成 compute_ontology 动作 inputSchema（field 可填字段中文名或字段编码）。
+    """生成 compute_ontology 动作 inputSchema（field 统一使用属性编码）。
 
-    协议（§3.1 字段映射版）：
-    - dimensions[i].field / metrics[i].field / filters[i].field 可填中文名或字段编码
+    协议（§3.1 属性编码版）：
+    - dimensions[i].field / metrics[i].field / filters[i].field 必须使用属性编码
     """
     dim_fields = [f for f in fields if getattr(f, "group_ops", [])]
     msr_fields = [
@@ -421,7 +436,7 @@ def build_compute_schema(
         if (getattr(f, "analytic_role", None) == "measure" and getattr(f, "aggregate_ops", []))
         or getattr(f, "secondary_role", None) == "measure"
     ]
-    filters_schema = _build_filters_schema(fields)
+    filters_schema = _build_filters_schema(fields, strict_field_code=True)
 
     def _dim_item(f: Any) -> dict[str, Any]:
         fcode = _fc(f)
@@ -433,10 +448,7 @@ def build_compute_schema(
             "description": f"{fname}（{fcode}）[{getattr(f, 'analytic_role', '')}-{kind}] 分组维度",
             "properties": {
                 "field": {
-                    "type": "string",
-                    "description": (
-                        f"字段中文名（如 '{fname}'）或字段编码（如 '{fcode}'），系统自动识别映射。"
-                    ),
+                    **_field_code_property(fcode, fname),
                 },
                 "group_op": {"type": "string", "enum": gops, "description": "分组方式"},
             },
@@ -450,11 +462,13 @@ def build_compute_schema(
                     "type": "object",
                     "properties": {
                         "from": {
-                            "type": ["number", "null"],
+                            "type": "number",
+                            "nullable": True,
                             "description": "区间起始（含），null 表示无下限",
                         },
                         "to": {
-                            "type": ["number", "null"],
+                            "type": "number",
+                            "nullable": True,
                             "description": "区间终止（不含），null 表示无上限",
                         },
                         "label": {"type": "string", "description": "桶标签"},
@@ -475,18 +489,15 @@ def build_compute_schema(
             ),
             "properties": {
                 "field": {
-                    "type": "string",
-                    "description": (
-                        f"字段中文名（如 '{fname}'）或字段编码（如 '{fcode}'），与 expr 互斥。"
-                    ),
+                    **_field_code_property(fcode, fname),
                 },
                 "expr": {
                     "type": "string",
-                    "description": "公式表达式（与 field 互斥），可填中文运算式，系统映射后生成 SQL。",
+                    "description": "公式表达式（与 field 互斥），系统会基于属性编码生成 SQL。",
                 },
                 "filters": {
                     "type": "array",
-                    "description": "条件聚合过滤（CASE WHEN），field/value 可填中文，规则同行级 filters。",
+                    "description": "条件聚合过滤（CASE WHEN），field 统一填写属性编码，规则同行级 filters。",
                     "items": {"type": "object"},
                 },
                 "agg": {
@@ -505,7 +516,7 @@ def build_compute_schema(
         "type": "object",
         "description": "内建行数统计，无需指定 field",
         "properties": {
-            "agg": {"type": "string", "const": "count_all"},
+            "agg": {"type": "string", "enum": ["count_all"]},
             "as": {"type": "string", "description": "结果列别名"},
         },
         "required": ["agg", "as"],
@@ -517,7 +528,7 @@ def build_compute_schema(
 
     schema: dict[str, Any] = {
         "type": "object",
-        "description": f"统计分析 {scope_name}（field 可填字段中文名或字段编码）{required_hint}",
+        "description": f"统计分析 {scope_name}（field 统一使用属性编码）{required_hint}",
         "properties": {
             "query": {
                 "type": "string",
@@ -534,8 +545,6 @@ def build_compute_schema(
                 "description": (
                     "溢出过滤区：满足以下条件时，必须将该条件用自然语言写入此列表：\n"
                     "1. 过滤条件的值无法在填参时确定为字面常量（如'后30%'、'高于行业平均'）。\n"
-                    "⚠️ 字段透传与 complex_conditions 是独立规则：字段名在字段列表中找不到精确对应时，"
-                    "不写入此列表——直接将用户原词填入 filters/dimensions/metrics，系统后端负责语义解析。\n"
                     "例如：'亩产效益后30%的地块'、'营收高于行业平均'。\n"
                     "能写成字面值的过滤条件仍放入 filters；"
                     "此列表非空时系统自动路由到全能查询路径（data_query）。"
@@ -543,11 +552,11 @@ def build_compute_schema(
             },
             "dimensions": {
                 "type": "array",
-                "description": "分组维度（field 填字段中文名或字段编码；时间类须指定粒度；range 须带 buckets）",
+                "description": "分组维度（field 统一填写属性编码；时间类须指定粒度；range 须带 buckets）",
                 "items": {"oneOf": [_dim_item(f) for f in dim_fields]}
                 if dim_fields
                 else {"type": "object"},
-                "examples": [[{"field": "企业等级", "group_op": "direct"}]],
+                "example": [{"field": "enterprise_level_name", "group_op": "direct"}],
                 "x-dc-dimension-fields": [
                     {
                         "field": _fc(f),
@@ -560,10 +569,10 @@ def build_compute_schema(
             },
             "metrics": {
                 "type": "array",
-                "description": "统计指标（field 填字段中文名或字段编码；至少一个；可用 count_all 统计行数）",
+                "description": "统计指标（field 统一填写属性编码；至少一个；可用 count_all 统计行数）",
                 "items": {"oneOf": metrics_items},
                 "minItems": 1,
-                "examples": [[{"field": "企业总营收（万元）", "agg": "sum", "as": "总营收"}]],
+                "example": [{"field": "total_revenue", "agg": "sum", "as": "total_revenue_sum"}],
                 "x-dc-measure-fields": [
                     {
                         "field": _fc(f),
@@ -603,7 +612,7 @@ def build_compute_schema(
             },
             "order_by": {
                 "type": "array",
-                "description": "排序（field 可以是 metrics.as 别名或维度字段中文名/编码）",
+                "description": "排序（field 可以是 metrics.as 别名或维度属性编码）",
                 "items": {
                     "type": "object",
                     "properties": {
@@ -640,7 +649,7 @@ def build_compute_description(
     required_filter_groups: list[str] | None = None,
     scope_type: str = "object",
 ) -> str:
-    """生成 compute_ontology 动作 Markdown 描述（§3.2.3 field 兼容版）。"""
+    """生成 compute_ontology 动作 Markdown 描述（§3.2.3 属性编码版）。"""
     req_groups = required_filter_groups or []
     req_hint = "必须满足账期等强制过滤规则。" if "period_required" in req_groups else ""
     view_hint = "结果来自多对象 JOIN。" if scope_type == "view" else ""
@@ -650,7 +659,7 @@ def build_compute_description(
         lines.append(scope_description)
         lines.append("")
     lines.append(
-        f"按规则对{scope_name}做分组统计。**field 可填字段中文名（如'企业总营收（万元）'）或字段编码（如 total_revenue），系统自动识别映射**；"
+        f"按规则对{scope_name}做分组统计。**dimensions.field / metrics.field / filters.field 统一使用属性编码（如 `total_revenue`）**；"
         f"支持 dimensions + metrics + filters；不支持明细输出。{req_hint}{view_hint}"
     )
     lines.append("")
@@ -690,8 +699,7 @@ def build_compute_description(
         '- `metrics` 项误用 `func` 表示聚合：必须使用键名 **`agg`**（如 `"agg": "count_distinct"`）'
     )
     lines.append(
-        "- field 找不到精确对应时猜测替换为相近字段（如把'贡献率'改成'营收值'）"
-        "——应直接填用户原词，系统后端负责语义解析"
+        "- 在 `dimensions.field`、`metrics.field`、`filters.field` 中使用中文名而不是属性编码"
     )
     lines.append("- `having.field` 未使用 `metrics` 中的 `as` 别名")
     lines.append("- order_by 中用了 sort/op/order 键名，应统一使用 direction")
