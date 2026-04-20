@@ -27,6 +27,18 @@ logger = logging.getLogger(__name__)
 
 MAX_COMBINATIONS = 20
 
+# 合法运算符候选（与 WhereClause.op 一致）
+_ALL_COMPARISON_OPS: list[str] = ["eq", "gt", "lt", "gte", "lte", "in", "between"]
+
+
+def _build_comparison_recall(current_op: str) -> list[str]:
+    """构建运算符候选列表，当前 op 排第一。"""
+    result = [current_op]
+    for op in _ALL_COMPARISON_OPS:
+        if op != current_op:
+            result.append(op)
+    return result
+
 
 def _fix_term_positions(
     sentence: str,
@@ -416,9 +428,14 @@ def _build_filter_paradigm_from_confirmed(
         conf_filter = confirmed_filters[idx] if idx < len(confirmed_filters) else {}
         conf_field = str(conf_filter.get("field", ""))
 
+        # comparison 从 LLM 确认结果中读取 op，兜底 "eq"
+        comparison = str(conf_filter.get("op", "") or conf_filter.get("comparison", "") or "eq")
+
         item: dict[str, Any] = {
             "field": key_term.raw_text,
-            "comparison": "eq",
+            "comparison": comparison,
+            "comparisonRecall": _build_comparison_recall(comparison),
+            "choiceComparison": comparison,
         }
 
         # field 部分
