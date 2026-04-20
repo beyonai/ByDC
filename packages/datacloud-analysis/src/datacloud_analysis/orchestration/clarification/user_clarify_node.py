@@ -1,4 +1,4 @@
-"""user_clarify_node：对用户澄清回复做格式化，将结果写入 clarification_formatted_params。"""
+"""user_clarify_node：interrupt 等待用户澄清，格式化后写入 clarification_formatted_params。"""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import json
 import logging
 from typing import Any
 
-from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
+from langgraph.types import interrupt
 
 from datacloud_analysis.orchestration.state import AgentState
 from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
@@ -17,22 +17,8 @@ from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin imp
 logger = logging.getLogger(__name__)
 
 
-def _extract_resume_value(state: AgentState) -> Any:
-    """从 state.messages 最后一条 HumanMessage 提取用户回复内容。"""
-    messages = list(state.get("messages") or [])
-    for msg in reversed(messages):
-        if isinstance(msg, HumanMessage):
-            return msg.content
-        if isinstance(msg, dict) and msg.get("type") == "human":
-            return msg.get("content", "")
-    return None
-
-
 async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
-    """读取用户澄清回复，调用 _format_clarification 格式化，写入 clarification_formatted_params。
-
-    完成后清理 pending_clarification_context 和 clarification_analyze_result。
-    """
+    """调用 interrupt() 暂停等待用户澄清，格式化回复后写入 clarification_formatted_params。"""
     ctx = dict(state.get("pending_clarification_context") or {})
     analyze_result = dict(state.get("clarification_analyze_result") or {})
 
@@ -43,18 +29,45 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
     )
     is_compute: bool = bool(ctx.get("is_compute") or analyze_result.get("is_complex"))
     clarify_knowledge = str(analyze_result.get("clarify_knowledge") or "")
+    paradigm_list: list[dict[str, Any]] = list(analyze_result.get("paradigm_list") or [])
 
-    resume_value = _extract_resume_value(state)
-    form_str = json.dumps(resume_value, ensure_ascii=False) if resume_value else "{}"
+    if not paradigm_list:
+        # _route_after_analyze 已将空 paradigm_list 路由到 tool_dispatcher；
+        # 此分支仅为安全兜底，使用 pre_filled_params 直接返回。
+        pre_filled: dict[str, Any] = dict(
+            analyze_result.get("pre_filled_params") or structured_input
+        )
+        logger.info(
+            "[user_clarify] paradigm_list empty, using pre_filled_params tool=%s", tool_name
+        )
+        return {
+            "clarification_formatted_params": {
+                "tool_name": tool_name,
+                "is_complex": is_compute,
+                "params": pre_filled,
+            },
+            "pending_clarification_context": None,
+            "clarification_analyze_result": None,
+        }
 
+    resume_value: Any = interrupt(
+        {
+            "prompt": "查询条件存在歧义，请确认查询维度",
+            "reason_code": "PARADIGM_CLARIFICATION",
+            "ask_user_payload": {"paradigmList": paradigm_list, "query": query},
+            "_clarify_knowledge": clarify_knowledge,
+        }
+    )
     logger.info(
-        "[user_clarify] tool=%s is_compute=%s form_str_len=%d",
+        "[user_clarify] resumed: tool=%s is_compute=%s resume_value_type=%s",
         tool_name,
         is_compute,
-        len(form_str),
+        type(resume_value).__name__,
     )
 
-    formatted_params = _format_clarification(
+    form_str = json.dumps(resume_value, ensure_ascii=False) if resume_value is not None else "{}"
+
+    formatted_params: dict[str, Any] = _format_clarification(
         query,
         structured_input,
         form_str,
@@ -62,16 +75,14 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
         is_compute=is_compute,
     )
 
-    clarification_formatted_params: dict[str, Any] = {
-        "tool_name": tool_name,
-        "is_complex": is_compute,
-        "params": formatted_params,
-    }
-
     logger.info("[user_clarify] formatted params keys=%s", sorted(formatted_params.keys()))
 
     return {
-        "clarification_formatted_params": clarification_formatted_params,
+        "clarification_formatted_params": {
+            "tool_name": tool_name,
+            "is_complex": is_compute,
+            "params": formatted_params,
+        },
         "pending_clarification_context": None,
         "clarification_analyze_result": None,
     }

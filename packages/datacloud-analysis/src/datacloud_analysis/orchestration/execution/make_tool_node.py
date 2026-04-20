@@ -18,9 +18,7 @@ from langchain_core.runnables import RunnableConfig
 
 from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
 from datacloud_analysis.orchestration.state import AgentState
-from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
-    ClarificationNeededError,
-)
+from datacloud_analysis.tool_hook_plugins.types import ClarificationNeededError
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +75,8 @@ def make_tool_node(
                 tool_name,
                 state.get("react_round_idx"),
             )
+            # 将 _clarification_cache 写入返回值，使 LangGraph 能 checkpoint 它；
+            # 否则 resume 时 cache 丢失，before_call_back 会重跑 22 秒的 _analyze_clarification。
             return {
                 "execution_status": "clarify_needed",
                 "pending_clarification_context": {
@@ -84,6 +84,7 @@ def make_tool_node(
                     "tool_name": tool_name,
                     "react_round_idx": int(state.get("react_round_idx") or 0),
                 },
+                "_clarification_cache": state.get("_clarification_cache"),
             }
 
         # 3. 检测 query data block（records + meta 结构）

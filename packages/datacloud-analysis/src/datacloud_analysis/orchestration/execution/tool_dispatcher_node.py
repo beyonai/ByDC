@@ -21,9 +21,7 @@ from datacloud_analysis.orchestration.execution.react_loop import (
 )
 from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
 from datacloud_analysis.orchestration.state import AgentState
-from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
-    ClarificationNeededError,
-)
+from datacloud_analysis.tool_hook_plugins.types import ClarificationNeededError
 
 logger = logging.getLogger(__name__)
 
@@ -45,16 +43,22 @@ def make_tool_dispatcher_node(
         ClarificationNeededError → execution_status=clarify_needed，路由到 analyze_clarify。
         """
         log = state.get("react_messages_log") or []
-        messages = _deserialize_messages(log)
+        messages = _deserialize_messages(log) if log else []
 
-        # 取最后一条 AIMessage
+        # 取最后一条 AIMessage；react_messages_log 为空时回退到 state["messages"]
+        # （llm_call_node 仅写 state["messages"]，resume 路径下 react_messages_log 可能为空）
         ai_msg: AIMessage | None = None
         for msg in reversed(messages):
             if isinstance(msg, AIMessage):
                 ai_msg = msg
                 break
         if ai_msg is None:
-            logger.error("[tool_dispatcher] no AIMessage found in react_messages_log")
+            for msg in reversed(list(state.get("messages") or [])):
+                if isinstance(msg, AIMessage):
+                    ai_msg = msg
+                    break
+        if ai_msg is None:
+            logger.error("[tool_dispatcher] no AIMessage found in react_messages_log or messages")
             return {"execution_status": "error"}
 
         tools_map: dict[str, Any] = {t.name: t for t in tools_list}
