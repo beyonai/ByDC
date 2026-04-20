@@ -4,7 +4,8 @@
   1. 从 state["messages"] 最后一条 AIMessage 提取对应 tool_call
   2. 捕获 ClarificationNeededError → execution_status="clarify_needed"
   3. 正常执行 → 写 ToolMessage 到 state["messages"]（MessagesState 自动累积）
-  4. 清理澄清相关 state 字段
+  4. 检测 query data block，写入 react_last_query_data
+  5. 清理澄清相关 state 字段
 """
 
 from __future__ import annotations
@@ -85,7 +86,19 @@ def make_tool_node(
                 },
             }
 
-        # 3. 写 ToolMessage（MessagesState add_messages reducer 自动累积）
+        # 3. 检测 query data block（records + meta 结构）
+        _query_data: dict[str, Any] | None = None
+        if isinstance(result, dict):
+            data_block = result.get("data") if isinstance(result.get("data"), dict) else result
+            if isinstance(data_block, dict) and "records" in data_block and "meta" in data_block:
+                _query_data = data_block
+                logger.info(
+                    "[tool_node:%s] query_data detected records=%s",
+                    tool_name,
+                    len(data_block.get("records") or []),
+                )
+
+        # 4. 写 ToolMessage（MessagesState add_messages reducer 自动累积）
         content = _compress(result, tool_name)
         tool_msg = ToolMessage(
             content=content,
@@ -93,13 +106,16 @@ def make_tool_node(
         )
         logger.info("[tool_node:%s] done tool_call_id=%s", tool_name, tc.get("id"))
 
-        return {
+        update: dict[str, Any] = {
             "messages": [tool_msg],
             "execution_status": None,
             "clarification_formatted_params": None,
             "pending_clarification_context": None,
             "clarification_analyze_result": None,
         }
+        if _query_data is not None:
+            update["react_last_query_data"] = _query_data
+        return update
 
     return _node
 

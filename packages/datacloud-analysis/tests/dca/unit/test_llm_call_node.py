@@ -190,6 +190,7 @@ async def test_tc1_4_resumes_from_state_messages_without_reinit() -> None:
     )
     msg_types = [type(m).__name__ for m in messages_window]
     assert "AIMessage" in msg_types, "传入 LLM 的消息应含上一轮 AIMessage（从 state.messages 恢复）"
+    assert "ToolMessage" in msg_types, "传入 LLM 的消息应含 ToolMessage（工具返回结果，V0.3 fix）"
 
     assert result.get("react_round_idx") == 2
 

@@ -88,6 +88,7 @@ class AgentState(MessagesState):
     react_pending_tool_calls: list[dict[str, Any]] | None  # 中断时未执行的 tool calls
     react_round_idx: int | None  # 中断时的 round 索引
     react_last_query_data: dict[str, Any] | None  # 中断时缓存的 query data block
+    answer_streamed: bool | None  # llm_call_node 是否已流式输出 answer
 
     # --- 澄清插件 interrupt/resume 缓存（方案 A）---
     # interrupt 前写入，resume 后 format 完成时清除，避免 _analyze_clarification 被重复调用。

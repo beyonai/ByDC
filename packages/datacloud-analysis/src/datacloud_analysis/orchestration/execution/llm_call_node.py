@@ -103,7 +103,10 @@ def make_llm_call_node(
         # 每轮从 state["messages"] 重建消息列表（系统提示 + 对话历史）
         _dynamic = dynamic_prompt or _build_runtime_dynamic_prompt(state, _gateway_context)
         system_msg = _build_system_message(system_prompt, stable_system_prompt, _dynamic)
-        conv = _conversation_messages_for_llm(state)
+        # V0.3: state["messages"] includes ToolMessages from per-tool nodes.
+        # _conversation_messages_for_llm only keeps Human/AI, dropping ToolMessages,
+        # causing the LLM to see dangling tool_calls with no result (empty response).
+        conv = list(state.get("messages") or [])
         if conv:
             messages = [system_msg, *conv]
         else:
@@ -135,6 +138,7 @@ def make_llm_call_node(
             "messages": [ai_msg],
             "react_round_idx": current_round + 1,
             "execution_status": None,
+            "answer_streamed": _did_stream,
         }
 
     return _llm_call
