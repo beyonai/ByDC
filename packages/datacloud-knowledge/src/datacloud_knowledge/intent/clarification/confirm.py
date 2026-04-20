@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
@@ -286,13 +287,14 @@ def llm_confirm_structured(
         logger.info("[confirm] 召回结果为空，跳过 LLM 确认")
         return None
 
-    # ── 临时数据采集（收集测试集，上线前删除）──
-    _collect_case_input = {
-        "query": query,
-        "structured_input": structured_input,
-        "recall_context": recall_context,
-        "mode": mode,
-    }
+    _collecting = os.environ.get("DATACLOUD_COLLECT_CONFIRM_CASES") == "1"
+    if _collecting:
+        _collect_input = {
+            "query": query,
+            "structured_input": structured_input,
+            "recall_context": recall_context,
+            "mode": mode,
+        }
 
     model_cls: type[ConfirmedStructuredQuery] | type[ConfirmedStructuredCompute] = (
         ConfirmedStructuredQuery if mode == "query" else ConfirmedStructuredCompute
@@ -328,7 +330,8 @@ def llm_confirm_structured(
             )
             result = model_cls.model_validate(args)
             result.needs_clarification = _check_needs_clarification(result)
-            _save_test_case(_collect_case_input, result)
+            if _collecting:
+                _save_test_case(_collect_input, result)
             return result
 
         # 兜底：从 content 文本中提取 JSON
@@ -343,16 +346,18 @@ def llm_confirm_structured(
         if fallback is not None:
             result = model_cls.model_validate(fallback)
             result.needs_clarification = _check_needs_clarification(result)
-            _save_test_case(_collect_case_input, result)
+            if _collecting:
+                _save_test_case(_collect_input, result)
             return result
         logger.warning("[confirm] 兜底提取失败: %s", content[:200])
     except Exception:
         logger.exception("[confirm] LLM 确认失败")
-    _save_test_case(_collect_case_input, None)
+    if _collecting:
+        _save_test_case(_collect_input, None)
     return None
 
 
-# ── 临时数据采集（收集测试集，上线前删除）─────────────────────────────
+# ── 数据采集（DATACLOUD_COLLECT_CONFIRM_CASES=1 时启用）───────────────
 
 _TEST_CASE_FILE = (
     Path(__file__).resolve().parents[4] / "scripts" / "manual" / "llm_confirm_test_cases.json"
