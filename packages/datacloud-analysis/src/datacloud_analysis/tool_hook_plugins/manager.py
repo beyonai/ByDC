@@ -11,7 +11,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, cast
 
-from datacloud_analysis.tool_hook_plugins.types import HookContext, HookDecision, ToolHookCallback
+from datacloud_analysis.tool_hook_plugins.types import (
+    HookContext,
+    HookDecision,
+    HookSignalError,
+    ToolHookCallback,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +126,8 @@ class ToolHookPluginManager:
         try:
             return await _invoke_callback(callback, context)
         except _GraphBubbleUp:  # type: ignore[misc]
+            raise
+        except HookSignalError:
             raise
         except Exception as exc:  # noqa: BLE001
             if _strict_mode():
