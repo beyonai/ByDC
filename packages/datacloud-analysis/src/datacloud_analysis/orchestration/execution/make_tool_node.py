@@ -18,9 +18,7 @@ from langchain_core.runnables import RunnableConfig
 
 from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
 from datacloud_analysis.orchestration.state import AgentState
-from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
-    ClarificationNeededError,
-)
+from datacloud_analysis.tool_hook_plugins.types import ClarificationNeededError
 
 logger = logging.getLogger(__name__)
 

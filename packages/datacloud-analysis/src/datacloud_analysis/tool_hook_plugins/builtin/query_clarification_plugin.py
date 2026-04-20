@@ -45,7 +45,11 @@ except ImportError:  # pragma: no cover
     _sdk_format_compute = None  # type: ignore[assignment]
     _sdk_format_query = None  # type: ignore[assignment]
 
-from datacloud_analysis.tool_hook_plugins.types import HookContext, HookDecision, HookSignalError
+from datacloud_analysis.tool_hook_plugins.types import (
+    ClarificationNeededError,
+    HookContext,
+    HookDecision,
+)
 
 try:
     from langgraph.types import interrupt  # type: ignore[import]
@@ -57,14 +61,6 @@ PRIORITY = 100
 ENABLED = True
 
 logger = logging.getLogger(__name__)
-
-
-class ClarificationNeededError(HookSignalError):
-    """澄清插件检测到需要用户确认时抛出，替代直接调用 interrupt()。"""
-
-    def __init__(self, context: dict[str, Any]) -> None:
-        super().__init__("clarification required")
-        self.context = context
 
 
 _QUERY_PREFIXES: frozenset[str] = frozenset({"query_", "compute_"})

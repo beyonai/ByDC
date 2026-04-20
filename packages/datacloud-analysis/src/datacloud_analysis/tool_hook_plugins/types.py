@@ -14,6 +14,19 @@ class HookSignalError(Exception):
     generic exception handler.
     """
 
+
+class ClarificationNeededError(HookSignalError):
+    """澄清插件检测到需要用户确认时抛出，替代直接调用 interrupt()。
+
+    定义在 types.py（静态模块）以确保动态加载的插件与静态导入使用同一类对象，
+    避免 isinstance 检查因模块双重加载而失败。
+    """
+
+    def __init__(self, context: dict[str, Any]) -> None:
+        super().__init__("clarification required")
+        self.context = context
+
+
 HookAction = Literal[
     "continue", "patch", "short_circuit", "interrupt", "fail", "recover", "redirect"
 ]
