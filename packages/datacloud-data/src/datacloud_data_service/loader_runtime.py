@@ -162,9 +162,6 @@ class LoaderRuntimeManager:
         if self._snapshot is None:
             return await self.reload(force=True, reason=reason)
 
-        if self._loader_override is not None:
-            return self._snapshot
-
         if not getattr(self._settings, "loader_reload_enabled", True):
             return self._snapshot
 
@@ -182,7 +179,7 @@ class LoaderRuntimeManager:
     ) -> LoaderSnapshot | None:
         """Build a fresh loader snapshot and publish it atomically on success."""
         async with self._reload_lock:
-            if self._snapshot is not None and not force and self._loader_override is None:
+            if self._snapshot is not None and not force:
                 fingerprint, _ = self._compute_fingerprint()
                 if not self._dirty and fingerprint == self._snapshot.fingerprint:
                     return self._snapshot
@@ -249,13 +246,11 @@ class LoaderRuntimeManager:
         }
 
     def _build_loader(self) -> OntologyLoader:
-        loader = self._loader_override if self._loader_override is not None else OntologyLoader()
+        loader = OntologyLoader()
         self._inherit_loader_config(loader)
         self._configure_term_loader(loader)
 
-        if self._loader_override is None:
-            self._load_ontology(loader)
-
+        self._load_ontology(loader)
         self._configure_runtime_services(loader)
         self._configure_datasources(loader)
 
@@ -271,8 +266,6 @@ class LoaderRuntimeManager:
         Datasource and KB source configs are intentionally excluded so the new
         ontology load can rebuild them from source files and explicit overrides.
         """
-        if self._snapshot is None and self._loader_override is None:
-            return
         if self._loader_override is not None:
             previous_loader = self._loader_override
         else:
@@ -392,8 +385,6 @@ class LoaderRuntimeManager:
             loader.configure(datasource_configs=self._datasource_configs)
 
     def _should_watch(self) -> bool:
-        if self._loader_override is not None:
-            return False
         return bool(getattr(self._settings, "loader_watch_enabled", False))
 
     async def _watch_loop(self) -> None:

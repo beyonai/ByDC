@@ -55,6 +55,7 @@ dependencies = [
     "strawberry-graphql[fastapi]>=0.260",
     "python-multipart>=0.0.12",
     "uvicorn>=0.32.0",
+    "watchfiles>=1.0",
 ]
 
 [dependency-groups]
