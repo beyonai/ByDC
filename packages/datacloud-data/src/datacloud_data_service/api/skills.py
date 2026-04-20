@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request
 
+from datacloud_data_service.loader_runtime import get_request_loader_snapshot
 from datacloud_data_service.tools.skill_package_generator import SkillPackageGenerator
 
 router = APIRouter()
@@ -39,12 +40,13 @@ async def get_skill_package(
             detail="view_id or object_ids required (at least one)",
         )
 
-    loader = getattr(request.app.state, "loader", None)
-    if loader is None:
+    snapshot = await get_request_loader_snapshot(request, reason="skills_package")
+    if snapshot is None:
         raise HTTPException(
             status_code=500,
             detail="OntologyLoader not initialized",
         )
+    loader = snapshot.loader
 
     tool_list_mode = request.headers.get("X-Tool-List-Mode", "unified")
     if tool_list_mode not in ("unified", "per_object"):

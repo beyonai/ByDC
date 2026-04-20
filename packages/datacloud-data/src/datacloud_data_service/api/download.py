@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
 from datacloud_data_service.config import get_settings
+from datacloud_data_service.loader_runtime import get_request_loader_snapshot
 
 router = APIRouter()
 
@@ -16,7 +17,8 @@ router = APIRouter()
 async def download_csv(file_id: str, request: Request) -> Response:
     """下载查询结果导出的 CSV 文件。"""
     settings = get_settings()
-    loader = getattr(request.app.state, "loader", None)
+    snapshot = await get_request_loader_snapshot(request, reason="download_csv")
+    loader = snapshot.loader if snapshot is not None else None
     result_file_storage = getattr(getattr(loader, "_config", None), "result_file_storage", None)
     ctx_kwargs = {
         "tenant_id": request.headers.get("X-Tenant-Id", ""),
