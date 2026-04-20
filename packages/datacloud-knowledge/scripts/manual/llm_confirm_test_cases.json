@@ -266,5 +266,186 @@
       ],
       "needs_clarification": true
     }
+  },
+  {
+    "query": "查询物理网格数据，包含网格编码、网格名称、贡献率三个字段，条件是贡献率大于100，返回10条数据",
+    "structured_input": {
+      "select": [
+        "网格编码",
+        "网格名称",
+        "贡献率"
+      ],
+      "filters": [],
+      "limit": 10,
+      "complex_conditions": [
+        "贡献率大于100的物理网格数据"
+      ]
+    },
+    "recall_context": "== 查询值 ==\n  网格编码 (select): ['所属管理网格编码', '企业所属物理网格编码']\n  网格名称 (select): ['所属管理网格名称', '企业所属物理网格名称']\n  贡献率 (select): 无召回结果\n\n== complex_conditions 术语 ==\n  [0] \"贡献率大于100的物理网格数据\":\n    物理网格数据 (select): 无召回结果\n    贡献率 (whereKey): 无召回结果",
+    "mode": "query",
+    "result": {
+      "select": [
+        "企业所属物理网格编码",
+        "企业所属物理网格名称",
+        "贡献率"
+      ],
+      "filters": [],
+      "order_by": [],
+      "limit": 10,
+      "offset": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "贡献率",
+          "candidates": [],
+          "reason": "知识库中无召回结果，无法确定对应字段名，请确认正确的字段名称",
+          "source": "select",
+          "path": "/select/2"
+        },
+        {
+          "keyword": "贡献率大于100",
+          "candidates": [],
+          "reason": "条件中的贡献率字段在知识库中无召回结果，无法确定过滤条件字段",
+          "source": "where",
+          "path": "/filters"
+        }
+      ],
+      "needs_clarification": true
+    }
+  },
+  {
+    "query": "查询物理网格数据，包含网格编码、网格名称、贡献率三个字段，条件是贡献率大于100",
+    "structured_input": {
+      "filters": [
+        {
+          "field": "贡献率",
+          "op": "gt",
+          "value": 100
+        }
+      ],
+      "limit": 10,
+      "select": [
+        "网格编码",
+        "网格名称",
+        "贡献率"
+      ],
+      "complex_conditions": []
+    },
+    "recall_context": "== 查询值 ==\n  网格编码 (select): ['所属管理网格编码', '企业所属物理网格编码']\n  网格名称 (select): ['所属管理网格名称', '企业所属物理网格名称']\n  贡献率 (select): 无召回结果\n\n== 过滤条件（字段） ==\n  贡献率 (whereKey): 无召回结果",
+    "mode": "query",
+    "result": {
+      "select": [
+        "网格编码",
+        "网格名称",
+        "贡献率"
+      ],
+      "filters": [
+        {
+          "field": "贡献率",
+          "op": "gt",
+          "value": 100
+        }
+      ],
+      "order_by": [],
+      "limit": 10,
+      "offset": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "网格编码",
+          "candidates": [
+            "企业所属物理网格编码",
+            "所属管理网格编码"
+          ],
+          "reason": "查询对象是物理网格，召回结果中有物理网格和管理网格两类候选，需用户选择具体使用哪个",
+          "source": "select",
+          "path": "/select/0"
+        },
+        {
+          "keyword": "网格名称",
+          "candidates": [
+            "企业所属物理网格名称",
+            "所属管理网格名称"
+          ],
+          "reason": "查询对象是物理网格，召回结果中有物理网格和管理网格两类候选，需用户选择具体使用哪个",
+          "source": "select",
+          "path": "/select/1"
+        },
+        {
+          "keyword": "贡献率",
+          "candidates": [],
+          "reason": "无知识库召回结果，无法确认该字段对应的真实字段名",
+          "source": "select",
+          "path": "/select/2"
+        },
+        {
+          "keyword": "贡献率",
+          "candidates": [],
+          "reason": "无知识库召回结果，无法确认该字段对应的真实字段名",
+          "source": "where",
+          "path": "/filters/0/field"
+        }
+      ],
+      "needs_clarification": true
+    }
+  },
+  {
+    "query": "查询物理网格数据，包含网格编码、网格名称、贡献率三个字段，条件是贡献率大于100",
+    "structured_input": {
+      "filters": [
+        {
+          "field": "贡献率",
+          "op": "gt",
+          "value": 100
+        }
+      ],
+      "limit": 10,
+      "select": [
+        "网格编码",
+        "网格名称",
+        "贡献率"
+      ],
+      "complex_conditions": []
+    },
+    "recall_context": "== 查询值 ==\n  网格编码 (select): ['所属管理网格编码', '企业所属物理网格编码']\n  网格名称 (select): ['所属管理网格名称', '企业所属物理网格名称']\n  贡献率 (select): 无召回结果\n\n== 过滤条件（字段） ==\n  贡献率 (whereKey): 无召回结果",
+    "mode": "query",
+    "result": {
+      "select": [
+        "企业所属物理网格编码",
+        "企业所属物理网格名称",
+        "贡献率"
+      ],
+      "filters": [
+        {
+          "field": "贡献率",
+          "op": "gt",
+          "value": 100
+        }
+      ],
+      "order_by": [],
+      "limit": 10,
+      "offset": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "贡献率",
+          "candidates": [],
+          "reason": "贡献率在知识库中无召回结果，无法确定对应的真实字段名",
+          "source": "select",
+          "path": "/select/2"
+        },
+        {
+          "keyword": "贡献率",
+          "candidates": [],
+          "reason": "贡献率在知识库中无召回结果，无法确定对应的真实字段名",
+          "source": "where",
+          "path": "/filters/0/field"
+        }
+      ],
+      "needs_clarification": true
+    }
   }
 ]

@@ -12,6 +12,11 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import text
 
+from datacloud_knowledge.query.search.vector_validation import (
+    TermVectorValidationError,
+    validate_term_vector_readiness,
+)
+
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
@@ -63,6 +68,12 @@ def vector_search(
         VectorResult 列表，按相似度降序排列
     """
     if not query_text or not query_text.strip():
+        return []
+
+    try:
+        validate_term_vector_readiness(session, embedding_service)
+    except TermVectorValidationError as exc:
+        log.error("知识库向量校验失败，vector_search 返回空结果: %s", exc)
         return []
 
     # 获取查询向量

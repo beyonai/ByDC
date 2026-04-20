@@ -10,6 +10,10 @@ from typing import Any
 from sqlalchemy import bindparam, text
 
 from datacloud_knowledge.knowledge_search.db.connection import get_session
+from datacloud_knowledge.query.search.vector_validation import (
+    TermVectorValidationError,
+    validate_term_vector_readiness,
+)
 
 from .cache import UserNameCache
 from .disambiguation import build_shortest_path_tree, disambiguate
@@ -28,12 +32,13 @@ logger = logging.getLogger(__name__)
 
 CandidateDict = dict[str, Any]
 _VECTOR_ENABLE_ENV = "DATACLOUD_INTENT_ENABLE_VECTOR"
-_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+_FALSE_VALUES = frozenset({"0", "false", "no", "off"})
 
 
 def _vector_search_enabled() -> bool:
-    raw = os.getenv(_VECTOR_ENABLE_ENV, "0").strip().lower()
-    return raw in _TRUE_VALUES
+    """Return whether intent vector recall is enabled; defaults to enabled."""
+    raw = os.getenv(_VECTOR_ENABLE_ENV, "1").strip().lower()
+    return raw not in _FALSE_VALUES
 
 
 def _build_global_name_index() -> dict[str, list[tuple[str, str, str]]]:
@@ -144,13 +149,31 @@ def _convert_hits(
     return [_candidate_to_dict(c, name_id=name_id_map.get(str(c.term_id))) for c in hits]
 
 
+def _get_validated_embedding_service(session: Any) -> Any:
+    if not _vector_search_enabled():
+        logger.error("知识库向量召回被环境变量 %s 关闭，服务将降级运行", _VECTOR_ENABLE_ENV)
+        return None
+
+    try:
+        embedding_module = import_module("datacloud_knowledge.query.embedding")
+        embedding_svc = embedding_module.get_embedding_service()
+        validate_term_vector_readiness(session, embedding_svc)
+    except TermVectorValidationError as exc:
+        logger.error("知识库向量校验失败，向量召回将跳过: %s", exc)
+        return None
+    except Exception as exc:
+        logger.error("知识库向量服务初始化失败，向量召回将跳过: %s", exc)
+        return None
+    return embedding_svc
+
+
 def search_all_candidates_with_name_id(
     concept_terms: list[str],
     *,
     user_id: str | None = None,
     top_k: int = 5,
 ) -> dict[str, list[CandidateDict]]:
-    """Run strict -> bm25 (+ optional vector) and return name_id-enriched candidates."""
+    """Run strict -> bm25 -> vector and return name_id-enriched candidates."""
     if not concept_terms:
         return {}
 
@@ -200,34 +223,23 @@ def search_all_candidates_with_name_id(
         if not still_remaining:
             return result
 
-        if not _vector_search_enabled():
-            logger.info(
-                "search_all_candidates_with_name_id: vector disabled by env %s, unresolved=%d",
-                _VECTOR_ENABLE_ENV,
-                len(still_remaining),
-            )
+        embedding_svc = _get_validated_embedding_service(session)
+        if embedding_svc is None:
             for word in still_remaining:
                 result[word] = []
             return result
 
-        try:
-            embedding_module = import_module("datacloud_knowledge.query.embedding")
-            embedding_svc = embedding_module.get_embedding_service()
-            vector_mentions = tuple(Mention(text=w) for w in still_remaining)
-            vector_hits = match_mentions_with_search(
-                vector_mentions,
-                session,
-                search_mode="vector",
-                embedding_service=embedding_svc,
-                top_k=top_k,
-            )
-            for word in still_remaining:
-                hits = vector_hits.get(word)
-                result[word] = _convert_hits(word=word, hits=hits, user_id=user_id) if hits else []
-        except Exception as exc:
-            logger.warning("search_all_candidates_with_name_id: vector step failed: %s", exc)
-            for word in still_remaining:
-                result[word] = []
+        vector_mentions = tuple(Mention(text=w) for w in still_remaining)
+        vector_hits = match_mentions_with_search(
+            vector_mentions,
+            session,
+            search_mode="vector",
+            embedding_service=embedding_svc,
+            top_k=top_k,
+        )
+        for word in still_remaining:
+            hits = vector_hits.get(word)
+            result[word] = _convert_hits(word=word, hits=hits, user_id=user_id) if hits else []
 
     return result
 
@@ -306,11 +318,19 @@ def typed_multi_recall_with_session(
     """
     from .typed_recall import typed_multi_recall
 
-    enable_vector = _vector_search_enabled()
     with get_session() as session:
+        embedding_svc = _get_validated_embedding_service(session)
+        if embedding_svc is None:
+            return typed_multi_recall(
+                items,
+                session=session,
+                top_k=top_k,
+                enable_vector=False,
+            )
+
         return typed_multi_recall(
             items,
             session=session,
             top_k=top_k,
-            enable_vector=enable_vector,
+            enable_vector=True,
         )

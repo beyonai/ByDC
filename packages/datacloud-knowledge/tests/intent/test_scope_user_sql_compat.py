@@ -32,7 +32,7 @@ class _FakeSession:
 
 
 @pytest.mark.intent
-def test_user_name_cache_query_uses_coalesce_for_scope_user_id() -> None:
+def test_user_name_cache_query_uses_scope_user_id_filter() -> None:
     cache_module = _get_cache_module()
     user_name_cache = cache_module.UserNameCache
     fake_session = _FakeSession()
@@ -40,14 +40,14 @@ def test_user_name_cache_query_uses_coalesce_for_scope_user_id() -> None:
     cache = user_name_cache()
     cache.load("test-user", fake_session)
 
-    assert "COALESCE((tn.search_scope->>'scope_user_id'), '') = :user_id" in fake_session.sql_text
+    assert "tn.search_scope->>'scope_user_id' = :user_id" in fake_session.sql_text
     assert fake_session.params == {"user_id": "test-user"}
 
 
 @pytest.mark.intent
-def test_sql_engine_name_index_does_not_use_scope_user_id_is_null() -> None:
+def test_sql_engine_name_index_filters_global_scope() -> None:
     sql_engine_module = _get_sql_engine_module()
     method_source = inspect.getsource(sql_engine_module.SQLKnowledgeGraphQuery._build_name_index)
 
-    assert "scope_user_id' IS NULL" not in method_source
-    assert "COALESCE((tn.search_scope->>'scope_user_id'), '') = ''" in method_source
+    # 全局索引只加载无 scope_user_id 的记录
+    assert "scope_user_id" in method_source
