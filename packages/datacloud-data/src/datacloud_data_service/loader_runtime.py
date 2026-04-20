@@ -399,6 +399,18 @@ class LoaderRuntimeManager:
         if ontology_path.is_file():
             return (ontology_path.parent,)
         if ontology_path.is_dir():
+            target_paths: list[Path] = []
+            for relative_dir in (
+                Path("ontology/objects"),
+                Path("ontology/views"),
+                Path("object"),
+                Path("view"),
+            ):
+                candidate = ontology_path / relative_dir
+                if candidate.is_dir():
+                    target_paths.append(candidate)
+            if target_paths:
+                return tuple(target_paths)
             return (ontology_path,)
         return ()
 
