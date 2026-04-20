@@ -281,6 +281,10 @@ class LoaderRuntimeManager:
 
         if ontology_path.is_dir() and (ontology_path / "ontology").exists():
             loader.load_from_owl_directory(ontology_path)
+        elif ontology_path.is_dir() and (
+            (ontology_path / "object").exists() or (ontology_path / "view").exists()
+        ):
+            loader.load_from_owl_resource_directory(ontology_path)
         else:
             loader.load_from_path(ontology_path)
         logger.info("Loaded ontology from %s", ontology_path)

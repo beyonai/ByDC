@@ -40,6 +40,26 @@ def _is_rdf_type_predicate(predicate: Any) -> bool:
     return predicate_str == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 
 
+def _normalize_owl_xml(content: str) -> str:
+    """Normalize malformed OWL XML by deduplicating root tag attributes."""
+
+    def replace_root(match: re.Match[str]) -> str:
+        attrs = match.group(1)
+        parts = re.findall(r'([^\s=]+)\s*=\s*(".*?"|\'.*?\')', attrs, flags=re.DOTALL)
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for name, value in parts:
+            if name in seen:
+                continue
+            seen.add(name)
+            deduped.append(f"{name}={value}")
+        if not deduped:
+            return "<rdf:RDF>"
+        return "<rdf:RDF " + " ".join(deduped) + ">"
+
+    return re.sub(r"<rdf:RDF\b([^>]*)>", replace_root, content, count=1, flags=re.DOTALL)
+
+
 @dataclass
 class ParsedObject:
     object_code: str
@@ -145,15 +165,17 @@ class OwlParser:
         if path.suffix.lower() != ".owl":
             return
 
-        content = path.read_text(encoding="utf-8")
-        object_scope = _infer_scoped_entity_code(path, "_object.owl")
-        mapping_scope = _infer_scoped_entity_code(path, "_mapping.owl")
+        content = _normalize_owl_xml(path.read_text(encoding="utf-8"))
+        object_scope = _infer_object_scope(path)
+        mapping_scope = _infer_mapping_scope(path)
+        view_scope = _infer_view_scope(path)
         try:
             self._parse_owl_content(
                 content,
                 path,
                 object_scope=object_scope,
                 mapping_scope=mapping_scope,
+                view_scope=view_scope,
             )
         except Exception as e:
             logger.warning(f"Failed to parse OWL file {path}: {e}")
@@ -165,6 +187,7 @@ class OwlParser:
         *,
         object_scope: str | None,
         mapping_scope: str | None,
+        view_scope: str | None,
     ) -> None:
         try:
             from rdflib import Graph
@@ -194,6 +217,8 @@ class OwlParser:
                 self._parse_database_definition(g, s)
             elif type_uri.endswith("SceneDefinition"):
                 self._parse_scene_definition(g, s)
+            elif type_uri.endswith("SceneField"):
+                self._parse_scene_field(g, s, view_scope)
             elif type_uri.endswith("EntityMapping"):
                 self._parse_entity_mapping(g, s)
             elif type_uri.endswith("Mapping"):
@@ -536,6 +561,30 @@ class OwlParser:
         )
         self._views[view_code] = view
 
+    def _parse_scene_field(self, g: Any, subject: Any, view_scope: str | None) -> None:
+        if not view_scope:
+            return
+
+        property_code = self._get_predicate_value(g, subject, "property_code")
+        source_object_code = self._get_predicate_value(g, subject, "source_object_code")
+        source_object_column_code = self._get_predicate_value(
+            g, subject, "source_object_column_code"
+        )
+        if not property_code or not source_object_code or not source_object_column_code:
+            return
+
+        property_name = self._get_predicate_value(g, subject, "property_name") or property_code
+        ext_property = self._get_predicate_value(g, subject, "ext_property")
+        self._view_field_mappings.setdefault(view_scope, []).append(
+            {
+                "property_code": property_code,
+                "property_name": property_name,
+                "source_object_code": source_object_code,
+                "source_object_column_code": source_object_column_code,
+                "ext_property": ext_property,
+            }
+        )
+
     def _parse_entity_mapping(self, g: Any, subject: Any) -> None:
         entity_code = self._get_predicate_value(g, subject, "entity_code")
         if not entity_code:
@@ -712,7 +761,15 @@ class OwlParser:
                 self.parse_file(owl_file)
 
         self._apply_mappings_to_objects()
+        return self._build_content()
 
+    def parse_resource_directory(self, base_dir: Path) -> dict[str, Any]:
+        """解析新的 resource/object + resource/view 目录结构。"""
+        self._parse_new_layout_directory(base_dir)
+        self._apply_mappings_to_objects()
+        return self._build_content()
+
+    def _build_content(self) -> dict[str, Any]:
         functions: dict[str, dict[str, Any]] = {}
         objects = []
         for obj in self._objects.values():
@@ -895,6 +952,48 @@ class OwlParser:
             "datasource_configs": datasource_configs,
             "views": views,
         }
+
+    def _parse_new_layout_directory(self, base_dir: Path) -> None:
+        object_dir = base_dir / "object"
+        view_dir = base_dir / "view"
+
+        if object_dir.is_dir():
+            for object_path in sorted(object_dir.iterdir()):
+                if not object_path.is_dir():
+                    continue
+                self._parse_new_layout_object_directory(object_path)
+
+        if view_dir.is_dir():
+            for view_path in sorted(view_dir.iterdir()):
+                if not view_path.is_dir():
+                    continue
+                self._parse_new_layout_view_directory(view_path)
+
+    def _parse_new_layout_object_directory(self, object_dir: Path) -> None:
+        definition_files = sorted(object_dir.glob("*_definition.owl"))
+        for owl_file in definition_files:
+            self.parse_file(owl_file)
+
+        for pattern in (
+            "*_mapping.owl",
+            "*_dbsource.owl",
+            "*_object_relations.owl",
+        ):
+            for owl_file in sorted(object_dir.glob(pattern)):
+                self.parse_file(owl_file)
+
+        actions_dir = object_dir / "actions"
+        if actions_dir.is_dir():
+            for owl_file in sorted(actions_dir.rglob("*.owl")):
+                self.parse_file(owl_file)
+
+    def _parse_new_layout_view_directory(self, view_dir: Path) -> None:
+        for pattern in (
+            "*_definition.owl",
+            "*_relations.owl",
+        ):
+            for owl_file in sorted(view_dir.glob(pattern)):
+                self.parse_file(owl_file)
 
     def _merge_function_configs(
         self,
@@ -1201,3 +1300,27 @@ def _infer_scoped_entity_code(path: Path, suffix: str) -> str | None:
     if not path.name.endswith(suffix):
         return None
     return path.name.removesuffix(suffix)
+
+
+def _infer_object_scope(path: Path) -> str | None:
+    scoped_code = _infer_scoped_entity_code(path, "_object.owl")
+    if scoped_code is not None:
+        return scoped_code
+
+    if (
+        path.name.endswith("_definition.owl")
+        and path.parent.name
+        and path.parent.parent.name == "object"
+    ):
+        return path.parent.name
+    return None
+
+
+def _infer_mapping_scope(path: Path) -> str | None:
+    return _infer_scoped_entity_code(path, "_mapping.owl")
+
+
+def _infer_view_scope(path: Path) -> str | None:
+    if path.parent.name and path.parent.parent.name == "view":
+        return path.parent.name
+    return None
