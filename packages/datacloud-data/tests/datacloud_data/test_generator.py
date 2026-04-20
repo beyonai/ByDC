@@ -330,3 +330,105 @@ def test_d4_compute_description_no_wrong_error_hint() -> None:
         "企业基础信息", "企业信息对象", FIELDS, required_filter_groups=["period_required"]
     )
     assert "field 填了字段编码而非中文名" not in desc, "compute description 常见错误仍含旧提示"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# G 系列：贪心阶段优化（§5.1）验收
+# 对应验收用例：TC-01 ~ TC-11
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# ── G1-G3: complex_conditions 触发条件 2 修复（§5.1.1）────────────────────────
+
+
+def test_g1_query_complex_conditions_no_unknown_field_trigger(
+    query_schema: dict[str, Any],
+) -> None:
+    """G1: query complex_conditions.description 不含"字段名找不到→写 complex_conditions"。"""
+    desc = query_schema["properties"]["complex_conditions"]["description"]
+    assert "字段名在当前对象字段列表中找不到精确对应" not in desc
+    assert "非标准词），需系统做语义推断" not in desc
+
+
+def test_g2_query_complex_conditions_explains_field_not_in_list(
+    query_schema: dict[str, Any],
+) -> None:
+    """G2: query complex_conditions.description 明确说明字段名未命中时不写此列表。"""
+    desc = query_schema["properties"]["complex_conditions"]["description"]
+    assert any(phrase in desc for phrase in ["不写入此列表", "不写此列表", "不进此列表"]), (
+        f"complex_conditions.description 未说明字段未命中时不写入此列表: {desc!r}"
+    )
+
+
+def test_g3_compute_complex_conditions_no_unknown_field_trigger(
+    compute_schema: dict[str, Any],
+) -> None:
+    """G3: compute complex_conditions.description 同样不含字段名未命中→complex_conditions。"""
+    desc = compute_schema["properties"]["complex_conditions"]["description"]
+    assert "字段名在当前对象字段列表中找不到精确对应" not in desc
+    assert "非标准词），需系统做语义推断" not in desc
+
+
+# ── G4-G5: filters oneOf catch-all 兜底（§5.1.3）────────────────────────────
+
+
+def test_g4_filters_oneOf_has_catchall_item(query_schema: dict[str, Any]) -> None:
+    """G4: filters.items.oneOf 末尾有 catch-all 兜底条目，其 field.description 含原词透传说明。"""
+    items = query_schema["properties"]["filters"]["items"]
+    one_of = items.get("oneOf", [])
+    assert len(one_of) > 0, "filters oneOf 为空"
+    catchall = one_of[-1]
+    field_desc = catchall.get("properties", {}).get("field", {}).get("description", "")
+    assert "原词" in field_desc or "原始词" in field_desc, (
+        f"catch-all 条目 field.description 未说明原词透传: {field_desc!r}"
+    )
+
+
+def test_g5_catchall_op_enum_covers_common_ops(query_schema: dict[str, Any]) -> None:
+    """G5: catch-all 条目的 op.enum 覆盖 gt/lt/eq/in 等常见操作符。"""
+    items = query_schema["properties"]["filters"]["items"]
+    one_of = items.get("oneOf", [])
+    catchall = one_of[-1]
+    op_enum = catchall.get("properties", {}).get("op", {}).get("enum", [])
+    for op in ("gt", "lt", "eq", "in", "gte", "lte"):
+        assert op in op_enum, f"catch-all op.enum 缺少 {op!r}: {op_enum}"
+
+
+# ── G6: filters.field 原词透传指令（§5.1.4）──────────────────────────────────
+
+
+def test_g6_filter_item_field_desc_contains_passthrough_instruction(
+    query_schema: dict[str, Any],
+) -> None:
+    """G6: 已知字段 filter 条目的 field.description 包含"找不到时填原词"指令。"""
+    items = query_schema["properties"]["filters"]["items"]
+    one_of = items.get("oneOf", [])
+    known_items = one_of[:-1]  # 排除末尾 catch-all
+    assert len(known_items) > 0, "没有已知字段的 filter 条目（oneOf 只有 catch-all）"
+    found = any(
+        "原词" in item.get("properties", {}).get("field", {}).get("description", "")
+        or "原始词" in item.get("properties", {}).get("field", {}).get("description", "")
+        for item in known_items
+    )
+    assert found, "所有已知字段 filter 条目的 field.description 均未包含原词透传指令"
+
+
+# ── G7-G9: 常见错误描述修正（§5.1.6）────────────────────────────────────────
+
+
+def test_g7_query_description_no_map_error_hint() -> None:
+    """G7: query 常见错误不含误导性"系统无法映射时会报错"描述。"""
+    desc = build_query_description("企业基础信息", "企业信息对象", FIELDS)
+    assert "系统无法映射时会报错" not in desc
+
+
+def test_g8_query_description_has_no_guess_replace_warning() -> None:
+    """G8: query 常见错误含正确的"猜测替换"警告（正向验收）。"""
+    desc = build_query_description("企业基础信息", "企业信息对象", FIELDS)
+    assert "猜测替换" in desc
+
+
+def test_g9_compute_description_no_map_error_hint() -> None:
+    """G9: compute 常见错误不含误导性"系统无法映射时会报错"描述。"""
+    desc = build_compute_description("企业基础信息", "企业信息对象", FIELDS)
+    assert "系统无法映射时会报错" not in desc

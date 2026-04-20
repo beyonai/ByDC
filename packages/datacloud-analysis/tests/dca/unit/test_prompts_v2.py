@@ -47,3 +47,52 @@ def test_T2_2_tool_naming_hint_fixed_not_env_dependent() -> None:
 
     # 恢复
     os.environ.pop("DATACLOUD_ONTOLOGY_LOAD_MODE", None)
+
+
+# ── T3 系列：贪心阶段优化验收（§5.1）────────────────────────────────────────────
+
+
+def test_T3_1_no_double_write_conflict() -> None:
+    """T3-1: 字段透传与 complex_conditions 双写冲突已消除（§5.1.2）。"""
+    from datacloud_analysis.i18n.prompts import get_execution_prompt
+
+    prompt = get_execution_prompt("zh_CN")
+    assert "同时将该字段涉及的完整条件写入 complex_conditions" not in prompt, (
+        "Prompt 仍含双写冲突文本"
+    )
+
+
+def test_T3_2_no_unknown_field_trigger_in_complex_conditions() -> None:
+    """T3-2: complex_conditions 触发条件 2（字段名找不到→写入）已移除（§5.1.1）。"""
+    from datacloud_analysis.i18n.prompts import get_execution_prompt
+
+    prompt = get_execution_prompt("zh_CN")
+    assert "字段名在工具字段列表中找不到精确对应" not in prompt, (
+        "Prompt complex_conditions 规则仍含字段名未命中触发条件"
+    )
+
+
+def test_T3_3_has_tool_selection_guidance() -> None:
+    """T3-3: 提示词包含贪心选工具引导（本体选择 + query/compute 任务分类）（§5.1.5）。"""
+    from datacloud_analysis.i18n.prompts import get_execution_prompt
+
+    prompt = get_execution_prompt("zh_CN")
+    assert "工具选择引导" in prompt, "Prompt 缺少贪心选工具引导章节"
+
+
+def test_T3_4_no_legacy_keyword_extraction() -> None:
+    """T3-4: 历史遗留的关键词提取逻辑已移除（§5.1.8）。"""
+    from datacloud_analysis.i18n.prompts import get_execution_prompt
+
+    prompt = get_execution_prompt("zh_CN")
+    assert "关键词只能是：名词或名词短语" not in prompt, "Prompt 仍含旧关键词提取逻辑"
+
+
+def test_T3_5_field_passthrough_independent_from_complex_conditions() -> None:
+    """T3-5: Prompt 明确说明字段透传与 complex_conditions 是独立规则（§5.1.2）。"""
+    from datacloud_analysis.i18n.prompts import get_execution_prompt
+
+    prompt = get_execution_prompt("zh_CN")
+    assert "独立规则" in prompt or "不触发 complex_conditions" in prompt, (
+        "Prompt 未明确说明字段透传与 complex_conditions 的独立性"
+    )
