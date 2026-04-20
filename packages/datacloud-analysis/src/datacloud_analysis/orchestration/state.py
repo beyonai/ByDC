@@ -89,6 +89,10 @@ class AgentState(MessagesState):
     react_round_idx: int | None  # 中断时的 round 索引
     react_last_query_data: dict[str, Any] | None  # 中断时缓存的 query data block
 
+    # --- 澄清插件 interrupt/resume 缓存（方案 A）---
+    # interrupt 前写入，resume 后 format 完成时清除，避免 _analyze_clarification 被重复调用。
+    _clarification_cache: dict[str, Any] | None
+
 
 StateDict = MutableMapping[str, Any]
 

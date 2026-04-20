@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -59,6 +60,13 @@ logger = logging.getLogger(__name__)
 
 _QUERY_PREFIXES: frozenset[str] = frozenset({"query_", "compute_"})
 _DATA_TOOL_PREFIXES: frozenset[str] = frozenset({"query_", "data_query_", "compute_"})
+
+
+def _make_cache_key(tool_name: str, query: str) -> str:
+    """生成澄清缓存键，绑定到 tool_name + query 两元组。"""
+    digest = hashlib.md5(query.encode()).hexdigest()[:12]  # noqa: S324
+    return f"{tool_name}:{digest}"
+
 
 # LLM 可能以 JSON 字符串形式传递的列表字段
 _JSON_LIST_FIELDS: frozenset[str] = frozenset(
@@ -388,6 +396,112 @@ def _format_clarification(
     return _sdk_format_query(query, structured_input, form_str, knowledge)  # type: ignore[misc]
 
 
+# ── Resume 路径共享逻辑 ───────────────────────────────────────────────────────
+
+
+def _execute_resume(
+    ctx: HookContext,
+    tool_name: str,
+    query: str,
+    cached: dict[str, Any],
+    graph_state: dict[str, Any] | None,
+    resume_value: Any,
+) -> HookDecision | None:
+    """parse resume_value → format_clarification → 清除缓存 → 返回 HookDecision。
+
+    由首次执行路径（interrupt 返回后）和 CACHE HIT 路径（_handle_resume）共同调用，
+    是 resume 逻辑的唯一实现来源。
+    """
+    knowledge = ""
+    paradigm_list_from_resume: list[dict[str, Any]] = []
+    if isinstance(resume_value, dict):
+        outer = resume_value.get("paradigmList") or []
+        if outer and isinstance(outer[0], dict):
+            paradigm_list_from_resume = list(outer[0].get("paradigmList") or [])
+        meta = resume_value.get("metadata") or {}
+        knowledge = str(meta.get("clarify_knowledge") or "")
+    if not knowledge:
+        knowledge = str(cached.get("clarify_knowledge") or "")
+
+    logger.info(
+        "[query_clarification] RESUME parsed: paradigm_list_count=%d knowledge_len=%d",
+        len(paradigm_list_from_resume),
+        len(knowledge),
+    )
+
+    structured_input: dict[str, Any] = dict(cached.get("structured_input") or {})
+    is_compute: bool = bool(cached.get("is_compute"))
+    resolved: dict[str, str] = dict(cached.get("resolved") or {})
+    is_complex: bool = bool(cached.get("is_complex"))
+
+    form_str = json.dumps({"paradigmList": paradigm_list_from_resume}, ensure_ascii=False)
+    tool_params = _format_clarification(
+        query,
+        structured_input,
+        form_str,
+        knowledge,
+        is_compute=is_compute,
+    )
+    logger.info(
+        "[query_clarification] format_clarification args:"
+        " query=%s | is_compute=%s | knowledge=%s"
+        " | structured_input=%s | form_str=%s",
+        query[:200],
+        is_compute,
+        knowledge[:200],
+        json.dumps(structured_input, ensure_ascii=False, default=str)[:500],
+        form_str[:500],
+    )
+    logger.info(
+        "[query_clarification] format_clarification result: tool_params=%s",
+        json.dumps(tool_params, ensure_ascii=False, default=str)[:500],
+    )
+
+    if graph_state is not None:
+        graph_state.pop("_clarification_cache", None)
+    logger.info("[query_clarification] _clarification_cache cleared from state")
+
+    tool_params = _apply_resolved_to_params(tool_params, resolved)
+    ctx["tool_params"] = tool_params
+
+    if is_complex:
+        return _build_redirect_decision(tool_name, query, tool_params)
+    return {"action": "patch", "patch": {"tool_params": tool_params}}
+
+
+async def _handle_resume(
+    ctx: HookContext,
+    tool_name: str,
+    graph_state: dict[str, Any],
+    cached: dict[str, Any],
+) -> HookDecision | None:
+    """CACHE HIT 路径：调用 interrupt() 取回 resume_value，再委托 _execute_resume。
+
+    LangGraph resume 时 interrupt() 直接返回用户提交的值，不再暂停。
+    """
+    query: str = str((ctx.get("tool_params") or {}).get("query", "") or "")
+    paradigm_list: list[dict[str, Any]] = list(cached.get("paradigm_list") or [])
+    clarify_knowledge: str = str(cached.get("clarify_knowledge") or "")
+
+    logger.info("[query_clarification] RESUME resume_value type=%s value=%s", "pending", "...")
+    resume_value = interrupt(
+        {
+            "prompt": "查询条件存在歧义，请确认查询维度",
+            "reason_code": "PARADIGM_CLARIFICATION",
+            "ask_user_payload": {"paradigmList": paradigm_list, "query": query},
+            "_clarify_knowledge": clarify_knowledge,
+        }
+    )
+    logger.info(
+        "[query_clarification] RESUME resume_value type=%s value=%s",
+        type(resume_value).__name__,
+        json.dumps(resume_value, ensure_ascii=False, default=str)[:800]
+        if resume_value is not None
+        else "None",
+    )
+    return _execute_resume(ctx, tool_name, query, cached, graph_state, resume_value)
+
+
 # ── 主 hook 入口 ──────────────────────────────────────────────────────────────
 
 
@@ -408,6 +522,17 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
     # 非 query_*/compute_* 工具直接跳过
     if not _is_query_or_compute_tool(tool_name):
         return None
+
+    # ── CACHE HIT 早返回：跳过全部分析逻辑，直接进入 resume 路径 ─────────────
+    # 注意：用 is not None 而非 bool 判断，state={} 是合法的可写空 dict
+    _graph_state: dict[str, Any] | None = (ctx.get("metadata") or {}).get("state")
+    if _graph_state is not None:
+        _raw_query = str((ctx.get("tool_params") or {}).get("query", "") or "")
+        _ck = _make_cache_key(tool_name, _raw_query)
+        _cached = _graph_state.get("_clarification_cache")
+        if _cached and _cached.get("cache_key") == _ck:
+            logger.info("[query_clarification] CACHE HIT — full skip to resume path")
+            return await _handle_resume(ctx, tool_name, _graph_state, _cached)
 
     # ── 剥除元字段（before_callback 消费，不透传给底层执行体）────────────────
     tool_params: dict[str, Any] = _normalize_json_fields(dict(ctx.get("tool_params") or {}))
@@ -458,18 +583,25 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             structured_input = {**tool_params, "complex_conditions": complex_conditions}
             is_compute = tool_name.startswith("compute_")
 
-            # ── 哨兵 1：即将发起 SDK 分析 ─────────────────────────────────────────
-            # 若恢复后此日志出现，说明恢复起点在 SDK 调用之前（错误）
-            logger.info(
-                "[query_clarification] PRE-INTERRUPT#1 calling analyze_clarification"
-                " — if this prints on resume, resume restarts before SDK call (WRONG)"
-            )
+            # CACHE MISS：首次执行，调用 SDK；interrupt 前写入完整缓存供 resume 命中
+            _ck = _make_cache_key(tool_name, query)
+            logger.info("[query_clarification] CACHE MISS — calling _analyze_clarification()")
             paradigm_list, clarify_knowledge = _analyze_clarification(
                 query,
                 scope_code,
                 structured_input,
                 is_compute=is_compute,
             )
+            if _graph_state is not None:
+                _graph_state["_clarification_cache"] = {
+                    "cache_key": _ck,
+                    "paradigm_list": paradigm_list,
+                    "clarify_knowledge": clarify_knowledge,
+                    "structured_input": structured_input,
+                    "is_compute": is_compute,
+                    "resolved": resolved,
+                    "is_complex": is_complex,
+                }
 
             if not paradigm_list:
                 # 澄清分析失败或无需澄清，跳过 interrupt，按原流程继续
@@ -495,7 +627,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 }
             )
 
-            # ── RESUME 确认点：恢复正确则只有此日志打印 ──────────────────────────
+            # ── RESUME 确认点：委托 _execute_resume 统一处理 ────────────────────
             logger.info(
                 "[query_clarification] RESUME resume_value type=%s value=%s",
                 type(resume_value).__name__,
@@ -503,59 +635,16 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 if resume_value is not None
                 else "None",
             )
-
-            # resume 后调 SDK format 写回参数
-            knowledge = ""
-            paradigm_list_from_resume: list[dict[str, Any]] = []
-            if isinstance(resume_value, dict):
-                # paradigmList 来自顶层 paradigmList[0].paradigmList（含用户 choiceKeyword）
-                outer = resume_value.get("paradigmList") or []
-                if outer and isinstance(outer[0], dict):
-                    paradigm_list_from_resume = list(outer[0].get("paradigmList") or [])
-                # clarify_knowledge 来自 metadata.clarify_knowledge
-                meta = resume_value.get("metadata") or {}
-                knowledge = str(meta.get("clarify_knowledge") or "")
-            # 兜底：metadata 中无 clarify_knowledge 时使用本轮 SDK 返回值
-            if not knowledge:
-                knowledge = clarify_knowledge
-            logger.info(
-                "[query_clarification] RESUME parsed: paradigm_list_count=%d knowledge_len=%d",
-                len(paradigm_list_from_resume),
-                len(knowledge),
-            )
-
-            form_str = json.dumps({"paradigmList": paradigm_list_from_resume}, ensure_ascii=False)
-            tool_params = _format_clarification(
-                query,
-                structured_input,
-                form_str,
-                knowledge,
-                is_compute=is_compute,
-            )
-            logger.info(
-                "[query_clarification] format_clarification args:"
-                " query=%s | is_compute=%s | knowledge=%s"
-                " | structured_input=%s | form_str=%s",
-                query[:200],
-                is_compute,
-                knowledge[:200],
-                json.dumps(structured_input, ensure_ascii=False, default=str)[:500],
-                form_str[:500],
-            )
-            logger.info(
-                "[query_clarification] format_clarification result: tool_params=%s",
-                json.dumps(tool_params, ensure_ascii=False, default=str)[:500],
-            )
-
-            # 兜底翻译：resume 后仍可能残留未命中的 field_name_cn（用户未选或选择为空）
-            # 对这些残留项做原样透传（field_name_cn → field），确保 SQL builder 不报语法错误
-            tool_params = _apply_resolved_to_params(tool_params, resolved)
-            ctx["tool_params"] = tool_params
-
-            # 恢复后路由
-            if is_complex:
-                return _build_redirect_decision(tool_name, query, tool_params)
-            return {"action": "patch", "patch": {"tool_params": tool_params}}
+            _full_cached: dict[str, Any] = {
+                "cache_key": _ck,
+                "paradigm_list": paradigm_list,
+                "clarify_knowledge": clarify_knowledge,
+                "structured_input": structured_input,
+                "is_compute": is_compute,
+                "resolved": resolved,
+                "is_complex": is_complex,
+            }
+            return _execute_resume(ctx, tool_name, query, _full_cached, _graph_state, resume_value)
     else:
         if not catalog and terms:
             # loader 未注入时打警告：field_name_cn 无法映射到 field_code，将原样透传

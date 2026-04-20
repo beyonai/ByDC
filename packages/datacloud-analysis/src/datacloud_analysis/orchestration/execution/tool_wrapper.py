@@ -474,7 +474,7 @@ async def dispatch_tool(
         "knowledge_snippets": list(state.get("knowledge_snippets") or []),
         "term_context": list(state.get("confirmed_terms") or []),
         "knowledge_payload": dict(state.get("knowledge_payload") or {}),
-        "metadata": {"loader": loader},
+        "metadata": {"loader": loader, "state": state},
     }
 
     hook_manager = get_tool_hook_plugin_manager()
