@@ -458,6 +458,12 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             structured_input = {**tool_params, "complex_conditions": complex_conditions}
             is_compute = tool_name.startswith("compute_")
 
+            # ── 哨兵 1：即将发起 SDK 分析 ─────────────────────────────────────────
+            # 若恢复后此日志出现，说明恢复起点在 SDK 调用之前（错误）
+            logger.info(
+                "[query_clarification] PRE-INTERRUPT#1 calling analyze_clarification"
+                " — if this prints on resume, resume restarts before SDK call (WRONG)"
+            )
             paradigm_list, clarify_knowledge = _analyze_clarification(
                 query,
                 scope_code,
@@ -474,6 +480,12 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                     return _build_redirect_decision(tool_name, query, tool_params)
                 return {"action": "patch", "patch": {"tool_params": tool_params}}
 
+            # ── 哨兵 2：即将调用 interrupt() ──────────────────────────────────────
+            # 若恢复后此日志出现，说明恢复起点在 interrupt() 调用之前（错误）
+            logger.info(
+                "[query_clarification] PRE-INTERRUPT#2 about to call interrupt()"
+                " — if this prints on resume, resume restarts at/before interrupt() (WRONG)"
+            )
             resume_value = interrupt(
                 {
                     "prompt": "查询条件存在歧义，请确认查询维度",
@@ -483,17 +495,34 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 }
             )
 
+            # ── RESUME 确认点：恢复正确则只有此日志打印 ──────────────────────────
+            logger.info(
+                "[query_clarification] RESUME resume_value type=%s value=%s",
+                type(resume_value).__name__,
+                json.dumps(resume_value, ensure_ascii=False, default=str)[:800]
+                if resume_value is not None
+                else "None",
+            )
+
             # resume 后调 SDK format 写回参数
             knowledge = ""
             paradigm_list_from_resume: list[dict[str, Any]] = []
             if isinstance(resume_value, dict):
+                # paradigmList 来自顶层 paradigmList[0].paradigmList（含用户 choiceKeyword）
+                outer = resume_value.get("paradigmList") or []
+                if outer and isinstance(outer[0], dict):
+                    paradigm_list_from_resume = list(outer[0].get("paradigmList") or [])
+                # clarify_knowledge 来自 metadata.clarify_knowledge
                 meta = resume_value.get("metadata") or {}
                 knowledge = str(meta.get("clarify_knowledge") or "")
-                para_result = resume_value.get("paradigmResult") or []
-                if para_result and isinstance(para_result[0], dict):
-                    paradigm_list_from_resume = list(para_result[0].get("paradigmList") or [])
-                if not paradigm_list_from_resume:
-                    paradigm_list_from_resume = list(meta.get("paradigmList") or [])
+            # 兜底：metadata 中无 clarify_knowledge 时使用本轮 SDK 返回值
+            if not knowledge:
+                knowledge = clarify_knowledge
+            logger.info(
+                "[query_clarification] RESUME parsed: paradigm_list_count=%d knowledge_len=%d",
+                len(paradigm_list_from_resume),
+                len(knowledge),
+            )
 
             form_str = json.dumps({"paradigmList": paradigm_list_from_resume}, ensure_ascii=False)
             tool_params = _format_clarification(
@@ -502,6 +531,20 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 form_str,
                 knowledge,
                 is_compute=is_compute,
+            )
+            logger.info(
+                "[query_clarification] format_clarification args:"
+                " query=%s | is_compute=%s | knowledge=%s"
+                " | structured_input=%s | form_str=%s",
+                query[:200],
+                is_compute,
+                knowledge[:200],
+                json.dumps(structured_input, ensure_ascii=False, default=str)[:500],
+                form_str[:500],
+            )
+            logger.info(
+                "[query_clarification] format_clarification result: tool_params=%s",
+                json.dumps(tool_params, ensure_ascii=False, default=str)[:500],
             )
 
             # 兜底翻译：resume 后仍可能残留未命中的 field_name_cn（用户未选或选择为空）
