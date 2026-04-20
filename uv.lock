@@ -328,7 +328,7 @@ wheels = [
 
 [[package]]
 name = "by-datacloud"
-version = "0.1.8"
+version = "0.1.9"
 source = { virtual = "." }
 dependencies = [
     { name = "aiochclient", extra = ["aiohttp"] },
@@ -366,6 +366,7 @@ dependencies = [
     { name = "sqlparse" },
     { name = "strawberry-graphql", extra = ["fastapi"] },
     { name = "uvicorn" },
+    { name = "watchfiles" },
 ]
 
 [package.optional-dependencies]
@@ -433,6 +434,7 @@ requires-dist = [
     { name = "sqlparse", specifier = ">=0.5" },
     { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.260" },
     { name = "uvicorn", specifier = ">=0.32.0" },
+    { name = "watchfiles", specifier = ">=1.0" },
 ]
 provides-extras = ["dev"]
 
