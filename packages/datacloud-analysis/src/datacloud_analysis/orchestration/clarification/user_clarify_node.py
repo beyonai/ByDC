@@ -99,5 +99,7 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             "paradigm_list": paradigm_list,
         },
         "pending_clarification_context": None,
-        "clarification_analyze_result": None,
+        # clarification_analyze_result 保留（不清空）：
+        # before_call_back 在旧版 user_clarify_node 不写 paradigm_list 时需要兜底读取；
+        # analyze_clarify_node 下次运行时会覆盖。
     }

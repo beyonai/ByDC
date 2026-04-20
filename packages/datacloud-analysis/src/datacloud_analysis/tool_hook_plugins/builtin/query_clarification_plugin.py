@@ -614,6 +614,16 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 # 两步映射：keyword(用户原文) → choiceKeyword(SDK确认名) → fieldCode(catalog)
                 # SDK _format_clarification 返回 keyword（如"网格编码"），catalog 只有 choiceKeyword（如"企业所属物理网格编码"）
                 _paradigm_list_fp = list(_clarify_result.get("paradigm_list") or [])
+                # 兜底：若 clarification_formatted_params 不含 paradigm_list，尝试从 analyze_result 读
+                if not _paradigm_list_fp:
+                    _analyze_res = dict((_graph_state or {}).get("clarification_analyze_result") or {})
+                    _paradigm_list_fp = list(_analyze_res.get("paradigm_list") or [])
+                logger.info(
+                    "[query_clarification] V0.3 early-return DIAG:"
+                    " clarify_result_keys=%s paradigm_list_len=%d",
+                    sorted((_clarify_result or {}).keys()),
+                    len(_paradigm_list_fp),
+                )
                 if _paradigm_list_fp and _unresolved_fp:
                     _kw_map = _build_keyword_map_from_paradigm(_paradigm_list_fp, _catalog_fp)
                     if _kw_map:

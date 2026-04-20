@@ -105,7 +105,9 @@ async def test_tc2_3b_is_complex_true_in_formatted_params() -> None:
 
 
 async def test_tc2_8_state_keys_cleared_after_format() -> None:
-    """TC-2-8: 完成后 pending_clarification_context 和 clarification_analyze_result 清为 None。"""
+    """TC-2-8: 完成后 pending_clarification_context 清为 None；
+    clarification_analyze_result 保留供 before_call_back 兜底读取。
+    """
     state = _make_state()
 
     with (
@@ -117,8 +119,9 @@ async def test_tc2_8_state_keys_cleared_after_format() -> None:
     assert result.get("pending_clarification_context") is None, (
         "pending_clarification_context 应被清理"
     )
-    assert result.get("clarification_analyze_result") is None, (
-        "clarification_analyze_result 应被清理"
+    # clarification_analyze_result 不再清空（before_call_back 兜底需要它）
+    assert "clarification_analyze_result" not in result, (
+        "clarification_analyze_result 不应被 user_clarify_node 写入（保留原值）"
     )
 
 
