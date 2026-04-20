@@ -280,6 +280,32 @@ def _normalize_sort_key(item: dict[str, Any]) -> dict[str, Any]:
     return new_item
 
 
+def _build_keyword_map_from_paradigm(
+    paradigm_list: list[dict[str, Any]],
+    catalog: dict[str, str],
+) -> dict[str, str]:
+    """从 paradigm_list 构建 keyword → field_code 两步映射。
+
+    SDK _format_clarification 返回的 select/filter 值是原始 keyword（用户输入的短名），
+    而 catalog 只有 choiceKeyword（确认后的完整字段名）。
+    先用 keyword→choiceKeyword（来自 paradigm），再用 choiceKeyword→fieldCode（来自 catalog）。
+    """
+    keyword_map: dict[str, str] = {}
+    for paradigm in paradigm_list:
+        for item in list(paradigm.get("paradigmResult") or []):
+            if not isinstance(item, dict):
+                continue
+            keyword = str(item.get("keyword") or "").strip()
+            choice = str(item.get("choiceKeyword") or "").strip()
+            if not keyword or not choice or keyword == choice:
+                continue
+            # choice 可能已是 field_code（ASCII），也可能是中文 field_name → 走 catalog
+            field_code = catalog.get(choice) or (choice if _is_field_code(choice) else None)
+            if field_code:
+                keyword_map[keyword] = field_code
+    return keyword_map
+
+
 def _apply_resolved_to_params(
     tool_params: dict[str, Any],
     resolved: dict[str, str],
@@ -564,13 +590,49 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             _raw_query_fp = str((ctx.get("tool_params") or {}).get("query", "") or "")
             _fmt_params = dict(_clarify_result.get("params") or {})
             _is_complex_fp: bool = bool(_clarify_result.get("is_complex"))
+            logger.info(
+                "[query_clarification] V0.3 early-return DIAG: fmt_select=%s fmt_filters=%s",
+                _fmt_params.get("select"),
+                [f.get("field") for f in (_fmt_params.get("filters") or []) if isinstance(f, dict)],
+            )
             # SDK 回填可能含官方中文字段名，用 catalog 做二次翻译
             _catalog_fp = _get_field_catalog(tool_name, ctx)
+            logger.info(
+                "[query_clarification] V0.3 early-return DIAG: catalog_size=%d sample=%s",
+                len(_catalog_fp),
+                dict(list(_catalog_fp.items())[:10]),
+            )
             if _catalog_fp:
                 _terms_fp = _collect_terms_from_params(_fmt_params)
-                _resolved_fp, _ = _resolve_terms(_terms_fp, _catalog_fp)
+                _resolved_fp, _unresolved_fp = _resolve_terms(_terms_fp, _catalog_fp)
+                logger.info(
+                    "[query_clarification] V0.3 early-return DIAG: terms=%s resolved=%s unresolved=%s",
+                    _terms_fp,
+                    _resolved_fp,
+                    _unresolved_fp,
+                )
+                # 两步映射：keyword(用户原文) → choiceKeyword(SDK确认名) → fieldCode(catalog)
+                # SDK _format_clarification 返回 keyword（如"网格编码"），catalog 只有 choiceKeyword（如"企业所属物理网格编码"）
+                _paradigm_list_fp = list(_clarify_result.get("paradigm_list") or [])
+                if _paradigm_list_fp and _unresolved_fp:
+                    _kw_map = _build_keyword_map_from_paradigm(_paradigm_list_fp, _catalog_fp)
+                    if _kw_map:
+                        logger.info(
+                            "[query_clarification] V0.3 early-return DIAG: keyword_map=%s",
+                            _kw_map,
+                        )
+                        _resolved_fp = {**_kw_map, **_resolved_fp}
                 if _resolved_fp:
                     _fmt_params = _apply_resolved_to_params(_fmt_params, _resolved_fp)
+                    logger.info(
+                        "[query_clarification] V0.3 early-return DIAG: patched_select=%s patched_filters=%s",
+                        _fmt_params.get("select"),
+                        [
+                            f.get("field")
+                            for f in (_fmt_params.get("filters") or [])
+                            if isinstance(f, dict)
+                        ],
+                    )
             ctx["tool_params"] = _fmt_params
             if _is_complex_fp:
                 return _build_redirect_decision(tool_name, _raw_query_fp, _fmt_params)

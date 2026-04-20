@@ -65,14 +65,17 @@ def _make_state(
 
 # ── TC-2-2b: is_complex=False ─────────────────────────────────────────────────
 
+_INTERRUPT_PATCH = "datacloud_analysis.orchestration.clarification.user_clarify_node.interrupt"
+_FORMAT_PATCH = "datacloud_analysis.orchestration.clarification.user_clarify_node._format_clarification"
+
 
 async def test_tc2_2b_is_complex_false_in_formatted_params() -> None:
     """TC-2-2b: is_complex=False → clarification_formatted_params.is_complex=False。"""
     state = _make_state(is_complex=False)
 
-    with patch(
-        "datacloud_analysis.orchestration.clarification.user_clarify_node._format_clarification",
-        return_value=_FORMATTED_PARAMS,
+    with (
+        patch(_INTERRUPT_PATCH, return_value=None),
+        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
     ):
         result = await user_clarify_node(state, MagicMock())  # type: ignore[arg-type]
 
@@ -88,9 +91,9 @@ async def test_tc2_3b_is_complex_true_in_formatted_params() -> None:
     """TC-2-3b: is_complex=True → clarification_formatted_params.is_complex=True。"""
     state = _make_state(is_complex=True)
 
-    with patch(
-        "datacloud_analysis.orchestration.clarification.user_clarify_node._format_clarification",
-        return_value=_FORMATTED_PARAMS,
+    with (
+        patch(_INTERRUPT_PATCH, return_value=None),
+        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
     ):
         result = await user_clarify_node(state, MagicMock())  # type: ignore[arg-type]
 
@@ -105,9 +108,9 @@ async def test_tc2_8_state_keys_cleared_after_format() -> None:
     """TC-2-8: 完成后 pending_clarification_context 和 clarification_analyze_result 清为 None。"""
     state = _make_state()
 
-    with patch(
-        "datacloud_analysis.orchestration.clarification.user_clarify_node._format_clarification",
-        return_value=_FORMATTED_PARAMS,
+    with (
+        patch(_INTERRUPT_PATCH, return_value=None),
+        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
     ):
         result = await user_clarify_node(state, MagicMock())  # type: ignore[arg-type]
 
@@ -126,10 +129,10 @@ async def test_tc2_10_empty_resume_value_does_not_raise() -> None:
     """TC-2-10: resume_value 为空 → _format_clarification 接收空 form_str，不抛异常。"""
     state = _make_state(resume_value=None)
 
-    with patch(
-        "datacloud_analysis.orchestration.clarification.user_clarify_node._format_clarification",
-        return_value=_FORMATTED_PARAMS,
-    ) as mock_fmt:
+    with (
+        patch(_INTERRUPT_PATCH, return_value=None),
+        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS) as mock_fmt,
+    ):
         result = await user_clarify_node(state, MagicMock())  # type: ignore[arg-type]
 
     # _format_clarification 应被调用，第三参数为 "{}" 或空字符串

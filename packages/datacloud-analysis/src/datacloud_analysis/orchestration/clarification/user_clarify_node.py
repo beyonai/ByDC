@@ -31,6 +31,19 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
     clarify_knowledge = str(analyze_result.get("clarify_knowledge") or "")
     paradigm_list: list[dict[str, Any]] = list(analyze_result.get("paradigm_list") or [])
 
+    # DIAG: 记录 paradigm 结构（首个条目）以核查 choiceKeyword/recall 格式
+    if paradigm_list:
+        _sample = paradigm_list[0]
+        _results = list(_sample.get("paradigmResult") or [])
+        logger.info(
+            "[user_clarify] DIAG paradigm[0]: paradigmId=%s paradigmName=%s result_count=%d "
+            "first_result=%s",
+            _sample.get("paradigmId"),
+            _sample.get("paradigmName"),
+            len(_results),
+            _results[0] if _results else None,
+        )
+
     if not paradigm_list:
         # _route_after_analyze 已将空 paradigm_list 路由到 tool_dispatcher；
         # 此分支仅为安全兜底，使用 pre_filled_params 直接返回。
@@ -82,6 +95,8 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             "tool_name": tool_name,
             "is_complex": is_compute,
             "params": formatted_params,
+            # paradigm_list 保存供 V0.3 早返回做 keyword→choiceKeyword→fieldCode 两步翻译
+            "paradigm_list": paradigm_list,
         },
         "pending_clarification_context": None,
         "clarification_analyze_result": None,
