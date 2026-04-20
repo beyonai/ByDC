@@ -1,6 +1,8 @@
 """TC-1 ~ TC-3: _analyze_clarification 缓存命中/未命中验收（方案A State 缓存）。
 
 对应《恢复中断优化方案》§5：推荐方案详细设计。
+
+V0.1 方案 A（已废弃，仅供历史参考）——V0.3 改用 ClarificationNeededError 替代 interrupt()。
 """
 
 from __future__ import annotations
@@ -86,6 +88,9 @@ def _params_with_unresolvable_term() -> dict[str, Any]:
 # ── TC-1：CACHE MISS → SDK 被调用，缓存在 interrupt 前写入 state ──────────────
 
 
+@pytest.mark.skip(
+    reason="V0.1->V0.3: before_call_back now raises ClarificationNeededError instead of interrupt()"
+)
 @pytest.mark.asyncio
 async def test_TC1_cache_miss_sdk_called_and_cache_written_before_interrupt() -> None:
     """TC-1: state 无缓存 → _analyze_clarification 被调用 1 次，interrupt 前缓存已写入 state。"""
@@ -147,6 +152,9 @@ _FULL_CACHE: dict[str, Any] = {
 }
 
 
+@pytest.mark.skip(
+    reason="V0.1->V0.3: _clarification_cache scheme replaced by ClarificationNeededError"
+)
 @pytest.mark.asyncio
 async def test_TC2_cache_hit_full_skip() -> None:
     """TC-2: state 已有完整缓存 → _analyze_clarification 和 _get_field_catalog 均不被调用。
@@ -197,6 +205,9 @@ async def test_TC2_cache_hit_full_skip() -> None:
 # ── TC-3：format 完成后缓存从 state 清除 ─────────────────────────────────────
 
 
+@pytest.mark.skip(
+    reason="V0.1->V0.3: _clarification_cache scheme replaced by ClarificationNeededError"
+)
 @pytest.mark.asyncio
 async def test_TC3_cache_cleared_after_format_clarification() -> None:
     """TC-3: format_clarification 完成后，state 中的 _clarification_cache 被清除。"""

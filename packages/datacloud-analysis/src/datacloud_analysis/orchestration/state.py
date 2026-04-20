@@ -93,6 +93,17 @@ class AgentState(MessagesState):
     # interrupt 前写入，resume 后 format 完成时清除，避免 _analyze_clarification 被重复调用。
     _clarification_cache: dict[str, Any] | None
 
+    # --- V0.3 Tool-as-Node：阶段 1 ReAct 内部消息日志 ---
+    # llm_call_node 每轮追加 AIMessage（序列化），tool_dispatcher_node 追加 ToolMessage。
+    # 通过正常 return 提交 → LangGraph checkpoint 自动持久化。
+    # interrupt() 重跑 tool_dispatcher_node 时从 checkpoint 读取，不重调 LLM。
+    react_messages_log: list[dict[str, Any]] | None
+
+    # --- V0.3 Tool-as-Node：阶段 2 澄清子流程状态 ---
+    pending_clarification_context: dict[str, Any] | None
+    clarification_analyze_result: dict[str, Any] | None
+    clarification_formatted_params: dict[str, Any] | None
+
 
 StateDict = MutableMapping[str, Any]
 

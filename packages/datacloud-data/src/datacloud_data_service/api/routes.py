@@ -135,101 +135,36 @@ def create_app(
 
     @asynccontextmanager
     async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
-        from datacloud_data_sdk.ontology.loader import OntologyLoader
-
         from datacloud_data_service.config import get_settings
-        from datacloud_data_service.file_storage import build_result_file_storage
+        from datacloud_data_service.loader_runtime import LoaderRuntimeManager
 
         settings = get_settings()
-        if loader_override is not None:
-            loader = loader_override
-            logger.info("Using loader_override for OntologyLoader")
-        else:
-            loader = OntologyLoader()
-
-            from datacloud_data_sdk.ontology.term_loader import TermLoader
-
-            logger.info("Configured TermLoader")
-            term_loader = TermLoader.from_config({})
-            loader.configure(term_loader=term_loader)
-            ontology_path = Path(settings.ontology_path)
-            if ontology_path.exists():
-                loader.load_from_owl_directory(ontology_path)
-                logger.info("Loaded ontology from %s", ontology_path)
-            result_file_storage = build_result_file_storage(settings)
-            loader.configure(result_file_storage=result_file_storage)
-
-            # scene_path = Path(settings.scene_path)
-            # if scene_path.exists():
-            #     loader.load_scene_from_path(scene_path)
-            #     logger.info("Loaded scene from %s", scene_path)
-
-        from datacloud_data_service.tools.virtual_action_injector import (
-            inject_virtual_actions,
+        runtime = LoaderRuntimeManager(
+            settings=settings,
+            datasource_configs=datasource_configs,
+            loader_override=loader_override,
+            performance_handler_factory=_make_performance_log_handler,
+            on_publish=lambda snapshot: _sync_app_loader(app, snapshot),
         )
-
-        inject_virtual_actions(loader)
-        logger.info("Injected virtual actions for DB/KB objects")
-
-        if settings.llm_api_key:
-            try:
-                from datacloud_data_sdk.plan.query_plan_generator import LangGraphPlanGenerator
-
-                plan_gen = LangGraphPlanGenerator(
-                    model=settings.llm_model,
-                    base_url=settings.llm_api_base,
-                    api_key=settings.llm_api_key,
-                    temperature=settings.llm_temperature,
-                    max_retries=settings.max_plan_retries,
-                )
-                loader.configure(plan_generator=plan_gen)
-                logger.info("Configured LangGraphPlanGenerator with model=%s", settings.llm_model)
-            except ImportError as e:
-                logger.warning(
-                    "langchain-openai not installed, LLM plan generation disabled: %s",
-                    e,
-                    exc_info=True,
-                )
-        else:
-            logger.warning("DATACLOUD_LLM_API_KEY not set, LLM plan generation disabled")
-
-        # configs = datasource_configs if datasource_configs is not None else _build_datasource_configs(settings)
-        # if configs:
-        #     loader.configure(datasource_configs=configs)
-
-        from datacloud_data_sdk.events.bus import EventBus
-        from datacloud_data_sdk.events.handlers import register_query_handlers
-        from datacloud_data_sdk.events.trace_logger import EventTraceLogger
-        from datacloud_data_sdk.events.tracing import TracingMiddleware
-
-        bus = EventBus()
-        tracing = TracingMiddleware(bus)
-        perf_handler, _ = _make_performance_log_handler()
-        tracing.on_span_complete(perf_handler)
-        register_query_handlers(bus, tracing=tracing)
-        if settings.trace_enabled:
-            trace_logger = EventTraceLogger(
-                trace_log_path=settings.trace_log_path,
-                enabled=True,
-            )
-            trace_logger.register(bus)
-        loader.configure(event_bus=bus)
-
-        app.state.event_bus = bus  # 供测试在替换 loader 时注入 event_bus
-        loader.configure(csv_base_dir=settings.csv_base_dir)
-        loader.configure(sql_execution_mode=settings.sql_execution_mode)
-        loader.configure(
-            query_result_csv_threshold=settings.query_result_csv_threshold,
-            query_result_preview_rows=settings.query_result_preview_rows,
-        )
+        await runtime.start()
+        loader = runtime.current_loader
+        app.state.loader_runtime = runtime
         app.state.loader = loader
-        logger.info("OntologyLoader initialized and stored in app.state")
+        app.state.event_bus = getattr(getattr(loader, "_config", None), "event_bus", None)
+        logger.info("OntologyLoader runtime initialized and stored in app.state")
 
-        from datacloud_data_service.api.mcp_sdk_handler import set_loader_ref
+        from datacloud_data_service.api.mcp_sdk_handler import (
+            set_loader_ref,
+            set_loader_runtime_ref,
+        )
 
-        set_loader_ref(lambda: app.state.loader)
+        set_loader_runtime_ref(lambda: getattr(app.state, "loader_runtime", None))
+        set_loader_ref(lambda: getattr(app.state, "loader", None))
         async with _mcp_session_manager.run():
-            yield
+            try:
+                yield
+            finally:
+                await runtime.stop()
 
     app = FastAPI(title="DataCloud Data Service", version="0.1.0", lifespan=_lifespan)
 
@@ -294,6 +229,13 @@ def create_app(
     async def health_v1() -> dict:
         return await _health_handler()
 
+    @app.get("/api/v1/loader/status")
+    async def loader_status() -> dict:
+        runtime = getattr(app.state, "loader_runtime", None)
+        if runtime is None:
+            return {"initialized": getattr(app.state, "loader", None) is not None}
+        return runtime.status()
+
     app.mount("/api/v1/mcp", _mcp_asgi_app)
 
     from datacloud_data_service.api.query import router as query_router
@@ -334,3 +276,8 @@ def create_app(
         )
 
     return app
+
+
+def _sync_app_loader(app: FastAPI, snapshot: Any) -> None:
+    app.state.loader = snapshot.loader
+    app.state.event_bus = getattr(getattr(snapshot.loader, "_config", None), "event_bus", None)

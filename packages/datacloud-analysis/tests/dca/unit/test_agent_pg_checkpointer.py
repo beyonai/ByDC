@@ -17,8 +17,12 @@ def test_create_agent_returns_compiled_graph() -> None:
     assert graph is not None
     nodes = list(graph.get_graph().nodes.keys())
     assert "intend" in nodes
-    assert "execution" in nodes
+    # V0.3: execution split into llm_call + tool_dispatcher + finish_react
+    assert "llm_call" in nodes
+    assert "tool_dispatcher" in nodes
+    assert "finish_react" in nodes
     assert "respond" in nodes
+    assert "execution" not in nodes
 
 
 def test_get_checkpointer_raises_when_uri_missing(monkeypatch: pytest.MonkeyPatch) -> None:

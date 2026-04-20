@@ -16,12 +16,18 @@ from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import Resource, TextContent, Tool
 from starlette.types import Message, Receive, Scope, Send
 
+from datacloud_data_service.loader_runtime import (
+    LoaderSnapshot,
+    build_external_snapshot,
+)
+
 logger = logging.getLogger(__name__)
 
 _SENSITIVE_HEADERS = frozenset({"authorization", "cookie", "set-cookie", "x-api-key"})
 
 # 由 routes lifespan 注入，用于在 MCP handler 中获取 loader
 _loader_ref: Any = None
+_loader_runtime_ref: Any = None
 
 
 def set_loader_ref(ref: Any) -> None:
@@ -30,9 +36,38 @@ def set_loader_ref(ref: Any) -> None:
     _loader_ref = ref
 
 
+def set_loader_runtime_ref(ref: Any) -> None:
+    """设置 loader runtime 引用，供 list_tools/call_tool 动态刷新。"""
+    global _loader_runtime_ref
+    _loader_runtime_ref = ref
+
+
 def _get_loader():
     loader = _loader_ref() if callable(_loader_ref) else _loader_ref
     return loader
+
+
+def _get_loader_runtime():
+    runtime = _loader_runtime_ref() if callable(_loader_runtime_ref) else _loader_runtime_ref
+    return runtime
+
+
+async def _get_loader_snapshot(reason: str) -> LoaderSnapshot | None:
+    runtime = _get_loader_runtime()
+    legacy_loader = _get_loader()
+    if runtime is not None:
+        snapshot = await runtime.ensure_fresh(reason)
+        if (
+            snapshot is not None
+            and legacy_loader is not None
+            and legacy_loader is not snapshot.loader
+            and not runtime.owns_loader(legacy_loader)
+        ):
+            return build_external_snapshot(legacy_loader)
+        return snapshot
+    if legacy_loader is None:
+        return None
+    return build_external_snapshot(legacy_loader)
 
 
 def _parse_csv_header(raw: str) -> list[str]:
@@ -131,9 +166,10 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
     async def list_tools() -> list[Tool]:
         """动态返回工具列表，基于 OntologyLoader。"""
         try:
-            loader = _get_loader()
-            if loader is None:
+            snapshot = await _get_loader_snapshot("mcp_tools_list")
+            if snapshot is None:
                 return [_unified_query_tool_fallback()]
+            loader = snapshot.loader
             from datacloud_data_sdk.context import get_current_context
 
             from datacloud_data_service.tools.registry import ToolRegistry
@@ -167,8 +203,8 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
         try:
             tool_arguments = arguments or {}
             _log_tool_call(name, tool_arguments)
-            loader = _get_loader()
-            if loader is None:
+            snapshot = await _get_loader_snapshot("mcp_tools_call")
+            if snapshot is None:
                 return [
                     TextContent(
                         type="text",
@@ -177,6 +213,7 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
                         ),
                     )
                 ]
+            loader = snapshot.loader
 
             if name == "unified_data_query":
                 from datacloud_data_service.tools.unified_query import UnifiedQuery
@@ -191,7 +228,7 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
                 text = _unwrap_sdk_payload_text(result)
                 return [TextContent(type="text", text=text)]
 
-            scope = _find_action_scope(loader, name)
+            scope = _find_action_scope(loader, name, snapshot=snapshot)
             if scope is None:
                 return [
                     TextContent(
@@ -275,7 +312,12 @@ def _find_action_object(loader: Any, action_code: str) -> str | None:
     return None
 
 
-def _find_action_scope(loader: Any, action_code: str) -> tuple[str, str] | None:
+def _find_action_scope(
+    loader: Any,
+    action_code: str,
+    *,
+    snapshot: LoaderSnapshot | None = None,
+) -> tuple[str, str] | None:
     """
     查找 action_code 对应的 (scope_type, scope_code)。
 
@@ -284,6 +326,11 @@ def _find_action_scope(loader: Any, action_code: str) -> tuple[str, str] | None:
     2. 对象动作遍历（兼容非虚拟动作）
     3. 视图动作遍历
     """
+    if snapshot is not None:
+        route_ref = snapshot.action_routes.get(action_code)
+        if route_ref is not None:
+            return route_ref.scope_type, route_ref.scope_code
+
     # 1. 优先查 VirtualActionRegistry
     try:
         from datacloud_data_sdk.virtual_action.registry import get_registry
