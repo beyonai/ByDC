@@ -22,7 +22,6 @@ from datacloud_analysis.orchestration.execution.llm_retry import _build_fallback
 from datacloud_analysis.orchestration.execution.react_loop import (
     _build_llm,
     _build_system_message,
-    _conversation_messages_for_llm,
     _invoke_llm_with_fallback,
     _trim_messages_window,
     finish_react,
