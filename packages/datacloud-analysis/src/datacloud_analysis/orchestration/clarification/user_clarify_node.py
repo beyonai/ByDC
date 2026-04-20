@@ -31,6 +31,19 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
     clarify_knowledge = str(analyze_result.get("clarify_knowledge") or "")
     paradigm_list: list[dict[str, Any]] = list(analyze_result.get("paradigm_list") or [])
 
+    # DIAG: 记录 paradigm 结构（首个条目）以核查 choiceKeyword/recall 格式
+    if paradigm_list:
+        _sample = paradigm_list[0]
+        _results = list(_sample.get("paradigmResult") or [])
+        logger.info(
+            "[user_clarify] DIAG paradigm[0]: paradigmId=%s paradigmName=%s result_count=%d "
+            "first_result=%s",
+            _sample.get("paradigmId"),
+            _sample.get("paradigmName"),
+            len(_results),
+            _results[0] if _results else None,
+        )
+
     if not paradigm_list:
         # _route_after_analyze 已将空 paradigm_list 路由到 tool_dispatcher；
         # 此分支仅为安全兜底，使用 pre_filled_params 直接返回。
@@ -65,7 +78,14 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
         type(resume_value).__name__,
     )
 
-    form_str = json.dumps(resume_value, ensure_ascii=False) if resume_value is not None else "{}"
+    # resume_value 结构：{"paradigmList": [{"paradigmList": [...items...], ...}]}
+    # _format_clarification 期望：{"paradigmList": [...items...]}（一层展开）
+    paradigm_list_from_resume: list[dict[str, Any]] = []
+    if isinstance(resume_value, dict):
+        outer = list(resume_value.get("paradigmList") or [])
+        if outer and isinstance(outer[0], dict):
+            paradigm_list_from_resume = list(outer[0].get("paradigmList") or [])
+    form_str = json.dumps({"paradigmList": paradigm_list_from_resume}, ensure_ascii=False)
 
     formatted_params: dict[str, Any] = _format_clarification(
         query,
@@ -82,7 +102,11 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             "tool_name": tool_name,
             "is_complex": is_compute,
             "params": formatted_params,
+            # paradigm_list 保存供 V0.3 早返回做 keyword→choiceKeyword→fieldCode 两步翻译
+            "paradigm_list": paradigm_list,
         },
         "pending_clarification_context": None,
-        "clarification_analyze_result": None,
+        # clarification_analyze_result 保留（不清空）：
+        # before_call_back 在旧版 user_clarify_node 不写 paradigm_list 时需要兜底读取；
+        # analyze_clarify_node 下次运行时会覆盖。
     }
