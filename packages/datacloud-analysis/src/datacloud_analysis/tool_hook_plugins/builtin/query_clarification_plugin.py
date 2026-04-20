@@ -486,7 +486,6 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             # resume 后调 SDK format 写回参数
             knowledge = ""
             paradigm_list_from_resume: list[dict[str, Any]] = []
-            paradigm_list_from_resume: list[dict[str, Any]] = []
             if isinstance(resume_value, dict):
                 meta = resume_value.get("metadata") or {}
                 knowledge = str(meta.get("clarify_knowledge") or "")
@@ -497,17 +496,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                     paradigm_list_from_resume = list(meta.get("paradigmList") or [])
 
             form_str = json.dumps({"paradigmList": paradigm_list_from_resume}, ensure_ascii=False)
-                meta = resume_value.get("metadata") or {}
-                knowledge = str(meta.get("clarify_knowledge") or "")
-                para_result = resume_value.get("paradigmResult") or []
-                if para_result and isinstance(para_result[0], dict):
-                    paradigm_list_from_resume = list(para_result[0].get("paradigmList") or [])
-                if not paradigm_list_from_resume:
-                    paradigm_list_from_resume = list(meta.get("paradigmList") or [])
-
-            form_str = json.dumps({"paradigmList": paradigm_list_from_resume}, ensure_ascii=False)
             tool_params = _format_clarification(
-                query,
                 query,
                 structured_input,
                 form_str,
