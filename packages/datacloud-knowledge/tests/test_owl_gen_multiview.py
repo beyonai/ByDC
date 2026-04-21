@@ -5,6 +5,7 @@ from pathlib import Path
 
 from datacloud_knowledge.owl_gen.generator import generate_from_tables
 from datacloud_knowledge.owl_gen.models import (
+    Column,
     FieldRole,
     ObjectRelation,
     OwlGenConfig,
@@ -20,7 +21,7 @@ from datacloud_knowledge.owl_gen.renderers.ontology import (
     render_view_mapping,
 )
 from datacloud_knowledge.owl_gen.renderers.relations import render_relation_view
-from datacloud_knowledge.owl_gen.renderers.terms import render_terms
+from datacloud_knowledge.owl_gen.renderers.terms import render_terms, render_terms_for_view
 
 
 def _build_config() -> OwlGenConfig:
@@ -189,6 +190,48 @@ def test_render_terms_emits_one_term_per_view() -> None:
     assert "term_view_scene_grid_analysis" in ontology_terms
 
 
+def test_render_terms_dedupes_props_across_objects_with_generic_desc() -> None:
+    config = _build_config()
+    tables = [
+        Table(
+            code="ads_enterprise_analysis",
+            name="企业综合分析表",
+            desc="企业",
+            columns=[
+                Column(
+                    name="enterprise_id",
+                    sql_type="varchar",
+                    nullable=False,
+                    comment="企业唯一 ID",
+                )
+            ],
+        ),
+        Table(
+            code="ads_grid_analysis",
+            name="物理网格综合分析表",
+            desc="网格",
+            columns=[
+                Column(
+                    name="enterprise_id",
+                    sql_type="varchar",
+                    nullable=False,
+                    comment="网格企业 ID",
+                )
+            ],
+        ),
+    ]
+
+    result = render_terms(config, tables, {}, OrderedDict())
+
+    ontology_terms, count = result["terms/terms_ontology.owl"]
+
+    assert count == 7
+    assert ontology_terms.count("term_prop_enterprise_id") == 1
+    assert "属性：企业唯一 ID" in ontology_terms
+    assert "企业综合分析表的字段" not in ontology_terms
+    assert "物理网格综合分析表的字段" not in ontology_terms
+
+
 def test_resolved_views_wraps_legacy_single_view_fields() -> None:
     config = OwlGenConfig(
         domain_code="D1",
@@ -253,3 +296,78 @@ def test_generate_from_tables_writes_per_view_files(tmp_path: Path) -> None:
         tmp_path / "view" / "scene_grid_analysis" / "scene_grid_analysis_definition.owl"
     ).exists()
     assert (tmp_path / "view" / "scene_grid_analysis" / "scene_grid_analysis_terms.owl").exists()
+
+
+def test_generate_from_tables_skips_duplicate_props_in_later_objects(tmp_path: Path) -> None:
+    config = _build_config()
+    config.output_dir = tmp_path
+    tables = [
+        Table(
+            code="ads_enterprise_analysis",
+            name="企业综合分析表",
+            desc="企业",
+            columns=[
+                Column(
+                    name="enterprise_id",
+                    sql_type="varchar",
+                    nullable=False,
+                    comment="企业唯一 ID",
+                )
+            ],
+        ),
+        Table(
+            code="ads_grid_analysis",
+            name="物理网格综合分析表",
+            desc="网格",
+            columns=[
+                Column(
+                    name="enterprise_id",
+                    sql_type="varchar",
+                    nullable=False,
+                    comment="网格企业 ID",
+                )
+            ],
+        ),
+    ]
+
+    generate_from_tables(config, tables, {})
+
+    first_terms = (
+        tmp_path / "object" / "ads_enterprise_analysis" / "ads_enterprise_analysis_terms.owl"
+    ).read_text()
+    second_terms = (
+        tmp_path / "object" / "ads_grid_analysis" / "ads_grid_analysis_terms.owl"
+    ).read_text()
+
+    assert "term_prop_enterprise_id" in first_terms
+    assert "属性：企业唯一 ID" in first_terms
+    assert "term_prop_enterprise_id" not in second_terms
+
+
+def test_render_terms_for_view_emits_prop_synonyms_for_aliases() -> None:
+    config = _build_config()
+    config.views = [
+        ViewConfig(
+            view_code="scene_enterprise_analysis",
+            view_name="企业综合分析视图",
+            view_desc="企业视图",
+            object_codes=["ads_enterprise_analysis"],
+            field_mappings=[
+                ViewFieldMapping(
+                    property_code="enterprise_id",
+                    property_name="企业综合分析视图企业 ID",
+                    source_object_code="ads_enterprise_analysis",
+                    source_object_column_code="enterprise_id",
+                    role=FieldRole("DIMENSION_ATTR", "id"),
+                    synonyms=["企业综合分析视图企业 ID"],
+                )
+            ],
+        )
+    ]
+
+    result, count = render_terms_for_view(config, config.views[0])
+
+    assert count == 2
+    assert "term_prop_enterprise_id" in result
+    assert '<synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">' in result
+    assert "企业综合分析视图企业 ID" in result
