@@ -407,45 +407,6 @@ class DataCloudWorker(GatewayWorker):
         """Compatibility method required by by_framework GatewayWorker abstract API."""
         return self.get_capabilities()
 
-    def _load_skill_capabilities(self, *, user_id: str, task_id: str) -> dict[str, Any]:
-        """Load task-scoped skills and expose awaitable wrappers with policy metadata."""
-        from datacloud_analysis.workspace.paths import build_task_paths
-        from datacloud_analysis.workspace.skills_loader import SkillLoader
-
-        task_paths = build_task_paths(user_id=user_id, task_id=task_id)
-        registry = SkillLoader(task_paths).load_all()
-        capabilities: dict[str, Any] = {}
-
-        def _wrap_skill(fn: Any) -> Any:
-            async def _wrapped(**params: Any) -> Any:
-                result = fn(**params)
-                if asyncio.iscoroutine(result):
-                    return await result
-                return result
-
-            return _wrapped
-
-        for name, entry in registry.items():
-            run_fn = entry.get("run")
-            if not callable(run_fn):
-                continue
-            wrapped = _wrap_skill(run_fn)
-            raw_meta = entry.get("meta")
-            meta = raw_meta if isinstance(raw_meta, dict) else {}
-            setattr(wrapped, "_skill_risk_level", str(meta.get("risk_level") or "medium"))
-            setattr(
-                wrapped,
-                "_skill_allowlist_tags",
-                [str(tag) for tag in (meta.get("allowlist_tags") or []) if str(tag).strip()],
-            )
-            setattr(
-                wrapped,
-                "_skill_blocklist_tags",
-                [str(tag) for tag in (meta.get("blocklist_tags") or []) if str(tag).strip()],
-            )
-            capabilities[str(name)] = wrapped
-        return capabilities
-
     async def _emit_6001(self, context: AgentContext, payload: dict[str, Any]) -> None:
         """Emit one structured data-table JSON chunk (content_type=6001)."""
         data_table_type = getattr(SseMessageType, "data_table_json", None)

@@ -3,7 +3,6 @@
 Tool              Module          Design symbol
 -------           ------          -------------
 search_knowledge  knowledge       T_KNOW_SEARCH
-build_skill       skill           T_SKILL_BUILD
 render_report     report          T_REPORT
 
 Memory tools (recall_memory, search_memory, read_memory) live in
@@ -21,10 +20,8 @@ File I/O tools (read_file, write_file) and code execution tools
 
 from .knowledge import search_knowledge
 from .report import render_report
-from .skill import build_skill
 
 __all__ = [
     "search_knowledge",
-    "build_skill",
     "render_report",
 ]
