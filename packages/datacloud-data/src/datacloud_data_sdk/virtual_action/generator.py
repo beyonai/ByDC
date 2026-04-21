@@ -281,6 +281,8 @@ def build_query_schema(
     scope_name: str,
     fields: list[Any],
     required_filter_groups: list[str] | None = None,
+    scope_type: str = "object",
+    scope_code: str | None = None,
 ) -> dict[str, Any]:
     """生成 query_ontology 动作 inputSchema（field 统一使用属性编码）。
 
@@ -295,31 +297,19 @@ def build_query_schema(
     required_groups = required_filter_groups or []
     required_hint = f"；强制过滤字段：{', '.join(required_groups)}" if required_groups else ""
 
+    scope_label = "对象" if scope_type == "object" else "视图"
     schema: dict[str, Any] = {
         "type": "object",
-        "description": f"查询 {scope_name} 明细数据（field 统一使用属性编码）{required_hint}",
+        "additionalProperties": False,
+        "description": (
+            f"查询{scope_label}{scope_name}的明细记录。"
+            "select、filters.field、order_by.field 只能填写当前工具列出的属性编码。"
+            "适合查记录列表，不适合做统计汇总。"
+            f"{required_hint}"
+        ),
+        "x-dc-action-family": "query",
+        "x-dc-scope-type": scope_type,
         "properties": {
-            "query": {
-                "type": "string",
-                "description": (
-                    "【必填】用户原始查询意图的完整自然语言描述。"
-                    "用于歧义判断、复杂查询路由及参数缺失时的兜底推断。"
-                    "不得为空，不得使用通配符代替。"
-                ),
-            },
-            "complex_conditions": {
-                "type": "array",
-                "items": {"type": "string"},
-                "default": [],
-                "description": (
-                    "溢出过滤区：满足以下条件时，必须将该条件用自然语言写入此列表：\n"
-                    "1. 过滤条件的值无法在填参时确定为字面常量（如'后30%'、'高于行业平均'）。\n"
-                    "2. 字段名未命中不是此列表的适用场景，不写入此列表；field 参数仍需使用属性编码。\n"
-                    "例如：'亩产效益后30%的地块'、'营收高于行业平均'。\n"
-                    "能写成字面值的过滤条件仍放入 filters；"
-                    "此列表非空时系统自动路由到全能查询路径（data_query）。"
-                ),
-            },
             "select": {
                 "type": "array",
                 "items": {"type": "string", "enum": [_fc(f) for f in queryable]},
@@ -338,6 +328,7 @@ def build_query_schema(
                 "description": "排序规则（field 统一填写属性编码）",
                 "items": {
                     "type": "object",
+                    "additionalProperties": False,
                     "properties": {
                         "field": _field_code_enum_property(
                             queryable,
@@ -357,9 +348,10 @@ def build_query_schema(
             "offset": {"type": "integer", "minimum": 0, "default": 0},
         },
     }
+    if scope_code:
+        schema["x-dc-scope-code"] = scope_code
     if required_groups:
         schema["x-dc-required-filter-group"] = required_groups
-    schema["required"] = ["query"]
     return schema
 
 
@@ -379,10 +371,20 @@ def build_query_description(
     if scope_description:
         lines.append(scope_description)
         lines.append("")
-    lines.append(
-        f"按条件查询{scope_name}明细。**select / filters.field / order_by.field 统一使用属性编码（如 `total_revenue`）**；"
-        f"支持字段过滤、排序、分页；不支持聚合统计。{req_hint}"
-    )
+    if scope_type == "view":
+        lines.append(
+            f"按条件查询视图{scope_name}的明细结果。"
+            "**select / filters.field / order_by.field 统一使用视图属性编码**；"
+            "适合在已经定义好的视图口径下查看列表结果，不适合做聚合统计。"
+            f"{req_hint}"
+        )
+    else:
+        lines.append(
+            f"按条件查询对象{scope_name}的明细记录。"
+            "**select / filters.field / order_by.field 统一使用对象属性编码**；"
+            "支持字段过滤、排序、分页；不支持聚合统计。"
+            f"{req_hint}"
+        )
     lines.append("")
     lines.append(
         "**何时使用**：查看具体记录列表时使用；不适用于统计汇总，如需统计请用 compute 动作。"
@@ -405,11 +407,6 @@ def build_query_description(
     lines.append("- 将中文名、口语词或模糊概念猜测替换为相近属性编码")
     lines.append("- 在 `select`、`filters.field`、`order_by.field` 中使用中文名而不是属性编码")
     lines.append("- order_by 中用了 sort/op/order 键名，应统一使用 direction")
-    lines.append(
-        "- 过滤条件的值无法确定为字面常量（如'后30%'、'高于平均'）时，"
-        "忘记放入 complex_conditions，导致系统无法路由到全能查询"
-    )
-    lines.append("- query 字段为空或未填写（query 为必填项，不可省略）")
     if req_groups:
         lines.append("- 缺少账期（period）过滤条件")
 
@@ -423,6 +420,8 @@ def build_compute_schema(
     scope_name: str,
     fields: list[Any],
     required_filter_groups: list[str] | None = None,
+    scope_type: str = "object",
+    scope_code: str | None = None,
 ) -> dict[str, Any]:
     """生成 compute_ontology 动作 inputSchema（field 统一使用属性编码）。
 
@@ -526,30 +525,19 @@ def build_compute_schema(
     required_groups = required_filter_groups or []
     required_hint = f"；强制过滤字段：{', '.join(required_groups)}" if required_groups else ""
 
+    scope_label = "对象" if scope_type == "object" else "视图"
     schema: dict[str, Any] = {
         "type": "object",
-        "description": f"统计分析 {scope_name}（field 统一使用属性编码）{required_hint}",
+        "additionalProperties": False,
+        "description": (
+            f"对{scope_label}{scope_name}执行分组统计。"
+            "dimensions.field、metrics.field、filters.field 只能填写当前工具列出的属性编码。"
+            "必须至少提供一个 metrics；如需看明细，请改用 query 动作。"
+            f"{required_hint}"
+        ),
+        "x-dc-action-family": "compute",
+        "x-dc-scope-type": scope_type,
         "properties": {
-            "query": {
-                "type": "string",
-                "description": (
-                    "【必填】用户原始查询意图的完整自然语言描述。"
-                    "用于歧义判断、复杂查询路由及参数缺失时的兜底推断。"
-                    "不得为空，不得使用通配符代替。"
-                ),
-            },
-            "complex_conditions": {
-                "type": "array",
-                "items": {"type": "string"},
-                "default": [],
-                "description": (
-                    "溢出过滤区：满足以下条件时，必须将该条件用自然语言写入此列表：\n"
-                    "1. 过滤条件的值无法在填参时确定为字面常量（如'后30%'、'高于行业平均'）。\n"
-                    "例如：'亩产效益后30%的地块'、'营收高于行业平均'。\n"
-                    "能写成字面值的过滤条件仍放入 filters；"
-                    "此列表非空时系统自动路由到全能查询路径（data_query）。"
-                ),
-            },
             "dimensions": {
                 "type": "array",
                 "description": "分组维度（field 统一填写属性编码；时间类须指定粒度；range 须带 buckets）",
@@ -589,6 +577,7 @@ def build_compute_schema(
                 "description": "聚合后过滤；field 必须是 metrics 中某项的 as 别名",
                 "items": {
                     "type": "object",
+                    "additionalProperties": False,
                     "properties": {
                         "field": {"type": "string", "description": "metrics.as 别名"},
                         "op": {
@@ -615,6 +604,7 @@ def build_compute_schema(
                 "description": "排序（field 可以是 metrics.as 别名或维度属性编码）",
                 "items": {
                     "type": "object",
+                    "additionalProperties": False,
                     "properties": {
                         "field": {"type": "string"},
                         "direction": {
@@ -636,9 +626,10 @@ def build_compute_schema(
         },
         "required": ["metrics"],
     }
+    if scope_code:
+        schema["x-dc-scope-code"] = scope_code
     if required_groups:
         schema["x-dc-required-filter-group"] = required_groups
-    schema["required"] = ["metrics", "query"]
     return schema
 
 
@@ -658,10 +649,18 @@ def build_compute_description(
     if scope_description:
         lines.append(scope_description)
         lines.append("")
-    lines.append(
-        f"按规则对{scope_name}做分组统计。**dimensions.field / metrics.field / filters.field 统一使用属性编码（如 `total_revenue`）**；"
-        f"支持 dimensions + metrics + filters；不支持明细输出。{req_hint}{view_hint}"
-    )
+    if scope_type == "view":
+        lines.append(
+            f"按规则对视图{scope_name}做分组统计。"
+            "**dimensions.field / metrics.field / filters.field 统一使用视图属性编码**；"
+            f"适合跨对象口径下的聚合分析，不适合明细输出。{req_hint}{view_hint}"
+        )
+    else:
+        lines.append(
+            f"按规则对对象{scope_name}做分组统计。"
+            "**dimensions.field / metrics.field / filters.field 统一使用对象属性编码**；"
+            f"支持 dimensions + metrics + filters；不适合直接查看明细。{req_hint}{view_hint}"
+        )
     lines.append("")
     lines.append(
         "**何时使用**：需要分组统计、聚合指标时使用；"
@@ -703,11 +702,6 @@ def build_compute_description(
     )
     lines.append("- `having.field` 未使用 `metrics` 中的 `as` 别名")
     lines.append("- order_by 中用了 sort/op/order 键名，应统一使用 direction")
-    lines.append(
-        "- 过滤条件的值无法确定为字面常量（如'后30%'、'高于平均'）时，"
-        "忘记放入 complex_conditions，导致系统无法路由到全能查询"
-    )
-    lines.append("- query 字段为空或未填写（query 为必填项，不可省略）")
     if req_groups:
         lines.append("- 缺少账期（period）过滤条件")
 
