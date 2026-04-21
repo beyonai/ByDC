@@ -222,7 +222,7 @@ async def _stream_llm_call(
                         _thinking_acc
                     ):
                         # 累积式：本 chunk 是上一次的超集，取新增部分
-                        _thinking_delta = _thinking_raw[len(_thinking_acc):]
+                        _thinking_delta = _thinking_raw[len(_thinking_acc) :]
                         _thinking_acc = _thinking_raw
                     else:
                         # 增量式：直接追加
