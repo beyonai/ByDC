@@ -344,7 +344,11 @@ def test_generate_from_tables_skips_duplicate_props_in_later_objects(tmp_path: P
     assert "term_prop_enterprise_id" not in second_terms
 
 
-def test_render_terms_for_view_emits_prop_synonyms_for_aliases() -> None:
+def test_render_terms_for_view_emits_only_view_term() -> None:
+    """视图 terms 只生成 VIEW 术语，不再生成 prop 术语。
+
+    prop 术语在对象层生成，视图专属别名通过 HAS_FIELD 关系的 ext_field 传递。
+    """
     config = _build_config()
     config.views = [
         ViewConfig(
@@ -367,7 +371,6 @@ def test_render_terms_for_view_emits_prop_synonyms_for_aliases() -> None:
 
     result, count = render_terms_for_view(config, config.views[0])
 
-    assert count == 2
-    assert "term_prop_enterprise_id" in result
-    assert '<synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">' in result
-    assert "企业综合分析视图企业 ID" in result
+    assert count == 1
+    assert "VIEW#scene_enterprise_analysis" in result
+    assert "term_prop_enterprise_id" not in result
