@@ -244,23 +244,12 @@ def test_generate_from_tables_writes_per_view_files(tmp_path: Path) -> None:
     generate_from_tables(config, tables, {})
 
     assert (
-        tmp_path
-        / "ontology"
-        / "views"
-        / "scene_enterprise_analysis"
-        / "scene_enterprise_analysis_view.owl"
+        tmp_path / "view" / "scene_enterprise_analysis" / "scene_enterprise_analysis_definition.owl"
     ).exists()
     assert (
-        tmp_path
-        / "ontology"
-        / "views"
-        / "scene_enterprise_analysis"
-        / "scene_enterprise_analysis_mapping.owl"
+        tmp_path / "view" / "scene_enterprise_analysis" / "scene_enterprise_analysis_terms.owl"
     ).exists()
     assert (
-        tmp_path / "ontology" / "views" / "scene_grid_analysis" / "scene_grid_analysis_view.owl"
+        tmp_path / "view" / "scene_grid_analysis" / "scene_grid_analysis_definition.owl"
     ).exists()
-    assert (
-        tmp_path / "ontology" / "views" / "scene_grid_analysis" / "scene_grid_analysis_mapping.owl"
-    ).exists()
-    assert not (tmp_path / "ontology" / "views" / "views.owl").exists()
+    assert (tmp_path / "view" / "scene_grid_analysis" / "scene_grid_analysis_terms.owl").exists()
