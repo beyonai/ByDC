@@ -8,6 +8,7 @@ from typing import Any
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 
+from datacloud_analysis.orchestration.message_util import extract_ai_text
 from datacloud_analysis.orchestration.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ async def finish_react_node(state: AgentState, config: RunnableConfig) -> dict[s
     last_content = ""
     for msg in reversed(messages):
         if isinstance(msg, AIMessage):
-            last_content = str(msg.content or "")
+            last_content = extract_ai_text(msg.content)
             calls = list(getattr(msg, "tool_calls", None) or [])
             for tc in calls:
                 if tc.get("name") == "finish_react":

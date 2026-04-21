@@ -197,6 +197,9 @@ async def _stream_llm_call(
     _fr_args_acc: str = ""  # 已累积的 args JSON 字符串
     _fr_answer_emitted: int = 0  # 已推送的 answer 字符数
 
+    # 用于检测 MiniMax 累积式 thinking（每个 chunk 含完整 thinking 全文，非增量）
+    _thinking_acc: str = ""
+
     try:
         async for chunk in llm_with_tools.astream(messages_window):
             # 累加 chunk
@@ -211,11 +214,24 @@ async def _stream_llm_call(
 
             if gateway_context is not None:
                 # ① 推送 thinking block（MiniMax reasoning_split=true / Claude extended_thinking）
-                _thinking_delta = _extract_thinking_text(chunk.content)
-                if _thinking_delta:
-                    await _emit_thinking_token(
-                        gateway_context, _thinking_delta, message_id=thinking_message_id
-                    )
+                # MiniMax 为累积式：每个 chunk 含截至当前的完整 thinking，需提取增量后推送；
+                # Anthropic 原生 extended thinking 为增量式，直接追加即可。
+                _thinking_raw = _extract_thinking_text(chunk.content)
+                if _thinking_raw:
+                    if _thinking_raw.startswith(_thinking_acc) and len(_thinking_raw) > len(
+                        _thinking_acc
+                    ):
+                        # 累积式：本 chunk 是上一次的超集，取新增部分
+                        _thinking_delta = _thinking_raw[len(_thinking_acc):]
+                        _thinking_acc = _thinking_raw
+                    else:
+                        # 增量式：直接追加
+                        _thinking_delta = _thinking_raw
+                        _thinking_acc += _thinking_raw
+                    if _thinking_delta:
+                        await _emit_thinking_token(
+                            gateway_context, _thinking_delta, message_id=thinking_message_id
+                        )
 
                 # ② 推送 LLM content 文字 token（ReAct 思考过程）
                 # 仅在无 tool_call_chunks 时推送：部分模型生成 tool_call 时 content 里会带工具名，
