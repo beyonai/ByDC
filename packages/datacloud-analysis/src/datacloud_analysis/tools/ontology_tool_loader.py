@@ -22,6 +22,17 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# 可选 SDK 依赖（模块级导入，供 configure_loader 和 patch 使用）
+# ---------------------------------------------------------------------------
+
+try:
+    from datacloud_data_sdk.ontology.term_loader import TermLoader
+    from datacloud_data_sdk.plan.query_plan_generator import LangGraphPlanGenerator
+except ImportError:
+    TermLoader = None  # type: ignore[assignment]
+    LangGraphPlanGenerator = None  # type: ignore[assignment]
+
+# ---------------------------------------------------------------------------
 # 哨兵对象：区分"未传 loader"与"显式传 loader=None"
 # ---------------------------------------------------------------------------
 
@@ -590,3 +601,120 @@ class OntologyToolLoader:
         except Exception as exc:  # noqa: BLE001
             logger.warning("OntologyToolLoader: 构建 query_%s 工具失败: %s", obj_code, exc)
             return None
+
+    # ------------------------------------------------------------------
+    # NL 查询工具工厂（阶段二 V-2 迁移）
+    # ------------------------------------------------------------------
+
+    def build_nl_query_tool(
+        self,
+        resource_code: str,
+        resource_biz_type: str,
+        resource_name: str,
+        resource_desc: str,
+        *,
+        inject_context_knowledge: bool = True,
+    ) -> Any:
+        """生成自然语言查询 StructuredTool，名称为 data_query_{resource_code}。
+
+        Args:
+            resource_code: 资源编码（OBJECT/VIEW code）。
+            resource_biz_type: 业务类型，"OBJECT" 或 "VIEW"。
+            resource_name: 资源名称（工具描述中使用）。
+            resource_desc: 资源描述（工具描述补充，取首行）。
+            inject_context_knowledge: True 时在 schema 中注入 contextKnowledge 字段。
+
+        Returns:
+            StructuredTool，名称为 data_query_{resource_code}。
+        """
+        from langchain_core.tools import StructuredTool  # noqa: PLC0415
+        from pydantic import BaseModel, Field, create_model  # noqa: PLC0415
+
+        loader = self._loader
+        tool_name = f"data_query_{resource_code}"
+
+        model_fields: dict[str, Any] = {
+            "query": (str, Field(description="自然语言查询问题")),
+        }
+        if inject_context_knowledge:
+            model_fields["contextKnowledge"] = (
+                str,
+                Field(default="", description="知识增强上下文，由系统注入，请勿填写"),
+            )
+
+        schema_cls = create_model(
+            f"_NLQuery{resource_code}Schema",
+            __base__=BaseModel,
+            **model_fields,
+        )
+
+        async def _execute(query: str, contextKnowledge: str = "") -> Any:  # noqa: N803
+            if resource_biz_type == "VIEW":
+                entity = loader.get_view(resource_code)
+            else:
+                entity = loader.get_object(resource_code)
+            return await entity.query(question=query, knowledge_context=contextKnowledge or None)
+
+        desc = f"数据查询工具: {resource_name or resource_code}"
+        if resource_desc:
+            first_line = resource_desc.split("\n")[0]
+            if first_line:
+                desc = f"{desc}。{first_line}"
+
+        return StructuredTool.from_function(
+            func=None,
+            coroutine=_execute,
+            name=tool_name,
+            description=desc,
+            args_schema=schema_cls,
+        )
+
+
+# ---------------------------------------------------------------------------
+# 便捷函数：configure_loader（阶段二 V-1 迁移）
+# ---------------------------------------------------------------------------
+
+
+def configure_loader(
+    loader: Any,
+    *,
+    model: str,
+    base_url: str | None = None,
+    api_key: str | None = None,
+    temperature: float = 0.0,
+    model_kwargs: dict[str, Any] | None = None,
+    csv_base_dir: str = "",
+    sql_execution_mode: str = "internal",
+) -> None:
+    """为 OntologyLoader 配置查询规划器和词条加载器。
+
+    将 System 3 (byclaw-data) 对 datacloud_data_sdk 的直接调用封装为门面，
+    使 agent 侧无需感知 SDK 内部实现。
+
+    Args:
+        loader: OntologyLoader 实例（已加载 OWL）。
+        model: LLM 模型名称。
+        base_url: API 基础 URL。
+        api_key: API 密钥。
+        temperature: 采样温度，默认 0.0。
+        model_kwargs: 额外模型参数（透传给 LangGraphPlanGenerator）。
+        csv_base_dir: CSV 文件基础目录。
+        sql_execution_mode: SQL 执行模式，默认 "internal"。
+    """
+    pg_kwargs: dict[str, Any] = {
+        "model": model,
+        "base_url": base_url,
+        "api_key": api_key,
+        "temperature": temperature,
+    }
+    if model_kwargs is not None:
+        pg_kwargs["model_kwargs"] = model_kwargs
+
+    plan_generator = LangGraphPlanGenerator(**pg_kwargs)  # type: ignore[operator]
+    term_loader = TermLoader.from_config({})  # type: ignore[union-attr]
+    loader.configure(
+        plan_generator=plan_generator,
+        term_loader=term_loader,
+        csv_base_dir=csv_base_dir,
+        sql_execution_mode=sql_execution_mode,
+    )
