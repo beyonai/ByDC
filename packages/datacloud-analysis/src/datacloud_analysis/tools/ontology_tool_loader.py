@@ -16,9 +16,27 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# 可选 SDK 依赖（模块级导入，供 configure_loader 和 patch 使用）
+# ---------------------------------------------------------------------------
+
+try:
+    from datacloud_data_sdk.ontology.term_loader import TermLoader
+    from datacloud_data_sdk.plan.query_plan_generator import LangGraphPlanGenerator
+except ImportError:
+    TermLoader = None  # type: ignore[assignment]
+    LangGraphPlanGenerator = None  # type: ignore[assignment]
+
+# ---------------------------------------------------------------------------
+# 哨兵对象：区分"未传 loader"与"显式传 loader=None"
+# ---------------------------------------------------------------------------
+
+_LOADER_NOT_PROVIDED: object = object()
 
 
 # ---------------------------------------------------------------------------
@@ -227,27 +245,34 @@ class OntologyToolLoader:
     参数：
         mounted_objects:      需挂载的本体对象/视图 code 列表
         loader:               OntologyLoader 实例（需已调用 load_from_owl_directory
-                              及 inject_virtual_actions）
+                              及 inject_virtual_actions）。与 ontology_path 互斥，
+                              优先级更高。显式传 None 时保持旧行为（skip + debug log）。
+        ontology_path:        OWL 文件目录路径。传入时由 OntologyToolLoader 内部自动
+                              调用 load_from_owl_directory + inject_virtual_actions，
+                              无需外部构建 loader。与 loader 互斥。
         skip_action_families: 需跳过的 action_type 族集合。
                               db_query 模式下传 frozenset({"query", "compute"}) 以
                               跳过虚拟注入动作，只保留 OWL 原生自定义 action。
+        agent_friendly:       True（默认）时对 query/compute 工具的 schema 做全量修正，
+                              使 LLM 感知字段中文名可用，并覆写 complex_conditions 描述。
 
-    调用示例::
-
-        from datacloud_data_sdk.ontology.loader import OntologyLoader
-        from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
-
-        loader = OntologyLoader()
-        loader.load_from_owl_directory(owl_path)
-        inject_virtual_actions(loader)   # 必须在此之前调用
+    调用示例（新接口，agent 侧）::
 
         tools = OntologyToolLoader(
-            mounted_objects=["ads_chain_analysis", "scene_enterprise_analysis"],
+            mounted_objects=["enterprise", "manage_grid"],
+            ontology_path="/path/to/owl",
+        ).load()
+
+    调用示例（旧接口，外部传入 loader）::
+
+        tools = OntologyToolLoader(
+            mounted_objects=["enterprise"],
             loader=loader,
         ).load()
 
     注意：
-    - 若 ``mounted_objects`` 为空或 ``loader`` 未提供，返回空字典（不报错）。
+    - ``loader`` 与 ``ontology_path`` 必须提供其一（显式传 loader=None 保留旧的 skip 行为）。
+    - 两者均未传时抛 ValueError。
     - 若 ``datacloud_data_service`` 未安装，记录 warning 并返回空字典。
     - 同名工具只生成一次；caller 传入的 ``tools`` 参数可在 ``create_agent`` 层覆盖。
     """
@@ -255,12 +280,22 @@ class OntologyToolLoader:
     def __init__(
         self,
         mounted_objects: list[str] | None = None,
-        loader: Any | None = None,
+        loader: Any = _LOADER_NOT_PROVIDED,
+        ontology_path: str | Path | None = None,
         skip_action_families: frozenset[str] = frozenset(),
+        agent_friendly: bool = True,
     ) -> None:
-        self._mounted_objects = mounted_objects or []
-        self._loader = loader
+        if loader is not _LOADER_NOT_PROVIDED:
+            # 显式传入 loader（可为 None，保持旧的 skip-on-None 行为）
+            self._loader: Any = loader
+        elif ontology_path is not None:
+            self._loader = self._build_loader(Path(str(ontology_path)))
+        else:
+            raise ValueError("必须提供 loader 或 ontology_path 之一")
+
+        self._mounted_objects: list[str] = list(mounted_objects or [])
         self._skip_action_families = skip_action_families
+        self._agent_friendly = agent_friendly
 
     # ------------------------------------------------------------------
     # 公开方法
@@ -329,6 +364,98 @@ class OntologyToolLoader:
         return tools
 
     # ------------------------------------------------------------------
+    # 静态方法：自建 loader
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_loader(ontology_path: Path) -> Any:
+        """自建 OntologyLoader：加载 OWL 文件并注入虚拟动作。
+
+        仅在 agent 侧通过 ontology_path 构建时调用；
+        外部传入 loader 时不经过此方法。
+        """
+        from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
+        from datacloud_data_service.tools.virtual_action_injector import (  # noqa: PLC0415
+            inject_virtual_actions,
+        )
+
+        loader = OntologyLoader()
+        loader.load_from_owl_directory(str(ontology_path))
+        inject_virtual_actions(loader)
+        return loader
+
+    # ------------------------------------------------------------------
+    # Schema 个性化：_apply_agent_schema_patches
+    # ------------------------------------------------------------------
+
+    def _apply_agent_schema_patches(
+        self, scope_code: str, input_schema: dict[str, Any]
+    ) -> dict[str, Any]:
+        """agent_friendly=True 时对 query/compute 工具 schema 做全量修正。
+
+        修正点：
+          1. filters → 替换为 relaxed 版本（catch-all 兜底 + field 支持中文名 + 原词透传指令）
+          2. select → description 替换为 AGENT_SELECT_DESCRIPTION
+          3. order_by.field → description 替换为 AGENT_ORDER_BY_FIELD_DESCRIPTION
+          4. complex_conditions → description 替换为 AGENT_COMPLEX_CONDITIONS_DESCRIPTION
+        loader 查找失败时原样返回，降级为原始行为。
+        """
+        from datacloud_data_sdk.virtual_action.generator import (  # noqa: PLC0415
+            _build_filters_schema,
+        )
+
+        from datacloud_analysis.tools._agent_schema_patches import (  # noqa: PLC0415
+            AGENT_COMPLEX_CONDITIONS_DESCRIPTION,
+            AGENT_ORDER_BY_FIELD_DESCRIPTION,
+            AGENT_SELECT_DESCRIPTION,
+        )
+
+        # 获取字段列表（OBJECT 路径优先，失败后尝试 VIEW 路径）
+        fields: list[Any] = []
+        try:
+            obj = self._loader.get_ontology_class(scope_code)
+            fields = list(obj.fields)
+        except Exception:  # noqa: BLE001
+            try:
+                view = self._loader.get_view(scope_code)
+                fields = list(getattr(view, "fields", []))
+            except Exception:  # noqa: BLE001
+                return input_schema  # 降级：loader 查找失败，原样返回
+
+        props = dict(input_schema.get("properties") or {})
+
+        # 1. filters：替换为 relaxed 版本（含 catch-all + 原词透传描述）
+        props["filters"] = _build_filters_schema(fields)
+
+        # 2. select：覆写 description，保留 enum 供 LLM 参考
+        if "select" in props:
+            select = dict(props["select"])
+            select["description"] = AGENT_SELECT_DESCRIPTION
+            props["select"] = select
+
+        # 3. order_by.field：覆写 description，保留 enum 供 LLM 参考
+        if "order_by" in props:
+            order_by = dict(props["order_by"])
+            items = dict(order_by.get("items") or {})
+            item_props = dict(items.get("properties") or {})
+            if "field" in item_props:
+                field_prop = dict(item_props["field"])
+                field_prop["description"] = AGENT_ORDER_BY_FIELD_DESCRIPTION
+                item_props["field"] = field_prop
+            items["properties"] = item_props
+            order_by["items"] = items
+            props["order_by"] = order_by
+
+        # 4. complex_conditions：覆写 description，删除"字段名未命中 → 写此列表"冲突条件
+        if "complex_conditions" in props:
+            props["complex_conditions"] = {
+                **props["complex_conditions"],
+                "description": AGENT_COMPLEX_CONDITIONS_DESCRIPTION,
+            }
+
+        return {**input_schema, "properties": props}
+
+    # ------------------------------------------------------------------
     # 私有方法
     # ------------------------------------------------------------------
 
@@ -353,11 +480,19 @@ class OntologyToolLoader:
                     continue
                 if not action.input_schema:
                     continue
+
+                view_schema: dict[str, Any] = dict(action.input_schema)
+                if self._agent_friendly and getattr(action, "action_type", "") in {
+                    "query",
+                    "compute",
+                }:
+                    view_schema = self._apply_agent_schema_patches(view_code, view_schema)
+
                 result[action.action_code] = StructuredTool(
                     name=action.action_code,
                     description=action.description or action.action_name,
                     args_schema=_json_schema_to_pydantic(
-                        action.input_schema,
+                        view_schema,
                         f"_{action.action_code}_Schema",
                     ),
                     coroutine=_make_view_action_coroutine(
@@ -392,15 +527,18 @@ class OntologyToolLoader:
 
                 # 优先使用 _meta["action_code"]（唯一码，由 action_tool_generator 写入）
                 # fallback 到工具名 name：ActionToolGenerator 保证 name == action.action_code
-                # 不能 fallback 到 action_family（族名如 "query"），那只是类型标签，不是唯一码
                 action_code: str = meta.get("action_code") or name
+
+                input_schema: dict[str, Any] = tool_def.get("inputSchema", {})
+                if self._agent_friendly and action_family in {"query", "compute"}:
+                    input_schema = self._apply_agent_schema_patches(obj_code, input_schema)
 
                 try:
                     result[name] = StructuredTool(
                         name=name,
                         description=tool_def.get("description", name),
                         args_schema=_json_schema_to_pydantic(
-                            tool_def.get("inputSchema", {}),
+                            input_schema,
                             f"_{name}_Schema",
                         ),
                         coroutine=_make_object_action_coroutine(
@@ -463,3 +601,120 @@ class OntologyToolLoader:
         except Exception as exc:  # noqa: BLE001
             logger.warning("OntologyToolLoader: 构建 query_%s 工具失败: %s", obj_code, exc)
             return None
+
+    # ------------------------------------------------------------------
+    # NL 查询工具工厂（阶段二 V-2 迁移）
+    # ------------------------------------------------------------------
+
+    def build_nl_query_tool(
+        self,
+        resource_code: str,
+        resource_biz_type: str,
+        resource_name: str,
+        resource_desc: str,
+        *,
+        inject_context_knowledge: bool = True,
+    ) -> Any:
+        """生成自然语言查询 StructuredTool，名称为 data_query_{resource_code}。
+
+        Args:
+            resource_code: 资源编码（OBJECT/VIEW code）。
+            resource_biz_type: 业务类型，"OBJECT" 或 "VIEW"。
+            resource_name: 资源名称（工具描述中使用）。
+            resource_desc: 资源描述（工具描述补充，取首行）。
+            inject_context_knowledge: True 时在 schema 中注入 contextKnowledge 字段。
+
+        Returns:
+            StructuredTool，名称为 data_query_{resource_code}。
+        """
+        from langchain_core.tools import StructuredTool  # noqa: PLC0415
+        from pydantic import BaseModel, Field, create_model  # noqa: PLC0415
+
+        loader = self._loader
+        tool_name = f"data_query_{resource_code}"
+
+        model_fields: dict[str, Any] = {
+            "query": (str, Field(description="自然语言查询问题")),
+        }
+        if inject_context_knowledge:
+            model_fields["contextKnowledge"] = (
+                str,
+                Field(default="", description="知识增强上下文，由系统注入，请勿填写"),
+            )
+
+        schema_cls = create_model(
+            f"_NLQuery{resource_code}Schema",
+            __base__=BaseModel,
+            **model_fields,
+        )
+
+        async def _execute(query: str, contextKnowledge: str = "") -> Any:  # noqa: N803
+            if resource_biz_type == "VIEW":
+                entity = loader.get_view(resource_code)
+            else:
+                entity = loader.get_object(resource_code)
+            return await entity.query(question=query, knowledge_context=contextKnowledge or None)
+
+        desc = f"数据查询工具: {resource_name or resource_code}"
+        if resource_desc:
+            first_line = resource_desc.split("\n")[0]
+            if first_line:
+                desc = f"{desc}。{first_line}"
+
+        return StructuredTool.from_function(
+            func=None,
+            coroutine=_execute,
+            name=tool_name,
+            description=desc,
+            args_schema=schema_cls,
+        )
+
+
+# ---------------------------------------------------------------------------
+# 便捷函数：configure_loader（阶段二 V-1 迁移）
+# ---------------------------------------------------------------------------
+
+
+def configure_loader(
+    loader: Any,
+    *,
+    model: str,
+    base_url: str | None = None,
+    api_key: str | None = None,
+    temperature: float = 0.0,
+    model_kwargs: dict[str, Any] | None = None,
+    csv_base_dir: str = "",
+    sql_execution_mode: str = "internal",
+) -> None:
+    """为 OntologyLoader 配置查询规划器和词条加载器。
+
+    将 System 3 (byclaw-data) 对 datacloud_data_sdk 的直接调用封装为门面，
+    使 agent 侧无需感知 SDK 内部实现。
+
+    Args:
+        loader: OntologyLoader 实例（已加载 OWL）。
+        model: LLM 模型名称。
+        base_url: API 基础 URL。
+        api_key: API 密钥。
+        temperature: 采样温度，默认 0.0。
+        model_kwargs: 额外模型参数（透传给 LangGraphPlanGenerator）。
+        csv_base_dir: CSV 文件基础目录。
+        sql_execution_mode: SQL 执行模式，默认 "internal"。
+    """
+    pg_kwargs: dict[str, Any] = {
+        "model": model,
+        "base_url": base_url,
+        "api_key": api_key,
+        "temperature": temperature,
+    }
+    if model_kwargs is not None:
+        pg_kwargs["model_kwargs"] = model_kwargs
+
+    plan_generator = LangGraphPlanGenerator(**pg_kwargs)  # type: ignore[operator]
+    term_loader = TermLoader.from_config({})  # type: ignore[union-attr]
+    loader.configure(
+        plan_generator=plan_generator,
+        term_loader=term_loader,
+        csv_base_dir=csv_base_dir,
+        sql_execution_mode=sql_execution_mode,
+    )
