@@ -98,6 +98,45 @@ _STEP_BATCH_HANDLERS = {
 }
 
 
+def discover_owl_files(package_dir: Path) -> list[tuple[str, Path]]:
+    """从目录结构自动发现 OWL 文件，返回按导入顺序排序的 (type, path) 列表。"""
+
+    steps: list[tuple[str, Path]] = []
+    term_types_files: list[Path] = []
+    terms_files: list[Path] = []
+    relations_files: list[Path] = []
+    ontology_files: list[Path] = []
+
+    for owl_file in sorted(package_dir.rglob("*.owl")):
+        name = owl_file.name
+        if name.endswith("_term_types.owl"):
+            term_types_files.append(owl_file)
+        elif name.endswith("_terms.owl"):
+            terms_files.append(owl_file)
+        elif name.endswith(
+            (
+                "_relations.owl",
+                "_object_relations.owl",
+                "_attribute_relations.owl",
+                "_term_relations.owl",
+            )
+        ):
+            relations_files.append(owl_file)
+        else:
+            ontology_files.append(owl_file)
+
+    for owl_file in term_types_files:
+        steps.append(("term_types", owl_file))
+    for owl_file in terms_files:
+        steps.append(("terms", owl_file))
+    for owl_file in relations_files:
+        steps.append(("relations", owl_file))
+    for owl_file in ontology_files:
+        steps.append(("ontology", owl_file))
+
+    return steps
+
+
 def _step_entity_type(step_type: str, filename: str) -> str:
     """与 precheck 保持相同推断逻辑。"""
     if step_type == "meta":
@@ -217,8 +256,16 @@ def run(folder_path: str) -> dict[str, Any]:
         "knowledge": {"inserted": 0, "updated": 0, "deleted": 0},
     }
 
-    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-    import_steps: list[dict[str, Any]] = manifest.get("import_steps", [])
+    manifest_path = root / "manifest.json"
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        import_steps: list[dict[str, Any]] = manifest.get("import_steps", [])
+    else:
+        import_steps = [
+            {"type": step_type, "file": str(path.relative_to(root))}
+            for step_type, path in discover_owl_files(root)
+        ]
+        logger.info("manifest.json 不存在，已切换到目录扫描模式: %s 个 OWL 文件", len(import_steps))
     batch_size = _import_batch_size()
 
     conn = _connect()
