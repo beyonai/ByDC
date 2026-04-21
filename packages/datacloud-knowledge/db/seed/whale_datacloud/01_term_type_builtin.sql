@@ -35,3 +35,157 @@ WHERE NOT EXISTS (SELECT 1 FROM whale_datacloud.term_type WHERE type_code = 'par
 INSERT INTO whale_datacloud.term_type (type_code, type_name, type_desc, type_category, is_builtin)
 SELECT 'prop', '属性', '本体-属性类型，对应对象的字段/属性描述', 3, TRUE
 WHERE NOT EXISTS (SELECT 1 FROM whale_datacloud.term_type WHERE type_code = 'prop');
+
+-- ── 元类型与系统库预置数据 ───────────────────────────────────────────────────────────────────────────────
+INSERT INTO whale_datacloud.term_type (type_code, type_name, type_desc, type_category, is_builtin)
+SELECT 'term_type', '术语类型', '术语类型的元类型，自引用', 3, TRUE
+WHERE NOT EXISTS (SELECT 1 FROM whale_datacloud.term_type WHERE type_code = 'term_type');
+
+INSERT INTO whale_datacloud.term_library (library_id, library_code, library_name)
+SELECT '_system', '_system', '系统内置术语库'
+WHERE NOT EXISTS (SELECT 1 FROM whale_datacloud.term_library WHERE library_code = '_system');
+
+-- ── 系统内置术语类型对应术语行 ───────────────────────────────────────────────────────────────────────────
+INSERT INTO whale_datacloud.term (
+    term_id,
+    term_code,
+    term_name,
+    domain_id,
+    term_type_code,
+    library_id,
+    term_tags
+)
+SELECT '_system#term_type#view', 'view', '视图', '_system', 'term_type', '_system', '{}'::jsonb
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM whale_datacloud.term
+    WHERE term_id = '_system#term_type#view'
+);
+
+INSERT INTO whale_datacloud.term (
+    term_id,
+    term_code,
+    term_name,
+    domain_id,
+    term_type_code,
+    library_id,
+    term_tags
+)
+SELECT '_system#term_type#object', 'object', '对象', '_system', 'term_type', '_system', '{}'::jsonb
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM whale_datacloud.term
+    WHERE term_id = '_system#term_type#object'
+);
+
+INSERT INTO whale_datacloud.term (
+    term_id,
+    term_code,
+    term_name,
+    domain_id,
+    term_type_code,
+    library_id,
+    term_tags
+)
+SELECT '_system#term_type#action', 'action', '动作', '_system', 'term_type', '_system', '{}'::jsonb
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM whale_datacloud.term
+    WHERE term_id = '_system#term_type#action'
+);
+
+INSERT INTO whale_datacloud.term (
+    term_id,
+    term_code,
+    term_name,
+    domain_id,
+    term_type_code,
+    library_id,
+    term_tags
+)
+SELECT '_system#term_type#func', 'func', '函数', '_system', 'term_type', '_system', '{}'::jsonb
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM whale_datacloud.term
+    WHERE term_id = '_system#term_type#func'
+);
+
+INSERT INTO whale_datacloud.term (
+    term_id,
+    term_code,
+    term_name,
+    domain_id,
+    term_type_code,
+    library_id,
+    term_tags
+)
+SELECT '_system#term_type#param', 'param', '参数', '_system', 'term_type', '_system', '{}'::jsonb
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM whale_datacloud.term
+    WHERE term_id = '_system#term_type#param'
+);
+
+INSERT INTO whale_datacloud.term (
+    term_id,
+    term_code,
+    term_name,
+    domain_id,
+    term_type_code,
+    library_id,
+    term_tags
+)
+SELECT '_system#term_type#prop', 'prop', '属性', '_system', 'term_type', '_system', '{}'::jsonb
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM whale_datacloud.term
+    WHERE term_id = '_system#term_type#prop'
+);
+
+INSERT INTO whale_datacloud.term (
+    term_id,
+    term_code,
+    term_name,
+    domain_id,
+    term_type_code,
+    library_id,
+    term_tags
+)
+SELECT '_system#term_type#employee', 'employee', '员工', '_system', 'term_type', '_system', '{}'::jsonb
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM whale_datacloud.term
+    WHERE term_id = '_system#term_type#employee'
+);
+
+INSERT INTO whale_datacloud.term (
+    term_id,
+    term_code,
+    term_name,
+    domain_id,
+    term_type_code,
+    library_id,
+    term_tags
+)
+SELECT '_system#term_type#general', 'general', '通用', '_system', 'term_type', '_system', '{}'::jsonb
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM whale_datacloud.term
+    WHERE term_id = '_system#term_type#general'
+);
+
+INSERT INTO whale_datacloud.term (
+    term_id,
+    term_code,
+    term_name,
+    domain_id,
+    term_type_code,
+    library_id,
+    term_tags
+)
+SELECT '_system#term_type#term_type', 'term_type', '术语类型', '_system', 'term_type', '_system', '{}'::jsonb
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM whale_datacloud.term
+    WHERE term_id = '_system#term_type#term_type'
+);
