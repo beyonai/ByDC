@@ -89,8 +89,8 @@ def vector_search(
             1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS similarity,
             t.term_code
         FROM
-            whale_datacloud.term_name tn,
-            whale_datacloud.term t
+            term_name tn,
+            term t
         WHERE
             tn.name_embedding IS NOT NULL
             AND tn.term_id = t.term_id
@@ -154,8 +154,8 @@ def vector_search_by_vector(
             1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS similarity,
             t.term_code
         From
-            whale_datacloud.term_name tn,
-            whale_datacloud.term t
+            term_name tn,
+            term t
         WHERE
             tn.name_embedding IS NOT NULL
             AND tn.term_id = t.term_id
