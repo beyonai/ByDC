@@ -45,7 +45,11 @@ except ImportError:  # pragma: no cover
     _sdk_format_compute = None  # type: ignore[assignment]
     _sdk_format_query = None  # type: ignore[assignment]
 
-from datacloud_analysis.tool_hook_plugins.types import HookContext, HookDecision, HookSignalError
+from datacloud_analysis.tool_hook_plugins.types import (
+    ClarificationNeededError,
+    HookContext,
+    HookDecision,
+)
 
 try:
     from langgraph.types import interrupt  # type: ignore[import]
@@ -57,14 +61,6 @@ PRIORITY = 100
 ENABLED = True
 
 logger = logging.getLogger(__name__)
-
-
-class ClarificationNeededError(HookSignalError):
-    """澄清插件检测到需要用户确认时抛出，替代直接调用 interrupt()。"""
-
-    def __init__(self, context: dict[str, Any]) -> None:
-        super().__init__("clarification required")
-        self.context = context
 
 
 _QUERY_PREFIXES: frozenset[str] = frozenset({"query_", "compute_"})
@@ -153,31 +149,65 @@ def _get_field_catalog(
 
     scope_code = _scope_code_from_tool(tool_name)
     catalog: dict[str, str] = {}
+    raw_fields: list[dict[str, Any]] = []  # 原始字段数据，用于调用链日志
 
+    def _index_field(code: str, name: str | None, aliases: list[str]) -> None:
+        catalog[code] = code
+        if name and name != code:
+            catalog[name] = code
+        for alias in aliases:
+            if alias and alias != code:
+                catalog[alias] = code
+
+    loader_path = "unknown"
     try:
         # 先尝试作为对象加载
         ontology_class = loader.get_ontology_class(scope_code)
+        loader_path = f"loader.get_ontology_class('{scope_code}')"
         for f in ontology_class.fields:
             code = getattr(f, "field_code", None) or getattr(f, "property_code", None)
+            if not code:
+                continue
             name = getattr(f, "field_name", None) or getattr(f, "property_name", None)
-            if code:
-                catalog[code] = code
-                if name and name != code:
-                    catalog[name] = code
+            aliases: list[str] = list(getattr(f, "aliases", None) or [])
+            raw_fields.append(
+                {
+                    "field_code": str(code),
+                    "field_name": str(name) if name else None,
+                    "aliases": [str(a) for a in aliases],
+                }
+            )
+            _index_field(str(code), str(name) if name else None, [str(a) for a in aliases])
     except Exception:  # noqa: BLE001
         # 尝试作为视图加载
         try:
             view = loader.get_view(scope_code)
+            loader_path = f"loader.get_view('{scope_code}')"
             for f in getattr(view, "fields", []):
                 code = getattr(f, "field_code", None) or getattr(f, "property_code", None)
+                if not code:
+                    continue
                 name = getattr(f, "field_name", None) or getattr(f, "property_name", None)
-                if code:
-                    catalog[code] = code
-                    if name and name != code:
-                        catalog[name] = code
+                aliases = list(getattr(f, "aliases", None) or [])
+                raw_fields.append(
+                    {
+                        "field_code": str(code),
+                        "field_name": str(name) if name else None,
+                        "aliases": [str(a) for a in aliases],
+                    }
+                )
+                _index_field(str(code), str(name) if name else None, [str(a) for a in aliases])
         except Exception:  # noqa: BLE001
             pass
 
+    logger.info(
+        "[ONTOLOGY-CHAIN] tool=%s scope=%s via=%s field_count=%d raw_fields=%s",
+        tool_name,
+        scope_code,
+        loader_path,
+        len(raw_fields),
+        raw_fields,
+    )
     return catalog
 
 
@@ -373,19 +403,48 @@ def _analyze_clarification(
     is_compute: bool,
 ) -> tuple[list[dict[str, Any]], str, bool]:
     """调用 SDK 澄清分析，返回 (paradigmList, knowledge, needs_clarification)。"""
+    sdk_fn_name = (
+        "analyze_query_clarification_compute" if is_compute else "analyze_query_clarification_query"
+    )
+    logger.info(
+        "[KG-CHAIN] call: datacloud_knowledge.intent.clarification.%s("
+        "query=%r, ontology_code=%r, structured_input=%s)",
+        sdk_fn_name,
+        query[:100],
+        ontology_code,
+        json.dumps(structured_input, ensure_ascii=False, default=str)[:300],
+    )
     if is_compute:
         result = _sdk_analyze_compute(query, ontology_code, structured_input)
     else:
         result = _sdk_analyze_query(query, ontology_code, structured_input)
 
     logger.info(
-        "[query_clarification] SDK result: needs=%s form_len=%d knowledge_len=%d",
+        "[KG-CHAIN] result: needs=%s form_len=%d knowledge_len=%d raw_form=%s",
         result.needs_clarification,
         len(result.form or ""),
         len(result.knowledge or ""),
+        result.form,
     )
     paradigm_list = json.loads(result.form or "{}").get("paradigmList", [])
-    logger.info("[query_clarification] paradigmList count=%d", len(paradigm_list))
+    for _p in paradigm_list:
+        _results = list(_p.get("paradigmResult") or [])
+        if _results:
+            logger.info(
+                "[KG-CHAIN] paradigm id=%s name=%s results=%s",
+                _p.get("paradigmId"),
+                _p.get("paradigmName"),
+                [
+                    {
+                        "keyword": _r.get("keyword"),
+                        "choiceKeyword": _r.get("choiceKeyword"),
+                        "recall": _r.get("recall"),
+                        "kid": _r.get("kid"),
+                        "ktype": _r.get("ktype"),
+                    }
+                    for _r in _results
+                ],
+            )
     return paradigm_list, result.knowledge, result.needs_clarification
 
 
@@ -470,6 +529,22 @@ def _execute_resume(
         graph_state.pop("_clarification_cache", None)
     logger.info("[query_clarification] _clarification_cache cleared from state")
 
+    # SDK 回填的可能是官方中文字段名（choiceKeyword），需用新鲜 catalog 做二次翻译
+    _fresh_catalog = _get_field_catalog(tool_name, ctx)
+    logger.info(
+        "[query_clarification] _execute_resume catalog: tool=%s catalog_size=%d",
+        tool_name,
+        len(_fresh_catalog),
+    )
+    if _fresh_catalog:
+        _fresh_terms = _collect_terms_from_params(tool_params)
+        _fresh_resolved, _ = _resolve_terms(_fresh_terms, _fresh_catalog)
+        logger.info(
+            "[query_clarification] _execute_resume fresh_resolved=%s",
+            _fresh_resolved,
+        )
+        resolved = {**resolved, **_fresh_resolved}
+
     tool_params = _apply_resolved_to_params(tool_params, resolved)
     ctx["tool_params"] = tool_params
 
@@ -544,6 +619,63 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             _raw_query_fp = str((ctx.get("tool_params") or {}).get("query", "") or "")
             _fmt_params = dict(_clarify_result.get("params") or {})
             _is_complex_fp: bool = bool(_clarify_result.get("is_complex"))
+            logger.info(
+                "[query_clarification] V0.3 early-return DIAG: fmt_select=%s fmt_filters=%s",
+                _fmt_params.get("select"),
+                [f.get("field") for f in (_fmt_params.get("filters") or []) if isinstance(f, dict)],
+            )
+            # ── 打印知识图谱侧数据（paradigm_list 每条 paradigmResult）──
+            _paradigm_list_fp = list(_clarify_result.get("paradigm_list") or [])
+            if not _paradigm_list_fp:
+                _analyze_res = dict((_graph_state or {}).get("clarification_analyze_result") or {})
+                _paradigm_list_fp = list(_analyze_res.get("paradigm_list") or [])
+            for _p in _paradigm_list_fp:
+                _p_results = list(_p.get("paradigmResult") or [])
+                if _p_results:
+                    logger.info(
+                        "[query_clarification] KNOWLEDGE-GRAPH paradigm: id=%s name=%s results=%s",
+                        _p.get("paradigmId"),
+                        _p.get("paradigmName"),
+                        [
+                            {
+                                "keyword": _r.get("keyword"),
+                                "choiceKeyword": _r.get("choiceKeyword"),
+                                "recall": _r.get("recall"),
+                                "kid": _r.get("kid"),
+                                "ktype": _r.get("ktype"),
+                            }
+                            for _r in _p_results
+                        ],
+                    )
+            # choiceKeyword 应与本体 catalog 字段名严格对齐；
+            # 若未命中说明知识图谱数据或表单生成有误，需修数据，不做兜底。
+            _catalog_fp = _get_field_catalog(tool_name, ctx)
+            if _catalog_fp:
+                _terms_fp = _collect_terms_from_params(_fmt_params)
+                _resolved_fp, _unresolved_fp = _resolve_terms(_terms_fp, _catalog_fp)
+                logger.info(
+                    "[query_clarification] V0.3 early-return DIAG: terms=%s resolved=%s unresolved=%s",
+                    _terms_fp,
+                    _resolved_fp,
+                    _unresolved_fp,
+                )
+                if _unresolved_fp:
+                    logger.warning(
+                        "[query_clarification] V0.3 DATA-MISMATCH: unresolved terms %s"
+                        " not found in ontology catalog — check KG choiceKeyword vs OWL field_name/aliases",
+                        _unresolved_fp,
+                    )
+                if _resolved_fp:
+                    _fmt_params = _apply_resolved_to_params(_fmt_params, _resolved_fp)
+                    logger.info(
+                        "[query_clarification] V0.3 early-return DIAG: patched_select=%s patched_filters=%s",
+                        _fmt_params.get("select"),
+                        [
+                            f.get("field")
+                            for f in (_fmt_params.get("filters") or [])
+                            if isinstance(f, dict)
+                        ],
+                    )
             ctx["tool_params"] = _fmt_params
             if _is_complex_fp:
                 return _build_redirect_decision(tool_name, _raw_query_fp, _fmt_params)

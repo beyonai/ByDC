@@ -328,7 +328,7 @@ wheels = [
 
 [[package]]
 name = "by-datacloud"
-version = "0.1.7"
+version = "0.1.9"
 source = { virtual = "." }
 dependencies = [
     { name = "aiochclient", extra = ["aiohttp"] },
@@ -366,6 +366,7 @@ dependencies = [
     { name = "sqlparse" },
     { name = "strawberry-graphql", extra = ["fastapi"] },
     { name = "uvicorn" },
+    { name = "watchfiles" },
 ]
 
 [package.optional-dependencies]
@@ -433,6 +434,7 @@ requires-dist = [
     { name = "sqlparse", specifier = ">=0.5" },
     { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.260" },
     { name = "uvicorn", specifier = ">=0.32.0" },
+    { name = "watchfiles", specifier = ">=1.0" },
 ]
 provides-extras = ["dev"]
 
@@ -938,6 +940,7 @@ source = { editable = "packages/datacloud-data" }
 dependencies = [
     { name = "pydantic" },
     { name = "rdflib" },
+    { name = "watchfiles" },
 ]
 
 [package.optional-dependencies]
@@ -1041,6 +1044,7 @@ requires-dist = [
     { name = "sqlparse", marker = "extra == 'sql'", specifier = ">=0.5" },
     { name = "strawberry-graphql", extras = ["fastapi"], marker = "extra == 'service'", specifier = ">=0.260" },
     { name = "uvicorn", marker = "extra == 'service'", specifier = ">=0.32.0" },
+    { name = "watchfiles", specifier = ">=1.0" },
     { name = "watchfiles", marker = "extra == 'service'", specifier = ">=1.0" },
 ]
 provides-extras = ["langchain", "sql", "clickhouse", "service", "all", "knowledge", "dev"]

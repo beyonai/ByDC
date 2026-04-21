@@ -7,7 +7,7 @@ import contextlib
 import hashlib
 import logging
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import UTC, datetime
 from enum import IntEnum
 from pathlib import Path
@@ -162,9 +162,6 @@ class LoaderRuntimeManager:
         if self._snapshot is None:
             return await self.reload(force=True, reason=reason)
 
-        if self._loader_override is not None:
-            return self._snapshot
-
         if not getattr(self._settings, "loader_reload_enabled", True):
             return self._snapshot
 
@@ -182,7 +179,7 @@ class LoaderRuntimeManager:
     ) -> LoaderSnapshot | None:
         """Build a fresh loader snapshot and publish it atomically on success."""
         async with self._reload_lock:
-            if self._snapshot is not None and not force and self._loader_override is None:
+            if self._snapshot is not None and not force:
                 fingerprint, _ = self._compute_fingerprint()
                 if not self._dirty and fingerprint == self._snapshot.fingerprint:
                     return self._snapshot
@@ -249,12 +246,11 @@ class LoaderRuntimeManager:
         }
 
     def _build_loader(self) -> OntologyLoader:
-        loader = self._loader_override if self._loader_override is not None else OntologyLoader()
+        loader = OntologyLoader()
+        self._inherit_loader_config(loader)
         self._configure_term_loader(loader)
 
-        if self._loader_override is None:
-            self._load_ontology(loader)
-
+        self._load_ontology(loader)
         self._configure_runtime_services(loader)
         self._configure_datasources(loader)
 
@@ -263,6 +259,33 @@ class LoaderRuntimeManager:
         inject_virtual_actions(loader)
         logger.info("Injected virtual actions for DB/KB objects")
         return loader
+
+    def _inherit_loader_config(self, loader: OntologyLoader) -> None:
+        """Carry forward runtime config from the previous loader snapshot.
+
+        Datasource and KB source configs are intentionally excluded so the new
+        ontology load can rebuild them from source files and explicit overrides.
+        """
+        if self._loader_override is not None:
+            previous_loader = self._loader_override
+        else:
+            snapshot = self._snapshot
+            if snapshot is None:
+                return
+            previous_loader = snapshot.loader
+        previous_config = getattr(previous_loader, "_config", None)
+        current_config = getattr(loader, "_config", None)
+        if previous_config is None or current_config is None:
+            return
+
+        inherited: dict[str, Any] = {}
+        for config_field in fields(current_config):
+            if config_field.name in {"datasource_configs", "kb_source_configs"}:
+                continue
+            inherited[config_field.name] = getattr(previous_config, config_field.name)
+
+        if inherited:
+            loader.configure(**inherited)
 
     def _configure_term_loader(self, loader: OntologyLoader) -> None:
         if getattr(loader._config, "term_loader", None) is not None:
@@ -290,9 +313,12 @@ class LoaderRuntimeManager:
         logger.info("Loaded ontology from %s", ontology_path)
 
     def _configure_runtime_services(self, loader: OntologyLoader) -> None:
+        config = getattr(loader, "_config", None)
         from datacloud_data_service.file_storage import build_result_file_storage
 
         result_file_storage = build_result_file_storage(self._settings)
+        if config is not None and config.result_file_storage:
+            result_file_storage = config.result_file_storage
         loader.configure(result_file_storage=result_file_storage)
         self._configure_plan_generator(loader)
         self._configure_event_bus(loader)
@@ -359,8 +385,6 @@ class LoaderRuntimeManager:
             loader.configure(datasource_configs=self._datasource_configs)
 
     def _should_watch(self) -> bool:
-        if self._loader_override is not None:
-            return False
         return bool(getattr(self._settings, "loader_watch_enabled", False))
 
     async def _watch_loop(self) -> None:

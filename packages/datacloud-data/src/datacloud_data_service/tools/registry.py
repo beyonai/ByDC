@@ -22,12 +22,15 @@ class ToolRegistry:
         object_ids: list[str] | None = None,
         tool_list_mode: str = "unified",
     ) -> list[dict[str, Any]]:
-        tools: list[dict[str, Any]] = [self._unified_query_tool()]
+        tools: list[dict[str, Any]] = []
+        if tool_list_mode == "unified":
+            tools.extend([self._unified_query_tool()])
 
         target_views: list[Any] = []
+        target_ids = []
         if view_id:
             target_views = [self._loader.get_view(view_id)]
-            target_ids = [obj.object_code for obj in target_views[0].objects]
+            # target_ids = [obj.object_code for obj in target_views[0].objects]
         elif object_ids:
             target_ids = object_ids
         else:

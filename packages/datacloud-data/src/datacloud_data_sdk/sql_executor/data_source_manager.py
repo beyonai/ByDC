@@ -74,9 +74,9 @@ class _LoggingConnectorProxy(BaseSourceConnector):
         try:
             from datacloud_data_sdk.trace_context import current_trace_id
 
-            _tid = current_trace_id.get("????????")
+            _tid = current_trace_id.get("")
         except Exception:
-            _tid = "????????"
+            _tid = ""
         _logger.warning("[%s] SQL: %s", _tid, _render_sql(sql, params))
         return await self._real.execute(sql, params)
 

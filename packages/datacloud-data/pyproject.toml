@@ -23,6 +23,7 @@ classifiers = [
 dependencies = [
     "pydantic>=2.0",
     "rdflib>=7.0",
+    "watchfiles>=1.0",
 ]
 
 [project.optional-dependencies]

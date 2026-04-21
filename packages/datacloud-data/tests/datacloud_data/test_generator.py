@@ -7,13 +7,13 @@
 验收项：
   Schema 层面：
     Q1  query select.items.enum 全部为 field_code，不含中文名
-    Q2  query filters.items 中每个 field 的 const 为 field_code
+    Q2  query filters.items 中每个 field 的 enum 单值为 field_code
     Q3  query order_by.items.field.enum 全部为 field_code
     Q4  query schema description 不含"中文名"字样
     Q5  query select description 不含"中文名"字样
-    C1  compute dimensions[i].field.const 为 field_code
-    C2  compute metrics[i].field.const 为 field_code
-    C3  compute filters 中 field.const 为 field_code
+    C1  compute dimensions[i].field.enum 单值为 field_code
+    C2  compute metrics[i].field.enum 单值为 field_code
+    C3  compute filters 中 field.enum 单值为 field_code
     C4  compute schema description 不含"中文名"字样
     C5  compute dimensions description 不含"中文名"字样
     C6  compute metrics description 不含"中文名"字样
@@ -111,37 +111,40 @@ FIELDS = [_REGION, _PERIOD, _REVENUE]
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _collect_filter_field_consts(schema: dict[str, Any]) -> list[str]:
-    """从 filters schema 中收集所有 field const 值。"""
-    consts: list[str] = []
+def _collect_filter_field_codes(schema: dict[str, Any]) -> list[str]:
+    """从 filters schema 中收集所有 field 单值 enum。"""
+    codes: list[str] = []
     items = schema.get("properties", {}).get("filters", {}).get("items", {})
     for one_of_item in items.get("oneOf", []):
         field_prop = one_of_item.get("properties", {}).get("field", {})
-        if "const" in field_prop:
-            consts.append(field_prop["const"])
-    return consts
+        enum_vals = field_prop.get("enum")
+        if isinstance(enum_vals, list) and len(enum_vals) == 1:
+            codes.append(enum_vals[0])
+    return codes
 
 
-def _collect_dim_field_consts(schema: dict[str, Any]) -> list[str]:
-    """从 dimensions schema 中收集所有 field const 值。"""
-    consts: list[str] = []
+def _collect_dim_field_codes(schema: dict[str, Any]) -> list[str]:
+    """从 dimensions schema 中收集所有 field 单值 enum。"""
+    codes: list[str] = []
     items = schema.get("properties", {}).get("dimensions", {}).get("items", {})
     for one_of_item in items.get("oneOf", []):
         field_prop = one_of_item.get("properties", {}).get("field", {})
-        if "const" in field_prop:
-            consts.append(field_prop["const"])
-    return consts
+        enum_vals = field_prop.get("enum")
+        if isinstance(enum_vals, list) and len(enum_vals) == 1:
+            codes.append(enum_vals[0])
+    return codes
 
 
-def _collect_metric_field_consts(schema: dict[str, Any]) -> list[str]:
-    """从 metrics schema 中收集所有 field const 值（排除 count_all）。"""
-    consts: list[str] = []
+def _collect_metric_field_codes(schema: dict[str, Any]) -> list[str]:
+    """从 metrics schema 中收集所有 field 单值 enum（排除 count_all）。"""
+    codes: list[str] = []
     items = schema.get("properties", {}).get("metrics", {}).get("items", {})
     for one_of_item in items.get("oneOf", []):
         field_prop = one_of_item.get("properties", {}).get("field", {})
-        if "const" in field_prop:
-            consts.append(field_prop["const"])
-    return consts
+        enum_vals = field_prop.get("enum")
+        if isinstance(enum_vals, list) and len(enum_vals) == 1:
+            codes.append(enum_vals[0])
+    return codes
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -168,17 +171,17 @@ def test_q1_select_enum_uses_field_code(query_schema: dict[str, Any]) -> None:
     assert "企业收入" not in enum_vals, f"select enum 不应含中文名，实际：{enum_vals}"
 
 
-def test_q2_filter_field_const_uses_field_code(query_schema: dict[str, Any]) -> None:
-    """Q2: filters 中每个 oneOf 项的 field.const 为 field_code。"""
-    consts = _collect_filter_field_consts(query_schema)
-    assert len(consts) > 0, "filters oneOf 为空，没有找到任何 field const"
-    for c in consts:
+def test_q2_filter_field_enum_uses_field_code(query_schema: dict[str, Any]) -> None:
+    """Q2: filters 中每个 oneOf 项的 field.enum 单值为 field_code。"""
+    codes = _collect_filter_field_codes(query_schema)
+    assert len(codes) > 0, "filters oneOf 为空，没有找到任何 field enum"
+    for c in codes:
         assert not any(ch > "\x7f" for ch in c), (
-            f"filter field.const '{c}' 含非 ASCII 字符（中文名），应为 field_code"
+            f"filter field.enum '{c}' 含非 ASCII 字符（中文名），应为 field_code"
         )
-    assert "region_name" in consts, f"缺少 region_name，实际 consts={consts}"
-    assert "period" in consts, f"缺少 period，实际 consts={consts}"
-    assert "revenue" in consts, f"缺少 revenue，实际 consts={consts}"
+    assert "region_name" in codes, f"缺少 region_name，实际 codes={codes}"
+    assert "period" in codes, f"缺少 period，实际 codes={codes}"
+    assert "revenue" in codes, f"缺少 revenue，实际 codes={codes}"
 
 
 def test_q3_order_by_field_enum_uses_field_code(query_schema: dict[str, Any]) -> None:
@@ -228,36 +231,34 @@ def compute_schema() -> dict[str, Any]:
     return build_compute_schema("企业基础信息", FIELDS, required_filter_groups=["period_required"])
 
 
-def test_c1_dimension_field_const_uses_field_code(compute_schema: dict[str, Any]) -> None:
-    """C1: dimensions 中每个 oneOf 项的 field.const 为 field_code。"""
-    consts = _collect_dim_field_consts(compute_schema)
-    assert len(consts) > 0, "dimensions oneOf 为空"
-    for c in consts:
+def test_c1_dimension_field_enum_uses_field_code(compute_schema: dict[str, Any]) -> None:
+    """C1: dimensions 中每个 oneOf 项的 field.enum 单值为 field_code。"""
+    codes = _collect_dim_field_codes(compute_schema)
+    assert len(codes) > 0, "dimensions oneOf 为空"
+    for c in codes:
         assert not any(ch > "\x7f" for ch in c), (
-            f"dimensions field.const '{c}' 含中文，应为 field_code"
+            f"dimensions field.enum '{c}' 含中文，应为 field_code"
         )
-    assert "region_name" in consts, f"缺少 region_name，实际：{consts}"
-    assert "period" in consts, f"缺少 period，实际：{consts}"
+    assert "region_name" in codes, f"缺少 region_name，实际：{codes}"
+    assert "period" in codes, f"缺少 period，实际：{codes}"
 
 
-def test_c2_metric_field_const_uses_field_code(compute_schema: dict[str, Any]) -> None:
-    """C2: metrics 中每个 oneOf 项的 field.const 为 field_code。"""
-    consts = _collect_metric_field_consts(compute_schema)
-    assert len(consts) > 0, "metrics oneOf（非 count_all）为空"
-    for c in consts:
+def test_c2_metric_field_enum_uses_field_code(compute_schema: dict[str, Any]) -> None:
+    """C2: metrics 中每个 oneOf 项的 field.enum 单值为 field_code。"""
+    codes = _collect_metric_field_codes(compute_schema)
+    assert len(codes) > 0, "metrics oneOf（非 count_all）为空"
+    for c in codes:
+        assert not any(ch > "\x7f" for ch in c), f"metrics field.enum '{c}' 含中文，应为 field_code"
+    assert "revenue" in codes, f"缺少 revenue，实际：{codes}"
+
+
+def test_c3_compute_filter_enum_uses_field_code(compute_schema: dict[str, Any]) -> None:
+    """C3: compute filters 中 field.enum 单值为 field_code。"""
+    codes = _collect_filter_field_codes(compute_schema)
+    assert len(codes) > 0, "compute filters oneOf 为空"
+    for c in codes:
         assert not any(ch > "\x7f" for ch in c), (
-            f"metrics field.const '{c}' 含中文，应为 field_code"
-        )
-    assert "revenue" in consts, f"缺少 revenue，实际：{consts}"
-
-
-def test_c3_compute_filter_const_uses_field_code(compute_schema: dict[str, Any]) -> None:
-    """C3: compute filters 中 field.const 为 field_code。"""
-    consts = _collect_filter_field_consts(compute_schema)
-    assert len(consts) > 0, "compute filters oneOf 为空"
-    for c in consts:
-        assert not any(ch > "\x7f" for ch in c), (
-            f"compute filter field.const '{c}' 含中文，应为 field_code"
+            f"compute filter field.enum '{c}' 含中文，应为 field_code"
         )
 
 
@@ -369,48 +370,48 @@ def test_g3_compute_complex_conditions_no_unknown_field_trigger(
     assert "非标准词），需系统做语义推断" not in desc
 
 
-# ── G4-G5: filters oneOf catch-all 兜底（§5.1.3）────────────────────────────
+# ── G4-G6: 严格属性编码约束（§5.1.3）────────────────────────────────────────
 
 
-def test_g4_filters_oneOf_has_catchall_item(query_schema: dict[str, Any]) -> None:
-    """G4: filters.items.oneOf 末尾有 catch-all 兜底条目，其 field.description 含原词透传说明。"""
+def test_g4_filters_oneOf_has_no_catchall_item(query_schema: dict[str, Any]) -> None:
+    """G4: query filters.items.oneOf 不再包含原词透传 catch-all 条目。"""
     items = query_schema["properties"]["filters"]["items"]
     one_of = items.get("oneOf", [])
     assert len(one_of) > 0, "filters oneOf 为空"
-    catchall = one_of[-1]
-    field_desc = catchall.get("properties", {}).get("field", {}).get("description", "")
-    assert "原词" in field_desc or "原始词" in field_desc, (
-        f"catch-all 条目 field.description 未说明原词透传: {field_desc!r}"
+    for item in one_of:
+        field_prop = item.get("properties", {}).get("field", {})
+        enum_vals = field_prop.get("enum", [])
+        assert isinstance(enum_vals, list) and len(enum_vals) == 1, (
+            f"filters oneOf 中存在非固定属性编码条目，应全部使用单值 enum 约束: {field_prop}"
+        )
+        assert "原词" not in field_prop.get("description", ""), (
+            f"filters.field.description 不应再提示原词透传: {field_prop}"
+        )
+
+
+def test_g5_filter_array_description_mentions_field_code_only(query_schema: dict[str, Any]) -> None:
+    """G5: query filters.description 只允许属性编码，不再提示中文名/原词。"""
+    desc = query_schema["properties"]["filters"].get("description", "")
+    assert "属性编码" in desc, f"filters.description 未明确属性编码要求: {desc!r}"
+    assert "中文名" not in desc, f"filters.description 不应再允许中文名: {desc!r}"
+    assert "原词" not in desc and "原始词" not in desc, (
+        f"filters.description 不应再提示原词透传: {desc!r}"
     )
 
 
-def test_g5_catchall_op_enum_covers_common_ops(query_schema: dict[str, Any]) -> None:
-    """G5: catch-all 条目的 op.enum 覆盖 gt/lt/eq/in 等常见操作符。"""
-    items = query_schema["properties"]["filters"]["items"]
-    one_of = items.get("oneOf", [])
-    catchall = one_of[-1]
-    op_enum = catchall.get("properties", {}).get("op", {}).get("enum", [])
-    for op in ("gt", "lt", "eq", "in", "gte", "lte"):
-        assert op in op_enum, f"catch-all op.enum 缺少 {op!r}: {op_enum}"
-
-
-# ── G6: filters.field 原词透传指令（§5.1.4）──────────────────────────────────
-
-
-def test_g6_filter_item_field_desc_contains_passthrough_instruction(
+def test_g6_filter_item_field_desc_contains_fixed_field_code_instruction(
     query_schema: dict[str, Any],
 ) -> None:
-    """G6: 已知字段 filter 条目的 field.description 包含"找不到时填原词"指令。"""
+    """G6: 已知字段 filter 条目的 field.description 明确固定为属性编码。"""
     items = query_schema["properties"]["filters"]["items"]
     one_of = items.get("oneOf", [])
-    known_items = one_of[:-1]  # 排除末尾 catch-all
-    assert len(known_items) > 0, "没有已知字段的 filter 条目（oneOf 只有 catch-all）"
+    assert len(one_of) > 0, "没有已知字段的 filter 条目"
     found = any(
-        "原词" in item.get("properties", {}).get("field", {}).get("description", "")
-        or "原始词" in item.get("properties", {}).get("field", {}).get("description", "")
-        for item in known_items
+        "固定为" in item.get("properties", {}).get("field", {}).get("description", "")
+        and "属性编码" in item.get("properties", {}).get("field", {}).get("description", "")
+        for item in one_of
     )
-    assert found, "所有已知字段 filter 条目的 field.description 均未包含原词透传指令"
+    assert found, "所有已知字段 filter 条目的 field.description 均未明确固定属性编码"
 
 
 # ── G7-G9: 常见错误描述修正（§5.1.6）────────────────────────────────────────

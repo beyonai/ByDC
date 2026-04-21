@@ -130,11 +130,11 @@ def test_T9_3_compute_metric_item_uses_field() -> None:
     schema = build_compute_schema("企业分析", _compute_fields())
     metric_items = schema["properties"]["metrics"]["items"]["oneOf"]
 
-    # 排除 count_all_item（它不需要 field，通过 agg.const 识别）
+    # 排除 count_all_item（它不需要 field，通过 agg.enum 识别）
     regular_items = [
         item
         for item in metric_items
-        if item.get("properties", {}).get("agg", {}).get("const") != "count_all"
+        if item.get("properties", {}).get("agg", {}).get("enum") != ["count_all"]
     ]
     assert regular_items, "没有普通指标项（非 count_all）"
 
@@ -196,31 +196,31 @@ def test_T9_5_field_description_mentions_both_formats() -> None:
     )
 
 
-# ── T9-6：dimensions / metrics arrays 带 examples ────────────────────────────
+# ── T9-6：dimensions / metrics arrays 带 example ─────────────────────────────
 
 
 def test_T9_6_arrays_have_examples_to_prevent_json_string_confusion() -> None:
-    """T9-6：dimensions / metrics 数组 Schema 带 examples，防止 LLM 把数组序列化成 JSON string。"""
+    """T9-6：dimensions / metrics 数组 Schema 带 example，防止 LLM 把数组序列化成 JSON string。"""
     from datacloud_data_sdk.virtual_action.generator import build_compute_schema
 
     schema = build_compute_schema("企业分析", _compute_fields())
     dims = schema["properties"]["dimensions"]
     mets = schema["properties"]["metrics"]
 
-    assert "examples" in dims, "dimensions 缺少 examples"
-    assert "examples" in mets, "metrics 缺少 examples"
+    assert "example" in dims, "dimensions 缺少 example"
+    assert "example" in mets, "metrics 缺少 example"
 
-    # examples 的第一个元素必须是 list（展示正确的数组结构）
-    assert isinstance(dims["examples"][0], list), (
-        f"dimensions examples[0] 应为 list，实际为 {type(dims['examples'][0])}"
+    # example 必须是 list（展示正确的数组结构）
+    assert isinstance(dims["example"], list), (
+        f"dimensions example 应为 list，实际为 {type(dims['example'])}"
     )
-    assert isinstance(mets["examples"][0], list), (
-        f"metrics examples[0] 应为 list，实际为 {type(mets['examples'][0])}"
+    assert isinstance(mets["example"], list), (
+        f"metrics example 应为 list，实际为 {type(mets['example'])}"
     )
-    # examples 中的 item 必须含 field（不是 field_name_cn，不是 JSON string）
-    dim_example_item = dims["examples"][0][0]
-    assert isinstance(dim_example_item, dict), "dimensions examples[0][0] 应为 dict"
-    assert "field" in dim_example_item, "dimensions examples[0][0] 应含 field"
+    # example 中的 item 必须含 field（不是 field_name_cn，不是 JSON string）
+    dim_example_item = dims["example"][0]
+    assert isinstance(dim_example_item, dict), "dimensions example[0] 应为 dict"
+    assert "field" in dim_example_item, "dimensions example[0] 应含 field"
 
 
 # ── T9-7：_collect_terms_from_params 读 field_name_cn（优先）及 field（fallback）

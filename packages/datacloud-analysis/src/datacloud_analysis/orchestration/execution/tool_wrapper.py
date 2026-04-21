@@ -14,7 +14,7 @@ except ImportError:  # langgraph not installed or older version
     GraphBubbleUp = type(None)  # type: ignore[assignment,misc]
 
 from datacloud_analysis.tool_hook_plugins import get_tool_hook_plugin_manager
-from datacloud_analysis.tool_hook_plugins.types import HookContext
+from datacloud_analysis.tool_hook_plugins.types import HookContext, HookSignalError
 from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
 
 logger = logging.getLogger(__name__)
@@ -650,6 +650,8 @@ async def dispatch_tool(
         except ToolHookError:
             raise
         except GraphBubbleUp:
+            raise
+        except HookSignalError:
             raise
         except Exception as exc:
             logger.debug("dispatch_tool sub_step failed: %s", exc)

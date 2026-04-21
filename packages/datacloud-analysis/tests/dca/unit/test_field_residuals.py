@@ -155,11 +155,11 @@ def test_T11_4_count_all_item_description_no_bare_field() -> None:
     schema = build_compute_schema("网格分析", _metric_fields())
     metric_items = schema["properties"]["metrics"]["items"]["oneOf"]
 
-    # count_all_item: agg 有 const: "count_all"
+    # count_all_item: agg 有 enum: ["count_all"]
     count_all_items = [
         item
         for item in metric_items
-        if item.get("properties", {}).get("agg", {}).get("const") == "count_all"
+        if item.get("properties", {}).get("agg", {}).get("enum") == ["count_all"]
     ]
     assert count_all_items, "没有找到 count_all_item"
 
