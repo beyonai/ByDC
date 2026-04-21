@@ -1,29 +1,30 @@
 # AGENTS.md
 
 **Module:** knowledge_build
-**Purpose:** 知识构建 — 本体/枚举/列表术语管理与导入
+**Purpose:** 知识构建 — OWL 导入管线 + FastAPI 路由
 
 ---
 
 ## Overview
 
-术语生命周期管理：构建、更新、导入（OWL 格式）。支持本体术语、枚举术语、列表术语三种类型。
+OWL 格式知识包的导入管线：解析→转换→预检→批量写入 DB→回调通知。
 
 ## Structure
 
 ```
 knowledge_build/
-├── importer/          # OWL 导入（核心）
-│   ├── executor.py    # 批量执行器（1127 行）
-│   ├── owl_parser.py  # OWL 解析
-│   ├── owl_converter.py # 数据转换
-│   ├── precheck.py    # 预检查
-│   ├── runner.py      # 入口
-│   └── snowflake.py   # ID 生成
-├── ontology/          # 本体术语
-├── enum_term/         # 枚举术语
-├── list_term/         # 列表术语
-└── schema.py          # Pydantic 模型
+├── importer/              # OWL 导入管线（核心）
+│   ├── runner.py          # 入口：预检→入库→回调
+│   ├── executor.py        # 编排层：连接、路由分发、schema 设置
+│   ├── writer.py          # SQL 写入层：6 个 _batch_process_* 函数（728L）
+│   ├── _helpers.py        # 共享工具：_execute_values、ID 查找等
+│   ├── owl_parser.py      # OWL XML 解析
+│   ├── owl_converter.py   # OWL→内部格式转换
+│   ├── precheck.py        # 导入前全量校验
+│   ├── snowflake.py       # 雪花 ID 生成
+│   └── notifier.py        # 回调通知
+├── router.py              # FastAPI 路由（/build/import-package/*）
+└── schema.py              # Pydantic 请求/响应模型
 ```
 
 ## Where to Look
@@ -31,7 +32,9 @@ knowledge_build/
 | Task | Location |
 |------|----------|
 | OWL 导入入口 | `importer/runner.py:run()` |
-| 批量处理逻辑 | `importer/executor.py:run()` |
+| 编排 + schema 设置 | `importer/executor.py:run()` |
+| 批量 SQL 写入 | `importer/writer.py:_batch_process_*()` |
+| 共享工具函数 | `importer/_helpers.py` |
 | OWL 解析 | `importer/owl_parser.py` |
 | 数据转换 | `importer/owl_converter.py` |
 | 预检查 | `importer/precheck.py` |
@@ -40,30 +43,24 @@ knowledge_build/
 
 ```
 OWL 文件
-  → owl_parser.py (解析)
+  → owl_parser.py (XML 解析)
   → owl_converter.py (转换为内部格式)
-  → precheck.py (校验)
-  → executor.py (批量写入 DB)
+  → precheck.py (全量校验)
+  → executor.py (SET LOCAL search_path + 路由分发)
+  → writer.py (批量写入 DB，裸表名)
   → notifier.py (回调通知)
 ```
 
 ## Conventions
 
-- **批量写入**：`_execute_values()` 批量 INSERT
-- **幂等导入**：UPSERT 模式，支持增量更新
-- **事务管理**：DDL 00_ 自动提交，其余事务内执行
-
-## Database Tables
-
-| Table | Purpose |
-|-------|---------|
-| `term` | 术语主表 |
-| `term_relation` | 术语关系 |
-| `term_name` | 术语名称（支持别名） |
-| `term_vocabulary` | 术语词汇表 |
-| `term_knowledge` | 术语知识 |
+- **Schema 隔离**: `executor.py` 通过 `DatabaseContext` + `SET LOCAL search_path` 注入 schema
+- **SQL 裸表名**: `writer.py` 中所有 SQL 使用裸表名，不硬编码 schema
+- **批量写入**: `_execute_values()` 模拟 psycopg2 的 execute_values（psycopg3 兼容）
+- **幂等导入**: UPSERT 模式，支持 add/update/delete 操作
+- **事务管理**: 整个导入在单事务内，失败整体回滚
 
 ## Notes
 
-- `executor.py` 1127 行 — 复杂的批量处理逻辑
+- `writer.py` 728 行 — 6 个实体的批量处理逻辑
+- `_helpers.py` 被 executor.py 和 writer.py 共享，避免循环导入
 - 导入前必须运行 `db/scripts/apply_whale_datacloud.py` 初始化表结构
