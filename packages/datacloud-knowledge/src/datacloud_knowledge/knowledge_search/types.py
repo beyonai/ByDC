@@ -52,3 +52,28 @@ class OwlResolveRoot(BaseModel):
 
     term_type_code: str
     term_codes: list[str] = Field(default_factory=list)
+
+
+class NameItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name_text: str
+    is_primary: bool
+
+
+class PropItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    term_id: str
+    term_code: str
+    term_name: str
+
+
+class ValueWithAliases(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    parent_term_id: str
+    term_id: str
+    term_code: str
+    term_name: str
+    aliases: list[str] = Field(default_factory=list)
