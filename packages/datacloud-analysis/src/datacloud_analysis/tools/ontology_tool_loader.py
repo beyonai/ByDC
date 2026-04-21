@@ -405,7 +405,6 @@ class OntologyToolLoader:
         )
 
         from datacloud_analysis.tools._agent_schema_patches import (  # noqa: PLC0415
-            AGENT_COMPLEX_CONDITIONS_DESCRIPTION,
             AGENT_ORDER_BY_FIELD_DESCRIPTION,
             AGENT_SELECT_DESCRIPTION,
         )
@@ -445,13 +444,6 @@ class OntologyToolLoader:
             items["properties"] = item_props
             order_by["items"] = items
             props["order_by"] = order_by
-
-        # 4. complex_conditions：覆写 description，删除"字段名未命中 → 写此列表"冲突条件
-        if "complex_conditions" in props:
-            props["complex_conditions"] = {
-                **props["complex_conditions"],
-                "description": AGENT_COMPLEX_CONDITIONS_DESCRIPTION,
-            }
 
         return {**input_schema, "properties": props}
 

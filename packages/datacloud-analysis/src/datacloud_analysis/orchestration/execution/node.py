@@ -145,32 +145,21 @@ def inject_query_fields(t: BaseTool) -> BaseTool:
         if original_schema is None:
             return t
 
+        from datacloud_analysis.tools._agent_schema_patches import (  # noqa: PLC0415
+            AGENT_COMPLEX_CONDITIONS_DESCRIPTION,
+            AGENT_QUERY_DESCRIPTION,
+        )
+
         new_schema = create_model(
             f"{original_schema.__name__}WithQuery",
             __base__=original_schema,
             query=(
                 str,
-                Field(
-                    default="",
-                    description=(
-                        "【必填】用户原始查询意图的完整自然语言描述。"
-                        "用于歧义判断、复杂查询路由及参数缺失时的兜底推断。"
-                    ),
-                ),
+                Field(default="", description=AGENT_QUERY_DESCRIPTION),
             ),
             complex_conditions=(
                 list[str],
-                Field(
-                    default_factory=list,
-                    description=(
-                        "溢出过滤区：满足以下任一条件时，必须将该条件用自然语言写入此列表：\n"
-                        "1. 过滤条件的值无法在填参时确定为字面常量（如'后30%'、'高于行业平均'）；\n"
-                        "2. 查询/排序/返回所涉及的字段名在当前对象字段列表中找不到精确对应"
-                        "（如'贡献率'、'地块'等非标准词），需系统做语义推断。\n"
-                        "例如：'贡献率后3的地块清单'、'亩产效益后30%的地块'、'营收高于行业平均'。\n"
-                        "非空时系统路由到全能查询路径（data_query）。"
-                    ),
-                ),
+                Field(default_factory=list, description=AGENT_COMPLEX_CONDITIONS_DESCRIPTION),
             ),
         )
         t.args_schema = new_schema
