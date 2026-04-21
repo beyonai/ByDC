@@ -22,7 +22,7 @@ def render_relation_view(config: OwlGenConfig) -> str:
                     target_lib=config.library_code,
                     target_type="object",
                     target_code=obj_code,
-                    rel_name=f"{v.view_name}包含{config.table_names.get(obj_code, obj_code)}",
+                    rel_name=f"{v.view_name}_包含_{config.table_names.get(obj_code, obj_code)}",
                     rel_type="HAS_OBJECT",
                 )
             )
@@ -30,8 +30,9 @@ def render_relation_view(config: OwlGenConfig) -> str:
 
 
 def render_view_relations_for_view(config: OwlGenConfig, view: ViewConfig) -> str:
-    """渲染单个视图的对象归属关系。"""
+    """渲染单个视图的关系：HAS_OBJECT + HAS_FIELD。"""
     items = []
+    # HAS_OBJECT: 视图包含哪些对象
     for obj_code in view.object_codes:
         items.append(
             rel_item(
@@ -42,8 +43,25 @@ def render_view_relations_for_view(config: OwlGenConfig, view: ViewConfig) -> st
                 target_lib=config.library_code,
                 target_type="object",
                 target_code=obj_code,
-                rel_name=f"{view.view_name}包含{config.table_names.get(obj_code, obj_code)}",
+                rel_name=f"{view.view_name}_包含_{config.table_names.get(obj_code, obj_code)}",
                 rel_type="HAS_OBJECT",
+            )
+        )
+    # HAS_FIELD: 视图拥有的字段（带视图专属别名）
+    for mapping in view.field_mappings:
+        alias = mapping.property_name or mapping.source_object_column_code
+        items.append(
+            rel_item(
+                rel_id=f"rel_{view.view_code}_{mapping.property_code}",
+                source_lib=config.library_code,
+                source_type="view",
+                source_code=view.view_code,
+                target_lib=config.library_code,
+                target_type="prop",
+                target_code=mapping.source_object_column_code,
+                rel_name=f"{view.view_name}_拥有字段_{alias}",
+                rel_type="HAS_FIELD",
+                ext_field=_has_field_ext(alias, mapping.synonyms),
             )
         )
     return wrap_rel(items) if items else ""
@@ -100,6 +118,8 @@ def render_relation_attribute(config: OwlGenConfig, tables: list[Table]) -> str:
     items = []
     for table in tables:
         for col in table.columns:
+            alias = col.comment or col.name
+            syns = config.object_field_synonyms.get((table.code, col.name), [])
             items.append(
                 rel_item(
                     rel_id=f"rel_{table.code}_{col.name}",
@@ -109,17 +129,28 @@ def render_relation_attribute(config: OwlGenConfig, tables: list[Table]) -> str:
                     target_lib=config.library_code,
                     target_type="prop",
                     target_code=col.name,
-                    rel_name=f"{table.name}拥有字段{col.comment or col.name}",
+                    rel_name=f"{table.name}_拥有字段_{alias}",
                     rel_type="HAS_FIELD",
+                    ext_field=_has_field_ext(alias, syns),
                 )
             )
     return wrap_rel(items)
+
+
+def _has_field_ext(field_alias: str, synonyms: list[str] | None = None) -> str:
+    """构建 HAS_FIELD 关系的 ext_field JSON。"""
+    data: dict[str, object] = {"field_alias": field_alias}
+    if synonyms:
+        data["synonyms"] = synonyms
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
 
 def render_attribute_relations_for_object(config: OwlGenConfig, table: Table) -> str:
     """渲染单个对象的字段关系。"""
     items = []
     for col in table.columns:
+        alias = col.comment or col.name
+        syns = config.object_field_synonyms.get((table.code, col.name), [])
         items.append(
             rel_item(
                 rel_id=f"rel_{table.code}_{col.name}",
@@ -129,8 +160,9 @@ def render_attribute_relations_for_object(config: OwlGenConfig, table: Table) ->
                 target_lib=config.library_code,
                 target_type="prop",
                 target_code=col.name,
-                rel_name=f"{table.name}拥有字段{col.comment or col.name}",
+                rel_name=f"{table.name}_拥有字段_{alias}",
                 rel_type="HAS_FIELD",
+                ext_field=_has_field_ext(alias, syns),
             )
         )
     return wrap_rel(items) if items else ""

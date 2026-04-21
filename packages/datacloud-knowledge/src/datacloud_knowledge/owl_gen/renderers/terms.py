@@ -257,7 +257,11 @@ def render_terms_for_view(
     config: OwlGenConfig,
     view: ViewConfig,
 ) -> tuple[str, int]:
-    """渲染单个视图的术语定义。"""
+    """渲染单个视图的术语定义。
+
+    只生成 VIEW 术语本身，不再生成 prop 术语。
+    prop 术语在对象层已生成（通用名），视图专属别名通过 HAS_FIELD 关系的 ext_field 传递。
+    """
     items: list[str] = [
         _term_item(
             config,
@@ -269,17 +273,4 @@ def render_terms_for_view(
             owl_doc_file=f"view/{view.view_code}/{view.view_code}_definition.owl",
         )
     ]
-
-    for mapping in view.field_mappings:
-        items.append(
-            _term_item(
-                config,
-                code_path=f"PROP#{mapping.source_object_column_code}",
-                term_code=mapping.source_object_column_code,
-                term_name=mapping.property_name or mapping.source_object_column_code,
-                term_type_code="prop",
-                term_desc=f"属性：{mapping.property_name or mapping.source_object_column_code}",
-                synonyms=mapping.synonyms,
-            )
-        )
     return (_wrap_terms(items), len(items))

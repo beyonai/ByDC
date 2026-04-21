@@ -152,6 +152,7 @@ def rel_item(
     rel_name: str,
     rel_type: str,
     joinkeys: str = "[]",
+    ext_field: str = "",
 ) -> str:
     """渲染单条关系 NamedIndividual。"""
     return f"""\
@@ -166,7 +167,7 @@ def rel_item(
         <relation_name rdf:datatype=\"http://www.w3.org/2001/XMLSchema#string\">{xml_escape(rel_name)}</relation_name>
         <relation_type rdf:datatype=\"http://www.w3.org/2001/XMLSchema#string\">{rel_type}</relation_type>
         <joinkeys rdf:datatype=\"http://www.w3.org/2001/XMLSchema#string\">{joinkeys}</joinkeys>
-        <ext_field rdf:datatype=\"http://www.w3.org/2001/XMLSchema#string\"></ext_field>
+        <ext_field rdf:datatype=\"http://www.w3.org/2001/XMLSchema#string\">{xml_escape(ext_field)}</ext_field>
         <version rdf:datatype=\"http://www.w3.org/2001/XMLSchema#string\">1.0</version>
     </owl:NamedIndividual>"""
 

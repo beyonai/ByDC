@@ -148,6 +148,11 @@ class OwlGenConfig:
     # key = column_name, value = 别名列表。不同表对同一字段的不同 comment 可作为别名。
     prop_synonyms: dict[str, list[str]] = field(default_factory=dict)
 
+    # ── 对象字段同义词（可选）──
+    # key = (table_code, column_name), value = 同义词列表。
+    # 配在 HAS_FIELD 关系的 ext_field.synonyms 里。
+    object_field_synonyms: dict[tuple[str, str], list[str]] = field(default_factory=dict)
+
     def resolved_views(self) -> list[ViewConfig]:
         """返回视图列表：优先 views，否则从旧字段自动包装。"""
         if self.views:

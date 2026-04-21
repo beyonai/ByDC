@@ -7,13 +7,20 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from importlib import import_module
+from typing import Any
 
 from datacloud_knowledge.owl_gen.models import Column, OwlGenConfig, Table
 
 
+def _load_pymysql() -> Any:
+    """延迟加载 pymysql，避免类型检查依赖外部 stub。"""
+    return import_module("pymysql")
+
+
 def read_tables(config: OwlGenConfig) -> list[Table]:
     """从 MySQL INFORMATION_SCHEMA 读取表结构。"""
-    import pymysql  # type: ignore[import-untyped]
+    pymysql = _load_pymysql()
 
     conn = pymysql.connect(
         host=config.mysql_host,
@@ -73,7 +80,7 @@ def load_term_values(
 
     返回 ``{term_type_code: [{code, name, parent_prop_code}, ...]}``。
     """
-    import pymysql
+    pymysql = _load_pymysql()
 
     conn = pymysql.connect(
         host=config.mysql_host,
