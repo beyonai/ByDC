@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS whale_datacloud.term_name (
-    name_id            VARCHAR(255) NOT NULL PRIMARY KEY,
-    term_id            VARCHAR(255) NOT NULL,
+    name_id            VARCHAR(1000) NOT NULL PRIMARY KEY,
+    term_id            VARCHAR(1000) NOT NULL,
     name_text          VARCHAR(255) NOT NULL,
     search_scope       JSONB        NOT NULL DEFAULT '{}'::jsonb,
     name_keywords      tsvector,
