@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections import OrderedDict
 
 from datacloud_knowledge.owl_gen._xml import safe_xml_id, xml_escape
-from datacloud_knowledge.owl_gen.models import OwlGenConfig, Table
+from datacloud_knowledge.owl_gen.models import OwlGenConfig, Table, ViewConfig
 
 _TERM_HEADER = """\
 <?xml version="1.0"?>
@@ -39,6 +39,7 @@ _TERM_FOOTER = """\
     <owl:DatatypeProperty rdf:about="#domain_code"/>
     <owl:DatatypeProperty rdf:about="#owl_doc_file"/>
     <owl:DatatypeProperty rdf:about="#ext_field"/>
+    <owl:DatatypeProperty rdf:about="#parent_term_code"/>
     <owl:DatatypeProperty rdf:about="#version"/>
 </rdf:RDF>"""
 
@@ -51,6 +52,7 @@ def _term_item(
     term_type_code: str,
     term_desc: str,
     owl_doc_file: str = "",
+    parent_term_code: str = "",
 ) -> str:
     return f"""\
     <owl:NamedIndividual rdf:about="#term_{term_type_code}_{safe_xml_id(term_code, 200)}">
@@ -75,6 +77,8 @@ def _term_item(
         <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
 {xml_escape(owl_doc_file)}</owl_doc_file>
         <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
+{xml_escape(parent_term_code)}</parent_term_code>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
     </owl:NamedIndividual>"""
 
@@ -145,13 +149,9 @@ def render_terms(
             )
         )
 
-    # 属性术语 (prop)
-    seen_props: set[str] = set()
+    # 属性术语 (prop)：按对象粒度生成，不再全局去重。
     for table in tables:
         for col in table.columns:
-            if col.name in seen_props:
-                continue
-            seen_props.add(col.name)
             ontology_items.append(
                 _term_item(
                     config,
@@ -178,9 +178,78 @@ def render_terms(
                     term_name=entry["name"],
                     term_type_code=type_code,
                     term_desc=f"{type_name}术语：{entry['name']}",
+                    parent_term_code=entry.get("parent_prop_code", ""),
                 )
             )
         if items:
             result[f"terms/terms_{type_code}.owl"] = (_wrap_terms(items), len(items))
 
     return result
+
+
+def render_terms_for_object(
+    config: OwlGenConfig,
+    table: Table,
+    term_values: dict[str, list[dict[str, str]]],
+    term_type_defs: OrderedDict[str, tuple[str, str, str]],
+) -> tuple[str, int]:
+    """渲染单个对象下的所有术语（object + prop + 值术语）。"""
+    items: list[str] = []
+    items.append(
+        _term_item(
+            config,
+            code_path=f"OBJECT#{table.code}",
+            term_code=table.code,
+            term_name=table.name,
+            term_type_code="object",
+            term_desc=table.desc,
+            owl_doc_file=f"object/{table.code}/{table.code}_definition.owl",
+        )
+    )
+
+    for col in table.columns:
+        items.append(
+            _term_item(
+                config,
+                code_path=f"PROP#{col.name}",
+                term_code=col.name,
+                term_name=col.comment or col.name,
+                term_type_code="prop",
+                term_desc=f"{table.name}的字段：{col.comment or col.name}",
+            )
+        )
+
+    binding_lookup = {b.column_name: b for b in config.term_bindings if b.table_code == table.code}
+    for binding in binding_lookup.values():
+        type_code = binding.term_type_code
+        type_name = term_type_defs.get(type_code, (type_code, "", ""))[0]
+        for entry in term_values.get(type_code, []):
+            items.append(
+                _term_item(
+                    config,
+                    code_path=f"{config.library_code}#{type_code}#{entry['code']}",
+                    term_code=entry["code"],
+                    term_name=entry["name"],
+                    term_type_code=type_code,
+                    term_desc=f"{type_name}术语：{entry['name']}",
+                    parent_term_code=entry.get("parent_prop_code", ""),
+                )
+            )
+
+    return (_wrap_terms(items), len(items))
+
+
+def render_terms_for_view(config: OwlGenConfig, view: ViewConfig) -> tuple[str, int]:
+    """渲染单个视图的术语定义。"""
+    items: list[str] = [
+        _term_item(
+            config,
+            code_path=f"VIEW#{view.view_code}",
+            term_code=view.view_code,
+            term_name=view.view_name,
+            term_type_code="view",
+            term_desc=view.view_desc,
+            owl_doc_file=f"view/{view.view_code}/{view.view_code}_definition.owl",
+        )
+    ]
+    return (_wrap_terms(items), len(items))
