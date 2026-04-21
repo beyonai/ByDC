@@ -1,4 +1,4 @@
-"""知识构建路由聚合：挂载三类术语子路由 + 知识包导入接口。"""
+"""知识构建路由聚合：知识包导入接口。"""
 
 from __future__ import annotations
 
@@ -6,18 +6,12 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from .enum_term.router import router as enum_term_router
 from .importer import precheck, runner
-from .list_term.router import router as list_term_router
-from .ontology.router import router as ontology_router
 from .schema import ImportPackageRequest, ImportPackageRunRequest, PrecheckResult, RunResult
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/build", tags=["知识构建"])
-router.include_router(ontology_router)
-router.include_router(enum_term_router)
-router.include_router(list_term_router)
 
 
 @router.post(
