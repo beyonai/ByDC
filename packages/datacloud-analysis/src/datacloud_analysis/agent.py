@@ -17,10 +17,6 @@ from typing import Any
 from datacloud_analysis.i18n import get_supported_locales
 from datacloud_analysis.orchestration.graph_builder import build_analysis_graph
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 _DIAG_QUESTION_KEYS = (
