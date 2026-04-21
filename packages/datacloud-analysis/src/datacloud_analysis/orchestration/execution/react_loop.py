@@ -463,8 +463,6 @@ async def finish_react(
     - 【重要】result_type=query_result 时，answer 字段只写一句话的文字摘要
       （例如"共有 N 家企业"），绝对不要在 answer 里写数据表格或列表，
       数据已经通过 query_data 自动结构化展示，写进 answer 会导致重复输出。
-    - execute_code 执行后会将 _result 自动保存到同名 .json 文件（result_file 字段），
-      此时推荐使用 result_type=json_file，csv_file_path 填写 result_file 路径。
     """
     parsed_data: Any = None
     if result_type == "json" and data:

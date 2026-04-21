@@ -131,6 +131,7 @@ explicit = false
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+extend-exclude = ["packages/datacloud-analysis-bak"]
 
 [tool.ruff.lint]
 extend-select = [
@@ -289,6 +290,7 @@ exclude = '''(?x)(
     (^|/)\.idea(/|$)
   | (^|/)(docs|examples|scripts|tmp_sqlparse)(/|$)
   | (^|/)tests(/|$)
+  | (^|/)packages/datacloud-analysis-bak(/|$)
 )'''
 
 [[tool.mypy.overrides]]
