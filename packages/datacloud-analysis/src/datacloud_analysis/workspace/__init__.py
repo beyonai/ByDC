@@ -1,8 +1,9 @@
-"""Workspace package — file-system path management and sandbox mounting.
+"""Workspace package - file-system path management and runtime helpers.
 
 Sub-modules
 -----------
-mount          Mount inputs/temp/outputs/skills into a sandbox backend.
+paths          Resolve task-scoped workspace directories.
+runtime        Resolve shared workspace visibility rules.
 skills_loader  Scan & register built-in / enterprise / user skills.
 """
 
