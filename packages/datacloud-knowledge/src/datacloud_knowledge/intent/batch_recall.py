@@ -34,7 +34,6 @@ class TypedKeywordState(Protocol):
 
 log = logging.getLogger(__name__)
 
-_SCHEMA = "whale_datacloud"
 _BM25_MIN_SCORE = 0.001
 # 向量召回不设最低相似度阈值，统一用 top_k 截断后交给 RRF 融合排序。
 # 低质量候选会在 RRF 融合时因排名靠后被自然淘汰。
@@ -525,36 +524,36 @@ def _run_substring_query(
 # Single-vector query (HNSW-friendly: ORDER BY embedding <=> :constant LIMIT k)
 # ---------------------------------------------------------------------------
 
-_VECTOR_NORMAL_SQL = text(f"""
+_VECTOR_NORMAL_SQL = text("""
     SELECT tn.term_id,
            tn.name_text AS term_name,
            tn.name_id,
            t.term_type_code,
            1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score,
            t.term_code
-    FROM {_SCHEMA}.term_name tn
-    JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
+    FROM term_name tn
+    JOIN term t ON tn.term_id = t.term_id
     WHERE tn.name_embedding IS NOT NULL
     ORDER BY tn.name_embedding <=> CAST(:vector AS vector)
     LIMIT :limit
 """)
 
-_VECTOR_TYPED_SQL = text(f"""
+_VECTOR_TYPED_SQL = text("""
     SELECT tn.term_id,
            tn.name_text AS term_name,
            tn.name_id,
            t.term_type_code,
            1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score,
            t.term_code
-    FROM {_SCHEMA}.term_name tn
-    JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
+    FROM term_name tn
+    JOIN term t ON tn.term_id = t.term_id
     WHERE tn.name_embedding IS NOT NULL
       AND t.term_type_code IN :type_codes
     ORDER BY tn.name_embedding <=> CAST(:vector AS vector)
     LIMIT :limit
 """).bindparams(bindparam("type_codes", expanding=True))
 
-_VECTOR_PER_TYPE_SQL = text(f"""
+_VECTOR_PER_TYPE_SQL = text("""
     SELECT term_id, term_name, name_id, term_type_code, score, term_code
     FROM (
         SELECT top_n.term_id,
@@ -574,8 +573,8 @@ _VECTOR_PER_TYPE_SQL = text(f"""
                    t.term_type_code,
                    1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score,
                    t.term_code
-            FROM {_SCHEMA}.term_name tn
-            JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
+            FROM term_name tn
+            JOIN term t ON tn.term_id = t.term_id
             WHERE tn.name_embedding IS NOT NULL
               AND t.term_type_code IN :type_codes
             ORDER BY tn.name_embedding <=> CAST(:vector AS vector)
@@ -681,8 +680,8 @@ def _build_tsquery_sql(
                          PARTITION BY t.term_type_code
                          ORDER BY ts_rank_cd(tn.{tsvector_column}, to_tsquery('simple', i.tsquery_text), 32) DESC
                        ) AS rn
-                FROM {_SCHEMA}.term_name tn
-                JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
+                FROM term_name tn
+                JOIN term t ON tn.term_id = t.term_id
                 WHERE tn.{tsvector_column} @@ to_tsquery('simple', i.tsquery_text)
                   AND tn.{tsvector_column} IS NOT NULL{type_clause}
               ) ranked
@@ -705,8 +704,8 @@ def _build_tsquery_sql(
                      t.term_type_code,
                      ts_rank_cd(tn.{tsvector_column}, to_tsquery('simple', i.tsquery_text), 32) AS score,
                      t.term_code
-              FROM {_SCHEMA}.term_name tn
-              JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
+              FROM term_name tn
+              JOIN term t ON tn.term_id = t.term_id
               WHERE tn.{tsvector_column} @@ to_tsquery('simple', i.tsquery_text)
                 AND tn.{tsvector_column} IS NOT NULL{type_clause}
                 AND ts_rank_cd(tn.{tsvector_column}, to_tsquery('simple', i.tsquery_text), 32) >= :min_score
@@ -752,8 +751,8 @@ def _build_substring_sql(
                          PARTITION BY t.term_type_code
                          ORDER BY LENGTH(tn.name_text) DESC
                        ) AS rn
-                FROM {_SCHEMA}.term_name tn
-                JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
+                FROM term_name tn
+                JOIN term t ON tn.term_id = t.term_id
                 WHERE (
                         POSITION(tn.name_text IN i.keyword_text) > 0
                         OR POSITION(i.keyword_text IN tn.name_text) > 0
@@ -778,8 +777,8 @@ def _build_substring_sql(
                      t.term_type_code,
                      LENGTH(tn.name_text)::float AS score,
                      t.term_code
-              FROM {_SCHEMA}.term_name tn
-              JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
+              FROM term_name tn
+              JOIN term t ON tn.term_id = t.term_id
               WHERE (
                       POSITION(tn.name_text IN i.keyword_text) > 0
                       OR POSITION(i.keyword_text IN tn.name_text) > 0

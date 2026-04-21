@@ -42,7 +42,7 @@ def create_user_term_name(
 
     session.execute(
         text(
-            "INSERT INTO whale_datacloud.term_name "
+            "INSERT INTO term_name "
             "(name_id, term_id, name_text, search_scope, created_time, updated_time) "
             "VALUES (:name_id, :term_id, :name_text, CAST(:search_scope AS jsonb), :now, :now)"
         ),
@@ -75,7 +75,7 @@ def create_term_with_knowledge(
     term_now = datetime.now(tz=UTC)
     session.execute(
         text(
-            "INSERT INTO whale_datacloud.term "
+            "INSERT INTO term "
             "(term_id, term_code, term_name, term_type_code, domain_id, created_time, updated_time) "
             "VALUES ("
             ":term_id, :term_code, :term_name, :term_type_code, :domain_id, :now, :now"
@@ -94,7 +94,7 @@ def create_term_with_knowledge(
     knowledge_now = datetime.now(tz=UTC)
     session.execute(
         text(
-            "INSERT INTO whale_datacloud.term_knowledge "
+            "INSERT INTO term_knowledge "
             '(knowledge_id, term_id, desc_summary, "desc", created_time, updated_time) '
             "VALUES (:knowledge_id, :term_id, :desc_summary, :desc, :now, :now)"
         ),
@@ -131,7 +131,7 @@ def create_term_knowledge(
     now = datetime.now(tz=UTC)
     session.execute(
         text(
-            "INSERT INTO whale_datacloud.term_knowledge "
+            "INSERT INTO term_knowledge "
             '(knowledge_id, term_id, desc_summary, "desc", created_time, updated_time) '
             "VALUES (:knowledge_id, :term_id, :desc_summary, :desc, :now, :now)"
         ),
