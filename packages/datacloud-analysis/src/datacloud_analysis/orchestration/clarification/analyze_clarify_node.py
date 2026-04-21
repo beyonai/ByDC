@@ -49,7 +49,7 @@ async def analyze_clarify_node(state: AgentState, config: RunnableConfig) -> dic
             is_compute,
             ontology_code,
         )
-        paradigm_list, clarify_knowledge = _analyze_clarification(
+        paradigm_list, clarify_knowledge, _needs = _analyze_clarification(
             query, ontology_code, structured_input, is_compute=is_compute
         )
 
