@@ -32,7 +32,6 @@ _DEFAULT_MAX_BFS_DEPTH = 4
 def disambiguate(
     match_result: MatchResult,
     session: Any,
-    schema: str = "whale_datacloud",
 ) -> DisambiguationResult:
     """执行多维消歧。"""
     confirmed: dict[str, MatchCandidate] = {}
@@ -67,7 +66,6 @@ def disambiguate(
             candidates=ranked,
             anchors=anchors,
             session=session,
-            schema=schema,
         )
         if topology_winner is not None:
             confirmed[mention_text] = topology_winner
@@ -99,7 +97,6 @@ def _bfs_distance(
     source_term_id: str,
     target_term_id: str,
     session: Any,
-    schema: str = "whale_datacloud",
     max_depth: int = 4,
 ) -> int | None:
     """计算 source 到 target 的最短 BFS 距离，不可达返回 None。"""
@@ -108,10 +105,6 @@ def _bfs_distance(
 
     if max_depth <= 0:
         return None
-
-    if schema != "whale_datacloud":
-        msg = "Only whale_datacloud schema is supported in disambiguation BFS query."
-        raise ValueError(msg)
 
     sql = text(
         """
@@ -134,7 +127,7 @@ def _bfs_distance(
                     ELSE tr.source_term_id
                 END
             FROM bfs b
-            JOIN whale_datacloud.term_relation tr
+            JOIN term_relation tr
                 ON tr.source_term_id = b.current_id OR tr.target_term_id = b.current_id
             WHERE b.depth < :max_depth
               AND NOT (
@@ -170,7 +163,6 @@ def _topology_check(
     candidates: list[MatchCandidate],
     anchors: list[MatchCandidate],
     session: Any,
-    schema: str = "whale_datacloud",
 ) -> MatchCandidate | None:
     """基于候选到 anchors 的最短距离进行拓扑判别。"""
     if not candidates or not anchors:
@@ -185,7 +177,6 @@ def _topology_check(
                 source_term_id=candidate.term_id,
                 target_term_id=anchor.term_id,
                 session=session,
-                schema=schema,
                 max_depth=_DEFAULT_MAX_BFS_DEPTH,
             )
             if distance is None:
@@ -245,7 +236,6 @@ def build_shortest_path_tree(
     target_term_id: str,
     source_term_type_codes: Sequence[str],
     session: Any,
-    schema: str = "whale_datacloud",
     max_depth: int = 6,
 ) -> ShortestPathTreeResult:
     """构建从限定类型根节点到目标术语的最短路径子图与树文本。"""
@@ -263,7 +253,6 @@ def build_shortest_path_tree(
         target_term_id=target_term_id,
         source_term_type_codes=normalized_type_codes,
         session=session,
-        schema=schema,
         max_depth=max_depth,
     )
     if not rows:
@@ -284,13 +273,9 @@ def _query_shortest_path_rows(
     target_term_id: str,
     source_term_type_codes: tuple[str, ...],
     session: Any,
-    schema: str,
     max_depth: int,
 ) -> list[Any]:
     """查询满足根类型约束的最短路径行。"""
-    if schema != "whale_datacloud":
-        msg = "Only whale_datacloud schema is supported in shortest path query."
-        raise ValueError(msg)
 
     sql = text(
         """
@@ -302,7 +287,7 @@ def _query_shortest_path_rows(
                 t.desc_summary AS term_desc_summary,
                 (
                     SELECT COALESCE(NULLIF(k.desc_summary, ''), NULLIF(k."desc", ''))
-                    FROM whale_datacloud.term_knowledge k
+                    FROM term_knowledge k
                     WHERE k.term_id = t.term_id
                     ORDER BY k.knowledge_id
                     LIMIT 1
@@ -316,7 +301,7 @@ def _query_shortest_path_rows(
                     COALESCE(
                         (
                             SELECT COALESCE(NULLIF(k.desc_summary, ''), NULLIF(k."desc", ''))
-                            FROM whale_datacloud.term_knowledge k
+                            FROM term_knowledge k
                             WHERE k.term_id = t.term_id
                             ORDER BY k.knowledge_id
                             LIMIT 1
@@ -326,7 +311,7 @@ def _query_shortest_path_rows(
                 ]::text[] AS path_descriptions,
                 ARRAY[]::text[] AS path_relations,
                 ARRAY[t.term_id]::text[] AS visited_ids
-            FROM whale_datacloud.term t
+            FROM term t
             WHERE t.term_id = :target_term_id
 
             UNION ALL
@@ -338,7 +323,7 @@ def _query_shortest_path_rows(
                 parent.desc_summary AS term_desc_summary,
                 (
                     SELECT COALESCE(NULLIF(k.desc_summary, ''), NULLIF(k."desc", ''))
-                    FROM whale_datacloud.term_knowledge k
+                    FROM term_knowledge k
                     WHERE k.term_id = parent.term_id
                     ORDER BY k.knowledge_id
                     LIMIT 1
@@ -352,7 +337,7 @@ def _query_shortest_path_rows(
                     COALESCE(
                         (
                             SELECT COALESCE(NULLIF(k.desc_summary, ''), NULLIF(k."desc", ''))
-                            FROM whale_datacloud.term_knowledge k
+                            FROM term_knowledge k
                             WHERE k.term_id = parent.term_id
                             ORDER BY k.knowledge_id
                             LIMIT 1
@@ -363,8 +348,8 @@ def _query_shortest_path_rows(
                 ARRAY[tr.relation_name]::text[] || upward.path_relations,
                 upward.visited_ids || ARRAY[parent.term_id]::text[]
             FROM upward
-            JOIN whale_datacloud.term_relation tr ON tr.target_term_id = upward.term_id
-            JOIN whale_datacloud.term parent ON parent.term_id = tr.source_term_id
+            JOIN term_relation tr ON tr.target_term_id = upward.term_id
+            JOIN term parent ON parent.term_id = tr.source_term_id
             WHERE upward.depth < :max_depth
               AND NOT parent.term_id = ANY(upward.visited_ids)
         ),

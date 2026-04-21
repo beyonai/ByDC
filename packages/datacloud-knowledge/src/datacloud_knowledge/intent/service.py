@@ -50,8 +50,8 @@ def _build_global_name_index() -> dict[str, list[tuple[str, str, str]]]:
             t.term_type_code,
             tn.name_text,
             CASE WHEN tn.name_text = t.term_name THEN 'standard_name' ELSE 'alias' END AS match_type
-        FROM whale_datacloud.term_name tn
-        JOIN whale_datacloud.term t ON tn.term_id = t.term_id
+        FROM term_name tn
+        JOIN term t ON tn.term_id = t.term_id
         WHERE tn.search_scope = '{}'::jsonb
            OR COALESCE((tn.search_scope->>'scope_user_id'), '') = ''
         """
@@ -82,7 +82,7 @@ def _query_name_ids_by_word(
             SELECT
                 tn.term_id,
                 tn.name_id
-            FROM whale_datacloud.term_name tn
+            FROM term_name tn
             WHERE tn.name_text = :name_text
               AND tn.term_id IN :term_ids
               AND (
@@ -103,7 +103,7 @@ def _query_name_ids_by_word(
             SELECT
                 tn.term_id,
                 tn.name_id
-            FROM whale_datacloud.term_name tn
+            FROM term_name tn
             WHERE tn.name_text = :name_text
               AND tn.term_id IN :term_ids
               AND (

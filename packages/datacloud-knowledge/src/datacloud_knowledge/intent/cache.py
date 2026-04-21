@@ -69,8 +69,8 @@ class UserNameCache:
         """
         sql = text(
             "SELECT tn.name_text, t.term_id, t.term_type_code, tn.search_scope "
-            "FROM whale_datacloud.term_name tn "
-            "JOIN whale_datacloud.term t ON tn.term_id = t.term_id "
+            "FROM term_name tn "
+            "JOIN term t ON tn.term_id = t.term_id "
             "WHERE tn.search_scope->>'scope_user_id' = :user_id"
         )
         rows = session.execute(sql, {"user_id": user_id}).fetchall()

@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import bindparam, text
 
+from datacloud_knowledge.db.url import resolve_knowledge_schema
+
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
@@ -20,7 +22,6 @@ log = logging.getLogger(__name__)
 
 _COLUMN_CAPS_CACHE: dict[str, bool | None] = {"name_keywords": None}
 
-_SCHEMA = "whale_datacloud"
 _TABLE = "term_name"
 _TSV_COLUMN = "name_keywords"
 
@@ -63,7 +64,7 @@ def _has_name_keywords_column(session: Session) -> bool:
         rows = session.execute(
             sql,
             {
-                "table_schema": _SCHEMA,
+                "table_schema": resolve_knowledge_schema(),
                 "table_name": _TABLE,
                 "column_name": _TSV_COLUMN,
             },
@@ -88,8 +89,8 @@ def _build_search_sql(*, with_type_filter: bool = False) -> object:
             ts_rank_cd(tn.name_keywords, query, 32) AS score,
             t.term_code
         FROM
-            whale_datacloud.term_name tn,
-            whale_datacloud.term t,
+            term_name tn,
+            term t,
             to_tsquery('simple', :tsquery) query
         WHERE
             tn.name_keywords @@ query
@@ -148,7 +149,7 @@ def _search(
     tsquery = f" {ts_operator} ".join(list(query_text.strip()))
     if not _has_name_keywords_column(session):
         message = (
-            "BM25 requires whale_datacloud.term_name.name_keywords column. "
+            "BM25 requires term_name.name_keywords column. "
             "Please apply DDL/importer to populate this column before querying."
         )
         log.error(message)
@@ -221,8 +222,8 @@ def _build_partitioned_search_sql(*, with_type_filter: bool = True) -> object:
                 ) AS rn,
                 t.term_code
             FROM
-                whale_datacloud.term_name tn,
-                whale_datacloud.term t,
+                term_name tn,
+                term t,
                 to_tsquery('simple', :tsquery) query
             WHERE
                 tn.name_keywords @@ query
@@ -343,7 +344,7 @@ def _has_jieba_column(session: Session) -> bool:
         rows = session.execute(
             sql,
             {
-                "table_schema": _SCHEMA,
+                "table_schema": resolve_knowledge_schema(),
                 "table_name": _TABLE,
                 "column_name": "name_keywords_jieba",
             },
@@ -380,8 +381,8 @@ def _build_jieba_search_sql(*, with_type_filter: bool = False) -> object:
             ts_rank_cd(tn.name_keywords_jieba, query, 32) AS score,
             t.term_code
         FROM
-            whale_datacloud.term_name tn,
-            whale_datacloud.term t,
+            term_name tn,
+            term t,
             to_tsquery('simple', :tsquery) query
         WHERE
             tn.name_keywords_jieba @@ query
@@ -475,8 +476,8 @@ def _build_jieba_partitioned_sql() -> object:
                 ) AS rn,
                 t.term_code
             FROM
-                whale_datacloud.term_name tn,
-                whale_datacloud.term t,
+                term_name tn,
+                term t,
                 to_tsquery('simple', :tsquery) query
             WHERE
                 tn.name_keywords_jieba @@ query

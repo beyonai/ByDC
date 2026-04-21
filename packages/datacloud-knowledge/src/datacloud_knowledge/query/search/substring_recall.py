@@ -16,8 +16,6 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-_SCHEMA = "whale_datacloud"
-
 
 def substring_recall(
     session: Session,
@@ -49,7 +47,7 @@ def substring_recall(
 
     if term_type_codes:
         type_codes_list = sorted(term_type_codes)
-        sql = text(f"""
+        sql = text("""
             SELECT
                 tn.term_id,
                 tn.name_text AS term_name,
@@ -57,8 +55,8 @@ def substring_recall(
                 t.term_type_code,
                 t.term_code
             FROM
-                {_SCHEMA}.term_name tn
-                JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
+                term_name tn
+                JOIN term t ON tn.term_id = t.term_id
             WHERE
                 (
                     POSITION(tn.name_text IN :query_text) > 0
@@ -77,7 +75,7 @@ def substring_recall(
             "limit": top_k,
         }
     else:
-        sql = text(f"""
+        sql = text("""
             SELECT
                 tn.term_id,
                 tn.name_text AS term_name,
@@ -85,8 +83,8 @@ def substring_recall(
                 t.term_type_code,
                 t.term_code
             FROM
-                {_SCHEMA}.term_name tn
-                JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
+                term_name tn
+                JOIN term t ON tn.term_id = t.term_id
             WHERE
                 (
                     POSITION(tn.name_text IN :query_text) > 0
@@ -122,7 +120,7 @@ def substring_recall_partitioned(
         return []
 
     type_codes_list = sorted(term_type_codes)
-    sql = text(f"""
+    sql = text("""
         SELECT term_id, term_name, name_id, term_type_code, term_code
         FROM (
             SELECT
@@ -136,8 +134,8 @@ def substring_recall_partitioned(
                     ORDER BY LENGTH(tn.name_text) DESC
                 ) AS rn
             FROM
-                {_SCHEMA}.term_name tn
-                JOIN {_SCHEMA}.term t ON tn.term_id = t.term_id
+                term_name tn
+                JOIN term t ON tn.term_id = t.term_id
             WHERE
                 (
                     POSITION(tn.name_text IN :query_text) > 0

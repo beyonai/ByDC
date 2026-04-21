@@ -40,7 +40,7 @@ def update_scores(
 
     for record in records:
         row = session.execute(
-            text("SELECT search_scope FROM whale_datacloud.term_name WHERE name_id = :name_id"),
+            text("SELECT search_scope FROM term_name WHERE name_id = :name_id"),
             {"name_id": record.name_id},
         ).fetchone()
         if row is None:
@@ -76,7 +76,7 @@ def update_scores(
 
         session.execute(
             text(
-                "UPDATE whale_datacloud.term_name "
+                "UPDATE term_name "
                 "SET search_scope = CAST(:search_scope AS jsonb), updated_time = :now "
                 "WHERE name_id = :name_id"
             ),

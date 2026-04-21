@@ -99,8 +99,8 @@ class DimensionValueResolver:
                 rows = session.execute(
                     text(
                         "SELECT t.term_name, tt.type_name "
-                        "FROM whale_datacloud.term t "
-                        "JOIN whale_datacloud.term_type tt "
+                        "FROM term t "
+                        "JOIN term_type tt "
                         "  ON t.term_type_code = tt.type_code "
                         "WHERE tt.type_category = 2"
                     )
