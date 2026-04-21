@@ -172,7 +172,13 @@ def _inject_db_object_actions(cls, existing_codes: set, registry) -> None:
     # query
     query_code = f"query_{obj_code}"
     if query_code not in existing_codes:
-        schema = build_query_schema(obj_name, fields, req_groups)
+        schema = build_query_schema(
+            obj_name,
+            fields,
+            req_groups,
+            scope_type="object",
+            scope_code=obj_code,
+        )
         action = _make_action(
             action_code=query_code,
             action_name=f"查询{obj_name}明细",
@@ -192,7 +198,13 @@ def _inject_db_object_actions(cls, existing_codes: set, registry) -> None:
     if _has_measure(fields):
         compute_code = f"compute_{obj_code}"
         if compute_code not in existing_codes:
-            schema = build_compute_schema(obj_name, fields, req_groups)
+            schema = build_compute_schema(
+                obj_name,
+                fields,
+                req_groups,
+                scope_type="object",
+                scope_code=obj_code,
+            )
             action = _make_action(
                 action_code=compute_code,
                 action_name=f"统计{obj_name}",
@@ -303,7 +315,13 @@ def _inject_view_actions(loader, registry) -> None:
         # query
         query_code = f"query_{view_id}"
         if query_code not in existing_codes:
-            schema = build_query_schema(view_name, view_fields, req_groups)
+            schema = build_query_schema(
+                view_name,
+                view_fields,
+                req_groups,
+                scope_type="view",
+                scope_code=view_id,
+            )
             action = _make_action(
                 action_code=query_code,
                 action_name=f"查询{view_name}明细",
@@ -325,7 +343,13 @@ def _inject_view_actions(loader, registry) -> None:
         if _has_measure(view_fields):
             compute_code = f"compute_{view_id}"
             if compute_code not in existing_codes:
-                schema = build_compute_schema(view_name, view_fields, req_groups)
+                schema = build_compute_schema(
+                    view_name,
+                    view_fields,
+                    req_groups,
+                    scope_type="view",
+                    scope_code=view_id,
+                )
                 action = _make_action(
                     action_code=compute_code,
                     action_name=f"统计{view_name}",
