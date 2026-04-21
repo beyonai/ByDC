@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from psycopg import Cursor
@@ -16,6 +17,8 @@ from ._helpers import (
     _term_id_from_obj_or_code_direct,
 )
 from .snowflake import _next_snowflake_ids
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_type_category(obj: dict[str, Any]) -> int:
@@ -263,16 +266,27 @@ def _dedupe_term_name_sync_items(
 def _batch_sync_term_names(
     cur: Cursor,
     items: list[tuple[str, str, list[str]]],
+    *,
+    skip_delete_ids: set[str] | None = None,
 ) -> int:
-    """批量同步 term_name，并一次性补全 term_vocabulary（仍用 NOT EXISTS，兼容无 ON CONFLICT 的库）。"""
+    """批量同步 term_name，并一次性补全 term_vocabulary。
+
+    skip_delete_ids: 这些 term_id 是新插入的，跳过 DELETE（无旧数据）。
+    """
     if not items:
         return 0
     items = _dedupe_term_name_sync_items(items)
-    term_ids = [t[0] for t in items]
-    cur.execute(
-        "DELETE FROM term_name WHERE term_id = ANY(%s)",
-        (term_ids,),
-    )
+
+    # 只对已有 term 做 DELETE（新增 term 无旧 name 行）
+    if skip_delete_ids is not None:
+        delete_ids = [t[0] for t in items if t[0] not in skip_delete_ids]
+    else:
+        delete_ids = [t[0] for t in items]
+    if delete_ids:
+        cur.execute(
+            "DELETE FROM term_name WHERE term_id = ANY(%s)",
+            (delete_ids,),
+        )
 
     # 预计算需要多少个 ID（每个 term_name + aliases）
     total_names = sum(
@@ -303,7 +317,7 @@ def _batch_sync_term_names(
         """INSERT INTO term_name (name_id, term_id, name_text)
            VALUES %s""",
         all_rows,
-        page_size=1000,  # 增大 page_size
+        page_size=2000,
     )
     words = list({row[2] for row in all_rows})
     if words:
@@ -387,15 +401,20 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
                 _batch_sync_term_names(cur, sync_items)
     if not upserts:
         return
-    upsert_norms = [_normalize_term_code(o["term_code"]) for o in upserts]
-    existing_map = _lookup_term_ids_by_norm_codes(cur, upsert_norms)
-    to_insert = [o for o in upserts if _normalize_term_code(o["term_code"]) not in existing_map]
-    to_update = [o for o in upserts if _normalize_term_code(o["term_code"]) in existing_map]
+    # 按 term_id 判断是否已存在（term_id = library#type#code，全局唯一）
+    upsert_ids = list(dict.fromkeys(o["term_id"] for o in upserts))
+    cur.execute(
+        "SELECT term_id FROM term WHERE term_id = ANY(%s)",
+        (upsert_ids,),
+    )
+    existing_ids: set[str] = {r[0] for r in cur.fetchall()}
+    to_insert = [o for o in upserts if o["term_id"] not in existing_ids]
+    to_update = [o for o in upserts if o["term_id"] in existing_ids]
     # 批量 UPDATE：使用临时表 + UPDATE JOIN，避免逐行 SQL
     if to_update:
         update_rows = []
         for obj in to_update:
-            term_id = existing_map[_normalize_term_code(obj["term_code"])]
+            term_id = obj["term_id"]
             term_code = _normalize_term_code(obj["term_code"])
             aliases = obj.get("aliases") or []
             term_tags = json.dumps({"aliases": aliases}, ensure_ascii=False) if aliases else "{}"
@@ -471,17 +490,13 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
             page_size=1000,  # 增大 page_size
         )
         stats["terms"]["inserted"] += len(to_insert)
-        # 复用 existing_map，避免重复查询
-        for obj in to_insert:
-            existing_map[_normalize_term_code(obj["term_code"])] = obj["term_id"]
-    # 使用 existing_map 代替 after_map，避免重复查询
+    # 直接使用 obj["term_id"]，不再依赖 existing_map
     sync_upsert: list[tuple[str, str, list[str]]] = []
     for o in upserts:
-        tid = _str_id_if_set(o, "term_id")
-        if tid is None:
-            tid = existing_map[_normalize_term_code(o["term_code"])]
-        sync_upsert.append((tid, o["term_name"], o.get("aliases") or []))
-    _batch_sync_term_names(cur, sync_upsert)
+        sync_upsert.append((o["term_id"], o["term_name"], o.get("aliases") or []))
+    # 新增 term 无旧 name 行，跳过 DELETE 加速
+    new_ids = {o["term_id"] for o in to_insert}
+    _batch_sync_term_names(cur, sync_upsert, skip_delete_ids=new_ids)
 
 
 def _batch_process_relation(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str, Any]) -> None:
@@ -511,17 +526,27 @@ def _batch_process_relation(cur: Cursor, objs: list[dict[str, Any]], stats: dict
             (deletes,),
         )
         stats["relations"]["deleted"] += cur.rowcount
-    for obj in updates:
-        relation_id = obj["relation_code"]
+    if updates:
+        upd_rows = [
+            (obj["relation_code"], obj.get("relation_name"), obj.get("ext_field"))
+            for obj in updates
+        ]
         cur.execute(
-            """UPDATE term_relation
-                  SET relation_name = COALESCE(%s, relation_name),
-                      ext_attrs     = COALESCE(%s::jsonb, ext_attrs),
-                      updated_time  = CURRENT_TIMESTAMP
-                WHERE relation_id = %s""",
-            (obj.get("relation_name"), obj.get("ext_field"), relation_id),
+            "CREATE TEMP TABLE _tmp_rel_patch ("
+            "  relation_id VARCHAR, relation_name VARCHAR, ext_attrs TEXT"
+            ") ON COMMIT PRESERVE ROWS"
         )
+        _execute_values(cur, "INSERT INTO _tmp_rel_patch VALUES %s", upd_rows)
+        cur.execute("""
+            UPDATE term_relation t
+            SET relation_name = COALESCE(tmp.relation_name, t.relation_name),
+                ext_attrs     = COALESCE(tmp.ext_attrs::jsonb, t.ext_attrs),
+                updated_time  = CURRENT_TIMESTAMP
+            FROM _tmp_rel_patch tmp
+            WHERE t.relation_id = tmp.relation_id
+        """)
         stats["relations"]["updated"] += cur.rowcount
+        cur.execute("DROP TABLE _tmp_rel_patch")
     if not upserts:
         return
     ids = [o["relation_code"] for o in upserts]
@@ -534,7 +559,6 @@ def _batch_process_relation(cur: Cursor, objs: list[dict[str, Any]], stats: dict
     to_update = [o for o in upserts if o["relation_code"] in existing]
 
     # 收集需要查找 term_id 的 code（仅用于 action_term_code）
-    # 收集需要查找 term_id 的 code（仅用于 action_term_code）
     ref_codes: list[str] = [
         _normalize_term_code(o["action_term_code"])
         for o in to_insert + to_update
@@ -542,20 +566,10 @@ def _batch_process_relation(cur: Cursor, objs: list[dict[str, Any]], stats: dict
     ]
     code_to_tid = _lookup_term_ids_by_norm_codes(cur, ref_codes) if ref_codes else {}
 
-    for obj in to_update:
-        relation_id = obj["relation_code"]
-        cur.execute(
-            """UPDATE term_relation
-                  SET source_term_id    = %s,
-                      target_term_id    = %s,
-                      relation_name     = %s,
-                      relation_category = %s,
-                      cardinality       = %s,
-                      action_term_id    = COALESCE(%s, action_term_id),
-                      ext_attrs         = COALESCE(%s::jsonb, ext_attrs),
-                      updated_time      = CURRENT_TIMESTAMP
-                WHERE relation_id = %s""",
+    if to_update:
+        update_rows = [
             (
+                obj["relation_code"],
                 _term_id_from_obj_or_code_direct(
                     obj, id_key="source_term_id", code_key="source_term_code"
                 ),
@@ -572,10 +586,41 @@ def _batch_process_relation(cur: Cursor, objs: list[dict[str, Any]], stats: dict
                     code_to_tid=code_to_tid,
                 ),
                 obj.get("ext_field"),
-                relation_id,
-            ),
+            )
+            for obj in to_update
+        ]
+        cur.execute(
+            "CREATE TEMP TABLE _tmp_rel_upd ("
+            "  relation_id VARCHAR,"
+            "  source_term_id VARCHAR,"
+            "  target_term_id VARCHAR,"
+            "  relation_name VARCHAR,"
+            "  relation_category VARCHAR,"
+            "  cardinality VARCHAR,"
+            "  action_term_id VARCHAR,"
+            "  ext_attrs TEXT"
+            ") ON COMMIT PRESERVE ROWS"
         )
-        stats["relations"]["updated"] += 1
+        _execute_values(
+            cur,
+            "INSERT INTO _tmp_rel_upd VALUES %s",
+            update_rows,
+        )
+        cur.execute("""
+            UPDATE term_relation t
+            SET source_term_id    = tmp.source_term_id,
+                target_term_id    = tmp.target_term_id,
+                relation_name     = tmp.relation_name,
+                relation_category = tmp.relation_category,
+                cardinality       = tmp.cardinality,
+                action_term_id    = COALESCE(tmp.action_term_id, t.action_term_id),
+                ext_attrs         = COALESCE(tmp.ext_attrs::jsonb, t.ext_attrs),
+                updated_time      = CURRENT_TIMESTAMP
+            FROM _tmp_rel_upd tmp
+            WHERE t.relation_id = tmp.relation_id
+        """)
+        cur.execute("DROP TABLE _tmp_rel_upd")
+        stats["relations"]["updated"] += len(update_rows)
     if to_insert:
         rows = [
             (
