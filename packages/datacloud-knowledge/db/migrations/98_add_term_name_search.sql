@@ -13,8 +13,8 @@ BEGIN
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'whale_datacloud' AND table_name = 'term_name' AND column_name = 'name_keywords'
     ) THEN
-        ALTER TABLE whale_datacloud.term_name ADD COLUMN name_keywords tsvector;
-        COMMENT ON COLUMN whale_datacloud.term_name.name_keywords IS 'BM25 全文搜索向量，基于 name_text 单字分词';
+        ALTER TABLE term_name ADD COLUMN name_keywords tsvector;
+        COMMENT ON COLUMN term_name.name_keywords IS 'BM25 全文搜索向量，基于 name_text 单字分词';
     END IF;
 END $$;
 
@@ -25,14 +25,14 @@ BEGIN
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'whale_datacloud' AND table_name = 'term_name' AND column_name = 'name_embedding'
     ) THEN
-        ALTER TABLE whale_datacloud.term_name ADD COLUMN name_embedding vector(1024);
-        COMMENT ON COLUMN whale_datacloud.term_name.name_embedding IS '向量语义召回，1024 维 embedding';
+        ALTER TABLE term_name ADD COLUMN name_embedding vector(1024);
+        COMMENT ON COLUMN term_name.name_embedding IS '向量语义召回，1024 维 embedding';
     END IF;
 END $$;
 
 -- 步骤 3: 创建 tsvector 自动更新触发器函数（单字分词）
 -- 使用 array_to_string + string_to_array 实现单字分词，兼容 GaussDB
-CREATE OR REPLACE FUNCTION whale_datacloud.term_name_tsv_trigger() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION term_name_tsv_trigger() RETURNS trigger AS $$
 BEGIN
     -- 单字分词：将 "企业分析" 转换为 "企 业 分 析"，使用 simple 配置索引
     NEW.name_keywords := to_tsvector('simple', array_to_string(string_to_array(COALESCE(NEW.name_text, ''), NULL), ' '));
@@ -43,15 +43,15 @@ $$ LANGUAGE plpgsql;
 -- 步骤 4: 创建触发器
 DO $$
 BEGIN
-    DROP TRIGGER IF EXISTS tsvector_update_term_name ON whale_datacloud.term_name;
+    DROP TRIGGER IF EXISTS tsvector_update_term_name ON term_name;
     CREATE TRIGGER tsvector_update_term_name
-        BEFORE INSERT OR UPDATE ON whale_datacloud.term_name
+        BEFORE INSERT OR UPDATE ON term_name
         FOR EACH ROW
-        EXECUTE FUNCTION whale_datacloud.term_name_tsv_trigger();
+        EXECUTE FUNCTION term_name_tsv_trigger();
 END $$;
 
 -- 步骤 5: 为存量数据填充 tsvector（仅执行一次，可手动运行）
--- UPDATE whale_datacloud.term_name
+-- UPDATE term_name
 -- SET name_keywords = to_tsvector('simple', array_to_string(string_to_array(COALESCE(name_text, ''), NULL), ' '));
 
 
@@ -65,7 +65,7 @@ BEGIN
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'whale_datacloud' AND table_name = 'term_name' AND column_name = 'name_keywords_jieba'
     ) THEN
-        ALTER TABLE whale_datacloud.term_name ADD COLUMN name_keywords_jieba tsvector;
-        COMMENT ON COLUMN whale_datacloud.term_name.name_keywords_jieba IS 'BM25 全文搜索向量，基于 jieba 中文分词（词级粒度，由应用层填充）';
+        ALTER TABLE term_name ADD COLUMN name_keywords_jieba tsvector;
+        COMMENT ON COLUMN term_name.name_keywords_jieba IS 'BM25 全文搜索向量，基于 jieba 中文分词（词级粒度，由应用层填充）';
     END IF;
 END $$;
