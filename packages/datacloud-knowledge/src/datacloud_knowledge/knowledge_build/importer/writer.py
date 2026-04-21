@@ -263,11 +263,158 @@ def _dedupe_term_name_sync_items(
     return list(by_tid.values())
 
 
+def _is_prop_term_id(term_id: str) -> bool:
+    """判断 term_id 是否为属性术语。"""
+    return "#prop#" in term_id
+
+
+def _term_name_search_scope_payload(search_scope: dict[str, str] | None) -> str:
+    """序列化 term_name.search_scope。"""
+    return json.dumps(search_scope or {}, ensure_ascii=False)
+
+
+def _split_term_name_items_by_prop_scope(
+    items: list[tuple[str, str, list[str]]],
+) -> tuple[list[tuple[str, str, list[str]]], list[tuple[str, str, list[str]]]]:
+    """将属性术语与非属性术语的名称同步项拆分。"""
+    prop_items: list[tuple[str, str, list[str]]] = []
+    other_items: list[tuple[str, str, list[str]]] = []
+    for item in items:
+        if _is_prop_term_id(item[0]):
+            prop_items.append(item)
+        else:
+            other_items.append(item)
+    return prop_items, other_items
+
+
+def _parse_relation_ext_field(ext_field: Any) -> dict[str, Any]:
+    """解析 relation.ext_field JSON，失败时降级为空字典。"""
+    if isinstance(ext_field, dict):
+        return ext_field
+    if not isinstance(ext_field, str):
+        return {}
+
+    raw = ext_field.strip()
+    if not raw:
+        return {}
+
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        logger.warning("relation ext_field JSON 解析失败，已跳过 scoped term_name 同步: %s", raw)
+        return {}
+
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _normalize_relation_scope_names(ext_field: dict[str, Any]) -> list[str]:
+    """从 HAS_FIELD relation.ext_field 中提取并清洗 field_alias / synonyms。"""
+    names: list[str] = []
+
+    field_alias = ext_field.get("field_alias")
+    if field_alias is not None:
+        alias_text = str(field_alias).strip()
+        if alias_text:
+            names.append(alias_text)
+
+    raw_synonyms = ext_field.get("synonyms")
+    if isinstance(raw_synonyms, list):
+        for item in raw_synonyms:
+            synonym = str(item).strip()
+            if synonym:
+                names.append(synonym)
+
+    return list(dict.fromkeys(names))
+
+
+def _relation_scope_from_source_term_id(source_term_id: str) -> dict[str, str] | None:
+    """根据 relation.source_term_id 推导对象/视图作用域。"""
+    if "#object#" in source_term_id:
+        _, _, object_code = source_term_id.partition("#object#")
+        if object_code:
+            return {"scope": "object", "code": object_code}
+
+    if "#view#" in source_term_id:
+        _, _, view_code = source_term_id.partition("#view#")
+        if view_code:
+            return {"scope": "view", "code": view_code}
+
+    return None
+
+
+def _batch_insert_relation_term_names(cur: Cursor, relation_ids: list[str]) -> int:
+    """从 HAS_FIELD relation.ext_attrs 追加写入 scoped term_name。"""
+    unique_relation_ids = list(dict.fromkeys(relation_ids))
+    if not unique_relation_ids:
+        return 0
+
+    cur.execute(
+        """SELECT relation_id, source_term_id, target_term_id, ext_attrs
+           FROM term_relation
+           WHERE relation_id = ANY(%s)""",
+        (unique_relation_ids,),
+    )
+
+    scope_rows: list[tuple[str, str, str, str]] = []
+    for _relation_id, source_term_id, target_term_id, ext_attrs in cur.fetchall():
+        source_id = str(source_term_id)
+        target_id = str(target_term_id)
+        if not _is_prop_term_id(target_id):
+            continue
+
+        search_scope = _relation_scope_from_source_term_id(source_id)
+        if search_scope is None:
+            continue
+
+        names = _normalize_relation_scope_names(_parse_relation_ext_field(ext_attrs))
+        if not names:
+            continue
+
+        scope_payload = _term_name_search_scope_payload(search_scope)
+        name_ids = _next_snowflake_ids(len(names))
+        scope_rows.extend(
+            (name_ids[index], target_id, name_text, scope_payload)
+            for index, name_text in enumerate(names)
+        )
+
+    if not scope_rows:
+        return 0
+
+    cur.execute(
+        "CREATE TEMP TABLE _tmp_rel_term_name (name_id VARCHAR, term_id VARCHAR, name_text VARCHAR, search_scope TEXT) ON COMMIT PRESERVE ROWS"
+    )
+    _execute_values(cur, "INSERT INTO _tmp_rel_term_name VALUES %s", scope_rows)
+    cur.execute(
+        """INSERT INTO term_name (name_id, term_id, name_text, search_scope)
+           SELECT t.name_id, t.term_id, t.name_text, t.search_scope::jsonb
+           FROM _tmp_rel_term_name t
+           WHERE NOT EXISTS (
+               SELECT 1 FROM term_name tn
+               WHERE tn.term_id = t.term_id AND tn.name_text = t.name_text
+           )"""
+    )
+    inserted_count = cur.rowcount
+    cur.execute("DROP TABLE _tmp_rel_term_name")
+
+    words = list({row[2] for row in scope_rows})
+    if words:
+        cur.execute(
+            """INSERT INTO term_vocabulary (word)
+               SELECT w FROM unnest(%s::text[]) AS t(w)
+               WHERE NOT EXISTS (
+                   SELECT 1 FROM term_vocabulary v WHERE v.word = t.w
+               )""",
+            (words,),
+        )
+    return inserted_count
+
+
 def _batch_sync_term_names(
     cur: Cursor,
     items: list[tuple[str, str, list[str]]],
     *,
     skip_delete_ids: set[str] | None = None,
+    search_scope: dict[str, str] | None = None,
 ) -> int:
     """批量同步 term_name，并一次性补全 term_vocabulary。
 
@@ -283,10 +430,16 @@ def _batch_sync_term_names(
     else:
         delete_ids = [t[0] for t in items]
     if delete_ids:
-        cur.execute(
-            "DELETE FROM term_name WHERE term_id = ANY(%s)",
-            (delete_ids,),
-        )
+        if search_scope is None:
+            cur.execute(
+                "DELETE FROM term_name WHERE term_id = ANY(%s)",
+                (delete_ids,),
+            )
+        else:
+            cur.execute(
+                "DELETE FROM term_name WHERE term_id = ANY(%s) AND search_scope @> %s::jsonb",
+                (delete_ids, _term_name_search_scope_payload(search_scope)),
+            )
 
     # 预计算需要多少个 ID（每个 term_name + aliases）
     total_names = sum(
@@ -298,23 +451,24 @@ def _batch_sync_term_names(
     # 批量生成雪花 ID
     name_ids = _next_snowflake_ids(total_names)
 
-    all_rows: list[tuple[str, str, str]] = []
+    all_rows: list[tuple[str, str, str, str]] = []
     id_idx = 0
+    scope_payload = _term_name_search_scope_payload(search_scope)
     for term_id, term_name, aliases in items:
         # 主名称
-        all_rows.append((name_ids[id_idx], term_id, term_name))
+        all_rows.append((name_ids[id_idx], term_id, term_name, scope_payload))
         id_idx += 1
         # 别名
         for alias in aliases:
             if alias and alias != term_name:
-                all_rows.append((name_ids[id_idx], term_id, alias))
+                all_rows.append((name_ids[id_idx], term_id, alias, scope_payload))
                 id_idx += 1
 
     if not all_rows:
         return 0
     _execute_values(
         cur,
-        """INSERT INTO term_name (name_id, term_id, name_text)
+        """INSERT INTO term_name (name_id, term_id, name_text, search_scope)
            VALUES %s""",
         all_rows,
         page_size=2000,
@@ -398,7 +552,15 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
                 if tid and tid in db_names:
                     sync_items.append((tid, db_names[tid], o.get("aliases") or []))
             if sync_items:
-                _batch_sync_term_names(cur, sync_items)
+                prop_items, other_items = _split_term_name_items_by_prop_scope(sync_items)
+                if other_items:
+                    _batch_sync_term_names(cur, other_items)
+                if prop_items:
+                    _batch_sync_term_names(
+                        cur,
+                        prop_items,
+                        search_scope={"scope": "global"},
+                    )
     if not upserts:
         return
     # 按 term_id 判断是否已存在（term_id = library#type#code，全局唯一）
@@ -496,7 +658,16 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
         sync_upsert.append((o["term_id"], o["term_name"], o.get("aliases") or []))
     # 新增 term 无旧 name 行，跳过 DELETE 加速
     new_ids = {o["term_id"] for o in to_insert}
-    _batch_sync_term_names(cur, sync_upsert, skip_delete_ids=new_ids)
+    prop_items, other_items = _split_term_name_items_by_prop_scope(sync_upsert)
+    if other_items:
+        _batch_sync_term_names(cur, other_items, skip_delete_ids=new_ids)
+    if prop_items:
+        _batch_sync_term_names(
+            cur,
+            prop_items,
+            skip_delete_ids=new_ids,
+            search_scope={"scope": "global"},
+        )
 
 
 def _batch_process_relation(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str, Any]) -> None:
@@ -654,6 +825,15 @@ def _batch_process_relation(cur: Cursor, objs: list[dict[str, Any]], stats: dict
             page_size=min(500, len(rows)),
         )
         stats["relations"]["inserted"] += len(to_insert)
+
+    synced_term_name_count = _batch_insert_relation_term_names(
+        cur,
+        [obj["relation_code"] for obj in updates]
+        + [obj["relation_code"] for obj in to_update]
+        + [obj["relation_code"] for obj in to_insert],
+    )
+    if synced_term_name_count:
+        logger.info("已从 HAS_FIELD relation 同步 scoped term_name: %s 条", synced_term_name_count)
 
 
 def _batch_process_knowledge(

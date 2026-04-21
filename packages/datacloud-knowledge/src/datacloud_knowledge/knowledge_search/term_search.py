@@ -274,6 +274,7 @@ def get_object_props(
 def get_term_names(
     *,
     term_ids: list[str],
+    scope_filter: dict[str, str] | None = None,
 ) -> dict[str, list[NameItem]]:
     """批量查询术语的所有名称（标准名 + 别名），通用函数。"""
     if not term_ids:
@@ -281,6 +282,15 @@ def get_term_names(
 
     try:
         with get_session() as session:
+            filters: list[Any] = [TermName.term_id.in_(term_ids)]
+            if scope_filter is not None:
+                filters.append(
+                    or_(
+                        TermName.search_scope.contains(scope_filter),
+                        TermName.search_scope.contains({"scope": "global"}),
+                    )
+                )
+
             rows = session.execute(
                 select(
                     TermName.term_id,
@@ -288,10 +298,12 @@ def get_term_names(
                     (TermName.name_text == Term.term_name).label("is_primary"),
                 )
                 .join(Term, Term.term_id == TermName.term_id)
-                .where(TermName.term_id.in_(term_ids))
+                .where(*filters)
             ).all()
     except Exception:
-        logger.exception("get_term_names failed: term_ids=%s", term_ids)
+        logger.exception(
+            "get_term_names failed: term_ids=%s, scope_filter=%s", term_ids, scope_filter
+        )
         raise
 
     result: dict[str, list[NameItem]] = {term_id: [] for term_id in term_ids}
