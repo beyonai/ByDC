@@ -85,6 +85,20 @@ CREATE INDEX IF NOT EXISTS idx_tn_name_text
 CREATE INDEX IF NOT EXISTS idx_tn_term
     ON whale_datacloud.term_name(term_id);
 
+-- 根术语：库内唯一（library_id + term_type_code + term_code）
+CREATE UNIQUE INDEX IF NOT EXISTS uq_term_root
+    ON whale_datacloud.term(library_id, term_type_code, term_code)
+    WHERE parent_term_id IS NULL AND library_id IS NOT NULL;
+
+-- 子术语：父节点内唯一（parent_term_id + term_code）
+CREATE UNIQUE INDEX IF NOT EXISTS uq_term_child
+    ON whale_datacloud.term(parent_term_id, term_code)
+    WHERE parent_term_id IS NOT NULL;
+
+-- 术语名称：同一术语下名称不重复
+CREATE UNIQUE INDEX IF NOT EXISTS uq_term_name_text
+    ON whale_datacloud.term_name(term_id, name_text);
+
 -- term_vocabulary：唯一索引保障去重查询极速（不依赖实时 DISTINCT）
 CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_word
     ON whale_datacloud.term_vocabulary(word);

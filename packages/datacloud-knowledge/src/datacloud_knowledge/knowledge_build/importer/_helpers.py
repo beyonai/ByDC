@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any, cast
 
-from psycopg import Cursor
+from psycopg import Cursor, sql
 
 from .snowflake import _next_snowflake_id
 
@@ -98,6 +98,26 @@ def _lookup_term_ids_by_norm_codes(cur: Cursor, norm_codes: list[str]) -> dict[s
         (uniq,),
     )
     return {r[0]: r[1] for r in cur.fetchall()}
+
+
+def _lookup_term_ids_by_keys(
+    cur: Cursor,
+    keys: list[tuple[str | None, str, str]],
+) -> dict[tuple[str | None, str, str], str]:
+    """按 (library_id, term_type_code, term_code) 三元组查找 term_id。"""
+    if not keys:
+        return {}
+
+    uniq = list(dict.fromkeys(keys))
+    params = [value for key in uniq for value in key]
+    cur.execute(
+        sql.SQL("SELECT library_id, term_type_code, term_code, term_id FROM term WHERE ")
+        + sql.SQL(" OR ").join(
+            [sql.SQL("(library_id = %s AND term_type_code = %s AND term_code = %s)") for _ in uniq]
+        ),
+        params,
+    )
+    return {(row[0], row[1], row[2]): row[3] for row in cur.fetchall()}
 
 
 def _str_id_if_set(obj: dict[str, Any], key: str) -> str | None:
