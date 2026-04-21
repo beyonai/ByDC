@@ -72,6 +72,7 @@ class ViewFieldMapping:
     source_object_code: str
     source_object_column_code: str
     role: FieldRole
+    synonyms: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -139,6 +140,13 @@ class OwlGenConfig:
 
     # ── 视图字段映射（向后兼容，推荐用 ViewConfig.field_mappings）──
     view_field_mappings: list[ViewFieldMapping] = field(default_factory=list)
+
+    # ── prop 通用显示名（可选）──
+    # key = column_name, value = 通用名。未指定的 prop 用第一个遇到的 column comment。
+    prop_display_names: dict[str, str] = field(default_factory=dict)
+    # ── prop 别名（可选）──
+    # key = column_name, value = 别名列表。不同表对同一字段的不同 comment 可作为别名。
+    prop_synonyms: dict[str, list[str]] = field(default_factory=dict)
 
     def resolved_views(self) -> list[ViewConfig]:
         """返回视图列表：优先 views，否则从旧字段自动包装。"""

@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import OrderedDict
 
 from datacloud_knowledge.owl_gen._xml import safe_xml_id, xml_escape
@@ -53,7 +54,9 @@ def _term_item(
     term_desc: str,
     owl_doc_file: str = "",
     parent_term_code: str = "",
+    synonyms: list[str] | None = None,
 ) -> str:
+    synonyms_json = json.dumps(synonyms or [], ensure_ascii=False)
     return f"""\
     <owl:NamedIndividual rdf:about="#term_{term_type_code}_{safe_xml_id(term_code, 200)}">
         <rdf:type rdf:resource="#TermDefinition"/>
@@ -69,7 +72,7 @@ def _term_item(
 {term_type_code}</term_type_code>
         <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
 {xml_escape(term_desc)}</term_desc>
-        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{xml_escape(synonyms_json)}</synonyms>
         <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
 []</terms_knowledge>
         <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
@@ -149,9 +152,13 @@ def render_terms(
             )
         )
 
-    # 属性术语 (prop)：按对象粒度生成，不再全局去重。
+    # 属性术语 (prop)：跨对象同名字段只保留首个定义。
+    seen_prop_codes: set[str] = set()
     for table in tables:
         for col in table.columns:
+            if col.name in seen_prop_codes:
+                continue
+            seen_prop_codes.add(col.name)
             ontology_items.append(
                 _term_item(
                     config,
@@ -159,7 +166,7 @@ def render_terms(
                     term_code=col.name,
                     term_name=col.comment or col.name,
                     term_type_code="prop",
-                    term_desc=f"{table.name}的字段：{col.comment or col.name}",
+                    term_desc=f"属性：{col.comment or col.name}",
                 )
             )
 
@@ -192,9 +199,11 @@ def render_terms_for_object(
     table: Table,
     term_values: dict[str, list[dict[str, str]]],
     term_type_defs: OrderedDict[str, tuple[str, str, str]],
+    seen_prop_codes: set[str] | None = None,
 ) -> tuple[str, int]:
     """渲染单个对象下的所有术语（object + prop + 值术语）。"""
     items: list[str] = []
+    prop_codes = seen_prop_codes if seen_prop_codes is not None else set()
     items.append(
         _term_item(
             config,
@@ -208,14 +217,19 @@ def render_terms_for_object(
     )
 
     for col in table.columns:
+        if col.name in prop_codes:
+            continue
+        prop_codes.add(col.name)
+        display_name = config.prop_display_names.get(col.name, col.comment or col.name)
         items.append(
             _term_item(
                 config,
                 code_path=f"PROP#{col.name}",
                 term_code=col.name,
-                term_name=col.comment or col.name,
+                term_name=display_name,
                 term_type_code="prop",
-                term_desc=f"{table.name}的字段：{col.comment or col.name}",
+                term_desc=f"属性：{display_name}",
+                synonyms=config.prop_synonyms.get(col.name, []),
             )
         )
 
@@ -239,7 +253,10 @@ def render_terms_for_object(
     return (_wrap_terms(items), len(items))
 
 
-def render_terms_for_view(config: OwlGenConfig, view: ViewConfig) -> tuple[str, int]:
+def render_terms_for_view(
+    config: OwlGenConfig,
+    view: ViewConfig,
+) -> tuple[str, int]:
     """渲染单个视图的术语定义。"""
     items: list[str] = [
         _term_item(
@@ -252,4 +269,17 @@ def render_terms_for_view(config: OwlGenConfig, view: ViewConfig) -> tuple[str, 
             owl_doc_file=f"view/{view.view_code}/{view.view_code}_definition.owl",
         )
     ]
+
+    for mapping in view.field_mappings:
+        items.append(
+            _term_item(
+                config,
+                code_path=f"PROP#{mapping.source_object_column_code}",
+                term_code=mapping.source_object_column_code,
+                term_name=mapping.property_name or mapping.source_object_column_code,
+                term_type_code="prop",
+                term_desc=f"属性：{mapping.property_name or mapping.source_object_column_code}",
+                synonyms=mapping.synonyms,
+            )
+        )
     return (_wrap_terms(items), len(items))
