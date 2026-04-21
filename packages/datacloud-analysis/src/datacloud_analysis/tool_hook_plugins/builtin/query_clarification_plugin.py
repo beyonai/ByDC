@@ -696,11 +696,6 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
     query: str = str(tool_params.pop("query", "") or "")
     complex_conditions: list[str] = list(tool_params.pop("complex_conditions", None) or [])
 
-    # 兼容旧版元字段（过渡期）
-    tool_params.pop("intent_reason", None)
-    tool_params.pop("extraction_confidence", None)
-    tool_params.pop("ambiguous_params", None)
-
     ctx["tool_params"] = tool_params
 
     logger.info(

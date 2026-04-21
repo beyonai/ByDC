@@ -19,7 +19,7 @@ import sys
 import types
 from contextlib import contextmanager, suppress
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from langchain_core.messages import HumanMessage
@@ -278,8 +278,8 @@ async def test_tc10_tc11_full_pipeline_system_prompt_contains_knowledge() -> Non
         state: Any,
         tools_list: Any,
         system_prompt: str,
-        max_rounds: int,
-        gateway_context: Any = None,
+        max_rounds: int = 10,
+        **kwargs: Any,
     ) -> dict:
         captured_prompts.append(system_prompt)
         return {
@@ -330,7 +330,7 @@ async def test_tc10_passthrough_query_no_knowledge_in_system_prompt() -> None:
 
     captured_prompts: list[str] = []
 
-    async def _mock_react_loop(state, tools_list, system_prompt, max_rounds, gateway_context=None):
+    async def _mock_react_loop(state, tools_list, system_prompt, max_rounds=10, **kwargs):
         captured_prompts.append(system_prompt)
         return {
             "react_rounds": 0,
@@ -346,205 +346,3 @@ async def test_tc10_passthrough_query_no_knowledge_in_system_prompt() -> None:
 
     assert captured_prompts
     assert "数据查询知识增强" not in captured_prompts[0], "透传查询 system_prompt 不应含增强段落"
-
-
-# ---------------------------------------------------------------------------
-# TC-36: v2 设计 — ambiguous_params 控制澄清触发
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_tc36_empty_ambiguous_params_skips_query_clarification() -> None:
-    """TC-36 v2：ambiguous_params=[] → 插件直接跳过，_call_query_clarification 不触发。
-
-    这是 v2 设计的核心行为：工具调用时 LLM 若无歧义（ambiguous_params=[]），
-    插件不调用澄清接口，直接放行。
-    """
-    from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
-    from datacloud_analysis.tool_hook_plugins.manager import get_tool_hook_plugin_manager
-    from langchain_core.tools import StructuredTool
-    from pydantic import BaseModel, ConfigDict, Field
-
-    class _Schema(BaseModel):
-        model_config = ConfigDict(populate_by_name=True)
-
-        query: str
-        context_knowledge: str = Field(default="", alias="contextKnowledge")
-
-    tool = StructuredTool(
-        name="data_query_grid",
-        description="test",
-        args_schema=_Schema,
-        coroutine=AsyncMock(return_value={"records": [], "meta": {}}),
-    )
-    tools_map = {"data_query_grid": tool}
-    # ambiguous_params=[] → 插件 skip
-    tool_call = {
-        "id": "tc36-call",
-        "name": "data_query_grid",
-        "args": {
-            "query": "营收",
-            "ambiguous_params": [],  # 空：无歧义，跳过澄清
-        },
-    }
-
-    state = {
-        "agent_id": "tc36-agent",
-        "user_query": "高效益网格的营收",
-        "workspace_dir": None,
-        "knowledge_snippets": None,
-        "confirmed_terms": None,
-    }
-
-    clarification_spy = AsyncMock(
-        return_value=MagicMock(needs_clarification=False, form="", knowledge="")
-    )
-
-    with patch(
-        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._call_query_clarification",
-        new=clarification_spy,
-    ):
-        get_tool_hook_plugin_manager.cache_clear()
-        try:
-            await dispatch_tool(
-                tool_call=tool_call,
-                tools_map=tools_map,
-                state=state,
-                gateway_context=None,
-            )
-        finally:
-            get_tool_hook_plugin_manager.cache_clear()
-
-    # ambiguous_params=[] → 插件跳过，_call_query_clarification 不应被调用
-    clarification_spy.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_tc36_multiple_tool_calls_no_ambiguity_skip_clarification() -> None:
-    """TC-36 v2：同一请求多次工具调用，ambiguous_params=[] → 均跳过澄清接口。"""
-    from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
-    from datacloud_analysis.tool_hook_plugins.manager import get_tool_hook_plugin_manager
-    from langchain_core.tools import StructuredTool
-    from pydantic import BaseModel, ConfigDict, Field
-
-    class _Schema(BaseModel):
-        model_config = ConfigDict(populate_by_name=True)
-
-        query: str
-        context_knowledge: str = Field(default="", alias="contextKnowledge")
-
-    tool = StructuredTool(
-        name="data_query_grid",
-        description="test",
-        args_schema=_Schema,
-        coroutine=AsyncMock(return_value={"records": [], "meta": {}}),
-    )
-    tools_map = {"data_query_grid": tool}
-
-    state = {
-        "agent_id": "tc36b",
-        "user_query": "营收利润查询",
-        "workspace_dir": None,
-        "knowledge_snippets": None,
-        "confirmed_terms": None,
-    }
-
-    clarification_spy = AsyncMock(
-        return_value=MagicMock(needs_clarification=False, form="", knowledge="")
-    )
-
-    with patch(
-        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._call_query_clarification",
-        new=clarification_spy,
-    ):
-        get_tool_hook_plugin_manager.cache_clear()
-        try:
-            # 第一次工具调用（ambiguous_params=[]）
-            await dispatch_tool(
-                tool_call={
-                    "id": "c1",
-                    "name": "data_query_grid",
-                    "args": {"query": "营收", "ambiguous_params": []},
-                },
-                tools_map=tools_map,
-                state=state,
-                gateway_context=None,
-            )
-            # 第二次工具调用（同样无歧义）
-            await dispatch_tool(
-                tool_call={
-                    "id": "c2",
-                    "name": "data_query_grid",
-                    "args": {"query": "利润", "ambiguous_params": []},
-                },
-                tools_map=tools_map,
-                state=state,
-                gateway_context=None,
-            )
-        finally:
-            get_tool_hook_plugin_manager.cache_clear()
-
-    # 两次工具调用均不触发澄清接口
-    clarification_spy.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_tc36_non_empty_ambiguous_params_triggers_query_clarification(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """TC-36 v2 对照组：ambiguous_params 非空 → analyze_query_clarification 被触发。
-
-    使用 _patch_analyze_query_clarification 直接 patch sys.modules 里的函数，
-    绕过 ToolHookPluginManager 动态加载导致正式模块 patch 无效的问题。
-    """
-
-    from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
-    from datacloud_analysis.tool_hook_plugins.manager import get_tool_hook_plugin_manager
-    from langchain_core.tools import StructuredTool
-    from pydantic import BaseModel, ConfigDict, Field
-
-    class _Schema(BaseModel):
-        model_config = ConfigDict(populate_by_name=True)
-
-        query: str
-        context_knowledge: str = Field(default="", alias="contextKnowledge")
-
-    tool = StructuredTool(
-        name="data_query_grid",
-        description="test",
-        args_schema=_Schema,
-        coroutine=AsyncMock(return_value={"records": [], "meta": {}}),
-    )
-    tools_map = {"data_query_grid": tool}
-
-    state = {
-        "agent_id": "tc36c",
-        "user_query": "营收",
-        "workspace_dir": None,
-        "knowledge_snippets": None,
-        "confirmed_terms": None,
-    }
-
-    mock_result = MagicMock(needs_clarification=False, form="", knowledge="")
-
-    with _patch_analyze_query_clarification(mock_result) as call_count:
-        get_tool_hook_plugin_manager.cache_clear()
-        try:
-            await dispatch_tool(
-                tool_call={
-                    "id": "tc36c-call",
-                    "name": "data_query_grid",
-                    "args": {
-                        "query": "营收",
-                        "ambiguous_params": ["metric_field"],  # 非空 → 触发澄清
-                    },
-                },
-                tools_map=tools_map,
-                state=state,
-                gateway_context=None,
-            )
-        finally:
-            get_tool_hook_plugin_manager.cache_clear()
-
-    # ambiguous_params 非空 → analyze_query_clarification 应被调用一次
-    assert call_count[0] == 1, f"ambiguous_params 非空应触发澄清接口，实际调用次数：{call_count[0]}"

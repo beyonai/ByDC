@@ -1,11 +1,5 @@
-"""Workspace package - file-system path management and runtime helpers.
+"""Workspace package - runtime workspace helpers."""
 
-Sub-modules
------------
-paths          Resolve task-scoped workspace directories.
-runtime        Resolve shared workspace visibility rules.
-"""
+from .runtime import resolve_shared_workspace_dir
 
-from .paths import TaskPaths, build_task_paths
-
-__all__ = ["TaskPaths", "build_task_paths"]
+__all__ = ["resolve_shared_workspace_dir"]

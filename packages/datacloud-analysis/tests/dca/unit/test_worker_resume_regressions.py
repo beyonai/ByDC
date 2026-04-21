@@ -5,9 +5,18 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from by_framework.core.protocol.commands import AskAgentCommand, ResumeCommand
-from by_framework.core.protocol.message_header import MessageHeader
-from datacloud_service.worker import DataCloudWorker
+
+try:
+    from by_framework.core.protocol.commands import AskAgentCommand, ResumeCommand
+    from by_framework.core.protocol.message_header import MessageHeader
+    from datacloud_service.worker import DataCloudWorker
+except ModuleNotFoundError as exc:
+    if exc.name == "dill":
+        pytest.skip(
+            "requires optional dependency 'dill' for by_framework imports",
+            allow_module_level=True,
+        )
+    raise
 
 
 @dataclass
@@ -179,7 +188,7 @@ async def test_ext_command_keeps_priority_over_chitchat_short_circuit(
         called.update(kwargs)
         return True, None
 
-    worker.command_plugin_manager.handle_ext_command = _fake_handle_ext_command  # type: ignore[method-assign]
+    worker.command_plugin_manager.handle_ext_command = _fake_handle_ext_command
 
     async def _never_called(**_kwargs: Any) -> dict[str, Any]:
         raise AssertionError("_stream_graph should not be called for handled ext_command")
