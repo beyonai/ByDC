@@ -5,25 +5,25 @@
 BEGIN;
 
 -- 1. term 表
-ALTER TABLE whale_datacloud.term
+ALTER TABLE term
     ALTER COLUMN term_id TYPE VARCHAR(255),
     ALTER COLUMN term_code TYPE VARCHAR(255),
     ALTER COLUMN parent_term_id TYPE VARCHAR(255);
 
 -- 2. term_relation 表
-ALTER TABLE whale_datacloud.term_relation
+ALTER TABLE term_relation
     ALTER COLUMN relation_id TYPE VARCHAR(1000),
     ALTER COLUMN source_term_id TYPE VARCHAR(255),
     ALTER COLUMN target_term_id TYPE VARCHAR(255),
     ALTER COLUMN action_term_id TYPE VARCHAR(255);
 
 -- 3. term_name 表
-ALTER TABLE whale_datacloud.term_name
+ALTER TABLE term_name
     ALTER COLUMN name_id TYPE VARCHAR(255),
     ALTER COLUMN term_id TYPE VARCHAR(255);
 
 -- 4. term_knowledge 表
-ALTER TABLE whale_datacloud.term_knowledge
+ALTER TABLE term_knowledge
     ALTER COLUMN knowledge_id TYPE VARCHAR(255),
     ALTER COLUMN term_id TYPE VARCHAR(255);
 

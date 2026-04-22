@@ -1,17 +1,8 @@
-"""T15-1 ~ T15-2：metrics oneOf 普通指标项 field_name_cn 必须在 required 中。
-
-Bug 描述：
-    compute_* metrics 的 oneOf 普通指标项（非 count_all），
-    field_name_cn 未在 required 列表中，
-    LLM 视为可选字段，回退到训练先验键名 field。
-
-修复要求：
-    _msr_item 的 required 列表加入 field_name_cn：
-    required: ["field_name_cn", "agg", "as"]
-    （count_all_item 不含 field_name_cn，不受影响）
-"""
+"""Checks compute metric-item required fields under current schema contract."""
 
 from __future__ import annotations
+
+from ._field_schema_assertions import assert_required_uses_field
 
 
 class _FakeField:
@@ -34,14 +25,8 @@ class _FakeField:
         self.required_filter_group: str | None = None
 
 
-# ── T15-1：普通指标项 required 含 field_name_cn ───────────────────────────────
-
-
 def test_T15_1_regular_metric_item_required_includes_field_name_cn() -> None:
-    """T15-1：compute_* metrics 普通指标 oneOf 项的 required 列表必须包含 field_name_cn。
-
-    field_name_cn 不在 required 时，LLM 视为可选并回退到训练先验 field 键名。
-    """
+    """T15-1: regular metric items require `field` (not field_name_cn)."""
     from datacloud_data_sdk.virtual_action.generator import build_compute_schema
 
     schema = build_compute_schema(
@@ -50,7 +35,6 @@ def test_T15_1_regular_metric_item_required_includes_field_name_cn() -> None:
     )
     metric_items = schema["properties"]["metrics"]["items"]["oneOf"]
 
-    # 排除 count_all_item（它无需 field_name_cn）
     regular_items = [
         item
         for item in metric_items
@@ -60,18 +44,11 @@ def test_T15_1_regular_metric_item_required_includes_field_name_cn() -> None:
 
     for item in regular_items:
         required = item.get("required", [])
-        assert "field_name_cn" in required, (
-            f"普通指标项 required 未包含 field_name_cn，LLM 会回退到 field 键名\n"
-            f"当前 required: {required}\n"
-            f"当前 properties: {list(item.get('properties', {}).keys())}"
-        )
-
-
-# ── T15-2：count_all_item required 不强制 field_name_cn ───────────────────────
+        assert_required_uses_field(required, context="普通指标项")
 
 
 def test_T15_2_count_all_item_required_does_not_include_field_name_cn() -> None:
-    """T15-2：count_all_item 不需要 field_name_cn，required 中不应包含它（避免 LLM 必填报错）。"""
+    """T15-2: count_all item should not require any field key."""
     from datacloud_data_sdk.virtual_action.generator import build_compute_schema
 
     schema = build_compute_schema(
@@ -89,6 +66,5 @@ def test_T15_2_count_all_item_required_does_not_include_field_name_cn() -> None:
 
     for item in count_all_items:
         required = item.get("required", [])
-        assert "field_name_cn" not in required, (
-            f"count_all_item required 不应包含 field_name_cn: {required}"
-        )
+        assert "field_name_cn" not in required
+        assert "field" not in required

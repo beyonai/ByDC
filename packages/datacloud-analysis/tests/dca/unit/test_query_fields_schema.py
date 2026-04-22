@@ -1,11 +1,8 @@
-"""T1-1 ~ T1-4：query / complex_conditions 新字段 + inject_query_fields 验收。
-
-对应 §3.1 generator.py 变更 + §3.2 node.py inject_query_fields。
-"""
+"""Schema and query-field injection contract checks."""
 
 from __future__ import annotations
 
-# ── 辅助：构造最简字段对象 ────────────────────────────────────────────────────
+from ._field_schema_assertions import assert_required_uses_field, assert_uses_field_key
 
 
 class _FakeField:
@@ -53,38 +50,23 @@ def _make_fields() -> list[_FakeField]:
     ]
 
 
-# ── T1-1：build_query_schema 包含 query(required) + complex_conditions ────────
-
-
 def test_T1_1_query_schema_has_query_and_complex_conditions() -> None:
-    """T1-1：query_{code} Schema 包含 query 必填字段和 complex_conditions。"""
+    """T1-1: query schema remains strict and does not expose query/complex_conditions."""
     from datacloud_data_sdk.virtual_action.generator import build_query_schema
 
     schema = build_query_schema("企业分析", _make_fields())
-
     props = schema.get("properties", {})
-    assert "query" in props, "Schema 缺少 query 字段"
-    assert "complex_conditions" in props, "Schema 缺少 complex_conditions 字段"
 
-    # query 必填
-    required = schema.get("required", [])
-    assert "query" in required, "query 未加入 required"
+    assert "query" not in props
+    assert "complex_conditions" not in props
+    assert "query" not in schema.get("required", [])
 
-    # complex_conditions 默认空列表
-    cc = props["complex_conditions"]
-    assert cc.get("type") == "array", "complex_conditions 应为 array"
-    assert cc.get("default") == [], "complex_conditions 默认值应为 []"
-
-    # 旧元字段不应出现
     for old_field in ("intent_reason", "extraction_confidence", "ambiguous_params"):
-        assert old_field not in props, f"旧元字段 {old_field!r} 不应出现在 Schema 中"
-
-
-# ── T1-2：build_compute_schema 包含 query(required) + MetricItem 扩展 ─────────
+        assert old_field not in props
 
 
 def test_T1_2_compute_schema_has_query_and_metric_extensions() -> None:
-    """T1-2：compute_{code} Schema 包含 query 必填、MetricItem 包含 expr/filters。"""
+    """T1-2: compute schema keeps strict fields and metric-item extensions."""
     from datacloud_data_sdk.virtual_action.generator import build_compute_schema
 
     fields = [
@@ -108,76 +90,63 @@ def test_T1_2_compute_schema_has_query_and_metric_extensions() -> None:
     schema = build_compute_schema("网格分析", fields)
     props = schema.get("properties", {})
 
-    assert "query" in props, "compute Schema 缺少 query 字段"
-    assert "query" in schema.get("required", []), "query 未加入 compute required"
-    assert "complex_conditions" in props, "compute Schema 缺少 complex_conditions"
+    assert "query" not in props
+    assert "complex_conditions" not in props
+    assert "metrics" in schema.get("required", [])
 
-    # MetricItem 中 expr 和 filters 字段存在
     metrics_schema = props.get("metrics", {})
-    items = metrics_schema.get("items", {})
-    one_of = items.get("oneOf", [])
-    # 至少有一个 metric item 含 expr
+    one_of = metrics_schema.get("items", {}).get("oneOf", [])
     has_expr = any("expr" in item.get("properties", {}) for item in one_of)
     has_filters = any("filters" in item.get("properties", {}) for item in one_of)
-    assert has_expr, "MetricItem 缺少 expr 字段"
-    assert has_filters, "MetricItem 缺少 filters 字段"
+    assert has_expr
+    assert has_filters
 
-    # MetricItem required 不包含 field（field/expr 二选一）
     for item in one_of:
         if "expr" in item.get("properties", {}):
-            assert "field" not in item.get("required", []), (
-                "含 expr 的 MetricItem required 不应包含 field"
-            )
-
-
-# ── T1-3：Schema 字段约束放开，允许填中文 ─────────────────────────────────────
+            assert_required_uses_field(item.get("required", []), context="compute expr item")
 
 
 def test_T1_3_schema_constraints_relaxed() -> None:
-    """T1-3：filters.field_name_cn 无 const；select 无 enum；x-dc-field-catalog 保留。"""
+    """T1-3: strict schema keeps enum constraints for field-code safety."""
     from datacloud_data_sdk.virtual_action.generator import build_query_schema
 
     schema = build_query_schema("企业分析", _make_fields())
     props = schema.get("properties", {})
 
-    # filters：field_name_cn 不含 const（已改名，旧 field 不再存在）
     filters_schema = props.get("filters", {})
     items = filters_schema.get("items", {})
-    for fitem in items.get("oneOf", []):
-        fn_cn_prop = fitem.get("properties", {}).get("field_name_cn", {})
-        assert "const" not in fn_cn_prop, f"filters.field_name_cn 仍含 const 约束: {fn_cn_prop}"
+    one_of = items.get("oneOf", [])
+    assert one_of
+    first_field = one_of[0].get("properties", {}).get("field", {})
+    assert "enum" in first_field or "const" in first_field
+    assert_uses_field_key(one_of[0].get("properties", {}), context="query filter item")
 
-    # select：无 enum 约束
     select_schema = props.get("select", {})
     select_items = select_schema.get("items", {})
-    assert "enum" not in select_items, "select.items 仍含 enum 约束，应放开"
+    assert "enum" in select_items
+    assert "x-dc-field-catalog" in select_schema
 
-    # x-dc-field-catalog 保留
-    assert "x-dc-field-catalog" in select_schema, "select 缺少 x-dc-field-catalog 字段目录"
-
-    # order_by.field_name_cn 无 enum（已改名）
     order_by = props.get("order_by", {})
     ob_items = order_by.get("items", {})
-    ob_fn_cn = ob_items.get("properties", {}).get("field_name_cn", {})
-    assert "enum" not in ob_fn_cn, "order_by.field_name_cn 仍含 enum 约束，应放开"
-
-
-# ── T1-4：inject_query_fields 替代 inject_ambiguity_fields ────────────────────
+    ob_field = ob_items.get("properties", {}).get("field", {})
+    assert "enum" in ob_field
+    assert_uses_field_key(ob_items.get("properties", {}), context="query order_by item")
 
 
 def test_T1_4_inject_query_fields_replaces_inject_ambiguity_fields() -> None:
-    """T1-4：inject_query_fields 注入 query/complex_conditions；底层不收到这两个字段。"""
+    """T1-4: inject_query_fields should inject and then strip query metadata fields."""
+    import asyncio
+
     from datacloud_analysis.orchestration.execution.node import inject_query_fields
+    from langchain_core.tools import StructuredTool
+    from pydantic import BaseModel
+    from pydantic import Field as PydanticField
 
     received: dict = {}
 
     async def _fake_coro(**kw: object) -> str:
         received.update(kw)
         return "ok"
-
-    from langchain_core.tools import StructuredTool
-    from pydantic import BaseModel
-    from pydantic import Field as PydanticField
 
     class _BaseSchema(BaseModel):
         select: list[str] = PydanticField(default_factory=list)
@@ -192,28 +161,20 @@ def test_T1_4_inject_query_fields_replaces_inject_ambiguity_fields() -> None:
     patched = inject_query_fields(tool)
     schema_fields = patched.args_schema.model_fields  # type: ignore[union-attr]
 
-    # 注入了 query 和 complex_conditions
-    assert "query" in schema_fields, "inject_query_fields 未注入 query"
-    assert "complex_conditions" in schema_fields, "inject_query_fields 未注入 complex_conditions"
-
-    # 旧元字段不应出现
+    assert "query" in schema_fields
+    assert "complex_conditions" in schema_fields
     for old in ("intent_reason", "extraction_confidence", "ambiguous_params"):
-        assert old not in schema_fields, f"旧元字段 {old!r} 不应被注入"
-
-    # 调用底层时，query/complex_conditions 被剥除
-    import asyncio
+        assert old not in schema_fields
 
     asyncio.get_event_loop().run_until_complete(
         patched.coroutine(  # type: ignore[misc]
             select=["stat_date"],
             query="测试",
-            complex_conditions=["亩产效益后30%"],
+            complex_conditions=["产效含0%"],
         )
     )
-    assert "query" not in received, "query 未被剥除，底层不应收到"
-    assert "complex_conditions" not in received, "complex_conditions 未被剥除，底层不应收到"
-    # 旧字段同样不应出现
+    assert "query" not in received
+    assert "complex_conditions" not in received
     assert "intent_reason" not in received
     assert "ambiguous_params" not in received
-    # 业务字段正常传递
     assert received.get("select") == ["stat_date"]

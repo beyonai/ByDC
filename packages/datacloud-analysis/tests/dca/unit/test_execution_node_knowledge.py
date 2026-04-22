@@ -39,6 +39,9 @@ def _make_mock_react_loop(captured: list[str]):
         dynamic_prompt=None,
         max_rounds=None,
         gateway_context=None,
+        loader=None,
+        redirect_tools_map=None,
+        **kwargs,
     ):
         captured.append(system_prompt)
         return {"react_rounds": 0, "react_final": {}, "messages": [], "results": []}

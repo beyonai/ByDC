@@ -13,6 +13,15 @@ from .snowflake import _next_snowflake_id
 
 logger = logging.getLogger(__name__)
 
+_TYPE_ALIAS: Final[dict[str, str]] = {
+    "对象": "object",
+    "视图": "view",
+    "属性": "prop",
+    "动作": "action",
+    "术语类型": "term_type",
+    "术语": "term_type",
+}
+
 
 # relation_type 到 cardinality 的标准映射。
 RELATION_TYPE_TO_CARDINALITY: Final[dict[str, str]] = {
@@ -101,6 +110,8 @@ def convert_term(owl_entity: dict[str, Any]) -> dict[str, Any]:
     term_type_code = _pick_str(owl_entity, "term_type_code")
     library_code = _pick_str(owl_entity, "library_code")
     domain_code = _pick_str(owl_entity, "domain_code")
+    parent_term_code = _pick_str(owl_entity, "parent_term_code") or ""
+    parent_term_id = f"{library_code}#prop#{parent_term_code}" if parent_term_code else None
 
     synonyms = parse_json_field(_pick_str(owl_entity, "synonyms"), [])
     if not isinstance(synonyms, list):
@@ -130,6 +141,7 @@ def convert_term(owl_entity: dict[str, Any]) -> dict[str, Any]:
         "domain_code": domain_code,
         "library_code": library_code,
         "term_type_code": term_type_code,
+        "parent_term_id": parent_term_id,
         "synonyms": normalized_synonyms,
         "aliases": aliases,
         "owl_doc_file": _pick_str(owl_entity, "owl_doc_file"),
@@ -181,6 +193,9 @@ def convert_relation(owl_entity: dict[str, Any]) -> dict[str, Any]:
     target_type = _pick_str(owl_entity, "target_type") or ""
     target_code = _pick_str(owl_entity, "target_code") or ""
 
+    source_type = _TYPE_ALIAS.get(source_type, source_type)
+    target_type = _TYPE_ALIAS.get(target_type, target_type)
+
     source_term_code = f"{source_library}#{source_type}#{source_code}"
     target_term_code = f"{target_library}#{target_type}#{target_code}"
 
@@ -230,6 +245,7 @@ def _pick_str(data: dict[str, Any], *keys: str) -> str | None:
 
 __all__ = [
     "RELATION_TYPE_TO_CARDINALITY",
+    "_TYPE_ALIAS",
     "convert_domain",
     "convert_relation",
     "convert_term",

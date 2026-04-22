@@ -2,7 +2,7 @@
 
 规则：
 - read_file / ask_user 是默认工具
-- write_code / write_file / execute_code 不在默认工具列表中
+- write_file 不在默认工具列表中
 """
 
 from __future__ import annotations
@@ -24,11 +24,3 @@ def test_ask_user_is_builtin() -> None:
 
 def test_write_file_is_not_builtin() -> None:
     assert "write_file" not in _get_builtin_tool_names()
-
-
-def test_write_code_is_not_builtin() -> None:
-    assert "write_code" not in _get_builtin_tool_names()
-
-
-def test_execute_code_is_not_builtin() -> None:
-    assert "execute_code" not in _get_builtin_tool_names()

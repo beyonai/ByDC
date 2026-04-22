@@ -25,6 +25,7 @@ _FINISH_CALL = {
     "args": {"answer": "done", "result_type": "text"},
     "id": "tc_002",
 }
+_MIXED_CALLS = [_FINISH_CALL, _TOOL_CALL]
 
 
 def _serialize(msgs: list) -> list[dict]:
@@ -176,3 +177,73 @@ async def test_tc1_4b_clarification_needed_error_captured() -> None:
     ctx = result.get("pending_clarification_context") or {}
     assert ctx.get("tool_name") == "query_ads_enterprise"
     assert "react_round_idx" in ctx, "react_round_idx 应写入 pending_clarification_context"
+
+
+async def test_tc1_5_gateway_context_prefers_configurable() -> None:
+    """TC-1-5: dispatch_tool 优先使用 config.configurable.gateway_context。"""
+    log = _log_with_ai([_TOOL_CALL])
+    state = _make_state(react_messages_log=log)
+    from_config = object()
+    from_closure = object()
+
+    received_ctx: list[Any] = []
+
+    async def _capture(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        received_ctx.append(kwargs.get("gateway_context"))
+        return "tc_001", {"records": []}
+
+    with patch(
+        "datacloud_analysis.orchestration.execution.tool_dispatcher_node.dispatch_tool",
+        _capture,
+    ):
+        node = make_tool_dispatcher_node(tools_list=[], gateway_context=from_closure)
+        result = await node(state, {"configurable": {"gateway_context": from_config}})
+
+    assert result.get("execution_status") is None
+    assert received_ctx == [from_config]
+
+
+async def test_tc1_6_gateway_context_falls_back_to_closure() -> None:
+    """TC-1-6: configurable 中无 gateway_context 时回退闭包注入值。"""
+    log = _log_with_ai([_TOOL_CALL])
+    state = _make_state(react_messages_log=log)
+    from_closure = object()
+    received_ctx: list[Any] = []
+
+    async def _capture(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        received_ctx.append(kwargs.get("gateway_context"))
+        return "tc_001", {"records": []}
+
+    with patch(
+        "datacloud_analysis.orchestration.execution.tool_dispatcher_node.dispatch_tool",
+        _capture,
+    ):
+        node = make_tool_dispatcher_node(tools_list=[], gateway_context=from_closure)
+        result = await node(state, {"configurable": {}})
+
+    assert result.get("execution_status") is None
+    assert received_ctx == [from_closure]
+
+
+async def test_tc1_7_mixed_calls_ignores_finish_and_dispatches_non_finish() -> None:
+    """TC-1-7: mixed tool_calls(含 finish_react) 时应优先执行非 finish 工具。"""
+    log = _log_with_ai(_MIXED_CALLS)
+    state = _make_state(react_messages_log=log)
+
+    dispatched: list[str] = []
+
+    async def _capture(tc: dict[str, Any], *args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        dispatched.append(str(tc.get("name") or ""))
+        return "tc_001", {"records": []}
+
+    with patch(
+        "datacloud_analysis.orchestration.execution.tool_dispatcher_node.dispatch_tool",
+        _capture,
+    ):
+        node = make_tool_dispatcher_node(tools_list=[])
+        result = await node(state, MagicMock())
+
+    assert result.get("execution_status") is None
+    assert dispatched == ["query_ads_enterprise"], (
+        "mixed calls 应忽略 finish_react，仅执行真实工具"
+    )

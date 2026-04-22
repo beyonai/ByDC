@@ -69,6 +69,11 @@ async def test_need_confirm_raises_clarification_needed_error() -> None:
     ctx = _make_ctx()
 
     with (
+        # 跳过轻量消歧，走 catalog fallback
+        patch(
+            "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._resolve_via_aliases",
+            return_value=None,
+        ),
         # catalog 非空 + unresolved 术语 → 进入 NEED_CONFIRM 分支
         patch(
             "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._get_field_catalog",
@@ -80,7 +85,7 @@ async def test_need_confirm_raises_clarification_needed_error() -> None:
         ),
         patch(
             "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._analyze_clarification",
-            return_value=(_PARADIGM_LIST, "知识"),
+            return_value=(_PARADIGM_LIST, "知识", True),
         ),
         patch(
             "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin.interrupt",

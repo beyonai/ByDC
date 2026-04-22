@@ -35,100 +35,6 @@ def _is_data_tool_name(name: str) -> bool:
     return any(name.startswith(p) for p in _DATA_TOOL_PREFIXES)
 
 
-def inject_ambiguity_fields(t: BaseTool) -> BaseTool:
-    """往数据类工具 Schema 注入三个元字段，由 LLM 在调用时填写，执行前自动剥除。
-
-    注入字段：
-    - intent_reason: str        — LLM 对本次查询意图的完整理解描述
-    - extraction_confidence: float — LLM 对参数提取正确性的自信度 [0.0, 1.0]
-    - ambiguous_params: List[str]  — LLM 认为有歧义/不确定的参数名列表
-
-    底层 coroutine 不会收到这三个字段（调用前自动剥除）。
-    """
-    try:
-        from pydantic import Field, create_model  # noqa: PLC0415
-
-        original_schema = t.args_schema
-        if original_schema is None:
-            return t
-
-        new_schema = create_model(
-            f"{original_schema.__name__}WithAmbiguity",
-            __base__=original_schema,
-            intent_reason=(
-                str,
-                Field(
-                    default="",
-                    description=(
-                        "你对用户本次查询意图的完整理解描述。"
-                        "请用一句话说明用户真正想查什么、时间范围、分组维度等关键要素。"
-                    ),
-                ),
-            ),
-            extraction_confidence=(
-                float,
-                Field(
-                    default=1.0,
-                    ge=0.0,
-                    le=1.0,
-                    description=(
-                        "你对本次参数提取正确性的自信度，范围 [0.0, 1.0]。"
-                        "若字段名、时间范围、过滤条件等存在不确定性，请填写较低值（如 0.6~0.8）。"
-                    ),
-                ),
-            ),
-            ambiguous_params=(
-                list[str],
-                Field(
-                    default_factory=list,
-                    description=(
-                        "【必填元字段】对本次参数提取存在不确定性的参数名列表。"
-                        "满足以下任一条件时，必须将该参数名加入此列表：\n"
-                        "1. 字段名/维度名/指标名在用户问题中未明确提及，是根据业务猜测填写的；\n"
-                        "2. 同一业务概念可能对应多个字段（如'营收'可能是revenue/net_revenue/gmv）；\n"
-                        "3. 时间范围存在模糊（如'最近'、'今年'、'上季度'等相对时间）；\n"
-                        "4. 过滤条件的枚举值不确定（如地区名称、状态码等）；\n"
-                        "5. 用户未明确说明分组维度，是推断填写的。\n"
-                        "仅当以上全部不符合时才填写空列表 []。"
-                        '示例：["dimensions", "filters"] 表示维度和过滤条件存在不确定。'
-                    ),
-                ),
-            ),
-        )
-        t.args_schema = new_schema
-
-        # 包装 coroutine：调用前剥除三个元字段
-        if hasattr(t, "coroutine") and t.coroutine is not None:
-            _orig_coro = t.coroutine
-
-            async def _coro_strip_ambiguity(**kw: Any) -> Any:
-                kw.pop("intent_reason", None)
-                kw.pop("extraction_confidence", None)
-                kw.pop("ambiguous_params", None)
-                return await _orig_coro(**kw)
-
-            t.coroutine = _coro_strip_ambiguity
-
-        # 包装 func（同步工具）
-        if hasattr(t, "func") and t.func is not None:
-            _orig_func = t.func
-
-            def _func_strip_ambiguity(**kw: Any) -> Any:
-                kw.pop("intent_reason", None)
-                kw.pop("extraction_confidence", None)
-                kw.pop("ambiguous_params", None)
-                return _orig_func(**kw)
-
-            t.func = _func_strip_ambiguity
-
-    except Exception as exc:  # pragma: no cover
-        logger.warning(
-            "[inject_ambiguity_fields] failed for tool=%s: %s", getattr(t, "name", "?"), exc
-        )
-
-    return t
-
-
 def inject_query_fields(t: BaseTool) -> BaseTool:
     """往数据类工具 Schema 注入 query/complex_conditions 字段，由 LLM 在调用时填写，执行前自动剥除。
 
@@ -145,32 +51,21 @@ def inject_query_fields(t: BaseTool) -> BaseTool:
         if original_schema is None:
             return t
 
+        from datacloud_analysis.tools._agent_schema_patches import (  # noqa: PLC0415
+            AGENT_COMPLEX_CONDITIONS_DESCRIPTION,
+            AGENT_QUERY_DESCRIPTION,
+        )
+
         new_schema = create_model(
             f"{original_schema.__name__}WithQuery",
             __base__=original_schema,
             query=(
                 str,
-                Field(
-                    default="",
-                    description=(
-                        "【必填】用户原始查询意图的完整自然语言描述。"
-                        "用于歧义判断、复杂查询路由及参数缺失时的兜底推断。"
-                    ),
-                ),
+                Field(default="", description=AGENT_QUERY_DESCRIPTION),
             ),
             complex_conditions=(
                 list[str],
-                Field(
-                    default_factory=list,
-                    description=(
-                        "溢出过滤区：满足以下任一条件时，必须将该条件用自然语言写入此列表：\n"
-                        "1. 过滤条件的值无法在填参时确定为字面常量（如'后30%'、'高于行业平均'）；\n"
-                        "2. 查询/排序/返回所涉及的字段名在当前对象字段列表中找不到精确对应"
-                        "（如'贡献率'、'地块'等非标准词），需系统做语义推断。\n"
-                        "例如：'贡献率后3的地块清单'、'亩产效益后30%的地块'、'营收高于行业平均'。\n"
-                        "非空时系统路由到全能查询路径（data_query）。"
-                    ),
-                ),
+                Field(default_factory=list, description=AGENT_COMPLEX_CONDITIONS_DESCRIPTION),
             ),
         )
         t.args_schema = new_schema
@@ -182,10 +77,6 @@ def inject_query_fields(t: BaseTool) -> BaseTool:
             async def _coro_strip_query_fields(**kw: Any) -> Any:
                 kw.pop("query", None)
                 kw.pop("complex_conditions", None)
-                # 兼容旧版元字段（过渡期）
-                kw.pop("intent_reason", None)
-                kw.pop("extraction_confidence", None)
-                kw.pop("ambiguous_params", None)
                 return await _orig_coro(**kw)
 
             t.coroutine = _coro_strip_query_fields
@@ -196,9 +87,6 @@ def inject_query_fields(t: BaseTool) -> BaseTool:
             def _func_strip_query_fields(**kw: Any) -> Any:
                 kw.pop("query", None)
                 kw.pop("complex_conditions", None)
-                kw.pop("intent_reason", None)
-                kw.pop("extraction_confidence", None)
-                kw.pop("ambiguous_params", None)
                 return _orig_func(**kw)
 
             t.func = _func_strip_query_fields

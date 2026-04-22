@@ -108,5 +108,5 @@ async def stream_llm_call_with_retry(
 
 
 def _build_fallback_llm() -> Any | None:
-    """备用模型当前关闭，后续若恢复请改为代码配置而非环境变量。"""
+    """Fallback model is disabled by policy."""
     return None

@@ -7,7 +7,11 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+import sys
+import types
+from contextlib import contextmanager
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # ── 被测目标（尚未实现，导入会失败 → 红）────────────────────────────────────
 from datacloud_analysis.orchestration.execution.react_loop import (
@@ -164,6 +168,54 @@ class TestIsMeaningfulThinking:
 # ===========================================================================
 
 
+@contextmanager
+def _mock_emit_runtime_modules() -> Any:
+    """Mock runtime-only modules used by _emit_thinking_token."""
+
+    by_framework = types.ModuleType("by_framework")
+    by_framework_core = types.ModuleType("by_framework.core")
+    by_framework_protocol = types.ModuleType("by_framework.core.protocol")
+    by_framework_content_type = types.ModuleType("by_framework.core.protocol.content_type")
+
+    class _ReasoningLogDelta:
+        value = "reasoningLogDelta"
+
+    class _EventType:
+        REASONING_LOG_DELTA = _ReasoningLogDelta()
+
+    class _ThinkText:
+        value = "1002"
+
+    class _SseReasonMessageType:
+        think_text = _ThinkText()
+
+    class _StreamChunkEvent:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+    by_framework.EventType = _EventType
+    by_framework.StreamChunkEvent = _StreamChunkEvent
+    by_framework_content_type.SseReasonMessageType = _SseReasonMessageType
+
+    datacloud_data_sdk = types.ModuleType("datacloud_data_sdk")
+    datacloud_stream_text = types.ModuleType("datacloud_data_sdk.stream_text")
+    datacloud_stream_text.coerce_stream_chunk_text = lambda x: x
+    datacloud_data_sdk.stream_text = datacloud_stream_text
+
+    with patch.dict(
+        sys.modules,
+        {
+            "by_framework": by_framework,
+            "by_framework.core": by_framework_core,
+            "by_framework.core.protocol": by_framework_protocol,
+            "by_framework.core.protocol.content_type": by_framework_content_type,
+            "datacloud_data_sdk": datacloud_data_sdk,
+            "datacloud_data_sdk.stream_text": datacloud_stream_text,
+        },
+    ):
+        yield
+
+
 class TestEmitThinkingToken:
     # 单测：gateway 为 None → 不报错
     def test_no_gateway_no_error(self) -> None:
@@ -185,18 +237,20 @@ class TestEmitThinkingToken:
         gw.emit_chunk = AsyncMock(side_effect=RuntimeError("network error"))
 
         # 不应抛出异常
-        asyncio.get_event_loop().run_until_complete(
-            _emit_thinking_token(gw, "some thought", message_id="test_msg")
-        )
+        with _mock_emit_runtime_modules():
+            asyncio.get_event_loop().run_until_complete(
+                _emit_thinking_token(gw, "some thought", message_id="test_msg")
+            )
 
     # 正常推送：emit_chunk 被调用一次
     def test_normal_emit_called(self) -> None:
         gw = MagicMock()
         gw.emit_chunk = AsyncMock(return_value=None)
 
-        asyncio.get_event_loop().run_until_complete(
-            _emit_thinking_token(gw, "用户想查营收数据", message_id="test_msg")
-        )
+        with _mock_emit_runtime_modules():
+            asyncio.get_event_loop().run_until_complete(
+                _emit_thinking_token(gw, "用户想查营收数据", message_id="test_msg")
+            )
         gw.emit_chunk.assert_called_once()
 
     # 推送时使用正确的 event_type
@@ -210,9 +264,10 @@ class TestEmitThinkingToken:
 
         gw.emit_chunk = _capture_emit
 
-        asyncio.get_event_loop().run_until_complete(
-            _emit_thinking_token(gw, "推理过程文字", message_id="test_msg")
-        )
+        with _mock_emit_runtime_modules():
+            asyncio.get_event_loop().run_until_complete(
+                _emit_thinking_token(gw, "推理过程文字", message_id="test_msg")
+            )
         assert call_kwargs.get("event_type") == "reasoningLogDelta"
         assert call_kwargs.get("content_type") == "1002"
 
@@ -226,9 +281,10 @@ class TestEmitThinkingToken:
 
         gw.emit_chunk = _capture_emit
 
-        asyncio.get_event_loop().run_until_complete(
-            _emit_thinking_token(gw, "推理过程文字", message_id="round_abc123")
-        )
+        with _mock_emit_runtime_modules():
+            asyncio.get_event_loop().run_until_complete(
+                _emit_thinking_token(gw, "推理过程文字", message_id="round_abc123")
+            )
         assert call_kwargs.get("message_id") == "round_abc123", (
             "emit_chunk 收到的 message_id 应与传入值完全一致"
         )

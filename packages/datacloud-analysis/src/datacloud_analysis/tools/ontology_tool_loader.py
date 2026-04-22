@@ -446,12 +446,12 @@ class OntologyToolLoader:
             order_by["items"] = items
             props["order_by"] = order_by
 
-        # 4. complex_conditions：覆写 description，删除"字段名未命中 → 写此列表"冲突条件
-        if "complex_conditions" in props:
-            props["complex_conditions"] = {
-                **props["complex_conditions"],
-                "description": AGENT_COMPLEX_CONDITIONS_DESCRIPTION,
-            }
+        # 4. complex_conditions：覆盖 description；若缺失则补一个可选数组字段
+        complex_conditions = dict(props.get("complex_conditions") or {})
+        if not complex_conditions:
+            complex_conditions = {"type": "array", "items": {"type": "string"}, "default": []}
+        complex_conditions["description"] = AGENT_COMPLEX_CONDITIONS_DESCRIPTION
+        props["complex_conditions"] = complex_conditions
 
         return {**input_schema, "properties": props}
 

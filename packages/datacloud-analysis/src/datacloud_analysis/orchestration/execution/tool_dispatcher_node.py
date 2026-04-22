@@ -61,23 +61,29 @@ def make_tool_dispatcher_node(
             logger.error("[tool_dispatcher] no AIMessage found in react_messages_log or messages")
             return {"execution_status": "error"}
 
+        # 与 llm_call_node 保持一致：请求级 configurable 覆盖闭包注入值
+        _gateway_context = (config.get("configurable") or {}).get(
+            "gateway_context"
+        ) or gateway_context
+
         tools_map: dict[str, Any] = {t.name: t for t in tools_list}
         tools_map["finish_react"] = finish_react
         if redirect_tools_map:
             tools_map.update(redirect_tools_map)
 
         calls = list(getattr(ai_msg, "tool_calls", None) or [])
-        if not calls or calls[0].get("name") == "finish_react":
+        non_finish_calls = [tc for tc in calls if tc.get("name") != "finish_react"]
+        if not calls or not non_finish_calls:
             return {"execution_status": "finish_react"}
 
-        for tc in calls:
+        for tc in non_finish_calls:
             tool_name = str(tc.get("name") or "")
             try:
                 _tool_id, result = await dispatch_tool(
                     tc,
                     tools_map,
                     state,
-                    gateway_context=gateway_context,
+                    gateway_context=_gateway_context,
                     loader=loader,
                 )
             except ClarificationNeededError as exc:

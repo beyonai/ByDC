@@ -60,6 +60,10 @@ async def setup() -> None:
         logger.info(
             "datacloud-analysis: LangGraph checkpoint tables ready; checkpointer registered."
         )
+        logger.info(
+            "datacloud-analysis: production requires checkpointer initialization. "
+            "Call `await bootstrap.setup()` before create_agent()/run_agent() startup."
+        )
 
         try:
             from datacloud_memory.store import init_store  # noqa: PLC0415

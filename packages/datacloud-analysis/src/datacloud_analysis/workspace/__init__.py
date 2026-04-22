@@ -1,12 +1,5 @@
-"""Workspace package — file-system path management and sandbox mounting.
+"""Workspace package - runtime workspace helpers."""
 
-Sub-modules
------------
-mount          Mount inputs/temp/outputs/skills into a sandbox backend.
-skills_loader  Scan & register built-in / enterprise / user skills.
-"""
+from .runtime import resolve_shared_workspace_dir
 
-from .paths import TaskPaths, build_task_paths
-from .skills_loader import SkillLoader
-
-__all__ = ["TaskPaths", "build_task_paths", "SkillLoader"]
+__all__ = ["resolve_shared_workspace_dir"]

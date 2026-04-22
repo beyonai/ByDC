@@ -1,12 +1,12 @@
-"""Tests for new atomic tool files: ask_user, file_io, code_exec."""
+"""Tests for new atomic tool files: ask_user and file_io."""
 
 from __future__ import annotations
 
 import asyncio
 import os
 import tempfile
-import warnings
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -29,7 +29,10 @@ class TestAskUserTool:
         # The schema should already have 'reason' as a field
         schema = ask_user.args_schema
         assert schema is not None
-        assert "reason" in schema.model_fields
+        if hasattr(schema, "model_fields"):
+            assert "reason" in schema.model_fields
+        else:
+            assert "reason" in schema
 
 
 # ---------------------------------------------------------------------------
@@ -78,9 +81,9 @@ class TestFileIOTools:
             ),
         ):
             result = await write_file.ainvoke({"path": "output.txt", "content": "data"})
+            written = await asyncio.to_thread(Path(tmpdir, "output.txt").read_text)
 
         assert result["success"] is True
-        written = await asyncio.to_thread(Path(tmpdir, "output.txt").read_text)
         assert written == "data"
 
     @pytest.mark.asyncio
@@ -101,103 +104,13 @@ class TestFileIOTools:
 
 
 # ---------------------------------------------------------------------------
-# write_code / execute_code tools
-# ---------------------------------------------------------------------------
-
-
-class TestCodeExecTools:
-    @pytest.mark.asyncio
-    async def test_write_code_creates_py_file(self) -> None:
-        from datacloud_analysis.tools.code_exec import write_code
-
-        with (
-            tempfile.TemporaryDirectory() as tmpdir,
-            patch.dict(
-                os.environ,
-                {"DATACLOUD_ACTIVE_WORKSPACE": tmpdir},
-            ),
-        ):
-            result = await write_code.ainvoke({"filename": "script.py", "code": "x = 1"})
-
-        assert result["success"] is True
-        assert result["path"].endswith(".py")
-
-    @pytest.mark.asyncio
-    async def test_write_code_adds_py_suffix(self) -> None:
-        from datacloud_analysis.tools.code_exec import write_code
-
-        with (
-            tempfile.TemporaryDirectory() as tmpdir,
-            patch.dict(
-                os.environ,
-                {"DATACLOUD_ACTIVE_WORKSPACE": tmpdir},
-            ),
-        ):
-            result = await write_code.ainvoke({"filename": "myscript", "code": "pass"})
-
-        assert result["success"] is True
-        assert result["path"].endswith(".py")
-
-    @pytest.mark.asyncio
-    async def test_execute_code_runs_successfully(self) -> None:
-        from datacloud_analysis.tools.code_exec import execute_code, write_code
-
-        with (
-            tempfile.TemporaryDirectory() as tmpdir,
-            patch.dict(
-                os.environ,
-                {"DATACLOUD_ACTIVE_WORKSPACE": tmpdir},
-            ),
-        ):
-            await write_code.ainvoke(
-                {"filename": "calc.py", "code": "print('hello')\n_result = 42"}
-            )
-            result = await execute_code.ainvoke({"filename": "calc.py"})
-
-        assert result["exit_code"] == 0
-        assert "hello" in result["output"]
-        assert result["result"] == 42
-
-    @pytest.mark.asyncio
-    async def test_execute_code_missing_file(self) -> None:
-        from datacloud_analysis.tools.code_exec import execute_code
-
-        with (
-            tempfile.TemporaryDirectory() as tmpdir,
-            patch.dict(
-                os.environ,
-                {"DATACLOUD_ACTIVE_WORKSPACE": tmpdir},
-            ),
-        ):
-            result = await execute_code.ainvoke({"filename": "missing.py"})
-
-        assert result["exit_code"] == 1
-
-    @pytest.mark.asyncio
-    async def test_execute_code_syntax_error(self) -> None:
-        from datacloud_analysis.tools.code_exec import execute_code, write_code
-
-        with (
-            tempfile.TemporaryDirectory() as tmpdir,
-            patch.dict(
-                os.environ,
-                {"DATACLOUD_ACTIVE_WORKSPACE": tmpdir},
-            ),
-        ):
-            await write_code.ainvoke({"filename": "bad.py", "code": "def bad syntax"})
-            result = await execute_code.ainvoke({"filename": "bad.py"})
-
-        assert result["exit_code"] == 1
-
-
-# ---------------------------------------------------------------------------
 # Gateway file_manager 委托路径测试（_context 注入）
 # ---------------------------------------------------------------------------
 
 
 def _make_mock_context(
-    read_return: dict | None = None,
-    write_return: dict | None = None,
+    read_return: dict[str, Any] | None = None,
+    write_return: dict[str, Any] | None = None,
 ) -> MagicMock:
     """构造一个最小的 mock gateway_context，file_manager 方法均为 AsyncMock。"""
     file_manager = MagicMock()
@@ -215,7 +128,7 @@ def _make_mock_context(
     return ctx
 
 
-async def _invoke_with_context(tool_func, params: dict, ctx: MagicMock):
+async def _invoke_with_context(tool_func: Any, params: dict[str, Any], ctx: MagicMock) -> Any:
     """模拟 _invoke_tool_with_runtime_context 的注入行为：直接调用底层 coroutine，注入 _context。"""
     invoke_params = dict(params)
     invoke_params["_context"] = ctx
@@ -299,73 +212,3 @@ class TestFileIOToolsWithGateway:
             result = await read_file.ainvoke({"path": "data.txt"})
 
         assert result == "fallback content"
-
-
-class TestCodeExecToolsWithGateway:
-    """验收用例 5-6：write_code / execute_code 委托 Gateway FileManager。"""
-
-    @pytest.mark.asyncio
-    async def test_write_code_delegates_to_file_manager(self) -> None:
-        """用例 5：write_code 委托 file_manager 写入 Python 文件，自动补 .py 后缀。"""
-        from datacloud_analysis.tools.code_exec import write_code
-
-        ctx = _make_mock_context(
-            write_return={"success": True, "data": {"path": "analysis.py", "bytes_written": 12}}
-        )
-        result = await _invoke_with_context(
-            write_code, {"filename": "analysis", "code": "print('ok')"}, ctx
-        )
-
-        assert result["success"] is True
-        ctx.agent_runtime_state.session_manager.file_manager.write_file.assert_called_once_with(
-            "analysis.py", "print('ok')"
-        )
-
-    @pytest.mark.asyncio
-    async def test_execute_code_reads_via_file_manager_and_executes(self) -> None:
-        """用例 6：execute_code 读文件走 file_manager，执行结果正确。"""
-        from datacloud_analysis.tools.code_exec import execute_code
-
-        ctx = _make_mock_context(
-            read_return={"success": True, "data": {"content": "_result = {'count': 42}"}}
-        )
-        result = await _invoke_with_context(execute_code, {"filename": "analysis.py"}, ctx)
-
-        assert result["exit_code"] == 0
-        assert result["result"] == {"count": 42}
-        ctx.agent_runtime_state.session_manager.file_manager.read_file.assert_called_once_with(
-            "analysis.py"
-        )
-
-    @pytest.mark.asyncio
-    async def test_execute_code_returns_error_when_file_manager_fails(self) -> None:
-        """execute_code：file_manager 读取失败时返回 exit_code=1，不抛异常。"""
-        from datacloud_analysis.tools.code_exec import execute_code
-
-        ctx = _make_mock_context(read_return={"success": False, "error": "Permission denied"})
-        result = await _invoke_with_context(execute_code, {"filename": "analysis.py"}, ctx)
-
-        assert result["exit_code"] == 1
-        assert "Permission denied" in result["output"]
-        assert result["result"] is None
-
-
-class TestSandboxDeprecation:
-    """验收用例 7：sbx_read_file 导入触发 DeprecationWarning。"""
-
-    def test_sandbox_import_triggers_deprecation_warning(self) -> None:
-        """用例 7：导入 sandbox 模块触发 DeprecationWarning。"""
-        import sys
-
-        # 确保模块未缓存，强制重新导入触发 warnings.warn
-        sys.modules.pop("datacloud_analysis.tools.sandbox", None)
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            import datacloud_analysis.tools.sandbox  # noqa: F401
-
-            assert any(
-                issubclass(warning.category, DeprecationWarning)
-                and "sandbox" in str(warning.message).lower()
-                for warning in w
-            ), f"Expected DeprecationWarning, got: {[str(x.message) for x in w]}"

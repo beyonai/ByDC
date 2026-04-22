@@ -57,15 +57,14 @@ def enrich_term_type_names(
                 defs[code] = (comment, f"{comment}术语类型", data_type)
 
 
-def render_term_types(
+def _term_type_item(
     config: OwlGenConfig,
-    defs: OrderedDict[str, tuple[str, str, str]],
+    type_code: str,
+    name: str,
+    desc: str,
+    term_data_type: str,
 ) -> str:
-    """术语类型定义 OWL。"""
-    items: list[str] = []
-    for type_code, (name, desc, term_data_type) in defs.items():
-        items.append(
-            f"""\
+    return f"""\
     <owl:NamedIndividual rdf:about="#termtype_{type_code}">
         <rdf:type rdf:resource="#TermTypeDefinition"/>
         <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
@@ -82,7 +81,9 @@ def render_term_types(
 {config.library_code}</library_code>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
     </owl:NamedIndividual>"""
-        )
+
+
+def _wrap_term_types(items: list[str]) -> str:
     body = "\n\n".join(items)
     return f"""\
 <?xml version="1.0"?>
@@ -107,3 +108,34 @@ def render_term_types(
     <owl:DatatypeProperty rdf:about="#version"/>
 </rdf:RDF>
 """
+
+
+def render_term_types(
+    config: OwlGenConfig,
+    defs: OrderedDict[str, tuple[str, str, str]],
+) -> str:
+    """术语类型定义 OWL。"""
+    items: list[str] = []
+    for type_code, (name, desc, term_data_type) in defs.items():
+        items.append(_term_type_item(config, type_code, name, desc, term_data_type))
+    return _wrap_term_types(items)
+
+
+def render_term_types_for_object(
+    config: OwlGenConfig,
+    table: Table,
+    term_type_defs: OrderedDict[str, tuple[str, str, str]],
+) -> str:
+    """渲染单个对象涉及的术语类型定义。"""
+    type_codes: set[str] = {"object", "prop"}
+    for binding in config.term_bindings:
+        if binding.table_code == table.code:
+            type_codes.add(binding.term_type_code)
+
+    items: list[str] = []
+    for type_code in term_type_defs:
+        if type_code not in type_codes:
+            continue
+        name, desc, term_data_type = term_type_defs[type_code]
+        items.append(_term_type_item(config, type_code, name, desc, term_data_type))
+    return _wrap_term_types(items)

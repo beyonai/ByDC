@@ -331,8 +331,8 @@ class TestConvertRelation:
 
         result = convert_relation(owl_entity)
 
-        assert result["source_term_code"] == "HR#术语类型#po_users"
-        assert result["target_term_code"] == "HR#术语类型#po_organization"
+        assert result["source_term_code"] == "HR#term_type#po_users"
+        assert result["target_term_code"] == "HR#term_type#po_organization"
         assert result["relation_name"] == "人员_归属_组织"
         assert result["cardinality"] == "N:1"
         # joinkeys 合并到 ext_field 中
@@ -415,8 +415,8 @@ class TestConvertRelation:
 
         result = convert_relation(owl_entity)
 
-        assert result["source_term_code"] == "HR#术语类型#po_users"
-        assert result["target_term_code"] == "HR#术语类型#po_organization"
+        assert result["source_term_code"] == "HR#term_type#po_users"
+        assert result["target_term_code"] == "HR#term_type#po_organization"
         assert result["relation_name"] is None
         assert result["cardinality"] is None
         import json

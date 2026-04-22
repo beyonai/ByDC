@@ -313,6 +313,9 @@ async def _invoke_llm_with_fallback(
     )
     from datacloud_analysis.orchestration.execution.llm_retry import stream_llm_call_with_retry
 
+    if not str(thinking_message_id or "").strip():
+        raise ValueError("thinking_message_id must be a non-empty string")
+
     # ── 主模型（含重试）────────────────────────────────────────────────────────
     last_exc: Exception
     try:
@@ -463,8 +466,6 @@ async def finish_react(
     - 【重要】result_type=query_result 时，answer 字段只写一句话的文字摘要
       （例如"共有 N 家企业"），绝对不要在 answer 里写数据表格或列表，
       数据已经通过 query_data 自动结构化展示，写进 answer 会导致重复输出。
-    - execute_code 执行后会将 _result 自动保存到同名 .json 文件（result_file 字段），
-      此时推荐使用 result_type=json_file，csv_file_path 填写 result_file 路径。
     """
     parsed_data: Any = None
     if result_type == "json" and data:
@@ -857,16 +858,6 @@ async def run_react_loop(
             _resume_token = is_resume_replay.set(True)
             try:
                 for tc in pending_tool_calls:
-                    # resume replay 时剥除旧版歧义元字段（向后兼容）：
-                    # LLM 首次调用时可能填写了这三个旧元字段，before_call_back
-                    # 新版已不依赖这三个字段，直接剥除放行避免无效干扰。
-                    # 注意：query / complex_conditions 保留，新版 before_call_back 需要它们做路由。
-                    _tc_args = dict(tc.get("args") or {})
-                    _tc_args.pop("ambiguous_params", None)
-                    _tc_args.pop("intent_reason", None)
-                    _tc_args.pop("extraction_confidence", None)
-                    tc = {**tc, "args": _tc_args}
-
                     _t0 = time.monotonic()
                     tool_id, result = await dispatch_tool(
                         tc, tools_map, state, gateway_context=gateway_context, loader=loader

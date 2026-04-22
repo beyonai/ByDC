@@ -11,16 +11,12 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Callable
 from typing import Any
 
 from datacloud_analysis.i18n import get_supported_locales
 from datacloud_analysis.orchestration.graph_builder import build_analysis_graph
+from datacloud_analysis.orchestration.graph_compile_policy import compile_graph_with_policy
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 _DIAG_QUESTION_KEYS = (
@@ -138,7 +134,6 @@ def create_agent(
     skip_action_families: frozenset[str] = frozenset(),
     user_message: str | None = None,
     agent_id: str | None = None,
-    knowledge_enhancer: Callable[..., Any] | None = None,
 ) -> Any:
     """Create a deep agent for DataCloud, usable with langgraph dev and deep-agents-ui.
 
@@ -154,12 +149,6 @@ def create_agent(
             ``prompts_overwrite`` 的 ``user_message`` / ``task_prompt`` 等键推断。
         agent_id: 可选。写入核查日志；未传时尝试 ``prompts_overwrite`` 中的
             ``agent_id`` / ``agentId`` / ``resourceId``。
-        knowledge_enhancer: 可选。知识增强函数，签名为
-            ``(query: str) -> ClarificationResult``（同步或异步均可）。
-            传入后，每次 ``intend_node`` 调用时会先调用此函数，将知识摘要写入
-            ``knowledge_snippets``、将完整结果写入 ``knowledge_payload``，
-            供后续 execution_node 和 query_clarification_plugin 使用（§6.4）。
-            典型用法：在调用方用 ``asyncio.to_thread`` 包装同步函数后传入。
     """
 
     # 语言和环境的日志预警可以保留，这里为了兼容现有 SDK 初始化
@@ -226,24 +215,11 @@ def create_agent(
     graph = build_analysis_graph(
         prompts_overwrite=prompts_overwrite,
         tools=merged_tools,
-        knowledge_enhancer=knowledge_enhancer,
         loader=loader,
         redirect_tools=redirect_tools or None,
     )
 
-    # Inject checkpointer if bootstrap.setup() has already been called;
-    # fall back to compiling without checkpointing in standalone / test mode.
-    try:
-        from datacloud_analysis.session.checkpointer import get_checkpointer  # noqa: PLC0415
-
-        compiled = graph.compile(checkpointer=get_checkpointer())
-        logger.info("create_agent: compiled with PG checkpointer")
-    except RuntimeError:
-        compiled = graph.compile()
-        logger.warning(
-            "create_agent: checkpointer not initialized — compiling without checkpointing. "
-            "Call `await bootstrap.setup()` before create_agent() to enable interrupt/resume."
-        )
+    compiled = compile_graph_with_policy(graph, caller_name="create_agent")
 
     try:
         nodes = list(compiled.get_graph().nodes.keys())

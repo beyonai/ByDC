@@ -91,7 +91,6 @@ def _as_state_update(value: object, *, node_name: str) -> dict[str, Any]:
 def build_analysis_graph(
     prompts_overwrite: dict[str, Any] | None = None,
     tools: dict[str, Any] | None = None,
-    knowledge_enhancer: Callable[..., Any] | None = None,
     loader: Any = None,
     redirect_tools: dict[str, Any] | None = None,
 ) -> StateGraph[AgentState]:
@@ -174,7 +173,7 @@ def build_analysis_graph(
 
     # ── 注册节点 ─────────────────────────────────────────────────────────────────
     async def _intend(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
-        result = await intend_node(state, config, knowledge_enhancer=knowledge_enhancer)
+        result = await intend_node(state, config)
         return _as_state_update(result, node_name="intend")
 
     async def _llm_call(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
@@ -265,12 +264,11 @@ def build_analysis_graph(
     redirect_tool_keys = sorted((redirect_tools or {}).keys())
     logger.info(
         "build_analysis_graph: V0.3 pipeline wired — tools count=%d keys=%s "
-        "redirect_tools count=%d keys=%s knowledge_enhancer=%s",
+        "redirect_tools count=%d keys=%s",
         len(tool_keys),
         tool_keys,
         len(redirect_tool_keys),
         redirect_tool_keys,
-        knowledge_enhancer is not None,
     )
 
     return builder

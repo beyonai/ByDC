@@ -4,7 +4,7 @@
   1. 非 query_*/compute_* 工具 → 直接跳过
   2. 剥除元字段（query, complex_conditions, 旧版三字段）
   3. Step 1：complex_conditions 非空 → is_complex=True
-  4. Step 2：_get_field_catalog 参数术语映射检查
+  4. Step 2：resolve_field_aliases 轻量消歧 → _get_field_catalog 兜底
      a. 全部 1:1 命中 → CLEAR
         is_complex=False → 返回 None（OQL 直查）
         is_complex=True  → redirect → data_query_*
@@ -44,6 +44,14 @@ except ImportError:  # pragma: no cover
     _sdk_analyze_query = None  # type: ignore[assignment]
     _sdk_format_compute = None  # type: ignore[assignment]
     _sdk_format_query = None  # type: ignore[assignment]
+
+try:
+    from datacloud_knowledge.knowledge_search import resolve_field_aliases
+
+    _HAS_RESOLVE_ALIASES = True
+except ImportError:  # pragma: no cover
+    resolve_field_aliases = None  # type: ignore[assignment]
+    _HAS_RESOLVE_ALIASES = False
 
 from datacloud_analysis.tool_hook_plugins.types import (
     ClarificationNeededError,
@@ -276,6 +284,36 @@ def _resolve_terms(
         else:
             unresolved.append(term)
     return resolved, unresolved
+
+
+def _resolve_via_aliases(
+    terms: list[str],
+    scope_code: str,
+) -> tuple[dict[str, str], list[str]] | None:
+    """尝试通过轻量级别名消歧解析术语。
+
+    成功时返回 (resolved, unresolved)；SDK 不可用或异常时返回 None（触发 fallback）。
+    ambiguous 候选视为 unresolved，交给慢路径处理。
+    """
+    if not _HAS_RESOLVE_ALIASES or not terms or not scope_code:
+        return None
+    try:
+        result = resolve_field_aliases(terms=terms, scope_code=scope_code)
+        # ambiguous 候选合并到 unresolved，交给 SDK 慢路径
+        unresolved = list(result.unresolved) + list(result.ambiguous.keys())
+        logger.info(
+            "[query_clarification] resolve_field_aliases: resolved=%d ambiguous=%d unresolved=%d",
+            len(result.resolved),
+            len(result.ambiguous),
+            len(result.unresolved),
+        )
+        return result.resolved, unresolved
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "[query_clarification] resolve_field_aliases failed, falling back to catalog",
+            exc_info=True,
+        )
+        return None
 
 
 # LLM 可能使用的非标准排序方向键（都应规范化为 Schema 定义的 direction）
@@ -529,20 +567,28 @@ def _execute_resume(
         graph_state.pop("_clarification_cache", None)
     logger.info("[query_clarification] _clarification_cache cleared from state")
 
-    # SDK 回填的可能是官方中文字段名（choiceKeyword），需用新鲜 catalog 做二次翻译
-    _fresh_catalog = _get_field_catalog(tool_name, ctx)
-    logger.info(
-        "[query_clarification] _execute_resume catalog: tool=%s catalog_size=%d",
-        tool_name,
-        len(_fresh_catalog),
-    )
-    if _fresh_catalog:
-        _fresh_terms = _collect_terms_from_params(tool_params)
-        _fresh_resolved, _ = _resolve_terms(_fresh_terms, _fresh_catalog)
-        logger.info(
-            "[query_clarification] _execute_resume fresh_resolved=%s",
-            _fresh_resolved,
+    # SDK 回填的可能是官方中文字段名（choiceKeyword），需做二次翻译
+    scope_code = _scope_code_from_tool(tool_name)
+    _fresh_terms = _collect_terms_from_params(tool_params)
+    _fresh_result = _resolve_via_aliases(_fresh_terms, scope_code)
+    if _fresh_result is not None:
+        _fresh_resolved, _fresh_unresolved = _fresh_result
+        # 快路径有 unresolved → catalog 兜底
+        if _fresh_unresolved:
+            _fresh_catalog = _get_field_catalog(tool_name, ctx)
+            if _fresh_catalog:
+                _extra, _ = _resolve_terms(_fresh_unresolved, _fresh_catalog)
+                _fresh_resolved = {**_fresh_resolved, **_extra}
+    else:
+        _fresh_catalog = _get_field_catalog(tool_name, ctx)
+        _fresh_resolved, _ = (
+            _resolve_terms(_fresh_terms, _fresh_catalog) if _fresh_catalog else ({}, [])
         )
+    logger.info(
+        "[query_clarification] _execute_resume fresh_resolved=%s",
+        _fresh_resolved,
+    )
+    if _fresh_resolved:
         resolved = {**resolved, **_fresh_resolved}
 
     tool_params = _apply_resolved_to_params(tool_params, resolved)
@@ -649,33 +695,46 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                     )
             # choiceKeyword 应与本体 catalog 字段名严格对齐；
             # 若未命中说明知识图谱数据或表单生成有误，需修数据，不做兜底。
-            _catalog_fp = _get_field_catalog(tool_name, ctx)
-            if _catalog_fp:
-                _terms_fp = _collect_terms_from_params(_fmt_params)
-                _resolved_fp, _unresolved_fp = _resolve_terms(_terms_fp, _catalog_fp)
-                logger.info(
-                    "[query_clarification] V0.3 early-return DIAG: terms=%s resolved=%s unresolved=%s",
-                    _terms_fp,
-                    _resolved_fp,
+            _scope_code_fp = _scope_code_from_tool(tool_name)
+            _terms_fp = _collect_terms_from_params(_fmt_params)
+            _alias_fp = _resolve_via_aliases(_terms_fp, _scope_code_fp)
+            if _alias_fp is not None:
+                _resolved_fp, _unresolved_fp = _alias_fp
+                # 快路径有 unresolved → catalog 兜底
+                if _unresolved_fp:
+                    _catalog_fp = _get_field_catalog(tool_name, ctx)
+                    if _catalog_fp:
+                        _extra_fp, _unresolved_fp = _resolve_terms(_unresolved_fp, _catalog_fp)
+                        _resolved_fp = {**_resolved_fp, **_extra_fp}
+            else:
+                _catalog_fp = _get_field_catalog(tool_name, ctx)
+                if _catalog_fp:
+                    _resolved_fp, _unresolved_fp = _resolve_terms(_terms_fp, _catalog_fp)
+                else:
+                    _resolved_fp, _unresolved_fp = {}, []
+            logger.info(
+                "[query_clarification] V0.3 early-return DIAG: terms=%s resolved=%s unresolved=%s",
+                _terms_fp,
+                _resolved_fp,
+                _unresolved_fp,
+            )
+            if _unresolved_fp:
+                logger.warning(
+                    "[query_clarification] V0.3 DATA-MISMATCH: unresolved terms %s"
+                    " not found in ontology catalog — check KG choiceKeyword vs OWL field_name/aliases",
                     _unresolved_fp,
                 )
-                if _unresolved_fp:
-                    logger.warning(
-                        "[query_clarification] V0.3 DATA-MISMATCH: unresolved terms %s"
-                        " not found in ontology catalog — check KG choiceKeyword vs OWL field_name/aliases",
-                        _unresolved_fp,
-                    )
-                if _resolved_fp:
-                    _fmt_params = _apply_resolved_to_params(_fmt_params, _resolved_fp)
-                    logger.info(
-                        "[query_clarification] V0.3 early-return DIAG: patched_select=%s patched_filters=%s",
-                        _fmt_params.get("select"),
-                        [
-                            f.get("field")
-                            for f in (_fmt_params.get("filters") or [])
-                            if isinstance(f, dict)
-                        ],
-                    )
+            if _resolved_fp:
+                _fmt_params = _apply_resolved_to_params(_fmt_params, _resolved_fp)
+                logger.info(
+                    "[query_clarification] V0.3 early-return DIAG: patched_select=%s patched_filters=%s",
+                    _fmt_params.get("select"),
+                    [
+                        f.get("field")
+                        for f in (_fmt_params.get("filters") or [])
+                        if isinstance(f, dict)
+                    ],
+                )
             ctx["tool_params"] = _fmt_params
             if _is_complex_fp:
                 return _build_redirect_decision(tool_name, _raw_query_fp, _fmt_params)
@@ -696,11 +755,6 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
     query: str = str(tool_params.pop("query", "") or "")
     complex_conditions: list[str] = list(tool_params.pop("complex_conditions", None) or [])
 
-    # 兼容旧版元字段（过渡期）
-    tool_params.pop("intent_reason", None)
-    tool_params.pop("extraction_confidence", None)
-    tool_params.pop("ambiguous_params", None)
-
     ctx["tool_params"] = tool_params
 
     logger.info(
@@ -714,103 +768,113 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
     is_complex: bool = bool(complex_conditions)
 
     # ── Step 2：双通道歧义判断 ────────────────────────────────────────────────
-    catalog = _get_field_catalog(tool_name, ctx)
+    scope_code = _scope_code_from_tool(tool_name)
     terms = _collect_terms_from_params(tool_params)
 
-    # resolved 始终初始化为空 dict；catalog 有值时才做术语解析
+    # resolved 始终初始化为空 dict
     resolved: dict[str, str] = {}
 
-    if catalog and terms:
-        resolved, unresolved = _resolve_terms(terms, catalog)
+    # 优先使用轻量级别名消歧（纯 DB，不依赖 OWL loader）
+    alias_result = _resolve_via_aliases(terms, scope_code) if terms else None
 
+    if alias_result is not None:
+        resolved, unresolved = alias_result
+        # 快路径有 unresolved → 用 catalog 二次兜底
         if unresolved:
-            # 存在未命中术语 → NEED_CONFIRM
-            logger.info("[query_clarification] NEED_CONFIRM: unresolved=%s", unresolved)
-            if interrupt is None:
-                logger.warning(
-                    "[query_clarification] interrupt unavailable, skip clarification interrupt"
-                )
-                tool_params = _apply_resolved_to_params(tool_params, resolved)
-                ctx["tool_params"] = tool_params
-                if is_complex:
-                    return _build_redirect_decision(tool_name, query, tool_params)
-                return None
-
-            scope_code = _scope_code_from_tool(tool_name)
-            structured_input = {**tool_params, "complex_conditions": complex_conditions}
-            is_compute = tool_name.startswith("compute_")
-
-            # CACHE MISS：首次执行，调用 SDK；interrupt 前写入完整缓存供 resume 命中
-            _ck = _make_cache_key(tool_name, query)
-            logger.info("[query_clarification] CACHE MISS — calling _analyze_clarification()")
-            paradigm_list, clarify_knowledge, needs_clarification = _analyze_clarification(
-                query,
-                scope_code,
-                structured_input,
-                is_compute=is_compute,
-            )
-            if _graph_state is not None:
-                _graph_state["_clarification_cache"] = {
-                    "cache_key": _ck,
-                    "paradigm_list": paradigm_list,
-                    "clarify_knowledge": clarify_knowledge,
-                    "structured_input": structured_input,
-                    "is_compute": is_compute,
-                    "resolved": resolved,
-                    "is_complex": is_complex,
-                }
-
-            if not paradigm_list:
-                # 澄清分析失败，跳过 interrupt，按原流程继续
-                logger.info("[query_clarification] paradigmList 为空，跳过澄清 interrupt")
-                tool_params = _apply_resolved_to_params(tool_params, resolved)
-                ctx["tool_params"] = tool_params
-                if is_complex:
-                    return _build_redirect_decision(tool_name, query, tool_params)
-                return {"action": "patch", "patch": {"tool_params": tool_params}}
-
-            if not needs_clarification:
-                # LLM 确认所有术语无歧义 → 直接应用替换，不弹表单
-                logger.info(
-                    "[query_clarification] needs_clarification=False, 直接应用 LLM 确认结果"
-                )
-                form_str = json.dumps({"paradigmList": paradigm_list}, ensure_ascii=False)
-                patched = _format_clarification(
-                    query,
-                    structured_input,
-                    form_str,
-                    clarify_knowledge or "",
-                    is_compute=is_compute,
-                )
-                tool_params = _apply_resolved_to_params(patched, resolved)
-                ctx["tool_params"] = tool_params
-                if is_complex:
-                    return _build_redirect_decision(tool_name, query, tool_params)
-                return {"action": "patch", "patch": {"tool_params": tool_params}}
-
-            # ── V0.3：改为抛出 ClarificationNeededError，由 tool_dispatcher 捕获 ──
-            logger.info("[query_clarification] NEED_CONFIRM: raising ClarificationNeededError")
-            raise ClarificationNeededError(
-                {
-                    "tool_name": tool_name,
-                    "query": query,
-                    "paradigm_list": paradigm_list,
-                    "clarify_knowledge": clarify_knowledge,
-                    "structured_input": structured_input,
-                    "ontology_code": scope_code,
-                    "is_compute": is_compute,
-                    "is_complex": is_complex,
-                }
-            )
+            catalog = _get_field_catalog(tool_name, ctx)
+            if catalog:
+                extra_resolved, unresolved = _resolve_terms(unresolved, catalog)
+                resolved = {**resolved, **extra_resolved}
     else:
-        if not catalog and terms:
-            # loader 未注入时打警告：field_name_cn 无法映射到 field_code，将原样透传
+        # fallback: OWL loader catalog
+        catalog = _get_field_catalog(tool_name, ctx)
+        if catalog and terms:
+            resolved, unresolved = _resolve_terms(terms, catalog)
+        elif not catalog and terms:
             logger.warning(
                 "[query_clarification] loader not available, "
                 "field_name_cn will be passed as-is to field (cannot resolve to field_code)"
             )
+            unresolved = []
         else:
-            logger.debug("[query_clarification] no terms to resolve, skip term resolution")
+            unresolved = []
+
+    if terms and unresolved:
+        # 存在未命中术语 → NEED_CONFIRM
+        logger.info("[query_clarification] NEED_CONFIRM: unresolved=%s", unresolved)
+        if interrupt is None:
+            logger.warning(
+                "[query_clarification] interrupt unavailable, skip clarification interrupt"
+            )
+            tool_params = _apply_resolved_to_params(tool_params, resolved)
+            ctx["tool_params"] = tool_params
+            if is_complex:
+                return _build_redirect_decision(tool_name, query, tool_params)
+            return None
+
+        structured_input = {**tool_params, "complex_conditions": complex_conditions}
+        is_compute = tool_name.startswith("compute_")
+
+        # CACHE MISS：首次执行，调用 SDK；interrupt 前写入完整缓存供 resume 命中
+        _ck = _make_cache_key(tool_name, query)
+        logger.info("[query_clarification] CACHE MISS — calling _analyze_clarification()")
+        paradigm_list, clarify_knowledge, needs_clarification = _analyze_clarification(
+            query,
+            scope_code,
+            structured_input,
+            is_compute=is_compute,
+        )
+        if _graph_state is not None:
+            _graph_state["_clarification_cache"] = {
+                "cache_key": _ck,
+                "paradigm_list": paradigm_list,
+                "clarify_knowledge": clarify_knowledge,
+                "structured_input": structured_input,
+                "is_compute": is_compute,
+                "resolved": resolved,
+                "is_complex": is_complex,
+            }
+
+        if not paradigm_list:
+            # 澄清分析失败，跳过 interrupt，按原流程继续
+            logger.info("[query_clarification] paradigmList 为空，跳过澄清 interrupt")
+            tool_params = _apply_resolved_to_params(tool_params, resolved)
+            ctx["tool_params"] = tool_params
+            if is_complex:
+                return _build_redirect_decision(tool_name, query, tool_params)
+            return {"action": "patch", "patch": {"tool_params": tool_params}}
+
+        if not needs_clarification:
+            # LLM 确认所有术语无歧义 → 直接应用替换，不弹表单
+            logger.info("[query_clarification] needs_clarification=False, 直接应用 LLM 确认结果")
+            form_str = json.dumps({"paradigmList": paradigm_list}, ensure_ascii=False)
+            patched = _format_clarification(
+                query,
+                structured_input,
+                form_str,
+                clarify_knowledge or "",
+                is_compute=is_compute,
+            )
+            tool_params = _apply_resolved_to_params(patched, resolved)
+            ctx["tool_params"] = tool_params
+            if is_complex:
+                return _build_redirect_decision(tool_name, query, tool_params)
+            return {"action": "patch", "patch": {"tool_params": tool_params}}
+
+        # ── V0.3：改为抛出 ClarificationNeededError，由 tool_dispatcher 捕获 ──
+        logger.info("[query_clarification] NEED_CONFIRM: raising ClarificationNeededError")
+        raise ClarificationNeededError(
+            {
+                "tool_name": tool_name,
+                "query": query,
+                "paradigm_list": paradigm_list,
+                "clarify_knowledge": clarify_knowledge,
+                "structured_input": structured_input,
+                "ontology_code": scope_code,
+                "is_compute": is_compute,
+                "is_complex": is_complex,
+            }
+        )
 
     # ── 字段名结构翻译（无条件执行）────────────────────────────────────────────
     # 无论 catalog 是否为空，都必须将 field_name_cn 翻译为 field 键，
