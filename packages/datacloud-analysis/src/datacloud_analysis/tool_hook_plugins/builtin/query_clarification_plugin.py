@@ -544,6 +544,7 @@ def _execute_resume(
         resolved = {**resolved, **_fresh_resolved}
 
     tool_params = _apply_resolved_to_params(tool_params, resolved)
+    tool_params["query"] = query  # _format_clarification 回填结果不含 query，需补回
     ctx["tool_params"] = tool_params
 
     if is_complex:
@@ -673,6 +674,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                         if isinstance(f, dict)
                     ],
                 )
+            _fmt_params["query"] = _raw_query_fp  # 澄清格式化结果不含 query，需补回
             ctx["tool_params"] = _fmt_params
             if _is_complex_fp:
                 return _build_redirect_decision(tool_name, _raw_query_fp, _fmt_params)
@@ -688,9 +690,10 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             logger.info("[query_clarification] CACHE HIT — full skip to resume path")
             return await _handle_resume(ctx, tool_name, _graph_state, _cached)
 
-    # ── 剥除元字段（before_callback 消费，不透传给底层执行体）────────────────
+    # ── 剥除元字段（before_callback 消费）────────────────────────────────────
+    # query 保留在 tool_params 中（工具本身需要），仅 complex_conditions 是纯路由元字段。
     tool_params: dict[str, Any] = _normalize_json_fields(dict(ctx.get("tool_params") or {}))
-    query: str = str(tool_params.pop("query", "") or "")
+    query: str = str(tool_params.get("query", "") or "")
     complex_conditions: list[str] = list(tool_params.pop("complex_conditions", None) or [])
 
     ctx["tool_params"] = tool_params
@@ -731,7 +734,9 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 return _build_redirect_decision(tool_name, query, tool_params)
             return None
 
-        structured_input = {**tool_params, "complex_conditions": complex_conditions}
+        # query 是 NL 描述，不属于结构化参数，不传给 SDK
+        _sdk_params = {k: v for k, v in tool_params.items() if k != "query"}
+        structured_input = {**_sdk_params, "complex_conditions": complex_conditions}
         is_compute = tool_name.startswith("compute_")
 
         # CACHE MISS：首次执行，调用 SDK；interrupt 前写入完整缓存供 resume 命中
@@ -775,6 +780,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 is_compute=is_compute,
             )
             tool_params = _apply_resolved_to_params(patched, resolved)
+            tool_params["query"] = query  # _format_clarification 回填结果不含 query，需补回
             ctx["tool_params"] = tool_params
             if is_complex:
                 return _build_redirect_decision(tool_name, query, tool_params)
