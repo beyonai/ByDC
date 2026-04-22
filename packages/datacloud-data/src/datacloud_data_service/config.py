@@ -60,25 +60,10 @@ class Settings(BaseSettings):
         validation_alias="DATACLOUD_TRACE_LOG_PATH",
     )
     trace_enabled: bool = Field(default=False, validation_alias="DATACLOUD_TRACE_ENABLED")
-    loader_reload_enabled: bool = Field(
-        default=True,
-        validation_alias="DATACLOUD_LOADER_RELOAD_ENABLED",
-    )
-    loader_watch_enabled: bool = Field(
-        default=True,
-        validation_alias="DATACLOUD_LOADER_WATCH_ENABLED",
-    )
+    loader_mode: str = Field(default="watch", validation_alias="DATACLOUD_LOADER_MODE")
     loader_reload_debounce_ms: int = Field(
         default=500,
         validation_alias="DATACLOUD_LOADER_RELOAD_DEBOUNCE_MS",
-    )
-    loader_watch_force_polling: bool = Field(
-        default=True,
-        validation_alias="DATACLOUD_LOADER_WATCH_FORCE_POLLING",
-    )
-    loader_watch_poll_delay_ms: int = Field(
-        default=300,
-        validation_alias="DATACLOUD_LOADER_WATCH_POLL_DELAY_MS",
     )
     # CORS 允许的源，逗号分隔，如 "http://localhost:3000,http://127.0.0.1:3000"
     cors_origins: str = Field(

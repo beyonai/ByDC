@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 
 WATCHED_SUFFIXES = frozenset({".json", ".yaml", ".yml", ".owl"})
 MAX_RECENT_EVENTS = 20
+_LOADER_MODE_STATIC = "static"
+_LOADER_MODE_LAZY = "lazy"
+_LOADER_MODE_WATCH = "watch"
 
 
 class ChangeKind(IntEnum):
@@ -162,7 +165,7 @@ class LoaderRuntimeManager:
         if self._snapshot is None:
             return await self.reload(force=True, reason=reason)
 
-        if not getattr(self._settings, "loader_reload_enabled", True):
+        if not self._should_reload():
             return self._snapshot
 
         current_fingerprint, _ = self._compute_fingerprint()
@@ -384,7 +387,19 @@ class LoaderRuntimeManager:
             loader.configure(datasource_configs=self._datasource_configs)
 
     def _should_watch(self) -> bool:
-        return bool(getattr(self._settings, "loader_watch_enabled", False))
+        return self._loader_mode() == _LOADER_MODE_WATCH
+
+    def _should_reload(self) -> bool:
+        return self._loader_mode() in {_LOADER_MODE_LAZY, _LOADER_MODE_WATCH}
+
+    def _loader_mode(self) -> str:
+        raw_mode = str(getattr(self._settings, "loader_mode", _LOADER_MODE_WATCH)).strip().lower()
+        if raw_mode in {_LOADER_MODE_STATIC, _LOADER_MODE_LAZY, _LOADER_MODE_WATCH}:
+            return raw_mode
+        logger.warning(
+            "Unknown DATACLOUD_LOADER_MODE=%s, fallback to %s", raw_mode, _LOADER_MODE_WATCH
+        )
+        return _LOADER_MODE_WATCH
 
     async def _watch_loop(self) -> None:
         try:
