@@ -16,6 +16,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
 from datacloud_analysis.orchestration.graph_builder import build_analysis_graph
+from datacloud_analysis.orchestration.graph_compile_policy import compile_graph_with_policy
 
 if TYPE_CHECKING:
     from datacloud_analysis.workspace.paths import TaskPaths
@@ -42,15 +43,7 @@ async def run_agent(
         State snapshots from ``astream(..., stream_mode="values")``.
     """
     graph = build_analysis_graph()
-    try:
-        from datacloud_analysis.session.checkpointer import get_checkpointer  # noqa: PLC0415
-
-        compiled = graph.compile(checkpointer=get_checkpointer())
-    except RuntimeError:
-        logger.warning(
-            "run_agent: checkpointer not initialized — compiling graph without checkpointing."
-        )
-        compiled = graph.compile()
+    compiled = compile_graph_with_policy(graph, caller_name="run_agent")
 
     workspace_dir = str(task_paths.inputs.parent)
 

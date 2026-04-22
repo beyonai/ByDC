@@ -16,6 +16,7 @@ from typing import Any
 
 from datacloud_analysis.i18n import get_supported_locales
 from datacloud_analysis.orchestration.graph_builder import build_analysis_graph
+from datacloud_analysis.orchestration.graph_compile_policy import compile_graph_with_policy
 
 logger = logging.getLogger(__name__)
 
@@ -227,19 +228,7 @@ def create_agent(
         redirect_tools=redirect_tools or None,
     )
 
-    # Inject checkpointer if bootstrap.setup() has already been called;
-    # fall back to compiling without checkpointing in standalone / test mode.
-    try:
-        from datacloud_analysis.session.checkpointer import get_checkpointer  # noqa: PLC0415
-
-        compiled = graph.compile(checkpointer=get_checkpointer())
-        logger.info("create_agent: compiled with PG checkpointer")
-    except RuntimeError:
-        compiled = graph.compile()
-        logger.warning(
-            "create_agent: checkpointer not initialized — compiling without checkpointing. "
-            "Call `await bootstrap.setup()` before create_agent() to enable interrupt/resume."
-        )
+    compiled = compile_graph_with_policy(graph, caller_name="create_agent")
 
     try:
         nodes = list(compiled.get_graph().nodes.keys())

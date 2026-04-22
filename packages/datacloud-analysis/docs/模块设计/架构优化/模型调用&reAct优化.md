@@ -287,7 +287,7 @@ calls = non_finish
 
 ---
 
-## 阶段 E（架构路线）：ReAct 与 LangGraph 生态对齐策略
+## 阶段 E（架构路线）：ReAct 与 LangGraph 生态对齐策略【暂不开发】
 
 ### 结论建议
 
@@ -316,7 +316,7 @@ calls = non_finish
 | 4 | 阶段 D：finish_react 判定 | P3 | 低成本高收益，提前实施 |
 | 5 | 阶段 B：checkpoint fail-fast | P2 | 需提取公共编译函数 |
 | 6 | 阶段 C：fallback 开关 | P2 | 依赖 P0-2 完成 |
-| 7 | 阶段 E：生态对齐 POC | — | 稳定后启动 |
+| 7 | 阶段 E：生态对齐 POC【暂不开发】 | — | 稳定后启动 |
 
 ---
 
