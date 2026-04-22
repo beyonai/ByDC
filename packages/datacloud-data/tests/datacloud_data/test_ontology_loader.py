@@ -519,10 +519,10 @@ def test_load_from_owl_resource_directory_supports_new_resource_layout() -> None
     loader = OntologyLoader()
     loader.load_from_owl_resource_directory(resource_dir)
 
-    enterprise = loader.get_ontology_class("LIB_002_ads_enterprise_analysis")
+    enterprise = loader.get_ontology_class("ads_enterprise_analysis")
     assert enterprise.object_name == "企业综合分析表"
     assert any(field.field_code == "enterprise_id" for field in enterprise.fields)
 
-    scene = loader.get_view("LIB_002_scene_enterprise_analysis")
-    assert scene.view_id == "LIB_002_scene_enterprise_analysis"
-    assert any(obj.object_code == "LIB_002_ads_enterprise_analysis" for obj in scene.objects)
+    scene = loader.get_view("scene_enterprise_analysis")
+    assert scene.view_id == "scene_enterprise_analysis"
+    assert any(obj.object_code == "ads_enterprise_analysis" for obj in scene.objects)

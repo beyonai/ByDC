@@ -24,26 +24,6 @@ from urllib.parse import urlsplit
 logger = logging.getLogger(__name__)
 
 
-def _normalize_library_code(library_code: str | None) -> str | None:
-    if library_code is None:
-        return None
-    normalized = library_code.strip()
-    return normalized or None
-
-
-def _build_scoped_code(library_code: str | None, code: str | None) -> str:
-    normalized_code = (code or "").strip()
-    if not normalized_code:
-        return ""
-    normalized_library = _normalize_library_code(library_code)
-    if not normalized_library:
-        return normalized_code
-    prefix = f"{normalized_library}_"
-    if normalized_code.startswith(prefix):
-        return normalized_code
-    return f"{prefix}{normalized_code}"
-
-
 def _predicate_local_name(predicate: Any) -> str:
     """提取谓词的本地名称。"""
     predicate_str = str(predicate)
@@ -84,7 +64,6 @@ def _normalize_owl_xml(content: str) -> str:
 class ParsedObject:
     object_code: str
     object_name: str
-    library_code: str | None = None
     description: str = ""
     source_type: str = "DB"
     datasource_alias: str | None = None
@@ -136,7 +115,6 @@ class ParsedRelation:
     relation_code: str
     source_class: str
     target_class: str
-    library_code: str | None = None
     relation_type: str = "ONE_TO_MANY"
     relation_name: str = ""
     join_keys: list[dict[str, str]] = field(default_factory=list)
@@ -154,7 +132,6 @@ class ParsedDatasource:
 class ParsedView:
     view_id: str
     view_name: str
-    library_code: str | None = None
     description: str = ""
     object_codes: list[str] = field(default_factory=list)
     relations: list[str] = field(default_factory=list)
@@ -278,18 +255,6 @@ class OwlParser:
         result = exact_matches or fallback_matches
         return result
 
-    def _get_library_value(self, g: Any, subject: Any) -> str | None:
-        return _normalize_library_code(
-            self._get_predicate_value(g, subject, "source_libeary")
-            or self._get_predicate_value(g, subject, "source_library")
-        )
-
-    def _normalize_relation_reference(self, library_code: str | None, relation_code: str) -> str:
-        return _build_scoped_code(library_code, relation_code)
-
-    def _normalize_object_reference(self, library_code: str | None, object_code: str) -> str:
-        return _build_scoped_code(library_code, object_code)
-
     def _parse_loose_json_list(self, s: str) -> list:
         """Parse non-standard JSON arrays used in OWL files.
 
@@ -329,13 +294,11 @@ class OwlParser:
             return [item.strip() for item in inner.split(",") if item.strip()]
 
     def _parse_entity_definition(self, g: Any, subject: Any) -> None:
-        raw_entity_code = self._get_predicate_value(g, subject, "entity_code")
-        if not raw_entity_code:
+        entity_code = self._get_predicate_value(g, subject, "entity_code")
+        if not entity_code:
             return
-        library_code = self._get_library_value(g, subject)
-        entity_code = self._normalize_object_reference(library_code, raw_entity_code)
 
-        entity_name = self._get_predicate_value(g, subject, "entity_name") or raw_entity_code
+        entity_name = self._get_predicate_value(g, subject, "entity_name") or entity_code
         entity_desc = self._get_predicate_value(g, subject, "entity_desc") or ""
         entity_source = self._get_predicate_value(g, subject, "entity_source") or "DB"
 
@@ -355,15 +318,11 @@ class OwlParser:
 
         # Read <relations> attribute — list of relation codes referencing relation OWL
         relations_str = self._get_predicate_value(g, subject, "relations") or "[]"
-        relation_refs = [
-            self._normalize_relation_reference(library_code, relation_code)
-            for relation_code in self._parse_loose_json_list(relations_str)
-        ]
+        relation_refs = self._parse_loose_json_list(relations_str)
 
         obj = ParsedObject(
             object_code=entity_code,
             object_name=entity_name,
-            library_code=library_code,
             description=entity_desc,
             source_type=source_type,
             field_refs=field_refs,
@@ -544,19 +503,6 @@ class OwlParser:
 
         # Derive relation_code from the individual's URI fragment (e.g. "#rel_enterprise_grid")
         relation_code = str(subject).split("#")[-1]
-        source_library_code = _normalize_library_code(
-            self._get_predicate_value(g, subject, "source_libeary")
-            or self._get_predicate_value(g, subject, "source_library")
-        )
-        target_library_code = _normalize_library_code(
-            self._get_predicate_value(g, subject, "target_libeary")
-            or self._get_predicate_value(g, subject, "target_library")
-        )
-        normalized_relation_code = self._normalize_relation_reference(
-            source_library_code, relation_code
-        )
-        normalized_source_code = self._normalize_object_reference(source_library_code, source_code)
-        normalized_target_code = self._normalize_object_reference(target_library_code, target_code)
 
         relation_name = self._get_predicate_value(g, subject, "relation_name") or ""
         relation_type = self._get_predicate_value(g, subject, "relation_type") or "ONE_TO_MANY"
@@ -564,15 +510,14 @@ class OwlParser:
         join_keys = self._parse_loose_json_list(joinkeys_str)
 
         relation = ParsedRelation(
-            relation_code=normalized_relation_code,
-            source_class=normalized_source_code,
-            target_class=normalized_target_code,
-            library_code=source_library_code,
+            relation_code=relation_code,
+            source_class=source_code,
+            target_class=target_code,
             relation_type=relation_type,
             relation_name=relation_name,
             join_keys=join_keys,
         )
-        self._relations[normalized_relation_code] = relation
+        self._relations[relation_code] = relation
 
     def _parse_database_definition(self, g: Any, subject: Any) -> None:
         db_code = self._get_predicate_value(g, subject, "dbCode")
@@ -595,30 +540,21 @@ class OwlParser:
         self._datasources[db_code] = datasource
 
     def _parse_scene_definition(self, g: Any, subject: Any) -> None:
-        raw_view_code = self._get_predicate_value(g, subject, "view_code")
-        if not raw_view_code:
+        view_code = self._get_predicate_value(g, subject, "view_code")
+        if not view_code:
             return
-        library_code = self._get_library_value(g, subject)
-        view_code = _build_scoped_code(library_code, raw_view_code)
 
-        view_name = self._get_predicate_value(g, subject, "view_name") or raw_view_code
+        view_name = self._get_predicate_value(g, subject, "view_name") or view_code
         description = self._get_predicate_value(g, subject, "description") or ""
         object_codes_str = self._get_predicate_value(g, subject, "object_codes") or "[]"
         relations_str = self._get_predicate_value(g, subject, "relations") or "[]"
 
-        object_codes = [
-            self._normalize_object_reference(library_code, object_code)
-            for object_code in self._parse_loose_json_list(object_codes_str)
-        ]
-        relations = [
-            self._normalize_relation_reference(library_code, relation_code)
-            for relation_code in self._parse_loose_json_list(relations_str)
-        ]
+        object_codes = self._parse_loose_json_list(object_codes_str)
+        relations = self._parse_loose_json_list(relations_str)
 
         view = ParsedView(
             view_id=view_code,
             view_name=view_name,
-            library_code=library_code,
             description=description,
             object_codes=object_codes,
             relations=relations,
@@ -637,18 +573,13 @@ class OwlParser:
         if not property_code or not source_object_code or not source_object_column_code:
             return
 
-        view = self._views.get(view_scope)
-        view_library_code = view.library_code if view is not None else None
         property_name = self._get_predicate_value(g, subject, "property_name") or property_code
         ext_property = self._get_predicate_value(g, subject, "ext_property")
         self._view_field_mappings.setdefault(view_scope, []).append(
             {
                 "property_code": property_code,
                 "property_name": property_name,
-                "source_object_code": self._normalize_object_reference(
-                    view_library_code,
-                    source_object_code,
-                ),
+                "source_object_code": source_object_code,
                 "source_object_column_code": source_object_column_code,
                 "ext_property": ext_property,
             }
@@ -1002,19 +933,7 @@ class OwlParser:
                             "description": rel.description,
                         }
                     )
-            raw_view_field_mappings = getattr(self, "_view_field_mappings", {}).get(
-                view.view_id, []
-            )
-            view_field_mappings = [
-                {
-                    **mapping,
-                    "source_object_code": self._normalize_object_reference(
-                        view.library_code,
-                        mapping.get("source_object_code", ""),
-                    ),
-                }
-                for mapping in raw_view_field_mappings
-            ]
+            view_field_mappings = getattr(self, "_view_field_mappings", {}).get(view.view_id, [])
             views.append(
                 {
                     "view_id": view.view_id,
@@ -1160,14 +1079,25 @@ class OwlParser:
         schema = self._build_schema_from_params(
             params,
         )
-        return schema if schema.get("properties") else None
+        return schema if self._schema_has_content(schema) else None
 
     def _build_response_schema(self, params: list[dict[str, Any]]) -> dict[str, Any] | None:
         """基于动作出参生成响应 schema。"""
         schema = self._build_schema_from_params(
             [param for param in params if param.get("direction") in ("OUT", "INOUT")]
         )
-        return schema if schema.get("properties") else None
+        return schema if self._schema_has_content(schema) else None
+
+    @staticmethod
+    def _schema_has_content(schema: dict[str, Any]) -> bool:
+        """判断 schema 是否包含有效结构。"""
+        schema_type = schema.get("type")
+        if schema_type == "object":
+            properties = schema.get("properties")
+            return isinstance(properties, dict) and bool(properties)
+        if schema_type == "array":
+            return "items" in schema
+        return False
 
     def _build_schema_from_params(
         self,
@@ -1215,6 +1145,7 @@ class OwlParser:
         location_map = {
             "requestBody": "body",
             "body": "body",
+            "parameters": "body",
             "query": "query",
             "queryParams": "query",
             "path": "path",
@@ -1320,7 +1251,23 @@ class OwlParser:
     ) -> None:
         """将叶子 schema 合并到指定路径。"""
         current = root
-        for index, raw_part in enumerate(path_parts):
+        start_index = 0
+        if path_parts and path_parts[0] == "[]":
+            if len(path_parts) == 1:
+                if root.get("type") != "array":
+                    root.clear()
+                    root.update({"type": "array", "items": leaf_schema})
+                return
+            if root.get("type") != "array":
+                root.clear()
+                root.update({"type": "array", "items": {"type": "object", "properties": {}}})
+            items = root.setdefault("items", {"type": "object", "properties": {}})
+            items.setdefault("type", "object")
+            items.setdefault("properties", {})
+            current = items
+            start_index = 1
+
+        for index, raw_part in enumerate(path_parts[start_index:], start=start_index):
             is_last = index == len(path_parts) - 1
             is_array = raw_part.endswith("[]")
             part = raw_part[:-2] if is_array else raw_part
@@ -1347,6 +1294,10 @@ class OwlParser:
                         required_list.append(part)
                 return
 
+            if required:
+                required_list = current.setdefault("required", [])
+                if part not in required_list:
+                    required_list.append(part)
             if is_array:
                 node = properties.setdefault(
                     part,
@@ -1398,12 +1349,6 @@ def _infer_object_scope(path: Path) -> str | None:
 
 
 def _infer_mapping_scope(path: Path) -> str | None:
-    if (
-        path.name.endswith("_mapping.owl")
-        and path.parent.name
-        and path.parent.parent.name in {"object", "view"}
-    ):
-        return path.parent.name
     return _infer_scoped_entity_code(path, "_mapping.owl")
 
 
