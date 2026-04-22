@@ -556,8 +556,9 @@ for msg in result.get("messages") or []:
 确认 `query_*` 工具是否直接在 finish_react args 里携带完整 query_data，
 若是则 `react_last_query_data` 可废弃，`finish_react_node` 直接从 tool_call args 读取。
 
-> **⚠️ 待确认**：在阶段三开始前，需 code review `query_*` 工具的 finish_react 调用约定，
-> 确定 query_data 是否已在 finish_react args 中传递。
+> **✅ 已确认（2026-04-22）**：`HookAwareToolNode.ainvoke` 在 after_call_back 后已检测 query_data block
+> 并写入 `state["react_last_query_data"]`（`hook_aware_tool_node.py:127-130`），
+> `finish_react_node` 正常读取该字段，无需额外修复。
 
 ---
 
