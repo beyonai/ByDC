@@ -251,8 +251,16 @@ async def test_T5_1_unknown_term_triggers_interrupt() -> None:
 
     with (
         patch(
+            "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._resolve_via_aliases",
+            return_value=None,
+        ),
+        patch(
             "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._analyze_clarification",
-            return_value=([{"keyword": "营收"}], "知识", True),
+            return_value=(
+                [{"paradigmId": "P1", "paradigmResult": [{"keyword": "营收"}]}],
+                "knowledge",
+                True,
+            ),
         ),
         pytest.raises(ClarificationNeededError) as exc_info,
     ):
@@ -329,6 +337,10 @@ async def test_T5_3_complex_need_confirm_restores_complex_conditions() -> None:
     )
 
     with (
+        patch(
+            "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._resolve_via_aliases",
+            return_value=None,
+        ),
         patch(
             "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._analyze_clarification",
             return_value=([{"keyword": "经济效益"}], "知识", True),

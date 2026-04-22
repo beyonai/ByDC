@@ -1,7 +1,10 @@
-"""TC-V03: query_clarification_plugin V0.3 琛屼负楠屾敹锛堥樁娈?2 绾㈤樁娈碉級銆?
-楠屾敹鐩爣锛?- ClarificationNeededError 绫诲瓨鍦ㄤ笖鍙?import
-- NEED_CONFIRM 璺緞 鈫?鎶?ClarificationNeededError锛堜笉鍐嶈皟鐢?interrupt锛?- 鏃╄繑鍥炶矾寰勶細state 涓湁 clarification_formatted_params 鈫?鐩存帴杩斿洖 patch/redirect decision
-- TC-2-3 绛夋晥锛歩s_complex=True 涓斿懡涓棭杩斿洖 鈫?redirect decision
+"""TC-V03: query_clarification_plugin V0.3 行为验收（阶段 2 红阶段）。
+
+验收目标：
+- ClarificationNeededError 类存在且可 import
+- NEED_CONFIRM 路径 → 抛 ClarificationNeededError（不再调用 interrupt）
+- 早返回路径：state 中有 clarification_formatted_params → 直接返回 patch/redirect decision
+- TC-2-3 等效：is_complex=True 且命中早返回 → redirect decision
 """
 
 from __future__ import annotations
@@ -15,10 +18,10 @@ from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin imp
     before_call_back,
 )
 
-# 鈹€鈹€ 杈呭姪 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+# ── 辅助 ──────────────────────────────────────────────────────────────────────
 
 TOOL = "query_ads_enterprise"
-QUERY = "鏌ヨ楂樿惀鏀剁殑浼佷笟"
+QUERY = "查询高营收的企业"
 
 _PARADIGM_LIST = [
     {
@@ -38,7 +41,7 @@ def _make_ctx(
 ) -> dict[str, Any]:
     return {
         "tool_name": tool_name,
-        "tool_params": {**(params or {"select": ["钀ユ敹"], "filters": []}), "query": query},
+        "tool_params": {**(params or {"select": ["营收"], "filters": []}), "query": query},
         "user_query": query,
         "metadata": {"loader": loader, "state": state or {}},
         "session_id": "test-sess",
@@ -48,36 +51,41 @@ def _make_ctx(
     }
 
 
-# 鈹€鈹€ TC-V03-1: ClarificationNeededError 鍙?import 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+# ── TC-V03-1: ClarificationNeededError 可 import ─────────────────────────────
 
 
 def test_clarification_needed_error_importable() -> None:
-    """ClarificationNeededError should be importable and carry context."""
+    """ClarificationNeededError 类存在且可 import。"""
     err = ClarificationNeededError({"tool_name": TOOL})
     assert isinstance(err, Exception)
     assert err.context["tool_name"] == TOOL
 
 
-# 鈹€鈹€ TC-V03-2: NEED_CONFIRM 鈫?ClarificationNeededError 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+# ── TC-V03-2: NEED_CONFIRM → ClarificationNeededError ─────────────────────────
 
 
 async def test_need_confirm_raises_clarification_needed_error() -> None:
-    """NEED_CONFIRM path should raise ClarificationNeededError."""
+    """NEED_CONFIRM 路径（paradigm_list 非空）→ 抛 ClarificationNeededError，不调用 interrupt。"""
     ctx = _make_ctx()
 
     with (
-        # catalog 闈炵┖ + unresolved 鏈 鈫?杩涘叆 NEED_CONFIRM 鍒嗘敮
+        # 跳过轻量消歧，走 catalog fallback
+        patch(
+            "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._resolve_via_aliases",
+            return_value=None,
+        ),
+        # catalog 非空 + unresolved 术语 → 进入 NEED_CONFIRM 分支
         patch(
             "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._get_field_catalog",
             return_value={"total_revenue": "total_revenue"},
         ),
         patch(
             "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._resolve_terms",
-            return_value=({}, ["钀ユ敹"]),  # resolved={}, unresolved=["钀ユ敹"] 鈫?NEED_CONFIRM
+            return_value=({}, ["营收"]),  # resolved={}, unresolved=["营收"] → NEED_CONFIRM
         ),
         patch(
             "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._analyze_clarification",
-            return_value=(_PARADIGM_LIST, "鐭ヨ瘑", True),
+            return_value=(_PARADIGM_LIST, "知识", True),
         ),
         patch(
             "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin.interrupt",
@@ -91,11 +99,11 @@ async def test_need_confirm_raises_clarification_needed_error() -> None:
     assert "paradigm_list" in exc_info.value.context or "query" in exc_info.value.context
 
 
-# 鈹€鈹€ TC-V03-3: 鏃╄繑鍥炶矾寰?鈥?clarification_formatted_params 宸插湪 state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+# ── TC-V03-3: 早返回路径 — clarification_formatted_params 已在 state ───────────
 
 
 async def test_early_return_when_formatted_params_in_state() -> None:
-    """Should return a decision when formatted params already exist in state."""
+    """早返回路径：state 中有 clarification_formatted_params 且 tool_name 匹配 → 返回 decision。"""
     formatted = {
         "tool_name": TOOL,
         "is_complex": False,
@@ -110,16 +118,16 @@ async def test_early_return_when_formatted_params_in_state() -> None:
     ):
         decision = await before_call_back(ctx)
 
-    assert decision is not None, "鏃╄繑鍥炶矾寰勫簲杩斿洖 HookDecision锛屼笉搴旇繑鍥?None"
-    # 闈?complex 鈫?patch 鍐崇瓥
-    assert decision.get("action") in ("patch", "redirect"), f"闈為鏈?action: {decision}"
+    assert decision is not None, "早返回路径应返回 HookDecision，不应返回 None"
+    # 非 complex → patch 决策
+    assert decision.get("action") in ("patch", "redirect"), f"非预期 action: {decision}"
 
 
-# 鈹€鈹€ TC-V03-4: 鏃╄繑鍥?is_complex=True 鈫?redirect 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+# ── TC-V03-4: 早返回 is_complex=True → redirect ───────────────────────────────
 
 
 async def test_early_return_is_complex_true_returns_redirect() -> None:
-    """TC-V03-4: early return with is_complex=True should redirect."""
+    """TC-V03-4: is_complex=True 且命中早返回 → redirect decision。"""
     formatted = {
         "tool_name": TOOL,
         "is_complex": True,
@@ -136,5 +144,5 @@ async def test_early_return_is_complex_true_returns_redirect() -> None:
 
     assert decision is not None
     assert decision.get("action") == "redirect", (
-        f"is_complex=True 搴旇繑鍥?redirect锛屽疄闄? {decision}"
+        f"is_complex=True 应返回 redirect，实际: {decision}"
     )
