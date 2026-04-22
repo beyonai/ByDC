@@ -149,7 +149,9 @@ async def format_result(
             return
 
         if output_fmt == "markdown":
-            await _emit_query_result_as_markdown(gateway_context, query_data)
+            # answer 已流式推送时跳过原始数据表格，避免重复推送
+            if not answer_was_streamed:
+                await _emit_query_result_as_markdown(gateway_context, query_data)
         else:
             await _emit_query_result_as_6001(gateway_context, query_data)
         return

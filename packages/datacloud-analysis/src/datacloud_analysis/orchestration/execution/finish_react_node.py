@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import contextlib
 import json
 import logging
 import re
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 _DECIMAL_RE = re.compile(r"Decimal\('([^']+)'\)")
+_NONLITERAL_RE = re.compile(r"\bdatetime\.(?:datetime|date|time)\b\([^)]*\)")
 
 
 def _try_parse_records_block(content: str) -> dict[str, Any] | None:
@@ -34,9 +36,34 @@ def _try_parse_records_block(content: str) -> dict[str, Any] | None:
         # 兜底：Python repr 字符串，先剥离 Decimal('x') 包装为浮点字面量
         try:
             cleaned = _DECIMAL_RE.sub(r"\1", content)
+            cleaned = _NONLITERAL_RE.sub("None", cleaned)
             parsed = ast.literal_eval(cleaned)
         except (ValueError, SyntaxError):
             return None
+    # 解包 MCP list 格式: [{"type": "text", "text": "...json..."}]
+    if isinstance(parsed, list):
+        for block in parsed:
+            if (
+                isinstance(block, dict)
+                and block.get("type") == "text"
+                and isinstance(block.get("text"), str)
+            ):
+                with contextlib.suppress(json.JSONDecodeError, ValueError):
+                    parsed = json.loads(block["text"])
+                break
+    if not isinstance(parsed, dict):
+        return None
+    # 解包 MCP dict 格式: {"content": [{"type": "text", "text": "...json..."}]}
+    if isinstance(parsed.get("content"), list):
+        for block in parsed["content"]:
+            if (
+                isinstance(block, dict)
+                and block.get("type") == "text"
+                and isinstance(block.get("text"), str)
+            ):
+                with contextlib.suppress(json.JSONDecodeError, ValueError):
+                    parsed = json.loads(block["text"])
+                break
     if not isinstance(parsed, dict):
         return None
     data_block = parsed.get("data") if isinstance(parsed.get("data"), dict) else parsed

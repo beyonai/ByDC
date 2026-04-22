@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import ast
+import contextlib
 import json
 import logging
 import re
@@ -109,8 +110,7 @@ class HookAwareToolNode(ToolNode):
 
         # tool_call_id → patched_params，供工具执行后推送详情使用
         call_params_map: dict[str, dict[str, Any]] = {
-            str(tc.get("id") or ""): dict(tc.get("args") or {})
-            for tc in patched_calls
+            str(tc.get("id") or ""): dict(tc.get("args") or {}) for tc in patched_calls
         }
 
         # 实际工具执行（走 prebuilt ToolNode 原有逻辑）
@@ -149,7 +149,8 @@ class HookAwareToolNode(ToolNode):
                         # 将 msg.content（可能是 Python repr 字符串）解析回 dict，
                         # 保证 coerce_stream_chunk_text 走 dump_json 而非原样透传。
                         _raw = str(msg.content or "")
-                        _tool_out: Any = _try_parse_to_dict(_raw) if _raw else _raw
+                        _parsed = _try_parse_to_dict(_raw) if _raw else None
+                        _tool_out: Any = _parsed if _parsed is not None else _raw
                         await _emit_tool_detail(_gw_ctx, "工具返回", _tool_out)
                 except Exception as detail_exc:  # noqa: BLE001
                     logger.debug(
@@ -190,6 +191,7 @@ def _extract_query_data_from_tool_messages(
 
 
 _DECIMAL_RE = re.compile(r"Decimal\('([^']+)'\)")
+_NONLITERAL_RE = re.compile(r"\bdatetime\.(?:datetime|date|time)\b\([^)]*\)")
 
 
 def _try_parse_to_dict(content: str) -> dict[str, Any] | None:
@@ -206,6 +208,7 @@ def _try_parse_to_dict(content: str) -> dict[str, Any] | None:
         pass
     try:
         cleaned = _DECIMAL_RE.sub(r"\1", content)
+        cleaned = _NONLITERAL_RE.sub("None", cleaned)
         parsed = ast.literal_eval(cleaned)
         if isinstance(parsed, dict):
             return parsed  # type: ignore[return-value]
@@ -229,6 +232,30 @@ def _try_parse_query_data(content: str) -> dict[str, Any] | None:
             parsed = ast.literal_eval(cleaned)
         except (ValueError, SyntaxError):
             return None
+    # 解包 MCP list 格式: [{"type": "text", "text": "...json..."}]
+    if isinstance(parsed, list):
+        for block in parsed:
+            if (
+                isinstance(block, dict)
+                and block.get("type") == "text"
+                and isinstance(block.get("text"), str)
+            ):
+                with contextlib.suppress(json.JSONDecodeError, ValueError):
+                    parsed = json.loads(block["text"])
+                break
+    if not isinstance(parsed, dict):
+        return None
+    # 解包 MCP dict 格式: {"content": [{"type": "text", "text": "...json..."}]}
+    if isinstance(parsed.get("content"), list):
+        for block in parsed["content"]:
+            if (
+                isinstance(block, dict)
+                and block.get("type") == "text"
+                and isinstance(block.get("text"), str)
+            ):
+                with contextlib.suppress(json.JSONDecodeError, ValueError):
+                    parsed = json.loads(block["text"])
+                break
     if not isinstance(parsed, dict):
         return None
     # 支持 {"data": {...}} 嵌套 或 直接 {"records": [...], "meta": {...}}
