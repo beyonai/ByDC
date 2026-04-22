@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from typing import Any
 
@@ -299,20 +300,25 @@ def _resolve_join_closure(
     return closure_objects
 
 
-def build_view_result_columns_meta(view: Any, col_keys: list[str]) -> list[dict[str, str]]:
+def build_view_result_columns_meta(
+    view: Any,
+    col_keys: list[str],
+    loader: Any = None,
+) -> list[dict[str, str]]:
     """将视图查询结果列键规范为与 ``QueryExecutor`` 一致的 ``meta.columns`` 结构。
 
     原先仅返回 ``property_code`` 字符串列表，前端 / Markdown 无法取中文 ``label``。
     此处按视图 ``fields``（``ViewFieldMeta``）映射 ``name``=行内键、``label``=展示名。
+    当 OWL 未定义 ``property_name`` 时，通过 ``loader`` 从源对象字段派生中文名。
 
     Args:
         view: 已加载的视图对象（含 ``fields``）。
         col_keys: SELECT 结果列顺序，与 ``records`` 行字典的 key 一致。
+        loader: 本体加载器（可选），用于在 ``property_name`` 缺失时派生中文 label。
 
     Returns:
         ``[{"name": code, "label": display, "type": "..."}, ...]``；未知列 ``label`` 回退为 ``name``。
     """
-
     if not col_keys:
         return []
 
@@ -328,7 +334,27 @@ def build_view_result_columns_meta(view: Any, col_keys: list[str]) -> list[dict[
         label = str(getattr(vf, "property_name", "") or "").strip() if vf else ""
         if not label:
             label = fc
+        # property_name 退化为字段编码（OWL 未定义中文名）时，从源对象字段派生
+        if label == fc and loader is not None and vf is not None:
+            label = _derive_label_from_source(vf, fc, loader)
         raw_type = getattr(vf, "field_type", None) if vf else None
         ft = str(raw_type or "string").lower()
         out.append({"name": fc, "label": label, "type": ft})
     return out
+
+
+def _derive_label_from_source(vf: Any, fc: str, loader: Any) -> str:
+    """从源对象字段派生中文 label（OWL property_name 缺失时的兜底）。"""
+    src_obj_code = str(getattr(vf, "source_object_code", "") or "").strip()
+    src_col_code = str(getattr(vf, "source_object_column_code", "") or "").strip()
+    if not src_obj_code or not src_col_code:
+        return fc
+    with contextlib.suppress(Exception):
+        src_cls = loader.get_ontology_class(src_obj_code)
+        for f in getattr(src_cls, "fields", []):
+            if getattr(f, "field_code", None) == src_col_code:
+                fname = str(getattr(f, "field_name", "") or "").strip()
+                if fname and fname != src_col_code:
+                    return fname
+                break
+    return fc

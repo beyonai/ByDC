@@ -147,7 +147,7 @@ class ViewLookupExecutor:
             dict(zip(col_keys, row, strict=False)) if isinstance(row, (list, tuple)) else row
             for row in rows
         ]
-        columns_meta = build_view_result_columns_meta(view, col_keys)
+        columns_meta = build_view_result_columns_meta(view, col_keys, loader=self._loader)
         return {
             "records": records,
             "total": len(records),
