@@ -6,8 +6,10 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import logging
+import re
 from typing import Any
 
 from langchain_core.messages import AIMessage, ToolMessage
@@ -183,12 +185,24 @@ def _extract_query_data_from_tool_messages(
     return None
 
 
+_DECIMAL_RE = re.compile(r"Decimal\('([^']+)'\)")
+
+
 def _try_parse_query_data(content: str) -> dict[str, Any] | None:
-    """尝试将 ToolMessage content 解析为 JSON 并检测 records+meta 结构。"""
+    """尝试将 ToolMessage content 解析为 dict 并检测 records+meta 结构。
+
+    支持 JSON 字符串和 Python repr 字符串（含 Decimal 值的工具返回经 str() 序列化后的格式）。
+    """
+    parsed: Any = None
     try:
         parsed = json.loads(content)
     except (json.JSONDecodeError, ValueError):
-        return None
+        # 兜底：Python repr，先剥离 Decimal('x') 包装为浮点字面量再 literal_eval
+        try:
+            cleaned = _DECIMAL_RE.sub(r"\1", content)
+            parsed = ast.literal_eval(cleaned)
+        except (ValueError, SyntaxError):
+            return None
     if not isinstance(parsed, dict):
         return None
     # 支持 {"data": {...}} 嵌套 或 直接 {"records": [...], "meta": {...}}
