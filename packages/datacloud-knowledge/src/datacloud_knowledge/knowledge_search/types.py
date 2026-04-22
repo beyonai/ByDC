@@ -106,3 +106,16 @@ class FieldResolutionResult:
     resolved: dict[str, str] = field(default_factory=dict)
     ambiguous: dict[str, list[AmbiguousCandidate]] = field(default_factory=dict)
     unresolved: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class ValueResolutionResult:
+    """属性值术语精确消歧结果。
+
+    Attributes:
+        matched: 命中的输入值集合（值在 scope 下的 prop child term 中存在）。
+        unmatched: 未命中的输入值列表。
+    """
+
+    matched: set[str] = field(default_factory=set)
+    unmatched: list[str] = field(default_factory=list)

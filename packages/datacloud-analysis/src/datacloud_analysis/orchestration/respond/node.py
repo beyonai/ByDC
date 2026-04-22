@@ -3,8 +3,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 
+from datacloud_analysis.orchestration.message_util import extract_ai_text
 from datacloud_analysis.orchestration.respond.formatter import format_result
 from datacloud_analysis.orchestration.state import AgentState
 
@@ -37,9 +39,19 @@ async def respond_node(state: AgentState, config: RunnableConfig) -> dict[str, A
     )
 
     if not react_final:
-        logger.warning("respond_node: react_final is empty")
-        await format_result({"result_type": "text", "answer": ""}, gw_ctx, workspace_dir)
-        return {}
+        # L2/L3 兜底：should_continue 直接路由到 respond 时 react_final 未设置
+        messages = list(state.get("messages") or [])
+        last_ai = next((m for m in reversed(messages) if isinstance(m, AIMessage)), None)
+        answer = extract_ai_text(last_ai.content) if last_ai else ""
+        react_final = {
+            "result_type": "text",
+            "answer": answer,
+            "answer_streamed": bool(state.get("answer_streamed")),
+        }
+        logger.warning(
+            "respond_node: react_final is empty, built fallback from AIMessage answer_len=%d",
+            len(answer),
+        )
 
     await format_result(react_final, gw_ctx, workspace_dir)
     return {}

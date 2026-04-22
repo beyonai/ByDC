@@ -3,7 +3,7 @@
 Bug 描述：
     create_agent(loader=X) 中的 loader 只被 OntologyToolLoader 消费（生成工具闭包），
     但 dispatch_tool 构建 HookContext 时没有 "metadata" 键，
-    导致 query_clarification_plugin._get_field_catalog() 永远拿到 None，
+    导致 query_clarification_plugin 的字段映射功能无法获取 loader，
     字段名→字段码映射功能形同虚设（总是 loader not available 警告）。
 
 修复要求：

@@ -198,109 +198,93 @@ def after_tools(state: AgentState) -> Literal["agent", "__end__"]:
 
 #### 1.2.4 关键结论
 
-**澄清子流程与插件钩子是迁移的核心障碍**，但两者均有明确的适配路径（见 1.3.3、1.3.4）。
+**澄清子流程与插件钩子是迁移的核心障碍**，但两者均有明确的适配路径（见 1.4.3）。
 `finish_react` + Markdown 输出在迁移后完全保留，无功能退化。
 
 ---
 
-### 1.3 POC 验证方案
 
-#### 1.3.1 POC 范围与边界
+### 1.4 实现设计
 
-**在 POC 范围内（必须验证，任一失败则中止）**
+---
 
-| 优先级 | 验证项 | 预计耗时 |
-|--------|--------|----------|
-| 1 | `finish_react` + `after_tools` 停止条件 + Markdown 输出完整性 | 1-2 天 |
-| 2 | `HookAwareToolNode` 插件钩子注入（before/after + ClarificationNeededError） | 2-3 天 |
-| 3 | 澄清子流程接入父图（ClarificationNeededError → analyze_clarify → user_clarify → resume） | 3-5 天 |
-| 4 | interrupt/resume 与 prebuilt checkpoint 的语义等价性 | 1-2 天 |
-| 5 | 流式 thinking token 的 stream handler 适配 | 1 天 |
-
-**不在 POC 范围内**
-
-- 生产迁移、数据迁移
-- 性能压测（功能等价后再做）
-- byclaw-data worker 层改造
-
-#### 1.3.2 POC 落地工作流
-
-**启动条件**：P0-1、P0-2、阶段 A~D 整改全部完成，主干稳定后再启动 POC。
+#### 1.4.1 新图拓扑
 
 ```
-Step 1  拉 POC 分支（不影响 main）
-────────────────────────────────────────────────────────────
-git checkout main && git pull
-git checkout -b poc/langgraph-prebuilt-react
-
-Step 2  按优先级顺序逐项验证（不通过即中止，不进入下一项）
-────────────────────────────────────────────────────────────
-① finish_react + Markdown 输出
-   → 写 tests/dca/poc/test_prebuilt_finish_condition.py
-   → 通过后继续
-
-② HookAwareToolNode 插件钩子
-   → 实现 src/datacloud_analysis/orchestration/execution/hook_aware_tool_node.py
-   → 写 tests/dca/poc/test_prebuilt_hooks.py
-   → 通过后继续
-
-③ 澄清子流程
-   → 实现 src/datacloud_analysis/orchestration/execution/clarify_subgraph.py
-   → 写 tests/dca/poc/test_prebuilt_clarification.py
-   → 通过后继续
-
-④ interrupt/resume 等价性
-   → 写 tests/dca/poc/test_prebuilt_interrupt_resume.py
-
-⑤ thinking token 流式适配
-   → 写 tests/dca/poc/test_prebuilt_streaming.py
-
-Step 3  输出 POC 报告（通过 / 部分通过 / 失败）
-────────────────────────────────────────────────────────────
-内容：验证结论、代码行数对比、风险点、建议决策
-
-Step 4  决策（见 1.3.6 决策门控）
-────────────────────────────────────────────────────────────
-通过 → 从 main 拉 feature/migrate-to-prebuilt-react 正式开发
-部分通过 → 局部借鉴（见 1.3.7 最低收益线）
-失败 → POC 分支直接丢弃，不合并 main
-```
-
-> **POC 分支不合并 main。** 验证性代码质量要求低于生产，正式迁移在独立的
-> feature 分支重新写生产级代码，复用 POC 的结论和接口设计，不复用 POC 的实现。
-
-#### 1.3.3 澄清子流程适配方案
-
-在 `create_react_agent` 外层包一个**父图**，prebuilt 作为子图运行，
-澄清子流程在父图层处理：
-
-```
-[父图: analysis_graph]
+START
   │
-  ├─ [prebuilt_react_subgraph]  ← create_react_agent（含 HookAwareToolNode）
-  │       工具执行时若抛 ClarificationNeededError
-  │       → HookAwareToolNode 捕获，写入 state["execution_status"]="clarify_needed"
-  │       → 父图出口路由至澄清子流程
+  ▼
+[intend]  ← 命令路由 + user_query 提取（不变）
   │
-  ├─ [analyze_clarify]  ← 与当前实现复用
-  └─ [user_clarify]     ← 与当前实现复用，执行 interrupt，等待用户 resume
+  ├─ command_done ─────────────────────────────────────────────────► END
+  │
+  └─ react
+       │
+       ▼
+    [agent]  ← LLM 推理（bind_tools + trim_messages + 流式输出）
+       │
+       ├─ L2: 无 tool_calls ──────────────────────────────────────► [respond]
+       ├─ L3: react_round_idx ≥ max_rounds ────────────────────────► [respond]
+       └─ 有 tool_calls（含 finish_react）
+            │
+            ▼
+         [tools]  ← HookAwareToolNode（before/after hook 注入）
+            │
+            ├─ ClarificationNeededError
+            │     └─► Command(goto="analyze_clarify")
+            │               │
+            │         [analyze_clarify]  ← LLM 分析歧义（复用现有节点）
+            │               │
+            │         [user_clarify]     ← interrupt，等待用户回复
+            │               │ resume
+            │               └──────────────────────────────────────► [tools]
+            │
+            └─ 正常执行（after_tools_route 路由）
+                  │
+                  ├─ L1: finish_react ToolMessage 存在
+                  │     └─► [finish_react_node]  ← 提取 react_final（微调）
+                  │               └─────────────────────────────────► [respond]
+                  │
+                  └─ 其他工具 ────────────────────────────────────► [agent]（下一轮）
+
+[respond]  ← format_result()（Markdown / 6001 协议，不变）
+  └─► END
 ```
 
-父图边路由：
+对比当前 V0.3 拓扑，**新增** `after_tools_route` 路由函数、`HookAwareToolNode`；
+**删除** `tool_dispatcher_node`、`make_tool_node`（per-tool Send API）；
+**保留** `intend`、`finish_react_node`（微调）、`respond`、澄清子流程三节点。
 
-```python
-def route_after_tools(state: AgentState) -> str:
-    if state.get("execution_status") == "clarify_needed":
-        return "analyze_clarify"      # 路由到澄清子流程
-    return "prebuilt_react_subgraph"  # 继续下一轮（或已结束）
-```
+---
 
-#### 1.3.4 插件钩子机制实现（`HookAwareToolNode`）
+#### 1.4.2 文件变更清单
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| **新增** | `execution/hook_aware_tool_node.py` | HookAwareToolNode 实现 |
+| **重写** | `orchestration/graph_builder.py` | 按新拓扑重组节点与边 |
+| **微调** | `execution/finish_react_node.py` | 适配 `react_last_query_data` 来源（见 1.4.5） |
+| **微调** | `execution/llm_call_node.py` | 提取为独立 `agent` 节点，移除旧路由判断 |
+| **保留** | `orchestration/intend/` | 不变 |
+| **保留** | `orchestration/respond/` | 不变 |
+| **保留** | `orchestration/clarification/` | 不变（直接复用） |
+| **保留** | `orchestration/state.py` | 不变（react_* 字段迁移完成后再清理） |
+| **迁移后删除** | `execution/react_loop.py` | ~1208 行，完全替代后删除 |
+| **迁移后删除** | `execution/tool_dispatcher_node.py` | 被 HookAwareToolNode 替代 |
+| **迁移后删除** | `execution/make_tool_node.py` | Send API per-tool 模式废弃 |
+
+---
+
+#### 1.4.3 阶段一（1 周）：HookAwareToolNode + 停止条件
+
+**目标**：实现新工具执行层，在独立测试中验证 finish_react + Markdown 路径。
+
+##### HookAwareToolNode（`execution/hook_aware_tool_node.py`）
 
 继承 `langgraph.prebuilt.ToolNode`，覆写 `ainvoke`（公开 API，比 `_run_one` 稳定）：
 
 ```python
-from typing import Any, Literal
+from typing import Any
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.prebuilt import ToolNode
@@ -391,144 +375,6 @@ class HookAwareToolNode(ToolNode):
 | `ClarificationNeededError` 返回 `Command` | LangGraph 父图收到 Command 后路由至 `analyze_clarify` 节点 |
 | `model_copy` 替换 tool_calls | AIMessage 为 Pydantic 不可变对象，必须用 `model_copy` 生成新实例 |
 | after_call_back 在 `super().ainvoke` 之后 | 确保工具已执行、ToolMessage 已生成再触发后置钩子 |
-
-#### 1.3.5 评估维度与度量指标
-
-| 维度             | 验证方法                                                      | 通过标准              |
-| ---------------- | ------------------------------------------------------------- | --------------------- |
-| **功能等价性**   | 跑现有 338 个单测（POC 分支不删除任何现有测试）               | 通过率 ≥ 当前 303/338 |
-| **finish_react** | `test_prebuilt_finish_condition.py` 验证 Markdown 内容完整性  | 全部通过              |
-| **interrupt/resume** | `test_prebuilt_interrupt_resume.py` 覆盖中断 + 跨实例恢复 | 全部通过              |
-| **澄清子流程**   | `test_prebuilt_clarification.py` 覆盖完整澄清链路             | 全部通过              |
-| **插件钩子**     | before/after_call_back 在 prebuilt 路径可触发，参数透传正确   | 验证通过              |
-| **代码行数**     | 统计 POC 分支相对 main 的净增/删行数                          | 净减少 > 30%          |
-
-#### 1.3.6 决策门控
-
-| 决策                    | 触发条件                                                              |
-| ----------------------- | --------------------------------------------------------------------- |
-| **全量迁移**            | 全部 5 项验证通过 + 代码净减少 > 30%                                  |
-| **保留自研 + 局部借鉴** | 澄清子流程或钩子适配复杂度超预期，但 finish_react / interrupt 验证通过 |
-| **放弃迁移**            | HookAwareToolNode 无法等价替代，或 prebuilt 内部 API 在升级中频繁破坏  |
-
-#### 1.3.7 最低收益线（局部借鉴，无需改图拓扑）
-
-即便全量迁移 POC 失败，以下三项改动可独立落地，**无需修改图拓扑**，风险极低：
-
-1. 将 `react_loop.py` 的消息裁剪替换为 `langchain_core.messages.trim_messages`
-2. 将 `llm_retry.py` 的重试逻辑替换为 `langchain_core` 的 `with_retry` 装饰器
-3. 引入 `langchain_core.RunnableWithFallbacks` 替代手工 fallback 切换
-
-#### 1.3.8 迁移路径（全量迁移 POC 通过后）
-
-```
-阶段 1（2 周）：从 main 拉 feature/migrate-to-prebuilt-react
-              实现 HookAwareToolNode + after_tools 节点，替换 react_loop 核心循环
-
-阶段 2（2 周）：接入澄清子图父图结构，端到端回归全量测试套件
-
-阶段 3（1 周）：thinking token 流式适配，LangSmith 可观测性验证
-
-阶段 4（1 周）：生产灰度（feature flag DATACLOUD_USE_PREBUILT_REACT=false 默认关闭）
-              监控 success_rate / latency / interrupt_resume 成功率
-              无异常后切换默认值为 true，保留旧路径一个版本后删除
-```
-
-
-
-### 1.4 实现设计
-
----
-
-#### 1.4.1 新图拓扑
-
-```
-START
-  │
-  ▼
-[intend]  ← 命令路由 + user_query 提取（不变）
-  │
-  ├─ command_done ─────────────────────────────────────────────────► END
-  │
-  └─ react
-       │
-       ▼
-    [agent]  ← LLM 推理（bind_tools + trim_messages + 流式输出）
-       │
-       ├─ L2: 无 tool_calls ──────────────────────────────────────► [respond]
-       ├─ L3: react_round_idx ≥ max_rounds ────────────────────────► [respond]
-       └─ 有 tool_calls（含 finish_react）
-            │
-            ▼
-         [tools]  ← HookAwareToolNode（before/after hook 注入）
-            │
-            ├─ ClarificationNeededError
-            │     └─► Command(goto="analyze_clarify")
-            │               │
-            │         [analyze_clarify]  ← LLM 分析歧义（复用现有节点）
-            │               │
-            │         [user_clarify]     ← interrupt，等待用户回复
-            │               │ resume
-            │               └──────────────────────────────────────► [tools]
-            │
-            └─ 正常执行（after_tools_route 路由）
-                  │
-                  ├─ L1: finish_react ToolMessage 存在
-                  │     └─► [finish_react_node]  ← 提取 react_final（微调）
-                  │               └─────────────────────────────────► [respond]
-                  │
-                  └─ 其他工具 ────────────────────────────────────► [agent]（下一轮）
-
-[respond]  ← format_result()（Markdown / 6001 协议，不变）
-  └─► END
-```
-
-对比当前 V0.3 拓扑，**新增** `after_tools_route` 路由函数、`HookAwareToolNode`；
-**删除** `tool_dispatcher_node`、`make_tool_node`（per-tool Send API）；
-**保留** `intend`、`finish_react_node`（微调）、`respond`、澄清子流程三节点。
-
----
-
-#### 1.4.2 文件变更清单
-
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| **新增** | `execution/hook_aware_tool_node.py` | HookAwareToolNode 实现 |
-| **重写** | `orchestration/graph_builder.py` | 按新拓扑重组节点与边 |
-| **微调** | `execution/finish_react_node.py` | 适配 `react_last_query_data` 来源（见 1.4.5） |
-| **微调** | `execution/llm_call_node.py` | 提取为独立 `agent` 节点，移除旧路由判断 |
-| **保留** | `orchestration/intend/` | 不变 |
-| **保留** | `orchestration/respond/` | 不变 |
-| **保留** | `orchestration/clarification/` | 不变（直接复用） |
-| **保留** | `orchestration/state.py` | 不变（react_* 字段迁移完成后再清理） |
-| **迁移后删除** | `execution/react_loop.py` | ~1208 行，完全替代后删除 |
-| **迁移后删除** | `execution/tool_dispatcher_node.py` | 被 HookAwareToolNode 替代 |
-| **迁移后删除** | `execution/make_tool_node.py` | Send API per-tool 模式废弃 |
-
----
-
-#### 1.4.3 阶段一（1 周）：HookAwareToolNode + 停止条件
-
-**目标**：实现新工具执行层，在独立测试中验证 finish_react + Markdown 路径。
-
-##### HookAwareToolNode（`execution/hook_aware_tool_node.py`）
-
-设计见 1.3.4，生产级关键点补充：
-
-```python
-class HookAwareToolNode(ToolNode):
-    async def ainvoke(self, state, config=None, **kwargs):
-        # 1. before_call_back：按工具逐一注入，可修改参数，可触发澄清
-        # 2. ClarificationNeededError → return Command(goto="analyze_clarify")
-        # 3. super().ainvoke(patched_state, config) — 执行工具
-        # 4. after_call_back：遍历本轮 ToolMessage，触发后置钩子
-        ...
-```
-
-注意事项：
-- `patched_state["messages"]` 必须用 `model_copy` 替换最后一条 AIMessage，不能直接赋值（Pydantic 不可变）
-- `after_call_back` 只遍历本轮新增 ToolMessage（最后一条 AIMessage 之后的 ToolMessage）
-- `gateway_context` 从 `config["configurable"]["gateway_context"]` 读取，优先级高于构造函数注入
 
 ##### 路由函数
 
@@ -662,6 +508,10 @@ async def test_interrupt_resume_across_invocations():
 
 **卡点**：此测试不通过，阻塞阶段三完成，不进入阶段四。
 
+> **✅ 决策（2026-04-22）**：TC-IR-1/2 已实现（`pytest.mark.db_integration`，需真实 OpenGauss），
+> **不做自动化 CI 集成，由开发者线下手动执行验证**。验证通过后即可进入阶段四。
+> 执行命令：`uv run pytest tests/dca/integration/test_interrupt_resume_prebuilt.py -v -m db_integration`
+
 ---
 
 ##### 风险二：流式 thinking token 适配（⚠️ 中风险）
@@ -706,12 +556,17 @@ for msg in result.get("messages") or []:
 确认 `query_*` 工具是否直接在 finish_react args 里携带完整 query_data，
 若是则 `react_last_query_data` 可废弃，`finish_react_node` 直接从 tool_call args 读取。
 
-> **⚠️ 待确认**：在阶段三开始前，需 code review `query_*` 工具的 finish_react 调用约定，
-> 确定 query_data 是否已在 finish_react args 中传递。
+> **✅ 已确认（2026-04-22）**：`HookAwareToolNode.ainvoke` 在 after_call_back 后已检测 query_data block
+> 并写入 `state["react_last_query_data"]`（`hook_aware_tool_node.py:127-130`），
+> `finish_react_node` 正常读取该字段，无需额外修复。
 
 ---
 
-#### 1.4.6 阶段四（3 天）：feature flag + 灰度上线
+#### 1.4.6 阶段四：feature flag + 上线
+
+> **✅ 决策（2026-04-22）**：**不做自动化灰度发布和性能基准测试**。
+> 开发者线下完成功能验证后，直接切换 `DATACLOUD_USE_PREBUILT_REACT=true` 上线。
+> 性能基准测试跳过，以实际线上表现为准。
 
 ```python
 # 环境变量开关（默认关闭，不影响现有生产）
@@ -723,20 +578,12 @@ def build_analysis_graph(...):
     return _build_legacy_graph(...)         # 旧路径（现有代码不动）
 ```
 
-**灰度监控指标**：
+**上线流程（简化）**：
+1. 线下验证通过（含 TC-IR-1/2 手动执行）
+2. 直接将生产环境切换 `DATACLOUD_USE_PREBUILT_REACT=true`
+3. 观察线上行为，异常时快速回滚（`=false` 即回旧路径，无需重启）
 
-| 指标 | 采集方式 | 告警阈值 |
-|------|----------|----------|
-| `success_rate` | respond_node 正常完成 / 总请求 | < 95% 回滚 |
-| `avg_latency` | intend → respond 耗时 | 较旧路径 > 20% 告警 |
-| `interrupt_resume_success` | user_clarify resume 成功 / interrupt 次数 | < 100% 立即回滚 |
-| `l3_rate` | max_rounds 触发比例 | 较旧路径 > 5% 告警 |
-
-**上线顺序**：
-1. 部署新版本（`DATACLOUD_USE_PREBUILT_REACT=false`，旧路径运行）
-2. 单台 worker 切 `true`，观察 1 小时
-3. 逐步扩大（25% → 50% → 100%）
-4. 100% 稳定 1 周后，删除旧路径代码，移除 feature flag
+~~**灰度监控指标**（已跳过）~~：~~分阶段 25% → 50% → 100% 灰度~~
 
 ---
 
@@ -751,8 +598,8 @@ def build_analysis_graph(...):
 | `ClarificationNeededError → Command` 路由 | `tests/dca/unit/test_hook_aware_tool_node.py` | 阶段一 |
 | 全量单测回归（≥ 342 passed） | `tests/dca/` | 阶段二 |
 | 澄清 E2E（ambiguous → resume → dispatch） | `tests/dca/unit/test_clarification_e2e_chain.py` | 阶段二 |
-| interrupt/resume 跨实例语义等价 | `tests/dca/integration/test_interrupt_resume_prebuilt.py` | 阶段三 |
-| thinking token 流式推送 | `tests/dca/integration/test_thinking_token_stream.py` | 阶段三 |
+| interrupt/resume 跨实例语义等价 | `tests/dca/integration/test_interrupt_resume_prebuilt.py` | 阶段三 — **线下手动执行**（`-m db_integration`，需 OpenGauss） |
+| thinking token 流式推送 | `tests/dca/integration/test_thinking_token_stream.py` | 阶段三 — ✅ mock-based，CI 自动执行 |
 
 ---
 
@@ -760,7 +607,7 @@ def build_analysis_graph(...):
 
 **迁移完成标志**（满足全部才可删除旧代码）：
 
-- [ ] `DATACLOUD_USE_PREBUILT_REACT=true` 生产运行 ≥ 7 天，0 次 interrupt_resume 失败
+- [ ] `DATACLOUD_USE_PREBUILT_REACT=true` 上线后线上观察无 interrupt_resume 失败（**不要求 7 天，以实际验证为准**）
 - [ ] `react_loop.py` 代码路径监控确认零调用
 - [ ] 净代码行数减少 > 30%（`react_loop.py` 1208 行 + `tool_dispatcher_node.py` 120 行 + `make_tool_node.py` 已删除）
 

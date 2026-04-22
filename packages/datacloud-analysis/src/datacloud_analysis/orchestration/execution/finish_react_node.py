@@ -2,16 +2,51 @@
 
 from __future__ import annotations
 
+import ast
+import json
 import logging
+import re
 from typing import Any
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
 from datacloud_analysis.orchestration.message_util import extract_ai_text
 from datacloud_analysis.orchestration.state import AgentState
 
 logger = logging.getLogger(__name__)
+
+
+_DECIMAL_RE = re.compile(r"Decimal\('([^']+)'\)")
+
+
+def _try_parse_records_block(content: str) -> dict[str, Any] | None:
+    """从 ToolMessage content 中解析 records+meta 结构，支持 JSON 和 Python repr 格式。
+
+    工具返回含 Decimal 的 dict 时，LangChain prebuilt ToolNode 回退到 str()，
+    产生 Python repr 字符串而非 JSON。此函数用 ast.literal_eval + Decimal 预处理
+    作为兜底解析路径。
+    """
+    parsed: Any = None
+    try:
+        parsed = json.loads(content)
+    except (json.JSONDecodeError, ValueError):
+        # 兜底：Python repr 字符串，先剥离 Decimal('x') 包装为浮点字面量
+        try:
+            cleaned = _DECIMAL_RE.sub(r"\1", content)
+            parsed = ast.literal_eval(cleaned)
+        except (ValueError, SyntaxError):
+            return None
+    if not isinstance(parsed, dict):
+        return None
+    data_block = parsed.get("data") if isinstance(parsed.get("data"), dict) else parsed
+    if (
+        isinstance(data_block, dict)
+        and isinstance(data_block.get("records"), list)
+        and "meta" in data_block
+    ):
+        return data_block
+    return None
 
 
 async def finish_react_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
@@ -42,6 +77,56 @@ async def finish_react_node(state: AgentState, config: RunnableConfig) -> dict[s
     answer_streamed = bool(state.get("answer_streamed"))
 
     _last_query_data: dict[str, Any] | None = state.get("react_last_query_data")
+
+    # ── DIAG ──────────────────────────────────────────────────────────────────
+    _tool_msgs = [m for m in messages if isinstance(m, ToolMessage)]
+    logger.warning(
+        "[finish_react DIAG] messages=%d tool_messages=%d "
+        "react_last_query_data_present=%s result_type_from_llm=%s",
+        len(messages),
+        len(_tool_msgs),
+        _last_query_data is not None,
+        result_type,
+    )
+    for _tm in _tool_msgs:
+        logger.warning(
+            "[finish_react DIAG] ToolMessage name=%r content_type=%s content_preview=%r",
+            getattr(_tm, "name", None),
+            type(_tm.content).__name__,
+            str(_tm.content or "")[:200],
+        )
+    # ── /DIAG ─────────────────────────────────────────────────────────────────
+
+    # 有缓存的 query_data 时，自动升级 result_type 为 query_result，
+    # 避免 LLM 误选 text 导致数据列表丢失。
+    if _last_query_data is not None and result_type == "text":
+        result_type = "query_result"
+
+    # Fallback：blob 持久化失败或跨轮次清除导致 react_last_query_data 丢失时，
+    # 回扫 messages 中最近一条含 records+meta 的 ToolMessage 恢复数据。
+    if _last_query_data is None and result_type in {"query_result", "text"}:
+        logger.warning("[finish_react DIAG] entering recovery scan, messages=%d", len(messages))
+        for msg in reversed(messages):
+            if not isinstance(msg, ToolMessage):
+                continue
+            if (getattr(msg, "name", "") or "") == "finish_react":
+                continue
+            _raw = str(msg.content or "")
+            recovered = _try_parse_records_block(_raw)
+            logger.warning(
+                "[finish_react DIAG] recovery candidate name=%r parse_ok=%s content_len=%d",
+                getattr(msg, "name", None),
+                recovered is not None,
+                len(_raw),
+            )
+            if recovered is not None:
+                _last_query_data = recovered
+                result_type = "query_result"
+                logger.info(
+                    "[finish_react] recovered query_data from messages records=%d",
+                    len(recovered.get("records") or []),
+                )
+                break
 
     logger.info("[finish_react] result_type=%s stop_reason=%s", result_type, stop_reason)
 

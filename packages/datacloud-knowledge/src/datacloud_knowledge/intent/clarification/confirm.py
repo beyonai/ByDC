@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
@@ -20,6 +21,10 @@ from .models import (
 )
 
 logger = logging.getLogger(__name__)
+
+_CONFIRM_MAX_RETRIES = 2
+_CONFIRM_RETRYABLE_HTTP_STATUS: frozenset[int] = frozenset({429, 500, 502, 503, 504})
+_CONFIRM_NON_RETRYABLE_HTTP_STATUS: frozenset[int] = frozenset({400, 401, 403})
 
 
 # ── System Prompt ────────────────────────────────────────────────────
@@ -306,6 +311,7 @@ def llm_confirm_structured(
         return None
 
     _collecting = os.environ.get("DATACLOUD_COLLECT_CONFIRM_CASES") == "1"
+    _collect_input: dict[str, Any] | None = None
     if _collecting:
         _collect_input = {
             "query": query,
@@ -330,13 +336,15 @@ def llm_confirm_structured(
 
         llm = build_llm()
         llm_with_tool = llm.bind_tools([model_cls])
-        response = stream_invoke_with_thinking(
-            llm_with_tool,
-            [
-                {"role": "system", "content": CONFIRM_SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            on_event=on_event,
+        response = _invoke_confirm_with_retry(
+            lambda: stream_invoke_with_thinking(
+                llm_with_tool,
+                [
+                    {"role": "system", "content": CONFIRM_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                on_event=on_event,
+            )
         )
         if response and response.tool_calls:
             args = response.tool_calls[0]["args"]
@@ -348,7 +356,7 @@ def llm_confirm_structured(
             )
             result = model_cls.model_validate(args)
             result.needs_clarification = _check_needs_clarification(result)
-            if _collecting:
+            if _collect_input is not None:
                 _save_test_case(_collect_input, result)
             return result
 
@@ -364,15 +372,54 @@ def llm_confirm_structured(
         if fallback is not None:
             result = model_cls.model_validate(fallback)
             result.needs_clarification = _check_needs_clarification(result)
-            if _collecting:
+            if _collect_input is not None:
                 _save_test_case(_collect_input, result)
             return result
         logger.warning("[confirm] 兜底提取失败: %s", content[:200])
     except Exception:
         logger.exception("[confirm] LLM 确认失败")
-    if _collecting:
+    if _collect_input is not None:
         _save_test_case(_collect_input, None)
     return None
+
+
+def _is_retryable_confirm_error(exc: Exception) -> bool:
+    """Return whether a clarification confirm failure is likely transient."""
+    status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+    if status is not None:
+        if int(status) in _CONFIRM_NON_RETRYABLE_HTTP_STATUS:
+            return False
+        return int(status) in _CONFIRM_RETRYABLE_HTTP_STATUS
+    if isinstance(exc, (TimeoutError, ConnectionError)):
+        return True
+    return isinstance(exc, ValueError) and "No generations found in stream" in str(exc)
+
+
+def _invoke_confirm_with_retry(invoke: Callable[[], Any]) -> Any:
+    """Invoke confirmation LLM call with minimal retry for transient failures."""
+    last_exc: Exception | None = None
+
+    for attempt in range(_CONFIRM_MAX_RETRIES + 1):
+        try:
+            return invoke()
+        except Exception as exc:
+            last_exc = exc
+            if not _is_retryable_confirm_error(exc) or attempt >= _CONFIRM_MAX_RETRIES:
+                raise
+
+            wait_seconds = float(2**attempt)
+            logger.warning(
+                "[confirm] LLM 确认调用失败，第 %d/%d 次重试，等待 %.1f 秒: %s",
+                attempt + 1,
+                _CONFIRM_MAX_RETRIES,
+                wait_seconds,
+                exc,
+            )
+            time.sleep(wait_seconds)
+
+    if last_exc is None:
+        raise RuntimeError("confirm retry loop exited without result")
+    raise last_exc
 
 
 # ── 数据采集（DATACLOUD_COLLECT_CONFIRM_CASES=1 时启用）───────────────

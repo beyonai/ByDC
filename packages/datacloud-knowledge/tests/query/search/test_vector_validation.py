@@ -138,3 +138,24 @@ def test_matching_top_hit_above_threshold_passes() -> None:
         cast("Session", session),
         cast("EmbeddingServiceLike", _FakeEmbeddingService([1.0, 0.0])),
     )
+
+
+def test_same_text_top_hit_with_different_name_id_passes() -> None:
+    session = _FakeSession(
+        [
+            True,
+            SimpleNamespace(total_count=12, vector_count=1),
+            SimpleNamespace(name_id="N1", term_id="T1", name_text="高端功能材料及关键基础元器件"),
+            SimpleNamespace(
+                name_id="N2",
+                term_id="T2",
+                name_text="高端功能材料及关键基础元器件",
+                similarity=1.0,
+            ),
+        ]
+    )
+
+    validate_term_vector_readiness(
+        cast("Session", session),
+        cast("EmbeddingServiceLike", _FakeEmbeddingService([1.0, 0.0])),
+    )

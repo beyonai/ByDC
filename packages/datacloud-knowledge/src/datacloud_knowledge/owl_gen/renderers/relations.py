@@ -64,6 +64,25 @@ def render_view_relations_for_view(config: OwlGenConfig, view: ViewConfig) -> st
                 ext_field=_has_field_ext(alias, mapping.synonyms),
             )
         )
+    # MANY_TO_ONE: 视图内对象间的 JOIN 关系（source 和 target 都在视图 object_codes 中）
+    obj_set = set(view.object_codes)
+    for rel in config.object_relations:
+        if rel.source_code in obj_set and rel.target_code in obj_set:
+            jk = json.dumps(rel.join_keys, ensure_ascii=False, separators=(",", ":"))
+            items.append(
+                rel_item(
+                    rel_id=rel.relation_id,
+                    source_lib=config.library_code,
+                    source_type="object",
+                    source_code=rel.source_code,
+                    target_lib=config.library_code,
+                    target_type="object",
+                    target_code=rel.target_code,
+                    rel_name=rel.relation_name,
+                    rel_type="MANY_TO_ONE",
+                    joinkeys=jk,
+                )
+            )
     return wrap_rel(items) if items else ""
 
 

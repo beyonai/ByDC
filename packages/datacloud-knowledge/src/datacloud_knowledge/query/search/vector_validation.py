@@ -72,6 +72,11 @@ class TermVectorValidationError(RuntimeError):
     """Raised when the knowledge DB cannot satisfy vector recall expectations."""
 
 
+def _is_equivalent_top_hit(sample: VectorSample, hit: VectorSmokeHit) -> bool:
+    """Return whether the top hit is an acceptable match for smoke validation."""
+    return hit.name_id == sample.name_id or hit.name_text == sample.name_text
+
+
 def validate_term_vector_readiness(
     session: Session,
     embedding_service: EmbeddingServiceLike,
@@ -121,7 +126,7 @@ def validate_term_vector_readiness(
             "术语知识库向量校验失败: 实时向量检索没有返回候选; "
             f"sample_name_id={sample.name_id}, sample_text={sample.name_text!r}; {db_info.as_text()}"
         )
-    if hit.name_id != sample.name_id:
+    if not _is_equivalent_top_hit(sample, hit):
         _validation_result = False
         raise TermVectorValidationError(
             "术语知识库向量校验失败: 实时向量检索 top1 未命中原始术语; "

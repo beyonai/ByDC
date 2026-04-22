@@ -227,7 +227,7 @@ def test_T9_7_collect_terms_reads_field_name_cn() -> None:
         "metrics": [{"field_name_cn": "企业唯一ID", "agg": "count_distinct", "as": "企业数量"}],
     }
 
-    terms = _collect_terms_from_params(params)
+    terms, _ = _collect_terms_from_params(params)
 
     assert "营收" in terms, f"未从 field_name_cn 收集到 '营收'，实际: {terms}"
     assert "企业等级" in terms, f"未从 field_name_cn 收集到 '企业等级'，实际: {terms}"
@@ -248,7 +248,7 @@ def test_T9_7b_collect_terms_fallback_to_field() -> None:
         "filters": [{"field": "管理网格总营收（万元）", "op": "gt", "value": 100}],
     }
 
-    terms = _collect_terms_from_params(params)
+    terms, _ = _collect_terms_from_params(params)
     assert "管理网格总营收（万元）" in terms, f"fallback 未读到 field 中的中文名: {terms}"
 
 
