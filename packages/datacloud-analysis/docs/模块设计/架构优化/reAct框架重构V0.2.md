@@ -433,3 +433,339 @@ class HookAwareToolNode(ToolNode):
               监控 success_rate / latency / interrupt_resume 成功率
               无异常后切换默认值为 true，保留旧路径一个版本后删除
 ```
+
+
+
+### 1.4 实现设计
+
+---
+
+#### 1.4.1 新图拓扑
+
+```
+START
+  │
+  ▼
+[intend]  ← 命令路由 + user_query 提取（不变）
+  │
+  ├─ command_done ─────────────────────────────────────────────────► END
+  │
+  └─ react
+       │
+       ▼
+    [agent]  ← LLM 推理（bind_tools + trim_messages + 流式输出）
+       │
+       ├─ L2: 无 tool_calls ──────────────────────────────────────► [respond]
+       ├─ L3: react_round_idx ≥ max_rounds ────────────────────────► [respond]
+       └─ 有 tool_calls（含 finish_react）
+            │
+            ▼
+         [tools]  ← HookAwareToolNode（before/after hook 注入）
+            │
+            ├─ ClarificationNeededError
+            │     └─► Command(goto="analyze_clarify")
+            │               │
+            │         [analyze_clarify]  ← LLM 分析歧义（复用现有节点）
+            │               │
+            │         [user_clarify]     ← interrupt，等待用户回复
+            │               │ resume
+            │               └──────────────────────────────────────► [tools]
+            │
+            └─ 正常执行（after_tools_route 路由）
+                  │
+                  ├─ L1: finish_react ToolMessage 存在
+                  │     └─► [finish_react_node]  ← 提取 react_final（微调）
+                  │               └─────────────────────────────────► [respond]
+                  │
+                  └─ 其他工具 ────────────────────────────────────► [agent]（下一轮）
+
+[respond]  ← format_result()（Markdown / 6001 协议，不变）
+  └─► END
+```
+
+对比当前 V0.3 拓扑，**新增** `after_tools_route` 路由函数、`HookAwareToolNode`；
+**删除** `tool_dispatcher_node`、`make_tool_node`（per-tool Send API）；
+**保留** `intend`、`finish_react_node`（微调）、`respond`、澄清子流程三节点。
+
+---
+
+#### 1.4.2 文件变更清单
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| **新增** | `execution/hook_aware_tool_node.py` | HookAwareToolNode 实现 |
+| **重写** | `orchestration/graph_builder.py` | 按新拓扑重组节点与边 |
+| **微调** | `execution/finish_react_node.py` | 适配 `react_last_query_data` 来源（见 1.4.5） |
+| **微调** | `execution/llm_call_node.py` | 提取为独立 `agent` 节点，移除旧路由判断 |
+| **保留** | `orchestration/intend/` | 不变 |
+| **保留** | `orchestration/respond/` | 不变 |
+| **保留** | `orchestration/clarification/` | 不变（直接复用） |
+| **保留** | `orchestration/state.py` | 不变（react_* 字段迁移完成后再清理） |
+| **迁移后删除** | `execution/react_loop.py` | ~1208 行，完全替代后删除 |
+| **迁移后删除** | `execution/tool_dispatcher_node.py` | 被 HookAwareToolNode 替代 |
+| **迁移后删除** | `execution/make_tool_node.py` | Send API per-tool 模式废弃 |
+
+---
+
+#### 1.4.3 阶段一（1 周）：HookAwareToolNode + 停止条件
+
+**目标**：实现新工具执行层，在独立测试中验证 finish_react + Markdown 路径。
+
+##### HookAwareToolNode（`execution/hook_aware_tool_node.py`）
+
+设计见 1.3.4，生产级关键点补充：
+
+```python
+class HookAwareToolNode(ToolNode):
+    async def ainvoke(self, state, config=None, **kwargs):
+        # 1. before_call_back：按工具逐一注入，可修改参数，可触发澄清
+        # 2. ClarificationNeededError → return Command(goto="analyze_clarify")
+        # 3. super().ainvoke(patched_state, config) — 执行工具
+        # 4. after_call_back：遍历本轮 ToolMessage，触发后置钩子
+        ...
+```
+
+注意事项：
+- `patched_state["messages"]` 必须用 `model_copy` 替换最后一条 AIMessage，不能直接赋值（Pydantic 不可变）
+- `after_call_back` 只遍历本轮新增 ToolMessage（最后一条 AIMessage 之后的 ToolMessage）
+- `gateway_context` 从 `config["configurable"]["gateway_context"]` 读取，优先级高于构造函数注入
+
+##### 路由函数
+
+```python
+def should_continue(state: AgentState) -> Literal["tools", "respond"]:
+    """agent 节点出口。"""
+    last = state["messages"][-1]
+    if not isinstance(last, AIMessage) or not (last.tool_calls or []):
+        return "respond"                             # L2：LLM 直接文字回答
+    if int(state.get("react_round_idx") or 0) >= _DEFAULT_MAX_ROUNDS:
+        return "respond"                             # L3：轮数保护
+    return "tools"                                   # finish_react 也走 tools（必须执行工具体）
+
+
+def after_tools_route(state: AgentState) -> Literal["agent", "finish_react_node"]:
+    """tools 节点出口（正常执行路径，ClarificationNeededError 由 Command 绕过此函数）。"""
+    messages = state["messages"]
+    for msg in reversed(messages):
+        if isinstance(msg, AIMessage):
+            break
+        if isinstance(msg, ToolMessage) and msg.name == "finish_react":
+            return "finish_react_node"               # L1：finish_react 已执行
+    return "agent"                                   # 继续下一轮推理
+```
+
+**阶段一验收**：`finish_react + Markdown` 单测全通；`before/after_call_back` 单测全通；
+`ClarificationNeededError → Command` 单测全通。
+
+---
+
+#### 1.4.4 阶段二（1 周）：父图重构
+
+**目标**：`graph_builder.py` 按新拓扑完整重连所有节点，端到端回归。
+
+##### 新 `graph_builder.py` 骨架
+
+```python
+def build_analysis_graph(
+    prompts_overwrite=None,
+    tools=None,
+    loader=None,
+    redirect_tools=None,
+) -> StateGraph[AgentState]:
+    builder = StateGraph(AgentState)
+
+    # ── 节点 ──────────────────────────────────────────────────────────────
+    builder.add_node("intend",            _intend)
+    builder.add_node("agent",             make_llm_call_node(...))   # 现有 llm_call_node 复用
+    builder.add_node("tools",             HookAwareToolNode(
+                                              tools_list,
+                                              plugin_manager=...,
+                                              loader=loader,
+                                          ))
+    builder.add_node("finish_react_node", finish_react_node)
+    builder.add_node("analyze_clarify",   analyze_clarify_node)
+    builder.add_node("user_clarify",      user_clarify_node)
+    builder.add_node("respond",           respond_node)
+
+    # ── 边 ────────────────────────────────────────────────────────────────
+    builder.add_edge(START, "intend")
+    builder.add_conditional_edges(
+        "intend", _route_after_intend,
+        {"command_done": END, "react": "agent"},
+    )
+    builder.add_conditional_edges(
+        "agent", should_continue,
+        {"tools": "tools", "respond": "respond"},
+    )
+    builder.add_conditional_edges(
+        "tools", after_tools_route,
+        {"agent": "agent", "finish_react_node": "finish_react_node"},
+    )
+    # ClarificationNeededError 由 HookAwareToolNode 返回 Command(goto="analyze_clarify")
+    # LangGraph 自动路由，无需额外 add_conditional_edges
+    builder.add_conditional_edges(
+        "analyze_clarify", _route_after_analyze,
+        {"user_clarify": "user_clarify", "tools": "tools"},
+    )
+    builder.add_edge("user_clarify",      "tools")
+    builder.add_edge("finish_react_node", "respond")
+    builder.add_edge("respond",           END)
+
+    return builder
+```
+
+##### L2/L3 在 `respond` 的处理
+
+`should_continue` L2/L3 路由到 `respond` 时，`state["react_final"]` 可能未设置。
+在 `respond_node` 开头增加兜底逻辑：
+
+```python
+# respond_node 兜底：L2/L3 时 react_final 未设置，从最后一条 AIMessage 构建
+if not state.get("react_final"):
+    last_ai = next((m for m in reversed(messages) if isinstance(m, AIMessage)), None)
+    answer = extract_ai_text(last_ai.content) if last_ai else ""
+    react_final = {
+        "result_type": "text",
+        "answer": answer,
+        "answer_streamed": bool(state.get("answer_streamed")),
+    }
+else:
+    react_final = state.get("react_final") or {}
+```
+
+**阶段二验收**：全量 `pytest tests/dca` 通过率 ≥ 当前基线（342/342）；
+`intend → agent → tools → finish_react_node → respond` 链路 E2E 通过；
+澄清子流程链路通过。
+
+---
+
+#### 1.4.5 阶段三（5 天）：高风险适配
+
+**目标**：解决两个未验证风险点，并修复 `react_last_query_data` 来源问题。
+
+##### 风险一：interrupt/resume 语义验证（⚠️ 最高风险）
+
+**问题**：方案 B 的 4 个 `react_*` 序列化字段（`react_messages`、`react_pending_tool_calls`、
+`react_round_idx`、`react_last_query_data`）在新架构下由 LangGraph 原生 checkpoint 替代。
+需要验证：真实 OpenGauss checkpointer 下，`user_clarify → interrupt()` 中断后，
+跨请求/跨实例恢复时 `state["messages"]` 与 `react_round_idx` 完整保留。
+
+**验证方法**（集成测试，非 mock）：
+```python
+# tests/dca/integration/test_interrupt_resume_prebuilt.py
+async def test_interrupt_resume_across_invocations():
+    # 1. 启动 graph，执行到 user_clarify interrupt()
+    # 2. 序列化 checkpoint 到 OpenGauss
+    # 3. 新实例加载 checkpoint，resume
+    # 4. 断言：messages 完整，round_idx 正确，工具参数回填成功
+```
+
+**卡点**：此测试不通过，阻塞阶段三完成，不进入阶段四。
+
+---
+
+##### 风险二：流式 thinking token 适配（⚠️ 中风险）
+
+**问题**：现有 `_invoke_llm_with_fallback` 在 `react_loop.py` 中直接控制流式输出，
+推送 thinking token 给 `gateway_context.emit_chunk()`。
+`llm_call_node.py` 已复用此逻辑。新架构保留 `make_llm_call_node`（agent 节点），
+不涉及 prebuilt 的 `astream_events`，因此**该风险实际可控**：
+只需确认 `_invoke_llm_with_fallback` 在新图拓扑中被正确调用即可，
+无需修改流式推送实现。
+
+**验证方法**：
+```python
+# tests/dca/integration/test_thinking_token_stream.py
+async def test_thinking_token_emitted_in_new_graph():
+    # mock gateway_context.emit_chunk
+    # 运行新图一轮推理
+    # 断言 emit_chunk 被调用且 event_type=thinking
+```
+
+---
+
+##### `react_last_query_data` 来源修复
+
+**问题**：`finish_react_node` 读取 `state["react_last_query_data"]` 填充 `query_data`，
+此字段由旧 `react_loop.py` 在工具执行后写入。新架构中 `react_loop.py` 被删除，
+写入者消失，`query_data` 将永远为 `None`。
+
+**修复方案**：在 `HookAwareToolNode.ainvoke` 的 after_call_back 阶段，
+检测 ToolMessage 中包含 query_result 格式数据时，写入 `state["react_last_query_data"]`：
+
+```python
+# hook_aware_tool_node.py — after_call_back 后追加
+for msg in result.get("messages") or []:
+    if isinstance(msg, ToolMessage) and msg.name != "finish_react":
+        # 尝试解析工具返回的 query_data
+        _try_persist_query_data(state, msg.content)
+```
+
+或更简单：`finish_react` 工具的 args 中已含 `result_type` 和 `answer`，
+`query_data` 通过 `react_last_query_data` 传递的场景仅限 `query_result` 类型。
+确认 `query_*` 工具是否直接在 finish_react args 里携带完整 query_data，
+若是则 `react_last_query_data` 可废弃，`finish_react_node` 直接从 tool_call args 读取。
+
+> **⚠️ 待确认**：在阶段三开始前，需 code review `query_*` 工具的 finish_react 调用约定，
+> 确定 query_data 是否已在 finish_react args 中传递。
+
+---
+
+#### 1.4.6 阶段四（3 天）：feature flag + 灰度上线
+
+```python
+# 环境变量开关（默认关闭，不影响现有生产）
+DATACLOUD_USE_PREBUILT_REACT = os.getenv("DATACLOUD_USE_PREBUILT_REACT", "false").lower()
+
+def build_analysis_graph(...):
+    if DATACLOUD_USE_PREBUILT_REACT == "true":
+        return _build_prebuilt_graph(...)   # 新路径
+    return _build_legacy_graph(...)         # 旧路径（现有代码不动）
+```
+
+**灰度监控指标**：
+
+| 指标 | 采集方式 | 告警阈值 |
+|------|----------|----------|
+| `success_rate` | respond_node 正常完成 / 总请求 | < 95% 回滚 |
+| `avg_latency` | intend → respond 耗时 | 较旧路径 > 20% 告警 |
+| `interrupt_resume_success` | user_clarify resume 成功 / interrupt 次数 | < 100% 立即回滚 |
+| `l3_rate` | max_rounds 触发比例 | 较旧路径 > 5% 告警 |
+
+**上线顺序**：
+1. 部署新版本（`DATACLOUD_USE_PREBUILT_REACT=false`，旧路径运行）
+2. 单台 worker 切 `true`，观察 1 小时
+3. 逐步扩大（25% → 50% → 100%）
+4. 100% 稳定 1 周后，删除旧路径代码，移除 feature flag
+
+---
+
+#### 1.4.7 集成测试卡点清单
+
+以下测试为**硬卡点**，任一失败阻塞对应阶段推进：
+
+| 卡点 | 测试文件 | 阻塞阶段 |
+|------|----------|---------|
+| `finish_react + Markdown` 内容完整性 | `tests/dca/unit/test_hook_aware_tool_node.py` | 阶段一 |
+| `before/after_call_back` 参数透传正确 | `tests/dca/unit/test_hook_aware_tool_node.py` | 阶段一 |
+| `ClarificationNeededError → Command` 路由 | `tests/dca/unit/test_hook_aware_tool_node.py` | 阶段一 |
+| 全量单测回归（≥ 342 passed） | `tests/dca/` | 阶段二 |
+| 澄清 E2E（ambiguous → resume → dispatch） | `tests/dca/unit/test_clarification_e2e_chain.py` | 阶段二 |
+| interrupt/resume 跨实例语义等价 | `tests/dca/integration/test_interrupt_resume_prebuilt.py` | 阶段三 |
+| thinking token 流式推送 | `tests/dca/integration/test_thinking_token_stream.py` | 阶段三 |
+
+---
+
+#### 1.4.8 完成标志与回滚策略
+
+**迁移完成标志**（满足全部才可删除旧代码）：
+
+- [ ] `DATACLOUD_USE_PREBUILT_REACT=true` 生产运行 ≥ 7 天，0 次 interrupt_resume 失败
+- [ ] `react_loop.py` 代码路径监控确认零调用
+- [ ] 净代码行数减少 > 30%（`react_loop.py` 1208 行 + `tool_dispatcher_node.py` 120 行 + `make_tool_node.py` 已删除）
+
+**回滚策略**：
+
+- 快速回滚：`DATACLOUD_USE_PREBUILT_REACT=false`，无需重启，下次请求即走旧路径
+- 数据回滚：LangGraph checkpoint 格式兼容（state 字段超集），旧版本可读新版本 checkpoint
+- 不兼容场景：若 `react_*` 序列化字段在新版本被清理，旧版本 resume 时可能失败 → **字段清理必须在旧路径完全下线后执行**
