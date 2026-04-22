@@ -226,9 +226,10 @@ def _try_parse_query_data(content: str) -> dict[str, Any] | None:
     try:
         parsed = json.loads(content)
     except (json.JSONDecodeError, ValueError):
-        # 兜底：Python repr，先剥离 Decimal('x') 包装为浮点字面量再 literal_eval
+        # 兜底：Python repr，先剥离 Decimal('x') 和 datetime.*(…) 再 literal_eval
         try:
             cleaned = _DECIMAL_RE.sub(r"\1", content)
+            cleaned = _NONLITERAL_RE.sub("None", cleaned)
             parsed = ast.literal_eval(cleaned)
         except (ValueError, SyntaxError):
             return None
