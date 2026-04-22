@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
@@ -48,6 +49,8 @@ class RecallRequest:
     type_filter: frozenset[str] | None
     is_per_type: bool
     per_type_limit: int
+    scope_code: str | None = None
+    is_value_recall: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,18 +85,19 @@ def _post_filter_non_field_types(
 
 
 def typed_multi_recall_batch(
-    items: list[TypedKeywordState],
+    items: Sequence[TypedKeywordState],
     *,
     session: Session,
     top_k: int,
     rrf_k: int,
     enable_vector: bool,
     wv_per_type: int,
+    scope_code: str | None = None,
 ) -> dict[str, list[CandidateDict]]:
     """批量并发执行 typed multi recall。"""
     started_at = time.monotonic()
     result: dict[str, list[CandidateDict]] = {}
-    batch = _prepare_batch(items, session, wv_per_type=wv_per_type)
+    batch = _prepare_batch(items, session, wv_per_type=wv_per_type, scope_code=scope_code)
 
     for item in items:
         if not item.keyword.strip() or not item.search_enabled:
@@ -131,10 +135,11 @@ def typed_multi_recall_batch(
 
 
 def _prepare_batch(
-    items: list[TypedKeywordState],
+    items: Sequence[TypedKeywordState],
     session: Session,
     *,
     wv_per_type: int,
+    scope_code: str | None = None,
 ) -> PreparedBatch:
     from . import typed_recall as serial_recall
 
@@ -177,6 +182,8 @@ def _prepare_batch(
                 type_filter=frozen_filter,
                 is_per_type=is_per_type,
                 per_type_limit=wv_per_type if is_per_type else 0,
+                scope_code=scope_code,
+                is_value_recall=item.ktype == "whereValue",
             )
         )
 
@@ -458,6 +465,11 @@ def _run_tsquery_query(
     tokenizer: Callable[[str], str],
     per_type_limit: int = 0,
 ) -> dict[str, list[tuple[str, str, str, str, str]]]:
+    scope_code = requests[0].scope_code if requests else None
+    # ontology-term recall (select/groupBy/orderBy/whereKey) uses strict scope;
+    # value-term recall (whereValue) allows legacy unscoped rows
+    is_strict = bool(requests) and not requests[0].is_value_recall
+    scope_clause = _build_effective_scope_clause(scope_code, strict=is_strict)
     input_values, params = _build_values_clause(
         requests,
         value_getter=lambda request: str(tokenizer(request.keyword)),
@@ -469,6 +481,7 @@ def _run_tsquery_query(
             order_expr="score DESC",
             type_filter=type_filter,
             per_type_limit=per_type_limit,
+            scope_clause=scope_clause,
         )
         params["per_type_limit"] = per_type_limit
     else:
@@ -477,13 +490,15 @@ def _run_tsquery_query(
             tsvector_column=column_name,
             order_expr="score DESC",
             type_filter=type_filter,
+            scope_clause=scope_clause,
         )
         params["per_kw_limit"] = top_k * 3
 
     params["min_score"] = _BM25_MIN_SCORE
     if type_filter is not None:
         params["type_codes"] = sorted(type_filter)
-    statement: Any = sql
+    if scope_clause:
+        params.update(_build_scope_params(scope_code))
     statement: Any = sql
     return _collect_ranked_rows(session.execute(statement, params).fetchall())
 
@@ -496,6 +511,9 @@ def _run_substring_query(
     top_k: int,
     per_type_limit: int = 0,
 ) -> dict[str, list[tuple[str, str, str, str, str]]]:
+    scope_code = requests[0].scope_code if requests else None
+    is_strict = bool(requests) and not requests[0].is_value_recall
+    scope_clause = _build_effective_scope_clause(scope_code, strict=is_strict)
     input_values, params = _build_values_clause(
         requests,
         value_getter=lambda request: request.keyword,
@@ -505,17 +523,20 @@ def _run_substring_query(
             input_values=input_values,
             type_filter=type_filter,
             per_type_limit=per_type_limit,
+            scope_clause=scope_clause,
         )
         params["per_type_limit"] = per_type_limit
     else:
         sql = _build_substring_sql(
             input_values=input_values,
             type_filter=type_filter,
+            scope_clause=scope_clause,
         )
         params["per_kw_limit"] = top_k * 3
     if type_filter is not None:
         params["type_codes"] = sorted(type_filter)
-    statement: Any = sql
+    if scope_clause:
+        params.update(_build_scope_params(scope_code))
     statement: Any = sql
     return _collect_ranked_rows(session.execute(statement, params).fetchall())
 
@@ -523,67 +544,6 @@ def _run_substring_query(
 # ---------------------------------------------------------------------------
 # Single-vector query (HNSW-friendly: ORDER BY embedding <=> :constant LIMIT k)
 # ---------------------------------------------------------------------------
-
-_VECTOR_NORMAL_SQL = text("""
-    SELECT tn.term_id,
-           tn.name_text AS term_name,
-           tn.name_id,
-           t.term_type_code,
-           1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score,
-           t.term_code
-    FROM term_name tn
-    JOIN term t ON tn.term_id = t.term_id
-    WHERE tn.name_embedding IS NOT NULL
-    ORDER BY tn.name_embedding <=> CAST(:vector AS vector)
-    LIMIT :limit
-""")
-
-_VECTOR_TYPED_SQL = text("""
-    SELECT tn.term_id,
-           tn.name_text AS term_name,
-           tn.name_id,
-           t.term_type_code,
-           1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score,
-           t.term_code
-    FROM term_name tn
-    JOIN term t ON tn.term_id = t.term_id
-    WHERE tn.name_embedding IS NOT NULL
-      AND t.term_type_code IN :type_codes
-    ORDER BY tn.name_embedding <=> CAST(:vector AS vector)
-    LIMIT :limit
-""").bindparams(bindparam("type_codes", expanding=True))
-
-_VECTOR_PER_TYPE_SQL = text("""
-    SELECT term_id, term_name, name_id, term_type_code, score, term_code
-    FROM (
-        SELECT top_n.term_id,
-               top_n.term_name,
-               top_n.name_id,
-               top_n.term_type_code,
-               top_n.score,
-               top_n.term_code,
-               ROW_NUMBER() OVER (
-                  PARTITION BY top_n.term_type_code
-                  ORDER BY top_n.score DESC
-               ) AS rn
-        FROM (
-            SELECT tn.term_id,
-                   tn.name_text AS term_name,
-                   tn.name_id,
-                   t.term_type_code,
-                   1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score,
-                   t.term_code
-            FROM term_name tn
-            JOIN term t ON tn.term_id = t.term_id
-            WHERE tn.name_embedding IS NOT NULL
-              AND t.term_type_code IN :type_codes
-            ORDER BY tn.name_embedding <=> CAST(:vector AS vector)
-            LIMIT :limit
-        ) top_n
-    ) ranked
-    WHERE rn <= :per_type_limit AND score >= :min_similarity
-    ORDER BY score DESC
-""").bindparams(bindparam("type_codes", expanding=True))
 
 
 def _run_single_vector_query(
@@ -599,18 +559,33 @@ def _run_single_vector_query(
             "vector": vector_str,
             "min_similarity": min_similarity,
         }
+        scope_clause = _build_effective_scope_clause(req.scope_code, strict=not req.is_value_recall)
         if req.is_per_type and req.type_filter is not None:
-            sql: Any = _VECTOR_PER_TYPE_SQL
+            sql: Any = _build_vector_sql(
+                typed=True,
+                per_type=True,
+                scope_clause=scope_clause,
+            )
             params["type_codes"] = sorted(req.type_filter)
             params["per_type_limit"] = req.per_type_limit
             params["limit"] = top_k * 3 * len(req.type_filter)
         elif req.type_filter is not None:
-            sql = _VECTOR_TYPED_SQL
+            sql = _build_vector_sql(
+                typed=True,
+                per_type=False,
+                scope_clause=scope_clause,
+            )
             params["type_codes"] = sorted(req.type_filter)
             params["limit"] = top_k * 3
         else:
-            sql = _VECTOR_NORMAL_SQL
+            sql = _build_vector_sql(
+                typed=False,
+                per_type=False,
+                scope_clause=scope_clause,
+            )
             params["limit"] = top_k * 3
+        if scope_clause:
+            params.update(_build_scope_params(req.scope_code))
 
         rows = session.execute(sql, params).fetchall()
         results: list[tuple[str, str, str, str, str]] = []
@@ -655,6 +630,7 @@ def _build_tsquery_sql(
     order_expr: str,
     type_filter: frozenset[str] | None,
     per_type_limit: int = 0,
+    scope_clause: str = "",
 ) -> object:
     type_clause = ""
     if type_filter is not None:
@@ -683,7 +659,7 @@ def _build_tsquery_sql(
                 FROM term_name tn
                 JOIN term t ON tn.term_id = t.term_id
                 WHERE tn.{tsvector_column} @@ to_tsquery('simple', i.tsquery_text)
-                  AND tn.{tsvector_column} IS NOT NULL{type_clause}
+                  AND tn.{tsvector_column} IS NOT NULL{type_clause}{scope_clause}
               ) ranked
               WHERE ranked.rn <= :per_type_limit AND ranked.score >= :min_score
             ) s
@@ -707,7 +683,7 @@ def _build_tsquery_sql(
               FROM term_name tn
               JOIN term t ON tn.term_id = t.term_id
               WHERE tn.{tsvector_column} @@ to_tsquery('simple', i.tsquery_text)
-                AND tn.{tsvector_column} IS NOT NULL{type_clause}
+                AND tn.{tsvector_column} IS NOT NULL{type_clause}{scope_clause}
                 AND ts_rank_cd(tn.{tsvector_column}, to_tsquery('simple', i.tsquery_text), 32) >= :min_score
               ORDER BY {order_expr}
               LIMIT :per_kw_limit
@@ -726,6 +702,7 @@ def _build_substring_sql(
     input_values: str,
     type_filter: frozenset[str] | None,
     per_type_limit: int = 0,
+    scope_clause: str = "",
 ) -> object:
     type_clause = ""
     if type_filter is not None:
@@ -756,7 +733,7 @@ def _build_substring_sql(
                 WHERE (
                         POSITION(tn.name_text IN i.keyword_text) > 0
                         OR POSITION(i.keyword_text IN tn.name_text) > 0
-                      ){type_clause}
+                      ){type_clause}{scope_clause}
               ) ranked
               WHERE ranked.rn <= :per_type_limit
             ) s
@@ -782,7 +759,7 @@ def _build_substring_sql(
               WHERE (
                       POSITION(tn.name_text IN i.keyword_text) > 0
                       OR POSITION(i.keyword_text IN tn.name_text) > 0
-                    ){type_clause}
+                    ){type_clause}{scope_clause}
               ORDER BY LENGTH(tn.name_text) DESC
               LIMIT :per_kw_limit
             ) s
@@ -791,6 +768,93 @@ def _build_substring_sql(
         sql_obj = text(sql)
 
     if type_filter is not None:
+        return sql_obj.bindparams(bindparam("type_codes", expanding=True))
+    return sql_obj
+
+
+def _build_effective_scope_clause(scope_code: str | None, *, strict: bool = False) -> str:
+    """Build scope SQL clause for recall filtering.
+
+    Args:
+        scope_code: View/object code to filter by. Empty = no filter.
+        strict: If True, exclude legacy ``search_scope = '{}'`` rows.
+                Use strict=True for ontology-term recall (prop aliases only).
+                Use strict=False for value-term recall (enterprise names etc.).
+    """
+    if not scope_code:
+        return ""
+    base = """
+                  AND (
+                        tn.search_scope @> CAST(:view_scope AS jsonb)
+                        OR tn.search_scope @> CAST(:obj_scope AS jsonb)
+                        OR tn.search_scope @> CAST('{"scope":"global"}' AS jsonb)"""
+    if strict:
+        return base + "\n                  )"
+    return base + "\n                        OR tn.search_scope = '{}'::jsonb\n                  )"
+
+
+def _build_scope_params(scope_code: str | None) -> dict[str, str]:
+    if not scope_code:
+        return {}
+    return {
+        "view_scope": json.dumps({"scope": "view", "code": scope_code}),
+        "obj_scope": json.dumps({"scope": "object", "code": scope_code}),
+    }
+
+
+def _build_vector_sql(*, typed: bool, per_type: bool, scope_clause: str = "") -> object:
+    type_clause = ""
+    if typed:
+        type_clause = "\n              AND t.term_type_code IN :type_codes"
+
+    if per_type:
+        sql = f"""
+            SELECT term_id, term_name, name_id, term_type_code, score, term_code
+            FROM (
+                SELECT top_n.term_id,
+                       top_n.term_name,
+                       top_n.name_id,
+                       top_n.term_type_code,
+                       top_n.score,
+                       top_n.term_code,
+                       ROW_NUMBER() OVER (
+                          PARTITION BY top_n.term_type_code
+                          ORDER BY top_n.score DESC
+                       ) AS rn
+                FROM (
+                    SELECT tn.term_id,
+                           tn.name_text AS term_name,
+                           tn.name_id,
+                           t.term_type_code,
+                           1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score,
+                           t.term_code
+                    FROM term_name tn
+                    JOIN term t ON tn.term_id = t.term_id
+                    WHERE tn.name_embedding IS NOT NULL{type_clause}{scope_clause}
+                    ORDER BY tn.name_embedding <=> CAST(:vector AS vector)
+                    LIMIT :limit
+                ) top_n
+            ) ranked
+            WHERE rn <= :per_type_limit AND score >= :min_similarity
+            ORDER BY score DESC
+        """
+    else:
+        sql = f"""
+            SELECT tn.term_id,
+                   tn.name_text AS term_name,
+                   tn.name_id,
+                   t.term_type_code,
+                   1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score,
+                   t.term_code
+            FROM term_name tn
+            JOIN term t ON tn.term_id = t.term_id
+            WHERE tn.name_embedding IS NOT NULL{type_clause}{scope_clause}
+            ORDER BY tn.name_embedding <=> CAST(:vector AS vector)
+            LIMIT :limit
+        """
+
+    sql_obj = text(sql)
+    if typed:
         return sql_obj.bindparams(bindparam("type_codes", expanding=True))
     return sql_obj
 

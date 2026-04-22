@@ -43,16 +43,13 @@ def analyze_query_clarification_query(
 
     Args:
         query: 用户原始自然语言查询。
-        ontology_code: 本体编码（预留，暂不过滤）。
+        ontology_code: 本体编码，用于限定召回范围。
         structured_query: StructuredQuery 的 dict 表示。
         on_event: 可选回调，接收 StreamEvent 实例。
 
     Returns:
         ClarificationResult。
     """
-    # TODO(ontology): 按 ontology_code 过滤召回候选的术语范围
-    _ = ontology_code
-
     emit = EventEmitter(on_event)
     complex_conditions: list[str] = structured_query.get("complex_conditions", [])
 
@@ -73,7 +70,7 @@ def analyze_query_clarification_query(
 
     # ── Step 2: 统一召回 ──
     with emit.step("知识召回", "knowledge_recall"):
-        recall_map = _unified_recall(all_terms)
+        recall_map = _unified_recall(all_terms, scope_code=ontology_code)
         emit.result({"terms": len(all_terms), "recalled": sum(1 for v in recall_map.values() if v)})
 
     # ── Step 3: LLM 确认 ──
@@ -137,16 +134,13 @@ def analyze_query_clarification_compute(
 
     Args:
         query: 用户原始自然语言查询。
-        ontology_code: 本体编码（预留，暂不过滤）。
+        ontology_code: 本体编码，用于限定召回范围。
         structured_compute: StructuredCompute 的 dict 表示。
         on_event: 可选回调，接收 StreamEvent 实例。
 
     Returns:
         ClarificationResult。
     """
-    # TODO(ontology): 按 ontology_code 过滤召回候选的术语范围
-    _ = ontology_code
-
     emit = EventEmitter(on_event)
     complex_conditions: list[str] = structured_compute.get("complex_conditions", [])
 
@@ -167,7 +161,7 @@ def analyze_query_clarification_compute(
 
     # ── Step 2: 统一召回 ──
     with emit.step("知识召回", "knowledge_recall"):
-        recall_map = _unified_recall(all_terms)
+        recall_map = _unified_recall(all_terms, scope_code=ontology_code)
         emit.result({"terms": len(all_terms), "recalled": sum(1 for v in recall_map.values() if v)})
 
     # ── Step 3: LLM 确认 ──
@@ -269,6 +263,8 @@ def format_clarification_compute(
 
 def _unified_recall(
     terms: list[ExtractedTerm],
+    *,
+    scope_code: str | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """对所有术语执行统一召回。
 
@@ -306,11 +302,11 @@ def _unified_recall(
 
     # 常规术语：走全部 4 路召回（BM25 + Jieba + Substring + Vector）
     if normal_items:
-        result.update(typed_multi_recall_with_session(normal_items, top_k=5))
+        result.update(typed_multi_recall_with_session(normal_items, top_k=5, scope_code=scope_code))
 
     # 英文标识符：只走向量召回（BM25/子串匹配对英文→中文无意义）
     if vector_only_items:
-        result.update(_vector_only_recall(vector_only_items, top_k=5))
+        result.update(_vector_only_recall(vector_only_items, top_k=5, scope_code=scope_code))
 
     return result
 
@@ -319,6 +315,7 @@ def _vector_only_recall(
     items: list[_RecallItem],
     *,
     top_k: int,
+    scope_code: str | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """对英文标识符术语只执行向量召回。
 
@@ -360,6 +357,7 @@ def _vector_only_recall(
                     type_filter=frozen_filter,
                     is_per_type=False,
                     per_type_limit=0,
+                    scope_code=scope_code,
                 )
             )
 

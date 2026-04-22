@@ -309,6 +309,7 @@ def typed_multi_recall_with_session(
     *,
     user_id: str | None = None,
     top_k: int = 5,
+    scope_code: str | None = None,
 ) -> dict[str, list[CandidateDict]]:
     """Run typed multi-path recall with a managed DB session.
 
@@ -326,6 +327,7 @@ def typed_multi_recall_with_session(
                 session=session,
                 top_k=top_k,
                 enable_vector=False,
+                scope_code=scope_code,
             )
 
         return typed_multi_recall(
@@ -333,4 +335,5 @@ def typed_multi_recall_with_session(
             session=session,
             top_k=top_k,
             enable_vector=True,
+            scope_code=scope_code,
         )
