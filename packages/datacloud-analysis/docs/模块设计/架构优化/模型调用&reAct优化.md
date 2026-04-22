@@ -351,14 +351,3 @@ uv run pytest tests/dca/unit/test_react_loop_state_resume.py
 
 ---
 
-## 7. v1.0 → v1.1 变更说明
-
-| 变更项 | v1.0 | v1.1 |
-|--------|------|------|
-| 新增 P0-1 | 未提及 | 识别 `tool_dispatcher_node` ToolMessage 死代码，提升为 P0 |
-| 新增 P0-2 | 未提及 | 识别 `llm_retry.py` 三处缺陷（async 缺失、变量覆盖、NameError），提升为 P0 |
-| 阶段 A 补充 | 未提及 `tool_wrapper.py` | 明确需确认 `dispatch_tool` 签名，必要时同步修改 |
-| 阶段 B 补充 | 两处编译路径各自修改 | 提取公共函数统一策略，避免再次行为偏差 |
-| 阶段 C 依赖声明 | 无前置依赖说明 | 明确依赖 P0-2 先完成 |
-| 阶段 E 评估项 | 未含澄清子流程 | 补充 `ClarificationNeededError` 兼容性为核心评估项 |
-| 实施顺序 | A → D → B → C → E | P0-1 → P0-2 → A → D → B → C → E |

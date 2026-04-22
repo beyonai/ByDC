@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import inspect
-import json
 import logging
 import os
-from collections.abc import Callable
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
@@ -15,22 +12,6 @@ from datacloud_analysis.orchestration.state import AgentState
 
 _router = CommandRouter()
 logger = logging.getLogger(__name__)
-
-
-def _format_knowledge_for_prompt(knowledge_json: str) -> str:
-    """将 knowledge JSON 转为人类可读字段映射文本（降低 token 消耗）。"""
-    try:
-        data = json.loads(knowledge_json)
-        items = data.get("paradigmList", [])
-        lines = []
-        for item in items:
-            name = item.get("name") or item.get("termName") or ""
-            desc = item.get("fieldName") or item.get("description") or ""
-            if name and desc:
-                lines.append(f"{name} → {desc}")
-        return "\n".join(lines) if lines else knowledge_json
-    except Exception:
-        return knowledge_json
 
 
 def _trace_user_query_enabled() -> bool:
@@ -46,45 +27,9 @@ def _message_line_preview(msg: Any, *, max_len: int = 100) -> str:
     return f"{cls}({one})"
 
 
-async def _invoke_knowledge_enhancer(
-    knowledge_enhancer: Callable[..., Any],
-    *,
-    user_query: str,
-    gateway_context: Any,
-    message_parent_id: str,
-) -> Any:
-    try:
-        signature = inspect.signature(knowledge_enhancer)
-        params = list(signature.parameters.values())
-        accepts_varargs = any(param.kind is inspect.Parameter.VAR_POSITIONAL for param in params)
-        positional_count = sum(
-            1
-            for param in params
-            if param.kind
-            in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
-        )
-        if accepts_varargs or positional_count >= 3:
-            value = knowledge_enhancer(user_query, gateway_context, message_parent_id)
-        elif positional_count == 2:
-            value = knowledge_enhancer(user_query, gateway_context)
-        else:
-            value = knowledge_enhancer(user_query)
-    except (TypeError, ValueError):
-        # Some callables don't expose inspectable signatures (or expose dynamic wrappers).
-        try:
-            value = knowledge_enhancer(user_query, gateway_context, message_parent_id)
-        except TypeError:
-            value = knowledge_enhancer(user_query)
-
-    if inspect.isawaitable(value):
-        return await value
-    return value
-
-
 async def intend_node(
     state: AgentState,
     config: RunnableConfig,
-    knowledge_enhancer: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     gw_ctx = (config.get("configurable") or {}).get("gateway_context")
     messages = state.get("messages") or []
@@ -129,36 +74,9 @@ async def intend_node(
             "user_query": user_query,
         }
 
-    # 2. 非命令查询直接走 react 路径，无需 LLM 意图分类
-    updates: dict[str, Any] = {
+    return {
         "intent": "react",
         "intent_source": "react",
         "execution_status": "execution",
         "user_query": user_query,
     }
-
-    # 3. 知识增强（仅当 knowledge_enhancer 提供时调用）
-    if knowledge_enhancer is not None:
-        try:
-            _cfg = config.get("configurable") or {}
-            message_pid = str(_cfg.get("knowledge_enhance_node_id") or "")
-            result = await _invoke_knowledge_enhancer(
-                knowledge_enhancer,
-                user_query=user_query,
-                gateway_context=gw_ctx,
-                message_parent_id=message_pid,
-            )
-            knowledge_payload: dict[str, Any] = {
-                "needs_clarification": result.needs_clarification,
-                "form": result.form,
-                "knowledge": result.knowledge,
-                "query": getattr(result, "query", user_query),
-            }
-            updates["knowledge_payload"] = knowledge_payload
-            if result.knowledge:
-                snippet = _format_knowledge_for_prompt(result.knowledge)
-                updates["knowledge_snippets"] = [snippet] if snippet else []
-        except Exception:
-            logger.exception("[intend_node] knowledge_enhancer failed, skipping")
-
-    return updates

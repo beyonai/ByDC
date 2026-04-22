@@ -1,7 +1,8 @@
 """TC-37: 静态检查 — AgentState 含 knowledge_snippets / knowledge_payload 字段定义。
 
 验证 datacloud_analysis/orchestration/state.py 中的 AgentState 包含
-知识增强方案所需的两个 state 字段，防止字段被意外删除导致框架层逻辑静默失效。
+知识增强所需的两个 state 字段（由 hook 插件写入，llm_call_node 消费），
+防止字段被意外删除导致 hook 层逻辑静默失效。
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ def _get_agent_state_annotations() -> dict[str, object]:
 
 
 def test_tc37_agent_state_has_knowledge_payload_field() -> None:
-    """AgentState 包含 knowledge_payload 字段，供 intend_node 写入、tool_wrapper 读取。"""
+    """AgentState 包含 knowledge_payload 字段，供 hook 插件通过 tool_wrapper 读写。"""
     hints = _get_agent_state_annotations()
     assert "knowledge_payload" in hints, (
         "AgentState 缺少 knowledge_payload 字段——知识增强方案依赖此字段在节点间传递缓存数据"
@@ -33,7 +34,7 @@ def test_tc37_agent_state_has_knowledge_payload_field() -> None:
 
 
 def test_tc37_agent_state_has_knowledge_snippets_field() -> None:
-    """AgentState 包含 knowledge_snippets 字段，供 intend_node 写入、execution_node 注入 system_prompt。"""
+    """AgentState 包含 knowledge_snippets 字段，供 hook 插件追加、llm_call_node 注入 system_prompt。"""
     hints = _get_agent_state_annotations()
     assert "knowledge_snippets" in hints, (
         "AgentState 缺少 knowledge_snippets 字段——层 A 知识注入依赖此字段"
@@ -41,7 +42,7 @@ def test_tc37_agent_state_has_knowledge_snippets_field() -> None:
 
 
 def test_tc37_knowledge_payload_allows_none() -> None:
-    """knowledge_payload 字段类型允许 None（未调用 knowledge_enhancer 时的初始状态）。"""
+    """knowledge_payload 字段类型允许 None（初始状态）。"""
     from datacloud_analysis.orchestration.state import AgentState
 
     annotation = AgentState.__annotations__.get("knowledge_payload", "")
@@ -51,7 +52,7 @@ def test_tc37_knowledge_payload_allows_none() -> None:
 
 
 def test_tc37_knowledge_snippets_allows_none() -> None:
-    """knowledge_snippets 字段类型允许 None（无知识增强时的透传状态）。"""
+    """knowledge_snippets 字段类型允许 None（无 hook 写入时的初始状态）。"""
     from datacloud_analysis.orchestration.state import AgentState
 
     annotation = AgentState.__annotations__.get("knowledge_snippets", "")
