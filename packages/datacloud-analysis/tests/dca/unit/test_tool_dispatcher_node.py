@@ -244,6 +244,4 @@ async def test_tc1_7_mixed_calls_ignores_finish_and_dispatches_non_finish() -> N
         result = await node(state, MagicMock())
 
     assert result.get("execution_status") is None
-    assert dispatched == ["query_ads_enterprise"], (
-        "mixed calls 应忽略 finish_react，仅执行真实工具"
-    )
+    assert dispatched == ["query_ads_enterprise"], "mixed calls 应忽略 finish_react，仅执行真实工具"

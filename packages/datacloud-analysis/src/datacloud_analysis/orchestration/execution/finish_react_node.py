@@ -43,6 +43,11 @@ async def finish_react_node(state: AgentState, config: RunnableConfig) -> dict[s
 
     _last_query_data: dict[str, Any] | None = state.get("react_last_query_data")
 
+    # 有缓存的 query_data 时，自动升级 result_type 为 query_result，
+    # 避免 LLM 误选 text 导致数据列表丢失。
+    if _last_query_data is not None and result_type == "text":
+        result_type = "query_result"
+
     logger.info("[finish_react] result_type=%s stop_reason=%s", result_type, stop_reason)
 
     react_final: dict[str, Any] = {

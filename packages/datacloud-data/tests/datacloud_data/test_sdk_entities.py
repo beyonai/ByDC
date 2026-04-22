@@ -2,6 +2,7 @@ import asyncio
 from unittest.mock import patch
 
 import pytest
+from datacloud_data_sdk.context import InvocationContext
 from datacloud_data_sdk.exceptions import ActionNotFoundError
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.ontology.term_loader import TermLoader
@@ -228,6 +229,106 @@ def test_action_get_schema_supports_array_and_term_enum() -> None:
     assert priority_schema["type"] == "string"
     assert priority_schema["enum"] == ["HIGH", "LOW"]
     assert set(priority_schema) == {"type", "description", "enum"}
+
+
+@pytest.mark.asyncio
+async def test_invoke_action_returns_execution_steps_in_detail_mode() -> None:
+    class _FakeGatewayContext:
+        def __init__(self) -> None:
+            self.events: list[tuple[str, str]] = []
+
+        async def emit_state(self, content: str, **_: object) -> None:
+            self.events.append(("state", content))
+
+        async def emit_chunk(self, content: str, **_: object) -> None:
+            self.events.append(("chunk", content))
+
+    loader = OntologyLoader()
+    loader.configure(
+        term_loader=TermLoader.from_mapping(
+            {
+                "priority.code": [
+                    {"code": "HIGH", "label": "高"},
+                    {"code": "LOW", "label": "低"},
+                ]
+            }
+        )
+    )
+    loader.load_from_content(
+        {
+            "functions": [],
+            "objects": [
+                {
+                    "object_code": "todo_items",
+                    "object_name": "待办",
+                    "source_type": "API",
+                    "fields": [],
+                    "actions": [
+                        {
+                            "action_code": "create_todo",
+                            "action_name": "创建待办",
+                            "action_type": "operation",
+                            "script": (
+                                "def execute(params):\n"
+                                "    return {'priority': params['priority']}\n"
+                            ),
+                            "function_refs": [],
+                            "params": [
+                                {
+                                    "param_code": "priority",
+                                    "param_name": "优先级",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "termMeta": {
+                                        "termMasterType": "dict",
+                                        "termTypeCode": "priority",
+                                        "termField": "code",
+                                    },
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "relations": [],
+        }
+    )
+
+    obj = loader.get_object("todo_items")
+    gateway_context = _FakeGatewayContext()
+    with InvocationContext(tool_call_detail=True, gateway_context=gateway_context):
+        result = await obj.invoke_action("create_todo", {"优先级": "高"})
+
+    assert result["records"] == [{"priority": "HIGH"}]
+    assert [item["step"] for item in result["execution_steps"]] == [
+        "request_received",
+        "param_mapping",
+        "term_resolved",
+        "action_executing",
+        "action_completed",
+    ]
+    assert result["execution_steps"][1]["data"]["params"] == {"priority": "高"}
+    assert result["execution_steps"][2]["data"]["params"] == {"priority": "HIGH"}
+    assert result["execution_steps"][3]["data"]["mode"] == "script"
+    assert [item[0] for item in gateway_context.events] == [
+        "state",
+        "chunk",
+        "state",
+        "chunk",
+        "state",
+        "chunk",
+        "state",
+        "chunk",
+        "state",
+        "chunk",
+    ]
+    assert [item[1] for item in gateway_context.events if item[0] == "state"] == [
+        "接收动作请求",
+        "参数映射",
+        "术语转换",
+        "动作执行",
+        "动作执行完成",
+    ]
 
 
 def test_list_action_codes_includes_script_action() -> None:

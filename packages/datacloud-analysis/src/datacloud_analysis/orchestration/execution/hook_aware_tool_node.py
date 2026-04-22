@@ -105,6 +105,12 @@ class HookAwareToolNode(ToolNode):
         patched_ai = last_ai.model_copy(update={"tool_calls": patched_calls})
         patched_state = {**state_dict, "messages": [*messages[:-1], patched_ai]}
 
+        # tool_call_id → patched_params，供工具执行后推送详情使用
+        call_params_map: dict[str, dict[str, Any]] = {
+            str(tc.get("id") or ""): dict(tc.get("args") or {})
+            for tc in patched_calls
+        }
+
         # 实际工具执行（走 prebuilt ToolNode 原有逻辑）
         result = await super().ainvoke(patched_state, config, **kwargs)
 
@@ -123,6 +129,28 @@ class HookAwareToolNode(ToolNode):
                 await hook_manager.run_after(after_ctx)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("[HookAwareToolNode] run_after failed tool=%s: %s", msg.name, exc)
+
+        # 推送工具调用详情（工具名 / 工具入参 / 工具返回）至 gateway_context，与 V0.3 保持一致
+        if _gw_ctx is not None:
+            from datacloud_analysis.orchestration.execution.tool_wrapper import (  # noqa: PLC0415
+                _emit_tool_detail,
+            )
+
+            for msg in result_dict.get("messages") or []:
+                if not isinstance(msg, ToolMessage) or (msg.name or "") == "finish_react":
+                    continue
+                params = call_params_map.get(str(msg.tool_call_id or ""), {})
+                try:
+                    async with _gw_ctx.sub_step(msg.name or "tool"):
+                        if params:
+                            await _emit_tool_detail(_gw_ctx, "工具入参", params)
+                        await _emit_tool_detail(_gw_ctx, "工具返回", msg.content)
+                except Exception as detail_exc:  # noqa: BLE001
+                    logger.debug(
+                        "[HookAwareToolNode] emit tool detail failed tool=%s: %s",
+                        msg.name,
+                        detail_exc,
+                    )
 
         # 检测 query_data block，为 finish_react_node 写入 react_last_query_data
         query_data = _extract_query_data_from_tool_messages(result_dict.get("messages") or [])
