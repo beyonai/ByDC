@@ -1,4 +1,4 @@
-﻿"""Tests for graph compile policy with mandatory checkpointer fail-fast."""
+"""Tests for graph compile policy with mandatory checkpointer fail-fast."""
 
 from __future__ import annotations
 

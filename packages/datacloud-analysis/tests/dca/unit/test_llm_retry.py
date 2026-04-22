@@ -410,4 +410,3 @@ def test_build_fallback_llm_always_disabled(monkeypatch: pytest.MonkeyPatch) -> 
 
     _ = monkeypatch
     assert _build_fallback_llm() is None
-

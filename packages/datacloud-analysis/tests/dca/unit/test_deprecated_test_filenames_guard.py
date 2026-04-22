@@ -20,6 +20,6 @@ def test_no_v2_v4_legacy_in_test_filenames() -> None:
         if any(token in path.name.lower() for token in ("v2", "v4", "legacy"))
     )
     bad_files = [item for item in flagged_files if item not in _ALLOWED_BASELINE]
-    assert not bad_files, (
-        "新增测试文件名不应包含 v2/v4/legacy 标记，请重命名：\n" + "\n".join(bad_files)
+    assert not bad_files, "新增测试文件名不应包含 v2/v4/legacy 标记，请重命名：\n" + "\n".join(
+        bad_files
     )
