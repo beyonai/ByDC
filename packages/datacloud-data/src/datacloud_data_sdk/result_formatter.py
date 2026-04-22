@@ -15,6 +15,7 @@ SDK 层只返回 data 内容（flat 格式）：
         "overflow_notice": "...",  # 仅 overflow 时有
         "trace": {...},
         "plan": {...},             # 仅 include_plan=True 时有
+        "execution_steps": [...],  # 仅详细模式 action/tool_call 时有
     }
 
 service 层负责包装 {code, message, data}。
@@ -56,6 +57,7 @@ def build_query_response(
     meta: dict[str, Any] = dict(raw_result.get("meta") or {})
     trace: dict[str, Any] = raw_result.get("trace") or {}
     plan: Any = raw_result.get("plan")
+    execution_steps: Any = raw_result.get("execution_steps")
 
     total = len(records)
     meta["total"] = total
@@ -69,6 +71,8 @@ def build_query_response(
     }
     if plan is not None:
         data["plan"] = plan
+    if execution_steps is not None:
+        data["execution_steps"] = execution_steps
 
     if threshold > 0 and total > threshold:
         # meta["columns"] 可能是字符串列表（ViewLookupExecutor / _normalize_to_unified_format

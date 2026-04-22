@@ -25,12 +25,78 @@ Action 是数据服务中执行操作的核心抽象，支持多种执行方式�
 from __future__ import annotations
 
 import logging
+from copy import deepcopy
 from typing import Any
 from urllib.parse import quote
 
 from datacloud_data_sdk.ontology.models import OntologyAction, OntologyActionParam, OntologyField
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_copy(value: Any) -> Any:
+    """尽量深拷贝调试信息，失败时回退原值。"""
+    try:
+        return deepcopy(value)
+    except Exception:
+        return value
+
+
+def _append_execution_step(
+    steps: list[dict[str, Any]] | None,
+    *,
+    step: str,
+    title: str,
+    status: str = "completed",
+    data: dict[str, Any] | None = None,
+) -> None:
+    """向动作执行明细中追加一步。"""
+    if steps is None:
+        return
+
+    payload: dict[str, Any] = {
+        "step": step,
+        "title": title,
+        "status": status,
+    }
+    if data is not None:
+        payload["data"] = _safe_copy(data)
+    steps.append(payload)
+
+
+async def _emit_execution_step(
+    *,
+    step: str,
+    title: str,
+    status: str = "completed",
+    data: dict[str, Any] | None = None,
+) -> None:
+    """通过 gateway_context 将动作步骤实时推送出去。"""
+    from datacloud_data_sdk.context import get_gateway_context
+    from datacloud_data_sdk.utils.json_utils import dump_json
+
+    gateway_context = get_gateway_context()
+    if gateway_context is None:
+        return
+
+    emit_state = getattr(gateway_context, "emit_state", None)
+    emit_chunk = getattr(gateway_context, "emit_chunk", None)
+    if not callable(emit_state):
+        return
+
+    try:
+        await emit_state(title)
+        if callable(emit_chunk):
+            payload: dict[str, Any] = {
+                "step": step,
+                "title": title,
+                "status": status,
+            }
+            if data is not None:
+                payload["data"] = _safe_copy(data)
+            await emit_chunk(dump_json(payload))
+    except Exception:
+        logger.debug("emit execution step failed", exc_info=True)
 
 
 def _translate_view_params(view: Any, params: dict[str, Any]) -> dict[str, Any]:
@@ -397,6 +463,8 @@ class Action:
 
         params = dict(params)
         term_loader = getattr(self._loader._config, "term_loader", None) if self._loader else None
+        include_execution_steps = self._should_include_execution_steps()
+        execution_steps: list[dict[str, Any]] | None = [] if include_execution_steps else None
 
         from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
         from datacloud_data_sdk.result_formatter import build_query_response
@@ -409,9 +477,43 @@ class Action:
             result_file_storage=getattr(cfg, "result_file_storage", None),
         )
 
+        request_received_data = {
+            "action_code": self._action.action_code,
+            "action_name": self._action.action_name or self._action.action_code,
+            "params": params,
+        }
+        _append_execution_step(
+            execution_steps,
+            step="request_received",
+            title="接收动作请求",
+            data=request_received_data,
+        )
+        await _emit_execution_step(
+            step="request_received",
+            title="接收动作请求",
+            data=request_received_data,
+        )
+
         if getattr(self._action, "is_virtual", False):
-            result = await self._execute_virtual(params, term_loader=term_loader)
+            action_executing_data = self._describe_execution_mode()
+            _append_execution_step(
+                execution_steps,
+                step="action_executing",
+                title="动作执行",
+                data=action_executing_data,
+            )
+            await _emit_execution_step(
+                step="action_executing",
+                title="动作执行",
+                data=action_executing_data,
+            )
+            result = await self._execute_virtual(
+                params,
+                term_loader=term_loader,
+                execution_steps=execution_steps,
+            )
             normalized = self._normalize_to_unified_format(result)
+            normalized = await self._attach_execution_steps(normalized, execution_steps)
             return build_query_response(
                 normalized,
                 csv_manager=csv_manager,
@@ -419,15 +521,76 @@ class Action:
                 preview_rows=preview_rows,
             )
 
-        params = self._map_names(params)
+        mapped_params = self._map_names(params)
+        param_mapping_data = {
+            "params": mapped_params,
+            "changed": mapped_params != params,
+        }
+        _append_execution_step(
+            execution_steps,
+            step="param_mapping",
+            title="参数映射",
+            data=param_mapping_data,
+        )
+        await _emit_execution_step(
+            step="param_mapping",
+            title="参数映射",
+            data=param_mapping_data,
+        )
+
+        params = mapped_params
         if term_loader:
             from datacloud_data_sdk.plan.term_resolver import TermResolver
 
-            params = TermResolver(term_loader).resolve(self._action, params)
+            resolved_params = TermResolver(term_loader).resolve(self._action, params)
+            term_resolved_data = {
+                "params": resolved_params,
+                "changed": resolved_params != params,
+            }
+            _append_execution_step(
+                execution_steps,
+                step="term_resolved",
+                title="术语转换",
+                data=term_resolved_data,
+            )
+            await _emit_execution_step(
+                step="term_resolved",
+                title="术语转换",
+                data=term_resolved_data,
+            )
+            params = resolved_params
+        else:
+            skipped_term_data = {"reason": "term_loader_not_configured"}
+            _append_execution_step(
+                execution_steps,
+                step="term_resolved",
+                title="术语转换",
+                status="skipped",
+                data=skipped_term_data,
+            )
+            await _emit_execution_step(
+                step="term_resolved",
+                title="术语转换",
+                status="skipped",
+                data=skipped_term_data,
+            )
 
         if self._action.script:
+            action_executing_data = self._describe_execution_mode()
+            _append_execution_step(
+                execution_steps,
+                step="action_executing",
+                title="动作执行",
+                data=action_executing_data,
+            )
+            await _emit_execution_step(
+                step="action_executing",
+                title="动作执行",
+                data=action_executing_data,
+            )
             result = await self._execute_script(params)
             normalized = self._normalize_to_unified_format(result)
+            normalized = await self._attach_execution_steps(normalized, execution_steps)
             return build_query_response(
                 normalized,
                 csv_manager=csv_manager,
@@ -435,8 +598,21 @@ class Action:
                 preview_rows=preview_rows,
             )
         if self._action.function_refs:
+            action_executing_data = self._describe_execution_mode()
+            _append_execution_step(
+                execution_steps,
+                step="action_executing",
+                title="动作执行",
+                data=action_executing_data,
+            )
+            await _emit_execution_step(
+                step="action_executing",
+                title="动作执行",
+                data=action_executing_data,
+            )
             result = await self._execute_api(params)
             normalized = self._normalize_to_unified_format(result)
+            normalized = await self._attach_execution_steps(normalized, execution_steps)
             return build_query_response(
                 normalized,
                 csv_manager=csv_manager,
@@ -450,6 +626,7 @@ class Action:
         params: dict[str, Any],
         *,
         term_loader: Any = None,
+        execution_steps: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """
         执行虚拟查询动作
@@ -495,23 +672,25 @@ class Action:
                     "total": 0,
                     "meta": {"view_id": scope_code, "note": "view not found"},
                 }
-            params = self._prepare_virtual_params(
+            params = await self._prepare_virtual_params(
                 params,
                 self._build_view_runtime_fields(view),
                 action_family,
                 required_filter_groups,
                 term_loader=term_loader,
+                execution_steps=execution_steps,
             )
             return await self._execute_virtual_view(view, action_family, params)
 
         object_code = scope_code
         cls = self._loader.get_ontology_class(object_code)
-        params = self._prepare_virtual_params(
+        params = await self._prepare_virtual_params(
             params,
             list(getattr(cls, "fields", [])),
             action_family,
             required_filter_groups,
             term_loader=term_loader,
+            execution_steps=execution_steps,
         )
 
         # 对象级虚拟动作：按 action_family 路由
@@ -573,7 +752,7 @@ class Action:
 
         return {"records": [], "total": 0, "meta": {"view_id": view.view_id}}
 
-    def _prepare_virtual_params(
+    async def _prepare_virtual_params(
         self,
         params: dict[str, Any],
         fields: list[Any],
@@ -581,14 +760,47 @@ class Action:
         required_filter_groups: list[str],
         *,
         term_loader: Any = None,
+        execution_steps: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """执行前统一处理虚拟动作参数。"""
         prepared = dict(params)
         if term_loader and "filters" in prepared:
             from datacloud_data_sdk.plan.term_resolver import TermResolver
 
+            original_filters = _safe_copy(prepared["filters"])
             prepared["filters"] = TermResolver(term_loader).resolve_filter_values(
                 prepared["filters"], fields
+            )
+            term_resolved_data = {
+                "scope": "filters",
+                "params": {"filters": prepared["filters"]},
+                "changed": prepared["filters"] != original_filters,
+            }
+            _append_execution_step(
+                execution_steps,
+                step="term_resolved",
+                title="术语转换",
+                data=term_resolved_data,
+            )
+            await _emit_execution_step(
+                step="term_resolved",
+                title="术语转换",
+                data=term_resolved_data,
+            )
+        else:
+            skipped_term_data = {"reason": "no_term_bound_filters"}
+            _append_execution_step(
+                execution_steps,
+                step="term_resolved",
+                title="术语转换",
+                status="skipped",
+                data=skipped_term_data,
+            )
+            await _emit_execution_step(
+                step="term_resolved",
+                title="术语转换",
+                status="skipped",
+                data=skipped_term_data,
             )
 
         if action_family in ("lookup", "analyze"):
@@ -600,6 +812,67 @@ class Action:
             else:
                 validator.validate_analyze(prepared, required_filter_groups)
         return prepared
+
+    def _should_include_execution_steps(self) -> bool:
+        """是否在动作返回中附带 execution_steps。"""
+        from datacloud_data_sdk.context import get_tool_call_detail
+
+        return get_tool_call_detail()
+
+    def _describe_execution_mode(self) -> dict[str, Any]:
+        """返回当前动作的执行模式摘要。"""
+        if getattr(self._action, "is_virtual", False):
+            return {
+                "mode": "virtual",
+                "action_family": getattr(self._action, "action_family", None),
+                "scope_type": getattr(self._action, "scope_type", "object"),
+                "scope_code": getattr(self._action, "scope_code", ""),
+            }
+        if self._action.script:
+            return {
+                "mode": "script",
+                "action_family": getattr(self._action, "action_family", None),
+            }
+        if self._action.function_refs:
+            return {
+                "mode": "api",
+                "action_family": getattr(self._action, "action_family", None),
+                "function_code": self._action.function_refs[0],
+            }
+        return {"mode": "unconfigured"}
+
+    async def _attach_execution_steps(
+        self,
+        normalized: dict[str, Any],
+        execution_steps: list[dict[str, Any]] | None,
+    ) -> dict[str, Any]:
+        """为动作结果补充 execution_steps 明细。"""
+        if execution_steps is None:
+            return normalized
+
+        records = normalized.get("records")
+        record_count = len(records) if isinstance(records, list) else 0
+        meta = normalized.get("meta", {})
+        columns = meta.get("columns", []) if isinstance(meta, dict) else []
+        action_completed_data = {
+            "record_count": record_count,
+            "total": normalized.get("total", record_count),
+            "columns": columns,
+        }
+        _append_execution_step(
+            execution_steps,
+            step="action_completed",
+            title="动作执行完成",
+            data=action_completed_data,
+        )
+        await _emit_execution_step(
+            step="action_completed",
+            title="动作执行完成",
+            data=action_completed_data,
+        )
+
+        normalized["execution_steps"] = execution_steps
+        return normalized
 
     def _get_virtual_required_filter_groups(self) -> list[str]:
         """获取虚拟动作的强制过滤组列表。"""

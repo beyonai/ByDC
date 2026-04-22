@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import json
 import logging
+from contextlib import asynccontextmanager
 from typing import Any
+from uuid import uuid4
 
 from datacloud_data_sdk.utils.json_utils import dump_json
 from mcp.server import Server
@@ -24,10 +26,81 @@ from datacloud_data_service.loader_runtime import (
 logger = logging.getLogger(__name__)
 
 _SENSITIVE_HEADERS = frozenset({"authorization", "cookie", "set-cookie", "x-api-key"})
+_TOOL_CALL_DETAIL_HEADER = "x-tool-call-detail"
+_FALSE_HEADER_VALUES = frozenset({"0", "false", "no", "off"})
 
 # 由 routes lifespan 注入，用于在 MCP handler 中获取 loader
 _loader_ref: Any = None
 _loader_runtime_ref: Any = None
+
+
+class _McpGatewayContext:
+    """将 MCP SSE notification 适配为 SDK GatewayProgressReporter 可消费的上下文。"""
+
+    def __init__(self, session: Any, request_id: str) -> None:
+        self._session = session
+        self.message_id = request_id
+        self._related_request_id = request_id
+
+    def generate_message_id(self) -> str:
+        return uuid4().hex
+
+    async def emit_state(
+        self,
+        content: str,
+        *,
+        message_id: str = "",
+        parent_message_id: str = "",
+        event_type: str = "",
+        content_type: str = "",
+    ) -> None:
+        await self._send_notification(
+            {
+                "event": "tool_call_step",
+                "phase": "state",
+                "content": content,
+                "message_id": message_id,
+                "parent_message_id": parent_message_id,
+                "event_type": event_type,
+                "content_type": content_type,
+            }
+        )
+
+    async def emit_chunk(
+        self,
+        content: str,
+        *,
+        message_id: str = "",
+        parent_message_id: str = "",
+        event_type: str = "",
+        content_type: str = "",
+    ) -> None:
+        await self._send_notification(
+            {
+                "event": "tool_call_step",
+                "phase": "chunk",
+                "content": content,
+                "message_id": message_id,
+                "parent_message_id": parent_message_id,
+                "event_type": event_type,
+                "content_type": content_type,
+            }
+        )
+
+    @asynccontextmanager
+    async def sub_step(self, title: str):
+        message_id = self.generate_message_id()
+        parent_message_id = self.message_id
+        await self.emit_state(title, message_id=message_id, parent_message_id=parent_message_id)
+        yield message_id, parent_message_id
+
+    async def _send_notification(self, payload: dict[str, Any]) -> None:
+        await self._session.send_log_message(
+            level="info",
+            data=payload,
+            logger="datacloud_data_service.mcp",
+            related_request_id=self._related_request_id,
+        )
 
 
 def set_loader_ref(ref: Any) -> None:
@@ -91,6 +164,59 @@ def _unwrap_sdk_payload_text(payload: dict[str, Any]) -> str:
         return dump_json(parsed["data"])
 
     return text
+
+
+def _parse_bool_header(raw: str | None) -> bool:
+    """解析布尔 header；未传返回 False，传入且非 false-like 值返回 True。"""
+    if raw is None:
+        return False
+    return raw.strip().lower() not in _FALSE_HEADER_VALUES
+
+
+def _strip_intermediate_fields(data: Any) -> Any:
+    """默认模式下移除 tool_call 明细字段，仅保留最终结果。"""
+    if not isinstance(data, dict):
+        return data
+
+    sanitized = dict(data)
+    sanitized.pop("plan", None)
+    sanitized.pop("execution_steps", None)
+    return sanitized
+
+
+def _render_tool_call_text(payload: dict[str, Any], *, include_detail: bool) -> str:
+    """按 header 开关渲染 tool_call 返回文本。"""
+    if include_detail:
+        return _extract_content_text(payload)
+
+    text = _unwrap_sdk_payload_text(payload)
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return text
+
+    return dump_json(_strip_intermediate_fields(parsed))
+
+
+def _build_sdk_envelope_text(data: Any) -> str:
+    """将原始结果包装为 {code, message, data} 文本。"""
+    code = 0
+    message = "success"
+    if isinstance(data, dict):
+        result_type = data.get("result_type", "normal")
+        if result_type in ("rejected", "ask_user"):
+            code = 500
+            message = data.get("overflow_notice") or str(result_type)
+
+    return dump_json({"code": code, "message": message, "data": data})
+
+
+def _wrap_raw_data_as_payload(data: Any) -> dict[str, Any]:
+    """将原始 data 结果包装成与 SDK 一致的 MCP payload。"""
+    return {
+        "content": [{"type": "text", "text": _build_sdk_envelope_text(data)}],
+        "isError": False,
+    }
 
 
 def _log_tool_call(name: str, arguments: dict[str, Any]) -> None:
@@ -214,6 +340,15 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
                     )
                 ]
             loader = snapshot.loader
+            from datacloud_data_sdk.context import get_current_context, get_tool_call_detail
+
+            include_tool_call_detail = get_tool_call_detail()
+            if include_tool_call_detail:
+                current_ctx = get_current_context()
+                current_ctx.gateway_context = _McpGatewayContext(
+                    server.request_context.session,
+                    str(server.request_context.request_id),
+                )
 
             if name == "unified_data_query":
                 from datacloud_data_service.tools.unified_query import UnifiedQuery
@@ -224,8 +359,9 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
                     view_id=tool_arguments.get("view_id", ""),
                     object_ids=tool_arguments.get("object_ids"),
                     knowledge_context=tool_arguments.get("knowledge_context"),
+                    include_plan=include_tool_call_detail,
                 )
-                text = _unwrap_sdk_payload_text(result)
+                text = _render_tool_call_text(result, include_detail=include_tool_call_detail)
                 return [TextContent(type="text", text=text)]
 
             scope = _find_action_scope(loader, name, snapshot=snapshot)
@@ -249,7 +385,8 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
                             type="text", text=json.dumps({"error": str(exc)}, ensure_ascii=False)
                         )
                     ]
-                text = dump_json(raw)
+                payload = _wrap_raw_data_as_payload(raw)
+                text = _render_tool_call_text(payload, include_detail=include_tool_call_detail)
                 return [TextContent(type="text", text=text)]
             else:
                 # 对象级动作：走原有 ActionExecutor
@@ -257,7 +394,7 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
 
                 executor = ActionExecutor(loader)
                 result = await executor.execute(scope_code, name, tool_arguments)
-                text = _unwrap_sdk_payload_text(result)
+                text = _render_tool_call_text(result, include_detail=include_tool_call_detail)
                 return [TextContent(type="text", text=text)]
         except Exception as e:
             logger.exception("call_tool failed: %s", e)
@@ -410,6 +547,7 @@ def create_mcp_asgi_app(session_manager: StreamableHTTPSessionManager):
             "tool_list_mode": tool_mode,
             "view_id": view_id,
             "object_ids": object_ids or None,
+            "tool_call_detail": _parse_bool_header(headers.get(_TOOL_CALL_DETAIL_HEADER)),
         }
         try:
             with InvocationContext(**ctx_kwargs):

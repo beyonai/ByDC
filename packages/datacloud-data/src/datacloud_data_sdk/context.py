@@ -54,6 +54,7 @@ class RequestContext:
     tool_list_mode: str = "unified"
     view_id: str = ""
     object_ids: list[str] | None = None
+    tool_call_detail: bool = False
     gateway_context: Any = field(default=None, repr=False)
     workspace_dir: str = ""
 
@@ -105,6 +106,7 @@ class InvocationContext:
             tool_list_mode=tool_mode,
             view_id=kwargs.get("view_id", ""),
             object_ids=kwargs.get("object_ids"),
+            tool_call_detail=bool(kwargs.get("tool_call_detail", False)),
             gateway_context=kwargs.get("gateway_context"),
             workspace_dir=kwargs.get("workspace_dir", ""),
         )
@@ -165,6 +167,21 @@ def get_tool_list_mode() -> str:
     if ctx is None:
         return "unified"
     return ctx.tool_list_mode if ctx.tool_list_mode in ("unified", "per_object") else "unified"
+
+
+def get_tool_call_detail() -> bool:
+    """
+    获取当前请求是否需要输出 tool_call 详细信息。
+
+    未设置上下文时返回 False，避免 SDK 层直接调用时报错。
+
+    Returns:
+        bool: 是否输出 tool_call 详细信息
+    """
+    ctx = _ctx_var.get()
+    if ctx is None:
+        return False
+    return bool(ctx.tool_call_detail)
 
 
 def get_gateway_context() -> Any | None:
