@@ -100,7 +100,9 @@ async def test_clarification_chain_resume_refill_then_second_dispatch_success() 
                     {
                         "paradigmId": "p1",
                         "paradigmName": "营收",
-                        "paradigmResult": [{"keyword": "营收", "choiceKeyword": "企业总营收（万元）"}],
+                        "paradigmResult": [
+                            {"keyword": "营收", "choiceKeyword": "企业总营收（万元）"}
+                        ],
                     }
                 ]
             }

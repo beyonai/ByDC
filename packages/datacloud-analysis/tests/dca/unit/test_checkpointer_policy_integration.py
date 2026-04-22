@@ -1,4 +1,4 @@
-﻿"""Integration-level checks for checkpointer compile policy wiring."""
+"""Integration-level checks for checkpointer compile policy wiring."""
 
 from __future__ import annotations
 
