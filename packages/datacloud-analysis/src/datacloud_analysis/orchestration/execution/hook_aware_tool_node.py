@@ -146,7 +146,11 @@ class HookAwareToolNode(ToolNode):
                     async with _gw_ctx.sub_step(msg.name or "tool"):
                         if params:
                             await _emit_tool_detail(_gw_ctx, "工具入参", params)
-                        await _emit_tool_detail(_gw_ctx, "工具返回", msg.content)
+                        # 将 msg.content（可能是 Python repr 字符串）解析回 dict，
+                        # 保证 coerce_stream_chunk_text 走 dump_json 而非原样透传。
+                        _raw = str(msg.content or "")
+                        _tool_out: Any = _try_parse_to_dict(_raw) if _raw else _raw
+                        await _emit_tool_detail(_gw_ctx, "工具返回", _tool_out)
                 except Exception as detail_exc:  # noqa: BLE001
                     logger.debug(
                         "[HookAwareToolNode] emit tool detail failed tool=%s: %s",
@@ -186,6 +190,28 @@ def _extract_query_data_from_tool_messages(
 
 
 _DECIMAL_RE = re.compile(r"Decimal\('([^']+)'\)")
+
+
+def _try_parse_to_dict(content: str) -> dict[str, Any] | None:
+    """将 ToolMessage content 字符串解析回 dict，支持 JSON 和 Python repr 格式。
+
+    用于 emit 前将 msg.content（prebuilt ToolNode 存储的字符串）还原为 dict，
+    保证 coerce_stream_chunk_text 走 dump_json 路径而非原样透传字符串。
+    """
+    try:
+        parsed = json.loads(content)
+        if isinstance(parsed, dict):
+            return parsed
+    except (json.JSONDecodeError, ValueError):
+        pass
+    try:
+        cleaned = _DECIMAL_RE.sub(r"\1", content)
+        parsed = ast.literal_eval(cleaned)
+        if isinstance(parsed, dict):
+            return parsed  # type: ignore[return-value]
+    except (ValueError, SyntaxError):
+        pass
+    return None
 
 
 def _try_parse_query_data(content: str) -> dict[str, Any] | None:
