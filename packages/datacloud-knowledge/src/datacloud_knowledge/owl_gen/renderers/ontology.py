@@ -16,6 +16,7 @@ from datacloud_knowledge.owl_gen.models import (
     Table,
     TermBinding,
     ViewConfig,
+    ViewFieldMapping,
 )
 
 
@@ -302,10 +303,55 @@ def _view_relation_ids(config: OwlGenConfig, view: ViewConfig) -> list[str]:
     return rel_ids
 
 
+def _view_field_role_json(m: ViewFieldMapping) -> str:
+    """返回视图字段的 ext_property JSON。"""
+    obj: dict[str, Any] = {
+        "property_role_rule": {
+            "property_role": m.role.property_role,
+            "rule_type": m.role.rule_type,
+        }
+    }
+    if m.role.formula:
+        obj["formula"] = m.role.formula
+    return json.dumps(obj, ensure_ascii=False)
+
+
+def _render_view_field_items(mappings: list[ViewFieldMapping]) -> str:
+    """渲染视图字段个体列表。"""
+    field_items: list[str] = []
+    for m in mappings:
+        ext_prop = _view_field_role_json(m)
+        synonyms_str = json.dumps(m.synonyms, ensure_ascii=False) if m.synonyms else ""
+        field_items.append(
+            f"""\
+    <owl:NamedIndividual rdf:about="#{m.property_code}_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
+{m.property_code}</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
+{xml_escape(m.property_name)}</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
+{m.source_object_code}</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
+{m.source_object_column_code}</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
+{xml_escape(synonyms_str)}</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
+{xml_escape(ext_prop)}</ext_property>
+    </owl:NamedIndividual>"""
+        )
+    return "\n\n".join(field_items)
+
+
 def render_single_view(config: OwlGenConfig, view: ViewConfig) -> str:
     """单个视图定义 OWL。"""
     object_codes = json.dumps(view.object_codes, ensure_ascii=False)
     relations_json = json.dumps(_view_relation_ids(config, view), ensure_ascii=False)
+    field_refs = "\n".join(
+        f'        <fields rdf:resource="#{m.property_code}_field"/>'
+        for m in view.field_mappings
+    )
+    fields_body = _render_view_field_items(view.field_mappings)
     return f"""\
 <?xml version="1.0"?>
 <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
@@ -317,6 +363,8 @@ def render_single_view(config: OwlGenConfig, view: ViewConfig) -> str:
 
     <owl:Class rdf:about="#SceneDefinition">\
 <rdfs:label>视图定义</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#SceneField">\
+<rdfs:label>视图字段</rdfs:label></owl:Class>
 
     <owl:NamedIndividual rdf:about="#{view.view_code}_v1">
         <rdf:type rdf:resource="#SceneDefinition"/>
@@ -331,7 +379,10 @@ def render_single_view(config: OwlGenConfig, view: ViewConfig) -> str:
 {xml_escape(object_codes)}</object_codes>
         <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
 {xml_escape(relations_json)}</relations>
+{field_refs}
     </owl:NamedIndividual>
+
+{fields_body}
 
     <owl:DatatypeProperty rdf:about="#view_code"/>
     <owl:DatatypeProperty rdf:about="#view_name"/>
@@ -339,6 +390,13 @@ def render_single_view(config: OwlGenConfig, view: ViewConfig) -> str:
     <owl:DatatypeProperty rdf:about="#version"/>
     <owl:DatatypeProperty rdf:about="#object_codes"/>
     <owl:DatatypeProperty rdf:about="#relations"/>
+    <owl:ObjectProperty rdf:about="#fields"/>
+    <owl:DatatypeProperty rdf:about="#property_code"/>
+    <owl:DatatypeProperty rdf:about="#property_name"/>
+    <owl:DatatypeProperty rdf:about="#source_object_code"/>
+    <owl:DatatypeProperty rdf:about="#source_object_column_code"/>
+    <owl:DatatypeProperty rdf:about="#synonyms"/>
+    <owl:DatatypeProperty rdf:about="#ext_property"/>
 </rdf:RDF>
 """
 
@@ -350,9 +408,14 @@ def render_view(config: OwlGenConfig) -> str:
         return ""
 
     individuals: list[str] = []
+    all_field_bodies: list[str] = []
     for view in views:
         object_codes = json.dumps(view.object_codes, ensure_ascii=False)
         relations_json = json.dumps(_view_relation_ids(config, view), ensure_ascii=False)
+        field_refs = "\n".join(
+            f'        <fields rdf:resource="#{m.property_code}_field"/>'
+            for m in view.field_mappings
+        )
         individuals.append(f"""\
     <owl:NamedIndividual rdf:about="#{view.view_code}_v1">
         <rdf:type rdf:resource="#SceneDefinition"/>
@@ -367,9 +430,14 @@ def render_view(config: OwlGenConfig) -> str:
 {xml_escape(object_codes)}</object_codes>
         <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
 {xml_escape(relations_json)}</relations>
+{field_refs}
     </owl:NamedIndividual>""")
+        fields_body = _render_view_field_items(view.field_mappings)
+        if fields_body:
+            all_field_bodies.append(fields_body)
 
     body = "\n\n".join(individuals)
+    fields_section = "\n\n".join(all_field_bodies)
     return f"""\
 <?xml version="1.0"?>
 <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
@@ -381,8 +449,12 @@ def render_view(config: OwlGenConfig) -> str:
 
     <owl:Class rdf:about="#SceneDefinition">\
 <rdfs:label>视图定义</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#SceneField">\
+<rdfs:label>视图字段</rdfs:label></owl:Class>
 
 {body}
+
+{fields_section}
 
     <owl:DatatypeProperty rdf:about="#view_code"/>
     <owl:DatatypeProperty rdf:about="#view_name"/>
@@ -390,6 +462,13 @@ def render_view(config: OwlGenConfig) -> str:
     <owl:DatatypeProperty rdf:about="#version"/>
     <owl:DatatypeProperty rdf:about="#object_codes"/>
     <owl:DatatypeProperty rdf:about="#relations"/>
+    <owl:ObjectProperty rdf:about="#fields"/>
+    <owl:DatatypeProperty rdf:about="#property_code"/>
+    <owl:DatatypeProperty rdf:about="#property_name"/>
+    <owl:DatatypeProperty rdf:about="#source_object_code"/>
+    <owl:DatatypeProperty rdf:about="#source_object_column_code"/>
+    <owl:DatatypeProperty rdf:about="#synonyms"/>
+    <owl:DatatypeProperty rdf:about="#ext_property"/>
 </rdf:RDF>
 """
 
