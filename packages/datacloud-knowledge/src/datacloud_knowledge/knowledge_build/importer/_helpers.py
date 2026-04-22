@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
-from psycopg import Cursor
+from psycopg import Cursor, sql
 
 from .snowflake import _next_snowflake_id
 
@@ -15,26 +15,32 @@ from .snowflake import _next_snowflake_id
 # execute_values 在 psycopg3 中不可用，使用自定义实现
 def _execute_values(
     cur: Cursor,
-    sql: str,
+    sql_template: str,
     argslist: list[tuple[Any, ...]],
     page_size: int = 1000,
     _template: str | None = None,
 ) -> None:
-    """批量执行 INSERT/UPDATE，模拟 psycopg2 的 execute_values。
+    """批量执行 INSERT，使用多行 VALUES 拼接（单次往返）。
 
-    psycopg3 不内置 execute_values，此实现使用 executemany 或分批执行。
-    template 参数用于兼容性（在 psycopg3 中不使用，因为通过 executemany 实现）。
+    将 ``INSERT INTO t (...) VALUES %s`` 展开为
+    ``INSERT INTO t (...) VALUES (%s,%s,...),(%s,%s,...),...``，
+    一条 SQL 插入整批数据，避免 executemany 的逐行往返开销。
     """
     if not argslist:
         return
-    # 将 VALUES %s 格式转换为 (%s,%s,...) 元组格式
-    # 使用 executemany 进行批量执行
-    placeholders = "(" + ",".join(["%s"] * len(argslist[0])) + ")"
-    sql_with_placeholders = sql.replace("VALUES %s", f"VALUES {placeholders}")
-    # 忽略 template 参数 - 在 psycopg3 中不需要，executemany 会自动处理类型转换
+    ncols = len(argslist[0])
+    single_row = "(" + ",".join(["%s"] * ncols) + ")"
+    # 拆分 SQL 模板：prefix = "INSERT INTO t (...) VALUES "
+    prefix, _, _ = sql_template.partition("VALUES %s")
+    prefix = prefix.rstrip() + " VALUES "
+
     for i in range(0, len(argslist), page_size):
         batch = argslist[i : i + page_size]
-        cur.executemany(cast(Any, sql_with_placeholders), batch)
+        values_clause = ",".join([single_row] * len(batch))
+        flat_params: list[Any] = []
+        for row in batch:
+            flat_params.extend(row)
+        cur.execute(prefix + values_clause, flat_params)
 
 
 # JSONL 每批解析后入库的行数（环境变量可覆盖，过大可能增加单次事务内存）
@@ -98,6 +104,26 @@ def _lookup_term_ids_by_norm_codes(cur: Cursor, norm_codes: list[str]) -> dict[s
         (uniq,),
     )
     return {r[0]: r[1] for r in cur.fetchall()}
+
+
+def _lookup_term_ids_by_keys(
+    cur: Cursor,
+    keys: list[tuple[str | None, str, str]],
+) -> dict[tuple[str | None, str, str], str]:
+    """按 (library_id, term_type_code, term_code) 三元组查找 term_id。"""
+    if not keys:
+        return {}
+
+    uniq = list(dict.fromkeys(keys))
+    params = [value for key in uniq for value in key]
+    cur.execute(
+        sql.SQL("SELECT library_id, term_type_code, term_code, term_id FROM term WHERE ")
+        + sql.SQL(" OR ").join(
+            [sql.SQL("(library_id = %s AND term_type_code = %s AND term_code = %s)") for _ in uniq]
+        ),
+        params,
+    )
+    return {(row[0], row[1], row[2]): row[3] for row in cur.fetchall()}
 
 
 def _str_id_if_set(obj: dict[str, Any], key: str) -> str | None:

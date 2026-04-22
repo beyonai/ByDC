@@ -7,13 +7,20 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from importlib import import_module
+from typing import Any
 
 from datacloud_knowledge.owl_gen.models import Column, OwlGenConfig, Table
 
 
+def _load_pymysql() -> Any:
+    """延迟加载 pymysql，避免类型检查依赖外部 stub。"""
+    return import_module("pymysql")
+
+
 def read_tables(config: OwlGenConfig) -> list[Table]:
     """从 MySQL INFORMATION_SCHEMA 读取表结构。"""
-    import pymysql  # type: ignore[import-untyped]
+    pymysql = _load_pymysql()
 
     conn = pymysql.connect(
         host=config.mysql_host,
@@ -71,9 +78,9 @@ def load_term_values(
 ) -> dict[str, list[dict[str, str]]]:
     """从 MySQL 读取术语化字段的 DISTINCT 值。
 
-    返回 ``{term_type_code: [{code, name}, ...]}``。
+    返回 ``{term_type_code: [{code, name, parent_prop_code}, ...]}``。
     """
-    import pymysql
+    pymysql = _load_pymysql()
 
     conn = pymysql.connect(
         host=config.mysql_host,
@@ -83,10 +90,12 @@ def load_term_values(
         database=config.mysql_database,
         charset="utf8mb4",
     )
-    # 按 term_type_code 分组，OrderedDict 去重
+    # 按 term_type_code 分组，OrderedDict 去重，并保留父属性编码。
     term_values: dict[str, OrderedDict[str, str]] = {}
+    type_parent_map: dict[str, str] = {}
     for binding in config.term_bindings:
         term_values.setdefault(binding.term_type_code, OrderedDict())
+        type_parent_map.setdefault(binding.term_type_code, binding.column_name)
 
     try:
         with conn.cursor() as cur:
@@ -106,7 +115,14 @@ def load_term_values(
         conn.close()
 
     return {
-        type_code: [{"code": code, "name": name} for code, name in values.items()]
+        type_code: [
+            {
+                "code": code,
+                "name": name,
+                "parent_prop_code": type_parent_map.get(type_code, ""),
+            }
+            for code, name in values.items()
+        ]
         for type_code, values in term_values.items()
         if values
     }

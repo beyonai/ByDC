@@ -20,11 +20,11 @@ class Term(Base):
     __tablename__ = "term"
     __table_args__ = {"schema": KNOWLEDGE_SCHEMA}  # noqa: RUF012
 
-    term_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    term_id: Mapped[str] = mapped_column(String(1000), primary_key=True)
     term_code: Mapped[str] = mapped_column(String(255), nullable=False)
     term_name: Mapped[str] = mapped_column(String(255), nullable=False)
     desc_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    parent_term_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    parent_term_id: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     owl_doc_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     domain_id: Mapped[str] = mapped_column(String(64), nullable=False)
     term_type_code: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -38,13 +38,13 @@ class TermRelation(Base):
     __tablename__ = "term_relation"
     __table_args__ = {"schema": KNOWLEDGE_SCHEMA}  # noqa: RUF012
 
-    relation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    source_term_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    target_term_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    relation_id: Mapped[str] = mapped_column(String(1000), primary_key=True)
+    source_term_id: Mapped[str] = mapped_column(String(1000), nullable=False)
+    target_term_id: Mapped[str] = mapped_column(String(1000), nullable=False)
     relation_name: Mapped[str] = mapped_column(String(255), nullable=False)
     relation_category: Mapped[str] = mapped_column(String(16), nullable=False)
     cardinality: Mapped[str | None] = mapped_column(String(8), nullable=True)
-    action_term_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    action_term_id: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     created_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
@@ -64,8 +64,8 @@ class TermName(Base):
     __tablename__ = "term_name"
     __table_args__ = {"schema": KNOWLEDGE_SCHEMA}  # noqa: RUF012
 
-    name_id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    term_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    name_id: Mapped[str] = mapped_column(String(1000), primary_key=True)
+    term_id: Mapped[str] = mapped_column(String(1000), nullable=False)
     name_text: Mapped[str] = mapped_column(String(255), nullable=False)
     search_scope: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     created_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -76,8 +76,8 @@ class TermKnowledge(Base):
     __tablename__ = "term_knowledge"
     __table_args__ = {"schema": KNOWLEDGE_SCHEMA}  # noqa: RUF012
 
-    knowledge_id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    term_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    knowledge_id: Mapped[str] = mapped_column(String(1000), primary_key=True)
+    term_id: Mapped[str] = mapped_column(String(1000), nullable=False)
     desc_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     desc: Mapped[str | None] = mapped_column(Text, nullable=True)
     ext_system: Mapped[str | None] = mapped_column(String(32), nullable=True)

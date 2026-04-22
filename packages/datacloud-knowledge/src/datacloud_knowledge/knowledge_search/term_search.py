@@ -3,12 +3,22 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import cast, func, select
+from sqlalchemy import and_, cast, func, or_, select
 from sqlalchemy.dialects.postgresql import NUMERIC, TIMESTAMP
+from sqlalchemy.orm import aliased
 
 from .db import get_session
-from .db.models import Term
-from .types import SearchTermsResult, TagFilter, TermItem
+from .db.models import Term, TermName, TermRelation
+from .types import (
+    AmbiguousCandidate,
+    FieldResolutionResult,
+    NameItem,
+    PropItem,
+    SearchTermsResult,
+    TagFilter,
+    TermItem,
+    ValueWithAliases,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -203,3 +213,288 @@ def _apply_order_by(stmt: Any, *, order_by: str) -> Any:
     if ob == "term_name":
         return stmt.order_by(Term.term_name.asc(), Term.term_id.asc())
     raise ValueError(f"未知排序字段: {order_by}")
+
+
+def get_term_ids(
+    *,
+    keys: list[tuple[str, str, str]],
+) -> dict[tuple[str, str, str], str]:
+    """批量根据 (library_id, term_type_code, term_code) 三元组查询 term_id。"""
+    if not keys:
+        return {}
+
+    try:
+        with get_session() as session:
+            conditions = [
+                and_(
+                    Term.library_id == library_id,
+                    Term.term_type_code == term_type_code,
+                    Term.term_code == term_code,
+                )
+                for library_id, term_type_code, term_code in keys
+            ]
+            rows = session.execute(
+                select(Term.library_id, Term.term_type_code, Term.term_code, Term.term_id).where(
+                    or_(*conditions)
+                )
+            ).all()
+    except Exception:
+        logger.exception("get_term_ids failed: keys=%s", keys)
+        raise
+
+    return {(str(row[0]), str(row[1]), str(row[2])): str(row[3]) for row in rows}
+
+
+def get_object_props(
+    *,
+    source_term_ids: list[str],
+) -> dict[str, list[PropItem]]:
+    """批量查询对象/视图下的属性（通过 term_relation HAS_FIELD）。"""
+    if not source_term_ids:
+        return {}
+
+    try:
+        with get_session() as session:
+            rows = session.execute(
+                select(
+                    TermRelation.source_term_id,
+                    Term.term_id,
+                    Term.term_code,
+                    Term.term_name,
+                )
+                .join(Term, Term.term_id == TermRelation.target_term_id)
+                .where(
+                    TermRelation.source_term_id.in_(source_term_ids),
+                    Term.term_type_code == "prop",
+                )
+            ).all()
+    except Exception:
+        logger.exception("get_object_props failed: source_term_ids=%s", source_term_ids)
+        raise
+
+    result: dict[str, list[PropItem]] = {source_term_id: [] for source_term_id in source_term_ids}
+    for source_id, term_id, term_code, term_name in rows:
+        result.setdefault(str(source_id), []).append(
+            PropItem(term_id=str(term_id), term_code=str(term_code), term_name=str(term_name))
+        )
+    return result
+
+
+def get_term_names(
+    *,
+    term_ids: list[str],
+    scope_filter: dict[str, str] | None = None,
+) -> dict[str, list[NameItem]]:
+    """批量查询术语的所有名称（标准名 + 别名），通用函数。"""
+    if not term_ids:
+        return {}
+
+    try:
+        with get_session() as session:
+            filters: list[Any] = [TermName.term_id.in_(term_ids)]
+            if scope_filter is not None:
+                filters.append(
+                    or_(
+                        TermName.search_scope.contains(scope_filter),
+                        TermName.search_scope.contains({"scope": "global"}),
+                    )
+                )
+
+            rows = session.execute(
+                select(
+                    TermName.term_id,
+                    TermName.name_text,
+                    (TermName.name_text == Term.term_name).label("is_primary"),
+                )
+                .join(Term, Term.term_id == TermName.term_id)
+                .where(*filters)
+            ).all()
+    except Exception:
+        logger.exception(
+            "get_term_names failed: term_ids=%s, scope_filter=%s", term_ids, scope_filter
+        )
+        raise
+
+    result: dict[str, list[NameItem]] = {term_id: [] for term_id in term_ids}
+    for term_id, name_text, is_primary in rows:
+        result.setdefault(str(term_id), []).append(
+            NameItem(name_text=str(name_text), is_primary=bool(is_primary))
+        )
+    return result
+
+
+def get_prop_values_with_aliases(
+    *,
+    source_term_ids: list[str],
+) -> dict[str, list[ValueWithAliases]]:
+    """批量查询对象下属性的值术语及其别名。
+
+    路径: source → (HAS_FIELD) → prop → (parent_term_id) → child term
+    """
+    if not source_term_ids:
+        return {}
+
+    prop = aliased(Term, name="prop")
+    child = aliased(Term, name="child")
+
+    try:
+        with get_session() as session:
+            child_rows = session.execute(
+                select(
+                    TermRelation.source_term_id,
+                    child.parent_term_id,
+                    child.term_id,
+                    child.term_code,
+                    child.term_name,
+                )
+                .join(prop, prop.term_id == TermRelation.target_term_id)
+                .join(child, child.parent_term_id == prop.term_id)
+                .where(
+                    TermRelation.source_term_id.in_(source_term_ids),
+                    prop.term_type_code == "prop",
+                )
+                .order_by(TermRelation.source_term_id, child.term_code)
+            ).all()
+
+            child_term_ids = list({str(row[2]) for row in child_rows})
+
+            alias_rows: list[Any] = []
+            if child_term_ids:
+                alias_rows = list(
+                    session.execute(
+                        select(TermName.term_id, TermName.name_text).where(
+                            TermName.term_id.in_(child_term_ids)
+                        )
+                    ).all()
+                )
+    except Exception:
+        logger.exception("get_prop_values_with_aliases failed: source_term_ids=%s", source_term_ids)
+        raise
+
+    alias_map: dict[str, list[str]] = {}
+    for term_id, name_text in alias_rows:
+        alias_map.setdefault(str(term_id), []).append(str(name_text))
+
+    result: dict[str, list[ValueWithAliases]] = {
+        source_term_id: [] for source_term_id in source_term_ids
+    }
+    for source_id, parent_term_id, term_id, term_code, term_name in child_rows:
+        result.setdefault(str(source_id), []).append(
+            ValueWithAliases(
+                parent_term_id=str(parent_term_id),
+                term_id=str(term_id),
+                term_code=str(term_code),
+                term_name=str(term_name),
+                aliases=alias_map.get(str(term_id), []),
+            )
+        )
+    return result
+
+
+def resolve_field_aliases(
+    *,
+    terms: list[str],
+    scope_code: str,
+    library_id: str | None = None,
+) -> FieldResolutionResult:
+    """轻量级字段别名精确消歧。
+
+    在 term_name 表中按 search_scope 过滤，精确匹配 name_text → prop term_code。
+    只匹配显式标注了 scope 的别名行（global / object / view），
+    不匹配 search_scope='{}' 的旧数据。
+
+    Args:
+        terms: 待解析的中文名/别名列表。
+        scope_code: 视图或对象 code（如 ``"scene_enterprise_analysis"``）。
+        library_id: 预留参数，v1 不使用。
+
+    Returns:
+        FieldResolutionResult，包含 resolved / ambiguous / unresolved 三类结果。
+    """
+    _ = library_id  # reserved for future use
+
+    if not terms or not scope_code:
+        return FieldResolutionResult(unresolved=list(terms) if terms else [])
+
+    unique_terms = list(dict.fromkeys(terms))  # 去重保序
+
+    view_scope = {"scope": "view", "code": scope_code}
+    obj_scope = {"scope": "object", "code": scope_code}
+    global_scope = {"scope": "global"}
+
+    try:
+        with get_session() as session:
+            rows = session.execute(
+                select(
+                    TermName.name_text,
+                    Term.term_code,
+                    Term.term_name,
+                    TermName.search_scope,
+                )
+                .join(Term, Term.term_id == TermName.term_id)
+                .where(
+                    TermName.name_text.in_(unique_terms),
+                    Term.term_type_code == "prop",
+                    or_(
+                        TermName.search_scope.contains(view_scope),
+                        TermName.search_scope.contains(obj_scope),
+                        TermName.search_scope.contains(global_scope),
+                    ),
+                )
+            ).all()
+    except Exception:
+        logger.exception(
+            "resolve_field_aliases failed: terms=%s, scope_code=%s",
+            unique_terms,
+            scope_code,
+        )
+        raise
+
+    # 按输入别名分组：{name_text → {term_code → (term_name, scope)}}
+    hits: dict[str, dict[str, tuple[str, dict[str, str]]]] = {}
+    for name_text, term_code, term_name, search_scope in rows:
+        alias = str(name_text)
+        code = str(term_code)
+        if alias not in hits:
+            hits[alias] = {}
+        if code not in hits[alias]:
+            raw_scope: dict[str, str] = (
+                {str(k): str(v) for k, v in search_scope.items()}
+                if isinstance(search_scope, dict)
+                else {}
+            )
+            hits[alias][code] = (str(term_name), raw_scope)
+
+    resolved: dict[str, str] = {}
+    ambiguous: dict[str, list[AmbiguousCandidate]] = {}
+    unresolved: list[str] = []
+
+    for term in unique_terms:
+        candidates = hits.get(term)
+        if candidates is None:
+            unresolved.append(term)
+        elif len(candidates) == 1:
+            resolved[term] = next(iter(candidates))
+        else:
+            ambiguous[term] = [
+                AmbiguousCandidate(
+                    term_code=code,
+                    term_name=name,
+                    matched_alias=term,
+                    scope=scope,
+                )
+                for code, (name, scope) in candidates.items()
+            ]
+
+    logger.info(
+        "[resolve_field_aliases] scope=%s resolved=%d ambiguous=%d unresolved=%d",
+        scope_code,
+        len(resolved),
+        len(ambiguous),
+        len(unresolved),
+    )
+    return FieldResolutionResult(
+        resolved=resolved,
+        ambiguous=ambiguous,
+        unresolved=unresolved,
+    )

@@ -7,10 +7,10 @@ BEGIN
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'whale_datacloud' AND table_name = 'term' AND column_name = 'ext_attrs'
     ) THEN
-        ALTER TABLE whale_datacloud.term ADD COLUMN ext_attrs JSONB NOT NULL DEFAULT '{}'::jsonb;
+        ALTER TABLE term ADD COLUMN ext_attrs JSONB NOT NULL DEFAULT '{}'::jsonb;
     END IF;
 END $$;
-COMMENT ON COLUMN whale_datacloud.term.ext_attrs IS '自定义扩展属性，JSON 键值对，供业务/产品扩展；与 term_tags（标签、别名）分离';
+COMMENT ON COLUMN term.ext_attrs IS '自定义扩展属性，JSON 键值对，供业务/产品扩展；与 term_tags（标签、别名）分离';
 
 DO $$
 BEGIN
@@ -18,7 +18,7 @@ BEGIN
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'whale_datacloud' AND table_name = 'term_relation' AND column_name = 'ext_attrs'
     ) THEN
-        ALTER TABLE whale_datacloud.term_relation ADD COLUMN ext_attrs JSONB NOT NULL DEFAULT '{}'::jsonb;
+        ALTER TABLE term_relation ADD COLUMN ext_attrs JSONB NOT NULL DEFAULT '{}'::jsonb;
     END IF;
 END $$;
-COMMENT ON COLUMN whale_datacloud.term_relation.ext_attrs IS '自定义扩展属性，JSON 键值对，供业务/产品扩展';
+COMMENT ON COLUMN term_relation.ext_attrs IS '自定义扩展属性，JSON 键值对，供业务/产品扩展';

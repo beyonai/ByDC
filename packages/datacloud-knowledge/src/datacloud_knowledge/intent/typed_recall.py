@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import time
 from collections import defaultdict
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Final, Protocol
 
 from datacloud_knowledge.query.search.bm25 import (
@@ -116,13 +117,14 @@ def _load_type_codes_by_category(
 
 
 def typed_multi_recall(
-    items: list[TypedKeywordState],
+    items: Sequence[TypedKeywordState],
     *,
     session: Session,
     top_k: int = 5,
     rrf_k: int = 60,
     enable_vector: bool = False,
     wv_per_type: int = _WHERE_VALUE_PER_TYPE,
+    scope_code: str | None = None,
 ) -> dict[str, list[CandidateDict]]:
     """对 TypedKeywordState 列表执行分类型多路召回。
 
@@ -148,6 +150,7 @@ def typed_multi_recall(
         rrf_k=rrf_k,
         enable_vector=enable_vector,
         wv_per_type=wv_per_type,
+        scope_code=scope_code,
     )
 
 

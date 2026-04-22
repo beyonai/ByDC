@@ -295,8 +295,9 @@ def render_dbsource(config: OwlGenConfig) -> str:
 
 def _view_relation_ids(config: OwlGenConfig, view: ViewConfig) -> list[str]:
     rel_ids = [f"rel_{view.view_code}_to_{obj_code}" for obj_code in view.object_codes]
+    anchor = view.object_codes[0] if view.object_codes else ""
     for rel in config.object_relations:
-        if rel.source_code in view.object_codes and rel.target_code in view.object_codes:
+        if rel.source_code == anchor and rel.target_code in view.object_codes:
             rel_ids.append(rel.relation_id)
     return rel_ids
 

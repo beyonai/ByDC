@@ -69,16 +69,22 @@ def _sql_files(directory: Path) -> list[Path]:
 
 def apply_ddl() -> None:
     """Drop existing tables and re-create schema from DDL files."""
+    from datacloud_knowledge.db_url import resolve_knowledge_schema
+
     files = _sql_files(_DDL_DIR)
     if not files:
         raise ValueError(f"no DDL files found in {_DDL_DIR}")
 
-    # 00_create_schema.sql 含 DROP TABLE，须在 autocommit 模式下执行
+    schema = resolve_knowledge_schema()
+
+    # 先确保 schema 存在，再执行 00_create_schema.sql（含 DROP TABLE）
     schema_file, *rest_files = files
     conn = _connect()
     try:
         conn.autocommit = True
         with conn.cursor() as cur:
+            cur.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
+            cur.execute(f"SET search_path TO {schema}")
             logger.info("executing %s (autocommit)", schema_file.name)
             cur.execute(schema_file.read_text(encoding="utf-8"))
     finally:
