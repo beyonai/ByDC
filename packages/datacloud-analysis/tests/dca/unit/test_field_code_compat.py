@@ -61,7 +61,7 @@ def test_T16_3_collect_terms_skips_field_code_in_filter() -> None:
     params: dict[str, Any] = {
         "filters": [{"field": "total_revenue", "op": "gt", "value": 100}],
     }
-    terms = _collect_terms_from_params(params)
+    terms, _ = _collect_terms_from_params(params)
 
     assert "total_revenue" not in terms, (
         f"字段编码 'total_revenue' 不应被收入 terms（它不需要 catalog 查询），实际: {terms}"
@@ -77,7 +77,7 @@ def test_T16_4_collect_terms_includes_chinese_name_in_filter() -> None:
     params: dict[str, Any] = {
         "filters": [{"field": "管理网格总营收（万元）", "op": "gt", "value": 100}],
     }
-    terms = _collect_terms_from_params(params)
+    terms, _ = _collect_terms_from_params(params)
 
     assert "管理网格总营收（万元）" in terms, (
         f"中文名 '管理网格总营收（万元）' 应被收入 terms，实际: {terms}"
@@ -176,7 +176,7 @@ def test_T16_9_order_by_field_code_passes_through() -> None:
     }
 
     # 1. 不收入 terms
-    terms = _collect_terms_from_params(params)
+    terms, _ = _collect_terms_from_params(params)
     assert "total_revenue" not in terms, f"order_by 字段编码不应收入 terms，实际: {terms}"
 
     # 2. 直接透传

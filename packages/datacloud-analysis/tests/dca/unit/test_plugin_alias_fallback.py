@@ -31,30 +31,33 @@ def _make_ctx(
 class TestResolveViaAliases:
     """_resolve_via_aliases helper: SDK available / unavailable / exception."""
 
-    def test_returns_none_when_sdk_unavailable(self) -> None:
+    def test_returns_empty_when_sdk_unavailable(self) -> None:
         from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
             _resolve_via_aliases,
         )
 
         with patch(f"{_PLUGIN_MOD}._HAS_RESOLVE_ALIASES", False):
-            result = _resolve_via_aliases(["营收"], "scene_enterprise_analysis")
-        assert result is None
+            resolved, unresolved = _resolve_via_aliases(["营收"], [], "scope")
+        assert resolved == {}
+        assert unresolved == ["营收"]
 
-    def test_returns_none_on_empty_terms(self) -> None:
+    def test_returns_empty_on_empty_terms(self) -> None:
         from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
             _resolve_via_aliases,
         )
 
-        result = _resolve_via_aliases([], "scene_enterprise_analysis")
-        assert result is None
+        resolved, unresolved = _resolve_via_aliases([], [], "scope")
+        assert resolved == {}
+        assert unresolved == []
 
-    def test_returns_none_on_empty_scope(self) -> None:
+    def test_returns_empty_on_empty_scope(self) -> None:
         from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
             _resolve_via_aliases,
         )
 
-        result = _resolve_via_aliases(["营收"], "")
-        assert result is None
+        resolved, unresolved = _resolve_via_aliases(["营收"], [], "")
+        assert resolved == {}
+        assert unresolved == ["营收"]
 
     def test_returns_resolved_and_unresolved(self) -> None:
         from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
@@ -68,9 +71,9 @@ class TestResolveViaAliases:
             unresolved=["不存在"],
         )
         with patch(f"{_PLUGIN_MOD}.resolve_field_aliases", return_value=mock_result):
-            result = _resolve_via_aliases(["营收", "不存在"], "scene_enterprise_analysis")
-        assert result is not None
-        resolved, unresolved = result
+            resolved, unresolved = _resolve_via_aliases(
+                ["营收", "不存在"], [], "scene_enterprise_analysis"
+            )
         assert resolved == {"营收": "total_revenue"}
         assert unresolved == ["不存在"]
 
@@ -104,13 +107,13 @@ class TestResolveViaAliases:
             unresolved=[],
         )
         with patch(f"{_PLUGIN_MOD}.resolve_field_aliases", return_value=mock_result):
-            result = _resolve_via_aliases(["营收"], "scene_enterprise_analysis")
-        assert result is not None
-        resolved, unresolved = result
+            resolved, unresolved = _resolve_via_aliases(
+                ["营收"], [], "scene_enterprise_analysis"
+            )
         assert resolved == {}
         assert unresolved == ["营收"]
 
-    def test_exception_returns_none(self) -> None:
+    def test_exception_returns_fallback(self) -> None:
         from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
             _resolve_via_aliases,
         )
@@ -119,8 +122,11 @@ class TestResolveViaAliases:
             f"{_PLUGIN_MOD}.resolve_field_aliases",
             side_effect=RuntimeError("DB down"),
         ):
-            result = _resolve_via_aliases(["营收"], "scene_enterprise_analysis")
-        assert result is None
+            resolved, unresolved = _resolve_via_aliases(
+                ["营收"], [], "scene_enterprise_analysis"
+            )
+        assert resolved == {}
+        assert unresolved == ["营收"]
 
 
 @pytest.mark.intent
@@ -129,28 +135,28 @@ class TestMainFlowFallback:
 
     @pytest.mark.asyncio
     async def test_alias_resolves_all_no_catalog_needed(self) -> None:
-        """All terms resolved by alias → catalog not called."""
+        """All terms resolved by alias → no slow path triggered."""
         from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
             before_call_back,
         )
 
         ctx = _make_ctx()
-        catalog_mock = MagicMock(return_value={"total_revenue": "total_revenue"})
 
-        with (
-            patch(
-                f"{_PLUGIN_MOD}._resolve_via_aliases",
-                return_value=({"营收": "total_revenue"}, []),
-            ),
-            patch(f"{_PLUGIN_MOD}._get_field_catalog", catalog_mock),
+        with patch(
+            f"{_PLUGIN_MOD}._resolve_via_aliases",
+            return_value=({"营收": "total_revenue"}, []),
         ):
-            result = await before_call_back(ctx)  # noqa: F841
+            result = await before_call_back(ctx)
 
-        catalog_mock.assert_not_called()
+        # No ClarificationNeededError → all resolved, simple query returns None
+        assert result is None
 
     @pytest.mark.asyncio
-    async def test_alias_partial_catalog_fills_gap(self) -> None:
-        """Alias resolves some, catalog resolves the rest → no SDK slow path."""
+    async def test_alias_partial_unresolved_triggers_confirm(self) -> None:
+        """Alias resolves some, unresolved remain → NEED_CONFIRM path.
+
+        interrupt is None in test env → skip clarification, return None.
+        """
         from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
             before_call_back,
         )
@@ -171,16 +177,8 @@ class TestMainFlowFallback:
                 f"{_PLUGIN_MOD}._resolve_via_aliases",
                 return_value=({"营收": "total_revenue"}, ["日期"]),
             ),
-            patch(
-                f"{_PLUGIN_MOD}._get_field_catalog",
-                return_value={"日期": "stat_date"},
-            ),
-            patch(
-                f"{_PLUGIN_MOD}._resolve_terms",
-                return_value=({"日期": "stat_date"}, []),
-            ),
+            patch(f"{_PLUGIN_MOD}.interrupt", None),
         ):
-            result = await before_call_back(ctx)  # noqa: F841
+            result = await before_call_back(ctx)
 
-        # No ClarificationNeededError → all resolved
-        # result is None or patch dict (no redirect since no complex_conditions)
+        assert result is None

@@ -143,84 +143,6 @@ async def test_T3_3_missing_complex_conditions_treated_as_empty() -> None:
         assert decision.get("action") != "redirect"
 
 
-# ── T4 系列：_get_field_catalog 术语映射 ──────────────────────────────────────
-
-
-def test_T4_1_field_chinese_name_maps_to_code() -> None:
-    """T4-1：中文名 1:1 命中 catalog → 返回 field_code。"""
-    from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
-        _get_field_catalog,
-    )
-
-    loader = _make_loader_with_fields(
-        [
-            ("total_revenue", "企业总营收（万元）"),
-            ("stat_date", "统计日期"),
-        ]
-    )
-
-    ctx = _make_ctx("query_ads_enterprise_analysis", {}, loader=loader)
-    catalog = _get_field_catalog("query_ads_enterprise_analysis", ctx)  # type: ignore[arg-type]
-
-    # field_code 自身应在目录中
-    assert "total_revenue" in catalog, "field_code 本身应在 catalog 中"
-    assert catalog["total_revenue"] == "total_revenue"
-
-    # 中文名应在目录中
-    assert "企业总营收（万元）" in catalog, "中文名应在 catalog 中"
-    assert catalog["企业总营收（万元）"] == "total_revenue"
-
-
-def test_T4_3_field_code_direct_passthrough() -> None:
-    """T4-3：field_code 直接填写 → 原样通过，catalog 含 code→code 映射。"""
-    from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
-        _get_field_catalog,
-    )
-
-    loader = _make_loader_with_fields(
-        [
-            ("energy_efficiency_Index", "企业经济效益等级（高、中、低）"),
-        ]
-    )
-
-    ctx = _make_ctx("query_ads_enterprise_analysis", {}, loader=loader)
-    catalog = _get_field_catalog("query_ads_enterprise_analysis", ctx)  # type: ignore[arg-type]
-
-    assert "energy_efficiency_Index" in catalog
-    assert catalog["energy_efficiency_Index"] == "energy_efficiency_Index"
-
-
-def test_T4_4_loader_none_returns_empty_catalog() -> None:
-    """T4-4：loader=None 时 _get_field_catalog 返回空 dict，不崩溃。"""
-    from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
-        _get_field_catalog,
-    )
-
-    ctx = _make_ctx("query_ads_enterprise_analysis", {}, loader=None)
-    catalog = _get_field_catalog("query_ads_enterprise_analysis", ctx)  # type: ignore[arg-type]
-    assert isinstance(catalog, dict)
-    assert len(catalog) == 0
-
-
-def test_T4_5_short_alias_not_in_catalog() -> None:
-    """T4-5：无短别名（'营收'不在 catalog），只有完整中文名和 field_code。"""
-    from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
-        _get_field_catalog,
-    )
-
-    loader = _make_loader_with_fields(
-        [
-            ("total_revenue", "企业总营收（万元）"),
-        ]
-    )
-
-    ctx = _make_ctx("query_ads_enterprise_analysis", {}, loader=loader)
-    catalog = _get_field_catalog("query_ads_enterprise_analysis", ctx)  # type: ignore[arg-type]
-
-    # "营收" 短词条不应出现
-    assert "营收" not in catalog, "'营收' 是短词条，不应出现在 catalog 中（无别名机制）"
-
-
 # ── T5 系列：歧义判断与 interrupt ─────────────────────────────────────────────
 
 
@@ -252,7 +174,7 @@ async def test_T5_1_unknown_term_triggers_interrupt() -> None:
     with (
         patch(
             "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._resolve_via_aliases",
-            return_value=None,
+            return_value=({}, ["营收"]),
         ),
         patch(
             "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._analyze_clarification",
@@ -339,7 +261,7 @@ async def test_T5_3_complex_need_confirm_restores_complex_conditions() -> None:
     with (
         patch(
             "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._resolve_via_aliases",
-            return_value=None,
+            return_value=({}, ["经济效益"]),
         ),
         patch(
             "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._analyze_clarification",

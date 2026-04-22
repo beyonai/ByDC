@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import and_, cast, func, or_, select
-from sqlalchemy.dialects.postgresql import NUMERIC, TIMESTAMP
+from sqlalchemy import and_, cast, func, literal, or_, select
+from sqlalchemy.dialects.postgresql import JSONB, NUMERIC, TIMESTAMP
 from sqlalchemy.orm import aliased
 
 from .db import get_session
@@ -17,6 +17,7 @@ from .types import (
     SearchTermsResult,
     TagFilter,
     TermItem,
+    ValueResolutionResult,
     ValueWithAliases,
 )
 
@@ -396,27 +397,40 @@ def resolve_field_aliases(
     terms: list[str],
     scope_code: str,
     library_id: str | None = None,
+    resolve_values: bool = False,
+    value_terms: list[str] | None = None,
 ) -> FieldResolutionResult:
-    """轻量级字段别名精确消歧。
+    """轻量级字段 + 值别名精确消歧（单次 SQL）。
 
-    在 term_name 表中按 search_scope 过滤，精确匹配 name_text → prop term_code。
-    只匹配显式标注了 scope 的别名行（global / object / view），
-    不匹配 search_scope='{}' 的旧数据。
+    通过 UNION 将字段别名查询和值 child term 查询合并为一条 SQL，
+    用 ``match_type`` 列区分来源，Python 侧分拣结果。
+
+    字段消歧：在 ``term_name`` 表中按 ``search_scope`` 过滤，
+    精确匹配 ``name_text → prop term_code``。
+
+    值消歧（``resolve_values=True``）：通过
+    ``view/object → HAS_FIELD → prop → child term`` 关系链路，
+    在 child term 的 ``term_name`` 和 ``TermName.name_text`` 中精确匹配。
 
     Args:
-        terms: 待解析的中文名/别名列表。
+        terms: 待解析的字段中文名/别名列表。
         scope_code: 视图或对象 code（如 ``"scene_enterprise_analysis"``）。
         library_id: 预留参数，v1 不使用。
+        resolve_values: 是否对 value_terms 追加值级别消歧。
+        value_terms: 待值消歧的过滤值列表（如企业名、地区名等）。
 
     Returns:
         FieldResolutionResult，包含 resolved / ambiguous / unresolved 三类结果。
     """
     _ = library_id  # reserved for future use
 
-    if not terms or not scope_code:
-        return FieldResolutionResult(unresolved=list(terms) if terms else [])
+    effective_values = value_terms or []
+    if not scope_code or (not terms and not effective_values):
+        all_unresolved = list(terms or []) + list(effective_values)
+        return FieldResolutionResult(unresolved=all_unresolved)
 
-    unique_terms = list(dict.fromkeys(terms))  # 去重保序
+    unique_field_terms = list(dict.fromkeys(terms)) if terms else []
+    unique_value_terms = list(dict.fromkeys(effective_values)) if effective_values else []
 
     view_scope = {"scope": "view", "code": scope_code}
     obj_scope = {"scope": "object", "code": scope_code}
@@ -424,53 +438,132 @@ def resolve_field_aliases(
 
     try:
         with get_session() as session:
-            rows = session.execute(
-                select(
-                    TermName.name_text,
-                    Term.term_code,
-                    Term.term_name,
-                    TermName.search_scope,
+            # ── 构建 UNION 查询 ───────────────────────────────────────────────
+            queries = []
+
+            # 子查询 1：字段别名（TermName → prop，按 search_scope 过滤）
+            if unique_field_terms:
+                field_q = (
+                    select(
+                        literal("field").label("match_type"),
+                        TermName.name_text.label("matched_text"),
+                        Term.term_code,
+                        Term.term_name,
+                        TermName.search_scope,
+                    )
+                    .join(Term, Term.term_id == TermName.term_id)
+                    .where(
+                        TermName.name_text.in_(unique_field_terms),
+                        Term.term_type_code == "prop",
+                        or_(
+                            TermName.search_scope.contains(view_scope),
+                            TermName.search_scope.contains(obj_scope),
+                            TermName.search_scope.contains(global_scope),
+                        ),
+                    )
                 )
-                .join(Term, Term.term_id == TermName.term_id)
-                .where(
-                    TermName.name_text.in_(unique_terms),
-                    Term.term_type_code == "prop",
-                    or_(
-                        TermName.search_scope.contains(view_scope),
-                        TermName.search_scope.contains(obj_scope),
-                        TermName.search_scope.contains(global_scope),
-                    ),
+                queries.append(field_q)
+
+            # 子查询 2+3：值消歧（child term_name + TermName 别名）
+            if resolve_values and unique_value_terms:
+                view_obj = aliased(Term, name="view_obj")
+                prop = aliased(Term, name="prop")
+                child = aliased(Term, name="child")
+
+                _null_scope = cast(literal(None), JSONB)
+
+                # child.term_name 直接匹配
+                val_direct_q = (
+                    select(
+                        literal("value").label("match_type"),
+                        child.term_name.label("matched_text"),
+                        literal("").label("term_code"),
+                        literal("").label("term_name"),
+                        _null_scope.label("search_scope"),
+                    )
+                    .select_from(view_obj)
+                    .join(TermRelation, TermRelation.source_term_id == view_obj.term_id)
+                    .join(prop, prop.term_id == TermRelation.target_term_id)
+                    .join(child, child.parent_term_id == prop.term_id)
+                    .where(
+                        view_obj.term_code == scope_code,
+                        view_obj.term_type_code.in_(["view", "object"]),
+                        prop.term_type_code == "prop",
+                        child.term_name.in_(unique_value_terms),
+                    )
                 )
-            ).all()
+                queries.append(val_direct_q)
+
+                # TermName 别名匹配
+                view_obj2 = aliased(Term, name="view_obj2")
+                prop2 = aliased(Term, name="prop2")
+                child2 = aliased(Term, name="child2")
+
+                val_alias_q = (
+                    select(
+                        literal("value").label("match_type"),
+                        TermName.name_text.label("matched_text"),
+                        literal("").label("term_code"),
+                        literal("").label("term_name"),
+                        _null_scope.label("search_scope"),
+                    )
+                    .select_from(view_obj2)
+                    .join(TermRelation, TermRelation.source_term_id == view_obj2.term_id)
+                    .join(prop2, prop2.term_id == TermRelation.target_term_id)
+                    .join(child2, child2.parent_term_id == prop2.term_id)
+                    .join(TermName, TermName.term_id == child2.term_id)
+                    .where(
+                        view_obj2.term_code == scope_code,
+                        view_obj2.term_type_code.in_(["view", "object"]),
+                        prop2.term_type_code == "prop",
+                        TermName.name_text.in_(unique_value_terms),
+                    )
+                )
+                queries.append(val_alias_q)
+
+            if not queries:
+                all_unresolved = unique_field_terms + unique_value_terms
+                return FieldResolutionResult(unresolved=all_unresolved)
+
+            # 执行 UNION ALL
+            stmt = queries[0].union_all(*queries[1:]) if len(queries) > 1 else queries[0]
+            rows = session.execute(stmt).all()
+
     except Exception:
         logger.exception(
             "resolve_field_aliases failed: terms=%s, scope_code=%s",
-            unique_terms,
+            unique_field_terms,
             scope_code,
         )
         raise
 
-    # 按输入别名分组：{name_text → {term_code → (term_name, scope)}}
-    hits: dict[str, dict[str, tuple[str, dict[str, str]]]] = {}
-    for name_text, term_code, term_name, search_scope in rows:
-        alias = str(name_text)
-        code = str(term_code)
-        if alias not in hits:
-            hits[alias] = {}
-        if code not in hits[alias]:
-            raw_scope: dict[str, str] = (
-                {str(k): str(v) for k, v in search_scope.items()}
-                if isinstance(search_scope, dict)
-                else {}
-            )
-            hits[alias][code] = (str(term_name), raw_scope)
+    # ── 分拣结果 ──────────────────────────────────────────────────────────────
+    # 字段消歧：{name_text → {term_code → (term_name, scope)}}
+    field_hits: dict[str, dict[str, tuple[str, dict[str, str]]]] = {}
+    value_matched: set[str] = set()
+
+    for match_type, matched_text, term_code, term_name, search_scope in rows:
+        if str(match_type) == "field":
+            alias = str(matched_text)
+            code = str(term_code)
+            if alias not in field_hits:
+                field_hits[alias] = {}
+            if code not in field_hits[alias]:
+                raw_scope: dict[str, str] = (
+                    {str(k): str(v) for k, v in search_scope.items()}
+                    if isinstance(search_scope, dict)
+                    else {}
+                )
+                field_hits[alias][code] = (str(term_name), raw_scope)
+        else:
+            value_matched.add(str(matched_text))
 
     resolved: dict[str, str] = {}
     ambiguous: dict[str, list[AmbiguousCandidate]] = {}
     unresolved: list[str] = []
 
-    for term in unique_terms:
-        candidates = hits.get(term)
+    for term in unique_field_terms:
+        candidates = field_hits.get(term)
         if candidates is None:
             unresolved.append(term)
         elif len(candidates) == 1:
@@ -486,6 +579,18 @@ def resolve_field_aliases(
                 for code, (name, scope) in candidates.items()
             ]
 
+    # 值未命中的归入 unresolved
+    if resolve_values and unique_value_terms:
+        if value_matched:
+            logger.info(
+                "[resolve_field_aliases] value_aliases: matched=%d unmatched=%d",
+                len(value_matched),
+                len(unique_value_terms) - len(value_matched),
+            )
+        unresolved.extend(t for t in unique_value_terms if t not in value_matched)
+    elif unique_value_terms:
+        unresolved.extend(unique_value_terms)
+
     logger.info(
         "[resolve_field_aliases] scope=%s resolved=%d ambiguous=%d unresolved=%d",
         scope_code,
@@ -498,3 +603,100 @@ def resolve_field_aliases(
         ambiguous=ambiguous,
         unresolved=unresolved,
     )
+
+
+def resolve_value_aliases(
+    *,
+    terms: list[str],
+    scope_code: str,
+) -> ValueResolutionResult:
+    """轻量级属性值精确消歧。
+
+    在 scope_code 对应的 view/object 下，通过关系链路
+    ``view/object → HAS_FIELD → prop → (parent_term_id) → child term``
+    查找值术语，并在 child term 的 ``term_name`` 和 ``TermName.name_text``（别名）
+    中精确匹配输入 terms。
+
+    用于 filter value 级别的消歧：当用户查询包含企业名、地区名等枚举值时，
+    判断该值是否为已知的合法属性值，避免不必要的澄清中断。
+
+    Args:
+        terms: 待匹配的值列表（如企业名、地区名等）。
+        scope_code: 视图或对象 code（如 ``"scene_enterprise_analysis"``）。
+
+    Returns:
+        ValueResolutionResult，包含 matched（已知值）和 unmatched（未知值）。
+    """
+    if not terms or not scope_code:
+        return ValueResolutionResult(unmatched=list(terms) if terms else [])
+
+    unique_terms = list(dict.fromkeys(terms))
+
+    # 找到 scope_code 对应的 view/object term_id
+    view_obj = aliased(Term, name="view_obj")
+    prop = aliased(Term, name="prop")
+    child = aliased(Term, name="child")
+
+    try:
+        with get_session() as session:
+            # Step 1: 通过 child.term_name 直接匹配
+            direct_rows = session.execute(
+                select(child.term_name)
+                .select_from(view_obj)
+                .join(
+                    TermRelation,
+                    TermRelation.source_term_id == view_obj.term_id,
+                )
+                .join(prop, prop.term_id == TermRelation.target_term_id)
+                .join(child, child.parent_term_id == prop.term_id)
+                .where(
+                    view_obj.term_code == scope_code,
+                    view_obj.term_type_code.in_(["view", "object"]),
+                    prop.term_type_code == "prop",
+                    child.term_name.in_(unique_terms),
+                )
+            ).all()
+            direct_hits: set[str] = {str(row[0]) for row in direct_rows}
+
+            # Step 2: 通过 TermName 别名匹配（仅对未命中的 terms）
+            remaining = [t for t in unique_terms if t not in direct_hits]
+            alias_hits: set[str] = set()
+
+            if remaining:
+                alias_rows = session.execute(
+                    select(TermName.name_text)
+                    .select_from(view_obj)
+                    .join(
+                        TermRelation,
+                        TermRelation.source_term_id == view_obj.term_id,
+                    )
+                    .join(prop, prop.term_id == TermRelation.target_term_id)
+                    .join(child, child.parent_term_id == prop.term_id)
+                    .join(TermName, TermName.term_id == child.term_id)
+                    .where(
+                        view_obj.term_code == scope_code,
+                        view_obj.term_type_code.in_(["view", "object"]),
+                        prop.term_type_code == "prop",
+                        TermName.name_text.in_(remaining),
+                    )
+                ).all()
+                alias_hits = {str(row[0]) for row in alias_rows}
+
+    except Exception:
+        logger.exception(
+            "resolve_value_aliases failed: terms=%s, scope_code=%s",
+            unique_terms,
+            scope_code,
+        )
+        raise
+
+    matched = direct_hits | alias_hits
+    unmatched = [t for t in unique_terms if t not in matched]
+
+    logger.info(
+        "[resolve_value_aliases] scope=%s matched=%d unmatched=%d",
+        scope_code,
+        len(matched),
+        len(unmatched),
+    )
+    return ValueResolutionResult(matched=matched, unmatched=unmatched)

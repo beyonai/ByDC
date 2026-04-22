@@ -4,7 +4,7 @@
   1. 非 query_*/compute_* 工具 → 直接跳过
   2. 剥除元字段（query, complex_conditions, 旧版三字段）
   3. Step 1：complex_conditions 非空 → is_complex=True
-  4. Step 2：resolve_field_aliases 轻量消歧 → _get_field_catalog 兜底
+  4. Step 2：resolve_field_aliases 轻量消歧：
      a. 全部 1:1 命中 → CLEAR
         is_complex=False → 返回 None（OQL 直查）
         is_complex=True  → redirect → data_query_*
@@ -88,6 +88,12 @@ _JSON_LIST_FIELDS: frozenset[str] = frozenset(
 
 # 字段编码识别：纯 ASCII identifier（snake_case / camelCase）
 _FIELD_CODE_RE: re.Pattern[str] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_HAS_CHINESE_RE: re.Pattern[str] = re.compile(r"[\u4e00-\u9fff]")
+_NUMERIC_RE: re.Pattern[str] = re.compile(r"^[\d.]+$")
+_NUMERIC_CN_RE: re.Pattern[str] = re.compile(r"^[\d.]+[万亿元%‰]+$")
+_DATE_RE: re.Pattern[str] = re.compile(
+    r"^\d{4}[-/年]\d{1,2}[-/月]?(\d{1,2}日?)?$|^\d{6,8}$|^\d{4}年?$"
+)
 
 
 def _is_field_code(term: str) -> bool:
@@ -97,6 +103,24 @@ def _is_field_code(term: str) -> bool:
     中文名（如 '管理网格总营收（万元）'）需要 catalog 查询后映射。
     """
     return bool(_FIELD_CODE_RE.match(term))
+
+
+def _is_term_value_candidate(value: Any) -> bool:
+    """Return True if a filter value looks like a human-readable term.
+
+    值歧义澄清只收集自然语言/中文值，跳过：
+    - 空值
+    - 纯数字 / 日期 / 百分比等量化值
+    - 纯 ASCII 标识符（常见编码值）
+    """
+    text = str(value).strip()
+    if not text:
+        return False
+    if _NUMERIC_RE.match(text) or _NUMERIC_CN_RE.match(text) or _DATE_RE.match(text):
+        return False
+    if _is_field_code(text):
+        return False
+    return bool(_HAS_CHINESE_RE.search(text))
 
 
 def _normalize_json_fields(params: dict[str, Any]) -> dict[str, Any]:
@@ -140,89 +164,15 @@ def _scope_code_from_tool(tool_name: str) -> str:
     return tool_name
 
 
-def _get_field_catalog(
-    tool_name: str,
-    ctx: HookContext,
-) -> dict[str, str]:
-    """从 OntologyLoader 读取当前工具的字段目录 {term → field_code}。
+def _collect_terms_from_params(
+    tool_params: dict[str, Any],
+) -> tuple[list[str], list[str]]:
+    """从 tool_params 收集需要映射的术语，按类型分组返回。
 
-    返回字典包含：
-    - field_code → field_code（field_code 本身）
-    - field_name（中文名）→ field_code
-    loader=None 时返回空 dict。
-    """
-    loader: Any = (ctx.get("metadata") or {}).get("loader")
-    if loader is None:
-        return {}
-
-    scope_code = _scope_code_from_tool(tool_name)
-    catalog: dict[str, str] = {}
-    raw_fields: list[dict[str, Any]] = []  # 原始字段数据，用于调用链日志
-
-    def _index_field(code: str, name: str | None, aliases: list[str]) -> None:
-        catalog[code] = code
-        if name and name != code:
-            catalog[name] = code
-        for alias in aliases:
-            if alias and alias != code:
-                catalog[alias] = code
-
-    loader_path = "unknown"
-    try:
-        # 先尝试作为对象加载
-        ontology_class = loader.get_ontology_class(scope_code)
-        loader_path = f"loader.get_ontology_class('{scope_code}')"
-        for f in ontology_class.fields:
-            code = getattr(f, "field_code", None) or getattr(f, "property_code", None)
-            if not code:
-                continue
-            name = getattr(f, "field_name", None) or getattr(f, "property_name", None)
-            aliases: list[str] = list(getattr(f, "aliases", None) or [])
-            raw_fields.append(
-                {
-                    "field_code": str(code),
-                    "field_name": str(name) if name else None,
-                    "aliases": [str(a) for a in aliases],
-                }
-            )
-            _index_field(str(code), str(name) if name else None, [str(a) for a in aliases])
-    except Exception:  # noqa: BLE001
-        # 尝试作为视图加载
-        try:
-            view = loader.get_view(scope_code)
-            loader_path = f"loader.get_view('{scope_code}')"
-            for f in getattr(view, "fields", []):
-                code = getattr(f, "field_code", None) or getattr(f, "property_code", None)
-                if not code:
-                    continue
-                name = getattr(f, "field_name", None) or getattr(f, "property_name", None)
-                aliases = list(getattr(f, "aliases", None) or [])
-                raw_fields.append(
-                    {
-                        "field_code": str(code),
-                        "field_name": str(name) if name else None,
-                        "aliases": [str(a) for a in aliases],
-                    }
-                )
-                _index_field(str(code), str(name) if name else None, [str(a) for a in aliases])
-        except Exception:  # noqa: BLE001
-            pass
-
-    logger.info(
-        "[ONTOLOGY-CHAIN] tool=%s scope=%s via=%s field_count=%d raw_fields=%s",
-        tool_name,
-        scope_code,
-        loader_path,
-        len(raw_fields),
-        raw_fields,
-    )
-    return catalog
-
-
-def _collect_terms_from_params(tool_params: dict[str, Any]) -> list[str]:
-    """从 tool_params 收集需要映射的术语列表（filters.field、select 项等）。
-
-    优先读取 field_name_cn（LLM 填写的中文名），fallback 到 field（向后兼容）。
+    Returns:
+        (field_terms, value_terms):
+          - field_terms: 字段名/别名（filters.field、select、dimensions 等）
+          - value_terms: 过滤值（filters.value 中的中文值，op=like 除外）
     """
 
     def _get_field_term(item: dict[str, Any]) -> str | None:
@@ -230,40 +180,47 @@ def _collect_terms_from_params(tool_params: dict[str, Any]) -> list[str]:
         if not v:
             return None
         s = str(v)
-        # 字段编码不需要 catalog 查询，跳过；只收集需要映射的中文名
         return None if _is_field_code(s) else s
 
-    terms: list[str] = []
+    field_terms: list[str] = []
+    value_terms: list[str] = []
+
     for f in tool_params.get("filters") or []:
         if isinstance(f, dict):
             t = _get_field_term(f)
             if t:
-                terms.append(t)
+                field_terms.append(t)
+            # op=like 是模糊搜索，不需要精确消歧
+            if str(f.get("op") or "").lower() != "like":
+                raw_value = f.get("value")
+                values = raw_value if isinstance(raw_value, list) else [raw_value]
+                for value in values:
+                    if _is_term_value_candidate(value):
+                        value_terms.append(str(value).strip())
     for s in tool_params.get("select") or []:
-        # select 是字符串列表：字段编码直通，只收集中文名
         if s and not _is_field_code(str(s)):
-            terms.append(str(s))
+            field_terms.append(str(s))
     for d in tool_params.get("dimensions") or []:
         if isinstance(d, dict):
             t = _get_field_term(d)
             if t:
-                terms.append(t)
+                field_terms.append(t)
     for m in tool_params.get("metrics") or []:
         if isinstance(m, dict):
             t = _get_field_term(m)
             if t:
-                terms.append(t)
+                field_terms.append(t)
     for o in tool_params.get("order_by") or []:
         if isinstance(o, dict):
             t = _get_field_term(o)
             if t:
-                terms.append(t)
+                field_terms.append(t)
     for h in tool_params.get("having") or []:
         if isinstance(h, dict):
             t = _get_field_term(h)
             if t:
-                terms.append(t)
-    return terms
+                field_terms.append(t)
+    return field_terms, value_terms
 
 
 def _resolve_terms(
@@ -287,19 +244,27 @@ def _resolve_terms(
 
 
 def _resolve_via_aliases(
-    terms: list[str],
+    field_terms: list[str],
+    value_terms: list[str],
     scope_code: str,
-) -> tuple[dict[str, str], list[str]] | None:
-    """尝试通过轻量级别名消歧解析术语。
+) -> tuple[dict[str, str], list[str]]:
+    """轻量级别名消歧（字段 + 值，单次 DB 往返）。
 
-    成功时返回 (resolved, unresolved)；SDK 不可用或异常时返回 None（触发 fallback）。
+    返回 (resolved, unresolved)。
+    resolved 仅含字段名映射（{中文名 → field_code}），值命中直接从 unresolved 移除。
     ambiguous 候选视为 unresolved，交给慢路径处理。
     """
-    if not _HAS_RESOLVE_ALIASES or not terms or not scope_code:
-        return None
+    all_terms = field_terms + value_terms
+    if not _HAS_RESOLVE_ALIASES or not all_terms or not scope_code:
+        logger.warning("[query_clarification] resolve_field_aliases skip")
+        return {}, all_terms
     try:
-        result = resolve_field_aliases(terms=terms, scope_code=scope_code)
-        # ambiguous 候选合并到 unresolved，交给 SDK 慢路径
+        result = resolve_field_aliases(
+            terms=field_terms,
+            scope_code=scope_code,
+            resolve_values=bool(value_terms),
+            value_terms=value_terms,
+        )
         unresolved = list(result.unresolved) + list(result.ambiguous.keys())
         logger.info(
             "[query_clarification] resolve_field_aliases: resolved=%d ambiguous=%d unresolved=%d",
@@ -310,10 +275,10 @@ def _resolve_via_aliases(
         return result.resolved, unresolved
     except Exception:  # noqa: BLE001
         logger.warning(
-            "[query_clarification] resolve_field_aliases failed, falling back to catalog",
+            "[query_clarification] resolve_field_aliases failed",
             exc_info=True,
         )
-        return None
+        return {}, all_terms
 
 
 # LLM 可能使用的非标准排序方向键（都应规范化为 Schema 定义的 direction）
@@ -569,21 +534,8 @@ def _execute_resume(
 
     # SDK 回填的可能是官方中文字段名（choiceKeyword），需做二次翻译
     scope_code = _scope_code_from_tool(tool_name)
-    _fresh_terms = _collect_terms_from_params(tool_params)
-    _fresh_result = _resolve_via_aliases(_fresh_terms, scope_code)
-    if _fresh_result is not None:
-        _fresh_resolved, _fresh_unresolved = _fresh_result
-        # 快路径有 unresolved → catalog 兜底
-        if _fresh_unresolved:
-            _fresh_catalog = _get_field_catalog(tool_name, ctx)
-            if _fresh_catalog:
-                _extra, _ = _resolve_terms(_fresh_unresolved, _fresh_catalog)
-                _fresh_resolved = {**_fresh_resolved, **_extra}
-    else:
-        _fresh_catalog = _get_field_catalog(tool_name, ctx)
-        _fresh_resolved, _ = (
-            _resolve_terms(_fresh_terms, _fresh_catalog) if _fresh_catalog else ({}, [])
-        )
+    _fresh_field_terms, _ = _collect_terms_from_params(tool_params)
+    _fresh_resolved, _fresh_unresolved = _resolve_via_aliases(_fresh_field_terms, [], scope_code)
     logger.info(
         "[query_clarification] _execute_resume fresh_resolved=%s",
         _fresh_resolved,
@@ -696,25 +648,11 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             # choiceKeyword 应与本体 catalog 字段名严格对齐；
             # 若未命中说明知识图谱数据或表单生成有误，需修数据，不做兜底。
             _scope_code_fp = _scope_code_from_tool(tool_name)
-            _terms_fp = _collect_terms_from_params(_fmt_params)
-            _alias_fp = _resolve_via_aliases(_terms_fp, _scope_code_fp)
-            if _alias_fp is not None:
-                _resolved_fp, _unresolved_fp = _alias_fp
-                # 快路径有 unresolved → catalog 兜底
-                if _unresolved_fp:
-                    _catalog_fp = _get_field_catalog(tool_name, ctx)
-                    if _catalog_fp:
-                        _extra_fp, _unresolved_fp = _resolve_terms(_unresolved_fp, _catalog_fp)
-                        _resolved_fp = {**_resolved_fp, **_extra_fp}
-            else:
-                _catalog_fp = _get_field_catalog(tool_name, ctx)
-                if _catalog_fp:
-                    _resolved_fp, _unresolved_fp = _resolve_terms(_terms_fp, _catalog_fp)
-                else:
-                    _resolved_fp, _unresolved_fp = {}, []
+            _field_terms_fp, _ = _collect_terms_from_params(_fmt_params)
+            _resolved_fp, _unresolved_fp = _resolve_via_aliases(_field_terms_fp, [], _scope_code_fp)
             logger.info(
                 "[query_clarification] V0.3 early-return DIAG: terms=%s resolved=%s unresolved=%s",
-                _terms_fp,
+                _field_terms_fp,
                 _resolved_fp,
                 _unresolved_fp,
             )
@@ -769,35 +707,16 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
 
     # ── Step 2：双通道歧义判断 ────────────────────────────────────────────────
     scope_code = _scope_code_from_tool(tool_name)
-    terms = _collect_terms_from_params(tool_params)
+    field_terms, value_terms = _collect_terms_from_params(tool_params)
+    terms = field_terms + value_terms
 
     # resolved 始终初始化为空 dict
     resolved: dict[str, str] = {}
 
-    # 优先使用轻量级别名消歧（纯 DB，不依赖 OWL loader）
-    alias_result = _resolve_via_aliases(terms, scope_code) if terms else None
-
-    if alias_result is not None:
-        resolved, unresolved = alias_result
-        # 快路径有 unresolved → 用 catalog 二次兜底
-        if unresolved:
-            catalog = _get_field_catalog(tool_name, ctx)
-            if catalog:
-                extra_resolved, unresolved = _resolve_terms(unresolved, catalog)
-                resolved = {**resolved, **extra_resolved}
-    else:
-        # fallback: OWL loader catalog
-        catalog = _get_field_catalog(tool_name, ctx)
-        if catalog and terms:
-            resolved, unresolved = _resolve_terms(terms, catalog)
-        elif not catalog and terms:
-            logger.warning(
-                "[query_clarification] loader not available, "
-                "field_name_cn will be passed as-is to field (cannot resolve to field_code)"
-            )
-            unresolved = []
-        else:
-            unresolved = []
+    # 轻量级别名消歧（字段 + 值，单次 DB 往返）
+    resolved, unresolved = (
+        _resolve_via_aliases(field_terms, value_terms, scope_code) if terms else ({}, [])
+    )
 
     if terms and unresolved:
         # 存在未命中术语 → NEED_CONFIRM

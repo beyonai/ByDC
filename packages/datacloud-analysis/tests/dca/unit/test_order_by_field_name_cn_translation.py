@@ -29,7 +29,7 @@ def test_T14_1_collect_terms_reads_order_by_field_name_cn() -> None:
         "filters": [],
     }
 
-    terms = _collect_terms_from_params(params)
+    terms, _ = _collect_terms_from_params(params)
 
     assert "管理网格总营收（万元）" in terms, (
         f"_collect_terms_from_params 未收集 order_by.field_name_cn，实际 terms: {terms}"

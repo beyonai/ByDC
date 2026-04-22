@@ -38,7 +38,7 @@ def test_T17_1_collect_terms_tolerates_none_list_fields() -> None:
     }
 
     # 不应抛出 TypeError
-    terms = _collect_terms_from_params(params)
+    terms, _ = _collect_terms_from_params(params)
     assert isinstance(terms, list)
     assert terms == []
 
@@ -116,5 +116,5 @@ def test_T17_4_collect_terms_mixed_none_and_valid() -> None:
         "select": None,
     }
 
-    terms = _collect_terms_from_params(params)
+    terms, _ = _collect_terms_from_params(params)
     assert "企业等级" in terms, f"应收集到 '企业等级'，实际: {terms}"
