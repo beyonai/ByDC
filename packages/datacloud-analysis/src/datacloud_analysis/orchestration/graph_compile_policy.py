@@ -1,4 +1,4 @@
-﻿"""Shared graph compile policy with mandatory checkpointer fail-fast."""
+"""Shared graph compile policy with mandatory checkpointer fail-fast."""
 
 from __future__ import annotations
 
