@@ -35,7 +35,12 @@ def _is_data_tool_name(name: str) -> bool:
     return any(name.startswith(p) for p in _DATA_TOOL_PREFIXES)
 
 
-def inject_query_fields(t: BaseTool) -> BaseTool:
+def inject_query_fields(
+    t: BaseTool,
+    *,
+    require_query: bool = False,
+    require_select: bool = False,
+) -> BaseTool:
     """往数据类工具 Schema 注入 query/complex_conditions 字段，由 LLM 在调用时填写，执行前自动剥除。
 
     注入字段：
@@ -56,17 +61,42 @@ def inject_query_fields(t: BaseTool) -> BaseTool:
             AGENT_QUERY_DESCRIPTION,
         )
 
+        model_fields = getattr(original_schema, "model_fields", {})
+        schema_overrides: dict[str, tuple[Any, Any]] = {}
+
+        if require_query:
+            schema_overrides["query"] = (
+                str,
+                Field(..., description=AGENT_QUERY_DESCRIPTION),
+            )
+        elif "query" not in model_fields:
+            schema_overrides["query"] = (
+                str,
+                Field(default="", description=AGENT_QUERY_DESCRIPTION),
+            )
+
+        if "complex_conditions" not in model_fields:
+            schema_overrides["complex_conditions"] = (
+                list[str],
+                Field(default_factory=list, description=AGENT_COMPLEX_CONDITIONS_DESCRIPTION),
+            )
+
+        if require_select:
+            select_desc = ""
+            select_field = model_fields.get("select")
+            if select_field is not None:
+                select_desc = str(select_field.description or "").strip()
+            if not select_desc:
+                select_desc = "返回字段列表"
+            schema_overrides["select"] = (
+                list[str],
+                Field(..., description=select_desc),
+            )
+
         new_schema = create_model(
             f"{original_schema.__name__}WithQuery",
             __base__=original_schema,
-            query=(
-                str,
-                Field(default="", description=AGENT_QUERY_DESCRIPTION),
-            ),
-            complex_conditions=(
-                list[str],
-                Field(default_factory=list, description=AGENT_COMPLEX_CONDITIONS_DESCRIPTION),
-            ),
+            **schema_overrides,
         )
         t.args_schema = new_schema
 
@@ -159,7 +189,11 @@ def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
                 tool = inject_reason_field(callable_or_tool)
                 # 数据类工具：注入查询元字段（在 inject_reason_field 之后）
                 if _is_data_tool_name(name):
-                    tool = inject_query_fields(tool)
+                    tool = inject_query_fields(
+                        tool,
+                        require_query=name.startswith(("query_", "compute_")),
+                        require_select=name.startswith("query_"),
+                    )
                 if runtime_context_param:
                     tool._datacloud_runtime_context_param = runtime_context_param
                 tools.append(tool)
@@ -202,7 +236,11 @@ def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
                 tool = inject_reason_field(t)
                 # 数据类工具：注入查询元字段（在 inject_reason_field 之后）
                 if _is_data_tool_name(name):
-                    tool = inject_query_fields(tool)
+                    tool = inject_query_fields(
+                        tool,
+                        require_query=name.startswith(("query_", "compute_")),
+                        require_select=name.startswith("query_"),
+                    )
                 if runtime_context_param:
                     tool._datacloud_runtime_context_param = runtime_context_param
                 if getattr(callable_or_tool, "_is_agent_delegate", False):

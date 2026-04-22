@@ -178,3 +178,68 @@ def test_T1_4_inject_query_fields_replaces_inject_ambiguity_fields() -> None:
     assert "intent_reason" not in received
     assert "ambiguous_params" not in received
     assert received.get("select") == ["stat_date"]
+
+
+def test_T1_5_query_tool_requires_select_and_query() -> None:
+    """T1-5: query_* tools must require select and query."""
+    from datacloud_analysis.orchestration.execution.node import _build_tools_list
+    from datacloud_analysis.tools._agent_schema_patches import AGENT_QUERY_DESCRIPTION
+    from langchain_core.tools import StructuredTool
+    from pydantic import BaseModel
+    from pydantic import Field as PydanticField
+
+    class _QuerySchema(BaseModel):
+        select: list[str] = PydanticField(default_factory=list, description="返回字段列表")
+
+    async def _query_tool(**kwargs: object) -> str:
+        _ = kwargs
+        return "ok"
+
+    query_tool = StructuredTool(
+        name="query_demo",
+        description="demo",
+        args_schema=_QuerySchema,
+        coroutine=_query_tool,
+    )
+
+    tools = _build_tools_list(default_tools={"query_demo": query_tool})
+    patched = next(t for t in tools if t.name == "query_demo")
+    schema = patched.args_schema.model_json_schema()  # type: ignore[union-attr]
+    required = set(schema.get("required", []))
+    props = schema.get("properties", {})
+
+    assert "select" in required
+    assert "query" in required
+    assert props.get("query", {}).get("description") == AGENT_QUERY_DESCRIPTION
+
+
+def test_T1_6_compute_tool_requires_query() -> None:
+    """T1-6: compute_* tools must require query with AGENT_QUERY_DESCRIPTION."""
+    from datacloud_analysis.orchestration.execution.node import _build_tools_list
+    from datacloud_analysis.tools._agent_schema_patches import AGENT_QUERY_DESCRIPTION
+    from langchain_core.tools import StructuredTool
+    from pydantic import BaseModel
+    from pydantic import Field as PydanticField
+
+    class _ComputeSchema(BaseModel):
+        metrics: list[str] = PydanticField(default_factory=list)
+
+    async def _compute_tool(**kwargs: object) -> str:
+        _ = kwargs
+        return "ok"
+
+    compute_tool = StructuredTool(
+        name="compute_demo",
+        description="demo",
+        args_schema=_ComputeSchema,
+        coroutine=_compute_tool,
+    )
+
+    tools = _build_tools_list(default_tools={"compute_demo": compute_tool})
+    patched = next(t for t in tools if t.name == "compute_demo")
+    schema = patched.args_schema.model_json_schema()  # type: ignore[union-attr]
+    required = set(schema.get("required", []))
+    props = schema.get("properties", {})
+
+    assert "query" in required
+    assert props.get("query", {}).get("description") == AGENT_QUERY_DESCRIPTION
