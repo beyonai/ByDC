@@ -109,8 +109,7 @@ class HookAwareToolNode(ToolNode):
 
         # tool_call_id → patched_params，供工具执行后推送详情使用
         call_params_map: dict[str, dict[str, Any]] = {
-            str(tc.get("id") or ""): dict(tc.get("args") or {})
-            for tc in patched_calls
+            str(tc.get("id") or ""): dict(tc.get("args") or {}) for tc in patched_calls
         }
 
         # 实际工具执行（走 prebuilt ToolNode 原有逻辑）

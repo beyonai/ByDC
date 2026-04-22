@@ -12,14 +12,13 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from datacloud_analysis.orchestration.execution.hook_aware_tool_node import HookAwareToolNode
+from datacloud_analysis.orchestration.graph_builder import after_tools_route, should_continue
+from datacloud_analysis.tool_hook_plugins.types import ClarificationNeededError
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.tools import tool
 from langgraph.prebuilt import ToolNode
 from langgraph.types import Command
-
-from datacloud_analysis.orchestration.execution.hook_aware_tool_node import HookAwareToolNode
-from datacloud_analysis.orchestration.graph_builder import after_tools_route, should_continue
-from datacloud_analysis.tool_hook_plugins.types import ClarificationNeededError
 
 # ── 共用常量 ───────────────────────────────────────────────────────────────────
 
@@ -84,6 +83,7 @@ def _make_mock_manager(
     if clarification_error is not None:
         manager.run_before = AsyncMock(side_effect=clarification_error)
     else:
+
         async def _run_before(ctx: dict[str, Any]) -> tuple[dict[str, Any], None]:
             merged = dict(ctx)
             if patched_tool_params is not None:
@@ -138,16 +138,24 @@ async def test_han2_before_hook_patches_tool_params() -> None:
 
     captured_states: list[dict[str, Any]] = []
 
-    async def _fake_super(self_instance: Any, input_state: Any, config: Any = None, **kw: Any) -> Any:
+    async def _fake_super(
+        self_instance: Any, input_state: Any, config: Any = None, **kw: Any
+    ) -> Any:
         captured_states.append(dict(input_state) if isinstance(input_state, dict) else {})
-        return {"messages": [ToolMessage(content="ok", tool_call_id=_TOOL_CALL_ID, name="mock_query_tool")]}
+        return {
+            "messages": [
+                ToolMessage(content="ok", tool_call_id=_TOOL_CALL_ID, name="mock_query_tool")
+            ]
+        }
 
-    with patch(
-        "datacloud_analysis.orchestration.execution.hook_aware_tool_node.get_tool_hook_plugin_manager",
-        return_value=manager,
+    with (
+        patch(
+            "datacloud_analysis.orchestration.execution.hook_aware_tool_node.get_tool_hook_plugin_manager",
+            return_value=manager,
+        ),
+        patch.object(ToolNode, "ainvoke", _fake_super),
     ):
-        with patch.object(ToolNode, "ainvoke", _fake_super):
-            await node.ainvoke(state, None)
+        await node.ainvoke(state, None)
 
     assert len(captured_states) == 1, "super().ainvoke 应被调用一次"
     msgs = captured_states[0].get("messages") or []
@@ -211,15 +219,19 @@ async def test_han4_after_hook_called_with_tool_message() -> None:
     manager.run_before = _run_before
     manager.run_after = _run_after
 
-    tool_msg = ToolMessage(content="tool_result_xyz", tool_call_id=_TOOL_CALL_ID, name="mock_query_tool")
+    tool_msg = ToolMessage(
+        content="tool_result_xyz", tool_call_id=_TOOL_CALL_ID, name="mock_query_tool"
+    )
 
-    with patch(
-        "datacloud_analysis.orchestration.execution.hook_aware_tool_node.get_tool_hook_plugin_manager",
-        return_value=manager,
+    with (
+        patch(
+            "datacloud_analysis.orchestration.execution.hook_aware_tool_node.get_tool_hook_plugin_manager",
+            return_value=manager,
+        ),
+        patch.object(ToolNode, "ainvoke", new_callable=AsyncMock) as sm,
     ):
-        with patch.object(ToolNode, "ainvoke", new_callable=AsyncMock) as sm:
-            sm.return_value = {"messages": [tool_msg]}
-            await node.ainvoke(state, None)
+        sm.return_value = {"messages": [tool_msg]}
+        await node.ainvoke(state, None)
 
     assert len(after_calls) >= 1, "after hook 应至少被调用一次"
     assert any(c.get("tool_name") == "mock_query_tool" for c in after_calls), (
@@ -259,13 +271,15 @@ async def test_han5_finish_react_markdown_preserved() -> None:
     # 验证重点：HookAwareToolNode 不修改 ToolMessage content（Markdown 内容透传）
     finish_tool_msg = ToolMessage(content=markdown, tool_call_id="tc_fr", name="mock_finish_react")
 
-    with patch(
-        "datacloud_analysis.orchestration.execution.hook_aware_tool_node.get_tool_hook_plugin_manager",
-        return_value=manager,
+    with (
+        patch(
+            "datacloud_analysis.orchestration.execution.hook_aware_tool_node.get_tool_hook_plugin_manager",
+            return_value=manager,
+        ),
+        patch.object(ToolNode, "ainvoke", new_callable=AsyncMock) as sm,
     ):
-        with patch.object(ToolNode, "ainvoke", new_callable=AsyncMock) as sm:
-            sm.return_value = {"messages": [finish_tool_msg]}
-            result = await node.ainvoke(state, None)
+        sm.return_value = {"messages": [finish_tool_msg]}
+        result = await node.ainvoke(state, None)
 
     msgs = result.get("messages") or []
     tool_msgs = [m for m in msgs if isinstance(m, ToolMessage)]
