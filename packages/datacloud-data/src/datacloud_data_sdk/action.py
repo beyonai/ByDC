@@ -71,32 +71,7 @@ async def _emit_execution_step(
     status: str = "completed",
     data: dict[str, Any] | None = None,
 ) -> None:
-    """通过 gateway_context 将动作步骤实时推送出去。"""
-    from datacloud_data_sdk.context import get_gateway_context
-    from datacloud_data_sdk.utils.json_utils import dump_json
-
-    gateway_context = get_gateway_context()
-    if gateway_context is None:
-        return
-
-    emit_state = getattr(gateway_context, "emit_state", None)
-    emit_chunk = getattr(gateway_context, "emit_chunk", None)
-    if not callable(emit_state):
-        return
-
-    try:
-        await emit_state(title)
-        if callable(emit_chunk):
-            payload: dict[str, Any] = {
-                "step": step,
-                "title": title,
-                "status": status,
-            }
-            if data is not None:
-                payload["data"] = _safe_copy(data)
-            await emit_chunk(dump_json(payload))
-    except Exception:
-        logger.debug("emit execution step failed", exc_info=True)
+    """通过 gateway_context 将动作步骤实时推送出去。（已禁用）"""
 
 
 def _translate_view_params(view: Any, params: dict[str, Any]) -> dict[str, Any]:
