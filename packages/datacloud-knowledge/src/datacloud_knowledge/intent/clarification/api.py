@@ -151,6 +151,7 @@ def analyze_query_clarification_query(
             term_registry,
             structured_query,
             main_terms,
+            recall_map=recall_map,
         )
         emit.result({"needs_clarification": confirmed.needs_clarification})
 
@@ -282,6 +283,7 @@ def analyze_query_clarification_compute(
             term_registry,
             structured_compute,
             main_terms,
+            recall_map=recall_map,
         )
         emit.result({"needs_clarification": confirmed.needs_clarification})
 
@@ -794,6 +796,20 @@ def _apply_confirmed_values(
         _apply_value_list(obj, vpath, idx_vals)
 
 
+def _recall_fallback_candidates(
+    recall_map: dict[str, list[dict[str, Any]]] | None,
+    ktype: str,
+    raw_text: str,
+    limit: int = 5,
+) -> list[str]:
+    """从召回结果中提取 term_name 列表作为兜底候选。"""
+    if not recall_map:
+        return []
+    key = f"{ktype}:{raw_text}"
+    candidates = recall_map.get(key, [])
+    return [str(c.get("term_name", "")) for c in candidates[:limit] if c.get("term_name")]
+
+
 def _merge_confirmed_common(
     pre: PreResolveResult,
     main_result: MainConfirmResult | None,
@@ -801,6 +817,7 @@ def _merge_confirmed_common(
     term_registry: dict[int, TermMeta],
     structured_input: dict[str, Any],
     main_terms: list[ExtractedTerm],
+    recall_map: dict[str, list[dict[str, Any]]] | None = None,
 ) -> tuple[dict[str, Any], list[ClarifyItem], list[ConfirmedCondition], bool]:
     """合并分治确认结果的共享逻辑。
 
@@ -855,11 +872,15 @@ def _merge_confirmed_common(
                 )
             else:
                 # confirmed=None, candidates=[] → fail-closed
+                # 从召回结果回填 candidates，避免空候选列表
                 llm_failed = True
+                fallback_candidates = _recall_fallback_candidates(
+                    recall_map, meta.ktype, meta.raw_text
+                )
                 clarify_items.append(
                     ClarifyItem(
                         keyword=meta.raw_text,
-                        candidates=[],
+                        candidates=fallback_candidates,
                         reason=tc.reason or "LLM 无法确认且无候选",
                         source=meta.ktype,
                         path=f"/{meta.path.replace('.', '/')}",
@@ -876,10 +897,13 @@ def _merge_confirmed_common(
             )
             for tid in missing_ids:
                 meta = term_registry[tid]
+                fallback_candidates = _recall_fallback_candidates(
+                    recall_map, meta.ktype, meta.raw_text
+                )
                 clarify_items.append(
                     ClarifyItem(
                         keyword=meta.raw_text,
-                        candidates=[],
+                        candidates=fallback_candidates,
                         reason="LLM 确认遗漏，需要人工确认",
                         source=meta.ktype,
                         path=f"/{meta.path.replace('.', '/')}",
@@ -895,10 +919,11 @@ def _merge_confirmed_common(
         llm_failed = True
         logger.warning("[merge] main LLM 确认失败，%d 个术语强制标记为需澄清", len(term_registry))
         for meta in term_registry.values():
+            fallback_candidates = _recall_fallback_candidates(recall_map, meta.ktype, meta.raw_text)
             clarify_items.append(
                 ClarifyItem(
                     keyword=meta.raw_text,
-                    candidates=[],
+                    candidates=fallback_candidates,
                     reason="LLM 确认失败，需要人工确认",
                     source=meta.ktype,
                     path=f"/{meta.path.replace('.', '/')}",
@@ -1023,6 +1048,7 @@ def _merge_to_confirmed_query(
     term_registry: dict[int, TermMeta],
     structured_input: dict[str, Any],
     main_terms: list[ExtractedTerm],
+    recall_map: dict[str, list[dict[str, Any]]] | None = None,
 ) -> ConfirmedStructuredQuery:
     """合并分治确认结果为 ConfirmedStructuredQuery（兼容下游）。"""
     result, clarify_items, confirmed_conditions, needs = _merge_confirmed_common(
@@ -1032,6 +1058,7 @@ def _merge_to_confirmed_query(
         term_registry,
         structured_input,
         main_terms,
+        recall_map=recall_map,
     )
     return ConfirmedStructuredQuery(
         select=result.get("select", []),
@@ -1053,6 +1080,7 @@ def _merge_to_confirmed_compute(
     term_registry: dict[int, TermMeta],
     structured_input: dict[str, Any],
     main_terms: list[ExtractedTerm],
+    recall_map: dict[str, list[dict[str, Any]]] | None = None,
 ) -> ConfirmedStructuredCompute:
     """合并分治确认结果为 ConfirmedStructuredCompute（兼容下游）。"""
     result, clarify_items, confirmed_conditions, needs = _merge_confirmed_common(
@@ -1062,6 +1090,7 @@ def _merge_to_confirmed_compute(
         term_registry,
         structured_input,
         main_terms,
+        recall_map=recall_map,
     )
     return ConfirmedStructuredCompute(
         dimensions=result.get("dimensions", []),

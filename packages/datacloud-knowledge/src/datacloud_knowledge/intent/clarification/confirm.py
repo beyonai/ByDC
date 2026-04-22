@@ -567,6 +567,8 @@ MAIN_CONFIRM_SYSTEM_PROMPT = """\
 - 对每个 #编号术语，从候选中选择语义最匹配的填入 confirmed
 - 无法确定 → confirmed = null，candidates 填精选候选（最多5个），附 reason
 - 重要：如果候选中没有与原始术语语义相关的字段，必须返回 confirmed = null，严禁强行选择不相关的候选
+- candidates 不能为空：即使没有精确匹配，也必须从候选中选出最接近的 2~3 个供用户选择
+- candidates 仅从召回候选中选取，严禁编造
 - 标注"取值范围"的术语，confirmed 只能从取值范围中选取
 - 已确认字段仅供理解上下文，不需要处理
 - 候选列表中排在前面的通常更相关，但要结合语义判断
