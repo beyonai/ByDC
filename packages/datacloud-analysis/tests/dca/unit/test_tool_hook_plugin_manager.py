@@ -156,7 +156,7 @@ async def test_builtin_semantic_param_enhancer_patches_tool_params(
     get_tool_hook_plugin_manager.cache_clear()
 
 
-async def test_tool_hook_manager_strict_mode_turns_callback_exception_into_fail_decision(
+async def test_tool_hook_manager_callback_exception_turns_into_fail_decision(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     plugin_dir = tmp_path / "tool_plugins"
@@ -174,7 +174,6 @@ async def test_tool_hook_manager_strict_mode_turns_callback_exception_into_fail_
     )
 
     monkeypatch.setenv("DATACLOUD_TOOL_HOOK_PLUGIN_DIRS", str(plugin_dir))
-    monkeypatch.setenv("DATACLOUD_TOOL_PLUGIN_STRICT", "true")
     get_tool_hook_plugin_manager.cache_clear()
     manager = get_tool_hook_plugin_manager()
     context: HookContext = {"tool_name": "any_tool", "tool_params": {}}

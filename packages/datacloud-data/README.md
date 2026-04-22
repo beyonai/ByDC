@@ -126,14 +126,7 @@ cp .env.example .env
 | `DC_ONTOLOGY_PATH` | 是 | 本体 JSON 文件路径 | `../../examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json` |
 | `DC_SCENE_PATH` | 否 | 场景 JSON 文件路径 | `../../examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json` |
 
-#### 术语服务配置
-
-| 变量名 | 必填 | 说明 | 示例 |
-|--------|------|------|------|
-| `DC_TERM_LOADER_TYPE` | 否 | 术语加载模式：`api` 或 `kb`，默认 `api` | `kb` |
-| `DC_ZNT_SERVER` | api模式时必填 | 术语服务 API 地址 | `https://byai.iwhalecloud.com/developer/knowledgeService` |
-
-#### 知识库数据库配置（KB 模式时需要）
+#### 知识库数据库配置（术语加载需要）
 
 | 变量名 | 必填 | 说明 | 示例 |
 |--------|------|------|------|
@@ -229,14 +222,7 @@ export DC_LLM_MODEL="gpt-4o"
 export DC_LLM_TEMPERATURE="0.0"
 export DC_MAX_PLAN_RETRIES="2"
 
-# 2. 术语加载
-# 推荐先用 api，避免默认走 kb 后还需要额外配置知识库数据库
-export DC_TERM_LOADER_TYPE="api"
-
-# 如果使用 api 术语模式，需要配置术语服务地址
-export DC_ZNT_SERVER="https://byai.iwhalecloud.com/developer/knowledgeService"
-
-# 如果使用 kb 术语模式，需要配置知识库连接
+# 2. 术语加载（知识库）
 # export DB_HOST="127.0.0.1"
 # export DB_PORT="5432"
 # export DB_USER="postgres"
@@ -253,8 +239,8 @@ export DC_SQL_EXECUTION_MODE="internal"
 说明：
 
 - 如果不配置 `DC_LLM_API_KEY`，`LangGraphPlanGenerator(...)` 这类自然语言查询能力无法正常工作
-- `TermLoader.from_config({})` 会从环境变量读取 `DC_TERM_LOADER_TYPE`；默认值是 `kb`
-- `DC_TERM_LOADER_TYPE=kb` 时，需要同时配置知识库数据库连接；`DC_TERM_LOADER_TYPE=api` 时，需要配置 `DC_ZNT_SERVER`
+- `TermLoader.from_config({})` 现在固定使用知识库术语加载器
+- 术语解析依赖知识库数据库连接配置
 - 如果你在代码里像下面示例一样手动 `load_from_path(...)` / `load_scene_from_path(...)`，那么 `DC_ONTOLOGY_PATH`、`DC_SCENE_PATH` 不是必需的
 - 如果你把路径也想交给环境变量管理，可以在代码里读取 `DC_ONTOLOGY_PATH`、`DC_SCENE_PATH`
 - `sales_business_opportunity` 这类 DB 对象查询依赖本体内配置的数据源可连通
@@ -479,7 +465,7 @@ asyncio.run(main())
 补充说明：
 
 - `LangGraphPlanGenerator(...)` 对齐 service 的 NL2SQL 计划生成方式
-- `TermLoader.from_config({})` 对齐 service 的术语加载方式，会从环境变量读取 `DC_TERM_LOADER_TYPE`、`DC_ZNT_SERVER`
+- `TermLoader.from_config({})` 对齐 service 的术语加载方式，固定使用知识库术语加载器
 - Service 启动时还会自动为 DB / KB 对象注入 `query_{object_code}` 这类虚拟查询动作
 
 查询结果为普通 Python `dict`，通常包含：

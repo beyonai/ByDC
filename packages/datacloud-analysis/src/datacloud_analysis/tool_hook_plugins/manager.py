@@ -52,11 +52,6 @@ async def _invoke_callback(
     return cast(HookDecision | None, result)
 
 
-def _strict_mode() -> bool:
-    raw = str(os.getenv("DATACLOUD_TOOL_PLUGIN_STRICT", "")).strip().lower()
-    return raw in {"1", "true", "yes", "on"}
-
-
 class ToolHookPluginManager:
     """Runtime manager for tool hook plugins."""
 
@@ -130,23 +125,12 @@ class ToolHookPluginManager:
         except HookSignalError:
             raise
         except Exception as exc:  # noqa: BLE001
-            if _strict_mode():
-                logger.error(
-                    "Tool hook callback failed in strict mode: plugin_id=%s error=%s",
-                    plugin_id,
-                    exc,
-                )
-                return {
-                    "action": "fail",
-                    "result": {
-                        "tool_error": {"error_type": type(exc).__name__, "message": str(exc)}
-                    },
-                    "audit": {"plugin_id": plugin_id, "message": "strict mode callback exception"},
-                }
-            logger.warning(
-                "Tool hook callback failed, ignored: plugin_id=%s error=%s", plugin_id, exc
-            )
-            return None
+            logger.error("Tool hook callback failed: plugin_id=%s error=%s", plugin_id, exc)
+            return {
+                "action": "fail",
+                "result": {"tool_error": {"error_type": type(exc).__name__, "message": str(exc)}},
+                "audit": {"plugin_id": plugin_id, "message": "callback exception"},
+            }
 
     def _iter_matched_plugins(
         self, tool_name: str, *, reverse: bool
@@ -259,30 +243,7 @@ def _candidate_extension_dirs() -> list[Path]:
     env_raw = os.getenv("DATACLOUD_TOOL_HOOK_PLUGIN_DIRS", "").strip()
     if env_raw:
         dirs.extend(Path(item.strip()) for item in env_raw.split(os.pathsep) if item.strip())
-
-    repo_root = _find_repo_root()
-    if repo_root is not None:
-        dirs.append(
-            repo_root
-            / "examples"
-            / "e_commerce_demo"
-            / "backend"
-            / "datacloud_service"
-            / "plugins"
-            / "tool_hook_plugins"
-        )
     return dirs
-
-
-def _find_repo_root() -> Path | None:
-    current = Path(__file__).resolve()
-    for parent in current.parents:
-        marker = (
-            parent / "examples" / "e_commerce_demo" / "backend" / "datacloud_service" / "plugins"
-        )
-        if marker.exists():
-            return parent
-    return None
 
 
 def _load_plugins_from_dir(directory: Path, *, source_prefix: str) -> list[_LoadedToolHookPlugin]:

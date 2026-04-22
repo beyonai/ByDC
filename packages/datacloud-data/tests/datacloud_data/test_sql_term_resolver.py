@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datacloud_data_sdk.ontology.term_loader import TermLoader
+from datacloud_data_sdk.ontology.term_loader import KbTermLoader
 from datacloud_data_sdk.plan.models import (
     ObjectViewField,
     ObjectViewObject,
@@ -14,7 +14,7 @@ from datacloud_data_sdk.plan.sql_term_resolver import resolve_sql_literals
 
 def test_resolve_sql_literals_col_equals_value() -> None:
     """col = '待办' 替换为 col = 'TODO'。"""
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {
             "status.code": [
                 {"code": "TODO", "label": "待办"},
@@ -50,7 +50,7 @@ def test_resolve_sql_literals_col_equals_value() -> None:
 
 def test_resolve_sql_literals_no_term_set_passthrough() -> None:
     """无 term_set 的字段不替换。"""
-    loader = TermLoader.from_mapping({"status.code": [{"code": "TODO", "label": "待办"}]})
+    loader = KbTermLoader({"status.code": [{"code": "TODO", "label": "待办"}]})
     payload = ObjectViewPayload(
         view_id="v1",
         sources=[ObjectViewSource(source_id="s1", source_type="DB", datasource_alias="ds1")],
@@ -75,7 +75,7 @@ def test_resolve_sql_literals_no_term_set_passthrough() -> None:
 
 def test_resolve_sql_literals_no_payload_passthrough() -> None:
     """无 payload 时原样返回。"""
-    loader = TermLoader.from_mapping({"status.code": [{"code": "TODO", "label": "待办"}]})
+    loader = KbTermLoader({"status.code": [{"code": "TODO", "label": "待办"}]})
     sql = "SELECT * FROM sales_bo WHERE status_code = '待办'"
     result = resolve_sql_literals(sql, None, "ds1", loader)
     assert result == sql
@@ -83,7 +83,7 @@ def test_resolve_sql_literals_no_payload_passthrough() -> None:
 
 def test_resolve_sql_literals_with_table_alias() -> None:
     """FROM sales_bo sb WHERE sb.status_code = '待办' 替换为 'TODO'。"""
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {
             "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
         }

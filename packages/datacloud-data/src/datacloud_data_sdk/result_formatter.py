@@ -32,14 +32,13 @@ def build_query_response(
     *,
     csv_manager: Any,
     threshold: int = 10,
-    preview_rows: int = 5,
 ) -> dict[str, Any]:
     """
     将原始查询结果格式化为标准 data 结构。
 
     当 threshold > 0 且 records 数量超过阈值时：
     - 完整数据写入 CSV 文件（exports/）
-    - data.records 仅保留前 preview_rows 行
+    - data.records 仅保留前 threshold 行
     - data.file.file_url 为 CSV 文件本地路径
     - data.pagination 描述分页信息
     - data.overflow_notice 给出提示
@@ -48,7 +47,6 @@ def build_query_response(
         raw_result: SDK 查询返回的原始字典，含 records / meta / trace / plan(可选)
         csv_manager: CsvStorageManager 实例
         threshold: 超过该行数才触发 overflow（0 = 不限制）
-        preview_rows: overflow 时返回的预览行数
 
     Returns:
         标准 data 结构字典
@@ -75,6 +73,7 @@ def build_query_response(
         data["execution_steps"] = execution_steps
 
     if threshold > 0 and total > threshold:
+        preview_limit = threshold
         # meta["columns"] 可能是字符串列表（ViewLookupExecutor / _normalize_to_unified_format
         # 生成的原始字段码）或字典列表（{"name": ..., "label": ...}），需兼容两种格式
         columns = [
@@ -88,7 +87,7 @@ def build_query_response(
         export_meta: dict[str, Any] = {
             "columns": meta.get("columns", []),
             "overflow": True,
-            "preview_rows": preview_rows,
+            "preview_rows": min(total, preview_limit),
             "viewId": meta.get("viewId") or meta.get("objectId", ""),
             "trace": trace,
         }
@@ -96,16 +95,16 @@ def build_query_response(
             records, columns=columns or None, meta=export_meta
         )
 
-        preview = records[:preview_rows]
-        total_pages = ceil(total / preview_rows) if preview_rows > 0 else 0
+        preview = records[:preview_limit]
+        total_pages = ceil(total / preview_limit)
 
         data["records"] = preview
         data["pagination"] = {
             "page": 1,
-            "page_size": preview_rows,
+            "page_size": preview_limit,
             "total": total,
             "total_pages": total_pages,
-            "has_next": total > preview_rows,
+            "has_next": total > preview_limit,
             "has_prev": False,
         }
         data["meta"] = {

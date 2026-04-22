@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import tempfile
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from datacloud_data_sdk.context import InvocationContext
 
 # ---------------------------------------------------------------------------
 # ask_user tool
@@ -48,8 +48,7 @@ class TestFileIOTools:
         with tempfile.TemporaryDirectory() as tmpdir:
             test_file = Path(tmpdir) / "test.txt"
             test_file.write_text("hello world", encoding="utf-8")
-
-            with patch.dict(os.environ, {"DATACLOUD_ACTIVE_WORKSPACE": tmpdir}):
+            with InvocationContext(workspace_dir=tmpdir):
                 result = await read_file.ainvoke({"path": "test.txt"})
 
         assert result == "hello world"
@@ -58,13 +57,7 @@ class TestFileIOTools:
     async def test_read_file_missing_returns_error(self) -> None:
         from datacloud_analysis.tools.file_io import read_file
 
-        with (
-            tempfile.TemporaryDirectory() as tmpdir,
-            patch.dict(
-                os.environ,
-                {"DATACLOUD_ACTIVE_WORKSPACE": tmpdir},
-            ),
-        ):
+        with tempfile.TemporaryDirectory() as tmpdir, InvocationContext(workspace_dir=tmpdir):
             result = await read_file.ainvoke({"path": "nonexistent.txt"})
 
         assert "错误" in result or "error" in result.lower()
@@ -73,13 +66,7 @@ class TestFileIOTools:
     async def test_write_file_creates_file(self) -> None:
         from datacloud_analysis.tools.file_io import write_file
 
-        with (
-            tempfile.TemporaryDirectory() as tmpdir,
-            patch.dict(
-                os.environ,
-                {"DATACLOUD_ACTIVE_WORKSPACE": tmpdir},
-            ),
-        ):
+        with tempfile.TemporaryDirectory() as tmpdir, InvocationContext(workspace_dir=tmpdir):
             result = await write_file.ainvoke({"path": "output.txt", "content": "data"})
             written = await asyncio.to_thread(Path(tmpdir, "output.txt").read_text)
 
@@ -91,13 +78,7 @@ class TestFileIOTools:
         """Accessing files outside workspace_dir should return an error."""
         from datacloud_analysis.tools.file_io import read_file
 
-        with (
-            tempfile.TemporaryDirectory() as tmpdir,
-            patch.dict(
-                os.environ,
-                {"DATACLOUD_ACTIVE_WORKSPACE": tmpdir},
-            ),
-        ):
+        with tempfile.TemporaryDirectory() as tmpdir, InvocationContext(workspace_dir=tmpdir):
             result = await read_file.ainvoke({"path": "../../etc/passwd"})
 
         assert "错误" in result or "error" in result.lower() or "outside" in result.lower()
@@ -192,17 +173,14 @@ class TestFileIOToolsWithGateway:
         assert isinstance(result, str)
 
     @pytest.mark.asyncio
-    async def test_read_file_falls_back_to_local_when_context_is_none(self) -> None:
-        """用例 4：_context 为 None 时降级本地实现。"""
+    async def test_read_file_falls_back_to_current_directory_when_context_is_none(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """用例 4：_context 与 InvocationContext 都不存在时，降级到当前目录。"""
         from datacloud_analysis.tools.file_io import read_file
 
-        with (
-            tempfile.TemporaryDirectory() as tmpdir,
-            patch.dict(
-                os.environ,
-                {"DATACLOUD_ACTIVE_WORKSPACE": tmpdir},
-            ),
-        ):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            monkeypatch.chdir(tmpdir)
             await asyncio.to_thread(
                 Path(tmpdir, "data.txt").write_text,
                 "fallback content",

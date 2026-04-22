@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -107,9 +107,7 @@ class TestResolveViaAliases:
             unresolved=[],
         )
         with patch(f"{_PLUGIN_MOD}.resolve_field_aliases", return_value=mock_result):
-            resolved, unresolved = _resolve_via_aliases(
-                ["营收"], [], "scene_enterprise_analysis"
-            )
+            resolved, unresolved = _resolve_via_aliases(["营收"], [], "scene_enterprise_analysis")
         assert resolved == {}
         assert unresolved == ["营收"]
 
@@ -122,9 +120,7 @@ class TestResolveViaAliases:
             f"{_PLUGIN_MOD}.resolve_field_aliases",
             side_effect=RuntimeError("DB down"),
         ):
-            resolved, unresolved = _resolve_via_aliases(
-                ["营收"], [], "scene_enterprise_analysis"
-            )
+            resolved, unresolved = _resolve_via_aliases(["营收"], [], "scene_enterprise_analysis")
         assert resolved == {}
         assert unresolved == ["营收"]
 

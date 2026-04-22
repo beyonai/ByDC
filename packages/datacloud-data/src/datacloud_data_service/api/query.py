@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import csv
 import json
-import os
 from typing import Any
 
 import anyio
@@ -27,6 +26,7 @@ from datacloud_data_service.config import get_settings
 from datacloud_data_service.loader_runtime import LoaderSnapshot, get_request_loader_snapshot
 
 router = APIRouter()
+_INCLUDE_PLAN_IN_RESPONSE = False
 
 
 def _build_context_kwargs(request: Request) -> dict[str, str]:
@@ -43,22 +43,6 @@ def _build_context_kwargs(request: Request) -> dict[str, str]:
 def _load_csv_rows_from_text(content: str) -> list[dict[str, str]]:
     """Load CSV rows from text content."""
     return [dict(row) for row in csv.DictReader(content.splitlines())]
-
-
-def _parse_include_plan() -> bool:
-    """
-    解析是否在响应中包含执行计划
-
-    从环境变量 DATACLOUD_INCLUDE_PLAN_IN_RESPONSE 读取配置。
-
-    Returns:
-        bool: 是否包含计划
-    """
-    raw = os.environ.get("DATACLOUD_INCLUDE_PLAN_IN_RESPONSE")
-    if raw is None:
-        raw = os.environ.get("DC_INCLUDE_PLAN_IN_RESPONSE", "true")
-    v = raw.lower()
-    return v not in ("false", "0")
 
 
 class QueryRequest(BaseModel):
@@ -134,13 +118,12 @@ async def query_endpoint(body: QueryRequest, request: Request) -> QueryResponse:
             from datacloud_data_service.tools.unified_query import UnifiedQuery
 
             query = UnifiedQuery(loader)
-            include_plan = _parse_include_plan()
             mcp_result = await query.execute(
                 question=body.question,
                 view_id=body.view_id,
                 object_ids=body.object_ids or None,
                 knowledge_context=body.knowledge_context,
-                include_plan=include_plan,
+                include_plan=_INCLUDE_PLAN_IN_RESPONSE,
                 page=body.page if body.page > 0 else 1,
                 page_size=body.page_size if body.page_size > 0 else 100,
             )

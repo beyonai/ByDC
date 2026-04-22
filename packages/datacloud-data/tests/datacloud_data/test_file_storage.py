@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 from datacloud_data_sdk.context import InvocationContext
 from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
-from datacloud_data_sdk.file_storage.api import ApiResultFileStorage
 from datacloud_data_sdk.file_storage.local import LocalResultFileStorage
 
 
@@ -43,42 +41,3 @@ def test_csv_storage_manager_save_export_uses_result_file_storage(tmp_path: Path
     assert meta["viewId"] == "demo_view"
     assert meta["file_url"] == str(file_path)
     assert meta["storage_type"] == "local"
-
-
-def test_api_result_file_storage_calls_remote_api() -> None:
-    write_response = MagicMock()
-    write_response.headers = {"content-type": "application/json"}
-    write_response.json.return_value = {"filePath": "/datacloud/exports/demo.csv"}
-    write_response.raise_for_status.return_value = None
-
-    read_response = MagicMock()
-    read_response.headers = {"content-type": "application/json"}
-    read_response.json.return_value = {"content": "id,name\n1,alice\n"}
-    read_response.raise_for_status.return_value = None
-
-    storage = ApiResultFileStorage(base_url="http://file-service")
-
-    with patch("httpx.Client.post", side_effect=[write_response, read_response]) as post_mock:
-        with InvocationContext(
-            user_id="00270019281",
-            session_id="12345",
-            token="abc123",
-            system_code="dc",
-        ):
-            stored_path = storage.write_text("/datacloud/exports/demo.csv", "id,name\n1,alice\n")
-            content = storage.read_text("/datacloud/exports/demo.csv")
-
-    assert stored_path == "/datacloud/exports/demo.csv"
-    assert content == "id,name\n1,alice\n"
-
-    first_call = post_mock.call_args_list[0]
-    assert first_call.kwargs["json"]["userCode"] == "00270019281"
-    assert first_call.kwargs["json"]["sessionId"] == "12345"
-    assert first_call.kwargs["json"]["filePath"] == "/datacloud/exports/demo.csv"
-    assert first_call.kwargs["headers"]["Authorization"] == "Bearer abc123"
-    assert first_call.kwargs["headers"]["X-System-Code"] == "dc"
-
-    second_call = post_mock.call_args_list[1]
-    assert second_call.kwargs["json"]["begin_line"] == 0
-    assert second_call.kwargs["json"]["end_line"] == -1
-    assert second_call.kwargs["json"]["fileType"] == "txt"

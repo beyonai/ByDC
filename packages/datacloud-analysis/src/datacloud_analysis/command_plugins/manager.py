@@ -163,30 +163,7 @@ def _candidate_command_plugin_dirs() -> list[Path]:
     env_raw = os.getenv("DATACLOUD_COMMAND_PLUGIN_DIRS", "").strip()
     if env_raw:
         dirs.extend(Path(item.strip()) for item in env_raw.split(os.pathsep) if item.strip())
-
-    repo_root = _find_repo_root()
-    if repo_root is not None:
-        dirs.append(
-            repo_root
-            / "examples"
-            / "e_commerce_demo"
-            / "backend"
-            / "datacloud_service"
-            / "plugins"
-            / "command_plugins"
-        )
     return dirs
-
-
-def _find_repo_root() -> Path | None:
-    current = Path(__file__).resolve()
-    for parent in current.parents:
-        marker = (
-            parent / "examples" / "e_commerce_demo" / "backend" / "datacloud_service" / "plugins"
-        )
-        if marker.exists():
-            return parent
-    return None
 
 
 def _load_one_extension_plugin(path: Path) -> _LoadedCommandPlugin | None:

@@ -41,34 +41,10 @@ class Settings(BaseSettings):
         default="./tmp",
         validation_alias="DATACLOUD_RESULT_FILE_BASE_DIR",
     )
-    result_file_api_base_url: str = Field(
-        default="",
-        validation_alias="DATACLOUD_RESULT_FILE_API_BASE_URL",
-    )
-    result_file_api_write_txt_path: str = Field(
-        default="/writeTxt",
-        validation_alias="DATACLOUD_RESULT_FILE_API_WRITE_TXT_PATH",
-    )
-    result_file_api_append_txt_path: str = Field(
-        default="/appendTxt",
-        validation_alias="DATACLOUD_RESULT_FILE_API_APPEND_TXT_PATH",
-    )
-    result_file_api_read_path: str = Field(
-        default="/read",
-        validation_alias="DATACLOUD_RESULT_FILE_API_READ_PATH",
-    )
-    result_file_api_timeout: float = Field(
-        default=30.0,
-        validation_alias="DATACLOUD_RESULT_FILE_API_TIMEOUT",
-    )
     # 查询结果溢出：超过阈值时存 CSV 并提供下载，避免模型上下文超长
     query_result_csv_threshold: int = Field(
         default=5,
         validation_alias="DATACLOUD_QUERY_RESULT_CSV_THRESHOLD",
-    )
-    query_result_preview_rows: int = Field(
-        default=5,
-        validation_alias="DATACLOUD_QUERY_RESULT_PREVIEW_ROWS",
     )
     api_base_url: str = Field(
         default="http://127.0.0.1:8080",
@@ -104,8 +80,6 @@ class Settings(BaseSettings):
         default=300,
         validation_alias="DATACLOUD_LOADER_WATCH_POLL_DELAY_MS",
     )
-    znt_server: str = Field(default="", validation_alias="DATACLOUD_ZNT_SERVER")
-    term_loader_type: str = Field(default="kb", validation_alias="DATACLOUD_TERM_LOADER_TYPE")
     # CORS 允许的源，逗号分隔，如 "http://localhost:3000,http://127.0.0.1:3000"
     cors_origins: str = Field(
         default="http://localhost:3000,http://127.0.0.1:3000",

@@ -1,7 +1,7 @@
 """DynamicQueryToolGenerator 单元测试。"""
 
 from datacloud_data_sdk.ontology.loader import OntologyLoader
-from datacloud_data_sdk.ontology.term_loader import TermLoader
+from datacloud_data_sdk.ontology.term_loader import KbTermLoader
 
 from datacloud_data_service.tools.dynamic_query_tool_generator import (
     DynamicQueryToolGenerator,
@@ -77,7 +77,7 @@ def test_term_field_gets_enum_when_term_loader_configured() -> None:
     """配置 term_loader 时，术语字段的 value 有 enum。"""
     loader = OntologyLoader()
     loader.load_from_path("resources/ontology/crm_demo/objects_registry.json")
-    term_loader = TermLoader.from_mapping(
+    term_loader = KbTermLoader(
         {"staffName.code": [{"code": "E001", "label": "张三"}, {"code": "E002", "label": "李四"}]}
     )
     loader.configure(term_loader=term_loader)

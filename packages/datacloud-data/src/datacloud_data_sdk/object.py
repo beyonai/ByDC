@@ -462,7 +462,6 @@ class Object:
                 raw_result,
                 csv_manager=csv_manager,
                 threshold=config.query_result_csv_threshold,
-                preview_rows=config.query_result_preview_rows,
             )
 
         except CannotAnswerError as exc:

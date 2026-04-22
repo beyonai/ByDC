@@ -180,6 +180,266 @@ PARAM_TYPE_MAP: dict[str, str] = {
 将本体定义中的参数类型（如 STRING, INTEGER）映射到 JSON Schema 标准类型。
 """
 
+_MAPPING_LOCATION_ALIASES: dict[str, str] = {
+    "requestBody": "body",
+    "body": "body",
+    "parameters": "body",
+    "query": "query",
+    "queryParams": "query",
+    "path": "path",
+    "pathParams": "path",
+    "headers": "headers",
+    "header": "headers",
+}
+_INPUT_LOCATION_ROOT_KEYS: dict[str, tuple[str, ...]] = {
+    "body": ("requestBody", "body", "parameters"),
+    "query": ("query", "queryParams"),
+    "path": ("path", "pathParams"),
+    "headers": ("headers", "header"),
+}
+_LOCATION_SCHEMA_KEYS: dict[str, str] = {
+    "body": "requestBody",
+    "query": "query",
+    "path": "path",
+    "headers": "headers",
+}
+_WRAPPER_INPUT_KEYS = frozenset(
+    {
+        "requestBody",
+        "body",
+        "parameters",
+        "query",
+        "queryParams",
+        "path",
+        "pathParams",
+        "headers",
+        "header",
+    }
+)
+_MISSING = object()
+
+
+def _normalize_mapping_location(location: str) -> str:
+    """归一化 mapping_path 位置前缀。"""
+    return _MAPPING_LOCATION_ALIASES.get(location, location)
+
+
+def _parse_mapping_path(
+    mapping_path: str,
+    *,
+    default_location: str,
+) -> tuple[str, list[str]]:
+    """解析 mapping_path，返回归一化后的 location 与剩余路径。"""
+    normalized_default = _normalize_mapping_location(default_location)
+    if not mapping_path.startswith("$."):
+        return normalized_default, []
+
+    parts = [part for part in mapping_path[2:].split(".") if part]
+    if not parts:
+        return normalized_default, []
+
+    first_part = parts[0]
+    if first_part in _MAPPING_LOCATION_ALIASES:
+        return _normalize_mapping_location(first_part), parts[1:]
+    return normalized_default, parts
+
+
+def _schema_location_key(location: str) -> str:
+    """将运行时位置映射为 input schema 顶层 key。"""
+    normalized = _normalize_mapping_location(location)
+    return _LOCATION_SCHEMA_KEYS.get(normalized, normalized)
+
+
+def _append_required(schema: dict[str, Any], field_name: str) -> None:
+    """为 schema 节点追加 required 字段。"""
+    required = schema.setdefault("required", [])
+    if isinstance(required, list) and field_name not in required:
+        required.append(field_name)
+
+
+def _ensure_object_schema(schema: dict[str, Any]) -> None:
+    """确保 schema 节点为 object。"""
+    schema.setdefault("type", "object")
+    schema.setdefault("properties", {})
+
+
+def _ensure_array_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """确保 schema 节点为数组，并返回 items 节点。"""
+    schema.setdefault("type", "array")
+    items = schema.setdefault("items", {"type": "object", "properties": {}})
+    if isinstance(items, dict):
+        items.setdefault("type", "object")
+        items.setdefault("properties", {})
+        return items
+    schema["items"] = {"type": "object", "properties": {}}
+    return schema["items"]
+
+
+def _assign_schema_path(
+    root: dict[str, Any],
+    path_parts: list[str],
+    leaf_schema: dict[str, Any],
+    *,
+    required: bool,
+) -> None:
+    """将叶子 schema 按 path_parts 合并到根节点。"""
+    if not path_parts:
+        _ensure_object_schema(root)
+        properties = root.setdefault("properties", {})
+        if isinstance(properties, dict):
+            properties.update(leaf_schema)
+        return
+
+    current = root
+    index = 0
+    if path_parts and path_parts[0] == "[]":
+        if len(path_parts) == 1:
+            root.clear()
+            root.update({"type": "array", "items": leaf_schema})
+            return
+        current = _ensure_array_schema(root)
+        index = 1
+
+    for raw_part in path_parts[index:]:
+        is_last = raw_part == path_parts[-1]
+        is_array = raw_part.endswith("[]")
+        part = raw_part[:-2] if is_array else raw_part
+        _ensure_object_schema(current)
+        properties = current.setdefault("properties", {})
+        if not isinstance(properties, dict):
+            current["properties"] = {}
+            properties = current["properties"]
+
+        if is_last:
+            if is_array:
+                properties[part] = {"type": "array", "items": leaf_schema}
+            else:
+                properties[part] = leaf_schema
+            if required:
+                _append_required(current, part)
+            return
+
+        if required:
+            _append_required(current, part)
+        if is_array:
+            node = properties.setdefault(
+                part, {"type": "array", "items": {"type": "object", "properties": {}}}
+            )
+            if not isinstance(node, dict):
+                node = {"type": "array", "items": {"type": "object", "properties": {}}}
+                properties[part] = node
+            current = _ensure_array_schema(node)
+        else:
+            node = properties.setdefault(part, {"type": "object", "properties": {}})
+            if not isinstance(node, dict):
+                node = {"type": "object", "properties": {}}
+                properties[part] = node
+            _ensure_object_schema(node)
+            current = node
+
+
+def _extract_structured_value(value: Any, path_parts: list[str]) -> Any:
+    """从嵌套输入结构中提取 mapping_path 对应的值。"""
+    if not path_parts:
+        return value
+
+    head = path_parts[0]
+    tail = path_parts[1:]
+    if head == "[]":
+        if not isinstance(value, list):
+            return _MISSING
+        if not tail:
+            return value
+        extracted_items: list[Any] = []
+        for item in value:
+            extracted = _extract_structured_value(item, tail)
+            extracted_items.append(None if extracted is _MISSING else extracted)
+        return extracted_items
+
+    if head.endswith("[]"):
+        key = head[:-2]
+        if not isinstance(value, dict):
+            return _MISSING
+        child = value.get(key, _MISSING)
+        if child is _MISSING or not isinstance(child, list):
+            return _MISSING
+        if not tail:
+            return child
+        extracted_items = []
+        for item in child:
+            extracted = _extract_structured_value(item, tail)
+            extracted_items.append(None if extracted is _MISSING else extracted)
+        return extracted_items
+
+    if not isinstance(value, dict):
+        return _MISSING
+    child = value.get(head, _MISSING)
+    if child is _MISSING:
+        return _MISSING
+    return _extract_structured_value(child, tail)
+
+
+def _coerce_sequence(value: Any) -> list[Any]:
+    """将值标准化为 list，用于数组路径赋值。"""
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    return [value]
+
+
+def _make_runtime_container(path_parts: list[str]) -> Any:
+    """根据剩余路径推断运行时容器类型。"""
+    if path_parts and path_parts[0] == "[]":
+        return []
+    return {}
+
+
+def _assign_runtime_path(container: Any, path_parts: list[str], value: Any) -> Any:
+    """按 path_parts 将值写入运行时请求结构。"""
+    if not path_parts:
+        return value
+
+    head = path_parts[0]
+    tail = path_parts[1:]
+    if head == "[]":
+        values = _coerce_sequence(value)
+        if not tail:
+            return values
+        result = container if isinstance(container, list) else []
+        while len(result) < len(values):
+            result.append(_make_runtime_container(tail))
+        for index, item_value in enumerate(values):
+            result[index] = _assign_runtime_path(result[index], tail, item_value)
+        return result
+
+    if head.endswith("[]"):
+        key = head[:-2]
+        current = container if isinstance(container, dict) else {}
+        values = _coerce_sequence(value)
+        if not tail:
+            current[key] = values
+            return current
+        items = current.get(key)
+        if not isinstance(items, list):
+            items = []
+        while len(items) < len(values):
+            items.append(_make_runtime_container(tail))
+        for index, item_value in enumerate(values):
+            items[index] = _assign_runtime_path(items[index], tail, item_value)
+        current[key] = items
+        return current
+
+    current = container if isinstance(container, dict) else {}
+    if not tail:
+        current[head] = value
+        return current
+    next_container = current.get(head)
+    if not isinstance(next_container, (dict, list)):
+        next_container = _make_runtime_container(tail)
+    current[head] = _assign_runtime_path(next_container, tail, value)
+    return current
+
 
 class Action:
     """
@@ -243,7 +503,7 @@ class Action:
         else:
             in_params = [p for p in self._action.params if p.direction in ("IN", "INOUT")]
             out_params = [p for p in self._action.params if p.direction in ("OUT", "INOUT")]
-            inp = self._build_schema(in_params)
+            inp = self._build_input_schema(in_params)
             out = self._build_schema(out_params)
         result = {
             "name": self._action.action_code,
@@ -254,6 +514,50 @@ class Action:
         }
         self._action._schema_cache = result
         return result
+
+    def _build_input_schema(self, params: list[OntologyActionParam]) -> dict[str, object]:
+        """为非虚拟动作构造输入 schema，支持 requestBody/query/path 分层。"""
+        if not params:
+            return {"type": "object", "properties": {}}
+
+        has_structured_mapping = any(
+            getattr(param, "mapping_path", "").startswith("$.") for param in params
+        )
+        if not has_structured_mapping:
+            return self._build_schema(params)
+
+        schema: dict[str, Any] = {"type": "object", "properties": {}}
+        wrapper_required: set[str] = set()
+        properties = schema["properties"]
+        for param in params:
+            leaf_schema = self._build_param_schema(param)
+            location, path_parts = _parse_mapping_path(
+                getattr(param, "mapping_path", ""),
+                default_location="body",
+            )
+            location_key = _schema_location_key(location)
+            if not path_parts:
+                properties[param.param_code] = leaf_schema
+                if param.required:
+                    wrapper_required.add(param.param_code)
+                continue
+
+            node = properties.setdefault(location_key, {})
+            if not isinstance(node, dict):
+                node = {}
+                properties[location_key] = node
+            _assign_schema_path(
+                node,
+                path_parts,
+                leaf_schema,
+                required=param.required,
+            )
+            if param.required:
+                wrapper_required.add(location_key)
+
+        if wrapper_required:
+            schema["required"] = sorted(wrapper_required)
+        return schema
 
     def _build_schema(self, params: list[OntologyActionParam]) -> dict[str, object]:
         """
@@ -415,6 +719,60 @@ class Action:
             mapped[param_code] = value
         return mapped
 
+    def _default_request_location(self) -> str:
+        """推断当前动作默认的请求位置。"""
+        if self._action.function_refs and self._loader:
+            config = self._loader.get_function_config(self._action.function_refs[0])
+            if config:
+                method, _ = self._get_request_target(config)
+                if method.upper() in {"GET", "DELETE", "HEAD"}:
+                    return "query"
+        return "body"
+
+    def _find_input_value(
+        self,
+        arguments: dict[str, Any],
+        param: OntologyActionParam,
+        *,
+        default_location: str,
+    ) -> Any:
+        """从平铺或结构化参数中读取指定动作参数值。"""
+        for candidate in (param.param_code, param.param_name):
+            if candidate and candidate in arguments:
+                return arguments[candidate]
+
+        location, path_parts = _parse_mapping_path(
+            param.mapping_path, default_location=default_location
+        )
+        for root_key in _INPUT_LOCATION_ROOT_KEYS.get(location, ()):
+            root_value = arguments.get(root_key, _MISSING)
+            if root_value is _MISSING:
+                continue
+            extracted = _extract_structured_value(root_value, path_parts)
+            if extracted is not _MISSING:
+                return extracted
+        return _MISSING
+
+    def _normalize_input_params(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        """将结构化输入参数还原为 param_code -> value。"""
+        normalized: dict[str, Any] = {}
+        consumed_keys: set[str] = set()
+        default_location = self._default_request_location()
+        for param in self._action.params:
+            if param.direction not in ("IN", "INOUT"):
+                continue
+            value = self._find_input_value(arguments, param, default_location=default_location)
+            if value is _MISSING:
+                continue
+            normalized[param.param_code] = value
+            consumed_keys.update({param.param_code, param.param_name})
+
+        for key, value in arguments.items():
+            if key in consumed_keys or key in _WRAPPER_INPUT_KEYS:
+                continue
+            normalized.setdefault(key, value)
+        return normalized
+
     async def execute(self, params: dict[str, object]) -> dict[str, object]:
         """
         执行动作
@@ -446,7 +804,6 @@ class Action:
 
         cfg = self._loader._config if self._loader else None
         threshold = cfg.query_result_csv_threshold if cfg else 0
-        preview_rows = cfg.query_result_preview_rows if cfg else 5
         csv_manager = CsvStorageManager(
             cfg.csv_base_dir if cfg else "/tmp/datacloud_csv",
             result_file_storage=getattr(cfg, "result_file_storage", None),
@@ -493,10 +850,9 @@ class Action:
                 normalized,
                 csv_manager=csv_manager,
                 threshold=threshold,
-                preview_rows=preview_rows,
             )
 
-        mapped_params = self._map_names(params)
+        mapped_params = self._normalize_input_params(params)
         param_mapping_data = {
             "params": mapped_params,
             "changed": mapped_params != params,
@@ -570,7 +926,6 @@ class Action:
                 normalized,
                 csv_manager=csv_manager,
                 threshold=threshold,
-                preview_rows=preview_rows,
             )
         if self._action.function_refs:
             action_executing_data = self._describe_execution_mode()
@@ -592,7 +947,6 @@ class Action:
                 normalized,
                 csv_manager=csv_manager,
                 threshold=threshold,
-                preview_rows=preview_rows,
             )
         raise ActionNotConfiguredError(self._action.action_code)
 
@@ -1079,7 +1433,7 @@ class Action:
             request_kwargs: dict[str, Any] = {"headers": headers}
             if request_parts["query"]:
                 request_kwargs["params"] = request_parts["query"]
-            if request_parts["body"]:
+            if request_parts["body"] is not None:
                 request_kwargs["json"] = request_parts["body"]
             resp = await client.request(method, url, **request_kwargs)
 
@@ -1115,14 +1469,12 @@ class Action:
         method = next(iter(operations.keys()), "post").upper()
         return method, path_template
 
-    def _build_request_parts(
-        self, params: dict[str, Any], *, method: str
-    ) -> dict[str, dict[str, Any]]:
+    def _build_request_parts(self, params: dict[str, Any], *, method: str) -> dict[str, Any]:
         """根据动作 mapping_path 将参数拆分为 path/query/body/header。"""
-        result: dict[str, dict[str, Any]] = {
+        result: dict[str, Any] = {
             "path": {},
             "query": {},
-            "body": {},
+            "body": None,
             "headers": {},
         }
         default_location = "query" if method.upper() in {"GET", "DELETE", "HEAD"} else "body"
@@ -1134,43 +1486,35 @@ class Action:
                 value = param.default_value
             if value is None:
                 continue
-            location, key = self._resolve_request_mapping(
+            location, path_parts = _parse_mapping_path(
                 getattr(param, "mapping_path", ""),
-                param.param_code,
                 default_location=default_location,
             )
+            if location == "body":
+                if path_parts:
+                    result["body"] = _assign_runtime_path(result["body"], path_parts, value)
+                else:
+                    if not isinstance(result["body"], dict):
+                        result["body"] = {}
+                    result["body"][param.param_code] = value
+                continue
+
+            key = self._resolve_request_key(path_parts, param.param_code)
             result[location][key] = value
         return result
 
     @staticmethod
-    def _resolve_request_mapping(
-        mapping_path: str,
+    def _resolve_request_key(
+        path_parts: list[str],
         fallback_key: str,
-        *,
-        default_location: str,
-    ) -> tuple[str, str]:
-        """解析参数位置与物理字段名。"""
-        if not mapping_path.startswith("$."):
-            return default_location, fallback_key
-
-        parts = [part for part in mapping_path[2:].split(".") if part]
-        if not parts:
-            return default_location, fallback_key
-
-        location_map = {
-            "requestBody": "body",
-            "body": "body",
-            "query": "query",
-            "queryParams": "query",
-            "path": "path",
-            "pathParams": "path",
-            "headers": "headers",
-            "header": "headers",
-        }
-        location = location_map.get(parts[0], default_location)
-        key_parts = parts[1:] if parts[0] in location_map else parts
-        key = key_parts[-1].removesuffix("[]") if key_parts else fallback_key
-        return location, key
+    ) -> str:
+        """为 query/path/header 解析最终物理字段名。"""
+        if not path_parts:
+            return fallback_key
+        key = path_parts[-1]
+        if key == "[]":
+            return fallback_key
+        return key.removesuffix("[]")
 
     def _build_url(
         self,

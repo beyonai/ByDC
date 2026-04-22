@@ -341,35 +341,6 @@ def test_T7_1_merge_resume_writes_field_code_back() -> None:
     assert "field_name_cn" not in f, f"resolved 后 filters 不应保留 field_name_cn，实际: {f}"
 
 
-# ── T8：模式开关废弃 ──────────────────────────────────────────────────────────
-
-
-def test_T8_1_no_env_mode_dependency_in_tool_registration() -> None:
-    """T8-1：init_agent_conf 或 node.py 不依赖 DATACLOUD_ONTOLOGY_LOAD_MODE 决定注册哪类工具。"""
-    import os
-
-    from datacloud_analysis.orchestration.execution.node import _is_data_tool_name
-
-    # 无论环境变量如何，data tool 识别规则固定
-    for env_val in ("ontology_query", "db_query", "", "unknown"):
-        os.environ["DATACLOUD_ONTOLOGY_LOAD_MODE"] = env_val
-        # query_* 和 compute_* 始终应被识别为数据工具
-        assert _is_data_tool_name("query_ads_enterprise_analysis"), (
-            f"env={env_val}: query_ads_enterprise_analysis 应被识别为数据工具"
-        )
-        assert _is_data_tool_name("compute_ads_grid_analysis"), (
-            f"env={env_val}: compute_ads_grid_analysis 应被识别为数据工具"
-        )
-        assert _is_data_tool_name("data_query_ads_enterprise_analysis"), (
-            f"env={env_val}: data_query_* 应被识别为数据工具"
-        )
-        assert not _is_data_tool_name("call_agent"), (
-            f"env={env_val}: call_agent 不应被识别为数据工具"
-        )
-
-    os.environ.pop("DATACLOUD_ONTOLOGY_LOAD_MODE", None)
-
-
 def test_T8_2_non_query_tool_skipped_by_before_callback() -> None:
     """T8-2（改为 T6-3 逻辑）：非 query_*/compute_* 工具 → before_callback 直接返回 None。"""
 

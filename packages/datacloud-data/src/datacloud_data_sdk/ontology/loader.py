@@ -67,7 +67,6 @@ class LoaderConfig:
     sql_execution_mode: str = "internal"
     term_loader: Any = None
     query_result_csv_threshold: int = 10  # 0 = 不启用溢出截断
-    query_result_preview_rows: int = 10  # 溢出时返回的预览行数
 
 
 class OntologyLoader:
