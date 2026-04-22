@@ -409,7 +409,6 @@ class View:
                 raw_result,
                 csv_manager=csv_manager,
                 threshold=config.query_result_csv_threshold,
-                preview_rows=config.query_result_preview_rows,
             )
         except CannotAnswerError as exc:
             from datacloud_data_sdk.result_formatter import build_error_data

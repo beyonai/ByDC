@@ -1,6 +1,6 @@
 from datacloud_data_sdk.executor.models import ApiExecTask, KbExecTask, ScriptExecTask, SqlExecTask
 from datacloud_data_sdk.ontology.loader import OntologyLoader
-from datacloud_data_sdk.ontology.term_loader import TermLoader
+from datacloud_data_sdk.ontology.term_loader import KbTermLoader
 from datacloud_data_sdk.plan.execution_object_converter import ExecutionObjectConverter
 from datacloud_data_sdk.plan.models import (
     ObjectViewField,
@@ -156,7 +156,7 @@ def test_sql_step_converts_to_sql_exec_task() -> None:
 
 def test_sql_step_resolves_term_bound_literals() -> None:
     """SQL 步骤中绑定术语字段的字面量会被解析为 code。"""
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {
             "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
         }
@@ -297,7 +297,7 @@ def test_kb_step_converts_to_kb_exec_task() -> None:
 
 def test_kb_step_resolves_term_bound_tags() -> None:
     """KB 步骤的 tags 中，绑定术语的 field 值会被解析为 code。"""
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {
             "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
         }

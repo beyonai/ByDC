@@ -1,13 +1,13 @@
 """TermResolver 测试。"""
 
 from datacloud_data_sdk.ontology.models import OntologyField
-from datacloud_data_sdk.ontology.term_loader import TermLoader
+from datacloud_data_sdk.ontology.term_loader import KbTermLoader
 from datacloud_data_sdk.plan.models import ObjectViewField, ObjectViewFunctionParam
 from datacloud_data_sdk.plan.term_resolver import TermResolver
 
 
 def test_resolve_params_enum() -> None:
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {
             "status.code": [
                 {"code": "TODO", "label": "待办"},
@@ -25,7 +25,7 @@ def test_resolve_params_enum() -> None:
 
 def test_resolve_params_enum_list() -> None:
     """resolve_params 支持列表参数，逐项解析。"""
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {
             "status.code": [
                 {"code": "TODO", "label": "待办"},
@@ -51,7 +51,7 @@ def test_resolve_params_no_loader_passthrough() -> None:
 
 
 def test_resolve_params_skips_non_term_params() -> None:
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {
             "status.code": [{"code": "TODO", "label": "待办"}],
         }
@@ -68,7 +68,7 @@ def test_resolve_params_skips_non_term_params() -> None:
 
 def test_resolve_fields_resolves_term_bound_values() -> None:
     """resolve_fields 对含 term_set 的 field 做标签→code 解析。"""
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {
             "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
         }
@@ -86,7 +86,7 @@ def test_resolve_fields_resolves_term_bound_values() -> None:
 
 def test_resolve_fields_resolves_term_bound_values_list() -> None:
     """resolve_fields 支持列表值，逐项解析。"""
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {
             "status.code": [
                 {"code": "TODO", "label": "待办"},
@@ -105,7 +105,7 @@ def test_resolve_fields_resolves_term_bound_values_list() -> None:
 
 def test_resolve_filter_values_resolves_term_bound_value() -> None:
     """resolve_filter_values 对 filters 中绑定术语的字段 value 做标签→code 解析。"""
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {
             "staffName.code": [
                 {"code": "E001", "label": "张三"},
@@ -129,7 +129,7 @@ def test_resolve_filter_values_resolves_term_bound_value() -> None:
 
 def test_resolve_filter_values_in_array() -> None:
     """resolve_filter_values 对 in 操作的数组逐项解析。"""
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {
             "status.code": [{"code": "A", "label": "状态A"}, {"code": "B", "label": "状态B"}],
         }
@@ -143,7 +143,7 @@ def test_resolve_filter_values_in_array() -> None:
 
 def test_resolve_filter_values_skips_is_null() -> None:
     """resolve_filter_values 对 is_null/is_not_null 不解析 value。"""
-    loader = TermLoader.from_mapping({"status.code": [{"code": "A", "label": "A"}]})
+    loader = KbTermLoader({"status.code": [{"code": "A", "label": "A"}]})
     resolver = TermResolver(term_loader=loader)
     fields = [OntologyField("status", "状态", "STRING", term_set="status.code")]
     filters = {"status": {"op": "is_null"}}
@@ -153,7 +153,7 @@ def test_resolve_filter_values_skips_is_null() -> None:
 
 def test_resolve_filter_values_supports_list_protocol() -> None:
     """resolve_filter_values 支持新的 filters 数组协议。"""
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {
             "staff.code": [
                 {"code": "E001", "label": "张三"},
@@ -172,7 +172,7 @@ def test_resolve_filter_values_supports_list_protocol() -> None:
 
 def test_resolve_filter_values_only_resolves_eq_or_in() -> None:
     """只有 eq/in 才做术语转换，其余操作保留原值。"""
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {
             "staff.code": [
                 {"code": "E001", "label": "张三"},

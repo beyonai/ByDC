@@ -1,6 +1,6 @@
 import pytest
 from datacloud_data_sdk.agents.plan_agent import _serialize_payload
-from datacloud_data_sdk.ontology.term_loader import TermLoader
+from datacloud_data_sdk.ontology.term_loader import KbTermLoader
 from datacloud_data_sdk.plan.models import (
     ObjectViewAction,
     ObjectViewField,
@@ -199,7 +199,7 @@ def test_serialize_payload_fields_include_source_column_when_present() -> None:
 
 def test_serialize_payload_injects_term_labels_with_loader() -> None:
     """有 term_loader 且 term_set 有数据时，对 action 的 inputParams 注入 termType 和 termLabels。"""
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {
             "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
         }
@@ -236,7 +236,7 @@ def test_serialize_payload_injects_term_labels_with_loader() -> None:
 
 def test_serialize_payload_injects_term_labels_for_fields() -> None:
     """有 term_loader 且 field 有 term_set 时，fields 注入 termType 和 termLabels。"""
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {
             "status.code": [{"code": "TODO", "label": "待办"}, {"code": "DONE", "label": "已完成"}],
         }

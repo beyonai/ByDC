@@ -326,7 +326,6 @@ class LoaderRuntimeManager:
         loader.configure(sql_execution_mode=self._settings.sql_execution_mode)
         loader.configure(
             query_result_csv_threshold=self._settings.query_result_csv_threshold,
-            query_result_preview_rows=self._settings.query_result_preview_rows,
         )
 
     def _configure_plan_generator(self, loader: OntologyLoader) -> None:

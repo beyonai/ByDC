@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from datacloud_data_sdk.context import get_current_context
+from datacloud_data_sdk.exceptions import DatacloudError
 from langchain_core.tools import tool
 
 from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
@@ -25,6 +27,19 @@ def _workspace_root_path(workspace_dir: str | None) -> Path | None:
     if raw is None:
         return None
     return Path(str(raw))
+
+
+def _resolve_fallback_workspace_dir() -> str:
+    """Resolve fallback workspace from InvocationContext, then current directory."""
+    try:
+        ctx = get_current_context()
+    except DatacloudError:
+        return os.getcwd()
+
+    workspace_dir = str(getattr(ctx, "workspace_dir", "") or "").strip()
+    if workspace_dir:
+        return workspace_dir
+    return os.getcwd()
 
 
 def _resolve_safe_path(path: str, workspace_dir: str | None) -> Path:
@@ -63,7 +78,7 @@ async def read_file(
         return result["data"]["content"]
 
     # 降级：本地路径实现（本地开发 / 单测场景）
-    workspace_dir = os.getenv("DATACLOUD_ACTIVE_WORKSPACE")
+    workspace_dir = _resolve_fallback_workspace_dir()
     try:
         resolved = _resolve_safe_path(path, workspace_dir)
     except ValueError as e:
@@ -102,7 +117,7 @@ async def write_file(
         return result
 
     # 降级：本地路径实现（本地开发 / 单测场景）
-    workspace_dir = os.getenv("DATACLOUD_ACTIVE_WORKSPACE")
+    workspace_dir = _resolve_fallback_workspace_dir()
     try:
         resolved = _resolve_safe_path(path, workspace_dir)
     except ValueError as e:

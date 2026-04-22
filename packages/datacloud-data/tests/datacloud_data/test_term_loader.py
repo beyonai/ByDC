@@ -3,55 +3,50 @@ from unittest.mock import MagicMock, patch
 import pytest
 from datacloud_data_sdk.exceptions import TermNotFoundError
 from datacloud_data_sdk.ontology.term_loader import (
-    ApiTermLoader,
     KbTermLoader,
     TermLoader,
 )
 
 
 def test_resolve_by_label() -> None:
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {"bo_stage": [{"code": "SIGNED", "label": "已签约", "aliases": ["签了合同"]}]}
     )
     assert loader.resolve_code("bo_stage", "已签约") == "SIGNED"
 
 
 def test_resolve_by_alias() -> None:
-    loader = TermLoader.from_mapping(
+    loader = KbTermLoader(
         {"bo_stage": [{"code": "SIGNED", "label": "已签约", "aliases": ["签了合同"]}]}
     )
     assert loader.resolve_code("bo_stage", "签了合同") == "SIGNED"
 
 
 def test_resolve_by_exact_code() -> None:
-    loader = TermLoader.from_mapping(
-        {"bo_stage": [{"code": "SIGNED", "label": "已签约", "aliases": []}]}
-    )
+    loader = KbTermLoader({"bo_stage": [{"code": "SIGNED", "label": "已签约", "aliases": []}]})
     assert loader.resolve_code("bo_stage", "SIGNED") == "SIGNED"
 
 
 def test_resolve_unknown_raises() -> None:
-    loader = TermLoader.from_mapping({"bo_stage": []})
+    loader = KbTermLoader({"bo_stage": []})
     with pytest.raises(TermNotFoundError, match="不存在"):
         loader.resolve_code("bo_stage", "不存在的值")
 
 
 def test_get_available_values() -> None:
-    loader = TermLoader.from_mapping(
-        {"bo_stage": [{"code": "SIGNED", "label": "已签约", "aliases": []}]}
-    )
+    loader = KbTermLoader({"bo_stage": [{"code": "SIGNED", "label": "已签约", "aliases": []}]})
     available = loader.get_available_values("bo_stage")
     assert "已签约" in available
 
 
-def test_api_term_loader_from_config() -> None:
-    loader = TermLoader.from_config(
-        {
-            "type": "api",
-            "api": {"base_url": "http://example.com", "mapping": {}},
-        }
-    )
-    assert isinstance(loader, ApiTermLoader)
+def test_kb_term_loader_supports_mapping() -> None:
+    loader = KbTermLoader({"bo_stage": [{"code": "SIGNED", "label": "已签约"}]})
+    assert isinstance(loader, KbTermLoader)
+
+
+def test_term_loader_from_config_rejects_removed_api_mode() -> None:
+    with pytest.raises(ValueError, match="Unsupported term loader type: api"):
+        TermLoader.from_config({"type": "api"})
 
 
 def test_kb_term_loader_from_config() -> None:
@@ -154,33 +149,25 @@ def test_kb_term_loader_resolve_code_explicit_type() -> None:
 
 
 def test_resolve_value_to_code() -> None:
-    loader = TermLoader.from_mapping(
-        {"staffName": [{"code": "EMP001", "label": "张三", "aliases": ["小张"]}]}
-    )
+    loader = KbTermLoader({"staffName": [{"code": "EMP001", "label": "张三", "aliases": ["小张"]}]})
     result = loader.resolve_value("staffName", "张三", term_field="code")
     assert result == "EMP001"
 
 
 def test_resolve_value_to_name() -> None:
-    loader = TermLoader.from_mapping(
-        {"staffName": [{"code": "EMP001", "label": "张三", "aliases": ["小张"]}]}
-    )
+    loader = KbTermLoader({"staffName": [{"code": "EMP001", "label": "张三", "aliases": ["小张"]}]})
     result = loader.resolve_value("staffName", "EMP001", term_field="name")
     assert result == "张三"
 
 
 def test_resolve_value_default_to_code() -> None:
-    loader = TermLoader.from_mapping(
-        {"staffName": [{"code": "EMP001", "label": "张三", "aliases": ["小张"]}]}
-    )
+    loader = KbTermLoader({"staffName": [{"code": "EMP001", "label": "张三", "aliases": ["小张"]}]})
     result = loader.resolve_value("staffName", "张三", term_field=None)
     assert result == "EMP001"
 
 
 def test_resolve_value_by_alias_to_name() -> None:
-    loader = TermLoader.from_mapping(
-        {"staffName": [{"code": "EMP001", "label": "张三", "aliases": ["小张"]}]}
-    )
+    loader = KbTermLoader({"staffName": [{"code": "EMP001", "label": "张三", "aliases": ["小张"]}]})
     result = loader.resolve_value("staffName", "小张", term_field="name")
     assert result == "张三"
 

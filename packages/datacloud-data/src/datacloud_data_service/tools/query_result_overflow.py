@@ -11,7 +11,6 @@ def apply_query_result_overflow(
     result: dict[str, Any],
     *,
     threshold: int,
-    preview_rows: int,
     csv_manager: Any,
     api_base_url: str,
     result_type: ResultType = "normal",
@@ -23,7 +22,6 @@ def apply_query_result_overflow(
     Args:
         result: 查询结果字典
         threshold: 溢出阈值
-        preview_rows: 预览行数
         csv_manager: CSV 存储管理器
         api_base_url: API 基础 URL
         result_type: 结果类型（normal/rejected/ask_user）
@@ -50,7 +48,7 @@ def apply_query_result_overflow(
     if not columns and records:
         columns = list(records[0].keys())
 
-    preview = records[:preview_rows]
+    preview = records[:threshold]
 
     file_id, _ = csv_manager.save_export(
         records,
@@ -68,10 +66,10 @@ def apply_query_result_overflow(
         "total": total,
         "pagination": {
             "page": 1,
-            "page_size": preview_rows,
+            "page_size": threshold,
             "total": total,
-            "total_pages": (total + preview_rows - 1) // preview_rows if preview_rows > 0 else 0,
-            "has_next": total > preview_rows,
+            "total_pages": (total + threshold - 1) // threshold,
+            "has_next": total > threshold,
             "has_prev": False,
         },
         "meta": {

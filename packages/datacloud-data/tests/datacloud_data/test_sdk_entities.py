@@ -5,7 +5,7 @@ import pytest
 from datacloud_data_sdk.context import InvocationContext
 from datacloud_data_sdk.exceptions import ActionNotFoundError
 from datacloud_data_sdk.ontology.loader import OntologyLoader
-from datacloud_data_sdk.ontology.term_loader import TermLoader
+from datacloud_data_sdk.ontology.term_loader import KbTermLoader
 
 REGISTRY = {
     "functions": [
@@ -103,9 +103,12 @@ def test_action_get_schema_returns_input_output() -> None:
     assert "outputSchema" in schema
     assert "name" in schema
     assert "description" in schema
-    assert "owner_id" in schema["inputSchema"]["properties"]
-    assert schema["inputSchema"]["required"] == ["owner_id"]
-    assert schema["inputSchema"]["properties"]["owner_id"]["type"] == "string"
+    assert "requestBody" in schema["inputSchema"]["properties"]
+    assert schema["inputSchema"]["required"] == ["requestBody"]
+    request_body_schema = schema["inputSchema"]["properties"]["requestBody"]
+    assert request_body_schema["type"] == "object"
+    assert request_body_schema["required"] == ["ownerId"]
+    assert request_body_schema["properties"]["ownerId"]["type"] == "string"
     assert schema["outputSchema"]["properties"]["bo_list"]["type"] == "array"
     assert schema["outputSchema"]["properties"]["bo_list"]["items"] == {"type": "string"}
 
@@ -161,7 +164,7 @@ def test_action_get_schema_preserves_decimal_and_datetime_hints() -> None:
 def test_action_get_schema_supports_array_and_term_enum() -> None:
     loader = OntologyLoader()
     loader.configure(
-        term_loader=TermLoader.from_mapping(
+        term_loader=KbTermLoader(
             {
                 "priority.code": [
                     {"code": "HIGH", "label": "高"},
@@ -245,7 +248,7 @@ async def test_invoke_action_returns_execution_steps_in_detail_mode() -> None:
 
     loader = OntologyLoader()
     loader.configure(
-        term_loader=TermLoader.from_mapping(
+        term_loader=KbTermLoader(
             {
                 "priority.code": [
                     {"code": "HIGH", "label": "高"},
@@ -483,3 +486,262 @@ def test_action_execute_supports_get_query_and_path_params() -> None:
         "params": {"keyword": "alice"},
     }
     assert result["records"] == [{"userId": "U001"}]
+
+
+def test_action_get_schema_supports_structured_request_body_and_root_array() -> None:
+    loader = OntologyLoader()
+    loader.load_from_content(
+        {
+            "functions": [],
+            "objects": [
+                {
+                    "object_code": "todo_items",
+                    "object_name": "待办",
+                    "source_type": "API",
+                    "fields": [],
+                    "actions": [
+                        {
+                            "action_code": "accept_todo",
+                            "action_name": "接收待办",
+                            "action_type": "operation",
+                            "function_refs": [],
+                            "params": [
+                                {
+                                    "param_code": "todoId",
+                                    "param_name": "待办ID",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "required": True,
+                                    "mapping_path": "$.requestBody.todoId",
+                                },
+                                {
+                                    "param_code": "userId",
+                                    "param_name": "用户ID",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "required": True,
+                                    "mapping_path": "$.requestBody.user.user_id",
+                                },
+                                {
+                                    "param_code": "orgId",
+                                    "param_name": "组织ID",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "mapping_path": "$.requestBody.org[].org_id",
+                                },
+                            ],
+                        },
+                        {
+                            "action_code": "accept_todo_batch",
+                            "action_name": "批量接收待办",
+                            "action_type": "operation",
+                            "function_refs": [],
+                            "params": [
+                                {
+                                    "param_code": "userCode",
+                                    "param_name": "用户编码",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "required": True,
+                                    "mapping_path": "$.requestBody.[].user_code",
+                                },
+                            ],
+                        },
+                    ],
+                }
+            ],
+            "relations": [],
+        }
+    )
+
+    obj = loader.get_object("todo_items")
+    schema = obj.get_action_schema("accept_todo")
+    request_body_schema = schema["inputSchema"]["properties"]["requestBody"]
+    batch_schema = obj.get_action_schema("accept_todo_batch")
+    batch_request_body_schema = batch_schema["inputSchema"]["properties"]["requestBody"]
+
+    assert schema["inputSchema"]["required"] == ["requestBody"]
+    assert request_body_schema["type"] == "object"
+    assert request_body_schema["required"] == ["todoId", "user"]
+    assert request_body_schema["properties"]["todoId"]["type"] == "string"
+    assert request_body_schema["properties"]["user"]["type"] == "object"
+    assert request_body_schema["properties"]["user"]["required"] == ["user_id"]
+    assert request_body_schema["properties"]["org"]["type"] == "array"
+    assert (
+        request_body_schema["properties"]["org"]["items"]["properties"]["org_id"]["type"]
+        == "string"
+    )
+    assert batch_schema["inputSchema"]["required"] == ["requestBody"]
+    assert batch_request_body_schema["type"] == "array"
+    assert batch_request_body_schema["items"]["properties"]["user_code"]["type"] == "string"
+
+
+def test_action_execute_supports_structured_request_body_and_root_array() -> None:
+    loader = OntologyLoader()
+    loader.load_from_content(
+        {
+            "functions": [
+                {
+                    "function_code": "fn_accept_todo",
+                    "function_type": "API",
+                    "api_schema": {
+                        "openapi": "3.0.3",
+                        "info": {"title": "接收待办", "version": "1.0.0"},
+                        "servers": [{"url": "http://mock:8080"}],
+                        "paths": {
+                            "/api/v1/todos/accept": {
+                                "post": {
+                                    "responses": {"200": {"description": "处理成功"}},
+                                }
+                            }
+                        },
+                    },
+                },
+                {
+                    "function_code": "fn_accept_todo_batch",
+                    "function_type": "API",
+                    "api_schema": {
+                        "openapi": "3.0.3",
+                        "info": {"title": "批量接收待办", "version": "1.0.0"},
+                        "servers": [{"url": "http://mock:8080"}],
+                        "paths": {
+                            "/api/v1/todos/accept/batch": {
+                                "post": {
+                                    "responses": {"200": {"description": "处理成功"}},
+                                }
+                            }
+                        },
+                    },
+                },
+            ],
+            "objects": [
+                {
+                    "object_code": "todo_items",
+                    "object_name": "待办",
+                    "source_type": "API",
+                    "fields": [],
+                    "actions": [
+                        {
+                            "action_code": "accept_todo",
+                            "action_name": "接收待办",
+                            "description": "嵌套 body 示例",
+                            "action_type": "operation",
+                            "function_refs": ["fn_accept_todo"],
+                            "params": [
+                                {
+                                    "param_code": "todoId",
+                                    "param_name": "待办ID",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "required": True,
+                                    "mapping_path": "$.requestBody.todoId",
+                                },
+                                {
+                                    "param_code": "userId",
+                                    "param_name": "用户ID",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "required": True,
+                                    "mapping_path": "$.requestBody.user.user_id",
+                                },
+                                {
+                                    "param_code": "userCode",
+                                    "param_name": "用户编码",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "mapping_path": "$.requestBody.user.user_code",
+                                },
+                            ],
+                        },
+                        {
+                            "action_code": "accept_todo_batch",
+                            "action_name": "批量接收待办",
+                            "description": "根数组 body 示例",
+                            "action_type": "operation",
+                            "function_refs": ["fn_accept_todo_batch"],
+                            "params": [
+                                {
+                                    "param_code": "userId",
+                                    "param_name": "用户ID",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "required": True,
+                                    "mapping_path": "$.requestBody.[].user_id",
+                                },
+                                {
+                                    "param_code": "userCode",
+                                    "param_name": "用户编码",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "mapping_path": "$.requestBody.[].user_code",
+                                },
+                            ],
+                        },
+                    ],
+                }
+            ],
+            "relations": [],
+        }
+    )
+    obj = loader.get_object("todo_items")
+    captured: list[dict[str, object]] = []
+
+    class _MockResponse:
+        status_code = 200
+        text = "ok"
+
+        @staticmethod
+        def json() -> list[dict[str, str]]:
+            return [{"status": "ok"}]
+
+    class _MockAsyncClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+
+        async def __aenter__(self) -> "_MockAsyncClient":
+            return self
+
+        async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
+            del exc_type, exc, tb
+
+        async def request(self, method: str, url: str, **kwargs: object) -> _MockResponse:
+            captured.append({"method": method, "url": url, "kwargs": kwargs})
+            return _MockResponse()
+
+    async def _run() -> None:
+        with patch("httpx.AsyncClient", _MockAsyncClient):
+            await obj.invoke_action(
+                "accept_todo",
+                {
+                    "requestBody": {
+                        "todoId": "T001",
+                        "user": {"user_id": "U001", "user_code": "A001"},
+                    }
+                },
+            )
+            await obj.invoke_action(
+                "accept_todo_batch",
+                {
+                    "requestBody": [
+                        {"user_id": "U001", "user_code": "A001"},
+                        {"user_id": "U002", "user_code": "A002"},
+                    ]
+                },
+            )
+
+    asyncio.run(_run())
+
+    assert captured[0]["kwargs"] == {
+        "headers": {"Content-Type": "application/json"},
+        "json": {
+            "todoId": "T001",
+            "user": {"user_id": "U001", "user_code": "A001"},
+        },
+    }
+    assert captured[1]["kwargs"] == {
+        "headers": {"Content-Type": "application/json"},
+        "json": [
+            {"user_id": "U001", "user_code": "A001"},
+            {"user_id": "U002", "user_code": "A002"},
+        ],
+    }
