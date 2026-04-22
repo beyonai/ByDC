@@ -102,7 +102,12 @@ class HookAwareToolNode(ToolNode):
                     goto="analyze_clarify",
                 )
 
-            patched_calls.append({**tc, "args": dict(ctx.get("tool_params") or {})})
+            # query_* 工具剥离 compute-only 字段，防止插件内部重新注入空列表
+            tp = dict(ctx.get("tool_params") or {})
+            if tool_name.startswith("query_"):
+                for _sf in ("dimensions", "metrics", "having"):
+                    tp.pop(_sf, None)
+            patched_calls.append({**tc, "args": tp})
 
         # 用修改后的 tool_calls 替换最后一条 AIMessage（Pydantic 不可变，必须 model_copy）
         patched_ai = last_ai.model_copy(update={"tool_calls": patched_calls})

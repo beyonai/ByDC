@@ -61,52 +61,6 @@ def _summarize_output(output: Any) -> str:
     return text
 
 
-def inject_reason_field(t: BaseTool) -> BaseTool:
-    """往工具的 args_schema 注入 reason: str 字段（可选，默认空字符串）。
-
-    同时包装底层 coroutine/func，确保 reason 在传入原始实现前被剥除，
-    避免原始函数因收到意外的 reason 关键字参数而抛出 TypeError。
-    """
-    try:
-        from pydantic import BaseModel, Field, create_model  # noqa: PLC0415, F401
-
-        original_schema = t.args_schema
-        if original_schema is None:
-            return t
-
-        # 以原 schema 为基类新增 reason 字段，保留原 schema 的所有 validator（含 _CoerceBase）
-        new_schema = create_model(
-            f"{original_schema.__name__}WithReason",
-            __base__=original_schema,
-            reason=(str, Field(default="", description="选择本工具的理由")),
-        )
-        t.args_schema = new_schema
-
-        # 包装底层 coroutine，在调用原始实现前剥除 reason
-        if hasattr(t, "coroutine") and t.coroutine is not None:
-            _orig_coro = t.coroutine
-
-            async def _coro_strip_reason(**kw: Any) -> Any:
-                kw.pop("reason", None)
-                return await _orig_coro(**kw)
-
-            t.coroutine = _coro_strip_reason
-
-        # 包装底层 func（同步），同样剥除 reason
-        if hasattr(t, "func") and t.func is not None:
-            _orig_func = t.func
-
-            def _func_strip_reason(**kw: Any) -> Any:
-                kw.pop("reason", None)
-                return _orig_func(**kw)
-
-            t.func = _func_strip_reason
-
-    except Exception as exc:
-        logger.warning("inject_reason_field failed for tool=%s: %s", getattr(t, "name", "?"), exc)
-    return t
-
-
 _THINK_EVENT_TYPE = "reasoningLogDelta"
 
 _THINK_CONTENT_TYPE = "1002"
@@ -386,9 +340,6 @@ async def dispatch_tool(
         result = await t.ainvoke(raw_params)
         return tool_call_id, result
 
-    # --- 提取 reason 并记录 ---
-    reason = raw_params.pop("reason", "")
-
     # --- 特殊工具：agent_delegate（内部调用 interrupt，必须跳过 hook 的 try/except）---
     t_delegate = tools_map.get(tool_name)
     is_delegate_flag = (
@@ -417,8 +368,6 @@ async def dispatch_tool(
             return tool_call_id, result
         if gateway_context is not None:
             async with gateway_context.sub_step(tool_name):
-                if reason:
-                    await _emit_child_think(gateway_context, reason)
                 delegate_parent_scope_factory = getattr(
                     gateway_context,
                     "delegate_parent_scope",
@@ -607,9 +556,6 @@ async def dispatch_tool(
     if gateway_context is not None:
         try:
             async with gateway_context.sub_step(tool_name):
-                # 工具名称下级：调用原因
-                if reason:
-                    await _emit_child_think(gateway_context, reason)
                 # 执行工具（SDK 内部的 sub_step 自动嵌套在此层下）
                 delegate_parent_scope_factory = getattr(
                     gateway_context,

@@ -14,7 +14,6 @@ from langchain_core.tools import BaseTool
 from datacloud_analysis.i18n.prompts import get_execution_prompt, get_system_prompt
 from datacloud_analysis.orchestration.execution.react_loop import run_react_loop
 from datacloud_analysis.orchestration.execution.tool_wrapper import (
-    inject_reason_field,
     is_delegate_wait_resume_command,
 )
 from datacloud_analysis.orchestration.state import AgentState
@@ -155,10 +154,9 @@ def _resolve_runtime_context_param(source: Any) -> str | None:
 
 
 def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
-    """Merge builtin tools with dynamically injected tools, inject reason field."""
+    """Merge builtin tools with dynamically injected tools."""
     tools: list[BaseTool] = []
 
-    # Builtin tools: ask_user skips reason injection (already has it)
     for t in _BUILTIN_TOOLS:
         if t.name == "ask_user" and _DISABLE_ASK_USER_TOOL:
             logger.info("ask_user omitted from execution tools (DATACLOUD_DISABLE_ASK_USER_TOOL)")
@@ -166,15 +164,12 @@ def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
         if t.name == "ask_user":
             tools.append(t)
         else:
-            # 在 inject_reason_field 之前检测签名，因为 inject_reason_field 会替换 coroutine
-            # 导致原始 _context 参数签名消失
             runtime_context_param = _resolve_runtime_context_param(
                 getattr(t, "coroutine", None)
             ) or _resolve_runtime_context_param(getattr(t, "func", None))
-            tool = inject_reason_field(t)
             if runtime_context_param:
-                tool._datacloud_runtime_context_param = runtime_context_param
-            tools.append(tool)
+                t._datacloud_runtime_context_param = runtime_context_param
+            tools.append(t)
 
     # Dynamic tools from agent config
     if default_tools:
@@ -186,8 +181,7 @@ def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
                 runtime_context_param = _resolve_runtime_context_param(
                     getattr(callable_or_tool, "coroutine", None)
                 ) or _resolve_runtime_context_param(getattr(callable_or_tool, "func", None))
-                tool = inject_reason_field(callable_or_tool)
-                # 数据类工具：注入查询元字段（在 inject_reason_field 之后）
+                tool = callable_or_tool
                 if _is_data_tool_name(name):
                     tool = inject_query_fields(
                         tool,
@@ -233,8 +227,7 @@ def _build_tools_list(default_tools: dict[str, Any] | None) -> list[BaseTool]:
                         description=getattr(callable_or_tool, "__doc__", name) or name,
                         coroutine=callable_or_tool if is_async else None,
                     )
-                tool = inject_reason_field(t)
-                # 数据类工具：注入查询元字段（在 inject_reason_field 之后）
+                tool = t
                 if _is_data_tool_name(name):
                     tool = inject_query_fields(
                         tool,
