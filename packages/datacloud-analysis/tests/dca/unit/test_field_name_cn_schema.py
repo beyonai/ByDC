@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ._field_schema_assertions import assert_required_uses_field, assert_uses_field_key
+
 # ── 辅助 ──────────────────────────────────────────────────────────────────────
 
 
@@ -90,13 +92,9 @@ def test_T9_1_query_filter_item_uses_field() -> None:
 
     for item in filter_items:
         props = item.get("properties", {})
-        assert "field" in props, f"filters item 缺少 field: {list(props.keys())}"
-        assert "field_name_cn" not in props, (
-            f"filters item 仍含旧 field_name_cn 键: {list(props.keys())}"
-        )
+        assert_uses_field_key(props, context="filters item")
         required = item.get("required", [])
-        assert "field" in required, "filters item required 应含 field"
-        assert "field_name_cn" not in required, "filters item required 不应含 field_name_cn"
+        assert_required_uses_field(required, context="filters item")
 
 
 # ── T9-2：compute_* dimensions 使用 field ────────────────────────────────────
@@ -114,10 +112,7 @@ def test_T9_2_compute_dim_item_uses_field() -> None:
     assert one_of, "dimensions.items.oneOf 为空"
     for item in one_of:
         props = item.get("properties", {})
-        assert "field" in props, f"dimensions item 缺少 field: {list(props.keys())}"
-        assert "field_name_cn" not in props, (
-            f"dimensions item 仍含 field_name_cn: {list(props.keys())}"
-        )
+        assert_uses_field_key(props, context="dimensions item")
 
 
 # ── T9-3：compute_* metrics 使用 field ───────────────────────────────────────
@@ -140,10 +135,7 @@ def test_T9_3_compute_metric_item_uses_field() -> None:
 
     for item in regular_items:
         props = item.get("properties", {})
-        assert "field" in props, f"metrics item 缺少 field: {list(props.keys())}"
-        assert "field_name_cn" not in props, (
-            f"metrics item 仍含 field_name_cn: {list(props.keys())}"
-        )
+        assert_uses_field_key(props, context="metrics item")
 
 
 # ── T9-4：query_* / compute_* order_by 使用 field ───────────────────────────
@@ -163,10 +155,7 @@ def test_T9_4_order_by_uses_field() -> None:
         ob_schema = schema["properties"].get("order_by", {})
         ob_item = ob_schema.get("items", {})
         ob_props = ob_item.get("properties", {})
-        assert "field" in ob_props, f"order_by item 缺少 field: {list(ob_props.keys())}"
-        assert "field_name_cn" not in ob_props, (
-            f"order_by item 仍含 field_name_cn: {list(ob_props.keys())}"
-        )
+        assert_uses_field_key(ob_props, context="order_by item")
 
 
 # ── T9-5：field description 含"中文名或字段编码"字样 ─────────────────────────

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ._field_schema_assertions import assert_required_uses_field, assert_uses_field_key
+
 
 class _FakeField:
     def __init__(
@@ -101,7 +103,7 @@ def test_T1_2_compute_schema_has_query_and_metric_extensions() -> None:
 
     for item in one_of:
         if "expr" in item.get("properties", {}):
-            assert "field" in item.get("required", [])
+            assert_required_uses_field(item.get("required", []), context="compute expr item")
 
 
 def test_T1_3_schema_constraints_relaxed() -> None:
@@ -117,6 +119,7 @@ def test_T1_3_schema_constraints_relaxed() -> None:
     assert one_of
     first_field = one_of[0].get("properties", {}).get("field", {})
     assert "enum" in first_field or "const" in first_field
+    assert_uses_field_key(one_of[0].get("properties", {}), context="query filter item")
 
     select_schema = props.get("select", {})
     select_items = select_schema.get("items", {})
@@ -127,6 +130,7 @@ def test_T1_3_schema_constraints_relaxed() -> None:
     ob_items = order_by.get("items", {})
     ob_field = ob_items.get("properties", {}).get("field", {})
     assert "enum" in ob_field
+    assert_uses_field_key(ob_items.get("properties", {}), context="query order_by item")
 
 
 def test_T1_4_inject_query_fields_replaces_inject_ambiguity_fields() -> None:

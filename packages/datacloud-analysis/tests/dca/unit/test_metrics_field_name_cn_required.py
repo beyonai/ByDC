@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ._field_schema_assertions import assert_required_uses_field
+
 
 class _FakeField:
     def __init__(
@@ -42,12 +44,7 @@ def test_T15_1_regular_metric_item_required_includes_field_name_cn() -> None:
 
     for item in regular_items:
         required = item.get("required", [])
-        assert "field" in required, (
-            f"普通指标项 required 未包含 field\n"
-            f"当前 required: {required}\n"
-            f"当前 properties: {list(item.get('properties', {}).keys())}"
-        )
-        assert "field_name_cn" not in required
+        assert_required_uses_field(required, context="普通指标项")
 
 
 def test_T15_2_count_all_item_required_does_not_include_field_name_cn() -> None:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 
 class _FakeField:
     def __init__(
@@ -32,6 +34,13 @@ def _metric_fields() -> list[_FakeField]:
     ]
 
 
+def _extract_compute_section(prompt: str) -> str:
+    start = prompt.find("## compute 统计工具参数规则")
+    assert start != -1, "Prompt 缺少 compute 统计工具参数规则段落"
+    end = prompt.find("##", start + 1)
+    return prompt[start:end] if end != -1 else prompt[start:]
+
+
 def test_T11_1_execution_prompt_no_bare_field_in_metrics_rule() -> None:
     """T11-1: execution prompt should explicitly guide `field` for metrics rules."""
     from datacloud_analysis.i18n.prompts import get_execution_prompt
@@ -41,13 +50,38 @@ def test_T11_1_execution_prompt_no_bare_field_in_metrics_rule() -> None:
     assert "field_name_cn" not in prompt
 
 
-def test_T11_1b_execution_prompt_metrics_rule_mentions_field_name_cn() -> None:
-    """T11-1b: compute metrics rule should mention `field` key and metrics."""
+@pytest.mark.parametrize(
+    ("needle", "context"),
+    [
+        ("`field`", "compute 段落未声明 field 键名"),
+        ("metrics 和 dimensions 中指定字段使用 `field` 键", "compute 段落缺少 field 键规则"),
+    ],
+)
+def test_T12_compute_section_field_rule_contract(needle: str, context: str) -> None:
+    """T12-1/2: compute section keeps `field`-key contract."""
     from datacloud_analysis.i18n.prompts import get_execution_prompt
 
     prompt = get_execution_prompt("zh_CN")
-    assert "metrics" in prompt
-    assert "`field`" in prompt
+    compute_section = _extract_compute_section(prompt)
+
+    assert needle in compute_section, context
+    assert "field_name_cn" not in compute_section, "compute 段落不应要求 field_name_cn 键名"
+
+
+def test_T12_3_field_rule_mentions_metrics_and_dimensions() -> None:
+    """T12-3: field 键规则应同时覆盖 metrics 和 dimensions。"""
+    from datacloud_analysis.i18n.prompts import get_execution_prompt
+
+    prompt = get_execution_prompt("zh_CN")
+    compute_section = _extract_compute_section(prompt)
+    field_rule = ""
+    for line in compute_section.splitlines():
+        if "使用 `field` 键" in line and "metrics" in line:
+            field_rule = line
+            break
+
+    assert "metrics" in field_rule, f"field 规则应覆盖 metrics，实际：{field_rule!r}"
+    assert "dimensions" in field_rule, f"field 规则应覆盖 dimensions，实际：{field_rule!r}"
 
 
 def test_T11_2_msr_item_expr_description_no_bare_field() -> None:
