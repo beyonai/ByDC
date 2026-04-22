@@ -9,7 +9,16 @@ from sqlalchemy.orm import aliased
 
 from .db import get_session
 from .db.models import Term, TermName, TermRelation
-from .types import NameItem, PropItem, SearchTermsResult, TagFilter, TermItem, ValueWithAliases
+from .types import (
+    AmbiguousCandidate,
+    FieldResolutionResult,
+    NameItem,
+    PropItem,
+    SearchTermsResult,
+    TagFilter,
+    TermItem,
+    ValueWithAliases,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -380,3 +389,112 @@ def get_prop_values_with_aliases(
             )
         )
     return result
+
+
+def resolve_field_aliases(
+    *,
+    terms: list[str],
+    scope_code: str,
+    library_id: str | None = None,
+) -> FieldResolutionResult:
+    """轻量级字段别名精确消歧。
+
+    在 term_name 表中按 search_scope 过滤，精确匹配 name_text → prop term_code。
+    只匹配显式标注了 scope 的别名行（global / object / view），
+    不匹配 search_scope='{}' 的旧数据。
+
+    Args:
+        terms: 待解析的中文名/别名列表。
+        scope_code: 视图或对象 code（如 ``"scene_enterprise_analysis"``）。
+        library_id: 预留参数，v1 不使用。
+
+    Returns:
+        FieldResolutionResult，包含 resolved / ambiguous / unresolved 三类结果。
+    """
+    _ = library_id  # reserved for future use
+
+    if not terms or not scope_code:
+        return FieldResolutionResult(unresolved=list(terms) if terms else [])
+
+    unique_terms = list(dict.fromkeys(terms))  # 去重保序
+
+    view_scope = {"scope": "view", "code": scope_code}
+    obj_scope = {"scope": "object", "code": scope_code}
+    global_scope = {"scope": "global"}
+
+    try:
+        with get_session() as session:
+            rows = session.execute(
+                select(
+                    TermName.name_text,
+                    Term.term_code,
+                    Term.term_name,
+                    TermName.search_scope,
+                )
+                .join(Term, Term.term_id == TermName.term_id)
+                .where(
+                    TermName.name_text.in_(unique_terms),
+                    Term.term_type_code == "prop",
+                    or_(
+                        TermName.search_scope.contains(view_scope),
+                        TermName.search_scope.contains(obj_scope),
+                        TermName.search_scope.contains(global_scope),
+                    ),
+                )
+            ).all()
+    except Exception:
+        logger.exception(
+            "resolve_field_aliases failed: terms=%s, scope_code=%s",
+            unique_terms,
+            scope_code,
+        )
+        raise
+
+    # 按输入别名分组：{name_text → {term_code → (term_name, scope)}}
+    hits: dict[str, dict[str, tuple[str, dict[str, str]]]] = {}
+    for name_text, term_code, term_name, search_scope in rows:
+        alias = str(name_text)
+        code = str(term_code)
+        if alias not in hits:
+            hits[alias] = {}
+        if code not in hits[alias]:
+            raw_scope: dict[str, str] = (
+                {str(k): str(v) for k, v in search_scope.items()}
+                if isinstance(search_scope, dict)
+                else {}
+            )
+            hits[alias][code] = (str(term_name), raw_scope)
+
+    resolved: dict[str, str] = {}
+    ambiguous: dict[str, list[AmbiguousCandidate]] = {}
+    unresolved: list[str] = []
+
+    for term in unique_terms:
+        candidates = hits.get(term)
+        if candidates is None:
+            unresolved.append(term)
+        elif len(candidates) == 1:
+            resolved[term] = next(iter(candidates))
+        else:
+            ambiguous[term] = [
+                AmbiguousCandidate(
+                    term_code=code,
+                    term_name=name,
+                    matched_alias=term,
+                    scope=scope,
+                )
+                for code, (name, scope) in candidates.items()
+            ]
+
+    logger.info(
+        "[resolve_field_aliases] scope=%s resolved=%d ambiguous=%d unresolved=%d",
+        scope_code,
+        len(resolved),
+        len(ambiguous),
+        len(unresolved),
+    )
+    return FieldResolutionResult(
+        resolved=resolved,
+        ambiguous=ambiguous,
+        unresolved=unresolved,
+    )

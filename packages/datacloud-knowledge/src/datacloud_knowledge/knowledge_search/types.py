@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -77,3 +78,31 @@ class ValueWithAliases(BaseModel):
     term_code: str
     term_name: str
     aliases: list[str] = Field(default_factory=list)
+
+
+# ── 字段别名消歧类型 ─────────────────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class AmbiguousCandidate:
+    """一个歧义候选：同一输入别名匹配到多个不同 prop 时的单条候选。"""
+
+    term_code: str
+    term_name: str
+    matched_alias: str
+    scope: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class FieldResolutionResult:
+    """字段别名精确消歧结果。
+
+    Attributes:
+        resolved: 无歧义命中 {输入别名 → field_code}。
+        ambiguous: 多候选歧义 {输入别名 → 候选列表}。
+        unresolved: 完全未命中的输入别名。
+    """
+
+    resolved: dict[str, str] = field(default_factory=dict)
+    ambiguous: dict[str, list[AmbiguousCandidate]] = field(default_factory=dict)
+    unresolved: list[str] = field(default_factory=list)
