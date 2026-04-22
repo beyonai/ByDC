@@ -405,6 +405,7 @@ class OntologyToolLoader:
         )
 
         from datacloud_analysis.tools._agent_schema_patches import (  # noqa: PLC0415
+            AGENT_COMPLEX_CONDITIONS_DESCRIPTION,
             AGENT_ORDER_BY_FIELD_DESCRIPTION,
             AGENT_SELECT_DESCRIPTION,
         )
@@ -444,6 +445,13 @@ class OntologyToolLoader:
             items["properties"] = item_props
             order_by["items"] = items
             props["order_by"] = order_by
+
+        # 4. complex_conditions：覆盖 description；若缺失则补一个可选数组字段
+        complex_conditions = dict(props.get("complex_conditions") or {})
+        if not complex_conditions:
+            complex_conditions = {"type": "array", "items": {"type": "string"}, "default": []}
+        complex_conditions["description"] = AGENT_COMPLEX_CONDITIONS_DESCRIPTION
+        props["complex_conditions"] = complex_conditions
 
         return {**input_schema, "properties": props}
 

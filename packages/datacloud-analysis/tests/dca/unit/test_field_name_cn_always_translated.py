@@ -164,13 +164,9 @@ async def test_T10_3_catalog_populated_unknown_term_passthrough() -> None:
         loader=loader,
     )
 
-    def _fake_interrupt(payload: object) -> dict[str, Any]:
-        # 用户未选择，返回空 paradigmList
-        return {"paradigmList": []}
-
     with patch(
-        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin.interrupt",
-        side_effect=_fake_interrupt,
+        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._analyze_clarification",
+        return_value=([], "知识", False),
     ):
         await before_call_back(ctx)  # type: ignore[arg-type]
 

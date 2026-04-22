@@ -226,17 +226,11 @@ def test_T4_5_short_alias_not_in_catalog() -> None:
 
 @pytest.mark.asyncio
 async def test_T5_1_unknown_term_triggers_interrupt() -> None:
-    """T5-1：filters.field='营收'（不在 catalog）→ NEED_CONFIRM → interrupt 触发。"""
+    """T5-1：unknown term should raise ClarificationNeededError in v0.3."""
     from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
+        ClarificationNeededError,
         before_call_back,
     )
-
-    interrupted_payload: dict[str, Any] = {}
-
-    def _fake_interrupt(payload: dict[str, Any]) -> dict[str, Any]:
-        interrupted_payload.update(payload)
-        # 模拟用户选择后返回
-        return {"paradigmList": [{"keyword": "营收", "choiceKeyword": "total_revenue"}]}
 
     loader = _make_loader_with_fields(
         [
@@ -255,15 +249,17 @@ async def test_T5_1_unknown_term_triggers_interrupt() -> None:
         loader=loader,
     )
 
-    with patch(
-        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin.interrupt",
-        side_effect=_fake_interrupt,
+    with (
+        patch(
+            "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._analyze_clarification",
+            return_value=([{"keyword": "营收"}], "知识", True),
+        ),
+        pytest.raises(ClarificationNeededError) as exc_info,
     ):
         await before_call_back(ctx)  # type: ignore[arg-type]
 
-    assert interrupted_payload, "interrupt 未被调用"
-    assert "reason_code" in interrupted_payload, "interrupt payload 缺少 reason_code"
-    assert interrupted_payload["reason_code"] == "PARADIGM_CLARIFICATION"
+    assert exc_info.value.context.get("tool_name") == "query_ads_enterprise_analysis"
+    assert exc_info.value.context.get("is_complex") is False
 
 
 @pytest.mark.asyncio
@@ -309,15 +305,11 @@ async def test_T5_2_after_resume_no_second_interrupt() -> None:
 
 @pytest.mark.asyncio
 async def test_T5_3_complex_need_confirm_restores_complex_conditions() -> None:
-    """T5-3：COMPLEX + NEED_CONFIRM 恢复后，complex_conditions 仍保留，路由 data_query。"""
+    """T5-3：COMPLEX + NEED_CONFIRM should raise ClarificationNeededError with complex context."""
     from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
+        ClarificationNeededError,
         before_call_back,
     )
-
-    def _fake_interrupt(payload: object) -> dict[str, Any]:
-        return {
-            "paradigmList": [{"keyword": "经济效益", "choiceKeyword": "energy_efficiency_Index"}]
-        }
 
     loader = _make_loader_with_fields(
         [
@@ -336,17 +328,20 @@ async def test_T5_3_complex_need_confirm_restores_complex_conditions() -> None:
         loader=loader,
     )
 
-    with patch(
-        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin.interrupt",
-        side_effect=_fake_interrupt,
+    with (
+        patch(
+            "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._analyze_clarification",
+            return_value=([{"keyword": "经济效益"}], "知识", True),
+        ),
+        pytest.raises(ClarificationNeededError) as exc_info,
     ):
-        decision = await before_call_back(ctx)  # type: ignore[arg-type]
+        await before_call_back(ctx)  # type: ignore[arg-type]
 
-    assert decision is not None
-    assert decision.get("action") == "redirect", "COMPLEX+消歧后应 redirect 到 data_query"
-    assert decision.get("tool", "").startswith("data_query_"), (
-        f"redirect 目标应为 data_query_*，实际={decision.get('tool')}"
-    )
+    context = exc_info.value.context
+    assert context.get("is_complex") is True
+    assert context.get("tool_name") == "query_ads_enterprise_analysis"
+    structured_input = context.get("structured_input") or {}
+    assert structured_input.get("complex_conditions") == ["亩产效益后30%的物理网格"]
 
 
 # ── T6 系列：redirect HookDecision ───────────────────────────────────────────
@@ -396,44 +391,20 @@ def test_T6_3_hook_decision_has_tool_and_params_fields() -> None:
 
 
 def test_T7_1_merge_resume_writes_field_code_back() -> None:
-    """T7-1：_merge_resume_to_args 将用户选择的 field_code 写回 filters。"""
+    """T7-1：resolved mapping should write field_code back to filters."""
     from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
-        _apply_resume_to_tool_params,
+        _apply_resolved_to_params,
     )
 
-    ctx: dict[str, Any] = {
-        "tool_name": "query_ads_enterprise_analysis",
-        "tool_params": {
-            "filters": [{"field_name_cn": "营收", "op": "gt", "value": "高"}],
-        },
-        "user_query": "查询高营收企业",
-        "metadata": {},
-        "knowledge_snippets": [],
-        "term_context": [],
-        "knowledge_payload": {},
-    }
+    tool_params = {"filters": [{"field_name_cn": "营收", "op": "gt", "value": "高"}]}
+    patched = _apply_resolved_to_params(tool_params, {"营收": "total_revenue"})
 
-    resume_value = {
-        "paradigmList": [
-            {
-                "keyword": "营收",
-                "choiceKeyword": "total_revenue",
-                "ktype": "select",
-            }
-        ]
-    }
-
-    _apply_resume_to_tool_params(
-        ctx, "query_ads_enterprise_analysis", resume_value, "查询高营收企业"
-    )  # type: ignore[arg-type]
-
-    # field_name_cn 应被移除，field 应写为 field_code
-    updated_filters = ctx["tool_params"].get("filters", [])
+    updated_filters = patched.get("filters", [])
     f = updated_filters[0]
     assert f.get("field") == "total_revenue", (
-        f"resume 后 filters.field 应为 total_revenue，实际: {f}"
+        f"resolved 后 filters.field 应为 total_revenue，实际: {f}"
     )
-    assert "field_name_cn" not in f, f"resume 后 filters 不应保留 field_name_cn，实际: {f}"
+    assert "field_name_cn" not in f, f"resolved 后 filters 不应保留 field_name_cn，实际: {f}"
 
 
 # ── T8：模式开关废弃 ──────────────────────────────────────────────────────────

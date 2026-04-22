@@ -313,6 +313,9 @@ async def _invoke_llm_with_fallback(
     )
     from datacloud_analysis.orchestration.execution.llm_retry import stream_llm_call_with_retry
 
+    if not str(thinking_message_id or "").strip():
+        raise ValueError("thinking_message_id must be a non-empty string")
+
     # ── 主模型（含重试）────────────────────────────────────────────────────────
     last_exc: Exception
     try:

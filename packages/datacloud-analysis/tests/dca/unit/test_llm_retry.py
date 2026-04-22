@@ -269,6 +269,58 @@ async def test_rate_limit_429_adds_extra_wait(monkeypatch: pytest.MonkeyPatch) -
 
 
 @pytest.mark.asyncio
+async def test_rate_limit_429_prefers_retry_after_over_default_extra(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """429 with Retry-After should add Retry-After seconds instead of default extra wait."""
+    from datacloud_analysis.orchestration.execution.llm_retry import stream_llm_call_with_retry
+
+    call_count = 0
+
+    class _Resp:
+        headers = {"Retry-After": "3"}
+
+    async def _rate_limited_with_header() -> str:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            exc = Exception("too many requests")
+            exc.status_code = 429  # type: ignore[attr-defined]
+            exc.response = _Resp()  # type: ignore[attr-defined]
+            raise exc
+        return "ok"
+
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_RETRIES",
+        3,
+    )
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MIN_WAIT",
+        1.0,
+    )
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_WAIT",
+        60.0,
+    )
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_RATE_LIMIT_WAIT",
+        10.0,
+    )
+
+    sleep_calls: list[float] = []
+
+    async def _fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+
+    with patch("asyncio.sleep", side_effect=_fake_sleep):
+        await stream_llm_call_with_retry(_rate_limited_with_header)
+
+    assert len(sleep_calls) == 1
+    # attempt=0: base 1.0 + Retry-After 3.0 = 4.0 (should not add default 10.0)
+    assert sleep_calls[0] == pytest.approx(4.0)
+
+
+@pytest.mark.asyncio
 async def test_exponential_backoff_increases_wait(monkeypatch: pytest.MonkeyPatch) -> None:
     """每次重试等待时间按指数增长：1.0, 2.0, 4.0 秒。"""
     from datacloud_analysis.orchestration.execution.llm_retry import stream_llm_call_with_retry
@@ -310,6 +362,44 @@ async def test_exponential_backoff_increases_wait(monkeypatch: pytest.MonkeyPatc
         await stream_llm_call_with_retry(_always_fail_500)
 
     assert sleep_calls == pytest.approx([1.0, 2.0, 4.0])
+
+
+@pytest.mark.asyncio
+async def test_max_wait_caps_exponential_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Backoff should be capped by _DEFAULT_MAX_WAIT."""
+    from datacloud_analysis.orchestration.execution.llm_retry import stream_llm_call_with_retry
+
+    async def _always_fail_500() -> str:
+        exc = Exception("server error")
+        exc.status_code = 500  # type: ignore[attr-defined]
+        raise exc
+
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_RETRIES",
+        3,
+    )
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MIN_WAIT",
+        5.0,
+    )
+    monkeypatch.setattr(
+        "datacloud_analysis.orchestration.execution.llm_retry._DEFAULT_MAX_WAIT",
+        6.0,
+    )
+
+    sleep_calls: list[float] = []
+
+    async def _fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+
+    with (
+        patch("asyncio.sleep", side_effect=_fake_sleep),
+        pytest.raises(Exception, match="server error"),
+    ):
+        await stream_llm_call_with_retry(_always_fail_500)
+
+    # attempt waits: min(5,6)=5, min(10,6)=6, min(20,6)=6
+    assert sleep_calls == pytest.approx([5.0, 6.0, 6.0])
 
 
 # ─── _build_fallback_llm ──────────────────────────────────────────────────────

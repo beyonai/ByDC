@@ -183,7 +183,7 @@ def test_T9_5_field_description_mentions_both_formats() -> None:
     q_schema = build_query_schema("企业分析", _query_fields())
     q_filter_item = q_schema["properties"]["filters"]["items"]["oneOf"][0]
     q_field_desc = q_filter_item["properties"]["field"].get("description", "")
-    assert "中文名" in q_field_desc or "字段编码" in q_field_desc, (
+    assert "中文名" in q_field_desc or "字段编码" in q_field_desc or "属性编码" in q_field_desc, (
         f"query filters.field description 缺少格式说明: {q_field_desc!r}"
     )
 
@@ -191,7 +191,7 @@ def test_T9_5_field_description_mentions_both_formats() -> None:
     c_schema = build_compute_schema("企业分析", _compute_fields())
     c_dim_item = c_schema["properties"]["dimensions"]["items"]["oneOf"][0]
     c_dim_desc = c_dim_item["properties"]["field"].get("description", "")
-    assert "中文名" in c_dim_desc or "字段编码" in c_dim_desc, (
+    assert "中文名" in c_dim_desc or "字段编码" in c_dim_desc or "属性编码" in c_dim_desc, (
         f"compute dimensions.field description 缺少格式说明: {c_dim_desc!r}"
     )
 
