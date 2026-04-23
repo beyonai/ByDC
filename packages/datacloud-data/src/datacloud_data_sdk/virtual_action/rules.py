@@ -11,19 +11,27 @@ from typing import Any
 
 # ── OWL property_role → 运行时 analytic_role ──────────────────────────────────
 _ROLE_MAP: dict[str, str] = {
+    "DIMENSION": "dimension",
     "DIMENSION_ATTR": "dimension",
     "MEASURE": "measure",
 }
 
 # ── OWL rule_type → 运行时 analytic_kind ─────────────────────────────────────
 _KIND_MAP: dict[str, str] = {
+    "attribute_id": "id",
     "id": "id",
+    "attribute_name": "name",
     "name": "name",
+    "attribute_description": "description",
     "description": "description",  # 新增
+    "datetime": "datetime",
     "time": "datetime",  # 改名（旧 "time" → "datetime"）
     "period": "period",
+    "numeric": "numeric",
     "numerical": "numeric",  # 改名（旧 "number"）
+    "raw_number": "raw_number",
     "index_numerical": "raw_number",  # 改名（旧 "number"）
+    "basic_metric": "basic_metric",
     "indicator": "basic_metric",  # 改名（旧 "indicator"）
     "snapshot_metric": "snapshot_metric",  # 新增
     "derived_metric": "derived_metric",  # 新增

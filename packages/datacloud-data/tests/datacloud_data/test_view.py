@@ -243,6 +243,107 @@ def test_view_virtual_actions_refresh_after_late_injection() -> None:
     )
 
 
+def test_view_compute_schema_supports_current_owl_role_and_kind_aliases() -> None:
+    loader = OntologyLoader()
+    loader.load_from_content(
+        {
+            "objects": [
+                {
+                    "object_code": "ads_enterprise_analysis",
+                    "object_name": "企业分析表",
+                    "source_type": "DB",
+                    "table_name": "ads_enterprise_analysis",
+                    "fields": [
+                        {
+                            "field_code": "enterprise_name",
+                            "field_name": "企业名称",
+                            "field_type": "STRING",
+                            "ext_property": (
+                                '{"property_role_rule": {"property_role": "DIMENSION", '
+                                '"rule_type": "name"}}'
+                            ),
+                        },
+                        {
+                            "field_code": "total_revenue",
+                            "field_name": "企业总营收（万元）",
+                            "field_type": "DOUBLE",
+                            "ext_property": (
+                                '{"property_role_rule": {"property_role": "MEASURE", '
+                                '"rule_type": "basic_metric"}}'
+                            ),
+                        },
+                        {
+                            "field_code": "grid_total_revenue",
+                            "field_name": "所属网格总营收（万元）",
+                            "field_type": "DOUBLE",
+                            "ext_property": (
+                                '{"property_role_rule": {"property_role": "DIMENSION", '
+                                '"rule_type": "numeric"}}'
+                            ),
+                        },
+                    ],
+                    "actions": [],
+                }
+            ],
+            "relations": [],
+            "views": [
+                {
+                    "view_id": "scene_enterprise_analysis",
+                    "view_name": "企业综合分析视图",
+                    "description": "",
+                    "objects": [{"object_code": "ads_enterprise_analysis"}],
+                    "relations": [],
+                    "mappings": [
+                        {
+                            "property_code": "enterprise_name",
+                            "property_name": "企业名称",
+                            "source_object_code": "ads_enterprise_analysis",
+                            "source_object_column_code": "enterprise_name",
+                            "ext_property": (
+                                "{&quot;property_role_rule&quot;: "
+                                "{&quot;property_role&quot;: &quot;DIMENSION&quot;, "
+                                "&quot;rule_type&quot;: &quot;name&quot;}}"
+                            ),
+                        },
+                        {
+                            "property_code": "total_revenue",
+                            "property_name": "企业总营收（万元）",
+                            "source_object_code": "ads_enterprise_analysis",
+                            "source_object_column_code": "total_revenue",
+                            "ext_property": (
+                                "{&quot;property_role_rule&quot;: "
+                                "{&quot;property_role&quot;: &quot;MEASURE&quot;, "
+                                "&quot;rule_type&quot;: &quot;basic_metric&quot;}}"
+                            ),
+                        },
+                        {
+                            "property_code": "grid_total_revenue",
+                            "property_name": "所属网格总营收（万元）",
+                            "source_object_code": "ads_enterprise_analysis",
+                            "source_object_column_code": "grid_total_revenue",
+                            "ext_property": (
+                                "{&quot;property_role_rule&quot;: "
+                                "{&quot;property_role&quot;: &quot;DIMENSION&quot;, "
+                                "&quot;rule_type&quot;: &quot;numeric&quot;}}"
+                            ),
+                        },
+                    ],
+                }
+            ],
+        }
+    )
+
+    inject_virtual_actions(loader)
+
+    view = loader.get_view("scene_enterprise_analysis")
+    schema = view.get_action_schema("compute_scene_enterprise_analysis")["inputSchema"]
+    measure_fields = schema["properties"]["metrics"]["x-dc-measure-fields"]
+    measure_codes = {item["field"] for item in measure_fields}
+
+    assert "total_revenue" in measure_codes
+    assert "grid_total_revenue" in measure_codes
+
+
 def test_build_view_result_columns_meta_uses_property_name() -> None:
     """视图 meta.columns 应带 label，供 Markdown 等展示中文列名。"""
     from types import SimpleNamespace

@@ -398,7 +398,11 @@ def _extract_view_fields(scene: dict, loader: Any) -> list:
     3. 空列表（由调用方降级到对象字段）
     """
     from datacloud_data_sdk.virtual_action.models import ViewFieldMeta
-    from datacloud_data_sdk.virtual_action.rules import derive_field_ops, parse_analytic_role
+    from datacloud_data_sdk.virtual_action.rules import (
+        derive_field_ops,
+        infer_secondary_role,
+        parse_analytic_role,
+    )
 
     # 优先使用已解析的 ViewFieldMeta 列表
     if "fields" in scene and scene["fields"]:
@@ -406,6 +410,8 @@ def _extract_view_fields(scene: dict, loader: Any) -> list:
         result: list = []
         for rf in raw_fields:
             if isinstance(rf, ViewFieldMeta):
+                if rf.secondary_role is None:
+                    rf.secondary_role = infer_secondary_role(rf.analytic_role, rf.analytic_kind)
                 result.append(rf)
             elif isinstance(rf, dict):
                 role, kind = parse_analytic_role(rf.get("ext_property") or "")
@@ -423,6 +429,7 @@ def _extract_view_fields(scene: dict, loader: Any) -> list:
                     ),
                     analytic_role=role,
                     analytic_kind=kind,
+                    secondary_role=infer_secondary_role(role, kind),
                     filter_ops=fops,
                     group_ops=gops,
                     aggregate_ops=aops,
@@ -451,6 +458,7 @@ def _extract_view_fields(scene: dict, loader: Any) -> list:
                     ),
                     analytic_role=role,
                     analytic_kind=kind,
+                    secondary_role=infer_secondary_role(role, kind),
                     filter_ops=fops,
                     group_ops=gops,
                     aggregate_ops=aops,
