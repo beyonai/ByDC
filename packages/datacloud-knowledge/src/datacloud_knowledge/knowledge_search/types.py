@@ -119,3 +119,34 @@ class ValueResolutionResult:
 
     matched: set[str] = field(default_factory=set)
     unmatched: list[str] = field(default_factory=list)
+
+
+# ── 扩展字段解析类型（含 term_name）────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedField:
+    """精确命中的字段解析结果（含中文标准名）。
+
+    Attributes:
+        term_code: 字段编码（prop 的 term_code）。
+        term_name: 字段中文标准名（prop 的 term_name）。
+    """
+
+    term_code: str
+    term_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class FieldResolutionResultWithNames:
+    """扩展版字段别名消歧结果（resolved 含 term_name）。
+
+    Attributes:
+        resolved: 无歧义命中 {输入别名 → ResolvedField}。
+        ambiguous: 多候选歧义 {输入别名 → 候选列表}。
+        unresolved: 完全未命中的输入别名。
+    """
+
+    resolved: dict[str, ResolvedField] = field(default_factory=dict)
+    ambiguous: dict[str, list[AmbiguousCandidate]] = field(default_factory=dict)
+    unresolved: list[str] = field(default_factory=list)

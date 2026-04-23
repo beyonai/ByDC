@@ -551,6 +551,7 @@ def _execute_resume(
 
     tool_params = _apply_resolved_to_params(tool_params, resolved)
     tool_params["query"] = query  # _format_clarification 回填结果不含 query，需补回
+    tool_params["query"] = query  # _format_clarification 回填结果不含 query，需补回
     ctx["tool_params"] = tool_params
 
     if is_complex:
@@ -678,7 +679,10 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
 
     # ── 剥除元字段（before_callback 消费）────────────────────────────────────
     # query 保留在 tool_params 中（工具本身需要），仅 complex_conditions 是纯路由元字段。
+    # ── 剥除元字段（before_callback 消费）────────────────────────────────────
+    # query 保留在 tool_params 中（工具本身需要），仅 complex_conditions 是纯路由元字段。
     tool_params: dict[str, Any] = _normalize_json_fields(dict(ctx.get("tool_params") or {}))
+    query: str = str(tool_params.get("query", "") or "")
     query: str = str(tool_params.get("query", "") or "")
     complex_conditions: list[str] = list(tool_params.pop("complex_conditions", None) or [])
 
@@ -728,6 +732,9 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         # query 是 NL 描述，不属于结构化参数，不传给 SDK
         _sdk_params = {k: v for k, v in tool_params.items() if k != "query"}
         structured_input = {**_sdk_params, "complex_conditions": complex_conditions}
+        # query 是 NL 描述，不属于结构化参数，不传给 SDK
+        _sdk_params = {k: v for k, v in tool_params.items() if k != "query"}
+        structured_input = {**_sdk_params, "complex_conditions": complex_conditions}
         is_compute = tool_name.startswith("compute_")
 
         # CACHE MISS：首次执行，调用 SDK；interrupt 前写入完整缓存供 resume 命中
@@ -771,6 +778,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 is_compute=is_compute,
             )
             tool_params = _apply_resolved_to_params(patched, resolved)
+            tool_params["query"] = query  # _format_clarification 回填结果不含 query，需补回
             tool_params["query"] = query  # _format_clarification 回填结果不含 query，需补回
             ctx["tool_params"] = tool_params
             if is_complex:

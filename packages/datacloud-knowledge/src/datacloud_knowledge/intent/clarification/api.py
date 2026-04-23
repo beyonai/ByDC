@@ -9,7 +9,10 @@
 
 from __future__ import annotations
 
+import contextlib
+import json
 import logging
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -17,7 +20,12 @@ from datacloud_knowledge.intent.llm_utils import EventEmitter
 from datacloud_knowledge.intent.types import ClarificationResult
 
 from .cartesian import build_paradigm_list, serialize_knowledge_meta, serialize_paradigm_payload
-from .confirm import format_recall_context, llm_confirm_structured
+from .confirm import (
+    format_cc_confirm_context,
+    format_main_confirm_context,
+    llm_confirm_cc,
+    llm_confirm_main,
+)
 from .extract import (
     ExtractedTerm,
     extract_terms_complex_conditions,
@@ -26,6 +34,18 @@ from .extract import (
 )
 from .format import format_clarification_compute as _format_compute
 from .format import format_clarification_query as _format_query
+from .models import (
+    CCConfirmResult,
+    CCTermMeta,
+    ClarifyItem,
+    ConditionTermMapping,
+    ConfirmedCondition,
+    ConfirmedStructuredCompute,
+    ConfirmedStructuredQuery,
+    MainConfirmResult,
+    PreResolveResult,
+    TermMeta,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,32 +88,74 @@ def analyze_query_clarification_query(
         len(cc_terms),
     )
 
-    # ── Step 2: 统一召回 ──
-    with emit.step("知识召回", "knowledge_recall"):
-        recall_map = _unified_recall(all_terms, scope_code=ontology_code)
-        emit.result({"terms": len(all_terms), "recalled": sum(1 for v in recall_map.values() if v)})
-
-    # ── Step 3: LLM 确认 ──
-    recall_context = format_recall_context(
-        all_terms,
-        recall_map,
-        complex_conditions=complex_conditions,
-    )
-    with emit.step("查询确认", "llm_confirm"):
-        confirmed = llm_confirm_structured(
-            query=query,
-            structured_input=structured_query,
-            recall_context=recall_context,
-            mode="query",
-            on_event=on_event,
+    # ── Step 2: Pre-Resolve（主结构字段预解析）──
+    with emit.step("字段预解析", "pre_resolve"):
+        pre = _pre_resolve_terms(main_terms, scope_code=ontology_code)
+        emit.result(
+            {
+                "confirmed": len(pre.confirmed),
+                "unresolved": len(pre.unresolved_terms),
+                "value_constraints": len(pre.value_enum_map),
+            }
         )
-        if confirmed is None:
-            logger.warning("[clarification] LLM 确认失败，返回原始查询")
-            emit.error("LLM 确认失败")
-            return ClarificationResult(query=query)
+
+    # ── Step 3: 定向召回（只对 unresolved 术语 + cc 术语）──
+    recall_terms = list(pre.unresolved_terms) + cc_terms
+    with emit.step("知识召回", "knowledge_recall"):
+        recall_map = _unified_recall(recall_terms, scope_code=ontology_code) if recall_terms else {}
+        emit.result(
+            {"terms": len(recall_terms), "recalled": sum(1 for v in recall_map.values() if v)}
+        )
+
+    # ── Step 4a: 主结构 LLM 确认（编号术语模式）──
+    pre_resolved_input = _build_pre_resolved_input(structured_query, pre, main_terms)
+    with emit.step("主结构确认", "llm_confirm_main"):
+        main_context, term_registry = format_main_confirm_context(
+            pre_resolved_input,
+            main_terms,
+            recall_map,
+            pre,
+            mode="query",
+        )
+        main_result = llm_confirm_main(context=main_context, on_event=on_event)
+        emit.result({"has_result": main_result is not None})
+
+    # ── Step 4b: 逐条 cc LLM 确认 ──
+    cc_results: list[tuple[CCConfirmResult | None, dict[int, CCTermMeta]]] = []
+    if complex_conditions and cc_terms:
+        cc_by_idx: dict[int, list[ExtractedTerm]] = {}
+        for t in cc_terms:
+            cc_by_idx.setdefault(t.condition_index, []).append(t)
+
+        with emit.step("条件确认", "llm_confirm_cc"):
+            for idx, sentence in enumerate(complex_conditions):
+                group = cc_by_idx.get(idx, [])
+                if not group:
+                    continue
+                cc_context, cc_registry = format_cc_confirm_context(
+                    group,
+                    recall_map,
+                    sentence,
+                    idx,
+                )
+                cc_result = llm_confirm_cc(context=cc_context, on_event=on_event)
+                cc_results.append((cc_result, cc_registry))
+            emit.result({"cc_count": len(cc_results)})
+
+    # ── Step 5: 合并为 ConfirmedStructuredQuery ──
+    with emit.step("结果合并", "merge_confirmed"):
+        confirmed = _merge_to_confirmed_query(
+            pre,
+            main_result,
+            cc_results,
+            term_registry,
+            structured_query,
+            main_terms,
+            recall_map=recall_map,
+        )
         emit.result({"needs_clarification": confirmed.needs_clarification})
 
-    # ── Step 4: 构建 paradigmList ──
+    # ── Step 6: 构建 paradigmList（不变）──
     with emit.step("结果生成", "build_paradigm_list"):
         paradigm_list, meta = build_paradigm_list(
             confirmed,
@@ -159,32 +221,73 @@ def analyze_query_clarification_compute(
         len(cc_terms),
     )
 
-    # ── Step 2: 统一召回 ──
-    with emit.step("知识召回", "knowledge_recall"):
-        recall_map = _unified_recall(all_terms, scope_code=ontology_code)
-        emit.result({"terms": len(all_terms), "recalled": sum(1 for v in recall_map.values() if v)})
-
-    # ── Step 3: LLM 确认 ──
-    recall_context = format_recall_context(
-        all_terms,
-        recall_map,
-        complex_conditions=complex_conditions,
-    )
-    with emit.step("查询确认", "llm_confirm"):
-        confirmed = llm_confirm_structured(
-            query=query,
-            structured_input=structured_compute,
-            recall_context=recall_context,
-            mode="compute",
-            on_event=on_event,
+    # ── Step 2: Pre-Resolve ──
+    with emit.step("字段预解析", "pre_resolve"):
+        pre = _pre_resolve_terms(main_terms, scope_code=ontology_code)
+        emit.result(
+            {
+                "confirmed": len(pre.confirmed),
+                "unresolved": len(pre.unresolved_terms),
+            }
         )
-        if confirmed is None:
-            logger.warning("[clarification] LLM 确认失败，返回原始查询")
-            emit.error("LLM 确认失败")
-            return ClarificationResult(query=query)
+
+    # ── Step 3: 定向召回 ──
+    recall_terms = list(pre.unresolved_terms) + cc_terms
+    with emit.step("知识召回", "knowledge_recall"):
+        recall_map = _unified_recall(recall_terms, scope_code=ontology_code) if recall_terms else {}
+        emit.result(
+            {"terms": len(recall_terms), "recalled": sum(1 for v in recall_map.values() if v)}
+        )
+
+    # ── Step 4a: 主结构 LLM 确认 ──
+    pre_resolved_input = _build_pre_resolved_input(structured_compute, pre, main_terms)
+    with emit.step("主结构确认", "llm_confirm_main"):
+        main_context, term_registry = format_main_confirm_context(
+            pre_resolved_input,
+            main_terms,
+            recall_map,
+            pre,
+            mode="compute",
+        )
+        main_result = llm_confirm_main(context=main_context, on_event=on_event)
+        emit.result({"has_result": main_result is not None})
+
+    # ── Step 4b: 逐条 cc LLM 确认 ──
+    cc_results: list[tuple[CCConfirmResult | None, dict[int, CCTermMeta]]] = []
+    if complex_conditions and cc_terms:
+        cc_by_idx: dict[int, list[ExtractedTerm]] = {}
+        for t in cc_terms:
+            cc_by_idx.setdefault(t.condition_index, []).append(t)
+
+        with emit.step("条件确认", "llm_confirm_cc"):
+            for idx, sentence in enumerate(complex_conditions):
+                group = cc_by_idx.get(idx, [])
+                if not group:
+                    continue
+                cc_context, cc_registry = format_cc_confirm_context(
+                    group,
+                    recall_map,
+                    sentence,
+                    idx,
+                )
+                cc_result = llm_confirm_cc(context=cc_context, on_event=on_event)
+                cc_results.append((cc_result, cc_registry))
+            emit.result({"cc_count": len(cc_results)})
+
+    # ── Step 5: 合并 ──
+    with emit.step("结果合并", "merge_confirmed"):
+        confirmed = _merge_to_confirmed_compute(
+            pre,
+            main_result,
+            cc_results,
+            term_registry,
+            structured_compute,
+            main_terms,
+            recall_map=recall_map,
+        )
         emit.result({"needs_clarification": confirmed.needs_clarification})
 
-    # ── Step 4: 构建 paradigmList ──
+    # ── Step 6: 构建 paradigmList ──
     with emit.step("结果生成", "build_paradigm_list"):
         paradigm_list, meta = build_paradigm_list(
             confirmed,
@@ -407,3 +510,597 @@ class _RecallItem:
         self.keyword = keyword
         self.ktype = ktype
         self.search_enabled = search_enabled
+
+
+# ── 分治确认内部辅助 ─────────────────────────────────────────────────
+
+_FIELD_CODE_RE: re.Pattern[str] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _is_field_code(term: str) -> bool:
+    """判断术语是否为英文字段编码。"""
+    return bool(_FIELD_CODE_RE.match(term))
+
+
+def _term_key(t: ExtractedTerm) -> str:
+    """生成术语的复合键：path:raw_text。"""
+    return f"{t.path}:{t.raw_text}"
+
+
+def _pre_resolve_terms(
+    main_terms: list[ExtractedTerm],
+    scope_code: str,
+) -> PreResolveResult:
+    """Phase 2: 预解析主结构术语。
+
+    - 英文 field_code / 中文唯一精确命中 → confirmed_exact
+    - 歧义 / 未命中 → unresolved，走 recall
+    - 已确认 whereKey → 查 prop 枚举值约束 whereValue
+
+    Args:
+        main_terms: 主结构提取的术语列表。
+        scope_code: 本体编码。
+
+    Returns:
+        PreResolveResult。
+    """
+    from datacloud_knowledge.knowledge_search.term_search import (
+        get_prop_enum_values,
+        resolve_field_aliases_with_names,
+    )
+    from datacloud_knowledge.knowledge_search.types import ResolvedField
+
+    confirmed: dict[str, ResolvedField] = {}  # keyed by path
+    provenance: dict[str, str] = {}  # keyed by path
+    value_enum_map: dict[str, list[str]] = {}  # keyed by path
+
+    # 收集字段类术语（非 whereValue），去重 raw_text 用于 SQL 查询
+    field_terms_raw: list[str] = []
+    for t in main_terms:
+        if t.source != "main" or not t.search_enabled:
+            continue
+        if t.ktype == "whereValue" or t.parent_raw_text is not None:
+            continue
+        if t.raw_text not in field_terms_raw:
+            field_terms_raw.append(t.raw_text)
+
+    # 调用扩展版别名解析（返回 {raw_text → ResolvedField}）
+    resolved_by_text: dict[str, ResolvedField] = {}
+    if field_terms_raw and scope_code:
+        try:
+            result = resolve_field_aliases_with_names(
+                terms=field_terms_raw,
+                scope_code=scope_code,
+            )
+            resolved_by_text = result.resolved
+            # 扇出到所有匹配的术语，按 path:raw_text 复合键入
+            for t in main_terms:
+                if t.source != "main" or t.ktype == "whereValue" or t.parent_raw_text is not None:
+                    continue
+                rf = resolved_by_text.get(t.raw_text)
+                if rf:
+                    tk = _term_key(t)
+                    confirmed[tk] = rf
+                    tag = "field_code" if _is_field_code(t.raw_text) else "alias_exact"
+                    provenance[tk] = tag
+            logger.info(
+                "[pre_resolve] resolved=%d ambiguous=%d unresolved=%d",
+                len(result.resolved),
+                len(result.ambiguous),
+                len(result.unresolved),
+            )
+        except Exception:
+            logger.warning("[pre_resolve] resolve_field_aliases_with_names 失败", exc_info=True)
+
+    # 已确认 whereKey → 查枚举值
+    confirmed_key_codes: list[str] = []
+    key_code_to_name: dict[str, str] = {}
+    for t in main_terms:
+        if t.ktype == "whereKey" and _term_key(t) in confirmed:
+            rf = confirmed[_term_key(t)]
+            if rf.term_code not in key_code_to_name:
+                confirmed_key_codes.append(rf.term_code)
+                key_code_to_name[rf.term_code] = rf.term_name
+
+    if confirmed_key_codes and scope_code:
+        try:
+            enum_map = get_prop_enum_values(
+                scope_code=scope_code,
+                field_codes=confirmed_key_codes,
+            )
+            # 为每个 whereValue 术语建立枚举约束（按 path 键入）
+            for t in main_terms:
+                if t.ktype != "whereValue" or not t.search_enabled:
+                    continue
+                key_term = _find_paired_where_key(t, main_terms)
+                if key_term and _term_key(key_term) in confirmed:
+                    rf = confirmed[_term_key(key_term)]
+                    enum_values = enum_map.get(rf.term_code, [])
+                    if enum_values:
+                        tk = _term_key(t)
+                        value_enum_map[tk] = enum_values
+                        # 尝试在枚举集内精确匹配
+                        for ev in enum_values:
+                            if ev == t.raw_text:
+                                confirmed[tk] = ResolvedField(
+                                    term_code=ev,
+                                    term_name=ev,
+                                )
+                                provenance[tk] = "enum_exact"
+                                break
+        except Exception:
+            logger.warning("[pre_resolve] get_prop_enum_values 失败", exc_info=True)
+
+    # 分拣 unresolved
+    unresolved: list[ExtractedTerm] = []
+    for t in main_terms:
+        if t.source != "main":
+            continue
+        if _term_key(t) in confirmed:
+            continue
+        unresolved.append(t)
+
+    logger.info(
+        "[pre_resolve] confirmed=%d unresolved=%d value_constraints=%d",
+        len(confirmed),
+        len(unresolved),
+        len(value_enum_map),
+    )
+
+    return PreResolveResult(
+        confirmed=confirmed,
+        unresolved_terms=unresolved,
+        value_enum_map=value_enum_map,
+        provenance=provenance,
+    )
+
+
+def _find_paired_where_key(
+    value_term: ExtractedTerm,
+    all_terms: list[ExtractedTerm],
+) -> ExtractedTerm | None:
+    """查找 whereValue 对应的 whereKey 术语。"""
+    filter_prefix = _extract_filter_prefix(value_term.path)
+    if not filter_prefix:
+        return None
+    for t in all_terms:
+        if t.ktype == "whereKey" and _extract_filter_prefix(t.path) == filter_prefix:
+            return t
+    return None
+
+
+def _extract_filter_prefix(path: str) -> str:
+    """从 path 提取 filter 前缀：'filters.1.field' → 'filters.1'。"""
+    parts = path.split(".")
+    if len(parts) >= 2 and parts[0] == "filters":
+        return f"{parts[0]}.{parts[1]}"
+    for i, p in enumerate(parts):
+        if p == "filters" and i + 1 < len(parts):
+            try:
+                int(parts[i + 1])
+                return ".".join(parts[: i + 2])
+            except ValueError:
+                pass
+    return ""
+
+
+def _build_pre_resolved_input(
+    structured_input: dict[str, Any],
+    pre_resolve: PreResolveResult,
+    main_terms: list[ExtractedTerm],
+) -> dict[str, Any]:
+    """将已确认字段替换到 structured_input 中（用中文 term_name）。"""
+    result = json.loads(json.dumps(structured_input, ensure_ascii=False))
+
+    # 非 whereValue 字段直接替换
+    for t in main_terms:
+        if t.source != "main" or _term_key(t) not in pre_resolve.confirmed:
+            continue
+        if t.ktype == "whereValue":
+            continue
+        rf = pre_resolve.confirmed[_term_key(t)]
+        _set_by_path(result, t.path, rf.term_name)
+
+    # whereValue 列表感知替换
+    _apply_confirmed_values(result, main_terms, pre_resolve.confirmed)
+
+    # 移除 complex_conditions（主结构不需要）
+    result.pop("complex_conditions", None)
+    return result
+
+
+def _set_by_path(obj: dict[str, Any], path: str, value: Any) -> None:
+    """按 JSON pointer 路径设置值。"""
+    parts = path.split(".")
+    current: Any = obj
+    for part in parts[:-1]:
+        if isinstance(current, dict):
+            current = current.get(part)
+        elif isinstance(current, list):
+            try:
+                current = current[int(part)]
+            except (ValueError, IndexError):
+                return
+        else:
+            return
+    if current is None:
+        return
+    last = parts[-1]
+    if isinstance(current, dict):
+        current[last] = value
+    elif isinstance(current, list):
+        with contextlib.suppress(ValueError, IndexError):
+            current[int(last)] = value
+
+
+def _apply_value_list(
+    obj: dict[str, Any],
+    value_path: str,
+    idx_vals: list[tuple[int, str]],
+) -> None:
+    """按索引替换 filter value 列表中的元素（不覆盖整个列表）。
+
+    Args:
+        obj: 结构化输入。
+        value_path: 如 'filters.0.value'。
+        idx_vals: [(列表内索引, 确认值)] 列表。
+    """
+    parts = value_path.split(".")
+    current: Any = obj
+    for part in parts:
+        if isinstance(current, dict):
+            current = current.get(part)
+        elif isinstance(current, list):
+            try:
+                current = current[int(part)]
+            except (ValueError, IndexError):
+                return
+        else:
+            return
+        if current is None:
+            return
+
+    if isinstance(current, list):
+        for idx, val in idx_vals:
+            if 0 <= idx < len(current):
+                current[idx] = val
+    elif idx_vals:
+        # 标量 value → 直接用最后一个确认值覆盖
+        _set_by_path(obj, value_path, idx_vals[-1][1])
+
+
+def _apply_confirmed_values(
+    obj: dict[str, Any],
+    main_terms: list[ExtractedTerm],
+    confirmed: dict[str, Any],
+    *,
+    term_source: str = "",
+) -> None:
+    """批量回填已确认的 whereValue 到 filter value 列表。"""
+    # 按 value path 分组
+    by_path: dict[str, list[tuple[int, str]]] = {}
+    path_counters: dict[str, int] = {}
+    for t in main_terms:
+        if t.source != "main" or t.ktype != "whereValue":
+            continue
+        tk = _term_key(t)
+        if tk not in confirmed:
+            continue
+        rf = confirmed[tk]
+        idx = path_counters.get(t.path, 0)
+        path_counters[t.path] = idx + 1
+        term_name = rf.term_name if hasattr(rf, "term_name") else str(rf)
+        by_path.setdefault(t.path, []).append((idx, term_name))
+
+    for vpath, idx_vals in by_path.items():
+        _apply_value_list(obj, vpath, idx_vals)
+
+
+def _recall_fallback_candidates(
+    recall_map: dict[str, list[dict[str, Any]]] | None,
+    ktype: str,
+    raw_text: str,
+    limit: int = 5,
+) -> list[str]:
+    """从召回结果中提取 term_name 列表作为兜底候选。"""
+    if not recall_map:
+        return []
+    key = f"{ktype}:{raw_text}"
+    candidates = recall_map.get(key, [])
+    return [str(c.get("term_name", "")) for c in candidates[:limit] if c.get("term_name")]
+
+
+def _merge_confirmed_common(
+    pre: PreResolveResult,
+    main_result: MainConfirmResult | None,
+    cc_results: list[tuple[CCConfirmResult | None, dict[int, CCTermMeta]]],
+    term_registry: dict[int, TermMeta],
+    structured_input: dict[str, Any],
+    main_terms: list[ExtractedTerm],
+    recall_map: dict[str, list[dict[str, Any]]] | None = None,
+) -> tuple[dict[str, Any], list[ClarifyItem], list[ConfirmedCondition], bool]:
+    """合并分治确认结果的共享逻辑。
+
+    Returns:
+        (patched_result, clarify_items, confirmed_conditions, needs_clarification)
+    """
+    result = json.loads(json.dumps(structured_input, ensure_ascii=False))
+
+    # 1. 回填 pre_resolve 已确认字段（非 whereValue）
+    for t in main_terms:
+        if t.source != "main" or _term_key(t) not in pre.confirmed:
+            continue
+        if t.ktype == "whereValue":
+            continue  # whereValue 列表需要特殊处理
+        rf = pre.confirmed[_term_key(t)]
+        _set_by_path(result, t.path, rf.term_name)
+
+    # 1b. 回填 pre_resolve 已确认的 whereValue（列表感知）
+    _apply_confirmed_values(result, main_terms, pre.confirmed, term_source="pre_resolve")
+
+    # 2. 回填 main LLM 确认结果（fail-closed: LLM 失败时强制澄清）
+    clarify_items: list[ClarifyItem] = []
+    llm_failed = False
+    # 收集 whereValue 的 LLM 确认结果，稍后批量回填
+    value_confirmations: dict[
+        str, list[tuple[int, str]]
+    ] = {}  # path → [(index_in_list, confirmed)]
+    if main_result:
+        covered_ids: set[int] = set()
+        # 先统计每个 value path 下有多少个术语（用于确定列表索引）
+        value_path_counters: dict[str, int] = {}
+        for tc in main_result.confirmations:
+            meta = term_registry.get(tc.term_id)
+            if meta is None:
+                continue
+            covered_ids.add(tc.term_id)
+            if meta.ktype == "whereValue" and tc.confirmed:
+                idx = value_path_counters.get(meta.path, 0)
+                value_path_counters[meta.path] = idx + 1
+                value_confirmations.setdefault(meta.path, []).append((idx, tc.confirmed))
+            elif tc.confirmed:
+                _set_by_path(result, meta.path, tc.confirmed)
+            elif tc.candidates:
+                clarify_items.append(
+                    ClarifyItem(
+                        keyword=meta.raw_text,
+                        candidates=tc.candidates,
+                        reason=tc.reason,
+                        source=meta.ktype,
+                        path=f"/{meta.path.replace('.', '/')}",
+                    )
+                )
+            else:
+                # confirmed=None, candidates=[] → fail-closed
+                # 从召回结果回填 candidates，避免空候选列表
+                llm_failed = True
+                fallback_candidates = _recall_fallback_candidates(
+                    recall_map, meta.ktype, meta.raw_text
+                )
+                clarify_items.append(
+                    ClarifyItem(
+                        keyword=meta.raw_text,
+                        candidates=fallback_candidates,
+                        reason=tc.reason or "LLM 无法确认且无候选",
+                        source=meta.ktype,
+                        path=f"/{meta.path.replace('.', '/')}",
+                    )
+                )
+        # 检查 LLM 遗漏的 term_id → 强制澄清
+        missing_ids = set(term_registry) - covered_ids
+        if missing_ids:
+            llm_failed = True
+            logger.warning(
+                "[merge] LLM 遗漏 %d 个术语: %s",
+                len(missing_ids),
+                [term_registry[tid].raw_text for tid in missing_ids],
+            )
+            for tid in missing_ids:
+                meta = term_registry[tid]
+                fallback_candidates = _recall_fallback_candidates(
+                    recall_map, meta.ktype, meta.raw_text
+                )
+                clarify_items.append(
+                    ClarifyItem(
+                        keyword=meta.raw_text,
+                        candidates=fallback_candidates,
+                        reason="LLM 确认遗漏，需要人工确认",
+                        source=meta.ktype,
+                        path=f"/{meta.path.replace('.', '/')}",
+                    )
+                )
+
+        # 批量回填 whereValue 列表（列表感知，不覆盖整个 value）
+        for vpath, idx_vals in value_confirmations.items():
+            _apply_value_list(result, vpath, idx_vals)
+
+    elif term_registry:
+        # LLM 失败但有未确认术语 → fail-closed，强制澄清
+        llm_failed = True
+        logger.warning("[merge] main LLM 确认失败，%d 个术语强制标记为需澄清", len(term_registry))
+        for meta in term_registry.values():
+            fallback_candidates = _recall_fallback_candidates(recall_map, meta.ktype, meta.raw_text)
+            clarify_items.append(
+                ClarifyItem(
+                    keyword=meta.raw_text,
+                    candidates=fallback_candidates,
+                    reason="LLM 确认失败，需要人工确认",
+                    source=meta.ktype,
+                    path=f"/{meta.path.replace('.', '/')}",
+                )
+            )
+
+    # 3. 组装 confirmed_conditions（fail-closed: cc LLM 失败时也强制澄清）
+    confirmed_conditions: list[ConfirmedCondition] = []
+    for cc_result, cc_registry in cc_results:
+        if cc_result is None:
+            if cc_registry:
+                # CC LLM 失败但有术语 → 强制澄清
+                llm_failed = True
+                logger.warning(
+                    "[merge] cc LLM 确认失败，%d 个术语强制标记为需澄清",
+                    len(cc_registry),
+                )
+                for meta in cc_registry.values():
+                    clarify_items.append(
+                        ClarifyItem(
+                            keyword=meta.raw_text,
+                            candidates=[],
+                            reason="LLM 确认失败，需要人工确认",
+                            source="complex_condition",
+                            path=f"complex_conditions.{meta.condition_index}",
+                        )
+                    )
+            continue
+        if not cc_registry:
+            continue
+        by_idx: dict[int, list[tuple[int, CCTermMeta]]] = {}
+        for tid, meta in cc_registry.items():
+            by_idx.setdefault(meta.condition_index, []).append((tid, meta))
+
+        for idx in sorted(by_idx):
+            items = by_idx[idx]
+            cc_list = structured_input.get("complex_conditions", [])
+            original = cc_list[idx] if idx < len(cc_list) else ""
+
+            term_mappings: list[ConditionTermMapping] = []
+            for tid, meta in items:
+                tc = next((c for c in cc_result.confirmations if c.term_id == tid), None)
+                if tc is None:
+                    # LLM 遗漏该术语 → 强制标记为需澄清
+                    llm_failed = True
+                    logger.warning("[merge] cc LLM 遗漏术语 '%s'", meta.raw_text)
+                    term_mappings.append(
+                        ConditionTermMapping(
+                            original_term=meta.raw_text,
+                            start=meta.start,
+                            end=meta.end,
+                            confirmed=None,
+                            candidates=[],
+                        )
+                    )
+                    clarify_items.append(
+                        ClarifyItem(
+                            keyword=meta.raw_text,
+                            candidates=[],
+                            reason="LLM 确认遗漏，需要人工确认",
+                            source="complex_condition",
+                            path=f"complex_conditions.{meta.condition_index}",
+                        )
+                    )
+                    continue
+                term_mappings.append(
+                    ConditionTermMapping(
+                        original_term=meta.raw_text,
+                        start=meta.start,
+                        end=meta.end,
+                        confirmed=tc.confirmed,
+                        candidates=tc.candidates,
+                    )
+                )
+                if tc.confirmed is None and tc.candidates:
+                    clarify_items.append(
+                        ClarifyItem(
+                            keyword=meta.raw_text,
+                            candidates=tc.candidates,
+                            reason=tc.reason,
+                            source="complex_condition",
+                            path=f"complex_conditions.{idx}",
+                        )
+                    )
+                elif tc.confirmed is None:
+                    # confirmed=None, candidates=[] → fail-closed
+                    llm_failed = True
+                    clarify_items.append(
+                        ClarifyItem(
+                            keyword=meta.raw_text,
+                            candidates=[],
+                            reason=tc.reason or "LLM 无法确认且无候选",
+                            source="complex_condition",
+                            path=f"complex_conditions.{idx}",
+                        )
+                    )
+
+            confirmed_conditions.append(
+                ConfirmedCondition(
+                    original_sentence=original,
+                    term_mappings=term_mappings,
+                )
+            )
+
+    needs = (
+        llm_failed
+        or bool(clarify_items)
+        or any(
+            tm.confirmed is None and tm.candidates
+            for cc in confirmed_conditions
+            for tm in cc.term_mappings
+        )
+    )
+
+    return result, clarify_items, confirmed_conditions, needs
+
+
+def _merge_to_confirmed_query(
+    pre: PreResolveResult,
+    main_result: MainConfirmResult | None,
+    cc_results: list[tuple[CCConfirmResult | None, dict[int, CCTermMeta]]],
+    term_registry: dict[int, TermMeta],
+    structured_input: dict[str, Any],
+    main_terms: list[ExtractedTerm],
+    recall_map: dict[str, list[dict[str, Any]]] | None = None,
+) -> ConfirmedStructuredQuery:
+    """合并分治确认结果为 ConfirmedStructuredQuery（兼容下游）。"""
+    result, clarify_items, confirmed_conditions, needs = _merge_confirmed_common(
+        pre,
+        main_result,
+        cc_results,
+        term_registry,
+        structured_input,
+        main_terms,
+        recall_map=recall_map,
+    )
+    return ConfirmedStructuredQuery(
+        select=result.get("select", []),
+        filters=result.get("filters", []),
+        order_by=result.get("order_by", []),
+        limit=result.get("limit"),
+        offset=result.get("offset"),
+        filter_relation=result.get("filter_relation", "AND"),
+        confirmed_conditions=confirmed_conditions,
+        clarify_items=clarify_items,
+        needs_clarification=needs,
+    )
+
+
+def _merge_to_confirmed_compute(
+    pre: PreResolveResult,
+    main_result: MainConfirmResult | None,
+    cc_results: list[tuple[CCConfirmResult | None, dict[int, CCTermMeta]]],
+    term_registry: dict[int, TermMeta],
+    structured_input: dict[str, Any],
+    main_terms: list[ExtractedTerm],
+    recall_map: dict[str, list[dict[str, Any]]] | None = None,
+) -> ConfirmedStructuredCompute:
+    """合并分治确认结果为 ConfirmedStructuredCompute（兼容下游）。"""
+    result, clarify_items, confirmed_conditions, needs = _merge_confirmed_common(
+        pre,
+        main_result,
+        cc_results,
+        term_registry,
+        structured_input,
+        main_terms,
+        recall_map=recall_map,
+    )
+    return ConfirmedStructuredCompute(
+        dimensions=result.get("dimensions", []),
+        metrics=result.get("metrics", []),
+        filters=result.get("filters", []),
+        having=result.get("having", []),
+        order_by=result.get("order_by", []),
+        limit=result.get("limit"),
+        filter_relation=result.get("filter_relation", "AND"),
+        confirmed_conditions=confirmed_conditions,
+        clarify_items=clarify_items,
+        needs_clarification=needs,
+    )

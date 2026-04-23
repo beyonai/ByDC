@@ -64,60 +64,6 @@ def _build_comparison_recall(current_op: str) -> list[str]:
     return result
 
 
-def _restore_clarify_to_confirmed(
-    confirmed: ConfirmedStructuredQuery | ConfirmedStructuredCompute,
-) -> None:
-    """将 clarify_items 按 path 还原回 confirmed 的各列表。
-
-    LLM 可能把不确定的术语从 select/filters/order_by 中移除，
-    只放在 clarify_items 里。这导致 confirmed 列表和 original 列表长度不一致。
-    此函数按 clarify_item.path 解析出位置，将占位符插回对应列表，
-    使 confirmed 列表和 original 列表长度一致，zip 配对不截断。
-    """
-    if not confirmed.clarify_items:
-        return
-
-    # 收集需要插入的位置：(target_list_name, index, keyword)
-    inserts: dict[str, list[tuple[int, str]]] = {}
-    for ci in confirmed.clarify_items:
-        path = ci.path.strip("/")
-        parts = path.split("/")
-        if len(parts) < 2:
-            continue
-        list_name = parts[0]
-        try:
-            idx = int(parts[1])
-        except ValueError:
-            continue
-        inserts.setdefault(list_name, []).append((idx, ci.keyword))
-
-    # 按 index 降序插入（从后往前，避免索引偏移）
-    for list_name, items in inserts.items():
-        items.sort(key=lambda x: x[0], reverse=True)
-        target: list[Any] | None = None
-        if list_name == "select" and isinstance(confirmed, ConfirmedStructuredQuery):
-            target = confirmed.select
-        elif list_name == "dimensions" and isinstance(confirmed, ConfirmedStructuredCompute):
-            target = confirmed.dimensions
-        elif list_name == "filters":
-            target = confirmed.filters
-        elif list_name == "order_by":
-            target = confirmed.order_by
-        if target is None:
-            continue
-        for idx, keyword in items:
-            # 用占位符标记：这个位置需要澄清，keyword 是原始术语
-            # filters/order_by 是 list[dict]，需要用 dict 占位符
-            if list_name in ("filters", "order_by"):
-                placeholder: Any = {"__clarify__": keyword}
-            else:
-                placeholder = f"__clarify__{keyword}"
-            if idx <= len(target):
-                target.insert(idx, placeholder)
-            else:
-                target.append(placeholder)
-
-
 # 合法运算符候选（与 WhereClause.op 一致）
 _ALL_COMPARISON_OPS: list[str] = ["eq", "gt", "lt", "gte", "lte", "in", "between"]
 
@@ -340,9 +286,6 @@ def build_paradigm_list(
     path_mapping: dict[str, str] = {}
     _orig = original_structured or {}
 
-    # ── 将 clarify_items 按 path 还原回 confirmed 列表 ──
-    _restore_clarify_to_confirmed(confirmed)
-
     # ── 构建 path 查找索引：raw_text+ktype → path ──
     # terms 的唯一作用是提供 JSON pointer，供 format 阶段回写用户选择。
     _path_index: dict[tuple[str, str], str] = {}
@@ -355,10 +298,20 @@ def build_paradigm_list(
     def _find_path(keyword: str, ktype: str, fallback: str = "") -> str:
         return _path_index.get((keyword, ktype), fallback)
 
-    # ── clarify_items 按 keyword 索引（快速查找某术语是否需要澄清）──
-    clarify_map: dict[str, ClarifyItem] = {}
+    # ── clarify_items 按 keyword 索引（支持同名术语多次出现）──
+    clarify_map: dict[str, list[ClarifyItem]] = {}
     for ci in confirmed.clarify_items:
-        clarify_map[ci.keyword] = ci
+        clarify_map.setdefault(ci.keyword, []).append(ci)
+
+    def _pop_clarify(keyword: str) -> ClarifyItem | None:
+        """从 clarify_map 中取出一个匹配的 ClarifyItem（先进先出）。"""
+        items = clarify_map.get(keyword)
+        if not items:
+            return None
+        ci = items.pop(0)
+        if not items:
+            del clarify_map[keyword]
+        return ci
 
     # ── paradigmId=1: 查询值 ──
     # 数据源：ConfirmedStructuredQuery.select / ConfirmedStructuredCompute.dimensions
@@ -369,9 +322,9 @@ def build_paradigm_list(
         for kid, (orig, conf) in enumerate(
             zip(original_select, confirmed_select, strict=False), start=1
         ):
-            if orig in clarify_map:
+            ci = _pop_clarify(orig)
+            if ci is not None:
                 # LLM 认为不确定 → 展示候选让用户选
-                ci = clarify_map[orig]
                 item: dict[str, Any] = {
                     "keyword": orig,
                     "recall": ci.candidates,
@@ -389,6 +342,35 @@ def build_paradigm_list(
                 }
             path_mapping[str(kid)] = _find_path(orig, "select", f"select.{kid - 1}")
             select_result.append(item)
+    elif isinstance(confirmed, ConfirmedStructuredCompute):
+        # compute 模式：metrics 中的字段也作为查询值展示
+        original_metrics = [t.raw_text for t in terms if t.ktype == "select" and t.source == "main"]
+        confirmed_metrics_raw = confirmed.metrics
+        confirmed_metric_fields = [
+            str(m.get("field", "")) if isinstance(m, dict) else str(m)
+            for m in confirmed_metrics_raw
+        ]
+        for kid, (orig, conf) in enumerate(
+            zip(original_metrics, confirmed_metric_fields, strict=False), start=1
+        ):
+            ci = _pop_clarify(orig)
+            if ci is not None:
+                item = {
+                    "keyword": orig,
+                    "recall": ci.candidates,
+                    "kid": kid,
+                    "ktype": "select",
+                }
+            else:
+                item = {
+                    "keyword": orig,
+                    "recall": [conf],
+                    "kid": kid,
+                    "ktype": "select",
+                    "choiceKeyword": conf,
+                }
+            path_mapping[str(kid)] = _find_path(orig, "select", f"metrics.{kid - 1}.field")
+            select_result.append(item)
 
     # ── paradigmId=2: 分组条件 ──
     group_result: list[dict[str, Any]] = []
@@ -398,8 +380,8 @@ def build_paradigm_list(
             str(d.get("field", "")) if isinstance(d, dict) else str(d) for d in confirmed.dimensions
         ]
         for i, (orig, conf) in enumerate(zip(original_dims, confirmed_dims, strict=False)):
-            if orig in clarify_map:
-                ci = clarify_map[orig]
+            ci = _pop_clarify(orig)
+            if ci is not None:
                 item = {
                     "keyword": orig,
                     "recall": ci.candidates,
@@ -455,8 +437,8 @@ def build_paradigm_list(
         str(o.get("field", "")) if isinstance(o, dict) else str(o) for o in confirmed.order_by
     ]
     for i, (orig, conf) in enumerate(zip(original_order, confirmed_order, strict=False)):
-        if orig in clarify_map:
-            ci = clarify_map[orig]
+        ci = _pop_clarify(orig)
+        if ci is not None:
             item = {
                 "keyword": orig,
                 "recall": ci.candidates,
@@ -497,7 +479,7 @@ def build_paradigm_list(
 def _build_filter_paradigm_from_confirmed(
     confirmed_filters: list[dict[str, Any]],
     original_filter_terms: list[ExtractedTerm],
-    clarify_map: dict[str, ClarifyItem],
+    clarify_map: dict[str, list[ClarifyItem]],
     filter_result: list[dict[str, Any]],
     path_mapping: dict[str, str],
     original_filters_raw: list[dict[str, Any]] | None = None,
@@ -550,8 +532,11 @@ def _build_filter_paradigm_from_confirmed(
         }
 
         # field 部分
-        if key_term.raw_text in clarify_map:
-            ci = clarify_map[key_term.raw_text]
+        field_items = clarify_map.get(key_term.raw_text)
+        if field_items:
+            ci = field_items.pop(0)
+            if not field_items:
+                del clarify_map[key_term.raw_text]
             item["fieldRecall"] = ci.candidates
         else:
             item["fieldRecall"] = [conf_field] if conf_field else []
@@ -563,7 +548,10 @@ def _build_filter_paradigm_from_confirmed(
             conf_values = conf_filter.get("value", "")
             item["value"] = value_term.raw_text
             if value_term.raw_text in clarify_map:
-                ci = clarify_map[value_term.raw_text]
+                val_items = clarify_map[value_term.raw_text]
+                ci = val_items.pop(0)
+                if not val_items:
+                    del clarify_map[value_term.raw_text]
                 item["valueRecall"] = ci.candidates
             else:
                 val_list = conf_values if isinstance(conf_values, list) else [conf_values]
