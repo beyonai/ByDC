@@ -13,24 +13,14 @@ import logging
 from typing import Any
 
 from datacloud_knowledge.intent.clarification.confirm import (
-    CC_CONFIRM_SYSTEM_PROMPT,
-    MAIN_CONFIRM_SYSTEM_PROMPT,
     format_cc_confirm_context,
     format_main_confirm_context,
     llm_confirm_cc,
     llm_confirm_main,
 )
 from datacloud_knowledge.intent.clarification.models import (
-    CCConfirmResult,
-    CCTermMeta,
-    ClarifyItem,
-    ConditionTermMapping,
-    ConfirmedCondition,
-    ConfirmedStructuredQuery,
     ExtractedTerm,
-    MainConfirmResult,
     PreResolveResult,
-    TermMeta,
 )
 from datacloud_knowledge.intent.types import StreamEvent, StreamEventKind
 from datacloud_knowledge.knowledge_search.types import ResolvedField
@@ -136,31 +126,55 @@ RECALL_MAP: dict[str, list[dict[str, Any]]] = {
 # 模拟主结构术语（含 whereKey）
 MAIN_TERMS = [
     ExtractedTerm(
-        raw_text="企业清单", ktype="select", path="select.0",
-        source="main", condition_index=-1, search_enabled=True,
+        raw_text="企业清单",
+        ktype="select",
+        path="select.0",
+        source="main",
+        condition_index=-1,
+        search_enabled=True,
     ),
     ExtractedTerm(
-        raw_text="效能", ktype="whereKey", path="filters.0.field",
-        source="main", condition_index=-1, search_enabled=True,
+        raw_text="效能",
+        ktype="whereKey",
+        path="filters.0.field",
+        source="main",
+        condition_index=-1,
+        search_enabled=True,
     ),
     ExtractedTerm(
-        raw_text="中效能", ktype="whereValue", path="filters.0.value.0",
-        source="main", condition_index=-1, search_enabled=True,
+        raw_text="中效能",
+        ktype="whereValue",
+        path="filters.0.value.0",
+        source="main",
+        condition_index=-1,
+        search_enabled=True,
     ),
     ExtractedTerm(
-        raw_text="低效能", ktype="whereValue", path="filters.0.value.1",
-        source="main", condition_index=-1, search_enabled=True,
+        raw_text="低效能",
+        ktype="whereValue",
+        path="filters.0.value.1",
+        source="main",
+        condition_index=-1,
+        search_enabled=True,
     ),
 ]
 
 CC_TERMS = [
     ExtractedTerm(
-        raw_text="亩产效益", ktype="select", path="complex_conditions.0",
-        source="complex_condition", condition_index=0, search_enabled=True,
+        raw_text="亩产效益",
+        ktype="select",
+        path="complex_conditions.0",
+        source="complex_condition",
+        condition_index=0,
+        search_enabled=True,
     ),
     ExtractedTerm(
-        raw_text="地块", ktype="groupBy", path="complex_conditions.0",
-        source="complex_condition", condition_index=0, search_enabled=True,
+        raw_text="地块",
+        ktype="groupBy",
+        path="complex_conditions.0",
+        source="complex_condition",
+        condition_index=0,
+        search_enabled=True,
     ),
 ]
 
@@ -187,7 +201,11 @@ def main() -> None:
     }
 
     main_context, term_registry = format_main_confirm_context(
-        pre_resolved_input, MAIN_TERMS, RECALL_MAP, PRE_RESOLVE, mode="query",
+        pre_resolved_input,
+        MAIN_TERMS,
+        RECALL_MAP,
+        PRE_RESOLVE,
+        mode="query",
     )
 
     print("\n--- LLM 输入上下文 ---")
@@ -200,7 +218,7 @@ def main() -> None:
     _last_thinking = ""
     main_result = llm_confirm_main(context=main_context, on_event=print_event)
     if main_result:
-        print(f"\n\n--- MainConfirmResult ---")
+        print("\n\n--- MainConfirmResult ---")
         print(json.dumps(main_result.model_dump(), ensure_ascii=False, indent=2))
     else:
         print("\n  ❌ 主结构确认失败")
@@ -211,7 +229,10 @@ def main() -> None:
     print("=" * 60)
 
     cc_context, cc_registry = format_cc_confirm_context(
-        CC_TERMS, RECALL_MAP, "亩产效益后30%的地块", 0,
+        CC_TERMS,
+        RECALL_MAP,
+        "亩产效益后30%的地块",
+        0,
     )
 
     print("\n--- LLM 输入上下文 ---")
@@ -224,7 +245,7 @@ def main() -> None:
     _last_thinking = ""
     cc_result = llm_confirm_cc(context=cc_context, on_event=print_event)
     if cc_result:
-        print(f"\n\n--- CCConfirmResult ---")
+        print("\n\n--- CCConfirmResult ---")
         print(json.dumps(cc_result.model_dump(), ensure_ascii=False, indent=2))
     else:
         print("\n  ❌ cc 确认失败")

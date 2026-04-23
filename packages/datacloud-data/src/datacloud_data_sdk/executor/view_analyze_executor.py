@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from datacloud_data_sdk.executor.analyze_executor import (
     _agg_expr,
@@ -33,6 +36,14 @@ class ViewAnalyzeExecutor:
 
     async def execute(self, view: Any, arguments: dict[str, Any]) -> dict[str, Any]:
         """执行视图 analyze 查询，生成多对象 JOIN + GROUP BY + HAVING SQL。"""
+        logger.info(
+            "[ViewAnalyzeExecutor] execute called view=%s arguments_keys=%s"
+            " dimensions=%s metrics=%s",
+            getattr(view, "view_id", "?"),
+            sorted(arguments.keys()),
+            arguments.get("dimensions"),
+            arguments.get("metrics"),
+        )
         if not view.objects:
             return {"records": [], "total": 0, "meta": {"view_id": view.view_id}}
 
@@ -60,9 +71,18 @@ class ViewAnalyzeExecutor:
             buckets = dim.get("buckets")
             resolved = field_to_alias_col.get(fc)
             if not resolved:
-                continue
-            ta, col = resolved
-            col_expr = f"{ta}.{quote_identifier(col, db_type)}"
+                # 字段不在视图映射中：降级使用裸字段名（无表别名前缀）。
+                # 比静默 continue 更安全：SQL 执行若失败会明确报错，而不是返回全量汇总误导调用方。
+                logger.warning(
+                    "[ViewAnalyzeExecutor] dimension field '%s' not in view mapping"
+                    " (view=%s), falling back to bare column — check field_code",
+                    fc,
+                    getattr(view, "view_id", "?"),
+                )
+                col_expr = quote_identifier(fc, db_type)
+            else:
+                ta, col = resolved
+                col_expr = f"{ta}.{quote_identifier(col, db_type)}"
 
             if group_op == "range" and buckets:
                 alias_name = f"{fc}_range"
@@ -101,9 +121,16 @@ class ViewAnalyzeExecutor:
                 fc = mtr.get("field", "")
                 resolved = field_to_alias_col.get(fc)
                 if not resolved:
-                    continue
-                ta, col = resolved
-                expr = _agg_expr(agg, f"{ta}.{quote_identifier(col, db_type)}")
+                    logger.warning(
+                        "[ViewAnalyzeExecutor] metric field '%s' not in view mapping"
+                        " (view=%s), falling back to bare column — check field_code",
+                        fc,
+                        getattr(view, "view_id", "?"),
+                    )
+                    expr = _agg_expr(agg, quote_identifier(fc, db_type))
+                else:
+                    ta, col = resolved
+                    expr = _agg_expr(agg, f"{ta}.{quote_identifier(col, db_type)}")
             select_parts.append(f"{expr} AS {quote_identifier(mtr_alias, db_type)}")
             col_keys.append(mtr_alias)
             metric_alias_to_expr[mtr_alias] = expr

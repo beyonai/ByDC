@@ -6,6 +6,7 @@ from datacloud_data_sdk.context import InvocationContext
 from datacloud_data_sdk.exceptions import ActionNotFoundError
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.ontology.term_loader import KbTermLoader
+from datacloud_data_sdk.plan.term_resolver import TermResolver
 
 REGISTRY = {
     "functions": [
@@ -153,12 +154,15 @@ def test_action_get_schema_preserves_decimal_and_datetime_hints() -> None:
     )
     obj = loader.get_object("expense")
     schema = obj.get_action_schema("apply_expense")
+    assert schema["inputSchema"]["required"] == ["userConfirmed"]
     amount_schema = schema["inputSchema"]["properties"]["expense_amount"]
     assert amount_schema["type"] == "number"
     assert amount_schema["format"] == "decimal"
     time_schema = schema["inputSchema"]["properties"]["apply_time"]
     assert time_schema["type"] == "string"
     assert time_schema["format"] == "date-time"
+    confirm_schema = schema["inputSchema"]["properties"]["userConfirmed"]
+    assert confirm_schema["type"] == "boolean"
 
 
 def test_action_get_schema_supports_array_and_term_enum() -> None:
@@ -222,6 +226,7 @@ def test_action_get_schema_supports_array_and_term_enum() -> None:
 
     obj = loader.get_object("todo_items")
     schema = obj.get_action_schema("create_todo")
+    assert schema["inputSchema"]["required"] == ["userConfirmed"]
 
     handler_ids_schema = schema["inputSchema"]["properties"]["handlerIds"]
     assert handler_ids_schema["type"] == "array"
@@ -299,39 +304,44 @@ async def test_invoke_action_returns_execution_steps_in_detail_mode() -> None:
 
     obj = loader.get_object("todo_items")
     gateway_context = _FakeGatewayContext()
-    with InvocationContext(tool_call_detail=True, gateway_context=gateway_context):
-        result = await obj.invoke_action("create_todo", {"优先级": "高"})
+    with InvocationContext(session_id="detail-confirm-cache"):
+        first_result = await obj.invoke_action(
+            "create_todo",
+            {"优先级": "高", "userConfirmed": False},
+        )
+    with InvocationContext(
+        session_id="detail-confirm-cache",
+        tool_call_detail=True,
+        gateway_context=gateway_context,
+    ):
+        result = await obj.invoke_action(
+            "create_todo",
+            {"优先级": "高", "userConfirmed": True},
+        )
 
+    assert first_result["result_type"] == "ask_user"
     assert result["records"] == [{"priority": "HIGH"}]
     assert [item["step"] for item in result["execution_steps"]] == [
         "request_received",
         "param_mapping",
+        "param_validation",
         "term_resolved",
+        "user_confirmation",
         "action_executing",
         "action_completed",
     ]
-    assert result["execution_steps"][1]["data"]["params"] == {"priority": "高"}
-    assert result["execution_steps"][2]["data"]["params"] == {"priority": "HIGH"}
-    assert result["execution_steps"][3]["data"]["mode"] == "script"
-    assert [item[0] for item in gateway_context.events] == [
-        "state",
-        "chunk",
-        "state",
-        "chunk",
-        "state",
-        "chunk",
-        "state",
-        "chunk",
-        "state",
-        "chunk",
-    ]
-    assert [item[1] for item in gateway_context.events if item[0] == "state"] == [
-        "接收动作请求",
-        "参数映射",
-        "术语转换",
-        "动作执行",
-        "动作执行完成",
-    ]
+    assert result["execution_steps"][1]["data"]["params"] == {
+        "priority": "高",
+        "userConfirmed": True,
+    }
+    assert result["execution_steps"][2]["data"]["missing_required_params"] == []
+    assert result["execution_steps"][3]["data"]["params"] == {"priority": "HIGH"}
+    assert result["execution_steps"][4]["data"] == {
+        "cache_status": "confirmed",
+        "user_confirmed": True,
+    }
+    assert result["execution_steps"][5]["data"]["mode"] == "script"
+    assert gateway_context.events == []
 
 
 def test_list_action_codes_includes_script_action() -> None:
@@ -560,18 +570,18 @@ def test_action_get_schema_supports_structured_request_body_and_root_array() -> 
     batch_schema = obj.get_action_schema("accept_todo_batch")
     batch_request_body_schema = batch_schema["inputSchema"]["properties"]["requestBody"]
 
-    assert schema["inputSchema"]["required"] == ["requestBody"]
+    assert schema["inputSchema"]["required"] == ["userConfirmed"]
     assert request_body_schema["type"] == "object"
-    assert request_body_schema["required"] == ["todoId", "user"]
     assert request_body_schema["properties"]["todoId"]["type"] == "string"
     assert request_body_schema["properties"]["user"]["type"] == "object"
-    assert request_body_schema["properties"]["user"]["required"] == ["user_id"]
     assert request_body_schema["properties"]["org"]["type"] == "array"
     assert (
         request_body_schema["properties"]["org"]["items"]["properties"]["org_id"]["type"]
         == "string"
     )
-    assert batch_schema["inputSchema"]["required"] == ["requestBody"]
+    assert "required" not in request_body_schema
+    assert "required" not in request_body_schema["properties"]["user"]
+    assert batch_schema["inputSchema"]["required"] == ["userConfirmed"]
     assert batch_request_body_schema["type"] == "array"
     assert batch_request_body_schema["items"]["properties"]["user_code"]["type"] == "string"
 
@@ -716,7 +726,18 @@ def test_action_execute_supports_structured_request_body_and_root_array() -> Non
                     "requestBody": {
                         "todoId": "T001",
                         "user": {"user_id": "U001", "user_code": "A001"},
-                    }
+                    },
+                    "userConfirmed": False,
+                },
+            )
+            await obj.invoke_action(
+                "accept_todo",
+                {
+                    "requestBody": {
+                        "todoId": "T001",
+                        "user": {"user_id": "U001", "user_code": "A001"},
+                    },
+                    "userConfirmed": True,
                 },
             )
             await obj.invoke_action(
@@ -725,12 +746,24 @@ def test_action_execute_supports_structured_request_body_and_root_array() -> Non
                     "requestBody": [
                         {"user_id": "U001", "user_code": "A001"},
                         {"user_id": "U002", "user_code": "A002"},
-                    ]
+                    ],
+                    "userConfirmed": False,
+                },
+            )
+            await obj.invoke_action(
+                "accept_todo_batch",
+                {
+                    "requestBody": [
+                        {"user_id": "U001", "user_code": "A001"},
+                        {"user_id": "U002", "user_code": "A002"},
+                    ],
+                    "userConfirmed": True,
                 },
             )
 
     asyncio.run(_run())
 
+    assert len(captured) == 2
     assert captured[0]["kwargs"] == {
         "headers": {"Content-Type": "application/json"},
         "json": {
@@ -744,4 +777,469 @@ def test_action_execute_supports_structured_request_body_and_root_array() -> Non
             {"user_id": "U001", "user_code": "A001"},
             {"user_id": "U002", "user_code": "A002"},
         ],
+    }
+
+
+def _build_confirmable_operation_loader() -> OntologyLoader:
+    loader = OntologyLoader()
+    loader.configure(
+        term_loader=KbTermLoader(
+            {
+                "priority.code": [
+                    {"code": "HIGH", "label": "高", "aliases": ["重复优先级"]},
+                    {"code": "LOW", "label": "低", "aliases": ["重复优先级"]},
+                ],
+                "staff.code": [
+                    {"code": "U001", "label": "张三", "aliases": ["重复负责人"]},
+                    {"code": "U002", "label": "李四", "aliases": ["重复负责人"]},
+                ],
+            }
+        )
+    )
+    loader.load_from_content(
+        {
+            "functions": [],
+            "objects": [
+                {
+                    "object_code": "approval_task",
+                    "object_name": "审批任务",
+                    "source_type": "API",
+                    "fields": [],
+                    "actions": [
+                        {
+                            "action_code": "submit_approval",
+                            "action_name": "提交审批",
+                            "action_type": "operation",
+                            "script": (
+                                "def execute(params):\n"
+                                "    return {'priority': params['priority'], 'owner_id': params['owner_id']}\n"
+                            ),
+                            "function_refs": [],
+                            "params": [
+                                {
+                                    "param_code": "title",
+                                    "param_name": "标题",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "required": True,
+                                },
+                                {
+                                    "param_code": "priority",
+                                    "param_name": "优先级",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "required": True,
+                                    "termMeta": {
+                                        "termMasterType": "dict",
+                                        "termTypeCode": "priority",
+                                        "termField": "code",
+                                    },
+                                },
+                                {
+                                    "param_code": "owner_id",
+                                    "param_name": "负责人",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "required": True,
+                                    "termMeta": {
+                                        "termMasterType": "dict",
+                                        "termTypeCode": "staff",
+                                        "termField": "code",
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "relations": [],
+        }
+    )
+    return loader
+
+
+def _build_confirmable_batch_loader() -> OntologyLoader:
+    loader = OntologyLoader()
+    loader.load_from_content(
+        {
+            "functions": [],
+            "objects": [
+                {
+                    "object_code": "batch_task",
+                    "object_name": "批量任务",
+                    "source_type": "API",
+                    "fields": [],
+                    "actions": [
+                        {
+                            "action_code": "submit_batch",
+                            "action_name": "提交批量任务",
+                            "action_type": "operation",
+                            "script": (
+                                "def execute(params):\n    return {'userId': params['userId']}\n"
+                            ),
+                            "function_refs": [],
+                            "params": [
+                                {
+                                    "param_code": "userId",
+                                    "param_name": "用户ID",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "required": True,
+                                    "mapping_path": "$.requestBody.[].user_id",
+                                },
+                                {
+                                    "param_code": "userCode",
+                                    "param_name": "用户编码",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "mapping_path": "$.requestBody.[].user_code",
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "relations": [],
+        }
+    )
+    return loader
+
+
+def _build_confirmable_nested_array_term_loader() -> OntologyLoader:
+    loader = OntologyLoader()
+    loader.configure(
+        term_loader=KbTermLoader(
+            {
+                "staff.code": [
+                    {"code": "U001", "label": "胡永春"},
+                    {"code": "U002", "label": "李四"},
+                ]
+            }
+        )
+    )
+    loader.load_from_content(
+        {
+            "functions": [],
+            "objects": [
+                {
+                    "object_code": "nested_batch_task",
+                    "object_name": "嵌套批量任务",
+                    "source_type": "API",
+                    "fields": [],
+                    "actions": [
+                        {
+                            "action_code": "submit_nested_batch",
+                            "action_name": "提交嵌套批量任务",
+                            "action_type": "operation",
+                            "script": (
+                                "def execute(params):\n"
+                                "    return {'handlerIds': params['handlerIds']}\n"
+                            ),
+                            "function_refs": [],
+                            "params": [
+                                {
+                                    "param_code": "title",
+                                    "param_name": "标题",
+                                    "direction": "IN",
+                                    "param_type": "STRING",
+                                    "required": True,
+                                    "mapping_path": "$.requestBody.[].title",
+                                },
+                                {
+                                    "param_code": "handlerIds",
+                                    "param_name": "处理人",
+                                    "direction": "IN",
+                                    "param_type": "ARRAY",
+                                    "required": True,
+                                    "mapping_path": "$.requestBody.[].handler_ids[]",
+                                    "termMeta": {
+                                        "termMasterType": "dict",
+                                        "termTypeCode": "staff",
+                                        "termField": "code",
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "relations": [],
+        }
+    )
+    return loader
+
+
+def test_operation_schema_only_requires_user_confirmed() -> None:
+    loader = _build_confirmable_operation_loader()
+    obj = loader.get_object("approval_task")
+
+    schema = obj.get_action_schema("submit_approval")
+
+    assert schema["inputSchema"]["required"] == ["userConfirmed"]
+    assert schema["inputSchema"]["properties"]["title"]["type"] == "string"
+    assert schema["inputSchema"]["properties"]["priority"]["enum"] == ["HIGH", "LOW"]
+    assert schema["inputSchema"]["properties"]["userConfirmed"]["type"] == "boolean"
+
+
+@pytest.mark.asyncio
+async def test_operation_returns_all_missing_required_and_term_errors() -> None:
+    loader = _build_confirmable_operation_loader()
+    obj = loader.get_object("approval_task")
+
+    result = await obj.invoke_action(
+        "submit_approval",
+        {
+            "priority": "重复优先级",
+            "owner_id": "重复负责人",
+            "userConfirmed": False,
+        },
+    )
+
+    assert result["result_type"] == "ask_user"
+    assert result["missing_required_params"] == [
+        {"param_code": "title", "param_name": "标题"},
+    ]
+    assert [item["param_code"] for item in result["term_errors"]] == ["priority", "owner_id"]
+    assert result["submitted_params"] == {
+        "priority": "重复优先级",
+        "owner_id": "重复负责人",
+        "userConfirmed": False,
+    }
+    assert result["normalized_params"] == {
+        "priority": "重复优先级",
+        "owner_id": "重复负责人",
+    }
+    assert result["confirmation"] == {
+        "user_confirmed": False,
+        "cache_status": "validation_failed",
+    }
+
+
+@pytest.mark.asyncio
+async def test_operation_array_required_param_detects_missing_items() -> None:
+    loader = _build_confirmable_batch_loader()
+    obj = loader.get_object("batch_task")
+
+    result = await obj.invoke_action(
+        "submit_batch",
+        {
+            "requestBody": [
+                {"user_id": "U001", "user_code": "A001"},
+                {"user_code": "A002"},
+            ],
+            "userConfirmed": False,
+        },
+    )
+
+    assert result["result_type"] == "ask_user"
+    assert result["missing_required_params"] == [
+        {"param_code": "userId", "param_name": "用户ID"},
+    ]
+    assert result["normalized_params"] == {
+        "userId": ["U001", None],
+        "userCode": ["A001", "A002"],
+    }
+    assert result["confirmation"] == {
+        "user_confirmed": False,
+        "cache_status": "validation_failed",
+    }
+
+
+@pytest.mark.asyncio
+async def test_operation_term_resolution_supports_nested_array_values() -> None:
+    loader = _build_confirmable_nested_array_term_loader()
+    obj = loader.get_object("nested_batch_task")
+
+    result = await obj.invoke_action(
+        "submit_nested_batch",
+        {
+            "requestBody": [
+                {"title": "你好", "handler_ids": ["胡永春"]},
+                {"title": "世界", "handler_ids": ["李四"]},
+            ],
+            "userConfirmed": False,
+        },
+    )
+
+    assert result["result_type"] == "ask_user"
+    assert result["term_errors"] == []
+    assert result["normalized_params"] == {
+        "title": ["你好", "世界"],
+        "handlerIds": [["胡永春"], ["李四"]],
+    }
+    assert result["resolved_params"] == {
+        "title": ["你好", "世界"],
+        "handlerIds": [["U001"], ["U002"]],
+    }
+    assert result["confirmation"] == {
+        "user_confirmed": False,
+        "cache_status": "cached",
+    }
+
+
+def test_term_resolver_skips_none_and_blank_values_in_nested_arrays() -> None:
+    resolver = TermResolver(
+        KbTermLoader(
+            {
+                "staff.code": [
+                    {"code": "U001", "label": "胡永春"},
+                    {"code": "U002", "label": "李四"},
+                ]
+            }
+        )
+    )
+
+    resolved = resolver._resolve_term_value(
+        term_set="staff.code",
+        term_type=None,
+        term_field="code",
+        dataset_id=None,
+        raw_value=[["胡永春", ""], [None, "  ", "李四"]],
+        param_name="处理人",
+    )
+
+    assert resolved == [["U001", ""], [None, "  ", "U002"]]
+
+
+@pytest.mark.asyncio
+async def test_operation_false_confirmation_caches_and_asks_user() -> None:
+    loader = _build_confirmable_operation_loader()
+    obj = loader.get_object("approval_task")
+
+    with InvocationContext(session_id="operation-cache-pending"):
+        result = await obj.invoke_action(
+            "submit_approval",
+            {
+                "title": "发起审批",
+                "priority": "高",
+                "owner_id": "张三",
+                "userConfirmed": False,
+            },
+        )
+
+    assert result["result_type"] == "ask_user"
+    assert result["resolved_params"] == {
+        "title": "发起审批",
+        "priority": "HIGH",
+        "owner_id": "U001",
+    }
+    assert result["confirmation"] == {
+        "user_confirmed": False,
+        "cache_status": "cached",
+    }
+
+
+@pytest.mark.asyncio
+async def test_operation_true_without_cache_returns_for_reconfirmation() -> None:
+    loader = _build_confirmable_operation_loader()
+    obj = loader.get_object("approval_task")
+
+    with InvocationContext(session_id="operation-no-cache"):
+        result = await obj.invoke_action(
+            "submit_approval",
+            {
+                "title": "发起审批",
+                "priority": "高",
+                "owner_id": "张三",
+                "userConfirmed": True,
+            },
+        )
+
+    assert result["result_type"] == "ask_user"
+    assert result["confirmation"] == {
+        "user_confirmed": True,
+        "cache_status": "confirm_without_cache",
+    }
+    assert result["resolved_params"] == {
+        "title": "发起审批",
+        "priority": "HIGH",
+        "owner_id": "U001",
+    }
+
+
+@pytest.mark.asyncio
+async def test_operation_true_with_mismatched_cache_returns_for_reconfirmation() -> None:
+    loader = _build_confirmable_operation_loader()
+    obj = loader.get_object("approval_task")
+
+    with InvocationContext(session_id="operation-cache-mismatch"):
+        first = await obj.invoke_action(
+            "submit_approval",
+            {
+                "title": "发起审批",
+                "priority": "高",
+                "owner_id": "张三",
+                "userConfirmed": False,
+            },
+        )
+        second = await obj.invoke_action(
+            "submit_approval",
+            {
+                "title": "重新发起审批",
+                "priority": "低",
+                "owner_id": "李四",
+                "userConfirmed": True,
+            },
+        )
+
+    assert first["confirmation"]["cache_status"] == "cached"
+    assert second["result_type"] == "ask_user"
+    assert second["confirmation"] == {
+        "user_confirmed": True,
+        "cache_status": "confirm_mismatch",
+    }
+    assert second["resolved_params"] == {
+        "title": "重新发起审批",
+        "priority": "LOW",
+        "owner_id": "U002",
+    }
+
+
+@pytest.mark.asyncio
+async def test_operation_true_with_matching_cache_executes_and_returns_params() -> None:
+    loader = _build_confirmable_operation_loader()
+    obj = loader.get_object("approval_task")
+
+    with InvocationContext(session_id="operation-cache-confirmed"):
+        first = await obj.invoke_action(
+            "submit_approval",
+            {
+                "title": "发起审批",
+                "priority": "高",
+                "owner_id": "张三",
+                "userConfirmed": False,
+            },
+        )
+        result = await obj.invoke_action(
+            "submit_approval",
+            {
+                "title": "发起审批",
+                "priority": "高",
+                "owner_id": "张三",
+                "userConfirmed": True,
+            },
+        )
+
+    assert first["result_type"] == "ask_user"
+    assert result["result_type"] == "normal"
+    assert result["records"] == [{"priority": "HIGH", "owner_id": "U001"}]
+    assert result["submitted_params"] == {
+        "title": "发起审批",
+        "priority": "高",
+        "owner_id": "张三",
+        "userConfirmed": True,
+    }
+    assert result["normalized_params"] == {
+        "title": "发起审批",
+        "priority": "高",
+        "owner_id": "张三",
+    }
+    assert result["resolved_params"] == {
+        "title": "发起审批",
+        "priority": "HIGH",
+        "owner_id": "U001",
+    }
+    assert result["confirmation"] == {
+        "user_confirmed": True,
+        "cache_status": "confirmed",
     }

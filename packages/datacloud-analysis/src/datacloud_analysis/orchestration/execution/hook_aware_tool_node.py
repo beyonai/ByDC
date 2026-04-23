@@ -147,6 +147,13 @@ class HookAwareToolNode(ToolNode):
             if tool_name.startswith("query_"):
                 for _sf in ("dimensions", "metrics", "having"):
                     tp.pop(_sf, None)
+            logger.info(
+                "[HookAwareToolNode] tool=%s patched_args_keys=%s dimensions=%s metrics=%s",
+                tool_name,
+                sorted(tp.keys()),
+                tp.get("dimensions"),
+                tp.get("metrics"),
+            )
             patched_calls.append({**tc, "args": tp})
 
         # 用修改后的 tool_calls 替换最后一条 AIMessage（Pydantic 不可变，必须 model_copy）

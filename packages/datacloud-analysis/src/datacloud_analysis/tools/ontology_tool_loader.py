@@ -3,6 +3,8 @@
 架构说明（统一以 MCP Server / ToolRegistry 为标准）：
 - OBJECT 类型：经 inject_virtual_actions 注入后，通过 ActionToolGenerator 读取 cls.actions 生成工具
   执行路径：ActionExecutor.execute(obj_code, action_code, args)
+- 非 DB OBJECT 类型：直接读取对象动作 schema 生成工具
+  执行路径：ActionExecutor.execute(obj_code, action_code, args)
 - VIEW 类型：直接读取 view.actions 生成工具
   执行路径：view.invoke_action(action_code, args)
 - 降级兜底：若 inject_virtual_actions 未调用（cls.actions 为空），退回 DynamicQueryToolGenerator
@@ -209,6 +211,15 @@ def _make_view_action_coroutine(view_code: str, action_code: str, loader: Any) -
     """VIEW 工具执行闭包：通过 view.invoke_action()，与 MCP call_tool VIEW 分支对齐。"""
 
     async def _execute(**kwargs: Any) -> Any:
+        logger.info(
+            "[_make_view_action_coroutine] view=%s action=%s kwargs_keys=%s"
+            " dimensions=%s metrics=%s",
+            view_code,
+            action_code,
+            sorted(kwargs.keys()),
+            kwargs.get("dimensions"),
+            kwargs.get("metrics"),
+        )
         try:
             view = loader.get_view(view_code)
             return await view.invoke_action(action_code, kwargs)
@@ -236,11 +247,13 @@ class OntologyToolLoader:
     生成对应的 LangChain StructuredTool 字典。
 
     执行路径（统一对齐 MCP Server / ToolRegistry）：
-    - OBJECT：ActionToolGenerator 读取 inject_virtual_actions 后的 cls.actions
-              → ActionExecutor.execute(obj_code, action_code, args)
-    - VIEW：  view.actions 直接生成工具
-              → view.invoke_action(action_code, args)
-    - 降级兜底：inject_virtual_actions 未调用时退回 DynamicQueryToolGenerator
+    - DB OBJECT：ActionToolGenerator 读取 inject_virtual_actions 后的 cls.actions
+                 → ActionExecutor.execute(obj_code, action_code, args)
+    - 非 DB OBJECT：object.get_action_schema(action_code) 直接生成工具
+                    → ActionExecutor.execute(obj_code, action_code, args)
+    - VIEW：       view.actions 直接生成工具
+                    → view.invoke_action(action_code, args)
+    - 降级兜底：DB OBJECT 在 inject_virtual_actions 未调用时退回 DynamicQueryToolGenerator
 
     参数：
         mounted_objects:      需挂载的本体对象/视图 code 列表
@@ -341,8 +354,8 @@ class OntologyToolLoader:
                 # VIEW 类型：直接读取 view.actions，对齐 ToolRegistry._append_view_tools
                 view_tools = self._build_view_tools(obj_code)
                 tools.update(view_tools)
-            else:
-                # OBJECT 类型：优先通过 ActionToolGenerator 生成所有动作工具
+            elif self._is_database_object(obj_code):
+                # DB OBJECT：优先通过 ActionToolGenerator 生成所有动作工具
                 # 前提：_build_shared_loader 已调用 inject_virtual_actions
                 action_tools = self._build_action_tools(action_gen, obj_code)
                 tools.update(action_tools)
@@ -355,6 +368,10 @@ class OntologyToolLoader:
                     query_tool = self._build_query_tool(query_gen, obj_code)
                     if query_tool is not None:
                         tools[query_tool.name] = query_tool
+            else:
+                # 非 DB OBJECT：直接根据对象下 action schema 生成工具
+                object_tools = self._build_object_schema_tools(obj_code)
+                tools.update(object_tools)
 
         logger.info(
             "OntologyToolLoader: 已生成 %d 个本体工具: %s",
@@ -480,6 +497,22 @@ class OntologyToolLoader:
         scenes = getattr(self._loader, "_scenes", {})
         return code in scenes
 
+    def _is_database_object(self, code: str) -> bool:
+        """检查对象是否为 DB 类型。"""
+        try:
+            cls = self._loader.get_ontology_class(code)
+        except Exception:  # noqa: BLE001
+            return False
+        return getattr(cls, "source_type", "") == "DB"
+
+    @staticmethod
+    def _get_action_family(action: Any) -> str:
+        """优先返回 action_family，缺失时回退到 action_type。"""
+        action_family = getattr(action, "action_family", "")
+        if action_family:
+            return action_family
+        return getattr(action, "action_type", "")
+
     def _build_view_tools(self, view_code: str) -> dict[str, Any]:
         """为 VIEW 类型生成工具，对齐 ToolRegistry._append_view_tools 逻辑。"""
         result: dict[str, Any] = {}
@@ -519,8 +552,50 @@ class OntologyToolLoader:
             logger.warning("OntologyToolLoader: 构建 VIEW %s 工具失败: %s", view_code, exc)
         return result
 
+    def _build_object_schema_tools(self, obj_code: str) -> dict[str, Any]:
+        """为非 DB OBJECT 直接根据对象动作 schema 生成工具。"""
+        result: dict[str, Any] = {}
+        try:
+            from langchain_core.tools import StructuredTool  # noqa: PLC0415
+
+            obj = self._loader.get_object(obj_code)
+            cls = self._loader.get_ontology_class(obj_code)
+            for action in cls.actions:
+                action_family = self._get_action_family(action)
+                if action_family in self._skip_action_families:
+                    continue
+
+                exposure = getattr(action, "exposure_policy", "direct")
+                if exposure == "hidden":
+                    continue
+
+                schema = obj.get_action_schema(action.action_code)
+                name = str(schema.get("name", action.action_code))
+                input_schema_raw = schema.get("inputSchema", {})
+                input_schema = (
+                    dict(input_schema_raw)
+                    if isinstance(input_schema_raw, dict)
+                    else {"type": "object", "properties": {}}
+                )
+                if self._agent_friendly and action_family in {"query", "compute"}:
+                    input_schema = self._apply_agent_schema_patches(obj_code, input_schema)
+
+                result[name] = StructuredTool(
+                    name=name,
+                    description=str(
+                        schema.get("description") or action.description or action.action_name
+                    ),
+                    args_schema=input_schema,
+                    coroutine=_make_object_action_coroutine(
+                        obj_code, action.action_code, self._loader
+                    ),
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("OntologyToolLoader: 构建 OBJECT %s 工具失败: %s", obj_code, exc)
+        return result
+
     def _build_action_tools(self, action_gen: Any, obj_code: str) -> dict[str, Any]:
-        """为 OBJECT 生成动作工具（含 query / compute / OWL 自定义）。
+        """为 DB OBJECT 生成动作工具（含 query / compute / OWL 自定义）。
 
         执行路径对齐 MCP call_tool 对象分支：ActionExecutor.execute(obj_code, action_code, args)。
         需要 inject_virtual_actions 已在 loader 上调用，否则 cls.actions 为空，返回 {}。

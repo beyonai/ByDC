@@ -348,8 +348,7 @@ def render_single_view(config: OwlGenConfig, view: ViewConfig) -> str:
     object_codes = json.dumps(view.object_codes, ensure_ascii=False)
     relations_json = json.dumps(_view_relation_ids(config, view), ensure_ascii=False)
     field_refs = "\n".join(
-        f'        <fields rdf:resource="#{m.property_code}_field"/>'
-        for m in view.field_mappings
+        f'        <fields rdf:resource="#{m.property_code}_field"/>' for m in view.field_mappings
     )
     fields_body = _render_view_field_items(view.field_mappings)
     return f"""\
