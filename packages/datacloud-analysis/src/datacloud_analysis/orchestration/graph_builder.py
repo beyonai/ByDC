@@ -41,13 +41,18 @@ _DEFAULT_MAX_ROUNDS = int(os.getenv("DATACLOUD_REACT_MAX_ROUNDS", "10"))
 # ── V0.4 路由函数（feature flag 新路径）────────────────────────────────────────
 
 
-def should_continue(state: AgentState) -> Literal["tools", "respond"]:
+def should_continue(state: AgentState) -> str:
     """agent 节点出口：决定是否继续调用工具。
 
+    L1: agent_abort=True → __end__（bad checkpoint 激活，直接终止该路径）
     L2: AIMessage 无 tool_calls → respond（LLM 直接文字回答）
     L3: execution_status=max_rounds_exceeded 或 react_round_idx >= max_rounds → respond
     其他: → tools（finish_react 也必须走 tools 节点执行工具体）
     """
+    if state.get("agent_abort"):
+        logger.info("[should_continue] agent_abort=True → __end__ (bad checkpoint activation)")
+        return "__end__"
+
     status = str(state.get("execution_status") or "")
     if status == "max_rounds_exceeded":
         return "respond"
@@ -78,6 +83,18 @@ def after_tools_route(state: AgentState) -> Literal["agent", "finish_react_node"
         if isinstance(msg, ToolMessage) and msg.name == "finish_react":
             return "finish_react_node"
     return "agent"
+
+
+def _route_after_user_clarify(state: AgentState) -> str:
+    """user_clarify 完成后的条件路由。
+
+    clarify_abort=True → END（DUPLICATE GUARD 触发的重复路径，防止产生多余 respond）
+    otherwise → continue（交由调用方映射到 tools / tool_dispatcher）
+    """
+    if state.get("clarify_abort"):
+        logger.info("[_route_after_user_clarify] clarify_abort=True → END (duplicate path aborted)")
+        return "__end__"
+    return "continue"
 
 
 def _route_after_intend(state: AgentState) -> str:
@@ -331,7 +348,11 @@ def _build_legacy_graph(
         _route_after_analyze,
         {"user_clarify": "user_clarify", "tool_dispatcher": "tool_dispatcher"},
     )
-    builder.add_edge("user_clarify", "tool_dispatcher")
+    builder.add_conditional_edges(
+        "user_clarify",
+        _route_after_user_clarify,
+        {"continue": "tool_dispatcher", "__end__": END},
+    )
     builder.add_edge("finish_react", "respond")
     builder.add_edge("respond", END)
 
@@ -447,7 +468,7 @@ def _build_prebuilt_graph(
     builder.add_conditional_edges(
         "agent",
         should_continue,
-        {"tools": "tools", "respond": "respond"},
+        {"tools": "tools", "respond": "respond", "__end__": END},
     )
     builder.add_conditional_edges(
         "tools",
@@ -461,7 +482,11 @@ def _build_prebuilt_graph(
         _route_after_analyze,
         {"user_clarify": "user_clarify", "tool_dispatcher": "tools"},
     )
-    builder.add_edge("user_clarify", "tools")
+    builder.add_conditional_edges(
+        "user_clarify",
+        _route_after_user_clarify,
+        {"continue": "tools", "__end__": END},
+    )
     builder.add_edge("finish_react_node", "respond")
     builder.add_edge("respond", END)
 

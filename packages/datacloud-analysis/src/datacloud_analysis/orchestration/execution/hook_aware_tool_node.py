@@ -76,6 +76,31 @@ class HookAwareToolNode(ToolNode):
             )
             return await super().ainvoke(state_dict, config, **kwargs)
 
+        # ── Checkpoint replay guard ─────────────────────────────────────────────────────────────
+        # OpenGauss checkpoint blob 丢失时，tools 节点会被错误激活（而非 user_clarify 节点恢复）。
+        # 检测特征：pending_clarification_context 已设置（等待澄清）+ clarification_formatted_params 未设置
+        # （user_clarify_node 尚未运行并写入格式化参数），说明当前调用属于脏 checkpoint replay。
+        # 直接 Command(goto=analyze_clarify) 跳过工具执行和 7 秒 SDK 分析，回到澄清子流程。
+        _pending_ctx_raw: dict[str, Any] | None = (
+            dict(state_dict["pending_clarification_context"])
+            if isinstance(state_dict.get("pending_clarification_context"), dict)
+            else None
+        )
+        if _pending_ctx_raw and not state_dict.get("clarification_formatted_params"):
+            logger.warning(
+                "[HookAwareToolNode] REPLAY GUARD: pending_clarification_context set"
+                " clarification_formatted_params=None → routing to analyze_clarify"
+                " without tool execution tool=%s",
+                str(_pending_ctx_raw.get("tool_name") or ""),
+            )
+            return Command(
+                update={
+                    "execution_status": "clarify_needed",
+                    "pending_clarification_context": _pending_ctx_raw,
+                },
+                goto="analyze_clarify",
+            )
+
         # Per-request gateway_context：config 优先，构造函数注入次之
         _gw_ctx = (
             ((config or {}).get("configurable") or {}).get("gateway_context") or self._gw_ctx  # type: ignore[attr-defined]

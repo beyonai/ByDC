@@ -44,6 +44,20 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             _results[0] if _results else None,
         )
 
+    # ── 重复路径中止守卫 ──────────────────────────────────────────────────────────────────────────
+    # 当 OpenGauss checkpoint blob 丢失时，tools 节点被错误激活 → ClarificationNeededError →
+    # analyze_clarify → user_clarify，走到这里时 clarification_formatted_params 已由并发恢复路径写入。
+    # 若此时再调用 interrupt()，会产生第二条完整 graph 路径（duplicate respond 推送）。
+    # 检测到 clarification_formatted_params 已设置 → 说明是重复路径，直接 Command(goto=END) 中止。
+    _existing_clarify_fp: dict[str, Any] | None = state.get("clarification_formatted_params")
+    if _existing_clarify_fp:
+        logger.warning(
+            "[user_clarify] DUPLICATE GUARD: clarification_formatted_params already set"
+            " → aborting duplicate path to prevent double respond tool=%s",
+            tool_name,
+        )
+        return {"clarify_abort": True}
+
     if not paradigm_list:
         # _route_after_analyze 已将空 paradigm_list 路由到 tool_dispatcher；
         # 此分支仅为安全兜底，使用 pre_filled_params 直接返回。
@@ -61,6 +75,7 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             },
             "pending_clarification_context": None,
             "clarification_analyze_result": None,
+            "clarify_abort": False,
         }
 
     logger.info(
@@ -116,6 +131,7 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             # paradigm_list 保存供 V0.3 早返回做 keyword→choiceKeyword→fieldCode 两步翻译
             "paradigm_list": paradigm_list,
         },
+        "clarify_abort": False,
         # pending_clarification_context 不在此处清空：
         # HookAwareToolNode 返回 Command(goto="analyze_clarify") 时，Command.update 会在
         # 同一个 pregel tick 内写入 pending_clarification_context，若此处同时写 None，
