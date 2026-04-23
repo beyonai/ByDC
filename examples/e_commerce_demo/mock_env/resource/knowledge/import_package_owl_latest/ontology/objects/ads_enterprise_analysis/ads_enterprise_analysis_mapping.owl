@@ -51,7 +51,7 @@
     <owl:NamedIndividual rdf:about="#enterprise_id_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_id</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业唯一 ID</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业唯一ID</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_id</source_column_code>
         <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yizhuang_brain</source_datasource_code>

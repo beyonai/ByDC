@@ -311,6 +311,16 @@ def _normalize_sort_key(item: dict[str, Any]) -> dict[str, Any]:
     return new_item
 
 
+def _ensure_dim_group_op(dim: dict[str, Any]) -> dict[str, Any]:
+    """dimensions 条目缺少 group_op 时补全默认值 'self'（按字段原值分组）。
+
+    tool schema 虽将 group_op 标记为 required，但 LLM 有时仅传 field 而省略 group_op。
+    executor 内部已有相同默认逻辑，此处在 before_call_back 阶段提前补全，
+    使日志和下游参数保持一致，避免 schema 校验层误报缺失字段。
+    """
+    return dim if "group_op" in dim else {**dim, "group_op": "self"}
+
+
 def _apply_resolved_to_params(
     tool_params: dict[str, Any],
     resolved: dict[str, str],
@@ -353,7 +363,7 @@ def _apply_resolved_to_params(
     ]
     if "dimensions" in tool_params:
         patched["dimensions"] = [
-            _translate_field(d) if isinstance(d, dict) else d
+            _ensure_dim_group_op(_translate_field(d)) if isinstance(d, dict) else d
             for d in patched.get("dimensions") or []
         ]
     if "metrics" in tool_params:

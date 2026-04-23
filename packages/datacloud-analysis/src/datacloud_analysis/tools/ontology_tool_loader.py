@@ -211,6 +211,15 @@ def _make_view_action_coroutine(view_code: str, action_code: str, loader: Any) -
     """VIEW 工具执行闭包：通过 view.invoke_action()，与 MCP call_tool VIEW 分支对齐。"""
 
     async def _execute(**kwargs: Any) -> Any:
+        logger.info(
+            "[_make_view_action_coroutine] view=%s action=%s kwargs_keys=%s"
+            " dimensions=%s metrics=%s",
+            view_code,
+            action_code,
+            sorted(kwargs.keys()),
+            kwargs.get("dimensions"),
+            kwargs.get("metrics"),
+        )
         try:
             view = loader.get_view(view_code)
             return await view.invoke_action(action_code, kwargs)
@@ -513,7 +522,10 @@ class OntologyToolLoader:
             view = self._loader.get_view(view_code)
             for action in view.actions:
                 # 跳过 skip_action_families 中的族（db_query 模式跳过 query/compute）
-                if getattr(action, "action_type", "") in self._skip_action_families:
+                # 用 action_family 而非 action_type：注入器将所有虚拟动作的 action_type 硬编码为
+                # "query"，action_family 才是区分 query/compute 的正确字段。
+                _view_action_family = self._get_action_family(action)
+                if _view_action_family in self._skip_action_families:
                     continue
                 exposure = getattr(action, "exposure_policy", "direct")
                 if exposure == "hidden":
@@ -522,10 +534,9 @@ class OntologyToolLoader:
                     continue
 
                 view_schema: dict[str, Any] = dict(action.input_schema)
-                _view_action_type = getattr(action, "action_type", "")
-                if self._agent_friendly and _view_action_type in {"query", "compute"}:
+                if self._agent_friendly and _view_action_family in {"query", "compute"}:
                     view_schema = self._apply_agent_schema_patches(
-                        view_code, view_schema, action_type=_view_action_type
+                        view_code, view_schema, action_type=_view_action_family
                     )
 
                 result[action.action_code] = StructuredTool(

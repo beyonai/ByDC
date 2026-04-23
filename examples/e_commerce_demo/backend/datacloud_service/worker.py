@@ -557,7 +557,7 @@ class DataCloudWorker(GatewayWorker):
                     content_type=SseMessageType.text.value,
                 )
                 await context.emit_chunk(
-                    StreamChunkEvent(content="鍥炵瓟瀹屾垚"),
+                    StreamChunkEvent(content="相关问题推荐"),
                     event_type=EventType.APP_STREAM_RESPONSE.value,
                     content_type=SseMessageType.text.value,
                 )

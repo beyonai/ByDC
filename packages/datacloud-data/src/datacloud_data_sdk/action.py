@@ -1534,6 +1534,14 @@ class Action:
             return await ViewLookupExecutor(self._loader).execute(view, params)
 
         if action_family in ("compute", "analyze"):
+            logger.info(
+                "[Action._execute_virtual_view] compute/analyze entry"
+                " view=%s params_keys=%s dimensions=%s metrics=%s",
+                getattr(view, "view_id", "?"),
+                sorted(params.keys()),
+                params.get("dimensions"),
+                params.get("metrics"),
+            )
             if action_family == "compute":
                 params = _translate_view_params(view, params)
             return await ViewAnalyzeExecutor(self._loader).execute(view, params)

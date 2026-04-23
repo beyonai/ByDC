@@ -152,7 +152,7 @@ async def _emit_stream_token(gateway_context: Any, token: str, *, message_id: st
         logger.debug("[react_loop] stream_token emit failed: %s", exc)
 
 
-async def _emit_answer_token(gateway_context: Any, token: str) -> None:
+async def _emit_answer_token(gateway_context: Any, token: str, *, message_id: str) -> None:
     """向 gateway_context 推送 finish_react.answer 增量 token（→ 答案区 ANSWER_DELTA）。"""
     if not gateway_context or not token:
         return
@@ -165,6 +165,7 @@ async def _emit_answer_token(gateway_context: Any, token: str) -> None:
             StreamChunkEvent(content=coerce_stream_chunk_text(token)),
             event_type=EventType.ANSWER_DELTA.value,
             content_type=SseMessageType.text.value,
+            message_id=message_id,
         )
     except Exception as exc:
         logger.debug("[react_loop] answer_token emit failed: %s", exc)
@@ -191,6 +192,10 @@ async def _stream_llm_call(
     """
     full_msg = None
     did_stream_text = False
+
+    # 本次流式调用的答案 message_id：同一次 _stream_llm_call 内所有 answer token 共享此 ID，
+    # 不同轮次调用时间戳不同，前端据此将各轮答案分为独立气泡。
+    _answer_msg_id = f"ans_text_{int(time.time() * 1000)}"
 
     # 用于追踪 finish_react tool call 的流式 answer 参数
     _fr_idx: int | None = None  # finish_react 对应的 tool_call_chunks index
@@ -261,7 +266,9 @@ async def _stream_llm_call(
                             current = m.group(1)
                             if len(current) > _fr_answer_emitted:
                                 delta = current[_fr_answer_emitted:]
-                                await _emit_answer_token(gateway_context, delta)
+                                await _emit_answer_token(
+                                    gateway_context, delta, message_id=_answer_msg_id
+                                )
                                 did_stream_text = True
                                 _fr_answer_emitted = len(current)
     except Exception as exc:
