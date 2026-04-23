@@ -6,9 +6,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from datacloud_knowledge.knowledge_search.types import ResolvedField
 
 # ── 术语提取 ──────────────────────────────────────────────────────────
 
@@ -169,3 +172,119 @@ class KnowledgeMeta(BaseModel):
         description="complex_conditions 的 LLM 确认结果",
     )
     mode: Literal["query", "compute"] = Field(description="输入模式")
+
+
+# ── 分治确认 LLM 输出 schema ─────────────────────────────────────────
+
+
+class TermConfirmation(BaseModel):
+    """主结构中单个编号术语的确认结果。"""
+
+    term_id: int = Field(description="输入中的 #编号")
+    confirmed: str | None = Field(
+        default=None,
+        description="确认值；无法确定时为 null",
+    )
+    candidates: list[str] = Field(
+        default_factory=list,
+        description="confirmed=null 时，按相关度降序的候选列表",
+    )
+    reason: str = Field(default="", description="澄清原因")
+
+
+class MainConfirmResult(BaseModel):
+    """主结构术语确认结果。对每个待确认术语选择最匹配的候选或标记需澄清。"""
+
+    confirmations: list[TermConfirmation] = Field(
+        description="每个编号术语的确认结果",
+    )
+    needs_clarification: bool = Field(
+        default=False,
+        description="true 表示存在无法确定的术语",
+    )
+
+
+class CCTermConfirmation(BaseModel):
+    """complex_condition 中单个编号术语的确认结果。"""
+
+    term_id: int = Field(description="输入中的 #编号")
+    confirmed: str | None = Field(
+        default=None,
+        description="确认值；无法确定时为 null",
+    )
+    candidates: list[str] = Field(
+        default_factory=list,
+        description="confirmed=null 时，按相关度降序的候选列表",
+    )
+    reason: str = Field(default="", description="澄清原因")
+
+
+class CCConfirmResult(BaseModel):
+    """单条 complex_condition 确认结果。"""
+
+    confirmations: list[CCTermConfirmation] = Field(
+        description="每个编号术语的确认结果",
+    )
+    needs_clarification: bool = Field(
+        default=False,
+        description="true 表示存在无法确定的术语",
+    )
+
+
+# ── 分治确认内部元数据 ───────────────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class TermMeta:
+    """主结构编号术语的内部元数据。"""
+
+    path: str
+    """JSON pointer，如 'select.0' / 'filters.1.value.0'。"""
+
+    ktype: str
+    """召回类型：select / whereKey / whereValue / orderBy / groupBy。"""
+
+    raw_text: str
+    """原始术语文本。"""
+
+
+@dataclass(frozen=True, slots=True)
+class CCTermMeta:
+    """CC 编号术语的内部元数据。"""
+
+    raw_text: str
+    """原始术语文本。"""
+
+    ktype: str
+    """召回类型。"""
+
+    start: int
+    """0-based 起始位置（来自抽取器）。"""
+
+    end: int
+    """exclusive 结束位置（来自抽取器）。"""
+
+    condition_index: int
+    """所属 complex_condition 索引。"""
+
+
+@dataclass
+class PreResolveResult:
+    """pre_resolve 阶段的输出。
+
+    所有字典以 ``path:raw_text`` 复合键（如 ``filters.0.field:效能``）为键，
+    确保同一 path 下不同 raw_text 的术语不会互相覆盖，
+    同时保持与下游 path 格式的兼容性。
+    """
+
+    confirmed: dict[str, ResolvedField]
+    """已确认字段 {path:raw_text → ResolvedField(term_code, term_name)}。"""
+
+    unresolved_terms: list[ExtractedTerm]
+    """需要 recall 的术语列表。"""
+
+    value_enum_map: dict[str, list[str]]
+    """whereValue 枚举约束 {path:raw_text → [枚举值列表]}。"""
+
+    provenance: dict[str, str]
+    """来源标记 {path:raw_text → 'field_code'|'alias_exact'|'enum_exact'|...}。"""

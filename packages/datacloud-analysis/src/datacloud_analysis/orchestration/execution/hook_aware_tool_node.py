@@ -58,8 +58,48 @@ class HookAwareToolNode(ToolNode):
 
         messages = list(state_dict.get("messages") or [])
         last_ai = next((m for m in reversed(messages) if isinstance(m, AIMessage)), None)
+        _has_clarify_fp = bool(state_dict.get("clarification_formatted_params"))
+        _last_ai_calls = list(last_ai.tool_calls or []) if last_ai else []
+        logger.info(
+            "[HookAwareToolNode] ainvoke entry: last_ai=%s tool_calls_count=%d"
+            " clarification_formatted_params=%s",
+            type(last_ai).__name__ if last_ai else "None",
+            len(_last_ai_calls),
+            _has_clarify_fp,
+        )
         if last_ai is None or not (last_ai.tool_calls or []):
+            logger.warning(
+                "[HookAwareToolNode] early-exit: no tool_calls on last AIMessage"
+                " → skipping hooks, calling super().ainvoke directly"
+                " last_ai=%s",
+                type(last_ai).__name__ if last_ai else "None",
+            )
             return await super().ainvoke(state_dict, config, **kwargs)
+
+        # ── Checkpoint replay guard ─────────────────────────────────────────────────────────────
+        # OpenGauss checkpoint blob 丢失时，tools 节点会被错误激活（而非 user_clarify 节点恢复）。
+        # 检测特征：pending_clarification_context 已设置（等待澄清）+ clarification_formatted_params 未设置
+        # （user_clarify_node 尚未运行并写入格式化参数），说明当前调用属于脏 checkpoint replay。
+        # 直接 Command(goto=analyze_clarify) 跳过工具执行和 7 秒 SDK 分析，回到澄清子流程。
+        _pending_ctx_raw: dict[str, Any] | None = (
+            dict(state_dict["pending_clarification_context"])
+            if isinstance(state_dict.get("pending_clarification_context"), dict)
+            else None
+        )
+        if _pending_ctx_raw and not state_dict.get("clarification_formatted_params"):
+            logger.warning(
+                "[HookAwareToolNode] REPLAY GUARD: pending_clarification_context set"
+                " clarification_formatted_params=None → routing to analyze_clarify"
+                " without tool execution tool=%s",
+                str(_pending_ctx_raw.get("tool_name") or ""),
+            )
+            return Command(
+                update={
+                    "execution_status": "clarify_needed",
+                    "pending_clarification_context": _pending_ctx_raw,
+                },
+                goto="analyze_clarify",
+            )
 
         # Per-request gateway_context：config 优先，构造函数注入次之
         _gw_ctx = (
@@ -102,7 +142,12 @@ class HookAwareToolNode(ToolNode):
                     goto="analyze_clarify",
                 )
 
-            patched_calls.append({**tc, "args": dict(ctx.get("tool_params") or {})})
+            # query_* 工具剥离 compute-only 字段，防止插件内部重新注入空列表
+            tp = dict(ctx.get("tool_params") or {})
+            if tool_name.startswith("query_"):
+                for _sf in ("dimensions", "metrics", "having"):
+                    tp.pop(_sf, None)
+            patched_calls.append({**tc, "args": tp})
 
         # 用修改后的 tool_calls 替换最后一条 AIMessage（Pydantic 不可变，必须 model_copy）
         patched_ai = last_ai.model_copy(update={"tool_calls": patched_calls})
@@ -226,9 +271,10 @@ def _try_parse_query_data(content: str) -> dict[str, Any] | None:
     try:
         parsed = json.loads(content)
     except (json.JSONDecodeError, ValueError):
-        # 兜底：Python repr，先剥离 Decimal('x') 包装为浮点字面量再 literal_eval
+        # 兜底：Python repr，先剥离 Decimal('x') 和 datetime.*(…) 再 literal_eval
         try:
             cleaned = _DECIMAL_RE.sub(r"\1", content)
+            cleaned = _NONLITERAL_RE.sub("None", cleaned)
             parsed = ast.literal_eval(cleaned)
         except (ValueError, SyntaxError):
             return None

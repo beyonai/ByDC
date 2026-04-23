@@ -85,6 +85,22 @@ def make_llm_call_node(
             )
             return {"execution_status": "max_rounds_exceeded", "react_round_idx": current_round}
 
+        # ── Agent checkpoint replay guard ──────────────────────────────────────────────────────
+        # OpenGauss checkpoint blob 丢失时，agent 节点可能与 user_clarify 同时被错误激活。
+        # 检测特征：pending_clarification_context 已设置（等待澄清）+ clarification_formatted_params 未设置
+        # （user_clarify_node 尚未运行写入格式化参数），说明当前 agent 调用属于脏 checkpoint replay。
+        # 直接设置 agent_abort=True 信号跳过 LLM 调用；should_continue 据此路由到 END 终止该路径。
+        _pending_ctx_ac: dict[str, Any] | None = state.get("pending_clarification_context")
+        _clarify_fp_ac: Any = state.get("clarification_formatted_params")
+        if _pending_ctx_ac and not _clarify_fp_ac:
+            logger.warning(
+                "[llm_call] AGENT REPLAY GUARD: pending_clarification_context set"
+                " clarification_formatted_params=None → aborting bad agent activation"
+                " (skipping LLM call) round=%d",
+                current_round,
+            )
+            return {"agent_abort": True}
+
         # Per-request gateway_context: prefer config over factory closure
         _gateway_context = (config.get("configurable") or {}).get(
             "gateway_context"
@@ -138,6 +154,7 @@ def make_llm_call_node(
             "react_round_idx": current_round + 1,
             "execution_status": None,
             "answer_streamed": _did_stream,
+            "agent_abort": False,
         }
 
     return _llm_call

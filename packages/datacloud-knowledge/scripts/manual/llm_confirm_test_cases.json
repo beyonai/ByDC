@@ -276,5 +276,1157 @@
       ],
       "needs_clarification": true
     }
+  },
+  {
+    "query": "",
+    "structured_input": {
+      "filters": [
+        {
+          "field": "贡献率",
+          "op": "gt",
+          "value": 100
+        }
+      ],
+      "complex_conditions": []
+    },
+    "recall_context": "== 过滤条件（字段） ==\n  贡献率 (whereKey): ['数据来源', '实际税负率（%）', '亩产效益（万元/亩）', '总利润（万元）', '统计日期']",
+    "mode": "query",
+    "result": {
+      "select": [],
+      "filters": [],
+      "order_by": [],
+      "limit": null,
+      "offset": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "贡献率",
+          "candidates": [
+            "数据来源",
+            "实际税负率（%）",
+            "亩产效益（万元/亩）",
+            "总利润（万元）",
+            "统计日期"
+          ],
+          "reason": "贡献率字段含义不明确，请选择正确的映射字段",
+          "source": "where",
+          "path": "/filters/0/field"
+        }
+      ],
+      "needs_clarification": true
+    }
+  },
+  {
+    "query": "",
+    "structured_input": {
+      "select": [
+        "网格编码",
+        "网格名称",
+        "贡献率"
+      ],
+      "complex_conditions": []
+    },
+    "recall_context": "== 查询值 ==\n  网格编码 (select): ['管理网格编码', '物理网格编码', '管理网格名称', '产业链编码', '网格中心经纬度']\n  网格名称 (select): ['管理网格名称', '物理网格名称', '管理网格编码', '下辖物理网格数量', '物理网格编码']\n  贡献率 (select): ['数据来源', '实际税负率（%）', '亩产效益（万元/亩）', '总利润（万元）', '统计日期']",
+    "mode": "query",
+    "result": {
+      "select": [],
+      "filters": [],
+      "order_by": [],
+      "limit": null,
+      "offset": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "网格编码",
+          "candidates": [
+            "管理网格编码",
+            "物理网格编码"
+          ],
+          "reason": "存在多个编码字段，请选择具体类型",
+          "source": "select",
+          "path": "/select/0"
+        },
+        {
+          "keyword": "网格名称",
+          "candidates": [
+            "管理网格名称",
+            "物理网格名称"
+          ],
+          "reason": "存在多个名称字段，请选择具体类型",
+          "source": "select",
+          "path": "/select/1"
+        },
+        {
+          "keyword": "贡献率",
+          "candidates": [
+            "实际税负率（%）",
+            "亩产效益（万元/亩）",
+            "总利润（万元）"
+          ],
+          "reason": "没有直接叫贡献率的字段，可能对应实际税负率、亩产效益或总利润等指标",
+          "source": "select",
+          "path": "/select/2"
+        }
+      ],
+      "needs_clarification": true
+    }
+  },
+  {
+    "query": "",
+    "structured_input": {
+      "select": [
+        "网格编码",
+        "网格名称",
+        "贡献率"
+      ],
+      "complex_conditions": []
+    },
+    "recall_context": "== 查询值 ==\n  网格编码 (select): ['管理网格编码', '物理网格编码', '管理网格名称', '产业链编码', '网格中心经纬度']\n  网格名称 (select): ['管理网格名称', '物理网格名称', '管理网格编码', '下辖物理网格数量', '物理网格编码']\n  贡献率 (select): ['数据来源', '实际税负率（%）', '亩产效益（万元/亩）', '总利润（万元）', '统计日期']",
+    "mode": "query",
+    "result": {
+      "select": [],
+      "filters": [],
+      "order_by": [],
+      "limit": null,
+      "offset": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "贡献率",
+          "candidates": [
+            "实际税负率（%）",
+            "亩产效益（万元/亩）",
+            "总利润（万元）"
+          ],
+          "reason": "未找到直接名为'贡献率'的字段，需要从相似含义的字段中选择",
+          "source": "select",
+          "path": "select/2"
+        }
+      ],
+      "needs_clarification": true
+    }
+  },
+  {
+    "query": "",
+    "structured_input": {
+      "filters": [
+        {
+          "field": "贡献率",
+          "op": "gt",
+          "value": 100
+        }
+      ],
+      "complex_conditions": []
+    },
+    "recall_context": "== 过滤条件（字段） ==\n  贡献率 (whereKey): ['数据来源', '实际税负率（%）', '亩产效益（万元/亩）', '总利润（万元）', '统计日期']",
+    "mode": "query",
+    "result": {
+      "select": [],
+      "filters": [
+        {
+          "field": "贡献率",
+          "op": "gt",
+          "value": 100
+        }
+      ],
+      "order_by": [],
+      "limit": null,
+      "offset": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "贡献率",
+          "candidates": [
+            "数据来源",
+            "实际税负率（%）",
+            "亩产效益（万元/亩）",
+            "总利润（万元）",
+            "统计日期"
+          ],
+          "reason": "无法确定「贡献率」对应哪个字段，请从候选中选择",
+          "source": "where",
+          "path": "/filters/0/field"
+        }
+      ],
+      "needs_clarification": true
+    }
+  },
+  {
+    "query": "",
+    "structured_input": {
+      "filters": [
+        {
+          "field": "贡献率",
+          "op": "gt",
+          "value": 100
+        }
+      ],
+      "complex_conditions": []
+    },
+    "recall_context": "== 过滤条件（字段） ==\n  贡献率 (whereKey): ['数据来源', '实际税负率（%）', '亩产效益（万元/亩）', '总利润（万元）', '统计日期']",
+    "mode": "query",
+    "result": {
+      "select": [],
+      "filters": [],
+      "order_by": [],
+      "limit": null,
+      "offset": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "贡献率",
+          "candidates": [
+            "数据来源",
+            "实际税负率（%）",
+            "亩产效益（万元/亩）",
+            "总利润（万元）",
+            "统计日期"
+          ],
+          "reason": "存在多个可能匹配的字段，请选择正确的字段",
+          "source": "where",
+          "path": "/filters/0/field"
+        }
+      ],
+      "needs_clarification": true
+    }
+  },
+  {
+    "query": "",
+    "structured_input": {
+      "filters": [
+        {
+          "field": "贡献率",
+          "op": "gt",
+          "value": 100
+        }
+      ],
+      "complex_conditions": []
+    },
+    "recall_context": "== 过滤条件（字段） ==\n  贡献率 (whereKey): ['数据来源', '实际税负率（%）', '亩产效益（万元/亩）', '总利润（万元）', '统计日期']",
+    "mode": "query",
+    "result": {
+      "select": [],
+      "filters": [],
+      "order_by": [],
+      "limit": null,
+      "offset": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "贡献率",
+          "candidates": [
+            "数据来源",
+            "实际税负率（%）",
+            "亩产效益（万元/亩）",
+            "总利润（万元）",
+            "统计日期"
+          ],
+          "reason": "知识库中未找到直接名为'贡献率'的字段，需要从候选列表中选择对应的字段",
+          "source": "where",
+          "path": "/filters/0/field"
+        }
+      ],
+      "needs_clarification": true
+    }
+  },
+  {
+    "query": "",
+    "structured_input": {
+      "filters": [
+        {
+          "field": "贡献率",
+          "op": "gt",
+          "value": 100
+        }
+      ],
+      "complex_conditions": []
+    },
+    "recall_context": "== 过滤条件（字段） ==\n  贡献率 (whereKey): ['数据来源', '实际税负率（%）', '亩产效益（万元/亩）', '总利润（万元）', '统计日期']",
+    "mode": "query",
+    "result": {
+      "select": [],
+      "filters": [],
+      "order_by": [],
+      "limit": null,
+      "offset": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "贡献率",
+          "candidates": [],
+          "reason": "知识库中没有直接名为'贡献率'的字段，请确认具体指哪个字段，或是否需要用现有字段计算得出",
+          "source": "where",
+          "path": "/filters/0/field"
+        }
+      ],
+      "needs_clarification": true
+    }
+  },
+  {
+    "query": "2026年2月荣华街道、亦庄街道、瀛海镇企业的总营收及企业数量",
+    "structured_input": {
+      "dimensions": [
+        {
+          "field": "manage_grid_name"
+        }
+      ],
+      "filter_relation": "and",
+      "filters": [
+        {
+          "field": "manage_grid_name",
+          "op": "in",
+          "value": [
+            "荣华街道",
+            "亦庄街道",
+            "瀛海镇"
+          ]
+        },
+        {
+          "field": "stat_date",
+          "op": "eq",
+          "value": "202602"
+        }
+      ],
+      "metrics": [
+        {
+          "agg": "sum",
+          "as": "total_revenue",
+          "field": "total_revenue"
+        },
+        {
+          "agg": "count_distinct",
+          "as": "enterprise_count",
+          "field": "enterprise_id"
+        }
+      ],
+      "reason": "查询荣华街道、亦庄街道、瀛海镇2026年2月企业总营收，需要按管理网格名称分组统计营收和计数",
+      "complex_conditions": []
+    },
+    "recall_context": "== 分组条件 ==\n  manage_grid_name (groupBy): ['管理网格边界', '所属产业链城市名称', '产业环节名称', '管理网格名称', '物理网格名称']\n\n== 查询值 ==\n  total_revenue (select): ['企业唯一ID', '总缴税（万元）', '数据来源', '分析表更新时间', '企业全称']\n  enterprise_id (select): ['企业唯一 ID', '下辖企业数量', '所属产业环节企业数量', '产业大类编码', '企业等级']\n\n== 过滤条件（字段） ==\n  manage_grid_name (whereKey): ['管理网格边界', '所属产业链城市名称', '产业环节名称', '管理网格名称', '物理网格名称']\n\n== 过滤条件（值） ==\n  荣华街道 (whereValue): ['荣华街道', '荣华街道_HHA3GL3L', '荣华街道_HHA3L93L', '荣华街道_HHA3L93N', '北京西部马华餐饮有限公司荣昌西街店']\n  亦庄街道 (whereValue): ['北京市大兴区亦庄镇政府北', '北京市大兴区亦庄镇政府内', '北京市大兴区亦庄镇亦庄西路4号', '亦庄地区_HHA39J5Q', '亦庄电子科技有限公司']\n  瀛海镇 (whereValue): ['北京市北京经济技术开发区（大兴）瀛海镇瀛坤路4号院1号楼一层105号151室', '北京市北京经济技术开发区（大兴）瀛海镇瀛坤路4号院1号楼一层105号131室', '北京市大兴区瀛海镇瀛海家园瀛坤路4号院1号楼-1-1号商铺', '瀛海地区_HHA38747', '瀛海地区_HHA39844']\n\n== 过滤条件（字段） ==\n  stat_date (whereKey): ['企业唯一ID', '统计日期', '分析表更新时间', '数据来源', 'ETL创建时间']",
+    "mode": "compute",
+    "result": {
+      "dimensions": [],
+      "metrics": [],
+      "filters": [],
+      "having": [],
+      "order_by": [],
+      "limit": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "total_revenue",
+          "candidates": [
+            "总营收（万元）",
+            "营业收入（万元）",
+            "总缴税（万元）",
+            "营收总额（万元）"
+          ],
+          "reason": "召回结果中未找到名为 total_revenue 的字段，但存在多个营收相关字段，请确认正确字段名",
+          "source": "select",
+          "path": "/metrics/0/field"
+        }
+      ],
+      "needs_clarification": true
+    }
+  },
+  {
+    "query": "2026年2月荣华街道、亦庄街道、瀛海镇企业的总营收及企业数量",
+    "structured_input": {
+      "dimensions": [
+        {
+          "field": "manage_grid_name"
+        }
+      ],
+      "filter_relation": "and",
+      "filters": [
+        {
+          "field": "manage_grid_name",
+          "op": "in",
+          "value": [
+            "荣华街道",
+            "亦庄街道",
+            "瀛海镇"
+          ]
+        },
+        {
+          "field": "stat_date",
+          "op": "eq",
+          "value": "202602"
+        }
+      ],
+      "metrics": [
+        {
+          "agg": "sum",
+          "as": "total_revenue",
+          "field": "total_revenue"
+        },
+        {
+          "agg": "count_distinct",
+          "as": "enterprise_count",
+          "field": "enterprise_id"
+        }
+      ],
+      "reason": "查询荣华街道、亦庄街道、瀛海镇2026年2月企业总营收及企业数量，按管理网格分组",
+      "complex_conditions": []
+    },
+    "recall_context": "== 分组条件 ==\n  manage_grid_name (groupBy): ['管理网格边界', '所属产业链城市名称', '产业环节名称', '管理网格名称', '物理网格名称']\n\n== 查询值 ==\n  total_revenue (select): ['企业唯一ID', '总缴税（万元）', '数据来源', '分析表更新时间', '企业全称']\n  enterprise_id (select): ['企业唯一 ID', '下辖企业数量', '所属产业环节企业数量', '产业大类编码', '企业等级']\n\n== 过滤条件（字段） ==\n  manage_grid_name (whereKey): ['管理网格边界', '所属产业链城市名称', '产业环节名称', '管理网格名称', '物理网格名称']\n\n== 过滤条件（值） ==\n  荣华街道 (whereValue): ['荣华街道', '荣华街道_HHA3GL3L', '荣华街道_HHA3L93L', '荣华街道_HHA3L93N', '北京西部马华餐饮有限公司荣昌西街店']\n  亦庄街道 (whereValue): ['北京市大兴区亦庄镇政府北', '北京市大兴区亦庄镇政府内', '北京市大兴区亦庄镇亦庄西路4号', '亦庄地区_HHA39J5Q', '亦庄电子科技有限公司']\n  瀛海镇 (whereValue): ['北京市北京经济技术开发区（大兴）瀛海镇瀛坤路4号院1号楼一层105号151室', '北京市北京经济技术开发区（大兴）瀛海镇瀛坤路4号院1号楼一层105号131室', '北京市大兴区瀛海镇瀛海家园瀛坤路4号院1号楼-1-1号商铺', '瀛海地区_HHA38747', '瀛海地区_HHA39844']\n\n== 过滤条件（字段） ==\n  stat_date (whereKey): ['企业唯一ID', '统计日期', '分析表更新时间', '数据来源', 'ETL创建时间']",
+    "mode": "compute",
+    "result": {
+      "dimensions": [],
+      "metrics": [],
+      "filters": [],
+      "having": [],
+      "order_by": [],
+      "limit": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [],
+      "needs_clarification": false
+    }
+  },
+  {
+    "query": "2026年2月荣华街道、亦庄街道、瀛海镇企业的总营收及企业数量",
+    "structured_input": {
+      "dimensions": [
+        {
+          "field": "manage_grid_name"
+        }
+      ],
+      "filter_relation": "and",
+      "filters": [
+        {
+          "field": "manage_grid_name",
+          "op": "in",
+          "value": [
+            "荣华街道",
+            "亦庄街道",
+            "瀛海镇"
+          ]
+        },
+        {
+          "field": "stat_date",
+          "op": "eq",
+          "value": "202602"
+        }
+      ],
+      "metrics": [
+        {
+          "agg": "sum",
+          "as": "total_revenue",
+          "field": "total_revenue"
+        },
+        {
+          "agg": "count_distinct",
+          "as": "enterprise_count",
+          "field": "enterprise_id"
+        }
+      ],
+      "reason": "查询荣华街道、亦庄街道、瀛海镇2026年2月企业总营收及企业数量，按管理网格分组",
+      "complex_conditions": []
+    },
+    "recall_context": "== 分组条件 ==\n  manage_grid_name (groupBy): ['管理网格边界', '所属产业链城市名称', '产业环节名称', '管理网格名称', '物理网格名称']\n\n== 查询值 ==\n  total_revenue (select): ['企业唯一ID', '总缴税（万元）', '数据来源', '分析表更新时间', '企业全称']\n  enterprise_id (select): ['企业唯一 ID', '下辖企业数量', '所属产业环节企业数量', '产业大类编码', '企业等级']\n\n== 过滤条件（字段） ==\n  manage_grid_name (whereKey): ['管理网格边界', '所属产业链城市名称', '产业环节名称', '管理网格名称', '物理网格名称']\n\n== 过滤条件（值） ==\n  荣华街道 (whereValue): ['荣华街道', '荣华街道_HHA3GL3L', '荣华街道_HHA3L93L', '荣华街道_HHA3L93N', '北京西部马华餐饮有限公司荣昌西街店']\n  亦庄街道 (whereValue): ['北京市大兴区亦庄镇政府北', '北京市大兴区亦庄镇政府内', '北京市大兴区亦庄镇亦庄西路4号', '亦庄地区_HHA39J5Q', '亦庄电子科技有限公司']\n  瀛海镇 (whereValue): ['北京市北京经济技术开发区（大兴）瀛海镇瀛坤路4号院1号楼一层105号151室', '北京市北京经济技术开发区（大兴）瀛海镇瀛坤路4号院1号楼一层105号131室', '北京市大兴区瀛海镇瀛海家园瀛坤路4号院1号楼-1-1号商铺', '瀛海地区_HHA38747', '瀛海地区_HHA39844']\n\n== 过滤条件（字段） ==\n  stat_date (whereKey): ['企业唯一ID', '统计日期', '分析表更新时间', '数据来源', 'ETL创建时间']",
+    "mode": "compute",
+    "result": {
+      "dimensions": [
+        "管理网格名称"
+      ],
+      "metrics": [
+        {
+          "agg": "sum",
+          "as": "total_revenue",
+          "field": "需要澄清"
+        },
+        {
+          "agg": "count_distinct",
+          "as": "enterprise_count",
+          "field": "企业唯一ID"
+        }
+      ],
+      "filters": [
+        {
+          "field": "管理网格名称",
+          "op": "in",
+          "value": [
+            "荣华街道",
+            "亦庄街道",
+            "瀛海镇"
+          ]
+        },
+        {
+          "field": "统计日期",
+          "op": "eq",
+          "value": "202602"
+        }
+      ],
+      "having": [],
+      "order_by": [],
+      "limit": null,
+      "filter_relation": "and",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "总营收",
+          "candidates": [
+            "总缴税（万元）",
+            "营业收入",
+            "其他营收相关字段"
+          ],
+          "reason": "知识库中 total_revenue 对应的是'总缴税（万元）'，但用户查询的是'总营收'（营业收入），两者概念不同",
+          "source": "select",
+          "path": "/metrics/0/field"
+        }
+      ],
+      "needs_clarification": true
+    }
+  },
+  {
+    "query": "",
+    "structured_input": {
+      "filters": [
+        {
+          "field": "stat_date",
+          "op": "eq",
+          "value": "202602"
+        },
+        {
+          "field": "business_status_name",
+          "op": "eq",
+          "value": "营业中"
+        },
+        {
+          "field": "light_active_level_name",
+          "op": "eq",
+          "value": "明亮"
+        },
+        {
+          "field": "energy_efficiency_Index",
+          "op": "eq",
+          "value": "高"
+        }
+      ],
+      "complex_conditions": []
+    },
+    "recall_context": "== 过滤条件（字段） ==\n  stat_date (whereKey): ['企业唯一ID', '统计日期', '分析表更新时间', '数据来源', 'ETL创建时间']\n  business_status_name (whereKey): ['所属产业大类名称', '企业唯一ID', '所属产业环节名称', '企业经营状态', '企业全称']\n\n== 过滤条件（值） ==\n  营业中 (whereValue): ['营业中', '中国邮政储蓄银行股份有限公司北京大兴区贵园中路营业所', '北京市北京经济技术开发区西环南路18号A幢5层办公1-5088室（北京自贸试验区高端产业片区亦庄组团）', '北京市丰台区贾家花园15号院7号楼一层西侧（东铁匠营企业集中办公区）', '北京市北京经济技术开发区荣华中路7号院4幢2层2027（北京自贸试验区高端产业片区亦庄组团）']\n\n== 过滤条件（字段） ==\n  light_active_level_name (whereKey): ['经济效益等级', '灯光活跃等级', '灯光强度', '车流活跃等级', '所属管理网格人流活跃等级']\n\n== 过滤条件（值） ==\n  明亮 (whereValue): ['明亮', '北京金明亮商贸有限公司', '北京心明眼亮文化有限公司', '北京国亮智能照明科技有限公司', '高亮']\n\n== 过滤条件（字段） ==\n  energy_efficiency_Index (whereKey): ['经济效益等级', '所属产业链效益等级', '亩产效益（万元/亩）', '所属物理网格POI密度（个/平方公里）', '数据来源']\n\n== 过滤条件（值） ==\n  高 (whereValue): ['高亮', '高风险', '高效益企业', '重点领域高端装备配套应用', '高优势产业链']",
+    "mode": "query",
+    "result": {
+      "select": [],
+      "filters": [
+        {
+          "field": "统计日期",
+          "op": "eq",
+          "value": "202602"
+        },
+        {
+          "field": "企业经营状态",
+          "op": "eq",
+          "value": "营业中"
+        },
+        {
+          "field": "灯光活跃等级",
+          "op": "eq",
+          "value": "明亮"
+        },
+        {
+          "field": "经济效益等级",
+          "op": "eq",
+          "value": "高"
+        }
+      ],
+      "order_by": [],
+      "limit": null,
+      "offset": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [],
+      "needs_clarification": false
+    }
+  },
+  {
+    "query": "2026年2月各街道的营收、龙头企业营收、骨干企业营收、小微企业营收",
+    "structured_input": {
+      "dimensions": [
+        {
+          "field": "manage_grid_name",
+          "granularity": "self"
+        }
+      ],
+      "filter_relation": "and",
+      "filters": [
+        {
+          "field": "stat_date",
+          "op": "eq",
+          "value": "2026-02"
+        }
+      ],
+      "limit": 100,
+      "metrics": [
+        {
+          "agg": "sum",
+          "as": "总营收",
+          "field": "total_revenue"
+        }
+      ],
+      "order_by": [
+        {
+          "direction": "desc",
+          "field": "总营收"
+        }
+      ],
+      "reason": "用户需要按街道分组统计营收，并按企业等级（龙头企业、骨干企业、小微企业）分别展示。需要先获取各街道的总营收作为基础数据。",
+      "complex_conditions": []
+    },
+    "recall_context": "== 分组条件 ==\n  manage_grid_name (groupBy): ['管理网格边界', '所属产业链城市名称', '产业环节名称', '管理网格名称', '物理网格名称']\n\n== 查询值 ==\n  total_revenue (select): ['企业唯一ID', '总缴税（万元）', '数据来源', '分析表更新时间', '企业全称']\n\n== 过滤条件（字段） ==\n  stat_date (whereKey): ['企业唯一ID', '统计日期', '分析表更新时间', '数据来源', 'ETL创建时间']",
+    "mode": "compute",
+    "result": {
+      "dimensions": [],
+      "metrics": [],
+      "filters": [],
+      "having": [],
+      "order_by": [],
+      "limit": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "企业等级（龙头企业、骨干企业、小微企业）",
+          "candidates": [
+            "enterprise_level",
+            "company_type",
+            "company_category",
+            "等级字段"
+          ],
+          "reason": "查询需要按企业等级分别统计营收，但当前 schema 中未找到企业等级相关字段，无法确认龙头企业、骨干企业、小微企业的区分方式",
+          "source": "select",
+          "path": "/metrics"
+        }
+      ],
+      "needs_clarification": true
+    }
+  },
+  {
+    "query": "2026年2月各街道营收超过5000万且税负率低于6%的龙头、骨干企业数",
+    "structured_input": {
+      "dimensions": [
+        {
+          "field": "manage_grid_name"
+        }
+      ],
+      "filter_relation": "and",
+      "filters": [
+        {
+          "field": "stat_date",
+          "op": "eq",
+          "value": "2026-02"
+        },
+        {
+          "field": "total_revenue",
+          "op": "gt",
+          "value": 5000
+        },
+        {
+          "field": "tax_rate",
+          "op": "lt",
+          "value": 6
+        },
+        {
+          "field": "enterprise_level_name",
+          "op": "in",
+          "value": [
+            "龙头",
+            "骨干"
+          ]
+        }
+      ],
+      "metrics": [
+        {
+          "field": "enterprise_id",
+          "agg": "count_distinct",
+          "as": "企业数"
+        }
+      ],
+      "reason": "用户需要按街道统计满足条件的企业数量，属于聚合统计任务，应使用compute工具",
+      "complex_conditions": []
+    },
+    "recall_context": "== 分组条件 ==\n  manage_grid_name (groupBy): ['管理网格边界', '所属产业链城市名称', '产业环节名称', '管理网格名称', '物理网格名称']\n\n== 查询值 ==\n  enterprise_id (select): ['企业唯一 ID', '下辖企业数量', '所属产业环节企业数量', '产业大类编码', '企业等级']\n\n== 过滤条件（字段） ==\n  stat_date (whereKey): ['企业唯一ID', '统计日期', '分析表更新时间', '数据来源', 'ETL创建时间']\n  total_revenue (whereKey): ['企业唯一ID', '总缴税（万元）', '数据来源', '分析表更新时间', '企业全称']\n  tax_rate (whereKey): ['实际税负率（%）', 'POI密度', '车流活跃等级', '企业唯一ID', '数据来源']\n  enterprise_level_name (whereKey): ['企业唯一ID', '企业经济效益等级', '所属产业链效益等级', '所属产业大类名称', '企业等级']\n\n== 过滤条件（值） ==\n  龙头 (whereValue): ['链主龙头', '北京市门头沟区石龙南路6号1幢4-9室', '北京市门头沟区石龙南路10号A-274室', '北京市门头沟区石龙经济开发区永安路20号3号楼A-5810室', '淮安龙平建设有限公司']\n  骨干 (whereValue): ['核心骨干', '川椒魂·干锅排骨虾(风味3北京美蛙聚兴餐饮管理有限公司)', '主导产业', '核心制造', '核心制造']",
+    "mode": "compute",
+    "result": {
+      "dimensions": [],
+      "metrics": [],
+      "filters": [],
+      "having": [],
+      "order_by": [],
+      "limit": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "营收",
+          "candidates": [
+            "total_revenue",
+            "revenue",
+            "business_revenue"
+          ],
+          "reason": "用户查询营收超过5000万，但知识库候选中只有'总缴税（万元）'字段，需要确认实际字段名",
+          "source": "where",
+          "path": ""
+        },
+        {
+          "keyword": "龙头骨干",
+          "candidates": [
+            "enterprise_level_name",
+            "enterprise_level",
+            "benefit_level"
+          ],
+          "reason": "用户查询龙头、骨干企业，但企业等级相关字段需要确认",
+          "source": "where",
+          "path": ""
+        }
+      ],
+      "needs_clarification": true
+    }
+  },
+  {
+    "query": "2026年2月营收超过5000万的龙头、骨干、中坚企业的数量、营收、利润统计",
+    "structured_input": {
+      "dimensions": [
+        {
+          "field": "enterprise_level_name",
+          "granularity": "self"
+        }
+      ],
+      "filter_relation": "and",
+      "filters": [
+        {
+          "field": "stat_date",
+          "op": "eq",
+          "value": "2026-02"
+        },
+        {
+          "field": "total_revenue",
+          "op": "gt",
+          "value": 5000
+        },
+        {
+          "field": "enterprise_level_name",
+          "op": "in",
+          "value": [
+            "龙头",
+            "骨干",
+            "中坚"
+          ]
+        }
+      ],
+      "metrics": [
+        {
+          "field": "enterprise_id",
+          "agg": "count_distinct",
+          "as": "企业数量"
+        },
+        {
+          "field": "total_revenue",
+          "agg": "sum",
+          "as": "总营收_万元"
+        },
+        {
+          "field": "total_profit",
+          "agg": "sum",
+          "as": "总利润_万元"
+        }
+      ],
+      "reason": "用户需要统计2026年2月营收超过5000万的企业，按企业等级（龙头、骨干、中坚）分组，计算企业数量、总营收和总利润。这是统计聚合类需求，使用compute工具最合适。",
+      "complex_conditions": []
+    },
+    "recall_context": "== 分组条件 ==\n  enterprise_level_name (groupBy): ['企业唯一ID', '企业经济效益等级', '所属产业链效益等级', '所属产业大类名称', '企业等级']\n\n== 查询值 ==\n  enterprise_id (select): ['企业唯一 ID', '下辖企业数量', '所属产业环节企业数量', '产业大类编码', '企业等级']\n  total_revenue (select): ['企业唯一ID', '总缴税（万元）', '数据来源', '分析表更新时间', '企业全称']\n  total_profit (select): ['总利润（万元）', '所属产业链效益等级', '所属产业环节总营收（万元）', '企业唯一 ID', '企业全称']\n\n== 过滤条件（字段） ==\n  stat_date (whereKey): ['企业唯一ID', '统计日期', '分析表更新时间', '数据来源', 'ETL创建时间']\n  total_revenue (whereKey): ['企业唯一ID', '总缴税（万元）', '数据来源', '分析表更新时间', '企业全称']\n  enterprise_level_name (whereKey): ['企业唯一ID', '企业经济效益等级', '所属产业链效益等级', '所属产业大类名称', '企业等级']\n\n== 过滤条件（值） ==\n  龙头 (whereValue): ['链主龙头', '北京市门头沟区石龙南路6号1幢4-9室', '北京市门头沟区石龙南路10号A-274室', '北京市门头沟区石龙经济开发区永安路20号3号楼A-5810室', '淮安龙平建设有限公司']\n  骨干 (whereValue): ['核心骨干', '川椒魂·干锅排骨虾(风味3北京美蛙聚兴餐饮管理有限公司)', '主导产业', '核心制造', '核心制造']\n  中坚 (whereValue): ['成长中坚', '核心骨干', '中游', '中风险', '核心制造']",
+    "mode": "compute",
+    "result": {
+      "dimensions": [],
+      "metrics": [],
+      "filters": [],
+      "having": [],
+      "order_by": [],
+      "limit": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "企业等级",
+          "candidates": [
+            "链主龙头",
+            "核心骨干",
+            "成长中坚"
+          ],
+          "reason": "知识库中企业等级字段的实际值是 ['链主龙头', '核心骨干', '成长中坚']，与用户使用的 ['龙头', '骨干', '中坚'] 存在差异",
+          "source": "",
+          "path": ""
+        }
+      ],
+      "needs_clarification": true
+    }
+  },
+  {
+    "query": "2026年2月荣华街道和亦庄镇营业中低风险的龙头、骨干企业数量、总营收、平均利润",
+    "structured_input": {
+      "dimensions": [
+        {
+          "field": "manage_grid_name",
+          "granularity": "self"
+        }
+      ],
+      "filter_relation": "and",
+      "filters": [
+        {
+          "field": "stat_date",
+          "op": "eq",
+          "value": "2026-02"
+        },
+        {
+          "field": "business_status_name",
+          "op": "eq",
+          "value": "营业中"
+        },
+        {
+          "field": "risk_level_name",
+          "op": "eq",
+          "value": "低风险"
+        },
+        {
+          "field": "enterprise_level_name",
+          "op": "in",
+          "value": [
+            "龙头",
+            "骨干"
+          ]
+        },
+        {
+          "field": "manage_grid_name",
+          "op": "in",
+          "value": [
+            "荣华街道",
+            "亦庄镇"
+          ]
+        }
+      ],
+      "metrics": [
+        {
+          "field": "enterprise_id",
+          "agg": "count_distinct",
+          "as": "企业数量"
+        },
+        {
+          "field": "total_revenue",
+          "agg": "sum",
+          "as": "总营收_万元"
+        },
+        {
+          "field": "total_profit",
+          "agg": "avg",
+          "as": "平均利润_万元"
+        }
+      ],
+      "reason": "用户需要按街道聚合统计龙头骨干企业的数量、营收和平均利润，属于聚合查询场景，因此使用compute工具",
+      "complex_conditions": []
+    },
+    "recall_context": "== 分组条件 ==\n  manage_grid_name (groupBy): ['管理网格边界', '所属产业链城市名称', '产业环节名称', '管理网格名称', '物理网格名称']\n\n== 查询值 ==\n  enterprise_id (select): ['企业唯一 ID', '下辖企业数量', '所属产业环节企业数量', '产业大类编码', '企业等级']\n  total_revenue (select): ['企业唯一ID', '总缴税（万元）', '数据来源', '分析表更新时间', '企业全称']\n  total_profit (select): ['总利润（万元）', '所属产业链效益等级', '所属产业环节总营收（万元）', '企业唯一 ID', '企业全称']\n\n== 过滤条件（字段） ==\n  stat_date (whereKey): ['企业唯一ID', '统计日期', '分析表更新时间', '数据来源', 'ETL创建时间']\n  business_status_name (whereKey): ['所属产业大类名称', '企业唯一ID', '所属产业环节名称', '企业经营状态', '企业全称']\n\n== 过滤条件（值） ==\n  营业中 (whereValue): ['营业中', '中国邮政储蓄银行股份有限公司北京大兴区贵园中路营业所', '北京市北京经济技术开发区西环南路18号A幢5层办公1-5088室（北京自贸试验区高端产业片区亦庄组团）', '北京市丰台区贾家花园15号院7号楼一层西侧（东铁匠营企业集中办公区）', '北京市北京经济技术开发区荣华中路7号院4幢2层2027（北京自贸试验区高端产业片区亦庄组团）']\n\n== 过滤条件（字段） ==\n  risk_level_name (whereKey): ['经济效益等级', '产业链效益等级', '所属管理网格人流活跃等级', '所属管理网格灯光活跃等级', '企业综合风险等级']\n\n== 过滤条件（值） ==\n  低风险 (whereValue): ['低风险', '中风险', '高风险', '北京法商风险管理咨询有限公司', '低效益企业']\n\n== 过滤条件（字段） ==\n  enterprise_level_name (whereKey): ['企业唯一ID', '企业经济效益等级', '所属产业链效益等级', '所属产业大类名称', '企业等级']\n\n== 过滤条件（值） ==\n  龙头 (whereValue): ['链主龙头', '北京市门头沟区石龙南路6号1幢4-9室', '北京市门头沟区石龙南路10号QS1089（集群注册）', '北京市门头沟区石龙经济开发区永安路20号3号楼A-5810室', '淮安龙平建设有限公司']\n  骨干 (whereValue): ['核心骨干', '川椒魂·干锅排骨虾(风味3北京美蛙聚兴餐饮管理有限公司)', '主导产业', '核心制造', '核心制造']\n\n== 过滤条件（字段） ==\n  manage_grid_name (whereKey): ['管理网格边界', '所属产业链城市名称', '产业环节名称', '管理网格名称', '物理网格名称']\n\n== 过滤条件（值） ==\n  荣华街道 (whereValue): ['荣华街道', '荣华街道_HHA3L93L', '荣华街道_HHA3L93N', '荣华街道_HHA3GL3L', '北京西部马华餐饮有限公司荣昌西街店']\n  亦庄镇 (whereValue): ['北京市大兴区亦庄镇亦庄中学体育馆内', '北京市大兴区亦庄镇小羊坊村北京同创同德建筑装饰工程有限责任公司院内5幢2层203、204、205、206房间', '北京市大兴区亦庄镇政府北', '亦庄地区_HHA3GK4Y', '北京农村商业银行股份有限公司亦庄支行']",
+    "mode": "compute",
+    "result": {
+      "dimensions": [],
+      "metrics": [],
+      "filters": [],
+      "having": [],
+      "order_by": [],
+      "limit": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [],
+      "needs_clarification": false
+    }
+  },
+  {
+    "query": "2026年2月荣华街道和亦庄镇营业中低风险的链主龙头、核心骨干企业数量、总营收、平均利润",
+    "structured_input": {
+      "dimensions": [
+        {
+          "field": "manage_grid_name",
+          "granularity": "self"
+        }
+      ],
+      "filter_relation": "and",
+      "filters": [
+        {
+          "field": "stat_date",
+          "op": "eq",
+          "value": "2026-02"
+        },
+        {
+          "field": "business_status_name",
+          "op": "eq",
+          "value": "营业中"
+        },
+        {
+          "field": "risk_level_name",
+          "op": "eq",
+          "value": "低风险"
+        },
+        {
+          "field": "enterprise_level_name",
+          "op": "in",
+          "value": [
+            "链主龙头",
+            "核心骨干"
+          ]
+        },
+        {
+          "field": "manage_grid_name",
+          "op": "in",
+          "value": [
+            "荣华街道",
+            "亦庄镇"
+          ]
+        }
+      ],
+      "metrics": [
+        {
+          "agg": "count_distinct",
+          "as": "企业数量",
+          "field": "enterprise_id"
+        },
+        {
+          "agg": "sum",
+          "as": "总营收_万元",
+          "field": "total_revenue"
+        },
+        {
+          "agg": "avg",
+          "as": "平均利润_万元",
+          "field": "total_profit"
+        }
+      ],
+      "reason": "用户需要按街道聚合统计龙头骨干企业的数量、营收和平均利润，属于聚合查询场景，因此使用compute工具",
+      "complex_conditions": []
+    },
+    "recall_context": "== 分组条件 ==\n  manage_grid_name (groupBy): ['管理网格边界', '所属产业链城市名称', '产业环节名称', '管理网格名称', '物理网格名称']\n\n== 查询值 ==\n  enterprise_id (select): ['企业唯一 ID', '下辖企业数量', '所属产业环节企业数量', '产业大类编码', '企业等级']\n  total_revenue (select): ['企业唯一ID', '总缴税（万元）', '数据来源', '分析表更新时间', '企业全称']\n  total_profit (select): ['总利润（万元）', '所属产业链效益等级', '所属产业环节总营收（万元）', '企业唯一 ID', '企业全称']\n\n== 过滤条件（字段） ==\n  stat_date (whereKey): ['企业唯一ID', '统计日期', '分析表更新时间', '数据来源', 'ETL创建时间']\n  business_status_name (whereKey): ['所属产业大类名称', '企业唯一ID', '所属产业环节名称', '企业经营状态', '企业全称']\n\n== 过滤条件（值） ==\n  营业中 (whereValue): ['营业中', '中国邮政储蓄银行股份有限公司北京大兴区贵园中路营业所', '北京市北京经济技术开发区西环南路18号A幢5层办公1-5088室（北京自贸试验区高端产业片区亦庄组团）', '北京市丰台区贾家花园15号院7号楼一层西侧（东铁匠营企业集中办公区）', '北京市北京经济技术开发区荣华中路7号院4幢2层2027（北京自贸试验区高端产业片区亦庄组团）']\n\n== 过滤条件（字段） ==\n  risk_level_name (whereKey): ['经济效益等级', '产业链效益等级', '所属管理网格人流活跃等级', '所属管理网格灯光活跃等级', '企业综合风险等级']\n\n== 过滤条件（值） ==\n  低风险 (whereValue): ['低风险', '中风险', '高风险', '北京法商风险管理咨询有限公司', '低效益企业']\n\n== 过滤条件（字段） ==\n  enterprise_level_name (whereKey): ['企业唯一ID', '企业经济效益等级', '所属产业链效益等级', '所属产业大类名称', '企业等级']\n\n== 过滤条件（值） ==\n  链主龙头 (whereValue): ['链主龙头', '上游', '整机制造', '整机制造', '北京坤链科技集团有限公司']\n  核心骨干 (whereValue): ['核心骨干', '核心零部件', '核心零部件', '核心制造', '核心制造']\n\n== 过滤条件（字段） ==\n  manage_grid_name (whereKey): ['管理网格边界', '所属产业链城市名称', '产业环节名称', '管理网格名称', '物理网格名称']\n\n== 过滤条件（值） ==\n  荣华街道 (whereValue): ['荣华街道', '荣华街道_HHA3L93N', '荣华街道_HHA3L93L', '荣华街道_HHA3GL3L', '北京西部马华餐饮有限公司荣昌西街店']\n  亦庄镇 (whereValue): ['北京市大兴区亦庄镇亦庄工业区内25号2幢2层', '北京市大兴区亦庄镇小羊坊村北京同创同德建筑装饰工程有限责任公司院内5幢2层203、204、205、206房间', '北京市大兴区亦庄镇政府北', '亦庄地区_HHA3GK4Y', '北京农村商业银行股份有限公司亦庄支行']",
+    "mode": "compute",
+    "result": {
+      "dimensions": [],
+      "metrics": [],
+      "filters": [],
+      "having": [],
+      "order_by": [],
+      "limit": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "总营收",
+          "candidates": [
+            "营业收入（万元）",
+            "企业营收（万元）",
+            "total_revenue_amt",
+            "revenue"
+          ],
+          "reason": "知识库中 total_revenue 字段对应的是'总缴税（万元）'，未找到与'总营收'直接匹配的字段名",
+          "source": "select",
+          "path": "/metrics/1/field"
+        }
+      ],
+      "needs_clarification": true
+    }
+  },
+  {
+    "query": "2026年2月信息技术、汽车产业链的上游、下游的龙头、骨干企业数",
+    "structured_input": {
+      "dimensions": [
+        {
+          "field": "stat_date",
+          "granularity": "month"
+        },
+        {
+          "field": "chain_name",
+          "granularity": "self"
+        },
+        {
+          "field": "item_type",
+          "granularity": "self"
+        }
+      ],
+      "filter_relation": "and",
+      "filters": [
+        {
+          "field": "stat_date",
+          "op": "eq",
+          "value": "202602"
+        },
+        {
+          "field": "chain_name",
+          "op": "in",
+          "value": [
+            "信息技术",
+            "汽车"
+          ]
+        }
+      ],
+      "metrics": [
+        {
+          "field": "ENTERPRISE_NUM",
+          "agg": "sum",
+          "as": "企业数量"
+        }
+      ],
+      "reason": "用户需要按产业链类型（信息技术、汽车）和环节类型（上游、下游）分组统计企业数量，这是典型的聚合统计场景，适合使用compute工具",
+      "complex_conditions": []
+    },
+    "recall_context": "== 分组条件 ==\n  stat_date (groupBy): ['统计日期', '分析表更新时间', '数据来源', '企业唯一 ID', 'ETL创建时间']\n  chain_name (groupBy): ['产业链环节名称', '管理网格名称', '城市名称', '产业链名称', '企业唯一 ID']\n  item_type (groupBy): ['产业环节类型', '产业链效益级别（高、中、低）', '产业链环节名称', '行业类型', '产业大类编码']\n\n== 查询值 ==\n  ENTERPRISE_NUM (select): ['环节企业数量', '企业等级', '企业全称', '企业经营状态', '企业唯一 ID']\n\n== 过滤条件（字段） ==\n  stat_date (whereKey): ['统计日期', '分析表更新时间', '数据来源', '企业唯一 ID', 'ETL创建时间']\n  chain_name (whereKey): ['产业链环节名称', '管理网格名称', '城市名称', '产业链名称', '企业唯一 ID']\n\n== 过滤条件（值） ==\n  信息技术 (whereValue): ['信息技术、新兴信息技术', '新一代信息技术产业链', '信息技术、计算机', '信息技术、通信', '奇安信网神信息技术（北京）股份有限公司北京经济技术开发区分公司']\n  汽车 (whereValue): ['汽车、汽车服务', '汽车、汽车零部件制造', '高端汽车与新能源智能汽车产业链', '汽车制造业', '北京市丰台区汽车博物馆东路1号院3号楼20层2308（园区）']",
+    "mode": "compute",
+    "result": {
+      "dimensions": [],
+      "metrics": [],
+      "filters": [],
+      "having": [],
+      "order_by": [],
+      "limit": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "龙头、骨干企业",
+          "candidates": [
+            "龙头骨干企业标识",
+            "企业等级",
+            "环节类型"
+          ],
+          "reason": "需要确认龙头、骨干企业的分类依据字段，知识库中未直接召回该概念",
+          "source": "select",
+          "path": ""
+        },
+        {
+          "keyword": "上、下游",
+          "candidates": [
+            "产业环节类型",
+            "产业链环节名称",
+            "行业类型"
+          ],
+          "reason": "需要确认区分上、下游的字段",
+          "source": "group_by",
+          "path": ""
+        }
+      ],
+      "needs_clarification": true
+    }
+  },
+  {
+    "query": "按管理网格统计202602各街道的龙头企业数量",
+    "structured_input": {
+      "dimensions": [
+        {
+          "field": "manage_grid_id"
+        }
+      ],
+      "filter_relation": "and",
+      "filters": [
+        {
+          "field": "stat_date",
+          "op": "eq",
+          "value": "202602"
+        },
+        {
+          "field": "enterprise_level_name",
+          "op": "eq",
+          "value": "龙头"
+        }
+      ],
+      "metrics": [
+        {
+          "agg": "count_distinct",
+          "as": "leading_enterprise_count",
+          "field": "enterprise_id"
+        }
+      ],
+      "reason": "用filters字段过滤龙头企业",
+      "complex_conditions": []
+    },
+    "recall_context": "== 分组条件 ==\n  manage_grid_id (groupBy): ['企业唯一ID', '管理网格边界', '管理网格名称', '管理网格编码', '产业链编码']\n\n== 查询值 ==\n  enterprise_id (select): ['企业唯一 ID', '下辖企业数量', '所属产业环节企业数量', '产业大类编码', '企业等级']\n\n== 过滤条件（字段） ==\n  stat_date (whereKey): ['企业唯一ID', '统计日期', '分析表更新时间', '数据来源', 'ETL创建时间']\n  enterprise_level_name (whereKey): ['企业唯一ID', '企业经济效益等级', '所属产业链效益等级', '所属产业大类名称', '企业等级']\n\n== 过滤条件（值） ==\n  龙头 (whereValue): ['链主龙头', '北京市门头沟区石龙南路6号1幢4-9室', '北京市门头沟区石龙南路10号A-274室', '北京市门头沟区石龙经济开发区永安路20号3号楼A-5810室', '淮安龙平建设有限公司']",
+    "mode": "compute",
+    "result": {
+      "dimensions": [
+        "manage_grid_code"
+      ],
+      "metrics": [],
+      "filters": [],
+      "having": [],
+      "order_by": [],
+      "limit": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [],
+      "needs_clarification": false
+    }
+  },
+  {
+    "query": "按管理网格统计202602各街道的高风险企业数量",
+    "structured_input": {
+      "dimensions": [
+        {
+          "field": "manage_grid_id"
+        }
+      ],
+      "filter_relation": "and",
+      "filters": [
+        {
+          "field": "stat_date",
+          "op": "eq",
+          "value": "202602"
+        },
+        {
+          "field": "risk_level_name",
+          "op": "eq",
+          "value": "高"
+        }
+      ],
+      "metrics": [
+        {
+          "agg": "count_distinct",
+          "as": "high_risk_enterprise_count",
+          "field": "enterprise_id"
+        }
+      ],
+      "reason": "用filters字段过滤高风险企业",
+      "complex_conditions": []
+    },
+    "recall_context": "== 分组条件 ==\n  manage_grid_id (groupBy): ['企业唯一ID', '管理网格边界', '管理网格名称', '管理网格编码', '产业链编码']\n\n== 查询值 ==\n  enterprise_id (select): ['企业唯一 ID', '下辖企业数量', '所属产业环节企业数量', '产业大类编码', '企业等级']\n\n== 过滤条件（字段） ==\n  stat_date (whereKey): ['企业唯一ID', '统计日期', '分析表更新时间', '数据来源', 'ETL创建时间']\n  risk_level_name (whereKey): ['经济效益等级', '产业链效益等级', '所属管理网格人流活跃等级', '所属管理网格灯光活跃等级', '企业综合风险等级']\n\n== 过滤条件（值） ==\n  高 (whereValue): ['高效益企业', '高亮', '高风险', '重点领域高端装备配套应用', '高优势产业链']",
+    "mode": "compute",
+    "result": {
+      "dimensions": [],
+      "metrics": [],
+      "filters": [],
+      "having": [],
+      "order_by": [],
+      "limit": null,
+      "filter_relation": "AND",
+      "confirmed_conditions": [],
+      "clarify_items": [
+        {
+          "keyword": "高",
+          "candidates": [
+            "高效益企业",
+            "高亮",
+            "高风险",
+            "重点领域高端装备配套应用",
+            "高优势产业链"
+          ],
+          "reason": "risk_level_name的过滤值\"高\"对应5个候选，需要根据业务语义选择",
+          "source": "where",
+          "path": "/filters/1/value"
+        }
+      ],
+      "needs_clarification": true
+    }
   }
 ]

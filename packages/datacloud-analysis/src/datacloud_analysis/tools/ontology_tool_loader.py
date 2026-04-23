@@ -396,16 +396,21 @@ class OntologyToolLoader:
     # Schema 个性化：_apply_agent_schema_patches
     # ------------------------------------------------------------------
 
+    # query_* 工具不应暴露给 LLM 的 compute-only 字段
+    _QUERY_ONLY_STRIP_FIELDS: frozenset[str] = frozenset({"dimensions", "metrics", "having"})
+
     def _apply_agent_schema_patches(
-        self, scope_code: str, input_schema: dict[str, Any]
+        self, scope_code: str, input_schema: dict[str, Any], *, action_type: str = ""
     ) -> dict[str, Any]:
         """agent_friendly=True 时对 query/compute 工具 schema 做全量修正。
 
         修正点：
-          1. filters → 替换为 relaxed 版本（catch-all 兜底 + field 支持中文名 + 原词透传指令）
-          2. select → description 替换为 AGENT_SELECT_DESCRIPTION
-          3. order_by.field → description 替换为 AGENT_ORDER_BY_FIELD_DESCRIPTION
-          4. complex_conditions → description 替换为 AGENT_COMPLEX_CONDITIONS_DESCRIPTION
+          1. (query only) dimensions/metrics/having → 从 properties/required 中移除，
+             避免 LLM 把 compute-only 字段填入 query 工具调用
+          2. filters → 替换为 relaxed 版本（catch-all 兜底 + field 支持中文名 + 原词透传指令）
+          3. select → description 替换为 AGENT_SELECT_DESCRIPTION
+          4. order_by.field → description 替换为 AGENT_ORDER_BY_FIELD_DESCRIPTION
+          5. complex_conditions → description 替换为 AGENT_COMPLEX_CONDITIONS_DESCRIPTION
         loader 查找失败时原样返回，降级为原始行为。
         """
         from datacloud_data_sdk.virtual_action.generator import (  # noqa: PLC0415
@@ -432,7 +437,18 @@ class OntologyToolLoader:
 
         props = dict(input_schema.get("properties") or {})
 
-        # 1. filters：替换为 relaxed 版本（含 catch-all + 原词透传描述）
+        # 1. (query only) 移除 compute-only 字段，LLM 不可见
+        if action_type == "query":
+            for _f in self._QUERY_ONLY_STRIP_FIELDS:
+                props.pop(_f, None)
+            required = [
+                r
+                for r in (input_schema.get("required") or [])
+                if r not in self._QUERY_ONLY_STRIP_FIELDS
+            ]
+            input_schema = {**input_schema, "required": required}
+
+        # 2. filters：替换为 relaxed 版本（含 catch-all + 原词透传描述）
         props["filters"] = _build_filters_schema(fields)
 
         # 2. select：覆写 description，保留 enum 供 LLM 参考
@@ -496,9 +512,8 @@ class OntologyToolLoader:
 
             view = self._loader.get_view(view_code)
             for action in view.actions:
-                action_family = self._get_action_family(action)
                 # 跳过 skip_action_families 中的族（db_query 模式跳过 query/compute）
-                if action_family in self._skip_action_families:
+                if getattr(action, "action_type", "") in self._skip_action_families:
                     continue
                 exposure = getattr(action, "exposure_policy", "direct")
                 if exposure == "hidden":
@@ -507,8 +522,11 @@ class OntologyToolLoader:
                     continue
 
                 view_schema: dict[str, Any] = dict(action.input_schema)
-                if self._agent_friendly and action_family in {"query", "compute"}:
-                    view_schema = self._apply_agent_schema_patches(view_code, view_schema)
+                _view_action_type = getattr(action, "action_type", "")
+                if self._agent_friendly and _view_action_type in {"query", "compute"}:
+                    view_schema = self._apply_agent_schema_patches(
+                        view_code, view_schema, action_type=_view_action_type
+                    )
 
                 result[action.action_code] = StructuredTool(
                     name=action.action_code,
@@ -595,7 +613,9 @@ class OntologyToolLoader:
 
                 input_schema: dict[str, Any] = tool_def.get("inputSchema", {})
                 if self._agent_friendly and action_family in {"query", "compute"}:
-                    input_schema = self._apply_agent_schema_patches(obj_code, input_schema)
+                    input_schema = self._apply_agent_schema_patches(
+                        obj_code, input_schema, action_type=action_family
+                    )
 
                 try:
                     result[name] = StructuredTool(

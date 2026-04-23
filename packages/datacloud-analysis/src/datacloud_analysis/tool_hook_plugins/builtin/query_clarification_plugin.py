@@ -70,9 +70,11 @@ ENABLED = True
 
 logger = logging.getLogger(__name__)
 
-
 _QUERY_PREFIXES: frozenset[str] = frozenset({"query_", "compute_"})
 _DATA_TOOL_PREFIXES: frozenset[str] = frozenset({"query_", "data_query_", "compute_"})
+
+# query_* schema 中不存在的 compute-only 字段；LLM 误填时静默丢弃，确保日志与 schema 一致
+_QUERY_STRIP_FIELDS: frozenset[str] = frozenset({"dimensions", "metrics", "having"})
 
 
 def _make_cache_key(tool_name: str, query: str) -> str:
@@ -349,19 +351,23 @@ def _apply_resolved_to_params(
     patched["select"] = [
         s if _is_field_code(str(s)) else _map(str(s)) for s in patched.get("select") or []
     ]
-    patched["dimensions"] = [
-        _translate_field(d) if isinstance(d, dict) else d for d in patched.get("dimensions") or []
-    ]
-    patched["metrics"] = [
-        _translate_field(m) if isinstance(m, dict) else m for m in patched.get("metrics") or []
-    ]
+    if "dimensions" in tool_params:
+        patched["dimensions"] = [
+            _translate_field(d) if isinstance(d, dict) else d
+            for d in patched.get("dimensions") or []
+        ]
+    if "metrics" in tool_params:
+        patched["metrics"] = [
+            _translate_field(m) if isinstance(m, dict) else m for m in patched.get("metrics") or []
+        ]
     patched["order_by"] = [
         _normalize_sort_key(_translate_field(o) if isinstance(o, dict) else o)
         for o in patched.get("order_by") or []
     ]
-    patched["having"] = [
-        _translate_field(h) if isinstance(h, dict) else h for h in patched.get("having") or []
-    ]
+    if "having" in tool_params:
+        patched["having"] = [
+            _translate_field(h) if isinstance(h, dict) else h for h in patched.get("having") or []
+        ]
     return patched
 
 
@@ -544,6 +550,8 @@ def _execute_resume(
         resolved = {**resolved, **_fresh_resolved}
 
     tool_params = _apply_resolved_to_params(tool_params, resolved)
+    tool_params["query"] = query  # _format_clarification 回填结果不含 query，需补回
+    tool_params["query"] = query  # _format_clarification 回填结果不含 query，需补回
     ctx["tool_params"] = tool_params
 
     if is_complex:
@@ -612,16 +620,15 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         _clarify_result = _graph_state.get("clarification_formatted_params")
         if _clarify_result and _clarify_result.get("tool_name") == tool_name:
             logger.info(
-                "[query_clarification] V0.3 early-return: clarification_formatted_params hit"
+                "[query_clarification] RESUME ENTRY → TOOL (not reAct): V0.3 early-return"
+                " tool=%s is_complex=%s fmt_params_keys=%s",
+                tool_name,
+                bool(_clarify_result.get("is_complex")),
+                sorted((_clarify_result.get("params") or {}).keys()),
             )
             _raw_query_fp = str((ctx.get("tool_params") or {}).get("query", "") or "")
             _fmt_params = dict(_clarify_result.get("params") or {})
             _is_complex_fp: bool = bool(_clarify_result.get("is_complex"))
-            logger.info(
-                "[query_clarification] V0.3 early-return DIAG: fmt_select=%s fmt_filters=%s",
-                _fmt_params.get("select"),
-                [f.get("field") for f in (_fmt_params.get("filters") or []) if isinstance(f, dict)],
-            )
             # ── 打印知识图谱侧数据（paradigm_list 每条 paradigmResult）──
             _paradigm_list_fp = list(_clarify_result.get("paradigm_list") or [])
             if not _paradigm_list_fp:
@@ -650,12 +657,6 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             _scope_code_fp = _scope_code_from_tool(tool_name)
             _field_terms_fp, _ = _collect_terms_from_params(_fmt_params)
             _resolved_fp, _unresolved_fp = _resolve_via_aliases(_field_terms_fp, [], _scope_code_fp)
-            logger.info(
-                "[query_clarification] V0.3 early-return DIAG: terms=%s resolved=%s unresolved=%s",
-                _field_terms_fp,
-                _resolved_fp,
-                _unresolved_fp,
-            )
             if _unresolved_fp:
                 logger.warning(
                     "[query_clarification] V0.3 DATA-MISMATCH: unresolved terms %s"
@@ -664,18 +665,20 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 )
             if _resolved_fp:
                 _fmt_params = _apply_resolved_to_params(_fmt_params, _resolved_fp)
-                logger.info(
-                    "[query_clarification] V0.3 early-return DIAG: patched_select=%s patched_filters=%s",
-                    _fmt_params.get("select"),
-                    [
-                        f.get("field")
-                        for f in (_fmt_params.get("filters") or [])
-                        if isinstance(f, dict)
-                    ],
-                )
+            _fmt_params["query"] = _raw_query_fp  # 澄清格式化结果不含 query，需补回
             ctx["tool_params"] = _fmt_params
             if _is_complex_fp:
+                logger.info(
+                    "[query_clarification] RESUME DECISION: action=redirect tool=%s → data_query_*",
+                    tool_name,
+                )
                 return _build_redirect_decision(tool_name, _raw_query_fp, _fmt_params)
+            logger.info(
+                "[query_clarification] RESUME DECISION: action=patch tool=%s"
+                " final_params_keys=%s",
+                tool_name,
+                sorted(_fmt_params.keys()),
+            )
             return {"action": "patch", "patch": {"tool_params": _fmt_params}}
 
     # ── CACHE HIT 早返回：跳过全部分析逻辑，直接进入 resume 路径 ─────────────
@@ -685,13 +688,28 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         _ck = _make_cache_key(tool_name, _raw_query)
         _cached = _graph_state.get("_clarification_cache")
         if _cached and _cached.get("cache_key") == _ck:
-            logger.info("[query_clarification] CACHE HIT — full skip to resume path")
+            logger.warning(
+                "[query_clarification] CACHE HIT (old path) — V0.3 应走 clarification_formatted_params"
+                " 路径，此处被触发说明 user_clarify_node 未写入 state，需排查"
+                " tool=%s cache_key=%s",
+                tool_name,
+                _ck,
+            )
             return await _handle_resume(ctx, tool_name, _graph_state, _cached)
 
-    # ── 剥除元字段（before_callback 消费，不透传给底层执行体）────────────────
+    # ── 剥除元字段（before_callback 消费）────────────────────────────────────
+    # query 保留在 tool_params 中（工具本身需要），仅 complex_conditions 是纯路由元字段。
+    # ── 剥除元字段（before_callback 消费）────────────────────────────────────
+    # query 保留在 tool_params 中（工具本身需要），仅 complex_conditions 是纯路由元字段。
     tool_params: dict[str, Any] = _normalize_json_fields(dict(ctx.get("tool_params") or {}))
-    query: str = str(tool_params.pop("query", "") or "")
+    query: str = str(tool_params.get("query", "") or "")
+    query: str = str(tool_params.get("query", "") or "")
     complex_conditions: list[str] = list(tool_params.pop("complex_conditions", None) or [])
+
+    # query_* schema 不含 compute-only 字段；LLM 若误填，静默丢弃
+    if tool_name.startswith("query_"):
+        for _sf in _QUERY_STRIP_FIELDS:
+            tool_params.pop(_sf, None)
 
     ctx["tool_params"] = tool_params
 
@@ -731,7 +749,12 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 return _build_redirect_decision(tool_name, query, tool_params)
             return None
 
-        structured_input = {**tool_params, "complex_conditions": complex_conditions}
+        # query 是 NL 描述，不属于结构化参数，不传给 SDK
+        _sdk_params = {k: v for k, v in tool_params.items() if k != "query"}
+        structured_input = {**_sdk_params, "complex_conditions": complex_conditions}
+        # query 是 NL 描述，不属于结构化参数，不传给 SDK
+        _sdk_params = {k: v for k, v in tool_params.items() if k != "query"}
+        structured_input = {**_sdk_params, "complex_conditions": complex_conditions}
         is_compute = tool_name.startswith("compute_")
 
         # CACHE MISS：首次执行，调用 SDK；interrupt 前写入完整缓存供 resume 命中
@@ -775,13 +798,25 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 is_compute=is_compute,
             )
             tool_params = _apply_resolved_to_params(patched, resolved)
+            tool_params["query"] = query  # _format_clarification 回填结果不含 query，需补回
+            tool_params["query"] = query  # _format_clarification 回填结果不含 query，需补回
             ctx["tool_params"] = tool_params
             if is_complex:
                 return _build_redirect_decision(tool_name, query, tool_params)
             return {"action": "patch", "patch": {"tool_params": tool_params}}
 
         # ── V0.3：改为抛出 ClarificationNeededError，由 tool_dispatcher 捕获 ──
-        logger.info("[query_clarification] NEED_CONFIRM: raising ClarificationNeededError")
+        logger.info(
+            "[query_clarification] INTERRUPT DIAG: raising ClarificationNeededError"
+            " tool=%s is_compute=%s is_complex=%s paradigm_list_count=%d"
+            " paradigm_ids=%s query=%s",
+            tool_name,
+            is_compute,
+            is_complex,
+            len(paradigm_list),
+            [p.get("paradigmId") for p in paradigm_list],
+            query[:200],
+        )
         raise ClarificationNeededError(
             {
                 "tool_name": tool_name,

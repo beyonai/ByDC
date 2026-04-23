@@ -44,6 +44,20 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             _results[0] if _results else None,
         )
 
+    # ── 重复路径中止守卫 ──────────────────────────────────────────────────────────────────────────
+    # 当 OpenGauss checkpoint blob 丢失时，tools 节点被错误激活 → ClarificationNeededError →
+    # analyze_clarify → user_clarify，走到这里时 clarification_formatted_params 已由并发恢复路径写入。
+    # 若此时再调用 interrupt()，会产生第二条完整 graph 路径（duplicate respond 推送）。
+    # 检测到 clarification_formatted_params 已设置 → 说明是重复路径，直接 Command(goto=END) 中止。
+    _existing_clarify_fp: dict[str, Any] | None = state.get("clarification_formatted_params")
+    if _existing_clarify_fp:
+        logger.warning(
+            "[user_clarify] DUPLICATE GUARD: clarification_formatted_params already set"
+            " → aborting duplicate path to prevent double respond tool=%s",
+            tool_name,
+        )
+        return {"clarify_abort": True}
+
     if not paradigm_list:
         # _route_after_analyze 已将空 paradigm_list 路由到 tool_dispatcher；
         # 此分支仅为安全兜底，使用 pre_filled_params 直接返回。
@@ -61,8 +75,15 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             },
             "pending_clarification_context": None,
             "clarification_analyze_result": None,
+            "clarify_abort": False,
         }
 
+    logger.info(
+        "[user_clarify] SUSPEND POINT: about to interrupt tool=%s paradigm_count=%d"
+        " — graph will pause here until user submits clarification",
+        tool_name,
+        len(paradigm_list),
+    )
     resume_value: Any = interrupt(
         {
             "prompt": "查询条件存在歧义，请确认查询维度",
@@ -71,11 +92,16 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             "_clarify_knowledge": clarify_knowledge,
         }
     )
+    # ── 恢复点：interrupt() 返回说明 ResumeCommand 已送达，以下代码仅在 resume 时执行 ──
     logger.info(
-        "[user_clarify] resumed: tool=%s is_compute=%s resume_value_type=%s",
+        "[user_clarify] RESUME POINT: interrupt returned tool=%s is_compute=%s"
+        " resume_value_type=%s resume_value=%s",
         tool_name,
         is_compute,
         type(resume_value).__name__,
+        json.dumps(resume_value, ensure_ascii=False, default=str)[:500]
+        if resume_value is not None
+        else "None",
     )
 
     # resume_value 结构：{"paradigmList": [{"paradigmList": [...items...], ...}]}
@@ -105,8 +131,13 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             # paradigm_list 保存供 V0.3 早返回做 keyword→choiceKeyword→fieldCode 两步翻译
             "paradigm_list": paradigm_list,
         },
-        "pending_clarification_context": None,
-        # clarification_analyze_result 保留（不清空）：
+        "clarify_abort": False,
+        # pending_clarification_context 不在此处清空：
+        # HookAwareToolNode 返回 Command(goto="analyze_clarify") 时，Command.update 会在
+        # 同一个 pregel tick 内写入 pending_clarification_context，若此处同时写 None，
+        # LangGraph 的 LastValue channel 会抛 InvalidUpdateError（同 tick 多次写同一 key）。
+        # analyze_clarify_node 每次被触发时均从 Command.update 读到最新值，无需在此清空。
+        # clarification_analyze_result 同样保留（不清空）：
         # before_call_back 在旧版 user_clarify_node 不写 paradigm_list 时需要兜底读取；
         # analyze_clarify_node 下次运行时会覆盖。
     }

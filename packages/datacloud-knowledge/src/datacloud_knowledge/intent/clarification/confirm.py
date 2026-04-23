@@ -15,9 +15,14 @@ from pathlib import Path
 from typing import Any, Literal
 
 from .models import (
+    CCConfirmResult,
+    CCTermMeta,
     ConfirmedStructuredCompute,
     ConfirmedStructuredQuery,
     ExtractedTerm,
+    MainConfirmResult,
+    PreResolveResult,
+    TermMeta,
 )
 
 logger = logging.getLogger(__name__)
@@ -549,3 +554,448 @@ def _check_needs_clarification(
             if tm.confirmed is None and tm.candidates:
                 return True
     return False
+
+
+# ── 分治确认 System Prompts ──────────────────────────────────────────
+
+
+MAIN_CONFIRM_SYSTEM_PROMPT = """\
+你是数据查询确认助手。根据知识库召回结果，对待确认术语选择最匹配的候选。
+分析完成后，你必须调用工具提交确认结果，不要用文本回复。
+
+## 规则
+- 对每个 #编号术语，从候选中选择语义最匹配的填入 confirmed
+- 无法确定 → confirmed = null，candidates 填精选候选（最多5个），附 reason
+- 重要：如果候选中没有与原始术语语义相关的字段，必须返回 confirmed = null，严禁强行选择不相关的候选
+- candidates 不能为空：即使没有精确匹配，也必须从候选中选出最接近的 2~3 个供用户选择
+- candidates 仅从召回候选中选取，严禁编造
+- 标注"取值范围"的术语，confirmed 只能从取值范围中选取
+- 已确认字段仅供理解上下文，不需要处理
+- 候选列表中排在前面的通常更相关，但要结合语义判断
+- 如果候选第一名与原始术语语义高度匹配，直接确认
+- 纯数值（如 50、30%、100万、202602）直接保留原值
+- needs_clarification = true ⟺ 任何术语 confirmed 为 null 且 candidates 非空
+- 分析完成后必须调用工具提交结果，不要用文本回复
+
+## 维度建模一致性规则
+- select / metrics 中的字段应来自相同粒度的数据实体
+- 如果候选中有多个不同粒度的字段，优先选择与 dimensions / group_by 粒度一致的字段
+
+## 粒度与查询对象匹配规则
+- 候选精选时必须考虑查询对象的粒度：优先选择与查询对象同粒度的字段
+"""
+
+CC_CONFIRM_SYSTEM_PROMPT = """\
+你是数据查询确认助手。对条件句中的中文术语做映射。
+分析完成后，你必须调用工具提交确认结果，不要用文本回复。
+
+## 规则
+- 对每个 #编号术语，从候选中选择语义最匹配的填入 confirmed
+- 无法确定 → confirmed = null，candidates 填精选候选（最多5个），附 reason
+- candidates 必须精选：只保留语义相关的候选，过滤明显不相关项
+- candidates 不能为空：即使没有精确匹配，也必须从候选中选出最接近的 2~3 个
+- candidates 仅从召回候选中选取，严禁编造
+- 纯数值（30%、100）不需要映射，不会出现在待确认列表中
+- needs_clarification = true ⟺ 任何术语 confirmed 为 null 且 candidates 非空
+- 分析完成后必须调用工具提交结果，不要用文本回复
+"""
+
+
+# ── 分治确认上下文格式化 ─────────────────────────────────────────────
+
+
+def _term_key(t: ExtractedTerm) -> str:
+    """生成术语的复合键：path:raw_text。"""
+    return f"{t.path}:{t.raw_text}"
+
+
+def format_main_confirm_context(
+    structured_input: dict[str, Any],
+    main_terms: list[ExtractedTerm],
+    recall_map: dict[str, list[dict[str, Any]]],
+    pre_resolve: PreResolveResult,
+    *,
+    mode: str = "query",
+) -> tuple[str, dict[int, TermMeta]]:
+    """格式化主结构 LLM 确认上下文（编号术语模式）。
+
+    Args:
+        structured_input: 已做 pre_resolve 替换后的结构化输入。
+        main_terms: 主结构提取的术语列表。
+        recall_map: 召回结果映射。
+        pre_resolve: pre_resolve 阶段输出。
+        mode: "query" 或 "compute"。
+
+    Returns:
+        (formatted_context, term_registry) 元组。
+    """
+    mode_label = "StructuredQuery" if mode == "query" else "StructuredCompute"
+    lines: list[str] = []
+
+    # 结构化输入（上下文参考）
+    lines.append(f"## 结构化输入（{mode_label}，上下文参考）")
+    lines.append(json.dumps(structured_input, ensure_ascii=False, indent=2))
+    lines.append("")
+
+    # 已确认字段（按 path 键入，显示时用 raw_text）
+    if pre_resolve.confirmed:
+        lines.append("## 已确认字段（仅供上下文，不需要处理）")
+        # 收集已确认术语的 raw_text → term_name 映射（用于显示）
+        shown: set[str] = set()
+        for t in main_terms:
+            if t.source != "main" or _term_key(t) not in pre_resolve.confirmed:
+                continue
+            rf = pre_resolve.confirmed[_term_key(t)]
+            display_key = f"{rf.term_name}←{t.raw_text}"
+            if display_key in shown:
+                continue
+            shown.add(display_key)
+            source_tag = pre_resolve.provenance.get(_term_key(t), "")
+            lines.append(f"  {rf.term_name} ← {t.raw_text}（{source_tag}）")
+        lines.append("")
+
+    # 编号待确认术语
+    term_registry: dict[int, TermMeta] = {}
+    term_id = 0
+
+    # 按 ktype 分组展示
+    ktype_section_map = {
+        "select": "查询值",
+        "groupBy": "分组条件",
+        "whereKey": "过滤条件（字段）",
+        "whereValue": "过滤条件（值）",
+        "orderBy": "排序目标",
+        "dimension": "维度",
+        "metric": "指标",
+    }
+
+    unresolved_terms = [
+        t
+        for t in main_terms
+        if t.source == "main"
+        and t.search_enabled
+        and _term_key(t) not in pre_resolve.confirmed
+        and t.parent_raw_text is None  # 跳过别名扩展词
+    ]
+
+    if unresolved_terms:
+        lines.append("## 待确认术语")
+        current_section = ""
+        for term in unresolved_terms:
+            section = ktype_section_map.get(term.ktype, term.ktype)
+            if section != current_section:
+                current_section = section
+
+            term_id += 1
+            meta = TermMeta(path=term.path, ktype=term.ktype, raw_text=term.raw_text)
+            term_registry[term_id] = meta
+
+            key = f"{term.ktype}:{term.raw_text}"
+            candidates = recall_map.get(key, [])
+            names = [str(c.get("term_name", "")) for c in candidates[:5]]
+
+            # whereValue 枚举约束（按 path 查找）
+            enum_values = pre_resolve.value_enum_map.get(_term_key(term))
+            if enum_values is not None and term.ktype == "whereValue":
+                # 找到该 value 对应的 whereKey 名称
+                where_key_name = _find_where_key_for_value(term, main_terms, pre_resolve)
+                lines.append(f"  #{term_id} {term.raw_text} ({section}，字段={where_key_name})")
+                lines.append(f"      取值范围: {enum_values}")
+            else:
+                lines.append(f"  #{term_id} {term.raw_text} ({section})")
+                lines.append(f"      候选: {names}")
+            lines.append("")
+
+    if not unresolved_terms:
+        lines.append("## 无待确认术语（所有字段已确认）")
+
+    lines.append("## 请对每个编号术语确认并提交")
+
+    return "\n".join(lines), term_registry
+
+
+def _find_term_position(
+    sentence: str,
+    term: str,
+    used_positions: set[int],
+) -> tuple[int, int]:
+    """在句子中查找术语位置，避免与已占用位置冲突。"""
+    term_len = len(term)
+    occurrences: list[int] = []
+    search_start = 0
+    while True:
+        idx = sentence.find(term, search_start)
+        if idx == -1:
+            break
+        occurrences.append(idx)
+        search_start = idx + 1
+
+    if not occurrences:
+        return -1, -1
+    if len(occurrences) == 1:
+        return occurrences[0], occurrences[0] + term_len
+    # 多次出现 → 选未占用的第一个
+    for occ in occurrences:
+        if occ not in used_positions:
+            return occ, occ + term_len
+    return occurrences[0], occurrences[0] + term_len
+
+
+def _find_where_key_for_value(
+    value_term: ExtractedTerm,
+    all_terms: list[ExtractedTerm],
+    pre_resolve: PreResolveResult,
+) -> str:
+    """查找 whereValue 对应的 whereKey 中文名。"""
+    # 从 path 推断：filters.N.value.M → filters.N 是 filter 前缀
+    filter_prefix = _extract_filter_prefix(value_term.path)
+    if not filter_prefix:
+        return "未知"
+    for t in all_terms:
+        if t.ktype == "whereKey" and _extract_filter_prefix(t.path) == filter_prefix:
+            rf = pre_resolve.confirmed.get(_term_key(t))
+            if rf:
+                return rf.term_name
+            return t.raw_text
+    return "未知"
+
+
+def _extract_filter_prefix(path: str) -> str:
+    """从 path 提取 filter 前缀：'filters.1.field' → 'filters.1'。"""
+    parts = path.split(".")
+    if len(parts) >= 2 and parts[0] == "filters":
+        return f"{parts[0]}.{parts[1]}"
+    # metrics.N.filters.M.field → metrics.N.filters.M
+    for i, p in enumerate(parts):
+        if p == "filters" and i + 1 < len(parts):
+            try:
+                int(parts[i + 1])
+                return ".".join(parts[: i + 2])
+            except ValueError:
+                pass
+    return ""
+
+
+def format_cc_confirm_context(
+    cc_terms: list[ExtractedTerm],
+    recall_map: dict[str, list[dict[str, Any]]],
+    sentence: str,
+    condition_index: int,
+) -> tuple[str, dict[int, CCTermMeta]]:
+    """格式化单条 complex_condition 的 LLM 确认上下文。
+
+    Args:
+        cc_terms: 该条 cc 的术语列表。
+        recall_map: 召回结果映射。
+        sentence: 原始条件句。
+        condition_index: cc 索引。
+
+    Returns:
+        (formatted_context, cc_term_registry) 元组。
+    """
+    lines: list[str] = []
+    cc_term_registry: dict[int, CCTermMeta] = {}
+
+    lines.append("## 条件句")
+    lines.append(f'"{sentence}"')
+    lines.append("")
+
+    # 合并别名候选到父术语
+    merged = _merge_alias_candidates(cc_terms, recall_map)
+
+    # 建立 raw_text → ExtractedTerm 映射（取第一个非别名的）
+    raw_to_term: dict[str, ExtractedTerm] = {}
+    for t in cc_terms:
+        if t.parent_raw_text is None and t.raw_text not in raw_to_term:
+            raw_to_term[t.raw_text] = t
+
+    # 计算每个术语在句子中的位置（不依赖 LLM）
+    used_positions: set[int] = set()
+
+    term_id = 0
+    if merged:
+        lines.append("## 待确认术语")
+        for raw_text, ktype, names in merged:
+            term_id += 1
+
+            # 从句子中查找位置
+            start, end = _find_term_position(sentence, raw_text, used_positions)
+            if start >= 0:
+                used_positions.add(start)
+            else:
+                logger.warning(
+                    "[confirm_cc] 术语 '%s' 未在句子中找到，位置设为 0/0",
+                    raw_text,
+                )
+
+            meta = CCTermMeta(
+                raw_text=raw_text,
+                ktype=ktype,
+                start=start if start >= 0 else 0,
+                end=end if start >= 0 else 0,
+                condition_index=condition_index,
+            )
+            cc_term_registry[term_id] = meta
+
+            ktype_label = {
+                "select": "指标/字段",
+                "groupBy": "分组",
+                "whereKey": "过滤字段",
+                "whereValue": "过滤值",
+                "orderBy": "排序",
+            }.get(ktype, ktype)
+
+            lines.append(f"  #{term_id} {raw_text} ({ktype_label})")
+            if names:
+                lines.append(f"      候选: {names}")
+            else:
+                lines.append("      候选: 无召回结果")
+            lines.append("")
+
+    lines.append("## 请对每个编号术语确认并提交")
+
+    return "\n".join(lines), cc_term_registry
+
+
+# ── 分治 LLM 调用 ────────────────────────────────────────────────────
+
+
+def llm_confirm_main(
+    *,
+    context: str,
+    on_event: Callable[[Any], None] | None = None,
+) -> MainConfirmResult | None:
+    """调用 LLM 确认主结构术语（编号模式）。
+
+    Args:
+        context: format_main_confirm_context 生成的上下文。
+        on_event: 可选回调。
+
+    Returns:
+        MainConfirmResult，LLM 失败时返回 None。
+    """
+    if not context.strip():
+        logger.info("[confirm_main] 上下文为空，跳过")
+        return None
+
+    try:
+        from datacloud_knowledge.intent.llm_utils import (
+            build_llm,
+            extract_json_from_text,
+            stream_invoke_with_thinking,
+        )
+
+        llm = build_llm()
+        llm_with_tool = llm.bind_tools([MainConfirmResult])
+        response = _invoke_confirm_with_retry(
+            lambda: stream_invoke_with_thinking(
+                llm_with_tool,
+                [
+                    {"role": "system", "content": MAIN_CONFIRM_SYSTEM_PROMPT},
+                    {"role": "user", "content": context},
+                ],
+                on_event=on_event,
+            )
+        )
+        if response and response.tool_calls:
+            args = response.tool_calls[0]["args"]
+            _sanitize_confirm_args(args)
+            logger.debug(
+                "[confirm_main] LLM 确认完成: %s",
+                json.dumps(args, ensure_ascii=False)[:500],
+            )
+            result = MainConfirmResult.model_validate(args)
+            # 代码侧校正 needs_clarification
+            result.needs_clarification = any(
+                tc.confirmed is None and tc.candidates for tc in result.confirmations
+            )
+            return result
+
+        raw_content = response.content if hasattr(response, "content") else str(response)
+        content = (
+            "\n".join(str(part) for part in raw_content)
+            if isinstance(raw_content, list)
+            else str(raw_content)
+        )
+        logger.warning("[confirm_main] LLM 未返回 tool call，尝试从文本提取")
+        fallback = extract_json_from_text(content)
+        if fallback is not None:
+            result = MainConfirmResult.model_validate(fallback)
+            result.needs_clarification = any(
+                tc.confirmed is None and tc.candidates for tc in result.confirmations
+            )
+            return result
+        logger.warning("[confirm_main] 兜底提取失败: %s", content[:200])
+    except Exception:
+        logger.exception("[confirm_main] LLM 确认失败")
+    return None
+
+
+def llm_confirm_cc(
+    *,
+    context: str,
+    on_event: Callable[[Any], None] | None = None,
+) -> CCConfirmResult | None:
+    """调用 LLM 确认单条 complex_condition 术语（编号模式）。
+
+    Args:
+        context: format_cc_confirm_context 生成的上下文。
+        on_event: 可选回调。
+
+    Returns:
+        CCConfirmResult，LLM 失败时返回 None。
+    """
+    if not context.strip():
+        logger.info("[confirm_cc] 上下文为空，跳过")
+        return None
+
+    try:
+        from datacloud_knowledge.intent.llm_utils import (
+            build_llm,
+            extract_json_from_text,
+            stream_invoke_with_thinking,
+        )
+
+        llm = build_llm()
+        llm_with_tool = llm.bind_tools([CCConfirmResult])
+        response = _invoke_confirm_with_retry(
+            lambda: stream_invoke_with_thinking(
+                llm_with_tool,
+                [
+                    {"role": "system", "content": CC_CONFIRM_SYSTEM_PROMPT},
+                    {"role": "user", "content": context},
+                ],
+                on_event=on_event,
+            )
+        )
+        if response and response.tool_calls:
+            args = response.tool_calls[0]["args"]
+            _sanitize_confirm_args(args)
+            logger.debug(
+                "[confirm_cc] LLM 确认完成: %s",
+                json.dumps(args, ensure_ascii=False)[:500],
+            )
+            result = CCConfirmResult.model_validate(args)
+            result.needs_clarification = any(
+                tc.confirmed is None and tc.candidates for tc in result.confirmations
+            )
+            return result
+
+        raw_content = response.content if hasattr(response, "content") else str(response)
+        content = (
+            "\n".join(str(part) for part in raw_content)
+            if isinstance(raw_content, list)
+            else str(raw_content)
+        )
+        logger.warning("[confirm_cc] LLM 未返回 tool call，尝试从文本提取")
+        fallback = extract_json_from_text(content)
+        if fallback is not None:
+            result = CCConfirmResult.model_validate(fallback)
+            result.needs_clarification = any(
+                tc.confirmed is None and tc.candidates for tc in result.confirmations
+            )
+            return result
+        logger.warning("[confirm_cc] 兜底提取失败: %s", content[:200])
+    except Exception:
+        logger.exception("[confirm_cc] LLM 确认失败")
+    return None

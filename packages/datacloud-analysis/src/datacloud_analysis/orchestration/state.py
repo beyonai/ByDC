@@ -104,6 +104,10 @@ class AgentState(MessagesState):
     pending_clarification_context: dict[str, Any] | None
     clarification_analyze_result: dict[str, Any] | None
     clarification_formatted_params: dict[str, Any] | None
+    clarify_abort: bool | None  # user_clarify_node 重复路径中止信号，条件边据此路由到 END
+    agent_abort: (
+        bool | None
+    )  # llm_call_node bad-checkpoint 激活守卫，should_continue 据此路由到 END
 
 
 StateDict = MutableMapping[str, Any]
