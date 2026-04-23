@@ -590,6 +590,8 @@ def _build_system_message(
         if dynamic_prompt:
             _content.append({"type": "text", "text": dynamic_prompt})
         return SystemMessage(content=_content)
+    if dynamic_prompt:
+        return SystemMessage(content=system_prompt + dynamic_prompt)
     return SystemMessage(content=system_prompt)
 
 

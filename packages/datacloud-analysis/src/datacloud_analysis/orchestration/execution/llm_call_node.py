@@ -45,8 +45,16 @@ def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> st
     with contextlib.suppress(AttributeError):
         _header_meta = gateway_context.current_command.header.metadata or {}
 
-    _user_code = str(_header_meta.get("user_code") or "").strip()
-    _user_name = str(_header_meta.get("user_name") or "").strip()
+    _header = getattr(gateway_context.current_command, "header", None)
+    _user_code = str(getattr(_header, "user_code", "") or "").strip()
+    _user_name = str(getattr(_header, "user_name", "") or "").strip()
+    logger.info(
+        "[_build_runtime_dynamic_prompt] gateway_context=%s header=%s user_code=%r user_name=%r",
+        type(gateway_context).__name__,
+        type(_header).__name__ if _header is not None else "None",
+        _user_code,
+        _user_name,
+    )
     _now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
     _runtime_lines = ["\n\n## 当前会话信息", f"- 当前时间：{_now_str}"]
     if _user_name and _user_code:
@@ -57,7 +65,9 @@ def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> st
         _runtime_lines.append(f"- 当前用户工号：{_user_code}")
     parts.append("\n".join(_runtime_lines))
 
-    return "".join(parts) if parts else None
+    result = "".join(parts) if parts else None
+    logger.info("[_build_runtime_dynamic_prompt] dynamic_prompt=%r", result)
+    return result
 
 
 def make_llm_call_node(
@@ -117,6 +127,12 @@ def make_llm_call_node(
 
         # 每轮从 state["messages"] 重建消息列表（系统提示 + 对话历史）
         _dynamic = dynamic_prompt or _build_runtime_dynamic_prompt(state, _gateway_context)
+        logger.info(
+            "[llm_call] round=%d gateway_context=%s dynamic_preview=%r",
+            current_round,
+            type(_gateway_context).__name__ if _gateway_context is not None else "None",
+            (_dynamic or "")[:120],
+        )
         system_msg = _build_system_message(system_prompt, stable_system_prompt, _dynamic)
         # V0.3: state["messages"] includes ToolMessages from per-tool nodes.
         # _conversation_messages_for_llm only keeps Human/AI, dropping ToolMessages,
