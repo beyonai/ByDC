@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 _ENTERPRISE_FIELD_KNOWLEDGE = """
 # 企业信息
 字段名	字段描述
-enterprise_id	企业唯一 ID
+enterprise_id	企业唯一ID
 enterprise_name	企业全称
 stat_date	统计日期
 industry_name	企业类型

@@ -35,7 +35,7 @@
     <owl:NamedIndividual rdf:about="#enterprise_id_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_id</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业唯一 ID</property_name>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">企业唯一ID</property_name>
         <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ads_enterprise_analysis</source_object_code>
         <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_id</source_object_column_code>
         <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;MEASURE&quot;, &quot;rule_type&quot;: &quot;primary_key&quot;}}</ext_property>

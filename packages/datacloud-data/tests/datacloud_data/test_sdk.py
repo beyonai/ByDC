@@ -207,7 +207,7 @@ async def main6() -> None:
         result = await obj.invoke_action(
             "query_ads_enterprise_analysis",
             {
-                "select": ["企业唯一 ID", "企业全称"],
+                "select": ["企业唯一ID", "企业全称"],
                 "order_by": [{"field": "企业总营收（万元）", "direction": "desc"}],
                 "limit": 100,
                 "offset": 0,

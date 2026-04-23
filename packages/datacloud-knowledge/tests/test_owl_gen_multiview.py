@@ -38,7 +38,7 @@ def _build_config() -> OwlGenConfig:
             field_mappings=[
                 ViewFieldMapping(
                     property_code="enterprise_id",
-                    property_name="企业唯一 ID",
+                    property_name="企业唯一ID",
                     source_object_code="ads_enterprise_analysis",
                     source_object_column_code="enterprise_id",
                     role=FieldRole("DIMENSION_ATTR", "id"),
@@ -202,7 +202,7 @@ def test_render_terms_dedupes_props_across_objects_with_generic_desc() -> None:
                     name="enterprise_id",
                     sql_type="varchar",
                     nullable=False,
-                    comment="企业唯一 ID",
+                    comment="企业唯一ID",
                 )
             ],
         ),
@@ -227,7 +227,7 @@ def test_render_terms_dedupes_props_across_objects_with_generic_desc() -> None:
 
     assert count == 7
     assert ontology_terms.count("term_prop_enterprise_id") == 1
-    assert "属性：企业唯一 ID" in ontology_terms
+    assert "属性：企业唯一ID" in ontology_terms
     assert "企业综合分析表的字段" not in ontology_terms
     assert "物理网格综合分析表的字段" not in ontology_terms
 
@@ -259,7 +259,7 @@ def test_resolved_views_wraps_legacy_single_view_fields() -> None:
         view_field_mappings=[
             ViewFieldMapping(
                 property_code="enterprise_id",
-                property_name="企业唯一 ID",
+                property_name="企业唯一ID",
                 source_object_code="ads_enterprise_analysis",
                 source_object_column_code="enterprise_id",
                 role=FieldRole("DIMENSION_ATTR", "id"),
@@ -311,7 +311,7 @@ def test_generate_from_tables_skips_duplicate_props_in_later_objects(tmp_path: P
                     name="enterprise_id",
                     sql_type="varchar",
                     nullable=False,
-                    comment="企业唯一 ID",
+                    comment="企业唯一ID",
                 )
             ],
         ),
@@ -340,7 +340,7 @@ def test_generate_from_tables_skips_duplicate_props_in_later_objects(tmp_path: P
     ).read_text()
 
     assert "term_prop_enterprise_id" in first_terms
-    assert "属性：企业唯一 ID" in first_terms
+    assert "属性：企业唯一ID" in first_terms
     assert "term_prop_enterprise_id" not in second_terms
 
 
