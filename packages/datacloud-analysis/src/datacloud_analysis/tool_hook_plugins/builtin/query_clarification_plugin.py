@@ -674,8 +674,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 )
                 return _build_redirect_decision(tool_name, _raw_query_fp, _fmt_params)
             logger.info(
-                "[query_clarification] RESUME DECISION: action=patch tool=%s"
-                " final_params_keys=%s",
+                "[query_clarification] RESUME DECISION: action=patch tool=%s final_params_keys=%s",
                 tool_name,
                 sorted(_fmt_params.keys()),
             )

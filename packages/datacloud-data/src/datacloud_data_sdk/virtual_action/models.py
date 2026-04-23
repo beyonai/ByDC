@@ -53,6 +53,7 @@ class ViewFieldMeta:
         filter_ops: 允许的过滤操作符
         group_ops: 允许的分组方式
         aggregate_ops: 允许的聚合函数
+        secondary_role: 附加分析角色（如 dimension numeric 可兼作 measure）
         required_filter_group: 强制过滤组
     """
 
@@ -63,6 +64,7 @@ class ViewFieldMeta:
     field_type: str | None = None
     analytic_role: str | None = None
     analytic_kind: str | None = None
+    secondary_role: str | None = None
     filter_ops: list[str] = field(default_factory=list)
     group_ops: list[str] = field(default_factory=list)
     aggregate_ops: list[str] = field(default_factory=list)

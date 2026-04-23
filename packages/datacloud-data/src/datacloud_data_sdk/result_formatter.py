@@ -56,6 +56,11 @@ def build_query_response(
     trace: dict[str, Any] = raw_result.get("trace") or {}
     plan: Any = raw_result.get("plan")
     execution_steps: Any = raw_result.get("execution_steps")
+    extra_fields = {
+        key: value
+        for key, value in raw_result.items()
+        if key not in {"records", "total", "meta", "trace", "plan", "execution_steps"}
+    }
 
     total = len(records)
     meta["total"] = total
@@ -71,6 +76,7 @@ def build_query_response(
         data["plan"] = plan
     if execution_steps is not None:
         data["execution_steps"] = execution_steps
+    data.update(extra_fields)
 
     if threshold > 0 and total > threshold:
         preview_limit = threshold
@@ -128,6 +134,7 @@ def build_error_data(
     message: str,
     result_type: str = "rejected",
     trace: dict[str, Any] | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     构建错误 data 结构（service 层负责包装 code/message）。
@@ -140,8 +147,11 @@ def build_error_data(
     Returns:
         标准 data 结构字典
     """
-    return {
+    data: dict[str, Any] = {
         "result_type": result_type,
         "overflow_notice": message,
         "trace": trace or {},
     }
+    if extra:
+        data.update(extra)
+    return data
