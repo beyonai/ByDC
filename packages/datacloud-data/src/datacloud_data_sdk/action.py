@@ -217,6 +217,9 @@ _WRAPPER_INPUT_KEYS = frozenset(
     }
 )
 _MISSING = object()
+_OPERATION_CONFIRM_PARAM = "userConfirmed"
+_OPERATION_CONFIRM_PARAM_ALIASES = frozenset({_OPERATION_CONFIRM_PARAM, "user_confirmed"})
+_OPERATION_CONFIRMATION_CACHE: dict[str, dict[str, Any]] = {}
 
 
 def _normalize_mapping_location(location: str) -> str:
@@ -388,6 +391,28 @@ def _coerce_sequence(value: Any) -> list[Any]:
     return [value]
 
 
+def _coerce_confirm_flag(value: Any) -> bool:
+    """将确认参数归一化为布尔值。"""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _is_missing_required_value(value: Any) -> bool:
+    """判断必填参数是否缺失。"""
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip() == ""
+    if isinstance(value, (list, tuple)):
+        return len(value) == 0 or any(_is_missing_required_value(item) for item in value)
+    if isinstance(value, dict):
+        return len(value) == 0
+    return False
+
+
 def _make_runtime_container(path_parts: list[str]) -> Any:
     """根据剩余路径推断运行时容器类型。"""
     if path_parts and path_parts[0] == "[]":
@@ -517,20 +542,24 @@ class Action:
 
     def _build_input_schema(self, params: list[OntologyActionParam]) -> dict[str, object]:
         """为非虚拟动作构造输入 schema，支持 requestBody/query/path 分层。"""
+        schema: dict[str, Any] = {"type": "object", "properties": {}}
+        is_confirmable_operation = self._is_confirmable_operation()
         if not params:
-            return {"type": "object", "properties": {}}
+            if is_confirmable_operation:
+                self._inject_operation_confirm_schema(schema)
+            return schema
 
         has_structured_mapping = any(
             getattr(param, "mapping_path", "").startswith("$.") for param in params
         )
-        if not has_structured_mapping:
+        if not has_structured_mapping and not is_confirmable_operation:
             return self._build_schema(params)
 
-        schema: dict[str, Any] = {"type": "object", "properties": {}}
         wrapper_required: set[str] = set()
         properties = schema["properties"]
         for param in params:
             leaf_schema = self._build_param_schema(param)
+            schema_required = False if is_confirmable_operation else param.required
             location, path_parts = _parse_mapping_path(
                 getattr(param, "mapping_path", ""),
                 default_location="body",
@@ -538,7 +567,7 @@ class Action:
             location_key = _schema_location_key(location)
             if not path_parts:
                 properties[param.param_code] = leaf_schema
-                if param.required:
+                if schema_required:
                     wrapper_required.add(param.param_code)
                 continue
 
@@ -550,14 +579,27 @@ class Action:
                 node,
                 path_parts,
                 leaf_schema,
-                required=param.required,
+                required=schema_required,
             )
-            if param.required:
+            if schema_required:
                 wrapper_required.add(location_key)
 
         if wrapper_required:
             schema["required"] = sorted(wrapper_required)
+        if is_confirmable_operation:
+            self._inject_operation_confirm_schema(schema)
         return schema
+
+    @staticmethod
+    def _inject_operation_confirm_schema(schema: dict[str, Any]) -> None:
+        """为操作类动作注入统一的用户确认参数。"""
+        properties = schema.setdefault("properties", {})
+        if isinstance(properties, dict):
+            properties[_OPERATION_CONFIRM_PARAM] = {
+                "type": "boolean",
+                "description": "用户是否确认按当前参数执行操作。首次提交请传 false，确认执行时传 true。",
+            }
+        schema["required"] = [_OPERATION_CONFIRM_PARAM]
 
     def _build_schema(self, params: list[OntologyActionParam]) -> dict[str, object]:
         """
@@ -773,6 +815,403 @@ class Action:
             normalized.setdefault(key, value)
         return normalized
 
+    def _is_confirmable_operation(self) -> bool:
+        """是否为需要二次确认的操作类动作。"""
+        return not bool(getattr(self._action, "is_virtual", False)) and (
+            getattr(self._action, "action_type", "") == "operation"
+        )
+
+    def _build_operation_confirmation_cache_key(self) -> str:
+        """构造操作确认缓存 key。"""
+        try:
+            from datacloud_data_sdk.context import get_current_context
+
+            ctx = get_current_context()
+            return (
+                f"{ctx.tenant_id}|{ctx.user_id}|{ctx.session_id}|{ctx.system_code}|"
+                f"{self._action.belong_class}|{self._action.action_code}"
+            )
+        except Exception:
+            return (
+                f"loader:{id(self._loader)}|{self._action.belong_class}|{self._action.action_code}"
+            )
+
+    def _get_cached_operation_confirmation(self) -> dict[str, Any] | None:
+        """获取当前动作的待确认缓存。"""
+        return _safe_copy(
+            _OPERATION_CONFIRMATION_CACHE.get(self._build_operation_confirmation_cache_key())
+        )
+
+    def _set_cached_operation_confirmation(self, params: dict[str, Any]) -> None:
+        """写入当前动作的待确认缓存。"""
+        _OPERATION_CONFIRMATION_CACHE[self._build_operation_confirmation_cache_key()] = _safe_copy(
+            params
+        )
+
+    def _clear_cached_operation_confirmation(self) -> None:
+        """清理当前动作的待确认缓存。"""
+        _OPERATION_CONFIRMATION_CACHE.pop(self._build_operation_confirmation_cache_key(), None)
+
+    @staticmethod
+    def _build_operation_feedback_message(
+        *,
+        missing_required: list[dict[str, str]],
+        term_errors: list[dict[str, Any]],
+        confirmation_state: str,
+    ) -> str:
+        """构造操作确认/校验反馈文案。"""
+        lines: list[str] = []
+        if missing_required:
+            params_text = "、".join(
+                f"{item['param_name']}({item['param_code']})" for item in missing_required
+            )
+            lines.append(f"以下必填参数未填写：{params_text}。")
+        if term_errors:
+            lines.append("以下参数术语转换未通过：")
+            lines.extend(
+                f"- {item['param_name']}({item['param_code']}): {item['message']}"
+                for item in term_errors
+            )
+        if confirmation_state == "pending_confirmation":
+            lines.append("参数校验通过，请确认以下参数后再次提交，并将 userConfirmed 设为 true。")
+        elif confirmation_state == "confirm_without_cache":
+            lines.append("当前没有待确认缓存，已为你缓存本次参数，请核对后再次确认。")
+        elif confirmation_state == "confirm_mismatch":
+            lines.append("本次确认参数与上次待确认参数不一致，已更新缓存，请核对后再次确认。")
+        return "\n".join(lines)
+
+    async def _record_operation_step(
+        self,
+        execution_steps: list[dict[str, Any]] | None,
+        *,
+        step: str,
+        title: str,
+        status: str = "completed",
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        """记录操作类动作前置校验步骤。"""
+        _append_execution_step(
+            execution_steps,
+            step=step,
+            title=title,
+            status=status,
+            data=data,
+        )
+        await _emit_execution_step(
+            step=step,
+            title=title,
+            status=status,
+            data=data,
+        )
+
+    async def _resolve_operation_terms(
+        self,
+        params: dict[str, Any],
+        *,
+        term_loader: Any = None,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """对操作类动作执行逐参数术语转换，并汇总全部错误。"""
+        resolved = dict(params)
+        errors: list[dict[str, Any]] = []
+        if term_loader is None:
+            return resolved, errors
+
+        from datacloud_data_sdk.exceptions import TermAmbiguousError, TermNotFoundError
+        from datacloud_data_sdk.plan.term_resolver import TermResolver
+
+        resolver = TermResolver(term_loader)
+        for param in self._action.params:
+            if param.direction not in ("IN", "INOUT") or not param.term_set:
+                continue
+            if param.param_code not in params or params[param.param_code] is None:
+                continue
+            try:
+                resolved[param.param_code] = resolver._resolve_term_value(
+                    term_set=param.term_set,
+                    term_type=param.term_type,
+                    term_field=param.term_field,
+                    dataset_id=param.dataset_id,
+                    raw_value=params[param.param_code],
+                    param_name=param.param_name or param.param_code,
+                )
+            except (TermNotFoundError, TermAmbiguousError) as exc:
+                errors.append(
+                    {
+                        "param_code": param.param_code,
+                        "param_name": param.param_name or param.param_code,
+                        "message": str(exc),
+                        "error_type": exc.__class__.__name__,
+                        "raw_value": _safe_copy(params[param.param_code]),
+                    }
+                )
+            except ValueError as exc:
+                errors.append(
+                    {
+                        "param_code": param.param_code,
+                        "param_name": param.param_name or param.param_code,
+                        "message": str(exc),
+                        "error_type": "ValueError",
+                        "raw_value": _safe_copy(params[param.param_code]),
+                    }
+                )
+        return resolved, errors
+
+    async def _build_operation_ask_user_response(
+        self,
+        *,
+        message: str,
+        original_params: dict[str, Any],
+        normalized_params: dict[str, Any],
+        resolved_params: dict[str, Any],
+        missing_required: list[dict[str, str]],
+        term_errors: list[dict[str, Any]],
+        user_confirmed: bool,
+        cache_status: str,
+        execution_steps: list[dict[str, Any]] | None,
+    ) -> dict[str, Any]:
+        """构造操作类动作的 ask_user 返回。"""
+        from datacloud_data_sdk.result_formatter import build_error_data
+
+        payload = build_error_data(
+            message,
+            result_type="ask_user",
+            extra={
+                "submitted_params": _safe_copy(original_params),
+                "normalized_params": _safe_copy(normalized_params),
+                "resolved_params": _safe_copy(resolved_params),
+                "missing_required_params": _safe_copy(missing_required),
+                "term_errors": _safe_copy(term_errors),
+                "confirmation": {
+                    "user_confirmed": user_confirmed,
+                    "cache_status": cache_status,
+                },
+            },
+        )
+        if execution_steps is not None:
+            payload["execution_steps"] = execution_steps
+        return payload
+
+    async def _prepare_confirmable_operation(
+        self,
+        params: dict[str, Any],
+        *,
+        original_params: dict[str, Any],
+        term_loader: Any = None,
+        execution_steps: list[dict[str, Any]] | None = None,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any], dict[str, Any]]:
+        """处理操作类动作的必填/术语/确认缓存逻辑。"""
+        user_confirmed = _coerce_confirm_flag(params.pop(_OPERATION_CONFIRM_PARAM, False))
+        for alias in _OPERATION_CONFIRM_PARAM_ALIASES:
+            if alias != _OPERATION_CONFIRM_PARAM:
+                params.pop(alias, None)
+
+        missing_required = [
+            {
+                "param_code": param.param_code,
+                "param_name": param.param_name or param.param_code,
+            }
+            for param in self._action.params
+            if param.direction in ("IN", "INOUT")
+            and param.required
+            and _is_missing_required_value(params.get(param.param_code))
+        ]
+        await self._record_operation_step(
+            execution_steps,
+            step="param_validation",
+            title="参数校验",
+            status="failed" if missing_required else "completed",
+            data={"missing_required_params": _safe_copy(missing_required)},
+        )
+
+        resolved_params, term_errors = await self._resolve_operation_terms(
+            params,
+            term_loader=term_loader,
+        )
+        await self._record_operation_step(
+            execution_steps,
+            step="term_resolved",
+            title="术语转换",
+            status="failed" if term_errors else ("skipped" if term_loader is None else "completed"),
+            data={
+                "params": _safe_copy(resolved_params),
+                "term_errors": _safe_copy(term_errors),
+            }
+            if term_loader is not None
+            else {"reason": "term_loader_not_configured"},
+        )
+
+        if missing_required or term_errors:
+            self._clear_cached_operation_confirmation()
+            message = self._build_operation_feedback_message(
+                missing_required=missing_required,
+                term_errors=term_errors,
+                confirmation_state="validation_failed",
+            )
+            await self._record_operation_step(
+                execution_steps,
+                step="user_confirmation",
+                title="用户确认",
+                status="waiting",
+                data={"cache_status": "cleared", "user_confirmed": user_confirmed},
+            )
+            return (
+                await self._build_operation_ask_user_response(
+                    message=message,
+                    original_params=original_params,
+                    normalized_params=params,
+                    resolved_params=resolved_params,
+                    missing_required=missing_required,
+                    term_errors=term_errors,
+                    user_confirmed=user_confirmed,
+                    cache_status="validation_failed",
+                    execution_steps=execution_steps,
+                ),
+                {},
+                {
+                    "submitted_params": _safe_copy(original_params),
+                    "normalized_params": _safe_copy(params),
+                    "resolved_params": _safe_copy(resolved_params),
+                    "confirmation": {
+                        "user_confirmed": user_confirmed,
+                        "cache_status": "validation_failed",
+                    },
+                },
+            )
+
+        cached = self._get_cached_operation_confirmation()
+        if not user_confirmed:
+            self._set_cached_operation_confirmation(resolved_params)
+            await self._record_operation_step(
+                execution_steps,
+                step="user_confirmation",
+                title="用户确认",
+                status="waiting",
+                data={"cache_status": "cached", "user_confirmed": False},
+            )
+            return (
+                await self._build_operation_ask_user_response(
+                    message=self._build_operation_feedback_message(
+                        missing_required=[],
+                        term_errors=[],
+                        confirmation_state="pending_confirmation",
+                    ),
+                    original_params=original_params,
+                    normalized_params=params,
+                    resolved_params=resolved_params,
+                    missing_required=[],
+                    term_errors=[],
+                    user_confirmed=False,
+                    cache_status="cached",
+                    execution_steps=execution_steps,
+                ),
+                {},
+                {
+                    "submitted_params": _safe_copy(original_params),
+                    "normalized_params": _safe_copy(params),
+                    "resolved_params": _safe_copy(resolved_params),
+                    "confirmation": {
+                        "user_confirmed": False,
+                        "cache_status": "cached",
+                    },
+                },
+            )
+
+        if cached is None:
+            self._set_cached_operation_confirmation(resolved_params)
+            await self._record_operation_step(
+                execution_steps,
+                step="user_confirmation",
+                title="用户确认",
+                status="waiting",
+                data={"cache_status": "confirm_without_cache", "user_confirmed": True},
+            )
+            return (
+                await self._build_operation_ask_user_response(
+                    message=self._build_operation_feedback_message(
+                        missing_required=[],
+                        term_errors=[],
+                        confirmation_state="confirm_without_cache",
+                    ),
+                    original_params=original_params,
+                    normalized_params=params,
+                    resolved_params=resolved_params,
+                    missing_required=[],
+                    term_errors=[],
+                    user_confirmed=True,
+                    cache_status="confirm_without_cache",
+                    execution_steps=execution_steps,
+                ),
+                {},
+                {
+                    "submitted_params": _safe_copy(original_params),
+                    "normalized_params": _safe_copy(params),
+                    "resolved_params": _safe_copy(resolved_params),
+                    "confirmation": {
+                        "user_confirmed": True,
+                        "cache_status": "confirm_without_cache",
+                    },
+                },
+            )
+
+        if cached != resolved_params:
+            self._set_cached_operation_confirmation(resolved_params)
+            await self._record_operation_step(
+                execution_steps,
+                step="user_confirmation",
+                title="用户确认",
+                status="waiting",
+                data={"cache_status": "confirm_mismatch", "user_confirmed": True},
+            )
+            return (
+                await self._build_operation_ask_user_response(
+                    message=self._build_operation_feedback_message(
+                        missing_required=[],
+                        term_errors=[],
+                        confirmation_state="confirm_mismatch",
+                    ),
+                    original_params=original_params,
+                    normalized_params=params,
+                    resolved_params=resolved_params,
+                    missing_required=[],
+                    term_errors=[],
+                    user_confirmed=True,
+                    cache_status="confirm_mismatch",
+                    execution_steps=execution_steps,
+                ),
+                {},
+                {
+                    "submitted_params": _safe_copy(original_params),
+                    "normalized_params": _safe_copy(params),
+                    "resolved_params": _safe_copy(resolved_params),
+                    "confirmation": {
+                        "user_confirmed": True,
+                        "cache_status": "confirm_mismatch",
+                    },
+                },
+            )
+
+        self._clear_cached_operation_confirmation()
+        await self._record_operation_step(
+            execution_steps,
+            step="user_confirmation",
+            title="用户确认",
+            status="completed",
+            data={"cache_status": "confirmed", "user_confirmed": True},
+        )
+        return (
+            None,
+            resolved_params,
+            {
+                "submitted_params": _safe_copy(original_params),
+                "normalized_params": _safe_copy(params),
+                "resolved_params": _safe_copy(resolved_params),
+                "confirmation": {
+                    "user_confirmed": True,
+                    "cache_status": "confirmed",
+                },
+            },
+        )
+
     async def execute(self, params: dict[str, object]) -> dict[str, object]:
         """
         执行动作
@@ -795,9 +1234,11 @@ class Action:
         from datacloud_data_sdk.exceptions import ActionNotConfiguredError
 
         params = dict(params)
+        original_params = _safe_copy(params)
         term_loader = getattr(self._loader._config, "term_loader", None) if self._loader else None
         include_execution_steps = self._should_include_execution_steps()
         execution_steps: list[dict[str, Any]] | None = [] if include_execution_steps else None
+        operation_result_extra: dict[str, Any] = {}
 
         from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
         from datacloud_data_sdk.result_formatter import build_query_response
@@ -870,7 +1311,23 @@ class Action:
         )
 
         params = mapped_params
-        if term_loader:
+        if self._is_confirmable_operation():
+            (
+                ask_user_response,
+                prepared_params,
+                operation_result_extra,
+            ) = await self._prepare_confirmable_operation(
+                dict(params),
+                original_params=original_params
+                if isinstance(original_params, dict)
+                else {"value": original_params},
+                term_loader=term_loader,
+                execution_steps=execution_steps,
+            )
+            if ask_user_response is not None:
+                return ask_user_response
+            params = prepared_params
+        elif term_loader:
             from datacloud_data_sdk.plan.term_resolver import TermResolver
 
             resolved_params = TermResolver(term_loader).resolve(self._action, params)
@@ -921,6 +1378,7 @@ class Action:
             )
             result = await self._execute_script(params)
             normalized = self._normalize_to_unified_format(result)
+            normalized.update(operation_result_extra)
             normalized = await self._attach_execution_steps(normalized, execution_steps)
             return build_query_response(
                 normalized,
@@ -942,6 +1400,7 @@ class Action:
             )
             result = await self._execute_api(params)
             normalized = self._normalize_to_unified_format(result)
+            normalized.update(operation_result_extra)
             normalized = await self._attach_execution_steps(normalized, execution_steps)
             return build_query_response(
                 normalized,

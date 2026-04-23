@@ -1,4 +1,5 @@
 import pytest
+from datacloud_data_sdk.context import InvocationContext
 from datacloud_data_sdk.exceptions import ActionNotFoundError
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
@@ -133,8 +134,17 @@ async def test_view_get_object_can_execute_object_action() -> None:
     loader.load_scene(SCENE)
     view = loader.get_view("scene_01")
 
-    result = await view.get_object("sales_bo").invoke_action("calc_score", {"owner_id": "u_001"})
+    with InvocationContext(session_id="view-object-action-confirm"):
+        first = await view.get_object("sales_bo").invoke_action(
+            "calc_score",
+            {"owner_id": "u_001", "userConfirmed": False},
+        )
+        result = await view.get_object("sales_bo").invoke_action(
+            "calc_score",
+            {"owner_id": "u_001", "userConfirmed": True},
+        )
 
+    assert first["result_type"] == "ask_user"
     assert result["records"] == [{"score": 100, "owner_id": "u_001"}]
     assert result["meta"]["columns"] == ["score", "owner_id"]
     assert result["total"] == 1

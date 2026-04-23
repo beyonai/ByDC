@@ -26,6 +26,11 @@ from datacloud_data_sdk.plan.models import ObjectViewField, ObjectViewFunctionPa
 logger = logging.getLogger(__name__)
 
 
+def _should_skip_term_value(value: Any) -> bool:
+    """判断值是否应跳过术语转换。"""
+    return value is None or (isinstance(value, str) and value.strip() == "")
+
+
 class TermResolver:
     """
     术语解析器
@@ -73,7 +78,11 @@ class TermResolver:
         if not self._term_loader:
             return raw_value
 
-        def _resolve_single(value: Any) -> str:
+        def _resolve_single(value: Any) -> Any:
+            if _should_skip_term_value(value):
+                return value
+            if isinstance(value, (list, tuple)):
+                return [_resolve_single(item) for item in value]
             value_str = str(value)
             keyword = value_str if term_type == "lookup" else None
             return self._term_loader.resolve_value(
@@ -86,8 +95,6 @@ class TermResolver:
                 param_name=param_name,
             )
 
-        if isinstance(raw_value, (list, tuple)):
-            return [_resolve_single(item) for item in raw_value]
         return _resolve_single(raw_value)
 
     def resolve(self, action: OntologyAction, params: dict[str, Any]) -> dict[str, Any]:
@@ -118,7 +125,7 @@ class TermResolver:
             if not p.term_set or p.param_code not in resolved:
                 continue
             raw = resolved[p.param_code]
-            if raw is None:
+            if _should_skip_term_value(raw):
                 # 可选参数未填时 Pydantic 默认置 None，无需 term 解析，与
                 # resolve_filter_values 中 `if value is None: return` 行为保持一致
                 continue
@@ -175,6 +182,8 @@ class TermResolver:
             if not p.term_set or p.param_code not in resolved:
                 continue
             raw = resolved[p.param_code]
+            if _should_skip_term_value(raw):
+                continue
             param_name = p.param_name or p.param_code
             try:
                 if isinstance(raw, (list, tuple)):
@@ -266,7 +275,7 @@ class TermResolver:
                 return resolved_filter
 
             value = filter_obj.get("value")
-            if value is None:
+            if _should_skip_term_value(value):
                 return resolved_filter
 
             param_name = getattr(field, "field_name", None) or getattr(
