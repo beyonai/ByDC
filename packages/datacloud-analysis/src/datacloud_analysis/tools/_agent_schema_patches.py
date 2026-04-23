@@ -10,9 +10,10 @@ AGENT_QUERY_DESCRIPTION: str = (
 )
 
 AGENT_SELECT_DESCRIPTION: str = (
-    "返回字段列表；支持字段编码（如 'enterprise_name'）或字段中文名（如 '企业名称'）；"
+    "【必填】返回字段列表，至少填一个字段；"
+    "支持字段编码（如 'enterprise_name'）或字段中文名（如 '企业名称'）；"
     "找不到精确对应时直接填用户原词，禁止猜测替换为相近字段名；"
-    "为空时返回全部非关联字段。"
+    "禁止留空——用户未指定时，根据查询意图从字段列表中选取最相关的字段。"
 )
 
 AGENT_ORDER_BY_FIELD_DESCRIPTION: str = (
