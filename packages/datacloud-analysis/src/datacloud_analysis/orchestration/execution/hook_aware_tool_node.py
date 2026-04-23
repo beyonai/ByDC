@@ -58,7 +58,22 @@ class HookAwareToolNode(ToolNode):
 
         messages = list(state_dict.get("messages") or [])
         last_ai = next((m for m in reversed(messages) if isinstance(m, AIMessage)), None)
+        _has_clarify_fp = bool(state_dict.get("clarification_formatted_params"))
+        _last_ai_calls = list(last_ai.tool_calls or []) if last_ai else []
+        logger.info(
+            "[HookAwareToolNode] ainvoke entry: last_ai=%s tool_calls_count=%d"
+            " clarification_formatted_params=%s",
+            type(last_ai).__name__ if last_ai else "None",
+            len(_last_ai_calls),
+            _has_clarify_fp,
+        )
         if last_ai is None or not (last_ai.tool_calls or []):
+            logger.warning(
+                "[HookAwareToolNode] early-exit: no tool_calls on last AIMessage"
+                " → skipping hooks, calling super().ainvoke directly"
+                " last_ai=%s",
+                type(last_ai).__name__ if last_ai else "None",
+            )
             return await super().ainvoke(state_dict, config, **kwargs)
 
         # Per-request gateway_context：config 优先，构造函数注入次之

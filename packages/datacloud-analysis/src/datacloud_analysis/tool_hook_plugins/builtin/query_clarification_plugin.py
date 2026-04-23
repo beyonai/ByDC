@@ -620,7 +620,11 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         _clarify_result = _graph_state.get("clarification_formatted_params")
         if _clarify_result and _clarify_result.get("tool_name") == tool_name:
             logger.info(
-                "[query_clarification] V0.3 early-return: clarification_formatted_params hit"
+                "[query_clarification] RESUME ENTRY → TOOL (not reAct): V0.3 early-return"
+                " tool=%s is_complex=%s fmt_params_keys=%s",
+                tool_name,
+                bool(_clarify_result.get("is_complex")),
+                sorted((_clarify_result.get("params") or {}).keys()),
             )
             _raw_query_fp = str((ctx.get("tool_params") or {}).get("query", "") or "")
             _fmt_params = dict(_clarify_result.get("params") or {})
@@ -664,7 +668,17 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             _fmt_params["query"] = _raw_query_fp  # 澄清格式化结果不含 query，需补回
             ctx["tool_params"] = _fmt_params
             if _is_complex_fp:
+                logger.info(
+                    "[query_clarification] RESUME DECISION: action=redirect tool=%s → data_query_*",
+                    tool_name,
+                )
                 return _build_redirect_decision(tool_name, _raw_query_fp, _fmt_params)
+            logger.info(
+                "[query_clarification] RESUME DECISION: action=patch tool=%s"
+                " final_params_keys=%s",
+                tool_name,
+                sorted(_fmt_params.keys()),
+            )
             return {"action": "patch", "patch": {"tool_params": _fmt_params}}
 
     # ── CACHE HIT 早返回：跳过全部分析逻辑，直接进入 resume 路径 ─────────────
@@ -674,7 +688,13 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         _ck = _make_cache_key(tool_name, _raw_query)
         _cached = _graph_state.get("_clarification_cache")
         if _cached and _cached.get("cache_key") == _ck:
-            logger.info("[query_clarification] CACHE HIT — full skip to resume path")
+            logger.warning(
+                "[query_clarification] CACHE HIT (old path) — V0.3 应走 clarification_formatted_params"
+                " 路径，此处被触发说明 user_clarify_node 未写入 state，需排查"
+                " tool=%s cache_key=%s",
+                tool_name,
+                _ck,
+            )
             return await _handle_resume(ctx, tool_name, _graph_state, _cached)
 
     # ── 剥除元字段（before_callback 消费）────────────────────────────────────
@@ -786,7 +806,17 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             return {"action": "patch", "patch": {"tool_params": tool_params}}
 
         # ── V0.3：改为抛出 ClarificationNeededError，由 tool_dispatcher 捕获 ──
-        logger.info("[query_clarification] NEED_CONFIRM: raising ClarificationNeededError")
+        logger.info(
+            "[query_clarification] INTERRUPT DIAG: raising ClarificationNeededError"
+            " tool=%s is_compute=%s is_complex=%s paradigm_list_count=%d"
+            " paradigm_ids=%s query=%s",
+            tool_name,
+            is_compute,
+            is_complex,
+            len(paradigm_list),
+            [p.get("paradigmId") for p in paradigm_list],
+            query[:200],
+        )
         raise ClarificationNeededError(
             {
                 "tool_name": tool_name,
