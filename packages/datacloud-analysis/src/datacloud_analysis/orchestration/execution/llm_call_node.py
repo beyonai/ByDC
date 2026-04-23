@@ -133,17 +133,27 @@ def make_llm_call_node(
             type(_gateway_context).__name__ if _gateway_context is not None else "None",
             (_dynamic or "")[:120],
         )
-        system_msg = _build_system_message(system_prompt, stable_system_prompt, _dynamic)
-        # V0.3: state["messages"] includes ToolMessages from per-tool nodes.
-        # _conversation_messages_for_llm only keeps Human/AI, dropping ToolMessages,
-        # causing the LLM to see dangling tool_calls with no result (empty response).
+        # Anthropic: dynamic 由 _build_system_message 注入 system（带 cache_control）。
+        # 其他 provider: system message 保持纯静态（最大化可缓存前缀），
+        # dynamic 注入第一条 HumanMessage，不影响 system + tools 的缓存命中。
+        _provider = os.getenv("DATACLOUD_LLM_MODEL_PROVIDER", "openai").strip().lower()
+        system_msg = _build_system_message(
+            system_prompt,
+            stable_system_prompt,
+            _dynamic if _provider == "anthropic" else None,
+        )
         conv = list(state.get("messages") or [])
         if conv:
-            messages = [system_msg, *conv]
+            if _dynamic and _provider != "anthropic" and isinstance(conv[0], HumanMessage):
+                patched = HumanMessage(content=_dynamic + "\n\n" + str(conv[0].content))
+                messages = [system_msg, patched, *conv[1:]]
+            else:
+                messages = [system_msg, *conv]
         else:
             messages = [system_msg]
             if query := str(state.get("user_query") or state.get("enriched_query") or ""):
-                messages.append(HumanMessage(content=query))
+                _content = (_dynamic + "\n\n" + query) if _dynamic else query
+                messages.append(HumanMessage(content=_content))
 
         thinking_id = uuid.uuid4().hex[:12]
         messages_window = _trim_messages_window(messages)
