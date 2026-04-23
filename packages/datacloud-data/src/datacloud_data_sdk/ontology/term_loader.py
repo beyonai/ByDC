@@ -147,7 +147,7 @@ class KbTermLoader(TermLoader):
         """按 term_type_code + keyword 获取缓存的术语搜索结果。"""
         cache_key = (term_type_code, keyword)
         cached = self._cache.get(cache_key)
-        if cached is None:
+        if not cached:
             cached = self._search(term_type_code, keyword=keyword)
             self._cache[cache_key] = cached
         return cached

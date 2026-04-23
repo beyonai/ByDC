@@ -153,8 +153,14 @@ def _build_filters(
     if term_codes:
         filters.append(Term.term_id.in_(term_codes))
 
-    if keyword:
-        filters.append(func.coalesce(Term.term_name, "").ilike(f"%{keyword}%"))
+    normalized_keyword = (keyword or "").strip()
+    if normalized_keyword:
+        filters.append(
+            or_(
+                Term.term_code == normalized_keyword,
+                func.coalesce(Term.term_name, "").ilike(f"%{normalized_keyword}%"),
+            )
+        )
 
     if tags:
         filters.extend(_tag_filter_expr(tf) for tf in tags)
