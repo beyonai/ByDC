@@ -171,12 +171,38 @@ async def _emit_answer_token(gateway_context: Any, token: str, *, message_id: st
         logger.debug("[react_loop] answer_token emit failed: %s", exc)
 
 
+async def _emit_thinking_done_notification(
+    gateway_context: Any,
+    elapsed_secs: float,
+) -> None:
+    """首轮 LLM 收到第一个 chunk 时推送耗时通知到思考气泡区（无论耗时长短）。"""
+    if gateway_context is None:
+        return
+    try:
+        from by_framework import EventType, StreamChunkEvent  # type: ignore
+        from by_framework.core.protocol.content_type import SseReasonMessageType  # type: ignore
+
+        msg_id = f"thinking_done_{int(time.time() * 1000)}"
+        text = f"久等了，我思考了 {elapsed_secs:.0f} 秒，继续干活"
+        await gateway_context.emit_chunk(
+            StreamChunkEvent(content=text),
+            event_type=EventType.REASONING_LOG_START.value,
+            content_type=SseReasonMessageType.think_text.value,
+            message_id=msg_id,
+        )
+        logger.info("[thinking_notify] elapsed=%.1fs notified", elapsed_secs)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[thinking_notify] emit failed: %s", exc)
+
+
 async def _stream_llm_call(
     llm_with_tools: Any,
     messages_window: list,
     gateway_context: Any = None,
     *,
     thinking_message_id: str = "model_thinking",
+    query_received_at: float | None = None,
+    round_idx: int = 0,
 ) -> tuple[Any, bool]:
     """流式调用 LLM，实时向 gateway_context 推送文字 token。
 
@@ -205,8 +231,35 @@ async def _stream_llm_call(
     # 用于检测 MiniMax 累积式 thinking（每个 chunk 含完整 thinking 全文，非增量）
     _thinking_acc: str = ""
 
+    # [DIAG] 发送前打印 messages_window 中 AIMessage/ToolMessage 的 ID 关系，
+    # 便于复现 tool_call_id  is not found（空 ID）等 400 错误。
+    for _di, _dm in enumerate(messages_window):
+        if isinstance(_dm, AIMessage):
+            _tcs = list(getattr(_dm, "tool_calls", None) or [])
+            if _tcs:
+                logger.warning(
+                    "[_stream_llm_call DIAG] window[%d] AIMessage tool_calls=%s",
+                    _di,
+                    [{"id": repr(_tc.get("id")), "name": _tc.get("name")} for _tc in _tcs],
+                )
+        elif isinstance(_dm, ToolMessage):
+            logger.warning(
+                "[_stream_llm_call DIAG] window[%d] ToolMessage tool_call_id=%r name=%r",
+                _di,
+                getattr(_dm, "tool_call_id", ""),
+                getattr(_dm, "name", ""),
+            )
+
+    _thinking_notified = False
     try:
         async for chunk in llm_with_tools.astream(messages_window):
+            # 首个 chunk 到达：计算等待耗时并推送通知（仅首轮，无论耗时长短）
+            if not _thinking_notified:
+                _thinking_notified = True
+                if round_idx == 0 and query_received_at is not None:
+                    elapsed = time.monotonic() - query_received_at
+                    await _emit_thinking_done_notification(gateway_context, elapsed)
+
             # 累加 chunk
             if full_msg is None:
                 full_msg = chunk
@@ -323,6 +376,8 @@ async def _invoke_llm_with_fallback(
     if not str(thinking_message_id or "").strip():
         raise ValueError("thinking_message_id must be a non-empty string")
 
+    _query_received_at: float | None = state.get("query_received_at") if state else None
+
     # ── 主模型（含重试）────────────────────────────────────────────────────────
     last_exc: Exception
     try:
@@ -332,6 +387,8 @@ async def _invoke_llm_with_fallback(
             messages_window,
             gateway_context,
             thinking_message_id=thinking_message_id,
+            query_received_at=_query_received_at,
+            round_idx=round_idx,
         )
     except Exception as primary_exc:
         logger.warning("[LLM] 主模型全部重试失败 round=%d: %s", round_idx + 1, primary_exc)
@@ -347,6 +404,8 @@ async def _invoke_llm_with_fallback(
                 messages_window,
                 gateway_context,
                 thinking_message_id=thinking_message_id,
+                # 备用模型切换时通知已由主模型分支处理（或主模型连首 chunk 都未产生）
+                # 不再重复推送，query_received_at 保持 None
             )
         except Exception as fallback_exc:
             logger.error("[LLM] 备用模型也失败 round=%d: %s", round_idx + 1, fallback_exc)
@@ -650,9 +709,11 @@ def _trim_messages_window(messages: list) -> list:
     """滑动窗口裁剪：保留 SystemMessage + HumanMessage + 最近 _TRIM_KEEP_ROUNDS 轮。
 
     只裁剪送给 LLM 的副本，原始 messages 列表不受影响。
+    裁剪后确保 tail 不以孤儿 ToolMessage 开头（其对应 AIMessage 已被截断），
+    避免 LLM API 返回 400 tool_call_id not found 错误。
     """
-    head = []
-    tail = []
+    head: list[Any] = []
+    tail: list[Any] = []
     for i, m in enumerate(messages):
         if isinstance(m, (SystemMessage, HumanMessage)):
             head.append(m)
@@ -666,8 +727,22 @@ def _trim_messages_window(messages: list) -> list:
     if len(tail) > keep:
         trimmed_count = len(tail) - keep
         tail = tail[-keep:]
+        # 截断后 tail 头部可能残留孤儿 ToolMessage（其 AIMessage 已被截断）。
+        # 判定准则：任何出现在第一个 AIMessage 之前的 ToolMessage 都是孤儿——
+        # 合法对话结构保证 ToolMessage 只能跟在其对应的 AIMessage 之后。
+        # 不做 tool_call_id 比对，避免同名工具在不同轮次复用相同 id 时误判。
+        first_ai_idx = next(
+            (i for i, m in enumerate(tail) if isinstance(m, AIMessage)),
+            0,
+        )
+        orphan_count = first_ai_idx
+        if first_ai_idx:
+            tail = tail[first_ai_idx:]
         logger.debug(
-            "[react_loop] trim_messages: dropped %d old messages, kept %d", trimmed_count, len(tail)
+            "[react_loop] trim_messages: dropped %d old messages, kept %d, orphans_removed=%d",
+            trimmed_count,
+            len(tail),
+            orphan_count,
         )
     return head + tail
 

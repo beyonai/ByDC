@@ -100,6 +100,9 @@ class AgentState(MessagesState):
     # interrupt() 重跑 tool_dispatcher_node 时从 checkpoint 读取，不重调 LLM。
     react_messages_log: list[dict[str, Any]] | None
 
+    # --- 性能追踪 ---
+    query_received_at: float | None  # time.monotonic() at graph entry (round=0 thinking timer)
+
     # --- V0.3 Tool-as-Node：阶段 2 澄清子流程状态 ---
     pending_clarification_context: dict[str, Any] | None
     clarification_analyze_result: dict[str, Any] | None
