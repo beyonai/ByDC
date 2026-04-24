@@ -28,29 +28,6 @@ from datacloud_data_sdk.executor.view_federation_support import (
 )
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
-from datacloud_data_sdk.virtual_action.validator import VirtualActionValidator
-
-
-def _collect_view_validation_fields(view: Any) -> list[Any]:
-    """收集视图 compute 校验所需字段元数据。"""
-    view_fields = list(getattr(view, "fields", []) or [])
-    if view_fields:
-        return view_fields
-    return [
-        field
-        for obj in getattr(view, "objects", []) or []
-        for field in getattr(obj._cls, "fields", [])
-    ]
-
-
-def _collect_required_filter_groups(fields: list[Any]) -> list[str]:
-    """收集并去重视图字段上的强制过滤组。"""
-    groups: list[str] = []
-    for field in fields:
-        group = getattr(field, "required_filter_group", None)
-        if group and group not in groups:
-            groups.append(group)
-    return groups
 
 
 class ViewAnalyzeExecutor:
@@ -64,11 +41,6 @@ class ViewAnalyzeExecutor:
 
     async def execute(self, view: Any, arguments: dict[str, Any]) -> dict[str, Any]:
         """执行视图 analyze 查询，生成多对象 JOIN + GROUP BY + HAVING SQL。"""
-        validation_fields = _collect_view_validation_fields(view)
-        required_groups = _collect_required_filter_groups(validation_fields)
-        validator = VirtualActionValidator(validation_fields)
-        validator.validate_analyze(arguments, required_groups or None)
-
         source_aliases = {
             object_source_alias(obj)
             for obj in getattr(view, "objects", []) or []
