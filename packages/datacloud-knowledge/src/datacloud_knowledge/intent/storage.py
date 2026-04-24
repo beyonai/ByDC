@@ -30,6 +30,30 @@ def create_user_term_name(
     Returns:
         The generated name_id.
     """
+    existing_row = session.execute(
+        text(
+            "SELECT name_id FROM term_name "
+            "WHERE term_id = :term_id AND name_text = :name_text "
+            "AND COALESCE((search_scope->>'scope_user_id'), '') = :user_id "
+            "ORDER BY updated_time DESC LIMIT 1"
+        ),
+        {
+            "term_id": term_id,
+            "name_text": name_text,
+            "user_id": user_id,
+        },
+    ).fetchone()
+    if existing_row is not None:
+        existing_name_id = str(existing_row[0])
+        log.info(
+            "User term name already exists: %s -> %s (user=%s, name_id=%s)",
+            name_text,
+            term_id,
+            user_id,
+            existing_name_id,
+        )
+        return existing_name_id
+
     name_id = str(uuid.uuid4())
     now = datetime.now(tz=UTC)
     search_scope = {
