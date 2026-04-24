@@ -597,7 +597,10 @@ class Action:
         if isinstance(properties, dict):
             properties[_OPERATION_CONFIRM_PARAM] = {
                 "type": "boolean",
-                "description": "用户是否确认按当前参数执行操作。首次提交请传 false，确认执行时传 true。",
+                "description": (
+                    "用户是否确认提交当前完整表单数据。只有在系统已返回完整表单数据、"
+                    "反问用户是否确定提交且用户明确确认后，才可传 true；首次提交或未获用户确认时请传 false。"
+                ),
             }
         schema["required"] = [_OPERATION_CONFIRM_PARAM]
 
@@ -875,9 +878,14 @@ class Action:
         if confirmation_state == "pending_confirmation":
             lines.append("参数校验通过，请确认以下参数后再次提交，并将 userConfirmed 设为 true。")
         elif confirmation_state == "confirm_without_cache":
-            lines.append("当前没有待确认缓存，已为你缓存本次参数，请核对后再次确认。")
+            lines.append(
+                "需要用户确认本次参数。已为你缓存本次参数，请核对后将 userConfirmed 设为 true 再次提交。"
+            )
         elif confirmation_state == "confirm_mismatch":
-            lines.append("本次确认参数与上次待确认参数不一致，已更新缓存，请核对后再次确认。")
+            lines.append(
+                "需要用户重新确认本次参数。本次确认参数与上次待确认参数不一致，"
+                "已更新缓存，请核对后将 userConfirmed 设为 true 再次提交。"
+            )
         return "\n".join(lines)
 
     async def _record_operation_step(
@@ -1838,7 +1846,13 @@ class Action:
             from datacloud_data_sdk.executor.response_mapping import extract_by_mapping_path
 
             records = extract_by_mapping_path(result, out_params)
-            columns = [p[0] for p in out_params]
+            if records:
+                columns = [p[0] for p in out_params]
+            else:
+                records = self._extract_records_fallback(result)
+                columns = (
+                    list(records[0].keys()) if records and isinstance(records[0], dict) else []
+                )
         else:
             records = self._extract_records_fallback(result)
             columns = list(records[0].keys()) if records and isinstance(records[0], dict) else []
@@ -1917,7 +1931,13 @@ class Action:
             from datacloud_data_sdk.executor.response_mapping import extract_by_mapping_path
 
             records = extract_by_mapping_path(raw, out_params)
-            columns = [p[0] for p in out_params]
+            if records:
+                columns = [p[0] for p in out_params]
+            else:
+                records = self._extract_records_fallback(raw)
+                columns = (
+                    list(records[0].keys()) if records and isinstance(records[0], dict) else []
+                )
         else:
             records = self._extract_records_fallback(raw)
             columns = list(records[0].keys()) if records and isinstance(records[0], dict) else []

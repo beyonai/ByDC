@@ -49,3 +49,33 @@ def test_extract_invalid_mapping_path() -> None:
     ]
     records = extract_by_mapping_path(data, output_params)
     assert records == []
+
+
+def test_extract_root_object_fields() -> None:
+    data = {"todoId": "1777010261647865", "status": "Received"}
+    output_params = [
+        ("todoId", "$.todoId"),
+        ("status", "$.status"),
+    ]
+    records = extract_by_mapping_path(data, output_params)
+    assert records == [{"todoId": "1777010261647865", "status": "Received"}]
+
+
+def test_extract_nested_fields_in_array_items() -> None:
+    data = {
+        "response": {
+            "users": [
+                {"profile": {"userId": "u1", "userName": "Alice"}},
+                {"profile": {"userId": "u2", "userName": "Bob"}},
+            ]
+        }
+    }
+    output_params = [
+        ("userId", "$.response.users[].profile.userId"),
+        ("userName", "$.response.users[].profile.userName"),
+    ]
+    records = extract_by_mapping_path(data, output_params)
+    assert records == [
+        {"userId": "u1", "userName": "Alice"},
+        {"userId": "u2", "userName": "Bob"},
+    ]

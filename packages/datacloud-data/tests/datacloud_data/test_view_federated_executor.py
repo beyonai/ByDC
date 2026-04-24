@@ -14,6 +14,7 @@ from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 from datacloud_data_sdk.virtual_action.models import ViewFieldMeta
+from datacloud_data_sdk.virtual_action.validator import VirtualActionValidationError
 
 
 def _init_sqlite_db(path: Path, ddl: str, rows: list[tuple[object, ...]]) -> None:
@@ -272,6 +273,43 @@ async def test_cross_db_view_analyze_federated_join(
         {"user_name": "Bob", "total_amount": 20.0},
         {"user_name": "Alice", "total_amount": 10.0},
     ]
+
+
+@pytest.mark.asyncio
+async def test_cross_db_view_analyze_requires_metrics(
+    cross_db_context: tuple[OntologyLoader, DataSourceManager],
+) -> None:
+    loader, ds_manager = cross_db_context
+    view = loader.get_view("cross_db_view")
+
+    with pytest.raises(VirtualActionValidationError, match="metrics 不能为空"):
+        await ViewAnalyzeExecutor(loader, ds_manager=ds_manager).execute(
+            view,
+            {
+                "dimensions": [{"field": "user_name"}],
+                "limit": 10,
+            },
+        )
+
+
+@pytest.mark.asyncio
+async def test_cross_db_view_analyze_respects_view_field_group_ops(
+    cross_db_context: tuple[OntologyLoader, DataSourceManager],
+) -> None:
+    loader, ds_manager = cross_db_context
+    view = loader.get_view("cross_db_view")
+    user_name_field = next(field for field in view.fields if field.property_code == "user_name")
+    user_name_field.group_ops = ["self"]
+
+    with pytest.raises(VirtualActionValidationError, match="不支持分组方式 'month'"):
+        await ViewAnalyzeExecutor(loader, ds_manager=ds_manager).execute(
+            view,
+            {
+                "dimensions": [{"field": "user_name", "group_op": "month"}],
+                "metrics": [{"field": "order_amount", "agg": "sum", "as": "total_amount"}],
+                "limit": 10,
+            },
+        )
 
 
 @pytest.mark.asyncio
