@@ -171,9 +171,7 @@ async def format_result(
                     gateway_context, query_data, message_id=_text_msg_id
                 )
         else:
-            await _emit_query_result_as_6001(
-                gateway_context, query_data, message_id=_data_msg_id
-            )
+            await _emit_query_result_as_6001(gateway_context, query_data, message_id=_data_msg_id)
         return
 
     if result_type == "csv_file":
@@ -215,9 +213,7 @@ async def format_result(
 
         resolved = _resolve_result_path(json_path, workspace_dir)
         if not resolved.exists():
-            await _emit_text(
-                gateway_context, f"(文件不存在: {json_path})", message_id=_text_msg_id
-            )
+            await _emit_text(gateway_context, f"(文件不存在: {json_path})", message_id=_text_msg_id)
             return
 
         if resolved.suffix.lower() == ".csv":
@@ -265,9 +261,7 @@ async def _emit_text(gateway_context: Any, text: str, *, message_id: str) -> Non
         logger.warning("format_result: emit_text failed: %s", exc)
 
 
-async def _emit_json_as_markdown(
-    gateway_context: Any, data: Any, *, message_id: str
-) -> None:
+async def _emit_json_as_markdown(gateway_context: Any, data: Any, *, message_id: str) -> None:
     """Emit arbitrary JSON-like payload as markdown table."""
     if isinstance(data, str):
         with suppress(Exception):
@@ -291,9 +285,7 @@ async def _emit_json_as_markdown(
     await _emit_text(gateway_context, markdown_text, message_id=message_id)
 
 
-async def _stream_csv_as_markdown(
-    gateway_context: Any, csv_path: Path, *, message_id: str
-) -> None:
+async def _stream_csv_as_markdown(gateway_context: Any, csv_path: Path, *, message_id: str) -> None:
     try:
         rows = await asyncio.to_thread(_load_csv_rows, csv_path)
     except Exception as exc:  # noqa: BLE001
@@ -329,9 +321,7 @@ async def _emit_query_result_as_markdown(
     await _emit_text(gateway_context, markdown_text, message_id=message_id)
 
 
-async def _emit_json_as_6001(
-    gateway_context: Any, data: Any, *, message_id: str
-) -> None:
+async def _emit_json_as_6001(gateway_context: Any, data: Any, *, message_id: str) -> None:
     if gateway_context is None:
         return
 
@@ -390,9 +380,7 @@ async def _emit_json_as_6001(
         logger.error("_emit_json_as_6001 failed: %s", exc)
 
 
-async def _stream_csv_as_6001(
-    gateway_context: Any, csv_path: Path, *, message_id: str
-) -> None:
+async def _stream_csv_as_6001(gateway_context: Any, csv_path: Path, *, message_id: str) -> None:
     if gateway_context is None:
         return
 

@@ -111,6 +111,7 @@ def build_filters_where(
     field_to_alias_col: dict[str, tuple[str, str]],
     db_type: str,
     param_key_builder: Any,
+    filter_relation: str = "AND",
 ) -> tuple[str, dict[str, Any]]:
     """构建支持表别名的 WHERE 子句。"""
     if not filters:
@@ -154,7 +155,8 @@ def build_filters_where(
             clauses.append(f"{col_expr} {op_map.get(op, '=')} :{param_key}")
             params[param_key] = value
 
-    return " AND ".join(clauses), params
+    relation = filter_relation.upper()
+    return f" {relation} ".join(clauses), params
 
 
 def collect_required_objects(

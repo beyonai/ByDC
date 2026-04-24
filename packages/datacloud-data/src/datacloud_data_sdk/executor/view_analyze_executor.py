@@ -21,6 +21,11 @@ from datacloud_data_sdk.executor.view_executor_support import (
     collect_required_objects,
     quote_identifier,
 )
+from datacloud_data_sdk.executor.view_federation_support import (
+    analyze_view_request,
+    build_view_slice,
+    object_source_alias,
+)
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 
@@ -36,6 +41,30 @@ class ViewAnalyzeExecutor:
 
     async def execute(self, view: Any, arguments: dict[str, Any]) -> dict[str, Any]:
         """执行视图 analyze 查询，生成多对象 JOIN + GROUP BY + HAVING SQL。"""
+        source_aliases = {
+            object_source_alias(obj)
+            for obj in getattr(view, "objects", []) or []
+            if getattr(obj._cls, "source_type", "") == "DB"
+        }
+        plan = analyze_view_request(view, arguments, "compute")
+        if len(plan.datasource_aliases) > 1:
+            from datacloud_data_sdk.executor.view_federated_executor import (
+                FederatedViewAnalyzeExecutor,
+            )
+
+            return await FederatedViewAnalyzeExecutor(self._loader, self._ds).execute(
+                view,
+                arguments,
+                plan,
+            )
+
+        direct_view = view
+        if len(source_aliases) > 1 and plan.closure_object_codes:
+            direct_view = build_view_slice(view, plan.closure_object_codes)
+        return await self._execute_direct(direct_view, arguments)
+
+    async def _execute_direct(self, view: Any, arguments: dict[str, Any]) -> dict[str, Any]:
+        """直接在单源数据源上执行视图 analyze。"""
         logger.info(
             "[ViewAnalyzeExecutor] execute called view=%s arguments_keys=%s"
             " dimensions=%s metrics=%s",
@@ -136,7 +165,13 @@ class ViewAnalyzeExecutor:
             metric_alias_to_expr[mtr_alias] = expr
 
         # WHERE
-        where_sql, params = build_filters_where(filters, field_to_alias_col, db_type, _safe_pkey)
+        where_sql, params = build_filters_where(
+            filters,
+            field_to_alias_col,
+            db_type,
+            _safe_pkey,
+            str(arguments.get("filter_relation") or "AND"),
+        )
 
         # HAVING
         having_clauses: list[str] = []
