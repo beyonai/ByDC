@@ -81,7 +81,6 @@ async def run_agent(
             "execution_summary_persistence": None,
             "resume_context": {},
             "query_mode": "analysis",
-            "chitchat_reply": None,
             "target_tool": "",
             "tool_params": {},
             "concept_terms": [],

@@ -587,3 +587,39 @@ async def test_chinese_name_in_filters_rejected(executor_with_data: ComputeExecu
         "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD",
         "VIRTUAL_ACTION_ERR_REQUIRED_FILTER_MISSING",
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 用例11：指标类字段（analytic_kind=basic_metric/snapshot_metric 等）不允许
+#         出现在 dimensions 中 → VIRTUAL_ACTION_ERR_UNSUPPORTED_OP
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "metric_field_code",
+    [
+        "revenue",          # analytic_kind=basic_metric（rule_type="indicator"）
+        "beginning_users",  # analytic_kind=snapshot_metric
+        "tax_rate",         # analytic_kind=derived_metric
+    ],
+)
+async def test_metric_field_in_dimensions_rejected(
+    loader: OntologyLoader,
+    metric_field_code: str,
+) -> None:
+    """用例11：指标类字段以 self 方式放入 dimensions 时，校验层必须拦截并报 UNSUPPORTED_OP。
+
+    group_op 缺失等同于 self。校验在 SQL 执行前触发，无需实际数据（不使用 executor_with_data）。
+    """
+    executor = ComputeExecutor(loader)
+    with pytest.raises(VirtualActionValidationError) as exc_info:
+        await executor.execute(
+            "enterprise_base",
+            {
+                "dimensions": [{"field": metric_field_code}],  # 无 group_op → self
+                "metrics": [{"agg": "count_all", "as": "cnt"}],
+                "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
+            },
+        )
+    assert exc_info.value.error_code == "VIRTUAL_ACTION_ERR_UNSUPPORTED_OP"
+    assert metric_field_code in str(exc_info.value)

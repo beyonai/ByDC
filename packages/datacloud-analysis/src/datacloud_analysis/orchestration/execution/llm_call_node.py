@@ -168,11 +168,15 @@ def make_llm_call_node(
         )
 
         calls = list(getattr(ai_msg, "tool_calls", None) or [])
+        _usage = getattr(ai_msg, "usage_metadata", None) or {}
+        _resp_meta = getattr(ai_msg, "response_metadata", None) or {}
         logger.info(
-            "[llm_call] round=%d tool_calls=%d streamed=%s",
+            "[llm_call] round=%d tool_calls=%d streamed=%s usage=%s resp_meta_keys=%s",
             current_round,
             len(calls),
             _did_stream,
+            _usage,
+            sorted(_resp_meta.keys()),
         )
 
         return {
@@ -181,6 +185,9 @@ def make_llm_call_node(
             "execution_status": None,
             "answer_streamed": _did_stream,
             "agent_abort": False,
+            # 新 turn 开始（round=0）时清除上一 turn 残留的 react_final，
+            # 防止 LLM 直接回答（不调 finish_react）时 respond_node 读到陈旧值。
+            **({"react_final": None} if current_round == 0 else {}),
         }
 
     return _llm_call

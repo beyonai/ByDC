@@ -17,6 +17,12 @@ class VirtualActionValidationError(Exception):
         self.error_code = error_code
 
 
+# 不允许出现在 dimensions 中的 analytic_kind（指标分类）
+_METRIC_KINDS: frozenset[str] = frozenset(
+    {"basic_metric", "snapshot_metric", "derived_metric", "formula_metric"}
+)
+
+
 def _field_map(fields: list[Any]) -> dict[str, Any]:
     """构建字段编码 → 字段元数据的映射（兼容 OntologyField 和 ViewFieldMeta）。"""
     result: dict[str, Any] = {}
@@ -205,6 +211,18 @@ class VirtualActionValidator:
         for dim in dimensions:
             fc = dim.get("field", "")
             f = self._get_field(fc)
+
+            # 指标类字段不允许作为分组维度（range 区间分桶除外：将指标转为分类维度）
+            analytic_kind = getattr(f, "analytic_kind", None)
+            if analytic_kind in _METRIC_KINDS and dim.get("group_op", "self") != "range":
+                fname = getattr(f, "field_name", None) or getattr(f, "property_name", fc)
+                raise VirtualActionValidationError(
+                    f"字段 '{fname}'({fc}) 是指标类型（{analytic_kind}），"
+                    "不能作为分组维度（仅支持 group_op=range 区间分桶），"
+                    "请将其放入 metrics",
+                    "VIRTUAL_ACTION_ERR_UNSUPPORTED_OP",
+                )
+
             allowed_gops = getattr(f, "group_ops", [])
             # group_op 未传时跳过校验（不约束分组方式）
             if "group_op" not in dim:

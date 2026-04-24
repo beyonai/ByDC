@@ -5,6 +5,7 @@ import csv
 import json
 import logging
 import os
+import re
 import time
 from collections.abc import Mapping
 from contextlib import suppress
@@ -17,6 +18,8 @@ from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
 
 logger = logging.getLogger(__name__)
 _CHUNK_ROWS = 100
+# 匹配 Markdown 表格分隔行：| --- |、|---|、| :--- |、| ---: | 等变体
+_TABLE_SEP_RE = re.compile(r"\| *:?-{2,}:? *\|")
 
 
 def _new_msg_id(prefix: str) -> str:
@@ -165,7 +168,7 @@ async def format_result(
         if output_fmt == "markdown":
             # answer 已流式推送且自身包含 MD 表格时跳过，避免重复推送；
             # 短摘要型 answer（无表格）仍需补充推送原始数据表格。
-            answer_has_table = "|---|" in answer or "| --- |" in answer
+            answer_has_table = bool(_TABLE_SEP_RE.search(answer))
             if not (answer_was_streamed and answer_has_table):
                 await _emit_query_result_as_markdown(
                     gateway_context, query_data, message_id=_text_msg_id

@@ -33,7 +33,6 @@ class AgentState(MessagesState):
     # --- Intent + routing ---
     clarify_needed: bool
     query_mode: str | None
-    chitchat_reply: str | None
     target_tool: str | None
     tool_params: dict[str, Any] | None
 
@@ -76,7 +75,7 @@ class AgentState(MessagesState):
     final_summary: dict[str, Any] | None
 
     # --- 重构新增字段 (P8) ---
-    intent_source: str | None  # "command" | "react" | "chitchat"
+    intent_source: str | None  # "command" | "react"
     command_result: dict | None  # intend 节点命令结果
     react_rounds: int | None  # 实际执行轮数
     react_final: dict | None  # 停止时的结构化结果
@@ -99,6 +98,9 @@ class AgentState(MessagesState):
     # 通过正常 return 提交 → LangGraph checkpoint 自动持久化。
     # interrupt() 重跑 tool_dispatcher_node 时从 checkpoint 读取，不重调 LLM。
     react_messages_log: list[dict[str, Any]] | None
+
+    # --- 性能追踪 ---
+    query_received_at: float | None  # time.monotonic() at graph entry (round=0 thinking timer)
 
     # --- V0.3 Tool-as-Node：阶段 2 澄清子流程状态 ---
     pending_clarification_context: dict[str, Any] | None

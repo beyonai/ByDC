@@ -98,10 +98,15 @@ async def finish_react_node(state: AgentState, config: RunnableConfig) -> dict[s
             break
 
     result_type = str(finish_args.get("result_type") or "text")
-    answer = str(finish_args.get("answer") or last_content or "")
+    answer_streamed = bool(state.get("answer_streamed"))
+    # 流式输出时 last_content 才是用户实际看到的完整内容（含 MD 表格）。
+    # finish_react args 的 answer 可能只是摘要，若用它做 answer_has_table 判断会误判为无表格。
+    if answer_streamed:
+        answer = last_content or str(finish_args.get("answer") or "")
+    else:
+        answer = str(finish_args.get("answer") or last_content or "")
     stop_reason = status if status else "finish_react"
     csv_file_path = str(finish_args.get("csv_file_path") or "")
-    answer_streamed = bool(state.get("answer_streamed"))
 
     _last_query_data: dict[str, Any] | None = state.get("react_last_query_data")
 
