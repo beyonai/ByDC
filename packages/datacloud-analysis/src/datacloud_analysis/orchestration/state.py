@@ -33,7 +33,6 @@ class AgentState(MessagesState):
     # --- Intent + routing ---
     clarify_needed: bool
     query_mode: str | None
-    chitchat_reply: str | None
     target_tool: str | None
     tool_params: dict[str, Any] | None
 
@@ -76,7 +75,7 @@ class AgentState(MessagesState):
     final_summary: dict[str, Any] | None
 
     # --- 重构新增字段 (P8) ---
-    intent_source: str | None  # "command" | "react" | "chitchat"
+    intent_source: str | None  # "command" | "react"
     command_result: dict | None  # intend 节点命令结果
     react_rounds: int | None  # 实际执行轮数
     react_final: dict | None  # 停止时的结构化结果
