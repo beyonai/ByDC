@@ -598,9 +598,9 @@ async def test_chinese_name_in_filters_rejected(executor_with_data: ComputeExecu
 @pytest.mark.parametrize(
     "metric_field_code",
     [
-        "revenue",          # analytic_kind=basic_metric（rule_type="indicator"）
+        "revenue",  # analytic_kind=basic_metric（rule_type="indicator"）
         "beginning_users",  # analytic_kind=snapshot_metric
-        "tax_rate",         # analytic_kind=derived_metric
+        "tax_rate",  # analytic_kind=derived_metric
     ],
 )
 async def test_metric_field_in_dimensions_rejected(
