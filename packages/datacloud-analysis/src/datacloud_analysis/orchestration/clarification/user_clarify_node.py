@@ -6,15 +6,60 @@ import json
 import logging
 from typing import Any
 
+from datacloud_knowledge.intent.clarification import (
+    normalize_clarification_params,
+    persist_confirmed_synonyms,
+)
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
+from datacloud_analysis.orchestration.gateway_user import get_gateway_user_id
 from datacloud_analysis.orchestration.state import AgentState
 from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
     _format_clarification,
+    _scope_code_from_tool,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _get_gateway_user_id(config: RunnableConfig) -> str | None:
+    """从 gateway_context 获取用户 ID；缺失时不做降级。"""
+    configurable = config.get("configurable") or {}
+    if not isinstance(configurable, dict):
+        logger.info(
+            "[user_clarify] user_id lookup: configurable is not dict type=%s",
+            type(configurable).__name__,
+        )
+        return None
+    gateway_context = configurable.get("gateway_context")
+    logger.info(
+        "[user_clarify] user_id lookup: configurable_keys=%s gateway_context_type=%s "
+        "gateway_user_id=%r header_type=%s header_user_id=%r header_user_code=%r "
+        "command_header_type=%s command_user_id=%r command_user_code=%r",
+        sorted(str(key) for key in configurable),
+        type(gateway_context).__name__ if gateway_context is not None else None,
+        getattr(gateway_context, "user_id", None),
+        type(getattr(gateway_context, "header", None)).__name__
+        if getattr(gateway_context, "header", None) is not None
+        else None,
+        getattr(getattr(gateway_context, "header", None), "user_id", None),
+        getattr(getattr(gateway_context, "header", None), "user_code", None),
+        type(getattr(getattr(gateway_context, "current_command", None), "header", None)).__name__
+        if getattr(getattr(gateway_context, "current_command", None), "header", None) is not None
+        else None,
+        getattr(
+            getattr(getattr(gateway_context, "current_command", None), "header", None),
+            "user_id",
+            None,
+        ),
+        getattr(
+            getattr(getattr(gateway_context, "current_command", None), "header", None),
+            "user_code",
+            None,
+        ),
+    )
+    return get_gateway_user_id(gateway_context)
 
 
 async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
@@ -120,6 +165,28 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
         clarify_knowledge,
         is_compute=is_compute,
     )
+
+    scope_code = _scope_code_from_tool(tool_name)
+    user_id = _get_gateway_user_id(config)
+    formatted_params = normalize_clarification_params(
+        formatted_params,
+        ontology_code=scope_code,
+        user_id=user_id,
+    )
+
+    if user_id:
+        created_ids = persist_confirmed_synonyms(
+            paradigm_list=paradigm_list_from_resume,
+            ontology_code=scope_code,
+            user_id=user_id,
+        )
+        logger.info(
+            "[user_clarify] persisted confirmed synonyms user_id=%s count=%d",
+            user_id,
+            len(created_ids),
+        )
+    else:
+        logger.info("[user_clarify] skip synonym persistence: gateway user_id is empty")
 
     logger.info("[user_clarify] formatted params keys=%s", sorted(formatted_params.keys()))
 

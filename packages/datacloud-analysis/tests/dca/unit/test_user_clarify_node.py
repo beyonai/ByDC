@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -39,7 +40,7 @@ def _make_state(
     *,
     is_complex: bool = False,
     resume_value: Any = None,
-    paradigm_list: list | None = None,
+    paradigm_list: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "pending_clarification_context": {
@@ -69,6 +70,13 @@ _INTERRUPT_PATCH = "datacloud_analysis.orchestration.clarification.user_clarify_
 _FORMAT_PATCH = (
     "datacloud_analysis.orchestration.clarification.user_clarify_node._format_clarification"
 )
+_NORMALIZE_PATCH = (
+    "datacloud_analysis.orchestration.clarification.user_clarify_node."
+    "normalize_clarification_params"
+)
+_PERSIST_PATCH = (
+    "datacloud_analysis.orchestration.clarification.user_clarify_node.persist_confirmed_synonyms"
+)
 
 
 async def test_tc2_2b_is_complex_false_in_formatted_params() -> None:
@@ -78,6 +86,7 @@ async def test_tc2_2b_is_complex_false_in_formatted_params() -> None:
     with (
         patch(_INTERRUPT_PATCH, return_value=None),
         patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
+        patch(_NORMALIZE_PATCH, return_value=_FORMATTED_PARAMS),
     ):
         result = await user_clarify_node(state, MagicMock())  # type: ignore[arg-type]
 
@@ -96,6 +105,7 @@ async def test_tc2_3b_is_complex_true_in_formatted_params() -> None:
     with (
         patch(_INTERRUPT_PATCH, return_value=None),
         patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
+        patch(_NORMALIZE_PATCH, return_value=_FORMATTED_PARAMS),
     ):
         result = await user_clarify_node(state, MagicMock())  # type: ignore[arg-type]
 
@@ -115,6 +125,7 @@ async def test_tc2_8_state_keys_cleared_after_format() -> None:
     with (
         patch(_INTERRUPT_PATCH, return_value=None),
         patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
+        patch(_NORMALIZE_PATCH, return_value=_FORMATTED_PARAMS),
     ):
         result = await user_clarify_node(state, MagicMock())  # type: ignore[arg-type]
 
@@ -137,6 +148,7 @@ async def test_tc2_10_empty_resume_value_does_not_raise() -> None:
     with (
         patch(_INTERRUPT_PATCH, return_value=None),
         patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS) as mock_fmt,
+        patch(_NORMALIZE_PATCH, return_value=_FORMATTED_PARAMS),
     ):
         result = await user_clarify_node(state, MagicMock())  # type: ignore[arg-type]
 
@@ -154,3 +166,90 @@ async def test_tc2_10_empty_resume_value_does_not_raise() -> None:
     assert parsed.get("paradigmList") == [], f"form_str 应含空 paradigmList，实际: {form_str_arg!r}"
 
     assert result.get("clarification_formatted_params") is not None
+
+
+async def test_gateway_user_id_controls_synonym_persistence() -> None:
+    """有 gateway user_id 才持久化用户确认同义词；缺失时不降级。"""
+    state = _make_state()
+    resume_value = {"paradigmList": [{"paradigmList": _PARADIGM_LIST}]}
+    config = {"configurable": {"gateway_context": SimpleNamespace(user_id="user-1")}}
+
+    with (
+        patch(_INTERRUPT_PATCH, return_value=resume_value),
+        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
+        patch(_NORMALIZE_PATCH, return_value=_FORMATTED_PARAMS),
+        patch(_PERSIST_PATCH, return_value=["name-1"]) as mock_persist,
+    ):
+        await user_clarify_node(state, config)  # type: ignore[arg-type]
+
+    mock_persist.assert_called_once_with(
+        paradigm_list=_PARADIGM_LIST,
+        ontology_code="ads_enterprise",
+        user_id="user-1",
+    )
+
+    with (
+        patch(_INTERRUPT_PATCH, return_value=resume_value),
+        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
+        patch(_NORMALIZE_PATCH, return_value=_FORMATTED_PARAMS),
+        patch(_PERSIST_PATCH, return_value=["name-1"]) as mock_persist_no_user,
+    ):
+        await user_clarify_node(state, {"configurable": {}})  # type: ignore[arg-type]
+
+    mock_persist_no_user.assert_not_called()
+
+
+async def test_gateway_header_user_code_is_user_identity() -> None:
+    """by-framework 网关通过 header.user_code 暴露用户身份。"""
+    state = _make_state()
+    resume_value = {"paradigmList": [{"paradigmList": _PARADIGM_LIST}]}
+    config = {
+        "configurable": {
+            "gateway_context": SimpleNamespace(
+                header=SimpleNamespace(user_code="adminvip"),
+            )
+        }
+    }
+
+    with (
+        patch(_INTERRUPT_PATCH, return_value=resume_value),
+        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
+        patch(_NORMALIZE_PATCH, return_value=_FORMATTED_PARAMS),
+        patch(_PERSIST_PATCH, return_value=["name-1"]) as mock_persist,
+    ):
+        await user_clarify_node(state, config)  # type: ignore[arg-type]
+
+    mock_persist.assert_called_once_with(
+        paradigm_list=_PARADIGM_LIST,
+        ontology_code="ads_enterprise",
+        user_id="adminvip",
+    )
+
+
+async def test_gateway_current_command_header_user_code_is_user_identity() -> None:
+    """实际 byclaw 网关通过 current_command.header.user_code 暴露用户身份。"""
+    state = _make_state()
+    resume_value = {"paradigmList": [{"paradigmList": _PARADIGM_LIST}]}
+    config = {
+        "configurable": {
+            "gateway_context": SimpleNamespace(
+                current_command=SimpleNamespace(
+                    header=SimpleNamespace(user_code="adminvip"),
+                ),
+            )
+        }
+    }
+
+    with (
+        patch(_INTERRUPT_PATCH, return_value=resume_value),
+        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
+        patch(_NORMALIZE_PATCH, return_value=_FORMATTED_PARAMS),
+        patch(_PERSIST_PATCH, return_value=["name-1"]) as mock_persist,
+    ):
+        await user_clarify_node(state, config)  # type: ignore[arg-type]
+
+    mock_persist.assert_called_once_with(
+        paradigm_list=_PARADIGM_LIST,
+        ontology_code="ads_enterprise",
+        user_id="adminvip",
+    )
