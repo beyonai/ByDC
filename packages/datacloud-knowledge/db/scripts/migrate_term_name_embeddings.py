@@ -456,11 +456,16 @@ def ensure_source_vectors_available(source_vector_rows: int) -> None:
         raise ValueError("源库 term_name.name_embedding 没有可复用数据")
 
 
-def raise_source_conflict(conflicts: set[str]) -> None:
-    """Abort when one source text maps to multiple vector payloads."""
+def log_skipped_source_conflicts(conflicts: set[str]) -> None:
+    """Log source texts skipped because multiple vector payloads exist."""
 
-    raise ValueError(
-        f"源库存在相同 name_text 对应多个不同向量，已拒绝迁移: {', '.join(sorted(conflicts)[:5])}"
+    if not conflicts:
+        return
+
+    LOGGER.warning(
+        "源库存在相同 name_text 对应多个不同向量，已跳过这些文本: count=%s samples=%s",
+        len(conflicts),
+        ", ".join(sorted(conflicts)[:5]),
     )
 
 
@@ -548,8 +553,7 @@ def run_migration(
             append_samples(stats.unmatched_samples, unmatched)
             append_samples(stats.conflict_samples, conflicts)
 
-            if conflicts:
-                raise_source_conflict(conflicts)
+            log_skipped_source_conflicts(conflicts)
 
             updatable_rows = count_target_rows_for_texts(
                 target_conn,
@@ -569,10 +573,11 @@ def run_migration(
                 stats.updated_rows += updatable_rows
 
             LOGGER.info(
-                "批次完成: processed_texts=%s matched_texts=%s unmatched=%s updated_rows=%s",
+                "批次完成: processed_texts=%s matched_texts=%s unmatched=%s conflicts=%s updated_rows=%s",
                 stats.processed_texts,
                 len(matched_texts),
                 len(unmatched),
+                len(conflicts),
                 stats.updated_rows,
             )
 
@@ -660,9 +665,9 @@ __all__ = [
     "fetch_source_embedding_map",
     "fetch_target_candidate_texts",
     "load_env",
+    "log_skipped_source_conflicts",
     "main",
     "parse_database_config",
-    "raise_source_conflict",
     "run_migration",
     "split_source_embedding_rows",
     "validate_term_name_columns",
