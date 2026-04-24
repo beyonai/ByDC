@@ -405,6 +405,7 @@ def resolve_field_aliases(
     terms: list[str],
     scope_code: str,
     library_id: str | None = None,
+    user_id: str | None = None,
     resolve_values: bool = False,
     value_terms: list[str] | None = None,
 ) -> FieldResolutionResult:
@@ -443,6 +444,7 @@ def resolve_field_aliases(
     view_scope = {"scope": "view", "code": scope_code}
     obj_scope = {"scope": "object", "code": scope_code}
     global_scope = {"scope": "global"}
+    user_scope = {"scope_user_id": user_id} if user_id else None
 
     try:
         with get_session() as session:
@@ -467,6 +469,9 @@ def resolve_field_aliases(
                             TermName.search_scope.contains(view_scope),
                             TermName.search_scope.contains(obj_scope),
                             TermName.search_scope.contains(global_scope),
+                            TermName.search_scope.contains(user_scope)
+                            if user_scope
+                            else literal(False),
                         ),
                     )
                 )
@@ -525,6 +530,12 @@ def resolve_field_aliases(
                         view_obj2.term_type_code.in_(["view", "object"]),
                         prop2.term_type_code == "prop",
                         TermName.name_text.in_(unique_value_terms),
+                        or_(
+                            TermName.search_scope.contains(global_scope),
+                            TermName.search_scope.contains(user_scope)
+                            if user_scope
+                            else literal(False),
+                        ),
                     )
                 )
                 queries.append(val_alias_q)
@@ -617,6 +628,7 @@ def resolve_value_aliases(
     *,
     terms: list[str],
     scope_code: str,
+    user_id: str | None = None,
 ) -> ValueResolutionResult:
     """轻量级属性值精确消歧。
 
@@ -639,6 +651,8 @@ def resolve_value_aliases(
         return ValueResolutionResult(unmatched=list(terms) if terms else [])
 
     unique_terms = list(dict.fromkeys(terms))
+    global_scope = {"scope": "global"}
+    user_scope = {"scope_user_id": user_id} if user_id else None
 
     # 找到 scope_code 对应的 view/object term_id
     view_obj = aliased(Term, name="view_obj")
@@ -686,6 +700,12 @@ def resolve_value_aliases(
                         view_obj.term_type_code.in_(["view", "object"]),
                         prop.term_type_code == "prop",
                         TermName.name_text.in_(remaining),
+                        or_(
+                            TermName.search_scope.contains(global_scope),
+                            TermName.search_scope.contains(user_scope)
+                            if user_scope
+                            else literal(False),
+                        ),
                     )
                 ).all()
                 alias_hits = {str(row[0]) for row in alias_rows}
@@ -715,6 +735,7 @@ def resolve_field_aliases_with_names(
     terms: list[str],
     scope_code: str,
     library_id: str | None = None,
+    user_id: str | None = None,
     resolve_values: bool = False,
     value_terms: list[str] | None = None,
 ) -> FieldResolutionResultWithNames:
@@ -747,6 +768,7 @@ def resolve_field_aliases_with_names(
     view_scope = {"scope": "view", "code": scope_code}
     obj_scope = {"scope": "object", "code": scope_code}
     global_scope = {"scope": "global"}
+    user_scope = {"scope_user_id": user_id} if user_id else None
 
     try:
         with get_session() as session:
@@ -770,6 +792,9 @@ def resolve_field_aliases_with_names(
                             TermName.search_scope.contains(view_scope),
                             TermName.search_scope.contains(obj_scope),
                             TermName.search_scope.contains(global_scope),
+                            TermName.search_scope.contains(user_scope)
+                            if user_scope
+                            else literal(False),
                         ),
                     )
                 )

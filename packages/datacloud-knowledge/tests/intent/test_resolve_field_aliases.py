@@ -14,7 +14,7 @@ class _FakeRow:
     """Simulates a SQLAlchemy Row with positional access."""
 
     def __init__(self, name_text: str, term_code: str, term_name: str, scope: dict[str, str]):
-        self._data = (name_text, term_code, term_name, scope)
+        self._data = ("field", name_text, term_code, term_name, scope)
 
     def __iter__(self):  # type: ignore[no-untyped-def]
         return iter(self._data)
