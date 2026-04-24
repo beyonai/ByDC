@@ -273,6 +273,37 @@ def _term_name_search_scope_payload(search_scope: dict[str, str] | None) -> str:
     return json.dumps(search_scope or {}, ensure_ascii=False)
 
 
+def _delete_global_prop_term_names(
+    cur: Cursor,
+    items: list[tuple[str, str, list[str]]],
+    *,
+    skip_delete_ids: set[str] | None = None,
+) -> int:
+    """删除历史导入产生的全局属性名称，避免跨对象/视图召回泄漏。"""
+    if skip_delete_ids is not None:
+        delete_ids = [
+            term_id for term_id, _term_name, _aliases in items if term_id not in skip_delete_ids
+        ]
+    else:
+        delete_ids = [term_id for term_id, _term_name, _aliases in items]
+    if not delete_ids:
+        return 0
+
+    cur.execute(
+        """DELETE FROM term_name
+           WHERE term_id = ANY(%s)
+             AND (
+                 search_scope @> %s::jsonb
+                 OR search_scope = '{}'::jsonb
+             )""",
+        (
+            list(dict.fromkeys(delete_ids)),
+            _term_name_search_scope_payload({"scope": "global"}),
+        ),
+    )
+    return int(cur.rowcount or 0)
+
+
 def _split_term_name_items_by_prop_scope(
     items: list[tuple[str, str, list[str]]],
 ) -> tuple[list[tuple[str, str, list[str]]], list[tuple[str, str, list[str]]]]:
@@ -387,11 +418,13 @@ def _batch_insert_relation_term_names(cur: Cursor, relation_ids: list[str]) -> i
     cur.execute(
         """INSERT INTO term_name (name_id, term_id, name_text, search_scope)
            SELECT t.name_id, t.term_id, t.name_text, t.search_scope::jsonb
-           FROM _tmp_rel_term_name t
-           WHERE NOT EXISTS (
-               SELECT 1 FROM term_name tn
-               WHERE tn.term_id = t.term_id AND tn.name_text = t.name_text
-           )"""
+            FROM _tmp_rel_term_name t
+            WHERE NOT EXISTS (
+                SELECT 1 FROM term_name tn
+                WHERE tn.term_id = t.term_id
+                  AND tn.name_text = t.name_text
+                  AND tn.search_scope @> t.search_scope::jsonb
+            )"""
     )
     inserted_count = cur.rowcount
     cur.execute("DROP TABLE _tmp_rel_term_name")
@@ -556,11 +589,7 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
                 if other_items:
                     _batch_sync_term_names(cur, other_items)
                 if prop_items:
-                    _batch_sync_term_names(
-                        cur,
-                        prop_items,
-                        search_scope={"scope": "global"},
-                    )
+                    _delete_global_prop_term_names(cur, prop_items)
     if not upserts:
         return
     # 按 term_id 判断是否已存在（term_id = library#type#code，全局唯一）
@@ -662,12 +691,7 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
     if other_items:
         _batch_sync_term_names(cur, other_items, skip_delete_ids=new_ids)
     if prop_items:
-        _batch_sync_term_names(
-            cur,
-            prop_items,
-            skip_delete_ids=new_ids,
-            search_scope={"scope": "global"},
-        )
+        _delete_global_prop_term_names(cur, prop_items, skip_delete_ids=new_ids)
 
 
 def _batch_process_relation(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str, Any]) -> None:
@@ -719,6 +743,14 @@ def _batch_process_relation(cur: Cursor, objs: list[dict[str, Any]], stats: dict
         stats["relations"]["updated"] += cur.rowcount
         cur.execute("DROP TABLE _tmp_rel_patch")
     if not upserts:
+        synced_term_name_count = _batch_insert_relation_term_names(
+            cur,
+            [obj["relation_code"] for obj in updates],
+        )
+        if synced_term_name_count:
+            logger.info(
+                "已从 HAS_FIELD relation 同步 scoped term_name: %s 条", synced_term_name_count
+            )
         return
     ids = [o["relation_code"] for o in upserts]
     cur.execute(
