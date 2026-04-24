@@ -112,6 +112,7 @@ async def test_early_return_when_formatted_params_in_state() -> None:
     assert decision is not None, "早返回路径应返回 HookDecision，不应返回 None"
     # 非 complex → patch 决策
     assert decision.get("action") in ("patch", "redirect"), f"非预期 action: {decision}"
+    assert "clarification_formatted_params" not in state
 
 
 # ── TC-V03-4: 早返回 is_complex=True → redirect ───────────────────────────────
@@ -137,3 +138,4 @@ async def test_early_return_is_complex_true_returns_redirect() -> None:
     assert decision.get("action") == "redirect", (
         f"is_complex=True 应返回 redirect，实际: {decision}"
     )
+    assert "clarification_formatted_params" not in state

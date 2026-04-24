@@ -53,6 +53,7 @@ except ImportError:  # pragma: no cover
     resolve_field_aliases = None  # type: ignore[assignment]
     _HAS_RESOLVE_ALIASES = False
 
+from datacloud_analysis.orchestration.gateway_user import get_gateway_user_id
 from datacloud_analysis.tool_hook_plugins.types import (
     ClarificationNeededError,
     HookContext,
@@ -249,6 +250,7 @@ def _resolve_via_aliases(
     field_terms: list[str],
     value_terms: list[str],
     scope_code: str,
+    user_id: str | None = None,
 ) -> tuple[dict[str, str], list[str]]:
     """轻量级别名消歧（字段 + 值，单次 DB 往返）。
 
@@ -264,12 +266,15 @@ def _resolve_via_aliases(
         result = resolve_field_aliases(
             terms=field_terms,
             scope_code=scope_code,
+            user_id=user_id,
             resolve_values=bool(value_terms),
             value_terms=value_terms,
         )
         unresolved = list(result.unresolved) + list(result.ambiguous.keys())
         logger.info(
-            "[query_clarification] resolve_field_aliases: resolved=%d ambiguous=%d unresolved=%d",
+            "[query_clarification] resolve_field_aliases: user_id=%s resolved=%d "
+            "ambiguous=%d unresolved=%d",
+            user_id or "",
             len(result.resolved),
             len(result.ambiguous),
             len(result.unresolved),
@@ -281,6 +286,13 @@ def _resolve_via_aliases(
             exc_info=True,
         )
         return {}, all_terms
+
+
+def _get_gateway_context_user_id(ctx: HookContext) -> str | None:
+    """从 HookContext.metadata.gateway_context 获取用户 ID；缺失时不降级到 state。"""
+    metadata = ctx.get("metadata") or {}
+    gateway_context = metadata.get("gateway_context") if isinstance(metadata, dict) else None
+    return get_gateway_user_id(gateway_context)
 
 
 # LLM 可能使用的非标准排序方向键（都应规范化为 Schema 定义的 direction）
@@ -550,8 +562,14 @@ def _execute_resume(
 
     # SDK 回填的可能是官方中文字段名（choiceKeyword），需做二次翻译
     scope_code = _scope_code_from_tool(tool_name)
+    user_id = _get_gateway_context_user_id(ctx)
     _fresh_field_terms, _ = _collect_terms_from_params(tool_params)
-    _fresh_resolved, _fresh_unresolved = _resolve_via_aliases(_fresh_field_terms, [], scope_code)
+    _fresh_resolved, _fresh_unresolved = _resolve_via_aliases(
+        _fresh_field_terms,
+        [],
+        scope_code,
+        user_id=user_id,
+    )
     logger.info(
         "[query_clarification] _execute_resume fresh_resolved=%s",
         _fresh_resolved,
@@ -639,6 +657,8 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             _raw_query_fp = str((ctx.get("tool_params") or {}).get("query", "") or "")
             _fmt_params = dict(_clarify_result.get("params") or {})
             _is_complex_fp: bool = bool(_clarify_result.get("is_complex"))
+            _graph_state.pop("clarification_formatted_params", None)
+            logger.info("[query_clarification] clarification_formatted_params consumed and cleared")
             # ── 打印知识图谱侧数据（paradigm_list 每条 paradigmResult）──
             _paradigm_list_fp = list(_clarify_result.get("paradigm_list") or [])
             if not _paradigm_list_fp:
@@ -665,8 +685,14 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             # choiceKeyword 应与本体 catalog 字段名严格对齐；
             # 若未命中说明知识图谱数据或表单生成有误，需修数据，不做兜底。
             _scope_code_fp = _scope_code_from_tool(tool_name)
+            _user_id_fp = _get_gateway_context_user_id(ctx)
             _field_terms_fp, _ = _collect_terms_from_params(_fmt_params)
-            _resolved_fp, _unresolved_fp = _resolve_via_aliases(_field_terms_fp, [], _scope_code_fp)
+            _resolved_fp, _unresolved_fp = _resolve_via_aliases(
+                _field_terms_fp,
+                [],
+                _scope_code_fp,
+                user_id=_user_id_fp,
+            )
             if _unresolved_fp:
                 logger.warning(
                     "[query_clarification] V0.3 DATA-MISMATCH: unresolved terms %s"
@@ -734,6 +760,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
 
     # ── Step 2：双通道歧义判断 ────────────────────────────────────────────────
     scope_code = _scope_code_from_tool(tool_name)
+    user_id = _get_gateway_context_user_id(ctx)
     field_terms, value_terms = _collect_terms_from_params(tool_params)
     terms = field_terms + value_terms
 
@@ -742,7 +769,9 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
 
     # 轻量级别名消歧（字段 + 值，单次 DB 往返）
     resolved, unresolved = (
-        _resolve_via_aliases(field_terms, value_terms, scope_code) if terms else ({}, [])
+        _resolve_via_aliases(field_terms, value_terms, scope_code, user_id=user_id)
+        if terms
+        else ({}, [])
     )
 
     if terms and unresolved:

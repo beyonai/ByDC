@@ -69,7 +69,11 @@ async def test_T3_1_complex_conditions_triggers_redirect() -> None:
         },
     )
 
-    decision = await before_call_back(ctx)  # type: ignore[arg-type]
+    with patch(
+        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._resolve_via_aliases",
+        return_value=({}, []),
+    ):
+        decision = await before_call_back(ctx)  # type: ignore[arg-type]
 
     assert decision is not None, "complex_conditions 非空时应返回 HookDecision"
     assert decision.get("action") == "redirect", (
@@ -111,11 +115,63 @@ async def test_T3_2_empty_complex_conditions_no_redirect() -> None:
         loader=loader,
     )
 
-    decision = await before_call_back(ctx)  # type: ignore[arg-type]
+    with patch(
+        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._resolve_via_aliases",
+        return_value=({}, []),
+    ):
+        decision = await before_call_back(ctx)  # type: ignore[arg-type]
 
     # 不应 redirect
     if decision is not None:
         assert decision.get("action") != "redirect", "complex_conditions=[] 时不应 redirect"
+
+
+@pytest.mark.asyncio
+async def test_user_scoped_alias_resolution_receives_gateway_user_id() -> None:
+    """轻量别名解析必须带 gateway user_id，才能命中用户确认同义词。"""
+    from types import SimpleNamespace
+
+    from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
+        before_call_back,
+    )
+
+    captured: dict[str, Any] = {}
+
+    def _fake_resolve_via_aliases(
+        field_terms: list[str],
+        value_terms: list[str],
+        scope_code: str,
+        user_id: str | None = None,
+    ) -> tuple[dict[str, str], list[str]]:
+        captured["field_terms"] = field_terms
+        captured["value_terms"] = value_terms
+        captured["scope_code"] = scope_code
+        captured["user_id"] = user_id
+        return {"贡献率": "mgrid_tax_rate"}, []
+
+    ctx = _make_ctx(
+        "query_scene_grid_analysis",
+        {
+            "query": "查询贡献率排名后10的物理网格",
+            "select": ["贡献率"],
+            "filters": [],
+        },
+    )
+    ctx["metadata"] = {
+        "gateway_context": SimpleNamespace(
+            current_command=SimpleNamespace(header=SimpleNamespace(user_code="adminvip")),
+        )
+    }
+
+    with patch(
+        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._resolve_via_aliases",
+        side_effect=_fake_resolve_via_aliases,
+    ):
+        await before_call_back(ctx)  # type: ignore[arg-type]
+
+    assert captured["field_terms"] == ["贡献率"]
+    assert captured["scope_code"] == "scene_grid_analysis"
+    assert captured["user_id"] == "adminvip"
 
 
 # ── T3-3：complex_conditions 字段缺失 → 视为空列表，正常处理 ─────────────────

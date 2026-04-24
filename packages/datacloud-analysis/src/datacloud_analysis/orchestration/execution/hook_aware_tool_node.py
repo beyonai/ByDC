@@ -126,7 +126,11 @@ class HookAwareToolNode(ToolNode):
                 "knowledge_snippets": list(state_dict.get("knowledge_snippets") or []),
                 "knowledge_payload": dict(state_dict.get("knowledge_payload") or {}),
                 "term_context": list(state_dict.get("confirmed_terms") or []),
-                "metadata": {"loader": self._loader, "state": state_dict},
+                "metadata": {
+                    "loader": self._loader,
+                    "state": state_dict,
+                    "gateway_context": _gw_ctx,
+                },
             }
 
             try:
