@@ -45,8 +45,16 @@ def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> st
     with contextlib.suppress(AttributeError):
         _header_meta = gateway_context.current_command.header.metadata or {}
 
-    _user_code = str(_header_meta.get("user_code") or "").strip()
-    _user_name = str(_header_meta.get("user_name") or "").strip()
+    _header = getattr(gateway_context.current_command, "header", None)
+    _user_code = str(getattr(_header, "user_code", "") or "").strip()
+    _user_name = str(getattr(_header, "user_name", "") or "").strip()
+    logger.info(
+        "[_build_runtime_dynamic_prompt] gateway_context=%s header=%s user_code=%r user_name=%r",
+        type(gateway_context).__name__,
+        type(_header).__name__ if _header is not None else "None",
+        _user_code,
+        _user_name,
+    )
     _now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
     _runtime_lines = ["\n\n## 当前会话信息", f"- 当前时间：{_now_str}"]
     if _user_name and _user_code:
@@ -57,7 +65,9 @@ def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> st
         _runtime_lines.append(f"- 当前用户工号：{_user_code}")
     parts.append("\n".join(_runtime_lines))
 
-    return "".join(parts) if parts else None
+    result = "".join(parts) if parts else None
+    logger.info("[_build_runtime_dynamic_prompt] dynamic_prompt=%r", result)
+    return result
 
 
 def make_llm_call_node(
@@ -117,17 +127,33 @@ def make_llm_call_node(
 
         # 每轮从 state["messages"] 重建消息列表（系统提示 + 对话历史）
         _dynamic = dynamic_prompt or _build_runtime_dynamic_prompt(state, _gateway_context)
-        system_msg = _build_system_message(system_prompt, stable_system_prompt, _dynamic)
-        # V0.3: state["messages"] includes ToolMessages from per-tool nodes.
-        # _conversation_messages_for_llm only keeps Human/AI, dropping ToolMessages,
-        # causing the LLM to see dangling tool_calls with no result (empty response).
+        logger.info(
+            "[llm_call] round=%d gateway_context=%s dynamic_preview=%r",
+            current_round,
+            type(_gateway_context).__name__ if _gateway_context is not None else "None",
+            (_dynamic or "")[:120],
+        )
+        # Anthropic: dynamic 由 _build_system_message 注入 system（带 cache_control）。
+        # 其他 provider: system message 保持纯静态（最大化可缓存前缀），
+        # dynamic 注入第一条 HumanMessage，不影响 system + tools 的缓存命中。
+        _provider = os.getenv("DATACLOUD_LLM_MODEL_PROVIDER", "openai").strip().lower()
+        system_msg = _build_system_message(
+            system_prompt,
+            stable_system_prompt,
+            _dynamic if _provider == "anthropic" else None,
+        )
         conv = list(state.get("messages") or [])
         if conv:
-            messages = [system_msg, *conv]
+            if _dynamic and _provider != "anthropic" and isinstance(conv[0], HumanMessage):
+                patched = HumanMessage(content=_dynamic + "\n\n" + str(conv[0].content))
+                messages = [system_msg, patched, *conv[1:]]
+            else:
+                messages = [system_msg, *conv]
         else:
             messages = [system_msg]
             if query := str(state.get("user_query") or state.get("enriched_query") or ""):
-                messages.append(HumanMessage(content=query))
+                _content = (_dynamic + "\n\n" + query) if _dynamic else query
+                messages.append(HumanMessage(content=_content))
 
         thinking_id = uuid.uuid4().hex[:12]
         messages_window = _trim_messages_window(messages)
