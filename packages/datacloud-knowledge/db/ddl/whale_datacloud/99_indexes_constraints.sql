@@ -95,9 +95,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_term_child
     ON term(parent_term_id, term_code)
     WHERE parent_term_id IS NOT NULL;
 
--- 术语名称：同一术语下名称不重复
-CREATE UNIQUE INDEX IF NOT EXISTS uq_term_name_text
-    ON term_name(term_id, name_text);
+-- 术语名称：同一术语同一作用域下名称不重复。
+-- 允许同一字段别名分别挂在不同 view/object scope 下。
+DROP INDEX IF EXISTS uq_term_name_text;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_term_name_scope
+    ON term_name(term_id, name_text, search_scope);
 
 -- term_vocabulary：唯一索引保障去重查询极速（不依赖实时 DISTINCT）
 CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_word

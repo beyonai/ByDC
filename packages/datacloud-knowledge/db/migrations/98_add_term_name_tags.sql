@@ -10,4 +10,4 @@ BEGIN
         ALTER TABLE term_name ADD COLUMN search_scope JSONB NOT NULL DEFAULT '{}'::jsonb;
     END IF;
 END $$;
-COMMENT ON COLUMN term_name.search_scope IS '名称标签属性，JSONB 格式；存储 scope_user_id/score/use_count/confirmed_count/last_used_at 等';
+COMMENT ON COLUMN term_name.search_scope IS '名称作用域与标签属性，JSONB 格式；字段别名使用 {"scope":"view|object|global","code":"..."} 限定召回范围，也可存储 scope_user_id/score/use_count/confirmed_count/last_used_at 等用户标签';
