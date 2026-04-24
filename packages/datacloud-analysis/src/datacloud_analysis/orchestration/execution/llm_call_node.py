@@ -168,11 +168,16 @@ def make_llm_call_node(
         )
 
         calls = list(getattr(ai_msg, "tool_calls", None) or [])
+        _usage = getattr(ai_msg, "usage_metadata", None) or {}
+        _resp_meta = getattr(ai_msg, "response_metadata", None) or {}
         logger.info(
-            "[llm_call] round=%d tool_calls=%d streamed=%s",
+            "[llm_call] round=%d tool_calls=%d streamed=%s"
+            " usage=%s resp_meta_keys=%s",
             current_round,
             len(calls),
             _did_stream,
+            _usage,
+            sorted(_resp_meta.keys()),
         )
 
         return {
