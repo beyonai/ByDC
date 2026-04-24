@@ -109,6 +109,13 @@ class HookAwareToolNode(ToolNode):
         hook_manager = get_tool_hook_plugin_manager()
         patched_calls: list[dict[str, Any]] = []
 
+        # before_call_back 会消费 complex_conditions（路由元字段），提前从原始 args 中保存，
+        # 供后续推送"工具入参"时还原展示，不影响实际执行参数。
+        original_complex_conditions_map: dict[str, list[str]] = {
+            str(tc.get("id") or ""): list((tc.get("args") or {}).get("complex_conditions") or [])
+            for tc in last_ai.tool_calls
+        }
+
         for tc in last_ai.tool_calls:
             tool_name = str(tc.get("name") or "")
             ctx: HookContext = {
@@ -160,10 +167,20 @@ class HookAwareToolNode(ToolNode):
         patched_ai = last_ai.model_copy(update={"tool_calls": patched_calls})
         patched_state = {**state_dict, "messages": [*messages[:-1], patched_ai]}
 
-        # tool_call_id → patched_params，供工具执行后推送详情使用
-        call_params_map: dict[str, dict[str, Any]] = {
-            str(tc.get("id") or ""): dict(tc.get("args") or {}) for tc in patched_calls
-        }
+        # tool_call_id → display_params，供工具执行后推送详情使用。
+        # complex_conditions 已被 before_call_back 消费剥除，此处从原始入参还原，仅用于展示。
+        # query_*/compute_* 工具始终展示该字段（含空列表），便于确认 LLM 是否判定为复杂查询。
+        call_params_map: dict[str, dict[str, Any]] = {}
+        for tc in patched_calls:
+            tc_id = str(tc.get("id") or "")
+            display_params = dict(tc.get("args") or {})
+            tool_name_disp = str(tc.get("name") or "")
+            orig_cc = original_complex_conditions_map.get(tc_id)
+            if tool_name_disp.startswith(("query_", "compute_")):
+                display_params["complex_conditions"] = orig_cc or []
+            elif orig_cc:
+                display_params["complex_conditions"] = orig_cc
+            call_params_map[tc_id] = display_params
 
         # 实际工具执行（走 prebuilt ToolNode 原有逻辑）
         result = await super().ainvoke(patched_state, config, **kwargs)
