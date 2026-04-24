@@ -44,6 +44,34 @@ class TermBinding:
 
 
 @dataclass
+class ObjectPropConfig:
+    """对象字段的业务语义配置。"""
+
+    property_code: str
+    property_name: str = ""
+    property_desc: str = ""
+    synonyms: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ResolvedObjectProp:
+    """解析后的对象字段语义。"""
+
+    property_code: str
+    property_name: str
+    property_desc: str
+    synonyms: list[str] = field(default_factory=list)
+
+
+@dataclass
+class TermTypeConfig:
+    """术语类型的业务语义配置。"""
+
+    type_name: str
+    type_desc: str = ""
+
+
+@dataclass
 class ObjectRelation:
     """对象间关系（JOIN 关系）。"""
 
@@ -153,6 +181,14 @@ class OwlGenConfig:
     # 配在 HAS_FIELD 关系的 ext_field.synonyms 里。
     object_field_synonyms: dict[tuple[str, str], list[str]] = field(default_factory=dict)
 
+    # ── 对象字段业务配置（推荐）──
+    # key = (table_code, column_name)
+    object_prop_configs: dict[tuple[str, str], ObjectPropConfig] = field(default_factory=dict)
+
+    # ── 术语类型业务配置（推荐）──
+    # key = term_type_code
+    term_type_configs: dict[str, TermTypeConfig] = field(default_factory=dict)
+
     def resolved_views(self) -> list[ViewConfig]:
         """返回视图列表：优先 views，否则从旧字段自动包装。"""
         if self.views:
@@ -168,3 +204,45 @@ class OwlGenConfig:
                 )
             ]
         return []
+
+    def resolve_object_prop(
+        self,
+        table_code: str,
+        column_name: str,
+        default_name: str,
+    ) -> ResolvedObjectProp:
+        """解析对象字段的最终业务语义。"""
+        prop_config = self.object_prop_configs.get((table_code, column_name))
+        property_code = prop_config.property_code if prop_config else column_name
+        property_name = (
+            prop_config.property_name
+            if prop_config and prop_config.property_name
+            else self.prop_display_names.get(column_name, default_name)
+        )
+        property_desc = (
+            prop_config.property_desc
+            if prop_config and prop_config.property_desc
+            else f"属性：{property_name}"
+        )
+        synonyms = (
+            list(prop_config.synonyms)
+            if prop_config and prop_config.synonyms
+            else list(self.prop_synonyms.get(column_name, []))
+        )
+        return ResolvedObjectProp(
+            property_code=property_code,
+            property_name=property_name,
+            property_desc=property_desc,
+            synonyms=synonyms,
+        )
+
+    def resolve_object_prop_code(self, table_code: str, column_name: str) -> str:
+        """解析对象字段编码。"""
+        prop_config = self.object_prop_configs.get((table_code, column_name))
+        if prop_config is None:
+            return column_name
+        return prop_config.property_code
+
+    def resolve_term_type(self, term_type_code: str) -> TermTypeConfig | None:
+        """解析术语类型配置。"""
+        return self.term_type_configs.get(term_type_code)

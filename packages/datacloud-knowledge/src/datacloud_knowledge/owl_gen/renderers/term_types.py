@@ -29,9 +29,18 @@ def build_term_type_defs(
         if binding.term_type_code in seen:
             continue
         seen.add(binding.term_type_code)
+        configured_type = config.resolve_term_type(binding.term_type_code)
+        type_name = (
+            configured_type.type_name if configured_type is not None else binding.term_type_code
+        )
+        type_desc = (
+            configured_type.type_desc
+            if configured_type is not None and configured_type.type_desc
+            else f"{type_name}术语类型"
+        )
         defs[binding.term_type_code] = (
-            binding.term_type_code,  # 占位，enrich 时用字段注释替换
-            f"{binding.term_type_code}术语类型",
+            type_name,
+            type_desc,
             binding.term_data_type,
         )
     return defs
@@ -52,6 +61,8 @@ def enrich_term_type_names(
         code = binding.term_type_code
         if code in defs:
             old_name, _old_desc, data_type = defs[code]
+            if config.resolve_term_type(code) is not None:
+                continue
             comment = col_comments.get(binding.column_name, "")
             if comment and old_name == code:
                 defs[code] = (comment, f"{comment}术语类型", data_type)

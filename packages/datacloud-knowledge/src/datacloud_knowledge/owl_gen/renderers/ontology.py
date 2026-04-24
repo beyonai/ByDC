@@ -63,8 +63,13 @@ def _property_group_for_field(
 def render_object(config: OwlGenConfig, table: Table) -> str:
     """对象定义 OWL（实体 + 字段）。"""
     binding_lookup = _build_binding_lookup(config)
+    resolved_props = {
+        col.name: config.resolve_object_prop(table.code, col.name, col.comment or col.name)
+        for col in table.columns
+    }
     field_refs = "\n".join(
-        f'        <fields rdf:resource="#{col.name}_field"/>' for col in table.columns
+        f'        <fields rdf:resource="#{resolved_props[col.name].property_code}_field"/>'
+        for col in table.columns
     )
     action_code = f"query_{table.code}"
     action_refs = json.dumps([action_code], ensure_ascii=False)
@@ -75,6 +80,7 @@ def render_object(config: OwlGenConfig, table: Table) -> str:
     for col in table.columns:
         dtype = map_data_type(col.sql_type, col.name)
         binding = binding_lookup.get((table.code, col.name))
+        resolved_prop = resolved_props[col.name]
         term_path = f"{config.library_code}#{binding.term_type_code}" if binding else ""
         lib_code = config.library_code if binding else ""
         rel_term = "name" if binding else ""
@@ -83,12 +89,12 @@ def render_object(config: OwlGenConfig, table: Table) -> str:
         prop_group = _property_group_for_field(config, table.code, col.name)
         field_items.append(
             f"""\
-    <owl:NamedIndividual rdf:about="#{col.name}_field">
+    <owl:NamedIndividual rdf:about="#{resolved_prop.property_code}_field">
         <rdf:type rdf:resource="#EntityField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{col.name}</property_code>
+{resolved_prop.property_code}</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(col.comment or col.name)}</property_name>
+{xml_escape(resolved_prop.property_name)}</property_name>
         <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
 {dtype}</data_type>
         <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">\
@@ -189,19 +195,25 @@ DB</entity_source>
 
 def render_mapping(config: OwlGenConfig, table: Table) -> str:
     """对象映射 OWL。"""
+    resolved_props = {
+        col.name: config.resolve_object_prop(table.code, col.name, col.comment or col.name)
+        for col in table.columns
+    }
     mapping_refs = "\n".join(
-        f'        <mapping rdf:resource="#{col.name}_mapping"/>' for col in table.columns
+        f'        <mapping rdf:resource="#{resolved_props[col.name].property_code}_mapping"/>'
+        for col in table.columns
     )
     mapping_items: list[str] = []
     for col in table.columns:
+        resolved_prop = resolved_props[col.name]
         mapping_items.append(
             f"""\
-    <owl:NamedIndividual rdf:about="#{col.name}_mapping">
+    <owl:NamedIndividual rdf:about="#{resolved_prop.property_code}_mapping">
         <rdf:type rdf:resource="#Mapping"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{col.name}</property_code>
+{resolved_prop.property_code}</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(col.comment or col.name)}</property_name>
+{xml_escape(resolved_prop.property_name)}</property_name>
         <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
 {table.code}</source_table_code>
         <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\

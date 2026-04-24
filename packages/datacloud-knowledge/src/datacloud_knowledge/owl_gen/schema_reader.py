@@ -95,7 +95,10 @@ def load_term_values(
     type_parent_map: dict[str, str] = {}
     for binding in config.term_bindings:
         term_values.setdefault(binding.term_type_code, OrderedDict())
-        type_parent_map.setdefault(binding.term_type_code, binding.column_name)
+        type_parent_map.setdefault(
+            binding.term_type_code,
+            config.resolve_object_prop_code(binding.table_code, binding.column_name),
+        )
 
     try:
         with conn.cursor() as cur:

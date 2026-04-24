@@ -156,17 +156,21 @@ def render_terms(
     seen_prop_codes: set[str] = set()
     for table in tables:
         for col in table.columns:
-            if col.name in seen_prop_codes:
+            resolved_prop = config.resolve_object_prop(
+                table.code, col.name, col.comment or col.name
+            )
+            if resolved_prop.property_code in seen_prop_codes:
                 continue
-            seen_prop_codes.add(col.name)
+            seen_prop_codes.add(resolved_prop.property_code)
             ontology_items.append(
                 _term_item(
                     config,
-                    code_path=f"PROP#{col.name}",
-                    term_code=col.name,
-                    term_name=col.comment or col.name,
+                    code_path=f"PROP#{resolved_prop.property_code}",
+                    term_code=resolved_prop.property_code,
+                    term_name=resolved_prop.property_name,
                     term_type_code="prop",
-                    term_desc=f"属性：{col.comment or col.name}",
+                    term_desc=resolved_prop.property_desc,
+                    synonyms=resolved_prop.synonyms,
                 )
             )
 
@@ -217,19 +221,19 @@ def render_terms_for_object(
     )
 
     for col in table.columns:
-        if col.name in prop_codes:
+        resolved_prop = config.resolve_object_prop(table.code, col.name, col.comment or col.name)
+        if resolved_prop.property_code in prop_codes:
             continue
-        prop_codes.add(col.name)
-        display_name = config.prop_display_names.get(col.name, col.comment or col.name)
+        prop_codes.add(resolved_prop.property_code)
         items.append(
             _term_item(
                 config,
-                code_path=f"PROP#{col.name}",
-                term_code=col.name,
-                term_name=display_name,
+                code_path=f"PROP#{resolved_prop.property_code}",
+                term_code=resolved_prop.property_code,
+                term_name=resolved_prop.property_name,
                 term_type_code="prop",
-                term_desc=f"属性：{display_name}",
-                synonyms=config.prop_synonyms.get(col.name, []),
+                term_desc=resolved_prop.property_desc,
+                synonyms=resolved_prop.synonyms,
             )
         )
 
@@ -259,8 +263,12 @@ def render_terms_for_view(
 ) -> tuple[str, int]:
     """渲染单个视图的术语定义。
 
-    只生成 VIEW 术语本身，不再生成 prop 术语。
-    prop 术语在对象层已生成（通用名），视图专属别名通过 HAS_FIELD 关系的 ext_field 传递。
+    生成 VIEW 术语，以及视图专属 prop 术语。
+
+    规则：
+    - 与对象源字段同 code 的映射（如 enterprise_id -> enterprise_id）沿用对象层 prop，避免重复生成。
+    - property_code 与 source_object_column_code 不同的视图字段（如 grid_total_revenue -> total_revenue）
+      生成独立 prop 术语，保留自身 code 与中文名，避免被标准化为源字段 code。
     """
     items: list[str] = [
         _term_item(
@@ -273,4 +281,24 @@ def render_terms_for_view(
             owl_doc_file=f"view/{view.view_code}/{view.view_code}_definition.owl",
         )
     ]
+
+    for mapping in view.field_mappings:
+        object_prop_code = config.resolve_object_prop_code(
+            mapping.source_object_code,
+            mapping.source_object_column_code,
+        )
+        if mapping.property_code in {mapping.source_object_column_code, object_prop_code}:
+            continue
+        items.append(
+            _term_item(
+                config,
+                code_path=f"VIEW_PROP#{view.view_code}#{mapping.property_code}",
+                term_code=mapping.property_code,
+                term_name=mapping.property_name,
+                term_type_code="prop",
+                term_desc=f"视图属性：{mapping.property_name}",
+                owl_doc_file=f"view/{view.view_code}/{view.view_code}_terms.owl",
+                synonyms=mapping.synonyms,
+            )
+        )
     return (_wrap_terms(items), len(items))

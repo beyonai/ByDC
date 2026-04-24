@@ -7,10 +7,12 @@ from datacloud_knowledge.owl_gen.generator import generate_from_tables
 from datacloud_knowledge.owl_gen.models import (
     Column,
     FieldRole,
+    ObjectPropConfig,
     ObjectRelation,
     OwlGenConfig,
     Table,
     TermBinding,
+    TermTypeConfig,
     ViewConfig,
     ViewFieldMapping,
 )
@@ -20,7 +22,10 @@ from datacloud_knowledge.owl_gen.renderers.ontology import (
     render_view,
     render_view_mapping,
 )
-from datacloud_knowledge.owl_gen.renderers.relations import render_relation_view
+from datacloud_knowledge.owl_gen.renderers.relations import (
+    render_relation_view,
+    render_view_relations_for_view,
+)
 from datacloud_knowledge.owl_gen.renderers.terms import render_terms, render_terms_for_view
 
 
@@ -344,10 +349,134 @@ def test_generate_from_tables_skips_duplicate_props_in_later_objects(tmp_path: P
     assert "term_prop_enterprise_id" not in second_terms
 
 
-def test_render_terms_for_view_emits_only_view_term() -> None:
-    """视图 terms 只生成 VIEW 术语，不再生成 prop 术语。
+def test_generate_from_tables_uses_business_object_prop_config(tmp_path: Path) -> None:
+    config = _build_config()
+    config.output_dir = tmp_path
+    config.object_prop_configs = {
+        ("ads_enterprise_analysis", "total_revenue"): ObjectPropConfig(
+            property_code="enterprise_total_revenue",
+            property_name="企业总营收（万元）",
+            synonyms=["企业收入"],
+        )
+    }
+    tables = [
+        Table(
+            code="ads_enterprise_analysis",
+            name="企业综合分析表",
+            desc="企业",
+            columns=[
+                Column(
+                    name="total_revenue",
+                    sql_type="decimal(18,2)",
+                    nullable=False,
+                    comment="总营收",
+                )
+            ],
+        )
+    ]
 
-    prop 术语在对象层生成，视图专属别名通过 HAS_FIELD 关系的 ext_field 传递。
+    generate_from_tables(config, tables, {})
+
+    object_definition = (
+        tmp_path / "object" / "ads_enterprise_analysis" / "ads_enterprise_analysis_definition.owl"
+    ).read_text()
+    object_mapping = (
+        tmp_path / "object" / "ads_enterprise_analysis" / "ads_enterprise_analysis_mapping.owl"
+    ).read_text()
+    object_terms = (
+        tmp_path / "object" / "ads_enterprise_analysis" / "ads_enterprise_analysis_terms.owl"
+    ).read_text()
+    object_relations = (
+        tmp_path
+        / "object"
+        / "ads_enterprise_analysis"
+        / "ads_enterprise_analysis_attribute_relations.owl"
+    ).read_text()
+
+    assert "enterprise_total_revenue_field" in object_definition
+    assert (
+        '<property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_total_revenue</property_code>'
+        in object_definition
+    )
+    assert "enterprise_total_revenue_mapping" in object_mapping
+    assert "term_prop_enterprise_total_revenue" in object_terms
+    assert (
+        '<target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_total_revenue</target_code>'
+        in object_relations
+    )
+    assert "企业收入" in object_relations
+
+
+def test_generate_from_tables_uses_business_term_type_config(tmp_path: Path) -> None:
+    config = _build_config()
+    config.output_dir = tmp_path
+    config.term_bindings = [
+        TermBinding(
+            "ads_enterprise_analysis",
+            "enterprise_level_name",
+            "ent_level",
+            "DICT_TERM",
+        )
+    ]
+    config.term_type_configs = {
+        "ent_level": TermTypeConfig(
+            type_name="企业等级",
+            type_desc="企业等级术语类型",
+        )
+    }
+    config.object_prop_configs = {
+        ("ads_enterprise_analysis", "enterprise_level_name"): ObjectPropConfig(
+            property_code="enterprise_level",
+            property_name="企业等级",
+        )
+    }
+    tables = [
+        Table(
+            code="ads_enterprise_analysis",
+            name="企业综合分析表",
+            desc="企业",
+            columns=[
+                Column(
+                    name="enterprise_level_name",
+                    sql_type="varchar",
+                    nullable=False,
+                    comment="企业等级字段备注",
+                )
+            ],
+        )
+    ]
+    term_values = {
+        "ent_level": [
+            {
+                "code": "A",
+                "name": "A级",
+                "parent_prop_code": "enterprise_level",
+            }
+        ]
+    }
+
+    generate_from_tables(config, tables, term_values)
+
+    term_types = (
+        tmp_path / "object" / "ads_enterprise_analysis" / "ads_enterprise_analysis_term_types.owl"
+    ).read_text()
+    object_terms = (
+        tmp_path / "object" / "ads_enterprise_analysis" / "ads_enterprise_analysis_terms.owl"
+    ).read_text()
+
+    assert "企业等级" in term_types
+    assert "企业等级术语类型" in term_types
+    assert (
+        '<parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_level</parent_term_code>'
+        in object_terms
+    )
+
+
+def test_render_terms_for_view_emits_only_view_term() -> None:
+    """视图 terms 为 prefixed 字段生成独立 prop 术语。
+
+    同 code 映射沿用对象层 prop；property_code 与 source_object_column_code 不同的映射
+    生成独立 prop 术语，避免被标准化到源字段 code。
     """
     config = _build_config()
     config.views = [
@@ -364,6 +493,50 @@ def test_render_terms_for_view_emits_only_view_term() -> None:
                     source_object_column_code="enterprise_id",
                     role=FieldRole("DIMENSION_ATTR", "id"),
                     synonyms=["企业综合分析视图企业 ID"],
+                ),
+                ViewFieldMapping(
+                    property_code="grid_total_revenue",
+                    property_name="所属物理网格总营收（万元）",
+                    source_object_code="ads_grid_analysis",
+                    source_object_column_code="total_revenue",
+                    role=FieldRole("DIMENSION", "numeric"),
+                    synonyms=["所属物理网格总营收（万元）"],
+                ),
+            ],
+        )
+    ]
+
+    result, count = render_terms_for_view(config, config.views[0])
+
+    assert count == 2
+    assert "VIEW#scene_enterprise_analysis" in result
+    assert "term_prop_enterprise_id" not in result
+    assert "term_prop_grid_total_revenue" in result
+    assert "VIEW_PROP#scene_enterprise_analysis#grid_total_revenue" in result
+    assert "所属物理网格总营收（万元）" in result
+
+
+def test_render_terms_for_view_skips_configured_object_prop_code() -> None:
+    config = _build_config()
+    config.object_prop_configs = {
+        ("ads_enterprise_analysis", "total_revenue"): ObjectPropConfig(
+            property_code="enterprise_total_revenue",
+            property_name="企业总营收（万元）",
+        )
+    }
+    config.views = [
+        ViewConfig(
+            view_code="scene_enterprise_analysis",
+            view_name="企业综合分析视图",
+            view_desc="企业视图",
+            object_codes=["ads_enterprise_analysis"],
+            field_mappings=[
+                ViewFieldMapping(
+                    property_code="enterprise_total_revenue",
+                    property_name="企业总营收（万元）",
+                    source_object_code="ads_enterprise_analysis",
+                    source_object_column_code="total_revenue",
+                    role=FieldRole("MEASURE", "basic_metric"),
                 )
             ],
         )
@@ -373,4 +546,70 @@ def test_render_terms_for_view_emits_only_view_term() -> None:
 
     assert count == 1
     assert "VIEW#scene_enterprise_analysis" in result
-    assert "term_prop_enterprise_id" not in result
+    assert "term_prop_enterprise_total_revenue" not in result
+
+
+def test_render_view_relations_for_view_targets_property_code_for_prefixed_fields() -> None:
+    config = _build_config()
+    config.views = [
+        ViewConfig(
+            view_code="scene_enterprise_analysis",
+            view_name="企业综合分析视图",
+            view_desc="企业视图",
+            object_codes=["ads_enterprise_analysis", "ads_grid_analysis"],
+            field_mappings=[
+                ViewFieldMapping(
+                    property_code="grid_total_revenue",
+                    property_name="所属物理网格总营收（万元）",
+                    source_object_code="ads_grid_analysis",
+                    source_object_column_code="total_revenue",
+                    role=FieldRole("DIMENSION", "numeric"),
+                )
+            ],
+        )
+    ]
+
+    result = render_view_relations_for_view(config, config.views[0])
+
+    assert (
+        '<target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_total_revenue</target_code>'
+        in result
+    )
+    assert (
+        '<target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_revenue</target_code>'
+        not in result
+    )
+
+
+def test_render_view_relations_for_view_uses_object_prop_code_for_same_code_mapping() -> None:
+    config = _build_config()
+    config.object_prop_configs = {
+        ("ads_enterprise_analysis", "total_revenue"): ObjectPropConfig(
+            property_code="enterprise_total_revenue",
+            property_name="企业总营收（万元）",
+        )
+    }
+    config.views = [
+        ViewConfig(
+            view_code="scene_enterprise_analysis",
+            view_name="企业综合分析视图",
+            view_desc="企业视图",
+            object_codes=["ads_enterprise_analysis"],
+            field_mappings=[
+                ViewFieldMapping(
+                    property_code="total_revenue",
+                    property_name="企业总营收（万元）",
+                    source_object_code="ads_enterprise_analysis",
+                    source_object_column_code="total_revenue",
+                    role=FieldRole("MEASURE", "basic_metric"),
+                )
+            ],
+        )
+    ]
+
+    result = render_view_relations_for_view(config, config.views[0])
+
+    assert (
+        '<target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_total_revenue</target_code>'
+        in result
+    )

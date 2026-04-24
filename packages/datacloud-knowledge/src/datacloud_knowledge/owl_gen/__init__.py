@@ -12,10 +12,13 @@ from datacloud_knowledge.owl_gen.generator import generate, generate_from_tables
 from datacloud_knowledge.owl_gen.models import (
     Column,
     FieldRole,
+    ObjectPropConfig,
     ObjectRelation,
     OwlGenConfig,
+    ResolvedObjectProp,
     Table,
     TermBinding,
+    TermTypeConfig,
     ViewConfig,
     ViewFieldMapping,
 )
@@ -23,10 +26,13 @@ from datacloud_knowledge.owl_gen.models import (
 __all__ = [
     "Column",
     "FieldRole",
+    "ObjectPropConfig",
     "ObjectRelation",
     "OwlGenConfig",
+    "ResolvedObjectProp",
     "Table",
     "TermBinding",
+    "TermTypeConfig",
     "ViewConfig",
     "ViewFieldMapping",
     "generate",

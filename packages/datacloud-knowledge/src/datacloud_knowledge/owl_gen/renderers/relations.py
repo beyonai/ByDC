@@ -50,6 +50,13 @@ def render_view_relations_for_view(config: OwlGenConfig, view: ViewConfig) -> st
     # HAS_FIELD: 视图拥有的字段（带视图专属别名）
     for mapping in view.field_mappings:
         alias = mapping.property_name or mapping.source_object_column_code
+        object_prop_code = config.resolve_object_prop_code(
+            mapping.source_object_code,
+            mapping.source_object_column_code,
+        )
+        target_code = object_prop_code
+        if mapping.property_code not in {mapping.source_object_column_code, object_prop_code}:
+            target_code = mapping.property_code
         items.append(
             rel_item(
                 rel_id=f"rel_{view.view_code}_{mapping.property_code}",
@@ -58,7 +65,7 @@ def render_view_relations_for_view(config: OwlGenConfig, view: ViewConfig) -> st
                 source_code=view.view_code,
                 target_lib=config.library_code,
                 target_type="prop",
-                target_code=mapping.source_object_column_code,
+                target_code=target_code,
                 rel_name=f"{view.view_name}_拥有字段_{alias}",
                 rel_type="HAS_FIELD",
                 ext_field=_has_field_ext(alias, mapping.synonyms),
@@ -137,8 +144,13 @@ def render_relation_attribute(config: OwlGenConfig, tables: list[Table]) -> str:
     items = []
     for table in tables:
         for col in table.columns:
-            alias = col.comment or col.name
-            syns = config.object_field_synonyms.get((table.code, col.name), [])
+            resolved_prop = config.resolve_object_prop(
+                table.code, col.name, col.comment or col.name
+            )
+            alias = resolved_prop.property_name
+            syns = resolved_prop.synonyms or config.object_field_synonyms.get(
+                (table.code, col.name), []
+            )
             items.append(
                 rel_item(
                     rel_id=f"rel_{table.code}_{col.name}",
@@ -147,7 +159,7 @@ def render_relation_attribute(config: OwlGenConfig, tables: list[Table]) -> str:
                     source_code=table.code,
                     target_lib=config.library_code,
                     target_type="prop",
-                    target_code=col.name,
+                    target_code=resolved_prop.property_code,
                     rel_name=f"{table.name}_拥有字段_{alias}",
                     rel_type="HAS_FIELD",
                     ext_field=_has_field_ext(alias, syns),
@@ -168,8 +180,11 @@ def render_attribute_relations_for_object(config: OwlGenConfig, table: Table) ->
     """渲染单个对象的字段关系。"""
     items = []
     for col in table.columns:
-        alias = col.comment or col.name
-        syns = config.object_field_synonyms.get((table.code, col.name), [])
+        resolved_prop = config.resolve_object_prop(table.code, col.name, col.comment or col.name)
+        alias = resolved_prop.property_name
+        syns = resolved_prop.synonyms or config.object_field_synonyms.get(
+            (table.code, col.name), []
+        )
         items.append(
             rel_item(
                 rel_id=f"rel_{table.code}_{col.name}",
@@ -178,7 +193,7 @@ def render_attribute_relations_for_object(config: OwlGenConfig, table: Table) ->
                 source_code=table.code,
                 target_lib=config.library_code,
                 target_type="prop",
-                target_code=col.name,
+                target_code=resolved_prop.property_code,
                 rel_name=f"{table.name}_拥有字段_{alias}",
                 rel_type="HAS_FIELD",
                 ext_field=_has_field_ext(alias, syns),
