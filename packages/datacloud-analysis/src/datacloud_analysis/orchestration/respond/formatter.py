@@ -128,14 +128,30 @@ def _load_csv_rows(path: Path) -> list[list[str]]:
         return list(reader)
 
 
+def _merge_final_answer(streamed_answer: str, formatted_answer: str | None) -> str | None:
+    """Merge streamed answer text with the later formatted final payload."""
+    streamed_text = streamed_answer.strip()
+    formatted_text = (formatted_answer or "").strip()
+    if not streamed_text:
+        return formatted_text or None
+    if not formatted_text or formatted_text == streamed_text:
+        return streamed_text
+    if formatted_text in streamed_text:
+        return streamed_text
+    if streamed_text in formatted_text:
+        return formatted_text
+    return f"{streamed_text}\n\n{formatted_text}"
+
+
 async def format_result(
     react_final: dict[str, Any],
     gateway_context: Any,
     workspace_dir: str | None = None,
-) -> None:
+) -> str | None:
     """Format and emit final ReAct result."""
     result_type = react_final.get("result_type", "text")
     answer_was_streamed = bool(react_final.get("answer_streamed", False))
+    streamed_answer = str(react_final.get("answer") or "") if answer_was_streamed else ""
     output_fmt = _get_output_format()
 
     # 每次 format_result 调用生成独立时间戳，同轮文本与数据用不同前缀区分前端气泡
@@ -159,91 +175,120 @@ async def format_result(
         query_data = react_final.get("query_data")
 
         if answer and not answer_was_streamed and not query_data:
-            await _emit_text(gateway_context, str(answer), message_id=_text_msg_id)
+            final_text = str(answer)
+            await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+            return final_text
         if not query_data:
             if not answer:
-                await _emit_text(gateway_context, "(query_data 为空)", message_id=_text_msg_id)
-            return
+                final_text = "(query_data 为空)"
+                await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+                return final_text
+            return str(answer)
 
         if output_fmt == "markdown":
             # answer 已流式推送且自身包含 MD 表格时跳过，避免重复推送；
             # 短摘要型 answer（无表格）仍需补充推送原始数据表格。
             answer_has_table = bool(_TABLE_SEP_RE.search(answer))
             if not (answer_was_streamed and answer_has_table):
-                await _emit_query_result_as_markdown(
+                formatted_answer = await _emit_query_result_as_markdown(
                     gateway_context, query_data, message_id=_text_msg_id
                 )
+                return _merge_final_answer(streamed_answer, formatted_answer)
+            return str(answer) if answer else None
         else:
-            await _emit_query_result_as_6001(gateway_context, query_data, message_id=_data_msg_id)
-        return
+            formatted_answer = await _emit_query_result_as_6001(
+                gateway_context, query_data, message_id=_data_msg_id
+            )
+            return _merge_final_answer(streamed_answer, formatted_answer)
 
     if result_type == "csv_file":
         csv_path = react_final.get("csv_file_path", "")
         if not csv_path:
-            await _emit_text(gateway_context, "(CSV 路径为空，无法输出)", message_id=_text_msg_id)
-            return
+            final_text = "(CSV 路径为空，无法输出)"
+            await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+            return final_text
 
         resolved = _resolve_result_path(csv_path, workspace_dir)
         if not resolved.exists():
-            await _emit_text(
-                gateway_context, f"(CSV 文件不存在: {csv_path})", message_id=_text_msg_id
-            )
-            return
+            final_text = f"(CSV 文件不存在: {csv_path})"
+            await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+            return final_text
 
         if output_fmt == "markdown":
-            await _stream_csv_as_markdown(gateway_context, resolved, message_id=_text_msg_id)
+            formatted_answer = await _stream_csv_as_markdown(
+                gateway_context, resolved, message_id=_text_msg_id
+            )
         else:
-            await _stream_csv_as_6001(gateway_context, resolved, message_id=_data_msg_id)
-        return
+            formatted_answer = await _stream_csv_as_6001(
+                gateway_context, resolved, message_id=_data_msg_id
+            )
+        return _merge_final_answer(streamed_answer, formatted_answer)
 
     if result_type == "json":
         data = react_final.get("data")
         if data is None:
-            await _emit_text(gateway_context, "(JSON 数据为空)", message_id=_text_msg_id)
-            return
+            final_text = "(JSON 数据为空)"
+            await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+            return final_text
 
         if output_fmt == "markdown":
-            await _emit_json_as_markdown(gateway_context, data, message_id=_text_msg_id)
+            formatted_answer = await _emit_json_as_markdown(
+                gateway_context, data, message_id=_text_msg_id
+            )
         else:
-            await _emit_json_as_6001(gateway_context, data, message_id=_data_msg_id)
-        return
+            formatted_answer = await _emit_json_as_6001(
+                gateway_context, data, message_id=_data_msg_id
+            )
+        return _merge_final_answer(streamed_answer, formatted_answer)
 
     if result_type == "json_file":
         json_path = react_final.get("csv_file_path") or react_final.get("json_file_path") or ""
         if not json_path:
-            await _emit_text(gateway_context, "(JSON 文件路径为空)", message_id=_text_msg_id)
-            return
+            final_text = "(JSON 文件路径为空)"
+            await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+            return final_text
 
         resolved = _resolve_result_path(json_path, workspace_dir)
         if not resolved.exists():
-            await _emit_text(gateway_context, f"(文件不存在: {json_path})", message_id=_text_msg_id)
-            return
+            final_text = f"(文件不存在: {json_path})"
+            await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+            return final_text
 
         if resolved.suffix.lower() == ".csv":
             if output_fmt == "markdown":
-                await _stream_csv_as_markdown(gateway_context, resolved, message_id=_text_msg_id)
+                formatted_answer = await _stream_csv_as_markdown(
+                    gateway_context, resolved, message_id=_text_msg_id
+                )
             else:
-                await _stream_csv_as_6001(gateway_context, resolved, message_id=_data_msg_id)
-            return
+                formatted_answer = await _stream_csv_as_6001(
+                    gateway_context, resolved, message_id=_data_msg_id
+                )
+            return _merge_final_answer(streamed_answer, formatted_answer)
 
         try:
             data = await asyncio.to_thread(_load_json_file, resolved)
         except Exception as exc:  # noqa: BLE001
             logger.error("format_result json_file read failed: %s", exc)
-            await _emit_text(
-                gateway_context, f"(读取 JSON 文件失败: {exc})", message_id=_text_msg_id
-            )
-            return
+            final_text = f"(读取 JSON 文件失败: {exc})"
+            await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+            return final_text
 
         if output_fmt == "markdown":
-            await _emit_json_as_markdown(gateway_context, data, message_id=_text_msg_id)
+            formatted_answer = await _emit_json_as_markdown(
+                gateway_context, data, message_id=_text_msg_id
+            )
         else:
-            await _emit_json_as_6001(gateway_context, data, message_id=_data_msg_id)
-        return
+            formatted_answer = await _emit_json_as_6001(
+                gateway_context, data, message_id=_data_msg_id
+            )
+        return _merge_final_answer(streamed_answer, formatted_answer)
 
     answer = react_final.get("answer", "")
     if not answer_was_streamed:
-        await _emit_text(gateway_context, answer, message_id=_text_msg_id)
+        final_text = str(answer)
+        await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+        return final_text
+    return str(answer) if answer else None
 
 
 async def _emit_text(gateway_context: Any, text: str, *, message_id: str) -> None:
@@ -264,7 +309,7 @@ async def _emit_text(gateway_context: Any, text: str, *, message_id: str) -> Non
         logger.warning("format_result: emit_text failed: %s", exc)
 
 
-async def _emit_json_as_markdown(gateway_context: Any, data: Any, *, message_id: str) -> None:
+async def _emit_json_as_markdown(gateway_context: Any, data: Any, *, message_id: str) -> str:
     """Emit arbitrary JSON-like payload as markdown table."""
     if isinstance(data, str):
         with suppress(Exception):
@@ -286,28 +331,33 @@ async def _emit_json_as_markdown(gateway_context: Any, data: Any, *, message_id:
 
     markdown_text = _data_to_markdown(columns, rows)
     await _emit_text(gateway_context, markdown_text, message_id=message_id)
+    return markdown_text
 
 
-async def _stream_csv_as_markdown(gateway_context: Any, csv_path: Path, *, message_id: str) -> None:
+async def _stream_csv_as_markdown(
+    gateway_context: Any, csv_path: Path, *, message_id: str
+) -> str | None:
     try:
         rows = await asyncio.to_thread(_load_csv_rows, csv_path)
     except Exception as exc:  # noqa: BLE001
         logger.error("_stream_csv_as_markdown read failed: %s", exc)
-        await _emit_text(gateway_context, f"(读取 CSV 文件失败: {exc})", message_id=message_id)
-        return
+        final_text = f"(读取 CSV 文件失败: {exc})"
+        await _emit_text(gateway_context, final_text, message_id=message_id)
+        return final_text
 
     if not rows:
-        return
+        return None
 
     header = rows[0]
     data_rows = rows[1:]
     markdown_text = _data_to_markdown(header, data_rows)
     await _emit_text(gateway_context, markdown_text, message_id=message_id)
+    return markdown_text
 
 
 async def _emit_query_result_as_markdown(
     gateway_context: Any, query_data: dict[str, Any], *, message_id: str
-) -> None:
+) -> str:
     columns, record_keys = _query_result_headers_and_record_keys(query_data)
     records = query_data.get("records") or []
 
@@ -322,17 +372,18 @@ async def _emit_query_result_as_markdown(
         markdown_text = markdown_text + "\n\n> " + str(notice)
 
     await _emit_text(gateway_context, markdown_text, message_id=message_id)
+    return markdown_text
 
 
-async def _emit_json_as_6001(gateway_context: Any, data: Any, *, message_id: str) -> None:
+async def _emit_json_as_6001(gateway_context: Any, data: Any, *, message_id: str) -> str | None:
     if gateway_context is None:
-        return
+        return None
 
     try:
         from by_framework import EventType, StreamChunkEvent
     except ImportError:
         logger.warning("by_framework not available, skipping 6001 json emit")
-        return
+        return None
 
     try:
         content_type_6001 = "6001"
@@ -363,6 +414,8 @@ async def _emit_json_as_6001(gateway_context: Any, data: Any, *, message_id: str
             columns = ["result"]
             rows = [[json.dumps(data, ensure_ascii=False, default=str)]]
 
+        final_text = _data_to_markdown(columns, rows)
+
         total_chunks = max(1, (len(rows) + _CHUNK_ROWS - 1) // _CHUNK_ROWS)
         for seq, start in enumerate(range(0, max(1, len(rows)), _CHUNK_ROWS), 1):
             chunk_rows = rows[start : start + _CHUNK_ROWS]
@@ -379,19 +432,23 @@ async def _emit_json_as_6001(gateway_context: Any, data: Any, *, message_id: str
                 content_type=content_type_6001,
                 message_id=message_id,
             )
+        return final_text
     except Exception as exc:  # noqa: BLE001
         logger.error("_emit_json_as_6001 failed: %s", exc)
+        return None
 
 
-async def _stream_csv_as_6001(gateway_context: Any, csv_path: Path, *, message_id: str) -> None:
+async def _stream_csv_as_6001(
+    gateway_context: Any, csv_path: Path, *, message_id: str
+) -> str | None:
     if gateway_context is None:
-        return
+        return None
 
     try:
         from by_framework import EventType, StreamChunkEvent
     except ImportError:
         logger.warning("by_framework not available, skipping 6001 emit")
-        return
+        return None
 
     try:
         content_type_6001 = "6001"
@@ -407,10 +464,11 @@ async def _stream_csv_as_6001(gateway_context: Any, csv_path: Path, *, message_i
         rows = await asyncio.to_thread(_load_csv_rows, csv_path)
 
         if not rows:
-            return
+            return None
 
         header = rows[0]
         data_rows = rows[1:]
+        final_text = _data_to_markdown(header, data_rows)
         total_chunks = max(1, (len(data_rows) + _CHUNK_ROWS - 1) // _CHUNK_ROWS)
 
         for seq, start in enumerate(range(0, max(1, len(data_rows)), _CHUNK_ROWS), 1):
@@ -428,21 +486,23 @@ async def _stream_csv_as_6001(gateway_context: Any, csv_path: Path, *, message_i
                 content_type=content_type_6001,
                 message_id=message_id,
             )
+        return final_text
     except Exception as exc:  # noqa: BLE001
         logger.error("_stream_csv_as_6001 failed: %s", exc)
+        return None
 
 
 async def _emit_query_result_as_6001(
     gateway_context: Any, query_data: dict[str, Any], *, message_id: str
-) -> None:
+) -> str | None:
     if gateway_context is None:
-        return
+        return None
 
     try:
         from by_framework import EventType, StreamChunkEvent
     except ImportError:
         logger.warning("by_framework not available, skipping query_result emit")
-        return
+        return None
 
     try:
         content_type_6001 = "6001"
@@ -493,6 +553,18 @@ async def _emit_query_result_as_6001(
         if query_data.get("file"):
             payload["file"] = query_data["file"]
 
+        columns, record_keys = _query_result_headers_and_record_keys(query_data)
+        if isinstance(records, list) and records and isinstance(records[0], dict) and record_keys:
+            markdown_rows = [
+                [str(record.get(key, "")) for key in record_keys] for record in records
+            ]
+        else:
+            markdown_rows = [[str(record)] for record in records]
+        final_text = _data_to_markdown(columns, markdown_rows)
+        notice = payload["notice_msg"]
+        if notice:
+            final_text = final_text + "\n\n> " + str(notice)
+
         text = json.dumps(payload, ensure_ascii=False, default=str)
         await gateway_context.emit_chunk(
             StreamChunkEvent(content=coerce_stream_chunk_text(text)),
@@ -500,8 +572,10 @@ async def _emit_query_result_as_6001(
             content_type=content_type_6001,
             message_id=message_id,
         )
+        return final_text
     except Exception as exc:  # noqa: BLE001
         logger.error("_emit_query_result_as_6001 failed: %s", exc)
+        return None
 
 
 def _build_pagination(records: list[Any], meta: Mapping[str, Any] | None) -> dict[str, Any]:
