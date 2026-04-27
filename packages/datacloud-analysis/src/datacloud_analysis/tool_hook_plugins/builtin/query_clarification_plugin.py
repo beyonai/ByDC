@@ -25,10 +25,7 @@ from typing import Any
 
 try:
     from datacloud_knowledge.intent.clarification import (
-        analyze_query_clarification_compute as _sdk_analyze_compute,
-    )
-    from datacloud_knowledge.intent.clarification import (
-        analyze_query_clarification_query as _sdk_analyze_query,
+        analyze_query_clarification as _sdk_analyze_clarification,
     )
     from datacloud_knowledge.intent.clarification import (
         format_clarification_compute as _sdk_format_compute,
@@ -40,8 +37,7 @@ try:
     _HAS_SDK_CLARIFICATION = True
 except ImportError:  # pragma: no cover
     _HAS_SDK_CLARIFICATION = False
-    _sdk_analyze_compute = None  # type: ignore[assignment]
-    _sdk_analyze_query = None  # type: ignore[assignment]
+    _sdk_analyze_clarification = None  # type: ignore[assignment]
     _sdk_format_compute = None  # type: ignore[assignment]
     _sdk_format_query = None  # type: ignore[assignment]
 
@@ -225,6 +221,7 @@ def _collect_terms_from_params(
                 field_terms.append(t)
     return field_terms, value_terms
 
+
 def _resolve_via_aliases(
     field_terms: list[str],
     value_terms: list[str],
@@ -238,7 +235,7 @@ def _resolve_via_aliases(
     ambiguous 候选视为 unresolved，交给慢路径处理。
     """
     all_terms = field_terms + value_terms
-    if not _HAS_RESOLVE_ALIASES or not all_terms or not scope_code:
+    if not _HAS_RESOLVE_ALIASES or resolve_field_aliases is None or not all_terms or not scope_code:
         logger.warning("[query_clarification] resolve_field_aliases skip")
         return {}, all_terms
     try:
@@ -413,21 +410,21 @@ def _analyze_clarification(
     is_compute: bool,
 ) -> tuple[list[dict[str, Any]], str, bool]:
     """调用 SDK 澄清分析，返回 (paradigmList, knowledge, needs_clarification)。"""
-    sdk_fn_name = (
-        "analyze_query_clarification_compute" if is_compute else "analyze_query_clarification_query"
-    )
+    if not _HAS_SDK_CLARIFICATION or _sdk_analyze_clarification is None:
+        msg = "datacloud_knowledge clarification SDK is unavailable"
+        raise RuntimeError(msg)
+
+    mode = "compute" if is_compute else "query"
     logger.info(
         "[KG-CHAIN] call: datacloud_knowledge.intent.clarification.%s("
-        "query=%r, ontology_code=%r, structured_input=%s)",
-        sdk_fn_name,
+        "query=%r, ontology_code=%r, structured_input=%s, mode=%r)",
+        "analyze_query_clarification",
         query[:100],
         ontology_code,
         json.dumps(structured_input, ensure_ascii=False, default=str)[:300],
+        mode,
     )
-    if is_compute:
-        result = _sdk_analyze_compute(query, ontology_code, structured_input)
-    else:
-        result = _sdk_analyze_query(query, ontology_code, structured_input)
+    result = _sdk_analyze_clarification(query, ontology_code, structured_input, mode=mode)
 
     logger.info(
         "[KG-CHAIN] result: needs=%s form_len=%d knowledge_len=%d raw_form=%s",
@@ -579,6 +576,10 @@ async def _handle_resume(
     query: str = str((ctx.get("tool_params") or {}).get("query", "") or "")
     paradigm_list: list[dict[str, Any]] = list(cached.get("paradigm_list") or [])
     clarify_knowledge: str = str(cached.get("clarify_knowledge") or "")
+
+    if interrupt is None:
+        msg = "langgraph interrupt is unavailable"
+        raise RuntimeError(msg)
 
     logger.info("[query_clarification] RESUME resume_value type=%s value=%s", "pending", "...")
     resume_value = interrupt(
