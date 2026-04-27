@@ -1,8 +1,7 @@
-"""澄清模块编排层 — 4 个公共函数入口。
+"""澄清模块编排层 — 澄清分析与格式化公共入口。
 
 公共 API：
-    - analyze_query_clarification_query
-    - analyze_query_clarification_compute
+    - analyze_query_clarification
     - format_clarification_query
     - format_clarification_compute
 """
@@ -14,7 +13,7 @@ import json
 import logging
 import re
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal, Protocol
 
 from datacloud_knowledge.intent.llm_utils import EventEmitter
 from datacloud_knowledge.intent.types import ClarificationResult
@@ -49,33 +48,53 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
+ClarificationMode = Literal["query", "compute"]
+ConfirmedStructured = ConfirmedStructuredQuery | ConfirmedStructuredCompute
+
+
+class _MergeConfirmed(Protocol):
+    """将公共确认结果合并为指定结构类型。"""
+
+    def __call__(
+        self,
+        pre: PreResolveResult,
+        main_result: MainConfirmResult | None,
+        cc_results: list[tuple[CCConfirmResult | None, dict[int, CCTermMeta]]],
+        term_registry: dict[int, TermMeta],
+        structured_input: dict[str, Any],
+        main_terms: list[ExtractedTerm],
+        *,
+        recall_map: dict[str, list[dict[str, Any]]] | None = None,
+    ) -> ConfirmedStructured: ...
+
 
 # ── 分析入口 ─────────────────────────────────────────────────────────
 
 
-def analyze_query_clarification_query(
+def analyze_query_clarification(
     query: str,
     ontology_code: str,
-    structured_query: dict[str, Any],
+    structured_input: dict[str, Any],
+    *,
+    mode: ClarificationMode,
     on_event: Callable[[Any], None] | None = None,
 ) -> ClarificationResult:
-    """分析 StructuredQuery 是否需要用户澄清。
+    """分析 StructuredQuery/StructuredCompute 是否需要用户澄清。"""
+    extract_terms: Callable[[dict[str, Any]], list[ExtractedTerm]]
+    merge_confirmed: _MergeConfirmed
+    if mode == "query":
+        extract_terms = extract_terms_query
+        merge_confirmed = _merge_to_confirmed_query
+    else:
+        extract_terms = extract_terms_compute
+        merge_confirmed = _merge_to_confirmed_compute
 
-    Args:
-        query: 用户原始自然语言查询。
-        ontology_code: 本体编码，用于限定召回范围。
-        structured_query: StructuredQuery 的 dict 表示。
-        on_event: 可选回调，接收 StreamEvent 实例。
-
-    Returns:
-        ClarificationResult。
-    """
     emit = EventEmitter(on_event)
-    complex_conditions: list[str] = structured_query.get("complex_conditions", [])
+    complex_conditions: list[str] = structured_input.get("complex_conditions", [])
 
     # ── Step 1: 术语提取 ──
-    with emit.step("术语提取", "extract_terms", {"mode": "query"}):
-        main_terms = extract_terms_query(structured_query)
+    with emit.step("术语提取", "extract_terms", {"mode": mode}):
+        main_terms = extract_terms(structured_input)
         cc_terms = (
             extract_terms_complex_conditions(complex_conditions) if complex_conditions else []
         )
@@ -91,13 +110,13 @@ def analyze_query_clarification_query(
     # ── Step 2: Pre-Resolve（主结构字段预解析）──
     with emit.step("字段预解析", "pre_resolve"):
         pre = _pre_resolve_terms(main_terms, scope_code=ontology_code)
-        emit.result(
-            {
-                "confirmed": len(pre.confirmed),
-                "unresolved": len(pre.unresolved_terms),
-                "value_constraints": len(pre.value_enum_map),
-            }
-        )
+        pre_result = {
+            "confirmed": len(pre.confirmed),
+            "unresolved": len(pre.unresolved_terms),
+        }
+        if mode == "query":
+            pre_result["value_constraints"] = len(pre.value_enum_map)
+        emit.result(pre_result)
 
     # ── Step 3: 定向召回（只对 unresolved 术语 + cc 术语）──
     recall_terms = list(pre.unresolved_terms) + cc_terms
@@ -108,146 +127,14 @@ def analyze_query_clarification_query(
         )
 
     # ── Step 4a: 主结构 LLM 确认（编号术语模式）──
-    pre_resolved_input = _build_pre_resolved_input(structured_query, pre, main_terms)
+    pre_resolved_input = _build_pre_resolved_input(structured_input, pre, main_terms)
     with emit.step("主结构确认", "llm_confirm_main"):
         main_context, term_registry = format_main_confirm_context(
             pre_resolved_input,
             main_terms,
             recall_map,
             pre,
-            mode="query",
-        )
-        main_result = llm_confirm_main(context=main_context, on_event=on_event)
-        emit.result({"has_result": main_result is not None})
-
-    # ── Step 4b: 逐条 cc LLM 确认 ──
-    cc_results: list[tuple[CCConfirmResult | None, dict[int, CCTermMeta]]] = []
-    if complex_conditions and cc_terms:
-        cc_by_idx: dict[int, list[ExtractedTerm]] = {}
-        for t in cc_terms:
-            cc_by_idx.setdefault(t.condition_index, []).append(t)
-
-        with emit.step("条件确认", "llm_confirm_cc"):
-            for idx, sentence in enumerate(complex_conditions):
-                group = cc_by_idx.get(idx, [])
-                if not group:
-                    continue
-                cc_context, cc_registry = format_cc_confirm_context(
-                    group,
-                    recall_map,
-                    sentence,
-                    idx,
-                )
-                cc_result = llm_confirm_cc(context=cc_context, on_event=on_event)
-                cc_results.append((cc_result, cc_registry))
-            emit.result({"cc_count": len(cc_results)})
-
-    # ── Step 5: 合并为 ConfirmedStructuredQuery ──
-    with emit.step("结果合并", "merge_confirmed"):
-        confirmed = _merge_to_confirmed_query(
-            pre,
-            main_result,
-            cc_results,
-            term_registry,
-            structured_query,
-            main_terms,
-            recall_map=recall_map,
-        )
-        emit.result({"needs_clarification": confirmed.needs_clarification})
-
-    # ── Step 6: 构建 paradigmList（不变）──
-    with emit.step("结果生成", "build_paradigm_list"):
-        paradigm_list, meta = build_paradigm_list(
-            confirmed,
-            all_terms,
-            recall_map,
-            complex_conditions=complex_conditions,
-            original_structured=structured_query,
-        )
-        form_payload = serialize_paradigm_payload(paradigm_list)
-        knowledge_payload = serialize_knowledge_meta(meta)
-        emit.result(form_payload)
-
-    if confirmed.needs_clarification:
-        logger.info("[clarification] 需要澄清: %d 项", len(confirmed.clarify_items))
-        return ClarificationResult(
-            query=query,
-            needs_clarification=True,
-            form=form_payload,
-            knowledge=knowledge_payload,
-        )
-
-    logger.info("[clarification] 无需澄清")
-    return ClarificationResult(
-        query=query,
-        needs_clarification=False,
-        form=form_payload,
-        knowledge=knowledge_payload,
-    )
-
-
-def analyze_query_clarification_compute(
-    query: str,
-    ontology_code: str,
-    structured_compute: dict[str, Any],
-    on_event: Callable[[Any], None] | None = None,
-) -> ClarificationResult:
-    """分析 StructuredCompute 是否需要用户澄清。
-
-    Args:
-        query: 用户原始自然语言查询。
-        ontology_code: 本体编码，用于限定召回范围。
-        structured_compute: StructuredCompute 的 dict 表示。
-        on_event: 可选回调，接收 StreamEvent 实例。
-
-    Returns:
-        ClarificationResult。
-    """
-    emit = EventEmitter(on_event)
-    complex_conditions: list[str] = structured_compute.get("complex_conditions", [])
-
-    # ── Step 1: 术语提取 ──
-    with emit.step("术语提取", "extract_terms", {"mode": "compute"}):
-        main_terms = extract_terms_compute(structured_compute)
-        cc_terms = (
-            extract_terms_complex_conditions(complex_conditions) if complex_conditions else []
-        )
-        all_terms = main_terms + cc_terms
-        emit.result({"main": len(main_terms), "complex_conditions": len(cc_terms)})
-
-    logger.info(
-        "[clarification] Step1 术语提取: main=%d, cc=%d",
-        len(main_terms),
-        len(cc_terms),
-    )
-
-    # ── Step 2: Pre-Resolve ──
-    with emit.step("字段预解析", "pre_resolve"):
-        pre = _pre_resolve_terms(main_terms, scope_code=ontology_code)
-        emit.result(
-            {
-                "confirmed": len(pre.confirmed),
-                "unresolved": len(pre.unresolved_terms),
-            }
-        )
-
-    # ── Step 3: 定向召回 ──
-    recall_terms = list(pre.unresolved_terms) + cc_terms
-    with emit.step("知识召回", "knowledge_recall"):
-        recall_map = _unified_recall(recall_terms, scope_code=ontology_code) if recall_terms else {}
-        emit.result(
-            {"terms": len(recall_terms), "recalled": sum(1 for v in recall_map.values() if v)}
-        )
-
-    # ── Step 4a: 主结构 LLM 确认 ──
-    pre_resolved_input = _build_pre_resolved_input(structured_compute, pre, main_terms)
-    with emit.step("主结构确认", "llm_confirm_main"):
-        main_context, term_registry = format_main_confirm_context(
-            pre_resolved_input,
-            main_terms,
-            recall_map,
-            pre,
-            mode="compute",
+            mode=mode,
         )
         main_result = llm_confirm_main(context=main_context, on_event=on_event)
         emit.result({"has_result": main_result is not None})
@@ -276,12 +163,12 @@ def analyze_query_clarification_compute(
 
     # ── Step 5: 合并 ──
     with emit.step("结果合并", "merge_confirmed"):
-        confirmed = _merge_to_confirmed_compute(
+        confirmed = merge_confirmed(
             pre,
             main_result,
             cc_results,
             term_registry,
-            structured_compute,
+            structured_input,
             main_terms,
             recall_map=recall_map,
         )
@@ -294,7 +181,7 @@ def analyze_query_clarification_compute(
             all_terms,
             recall_map,
             complex_conditions=complex_conditions,
-            original_structured=structured_compute,
+            original_structured=structured_input,
         )
         form_payload = serialize_paradigm_payload(paradigm_list)
         knowledge_payload = serialize_knowledge_meta(meta)

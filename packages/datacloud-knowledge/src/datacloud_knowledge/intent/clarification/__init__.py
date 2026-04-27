@@ -3,16 +3,14 @@
 公共 API::
 
     from datacloud_knowledge.intent.clarification import (
-        analyze_query_clarification_query,
-        analyze_query_clarification_compute,
+        analyze_query_clarification,
         format_clarification_query,
         format_clarification_compute,
     )
 """
 
 from .api import (
-    analyze_query_clarification_compute,
-    analyze_query_clarification_query,
+    analyze_query_clarification,
     format_clarification_compute,
     format_clarification_query,
 )
@@ -24,8 +22,7 @@ from .postprocess import (
 )
 
 __all__ = [
-    "analyze_query_clarification_compute",
-    "analyze_query_clarification_query",
+    "analyze_query_clarification",
     "apply_resolved_to_params",
     "collect_terms_from_params",
     "format_clarification_compute",
