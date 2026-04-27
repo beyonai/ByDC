@@ -195,6 +195,55 @@ async def test_tc1_4_resumes_from_state_messages_without_reinit() -> None:
     assert result.get("react_round_idx") == 2
 
 
+async def test_tc1_4b_drops_unpaired_finish_react_before_llm_call() -> None:
+    """TC-1-4b: 下一轮调用前清理未配对 finish_react，避免 LLM API 拒绝孤儿 tool_call。"""
+    stale_ai = AIMessage(
+        content="分析完成",
+        tool_calls=[_FINISH_CALL],
+        additional_kwargs={
+            "tool_calls": [
+                {
+                    "id": "tc_002",
+                    "type": "function",
+                    "function": {"name": "finish_react", "arguments": "{}"},
+                }
+            ]
+        },
+    )
+    state = _make_state(
+        react_round_idx=0,
+        messages=[HumanMessage(content="上一轮查询"), stale_ai, HumanMessage(content="继续分析")],
+    )
+    invoke_mock = AsyncMock(return_value=(_make_ai_msg(content="ok"), False))
+
+    with (
+        patch(
+            "datacloud_analysis.orchestration.execution.llm_call_node._invoke_llm_with_fallback",
+            invoke_mock,
+        ),
+        patch(
+            "datacloud_analysis.orchestration.execution.llm_call_node._build_llm",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "datacloud_analysis.orchestration.execution.llm_call_node._build_fallback_llm",
+            return_value=None,
+        ),
+    ):
+        node = make_llm_call_node(tools_list=[], system_prompt="sys", max_rounds=10)
+        await node(state, MagicMock())
+
+    call_args = invoke_mock.call_args
+    messages_window = (
+        call_args.args[2]
+        if len(call_args.args) >= 3
+        else call_args.kwargs.get("messages_window", [])
+    )
+    sanitized_ai = next(m for m in messages_window if isinstance(m, AIMessage))
+    assert sanitized_ai.tool_calls == []
+    assert "tool_calls" not in sanitized_ai.additional_kwargs
+
+
 # ── TC-1-7: react_round_idx 自增 ───────────────────────────────────────────────
 
 

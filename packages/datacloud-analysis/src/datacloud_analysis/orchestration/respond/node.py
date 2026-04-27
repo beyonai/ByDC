@@ -3,14 +3,20 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, RemoveMessage
 from langchain_core.runnables import RunnableConfig
+from langgraph.graph.message import REMOVE_ALL_MESSAGES
 
 from datacloud_analysis.orchestration.message_util import extract_ai_text
 from datacloud_analysis.orchestration.respond.formatter import format_result
 from datacloud_analysis.orchestration.state import AgentState
 
 logger = logging.getLogger(__name__)
+
+
+def _clear_messages_update() -> dict[str, Any]:
+    """Build a LangGraph update that clears accumulated conversation messages."""
+    return {"messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES)]}
 
 
 async def respond_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
@@ -53,5 +59,8 @@ async def respond_node(state: AgentState, config: RunnableConfig) -> dict[str, A
             len(answer),
         )
 
-    await format_result(react_final, gw_ctx, workspace_dir)
-    return {}
+    final_answer = await format_result(react_final, gw_ctx, workspace_dir)
+    update = _clear_messages_update()
+    if final_answer is not None:
+        update["final_answer"] = final_answer
+    return update
