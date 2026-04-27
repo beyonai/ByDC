@@ -225,27 +225,6 @@ def _collect_terms_from_params(
                 field_terms.append(t)
     return field_terms, value_terms
 
-
-def _resolve_terms(
-    terms: list[str],
-    catalog: dict[str, str],
-) -> tuple[dict[str, str], list[str]]:
-    """将术语列表映射到 field_code。
-
-    Returns:
-        resolved: {term → field_code} 1:1 命中的映射
-        unresolved: 未命中 catalog 的术语列表
-    """
-    resolved: dict[str, str] = {}
-    unresolved: list[str] = []
-    for term in terms:
-        if term in catalog:
-            resolved[term] = catalog[term]
-        else:
-            unresolved.append(term)
-    return resolved, unresolved
-
-
 def _resolve_via_aliases(
     field_terms: list[str],
     value_terms: list[str],
@@ -734,10 +713,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
 
     # ── 剥除元字段（before_callback 消费）────────────────────────────────────
     # query 保留在 tool_params 中（工具本身需要），仅 complex_conditions 是纯路由元字段。
-    # ── 剥除元字段（before_callback 消费）────────────────────────────────────
-    # query 保留在 tool_params 中（工具本身需要），仅 complex_conditions 是纯路由元字段。
     tool_params: dict[str, Any] = _normalize_json_fields(dict(ctx.get("tool_params") or {}))
-    query: str = str(tool_params.get("query", "") or "")
     query: str = str(tool_params.get("query", "") or "")
     complex_conditions: list[str] = list(tool_params.pop("complex_conditions", None) or [])
 
@@ -787,9 +763,6 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 return _build_redirect_decision(tool_name, query, tool_params)
             return None
 
-        # query 是 NL 描述，不属于结构化参数，不传给 SDK
-        _sdk_params = {k: v for k, v in tool_params.items() if k != "query"}
-        structured_input = {**_sdk_params, "complex_conditions": complex_conditions}
         # query 是 NL 描述，不属于结构化参数，不传给 SDK
         _sdk_params = {k: v for k, v in tool_params.items() if k != "query"}
         structured_input = {**_sdk_params, "complex_conditions": complex_conditions}
@@ -868,10 +841,6 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             }
         )
 
-    # ── 字段名结构翻译（无条件执行）────────────────────────────────────────────
-    # 无论 catalog 是否为空，都必须将 field_name_cn 翻译为 field 键，
-    # 确保 SQL builder 能读到 field（resolved={} 时原样透传中文名值）。
-    # 若 catalog 有映射，则写入 field_code；否则写入原始中文名（至少避免 SQL 语法错误）。
     patched_params = _apply_resolved_to_params(tool_params, resolved)
     ctx["tool_params"] = patched_params
     tool_params = patched_params

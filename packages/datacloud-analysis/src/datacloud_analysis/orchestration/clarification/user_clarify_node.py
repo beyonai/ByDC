@@ -72,7 +72,7 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
     structured_input = dict(
         ctx.get("structured_input") or analyze_result.get("structured_input") or {}
     )
-    is_compute: bool = bool(ctx.get("is_compute") or analyze_result.get("is_complex"))
+    is_compute: bool = bool(ctx.get("is_compute") or tool_name.startswith("compute_"))
     clarify_knowledge = str(analyze_result.get("clarify_knowledge") or "")
     paradigm_list: list[dict[str, Any]] = list(analyze_result.get("paradigm_list") or [])
 
