@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -122,7 +123,10 @@ def _json_schema_to_pydantic(schema: dict[str, Any], model_name: str) -> type:
     from pydantic import BaseModel, Field, create_model  # noqa: PLC0415
 
     if not isinstance(schema, dict) or schema.get("type") != "object":
-        return create_model(model_name, __base__=BaseModel)
+        _m = create_model(model_name, __base__=BaseModel)
+        _m.__module__ = __name__
+        setattr(sys.modules[__name__], model_name, _m)
+        return _m
 
     properties: dict[str, Any] = schema.get("properties", {})
     required_fields: set[str] = set(schema.get("required", []))
@@ -156,7 +160,10 @@ def _json_schema_to_pydantic(schema: dict[str, Any], model_name: str) -> type:
             )
 
     base = _make_coerce_base(frozenset(coerce_fields)) if coerce_fields else BaseModel
-    return create_model(model_name, __base__=base, **pydantic_fields)
+    _m = create_model(model_name, __base__=base, **pydantic_fields)
+    _m.__module__ = __name__
+    setattr(sys.modules[__name__], model_name, _m)
+    return _m
 
 
 # ---------------------------------------------------------------------------
@@ -742,6 +749,8 @@ class OntologyToolLoader:
             __base__=BaseModel,
             **model_fields,
         )
+        schema_cls.__module__ = __name__
+        setattr(sys.modules[__name__], schema_cls.__name__, schema_cls)
 
         async def _execute(query: str, contextKnowledge: str = "") -> Any:  # noqa: N803
             if resource_biz_type == "VIEW":
