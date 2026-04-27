@@ -1,4 +1,4 @@
-"""端到端验证 analyze_query_clarification_query。
+"""端到端验证 query 模式的 analyze_query_clarification。
 
 需要数据库连接：请通过 dotenv 加载相关 DB 环境变量。
 
@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from datacloud_knowledge.intent.clarification.api import analyze_query_clarification_query
+from datacloud_knowledge.intent.clarification.api import analyze_query_clarification
 from datacloud_knowledge.intent.types import StreamEvent, StreamEventKind
 
 _last_thinking = ""
@@ -31,7 +31,7 @@ def print_event(event: StreamEvent) -> None:
 def main() -> None:
     # 场景：找出亩产效益后30%的地块上的中低效能企业清单
     query = "找出亩产效益后30%的地块，查询这些地块上的中、低效能的企业清单。"
-    ontology_code = "demo_ontology"
+    ontology_code = "scene_enterprise_analysis"
     structured_query = {
         "select": ["企业清单"],
         "filters": [
@@ -42,16 +42,17 @@ def main() -> None:
     }
 
     print("=" * 60)
-    print("端到端验证 analyze_query_clarification_query")
+    print("端到端验证 analyze_query_clarification(mode='query')")
     print("=" * 60)
     print(f"\nquery: {query}")
     print(f"\nstructured_query:\n{json.dumps(structured_query, ensure_ascii=False, indent=2)}")
     print("-" * 60)
 
-    result = analyze_query_clarification_query(
+    result = analyze_query_clarification(
         query=query,
         ontology_code=ontology_code,
-        structured_query=structured_query,
+        structured_input=structured_query,
+        mode="query",
         on_event=print_event,
     )
 

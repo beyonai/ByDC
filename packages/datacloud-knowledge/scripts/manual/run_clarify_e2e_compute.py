@@ -1,4 +1,4 @@
-"""端到端验证 analyze_query_clarification_compute。
+"""端到端验证 compute 模式的 analyze_query_clarification。
 
 需要数据库连接：请通过 dotenv 加载相关 DB 环境变量。
 
@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from datacloud_knowledge.intent.clarification.api import analyze_query_clarification_compute
+from datacloud_knowledge.intent.clarification.api import analyze_query_clarification
 from datacloud_knowledge.intent.types import StreamEvent, StreamEventKind
 
 _last_thinking = ""
@@ -46,16 +46,17 @@ def main() -> None:
     }
 
     print("=" * 60)
-    print("端到端验证 analyze_query_clarification_compute")
+    print("端到端验证 analyze_query_clarification(mode='compute')")
     print("=" * 60)
     print(f"\nquery: {query}")
     print(f"\nstructured_compute:\n{json.dumps(structured_compute, ensure_ascii=False, indent=2)}")
     print("-" * 60)
 
-    result = analyze_query_clarification_compute(
+    result = analyze_query_clarification(
         query=query,
         ontology_code=ontology_code,
-        structured_compute=structured_compute,
+        structured_input=structured_compute,
+        mode="compute",
         on_event=print_event,
     )
 
