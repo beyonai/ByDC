@@ -54,6 +54,15 @@ class RecallRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class ScopeRecallLayer:
+    """A weighted search-scope layer used by layered recall validation."""
+
+    scope_code: str | None
+    weight: float = 1.0
+    label: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class PreparedBatch:
     requests: tuple[RecallRequest, ...]
     normal_requests: tuple[RecallRequest, ...]
@@ -93,10 +102,27 @@ def typed_multi_recall_batch(
     enable_vector: bool,
     wv_per_type: int,
     scope_code: str | None = None,
+    scope_layers: Sequence[ScopeRecallLayer] | None = None,
 ) -> dict[str, list[CandidateDict]]:
     """批量并发执行 typed multi recall。"""
     started_at = time.monotonic()
     result: dict[str, list[CandidateDict]] = {}
+    normalized_layers = _normalize_scope_layers(scope_layers)
+    if normalized_layers:
+        result.update(
+            _typed_multi_recall_layered(
+                items,
+                session=session,
+                top_k=top_k,
+                rrf_k=rrf_k,
+                enable_vector=enable_vector,
+                wv_per_type=wv_per_type,
+                scope_layers=normalized_layers,
+            )
+        )
+        log.info("[recall_perf] batch_total_layered: %.3fs", time.monotonic() - started_at)
+        return _post_filter_non_field_types(result)
+
     batch = _prepare_batch(items, session, wv_per_type=wv_per_type, scope_code=scope_code)
 
     for item in items:
@@ -132,6 +158,176 @@ def typed_multi_recall_batch(
 
     log.info("[recall_perf] batch_total: %.3fs", time.monotonic() - started_at)
     return _post_filter_non_field_types(result)
+
+
+def _typed_multi_recall_layered(
+    items: Sequence[TypedKeywordState],
+    *,
+    session: Session,
+    top_k: int,
+    rrf_k: int,
+    enable_vector: bool,
+    wv_per_type: int,
+    scope_layers: tuple[ScopeRecallLayer, ...],
+) -> dict[str, list[CandidateDict]]:
+    """Run recall per scope layer and fuse layer-ranked candidates with weighted RRF."""
+    per_layer_results: list[tuple[ScopeRecallLayer, dict[str, list[CandidateDict]]]] = []
+    requests: tuple[RecallRequest, ...] = ()
+
+    for layer in scope_layers:
+        layer_started_at = time.monotonic()
+        batch = _prepare_batch(
+            items,
+            session,
+            wv_per_type=wv_per_type,
+            scope_code=layer.scope_code,
+        )
+        if not requests:
+            requests = batch.requests
+        if not batch.requests:
+            per_layer_results.append((layer, {}))
+            continue
+
+        path_results = _run_paths_concurrent(batch, top_k=top_k, enable_vector=enable_vector)
+        shaped = _fuse_and_shape(batch, path_results, top_k=top_k, rrf_k=rrf_k)
+        per_layer_results.append((layer, shaped))
+        for req in batch.requests:
+            candidates = shaped.get(req.map_key, [])
+            if candidates:
+                log.debug(
+                    "[recall_layered] layer=%s scope=%s %s -> %d 候选 top3=%s",
+                    layer.label or "scope",
+                    layer.scope_code or "unscoped",
+                    req.map_key,
+                    len(candidates),
+                    _candidate_top_names(candidates),
+                )
+            else:
+                log.debug(
+                    "[recall_layered] layer=%s scope=%s %s -> 0 候选",
+                    layer.label or "scope",
+                    layer.scope_code or "unscoped",
+                    req.map_key,
+                )
+        log.info(
+            "[recall_perf] layer=%s scope=%s weight=%.3f elapsed=%.3fs hits=%d",
+            layer.label or "scope",
+            layer.scope_code or "unscoped",
+            layer.weight,
+            time.monotonic() - layer_started_at,
+            sum(len(hits) for hits in shaped.values()),
+        )
+
+    result: dict[str, list[CandidateDict]] = {}
+    for item in items:
+        map_key = f"{item.ktype}:{item.keyword}"
+        result.setdefault(map_key, [])
+
+    for req in requests:
+        candidate_layers = [
+            (layer, layer_result.get(req.map_key, []))
+            for layer, layer_result in per_layer_results
+            if layer_result.get(req.map_key)
+        ]
+        result[req.map_key] = _weighted_fuse_candidate_layers(
+            candidate_layers,
+            top_k=top_k,
+            rrf_k=rrf_k,
+        )
+        if result[req.map_key]:
+            log.debug(
+                "[recall_layered] fused %s -> %d 候选 top3=%s",
+                req.map_key,
+                len(result[req.map_key]),
+                _candidate_top_names(result[req.map_key]),
+            )
+        else:
+            log.debug("[recall_layered] fused %s -> 0 候选", req.map_key)
+    return result
+
+
+def _candidate_top_names(candidates: Sequence[CandidateDict], *, limit: int = 3) -> list[str]:
+    """Return a compact candidate-name preview for recall debug logs."""
+    return [str(candidate.get("term_name", "")) for candidate in candidates[:limit]]
+
+
+def _normalize_scope_layers(
+    scope_layers: Sequence[ScopeRecallLayer] | None,
+) -> tuple[ScopeRecallLayer, ...]:
+    """Validate, dedupe, and cap scope layers to bound recall cost."""
+    if not scope_layers:
+        return ()
+
+    normalized: list[ScopeRecallLayer] = []
+    seen: set[str | None] = set()
+    for layer in scope_layers:
+        if layer.weight <= 0:
+            continue
+        key = layer.scope_code or None
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(layer)
+        if len(normalized) >= 4:
+            break
+    return tuple(normalized)
+
+
+def _weighted_fuse_candidate_layers(
+    candidate_layers: Sequence[tuple[ScopeRecallLayer, list[CandidateDict]]],
+    *,
+    top_k: int,
+    rrf_k: int,
+) -> list[CandidateDict]:
+    """Fuse already-ranked layer candidates using weighted reciprocal rank fusion."""
+    if not candidate_layers:
+        return []
+
+    score_map: dict[str, float] = {}
+    info_map: dict[str, CandidateDict] = {}
+    for layer, candidates in candidate_layers:
+        for rank, candidate in enumerate(candidates, start=1):
+            term_id = str(candidate.get("term_id", ""))
+            if not term_id:
+                continue
+            score_map[term_id] = score_map.get(term_id, 0.0) + layer.weight / (rrf_k + rank)
+            if term_id not in info_map:
+                info_map[term_id] = candidate
+
+    sorted_ids = sorted(score_map, key=lambda term_id: score_map[term_id], reverse=True)[:top_k]
+    sorted_ids = _preserve_base_layer_candidate(sorted_ids, candidate_layers, top_k=top_k)
+    fused: list[CandidateDict] = []
+    for term_id in sorted_ids:
+        candidate = dict(info_map[term_id])
+        score = score_map[term_id]
+        candidate["match_type"] = "layered_multi_recall"
+        candidate["score"] = score
+        candidate["confidence"] = min(score * 10, 1.0)
+        fused.append(candidate)
+    return fused
+
+
+def _preserve_base_layer_candidate(
+    sorted_ids: list[str],
+    candidate_layers: Sequence[tuple[ScopeRecallLayer, list[CandidateDict]]],
+    *,
+    top_k: int,
+) -> list[str]:
+    """Keep the first layer's best candidate visible after weighted layer fusion."""
+    if not sorted_ids or not candidate_layers:
+        return sorted_ids
+
+    _, base_candidates = candidate_layers[0]
+    if not base_candidates:
+        return sorted_ids
+
+    base_term_id = str(base_candidates[0].get("term_id", ""))
+    if not base_term_id or base_term_id in sorted_ids:
+        return sorted_ids
+
+    if len(sorted_ids) < top_k:
+        return [*sorted_ids, base_term_id]
+    return [*sorted_ids[:-1], base_term_id]
 
 
 def _prepare_batch(

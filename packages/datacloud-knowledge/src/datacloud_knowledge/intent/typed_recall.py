@@ -33,6 +33,8 @@ from datacloud_knowledge.query.search.substring_recall import (
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
+    from .batch_recall import ScopeRecallLayer
+
 
 class TypedKeywordState(Protocol):
     keyword: str
@@ -125,6 +127,7 @@ def typed_multi_recall(
     enable_vector: bool = False,
     wv_per_type: int = _WHERE_VALUE_PER_TYPE,
     scope_code: str | None = None,
+    scope_layers: Sequence[ScopeRecallLayer] | None = None,
 ) -> dict[str, list[CandidateDict]]:
     """对 TypedKeywordState 列表执行分类型多路召回。
 
@@ -151,6 +154,7 @@ def typed_multi_recall(
         enable_vector=enable_vector,
         wv_per_type=wv_per_type,
         scope_code=scope_code,
+        scope_layers=scope_layers,
     )
 
 

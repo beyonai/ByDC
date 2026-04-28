@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from importlib import import_module
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import bindparam, text
 
@@ -31,6 +31,9 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 CandidateDict = dict[str, Any]
+if TYPE_CHECKING:
+    from .batch_recall import ScopeRecallLayer
+
 _VECTOR_ENABLE_ENV = "DATACLOUD_INTENT_ENABLE_VECTOR"
 _FALSE_VALUES = frozenset({"0", "false", "no", "off"})
 
@@ -310,6 +313,7 @@ def typed_multi_recall_with_session(
     user_id: str | None = None,
     top_k: int = 5,
     scope_code: str | None = None,
+    scope_layers: list[ScopeRecallLayer] | None = None,
 ) -> dict[str, list[CandidateDict]]:
     """Run typed multi-path recall with a managed DB session.
 
@@ -328,6 +332,7 @@ def typed_multi_recall_with_session(
                 top_k=top_k,
                 enable_vector=False,
                 scope_code=scope_code,
+                scope_layers=scope_layers,
             )
 
         return typed_multi_recall(
@@ -336,4 +341,5 @@ def typed_multi_recall_with_session(
             top_k=top_k,
             enable_vector=True,
             scope_code=scope_code,
+            scope_layers=scope_layers,
         )
