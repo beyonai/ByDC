@@ -14,7 +14,7 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from datacloud_knowledge.intent.llm_utils import EventEmitter
 from datacloud_knowledge.intent.types import ClarificationResult
@@ -49,6 +49,9 @@ from .models import (
 )
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from datacloud_knowledge.intent.batch_recall import ScopeRecallLayer
 
 ClarificationMode = Literal["query", "compute"]
 ConfirmedStructured = ConfirmedStructuredQuery | ConfirmedStructuredCompute
@@ -170,8 +173,14 @@ def analyze_query_clarification(
     # 召回范围被刻意收窄为“主结构未解析术语 + complex condition 术语”：
     # 已预解析字段无需再次检索，复杂条件必须召回候选供 LLM 判断自然语言片段对应字段。
     recall_terms = list(pre.unresolved_terms) + list(cc_pre.unresolved_terms)
+    inferred_scope_layers = _build_scope_recall_layers(ontology_code, pre, cc_pre)
+    scope_layers = inferred_scope_layers if len(inferred_scope_layers) > 1 else None
     with emit.step("知识召回", "knowledge_recall"):
-        recall_map = _unified_recall(recall_terms, scope_code=ontology_code) if recall_terms else {}
+        recall_map = (
+            _unified_recall(recall_terms, scope_code=ontology_code, scope_layers=scope_layers)
+            if recall_terms
+            else {}
+        )
         emit.result(
             {"terms": len(recall_terms), "recalled": sum(1 for v in recall_map.values() if v)}
         )
@@ -328,7 +337,9 @@ def format_clarification_compute(
 def _unified_recall(
     terms: list[ExtractedTerm],
     *,
+    top_k: int = 10,
     scope_code: str | None = None,
+    scope_layers: list[ScopeRecallLayer] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """对所有术语执行统一召回。
 
@@ -366,13 +377,89 @@ def _unified_recall(
 
     # 常规术语：走全部 4 路召回（BM25 + Jieba + Substring + Vector）
     if normal_items:
-        result.update(typed_multi_recall_with_session(normal_items, top_k=5, scope_code=scope_code))
+        result.update(
+            typed_multi_recall_with_session(
+                normal_items,
+                top_k=top_k,
+                scope_code=scope_code,
+                scope_layers=scope_layers,
+            )
+        )
 
     # 英文标识符：只走向量召回（BM25/子串匹配对英文→中文无意义）
     if vector_only_items:
-        result.update(_vector_only_recall(vector_only_items, top_k=5, scope_code=scope_code))
+        result.update(_vector_only_recall(vector_only_items, top_k=top_k, scope_code=scope_code))
 
     return result
+
+
+def _build_scope_recall_layers(
+    ontology_code: str,
+    pre: PreResolveResult,
+    cc_pre: PreResolveResult,
+) -> list[ScopeRecallLayer]:
+    """Build a small weighted scope stack from confirmed fields for recall validation."""
+    from sqlalchemy import func, select
+    from sqlalchemy.orm import aliased
+
+    from datacloud_knowledge.db.models import Term, TermRelation
+    from datacloud_knowledge.intent.batch_recall import ScopeRecallLayer
+    from datacloud_knowledge.knowledge_search.db.connection import get_session
+
+    layers: list[ScopeRecallLayer] = []
+    field_codes = _collect_confirmed_field_codes(pre, cc_pre)
+    if ontology_code:
+        layers.append(ScopeRecallLayer(scope_code=ontology_code, weight=1.0, label="ontology"))
+    if not ontology_code or not field_codes:
+        return layers
+
+    try:
+        view_term = aliased(Term, name="view_term")
+        object_term = aliased(Term, name="object_term")
+        prop_term = aliased(Term, name="prop_term")
+        view_object_rel = aliased(TermRelation, name="view_object_rel")
+        object_prop_rel = aliased(TermRelation, name="object_prop_rel")
+        with get_session() as session:
+            rows = session.execute(
+                select(object_term.term_code, func.count(prop_term.term_id).label("matched_count"))
+                .select_from(view_term)
+                .join(view_object_rel, view_object_rel.source_term_id == view_term.term_id)
+                .join(object_term, object_term.term_id == view_object_rel.target_term_id)
+                .join(object_prop_rel, object_prop_rel.source_term_id == object_term.term_id)
+                .join(prop_term, prop_term.term_id == object_prop_rel.target_term_id)
+                .where(
+                    view_term.term_code == ontology_code,
+                    view_term.term_type_code.in_(["view", "object"]),
+                    object_term.term_type_code == "object",
+                    prop_term.term_type_code == "prop",
+                    prop_term.term_code.in_(field_codes),
+                )
+                .group_by(object_term.term_code)
+                .order_by(func.count(prop_term.term_id).desc())
+                .limit(2)
+            ).all()
+    except Exception:
+        logger.warning("[clarification] build scope recall layers failed", exc_info=True)
+        return layers
+
+    for object_code, matched_count in rows:
+        code = str(object_code)
+        if code == ontology_code:
+            continue
+        weight = 1.5 + min(float(matched_count), 3.0) * 0.25
+        layers.append(ScopeRecallLayer(scope_code=code, weight=weight, label="confirmed_object"))
+    return layers
+
+
+def _collect_confirmed_field_codes(pre: PreResolveResult, cc_pre: PreResolveResult) -> list[str]:
+    """Collect confirmed ontology field codes while preserving first-seen order."""
+    field_codes: list[str] = []
+    for result in (pre, cc_pre):
+        for resolved in result.confirmed.values():
+            term_code = str(getattr(resolved, "term_code", ""))
+            if term_code and term_code not in field_codes:
+                field_codes.append(term_code)
+    return field_codes
 
 
 def _vector_only_recall(

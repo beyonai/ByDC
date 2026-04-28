@@ -615,7 +615,7 @@ def format_main_confirm_context(
     recall_map: dict[str, list[dict[str, Any]]],
     pre_resolve: PreResolveResult,
     *,
-    mode: str = "query",
+    mode: str = "query"
 ) -> tuple[str, dict[int, TermMeta]]:
     """格式化主结构 LLM 确认上下文（编号术语模式）。
 
@@ -692,7 +692,7 @@ def format_main_confirm_context(
 
             key = f"{term.ktype}:{term.raw_text}"
             candidates = recall_map.get(key, [])
-            names = [str(c.get("term_name", "")) for c in candidates[:5]]
+            names = [str(c.get("term_name", "")) for c in candidates]
 
             # whereValue 枚举约束（按 path 查找）
             enum_values = pre_resolve.value_enum_map.get(_term_key(term))
