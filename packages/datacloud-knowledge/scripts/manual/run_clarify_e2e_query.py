@@ -30,15 +30,12 @@ def print_event(event: StreamEvent) -> None:
 
 def main() -> None:
     # 场景：找出亩产效益后30%的地块上的中低效能企业清单
-    query = "找出亩产效益后30%的地块，查询这些地块上的中、低效能的企业清单。"
-    ontology_code = "scene_enterprise_analysis"
+    query = "查询物理网格数据，包含网格编码、网格名称、贡献率三个字段，条件是贡献率大于100，返回10条数据"
+    ontology_code = "scene_grid_analysis"
     structured_query = {
-        "select": ["企业清单"],
-        "filters": [
-            {"field": "效能", "op": "in", "value": ["中效能", "低效能"]},
-        ],
-        "order_by": [],
-        "complex_conditions": ["亩产效益后30%的地块"],
+        "select": ["phy_grid_id", "phy_grid_name", "贡献率"],
+        "limit": 10,
+        "complex_conditions": ["贡献率大于100"],
     }
 
     print("=" * 60)
