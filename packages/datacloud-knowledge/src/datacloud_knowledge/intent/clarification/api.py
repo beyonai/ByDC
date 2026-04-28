@@ -13,6 +13,7 @@ import json
 import logging
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
 from datacloud_knowledge.intent.llm_utils import EventEmitter
@@ -35,6 +36,7 @@ from .format import format_clarification_compute as _format_compute
 from .format import format_clarification_query as _format_query
 from .models import (
     CCConfirmResult,
+    CCTermConfirmation,
     CCTermMeta,
     ClarifyItem,
     ConditionTermMapping,
@@ -50,6 +52,15 @@ logger = logging.getLogger(__name__)
 
 ClarificationMode = Literal["query", "compute"]
 ConfirmedStructured = ConfirmedStructuredQuery | ConfirmedStructuredCompute
+
+
+@dataclass(frozen=True, slots=True)
+class _TermResolutionHint:
+    """已确认术语对后续相同术语的复用提示。"""
+
+    confirmed: str | None
+    candidates: tuple[str, ...]
+    force_confirm: bool = False
 
 
 class _MergeConfirmed(Protocol):
@@ -79,9 +90,29 @@ def analyze_query_clarification(
     mode: ClarificationMode,
     on_event: Callable[[Any], None] | None = None,
 ) -> ClarificationResult:
-    """分析 StructuredQuery/StructuredCompute 是否需要用户澄清。"""
+    """分析结构化查询或统计参数是否需要用户澄清。
+
+    该函数是澄清分析的统一编排入口，负责把 StructuredQuery 与
+    StructuredCompute 收敛到同一条处理链路：术语提取、字段预解析、知识召回、
+    LLM 确认、结果合并、前端 paradigmList 生成。调用方通过 ``mode`` 指定输入
+    结构类型，函数内部按模式选择对应的术语提取器和确认结果合并器。
+
+    Args:
+        query: 用户原始自然语言查询，用于最终返回和澄清上下文展示。
+        ontology_code: 本体编码，用于限定预解析和知识召回的数据范围。
+        structured_input: StructuredQuery 或 StructuredCompute 的 dict 表示。
+        mode: 输入结构类型；``"query"`` 表示查询参数，``"compute"`` 表示统计参数。
+        on_event: 可选事件回调，接收分析过程中的流式步骤事件和 LLM 输出事件。
+
+    Returns:
+        ClarificationResult: 澄清分析结果，包含原始 query、是否需要澄清、
+        前端表单 JSON（form）以及格式化阶段使用的内部知识元数据 JSON（knowledge）。
+    """
     extract_terms: Callable[[dict[str, Any]], list[ExtractedTerm]]
     merge_confirmed: _MergeConfirmed
+
+    # 根据输入模式绑定模式专属能力：query/compute 的主结构字段不同，
+    # 因此术语提取和最终结构模型合并必须分派到各自实现；其余编排步骤保持共享。
     if mode == "query":
         extract_terms = extract_terms_query
         merge_confirmed = _merge_to_confirmed_query
@@ -93,6 +124,9 @@ def analyze_query_clarification(
     complex_conditions: list[str] = structured_input.get("complex_conditions", [])
 
     # ── Step 1: 术语提取 ──
+    # 主结构术语来自 select/filter/order_by 或 dimensions/metrics/having 等结构化槽位；
+    # complex_conditions 是自然语言条件，需要单独抽取并保留 condition_index，
+    # 后续才能逐条回填到对应的复杂条件句子中。
     with emit.step("术语提取", "extract_terms", {"mode": mode}):
         main_terms = extract_terms(structured_input)
         cc_terms = (
@@ -108,6 +142,9 @@ def analyze_query_clarification(
     )
 
     # ── Step 2: Pre-Resolve（主结构字段预解析）──
+    # 预解析先处理主结构术语：能通过确定性规则命中的字段直接确认，
+    # 无法确认的字段保留到召回和 LLM 确认阶段，避免对已知字段重复召回。
+    # query 模式额外暴露 value_enum_map 数量，用于观测枚举值约束命中情况。
     with emit.step("字段预解析", "pre_resolve"):
         pre = _pre_resolve_terms(main_terms, scope_code=ontology_code)
         pre_result = {
@@ -118,8 +155,21 @@ def analyze_query_clarification(
             pre_result["value_constraints"] = len(pre.value_enum_map)
         emit.result(pre_result)
 
+    # complex_conditions 中抽取出的术语同样先走确定性预解析。
+    # 这样自然语言条件里与主结构相同或可精确命中的字段，不必完全依赖后续 LLM 判断。
+    with emit.step("条件字段预解析", "pre_resolve_cc"):
+        cc_pre = _pre_resolve_terms(cc_terms, scope_code=ontology_code)
+        emit.result(
+            {
+                "confirmed": len(cc_pre.confirmed),
+                "unresolved": len(cc_pre.unresolved_terms),
+            }
+        )
+
     # ── Step 3: 定向召回（只对 unresolved 术语 + cc 术语）──
-    recall_terms = list(pre.unresolved_terms) + cc_terms
+    # 召回范围被刻意收窄为“主结构未解析术语 + complex condition 术语”：
+    # 已预解析字段无需再次检索，复杂条件必须召回候选供 LLM 判断自然语言片段对应字段。
+    recall_terms = list(pre.unresolved_terms) + list(cc_pre.unresolved_terms)
     with emit.step("知识召回", "knowledge_recall"):
         recall_map = _unified_recall(recall_terms, scope_code=ontology_code) if recall_terms else {}
         emit.result(
@@ -127,6 +177,8 @@ def analyze_query_clarification(
         )
 
     # ── Step 4a: 主结构 LLM 确认（编号术语模式）──
+    # 将预解析结果写回一份临时结构，再把未确认术语编号后交给 LLM。
+    # term_registry 保存“编号 -> 术语元数据”的映射，后续合并时可按 path 精确替换字段。
     pre_resolved_input = _build_pre_resolved_input(structured_input, pre, main_terms)
     with emit.step("主结构确认", "llm_confirm_main"):
         main_context, term_registry = format_main_confirm_context(
@@ -139,7 +191,16 @@ def analyze_query_clarification(
         main_result = llm_confirm_main(context=main_context, on_event=on_event)
         emit.result({"has_result": main_result is not None})
 
+    # 主结构确认结果与 cc 预解析结果共同形成复用提示表。
+    # 后续逐条确认 complex_conditions 时，相同术语会优先复用前面已确认结果；
+    # 若不能直接确认，则将两边候选用 RRF 融合，保持各自排序贡献。
+    resolution_hints = _build_main_resolution_hints(main_result, term_registry)
+    _merge_pre_resolve_hints(resolution_hints, pre, main_terms, force_confirm=True)
+    _merge_pre_resolve_hints(resolution_hints, cc_pre, cc_terms, force_confirm=True)
+
     # ── Step 4b: 逐条 cc LLM 确认 ──
+    # complex_conditions 按原句逐条确认，而不是合并成一个大上下文，
+    # 这样可以降低跨句干扰，并让每条自然语言条件生成独立的 term_mappings。
     cc_results: list[tuple[CCConfirmResult | None, dict[int, CCTermMeta]]] = []
     if complex_conditions and cc_terms:
         cc_by_idx: dict[int, list[ExtractedTerm]] = {}
@@ -158,10 +219,19 @@ def analyze_query_clarification(
                     idx,
                 )
                 cc_result = llm_confirm_cc(context=cc_context, on_event=on_event)
+                cc_result = _normalize_cc_result_with_hints(
+                    cc_result,
+                    cc_registry,
+                    resolution_hints,
+                    recall_map,
+                )
+                _merge_cc_resolution_hints(resolution_hints, cc_result, cc_registry)
                 cc_results.append((cc_result, cc_registry))
             emit.result({"cc_count": len(cc_results)})
 
     # ── Step 5: 合并 ──
+    # 合并阶段统一吸收预解析结果、主结构 LLM 结果和复杂条件 LLM 结果。
+    # query/compute 的输出模型不同，所以通过 merge_confirmed 分派到模式专属合并器。
     with emit.step("结果合并", "merge_confirmed"):
         confirmed = merge_confirmed(
             pre,
@@ -175,6 +245,8 @@ def analyze_query_clarification(
         emit.result({"needs_clarification": confirmed.needs_clarification})
 
     # ── Step 6: 构建 paradigmList ──
+    # paradigmList 是前端展示的澄清表单；knowledge_payload 是内部元数据，
+    # 记录 path_mapping 和 confirmed_conditions，供用户选择后 format 阶段精确回写。
     with emit.step("结果生成", "build_paradigm_list"):
         paradigm_list, meta = build_paradigm_list(
             confirmed,
@@ -187,6 +259,8 @@ def analyze_query_clarification(
         knowledge_payload = serialize_knowledge_meta(meta)
         emit.result(form_payload)
 
+    # 不论是否需要用户澄清，都返回同一结构：调用方依赖 needs_clarification 决定
+    # 是中断展示 form，还是直接把已确认的 form/knowledge 作为后续处理上下文。
     if confirmed.needs_clarification:
         logger.info("[clarification] 需要澄清: %d 项", len(confirmed.clarify_items))
         return ClarificationResult(
@@ -415,17 +489,17 @@ def _term_key(t: ExtractedTerm) -> str:
 
 
 def _pre_resolve_terms(
-    main_terms: list[ExtractedTerm],
+    terms: list[ExtractedTerm],
     scope_code: str,
 ) -> PreResolveResult:
-    """Phase 2: 预解析主结构术语。
+    """Phase 2: 预解析可确定匹配的术语。
 
     - 英文 field_code / 中文唯一精确命中 → confirmed_exact
     - 歧义 / 未命中 → unresolved，走 recall
     - 已确认 whereKey → 查 prop 枚举值约束 whereValue
 
     Args:
-        main_terms: 主结构提取的术语列表。
+        terms: 从主结构或 complex_conditions 提取的术语列表。
         scope_code: 本体编码。
 
     Returns:
@@ -443,8 +517,8 @@ def _pre_resolve_terms(
 
     # 收集字段类术语（非 whereValue），去重 raw_text 用于 SQL 查询
     field_terms_raw: list[str] = []
-    for t in main_terms:
-        if t.source != "main" or not t.search_enabled:
+    for t in terms:
+        if not t.search_enabled:
             continue
         if t.ktype == "whereValue" or t.parent_raw_text is not None:
             continue
@@ -461,8 +535,8 @@ def _pre_resolve_terms(
             )
             resolved_by_text = result.resolved
             # 扇出到所有匹配的术语，按 path:raw_text 复合键入
-            for t in main_terms:
-                if t.source != "main" or t.ktype == "whereValue" or t.parent_raw_text is not None:
+            for t in terms:
+                if t.ktype == "whereValue" or t.parent_raw_text is not None:
                     continue
                 rf = resolved_by_text.get(t.raw_text)
                 if rf:
@@ -482,7 +556,7 @@ def _pre_resolve_terms(
     # 已确认 whereKey → 查枚举值
     confirmed_key_codes: list[str] = []
     key_code_to_name: dict[str, str] = {}
-    for t in main_terms:
+    for t in terms:
         if t.ktype == "whereKey" and _term_key(t) in confirmed:
             rf = confirmed[_term_key(t)]
             if rf.term_code not in key_code_to_name:
@@ -496,10 +570,10 @@ def _pre_resolve_terms(
                 field_codes=confirmed_key_codes,
             )
             # 为每个 whereValue 术语建立枚举约束（按 path 键入）
-            for t in main_terms:
+            for t in terms:
                 if t.ktype != "whereValue" or not t.search_enabled:
                     continue
-                key_term = _find_paired_where_key(t, main_terms)
+                key_term = _find_paired_where_key(t, terms)
                 if key_term and _term_key(key_term) in confirmed:
                     rf = confirmed[_term_key(key_term)]
                     enum_values = enum_map.get(rf.term_code, [])
@@ -520,9 +594,7 @@ def _pre_resolve_terms(
 
     # 分拣 unresolved
     unresolved: list[ExtractedTerm] = []
-    for t in main_terms:
-        if t.source != "main":
-            continue
+    for t in terms:
         if _term_key(t) in confirmed:
             continue
         unresolved.append(t)
@@ -562,7 +634,7 @@ def _extract_filter_prefix(path: str) -> str:
     if len(parts) >= 2 and parts[0] == "filters":
         return f"{parts[0]}.{parts[1]}"
     for i, p in enumerate(parts):
-        if p == "filters" and i + 1 < len(parts):
+        if p in {"filters", "where"} and i + 1 < len(parts):
             try:
                 int(parts[i + 1])
                 return ".".join(parts[: i + 2])
@@ -695,6 +767,253 @@ def _recall_fallback_candidates(
     key = f"{ktype}:{raw_text}"
     candidates = recall_map.get(key, [])
     return [str(c.get("term_name", "")) for c in candidates[:limit] if c.get("term_name")]
+
+
+def _resolution_key(ktype: str, raw_text: str) -> tuple[str, str]:
+    """生成跨主结构与 complex_conditions 复用的术语键。"""
+    return ktype, raw_text
+
+
+def _candidate_names_from_hint(hint: _TermResolutionHint | None) -> list[str]:
+    """按确认值优先提取复用提示中的候选名称。"""
+    if hint is None:
+        return []
+    names: list[str] = []
+    if hint.confirmed:
+        names.append(hint.confirmed)
+    names.extend(hint.candidates)
+    return _dedupe_candidate_names(names)
+
+
+def _dedupe_candidate_names(names: list[str]) -> list[str]:
+    """按首次出现顺序去重候选名称。"""
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for name in names:
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        deduped.append(name)
+    return deduped
+
+
+def _fuse_candidate_names_rrf(
+    ranked_lists: list[list[str]],
+    *,
+    limit: int = 5,
+) -> list[str]:
+    """使用 RRF 融合多个候选排序列表。
+
+    Args:
+        ranked_lists: 多个已按相关度排序的候选名称列表。
+        limit: 返回候选数量上限。
+
+    Returns:
+        RRF 融合后的去重候选名称列表。
+    """
+    from datacloud_knowledge.query.search.rrf import rrf_fuse
+
+    prepared: list[list[tuple[str, str, str, str]]] = []
+    for ranked in ranked_lists:
+        deduped = _dedupe_candidate_names(ranked)
+        if not deduped:
+            continue
+        prepared.append([(name, name, "", "") for name in deduped])
+
+    if not prepared:
+        return []
+
+    return [candidate.term_name for candidate in rrf_fuse(prepared, top_n=limit)]
+
+
+def _merge_resolution_hint(
+    existing: _TermResolutionHint | None,
+    incoming: _TermResolutionHint,
+) -> _TermResolutionHint:
+    """合并同一术语的历史确认提示，候选排序用 RRF 保持稳定。"""
+    if existing is None:
+        return incoming
+
+    confirmed = existing.confirmed or incoming.confirmed
+    candidates = _fuse_candidate_names_rrf(
+        [
+            _candidate_names_from_hint(existing),
+            _candidate_names_from_hint(incoming),
+        ]
+    )
+    return _TermResolutionHint(
+        confirmed=confirmed,
+        candidates=tuple(candidates),
+        force_confirm=existing.force_confirm or incoming.force_confirm,
+    )
+
+
+def _merge_pre_resolve_hints(
+    hints: dict[tuple[str, str], _TermResolutionHint],
+    pre_resolve: PreResolveResult,
+    terms: list[ExtractedTerm],
+    *,
+    force_confirm: bool = False,
+) -> None:
+    """将 pre_resolve 的确定性结果合并到跨阶段复用提示。"""
+    for term in terms:
+        resolved = pre_resolve.confirmed.get(_term_key(term))
+        if resolved is None:
+            continue
+        key = _resolution_key(term.ktype, term.raw_text)
+        incoming = _TermResolutionHint(
+            confirmed=resolved.term_name,
+            candidates=(resolved.term_name,),
+            force_confirm=force_confirm,
+        )
+        hints[key] = _merge_resolution_hint(hints.get(key), incoming)
+
+
+def _build_main_resolution_hints(
+    main_result: MainConfirmResult | None,
+    term_registry: dict[int, TermMeta],
+) -> dict[tuple[str, str], _TermResolutionHint]:
+    """从主结构 LLM 确认结果构建术语复用提示。"""
+    hints: dict[tuple[str, str], _TermResolutionHint] = {}
+
+    if main_result is None:
+        return hints
+
+    for confirmation in main_result.confirmations:
+        meta = term_registry.get(confirmation.term_id)
+        if meta is None:
+            continue
+        key = _resolution_key(meta.ktype, meta.raw_text)
+        incoming = _TermResolutionHint(
+            confirmed=confirmation.confirmed,
+            candidates=tuple(confirmation.candidates),
+        )
+        hints[key] = _merge_resolution_hint(hints.get(key), incoming)
+
+    return hints
+
+
+def _normalize_cc_result_with_hints(
+    cc_result: CCConfirmResult | None,
+    cc_registry: dict[int, CCTermMeta],
+    hints: dict[tuple[str, str], _TermResolutionHint],
+    recall_map: dict[str, list[dict[str, Any]]],
+) -> CCConfirmResult | None:
+    """根据历史确认提示归一化单条 complex_condition 的确认结果。
+
+    若前序确认值出现在当前 cc 候选中，直接复用该确认值；若不在候选中，
+    则用 RRF 融合当前候选与历史候选，保持两个排序来源的相对贡献。
+    """
+    if cc_result is None:
+        return None
+
+    normalized: list[CCTermConfirmation] = []
+    for confirmation in cc_result.confirmations:
+        meta = cc_registry.get(confirmation.term_id)
+        if meta is None:
+            normalized.append(confirmation)
+            continue
+
+        hint = hints.get(_resolution_key(meta.ktype, meta.raw_text))
+        if hint is None:
+            normalized.append(confirmation)
+            continue
+
+        fallback_candidates = _recall_fallback_candidates(recall_map, meta.ktype, meta.raw_text)
+        current_candidates = _dedupe_candidate_names(
+            ([confirmation.confirmed] if confirmation.confirmed else [])
+            + (confirmation.candidates or fallback_candidates)
+        )
+        hint_candidates = _candidate_names_from_hint(hint)
+
+        if hint.confirmed and (hint.force_confirm or hint.confirmed in current_candidates):
+            normalized.append(
+                CCTermConfirmation(
+                    term_id=confirmation.term_id,
+                    confirmed=hint.confirmed,
+                    candidates=[],
+                    reason=confirmation.reason,
+                )
+            )
+            continue
+
+        fused_candidates = _fuse_candidate_names_rrf([current_candidates, hint_candidates])
+        keep_confirmed = bool(
+            confirmation.confirmed
+            and (hint.confirmed is None or confirmation.confirmed in fused_candidates)
+        )
+        normalized.append(
+            CCTermConfirmation(
+                term_id=confirmation.term_id,
+                confirmed=confirmation.confirmed if keep_confirmed else None,
+                candidates=fused_candidates,
+                reason=confirmation.reason,
+            )
+        )
+
+    return CCConfirmResult(
+        confirmations=normalized,
+        needs_clarification=any(c.confirmed is None and c.candidates for c in normalized),
+    )
+
+
+def _merge_cc_resolution_hints(
+    hints: dict[tuple[str, str], _TermResolutionHint],
+    cc_result: CCConfirmResult | None,
+    cc_registry: dict[int, CCTermMeta],
+) -> None:
+    """将当前 cc 确认结果写入提示表，供后续 cc_terms 按顺序复用。"""
+    if cc_result is None:
+        return
+
+    for confirmation in cc_result.confirmations:
+        meta = cc_registry.get(confirmation.term_id)
+        if meta is None:
+            continue
+        key = _resolution_key(meta.ktype, meta.raw_text)
+        incoming = _TermResolutionHint(
+            confirmed=confirmation.confirmed,
+            candidates=tuple(confirmation.candidates),
+        )
+        hints[key] = _merge_resolution_hint(hints.get(key), incoming)
+
+
+def _dedupe_condition_term_mappings(
+    mappings: list[ConditionTermMapping],
+) -> list[ConditionTermMapping]:
+    """按句子 span 合并重复的 complex_condition 术语映射。
+
+    complex_condition 的替换逻辑基于 ``start/end`` 操作原句。同一个文本 span
+    如果同时被解析为 select 和 whereKey，不能在前端展示时替换两次；因此这里按
+    ``(start, end, original_term)`` 合并，候选用 RRF 融合以保留不同来源的排序贡献。
+    """
+    grouped: dict[tuple[int, int, str], list[ConditionTermMapping]] = {}
+    order: list[tuple[int, int, str]] = []
+    for mapping in mappings:
+        key = (mapping.start, mapping.end, mapping.original_term)
+        if key not in grouped:
+            grouped[key] = []
+            order.append(key)
+        grouped[key].append(mapping)
+
+    deduped: list[ConditionTermMapping] = []
+    for key in order:
+        group = grouped[key]
+        first = group[0]
+        confirmed = next((item.confirmed for item in group if item.confirmed is not None), None)
+        candidate_lists = [item.candidates for item in group if item.candidates]
+        candidates = [] if confirmed is not None else _fuse_candidate_names_rrf(candidate_lists)
+        deduped.append(
+            ConditionTermMapping(
+                original_term=first.original_term,
+                start=first.start,
+                end=first.end,
+                confirmed=confirmed,
+                candidates=candidates,
+            )
+        )
+
+    return deduped
 
 
 def _merge_confirmed_common(
@@ -851,6 +1170,7 @@ def _merge_confirmed_common(
             original = cc_list[idx] if idx < len(cc_list) else ""
 
             term_mappings: list[ConditionTermMapping] = []
+            mapping_reasons: dict[tuple[int, int, str], str] = {}
             for tid, meta in items:
                 tc = next((c for c in cc_result.confirmations if c.term_id == tid), None)
                 if tc is None:
@@ -866,14 +1186,8 @@ def _merge_confirmed_common(
                             candidates=[],
                         )
                     )
-                    clarify_items.append(
-                        ClarifyItem(
-                            keyword=meta.raw_text,
-                            candidates=[],
-                            reason="LLM 确认遗漏，需要人工确认",
-                            source="complex_condition",
-                            path=f"complex_conditions.{meta.condition_index}",
-                        )
+                    mapping_reasons[(meta.start, meta.end, meta.raw_text)] = (
+                        "LLM 确认遗漏，需要人工确认"
                     )
                     continue
                 term_mappings.append(
@@ -885,28 +1199,43 @@ def _merge_confirmed_common(
                         candidates=tc.candidates,
                     )
                 )
-                if tc.confirmed is None and tc.candidates:
-                    clarify_items.append(
-                        ClarifyItem(
-                            keyword=meta.raw_text,
-                            candidates=tc.candidates,
-                            reason=tc.reason,
-                            source="complex_condition",
-                            path=f"complex_conditions.{idx}",
-                        )
+                if tc.confirmed is None:
+                    mapping_reasons[(meta.start, meta.end, meta.raw_text)] = (
+                        tc.reason or "LLM 无法确认且无候选"
                     )
-                elif tc.confirmed is None:
+                if tc.confirmed is None and not tc.candidates:
                     # confirmed=None, candidates=[] → fail-closed
                     llm_failed = True
+
+            term_mappings = _dedupe_condition_term_mappings(term_mappings)
+            for tm in term_mappings:
+                if tm.confirmed is not None:
+                    continue
+                reason = mapping_reasons.get(
+                    (tm.start, tm.end, tm.original_term),
+                    "LLM 无法确认且无候选",
+                )
+                if tm.candidates:
                     clarify_items.append(
                         ClarifyItem(
-                            keyword=meta.raw_text,
-                            candidates=[],
-                            reason=tc.reason or "LLM 无法确认且无候选",
+                            keyword=tm.original_term,
+                            candidates=tm.candidates,
+                            reason=reason,
                             source="complex_condition",
                             path=f"complex_conditions.{idx}",
                         )
                     )
+                    continue
+                llm_failed = True
+                clarify_items.append(
+                    ClarifyItem(
+                        keyword=tm.original_term,
+                        candidates=[],
+                        reason=reason,
+                        source="complex_condition",
+                        path=f"complex_conditions.{idx}",
+                    )
+                )
 
             confirmed_conditions.append(
                 ConfirmedCondition(
