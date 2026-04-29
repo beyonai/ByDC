@@ -83,7 +83,8 @@ def build_view_execution_context(
             source_column_code = getattr(vf, "source_object_column_code", field_code)
             for idx, obj in enumerate(view.objects):
                 if obj.object_code == source_object_code:
-                    field_to_alias_col[field_code] = (f"t{idx}", source_column_code)
+                    source_column = _resolve_source_column(obj._cls, source_column_code)
+                    field_to_alias_col[field_code] = (f"t{idx}", source_column)
                     field_to_object_code[field_code] = obj.object_code
                     break
     else:
@@ -104,6 +105,14 @@ def build_view_execution_context(
         field_to_alias_col=field_to_alias_col,
         field_to_object_code=field_to_object_code,
     )
+
+
+def _resolve_source_column(cls: Any, field_code: str) -> str:
+    """按 field_code/source_column 查找真实物理列名。"""
+    for field in getattr(cls, "fields", []) or []:
+        if field.field_code == field_code or getattr(field, "source_column", None) == field_code:
+            return getattr(field, "source_column", None) or field.field_code
+    return field_code
 
 
 def build_filters_where(

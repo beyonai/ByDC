@@ -228,6 +228,10 @@ class ViewAnalyzeExecutor:
                 direction = "DESC"
             if ob_field in metric_alias_to_expr:
                 order_clauses.append(f"{metric_alias_to_expr[ob_field]} {direction}")
+            elif ob_field in dim_aliases:
+                order_clauses.append(
+                    f"{quote_identifier(dim_aliases[ob_field], db_type)} {direction}"
+                )
             else:
                 resolved = field_to_alias_col.get(ob_field)
                 if resolved:

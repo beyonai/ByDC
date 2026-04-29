@@ -99,9 +99,7 @@ async def test_tc_gd2_thinking_token_payload_structure() -> None:
     assert payload.get("content_type") == "think_text", (
         f"content_type 应为 think_text，实际：{payload}"
     )
-    assert payload.get("message_id") == msg_id, (
-        f"message_id 应为 {msg_id!r}，实际：{payload}"
-    )
+    assert payload.get("message_id") == msg_id, f"message_id 应为 {msg_id!r}，实际：{payload}"
     assert payload.get("content"), "content 不应为空"
 
 
@@ -137,9 +135,7 @@ async def test_tc_gd3_answer_token_dispatches_custom_event() -> None:
     assert payload.get("event_type") == "answer_delta", (
         f"event_type 应为 answer_delta，实际：{payload}"
     )
-    assert payload.get("content_type") == "text", (
-        f"content_type 应为 text，实际：{payload}"
-    )
+    assert payload.get("content_type") == "text", f"content_type 应为 text，实际：{payload}"
     assert payload.get("message_id") == "ans-001"
 
 
@@ -175,9 +171,7 @@ async def test_tc_gd4_emit_text_dispatches_custom_event() -> None:
     assert payload.get("event_type") == "answer_delta", (
         f"event_type 应为 answer_delta，实际：{payload}"
     )
-    assert payload.get("content_type") == "text", (
-        f"content_type 应为 text，实际：{payload}"
-    )
+    assert payload.get("content_type") == "text", f"content_type 应为 text，实际：{payload}"
     assert payload.get("message_id") == "text-001"
     assert payload.get("content"), "content 不应为空"
 
@@ -193,12 +187,8 @@ def test_tc_gd5_react_loop_no_by_framework_import() -> None:
     RED：当前源码含懒导入 from by_framework import ...。
     GREEN：所有懒导入替换为 adispatch_custom_event。
     """
-    source = _read_module_source(
-        "datacloud_analysis.orchestration.execution.react_loop"
-    )
-    assert "from by_framework" not in source, (
-        "react_loop.py 仍含 by_framework 导入，解耦未完成"
-    )
+    source = _read_module_source("datacloud_analysis.orchestration.execution.react_loop")
+    assert "from by_framework" not in source, "react_loop.py 仍含 by_framework 导入，解耦未完成"
 
 
 def test_tc_gd6_tool_wrapper_no_by_framework_import() -> None:
@@ -207,12 +197,8 @@ def test_tc_gd6_tool_wrapper_no_by_framework_import() -> None:
     RED：_emit_think / _emit_child_think 含 from by_framework import StreamChunkEvent。
     GREEN：改用 adispatch_custom_event，移除 by_framework 导入。
     """
-    source = _read_module_source(
-        "datacloud_analysis.orchestration.execution.tool_wrapper"
-    )
-    assert "from by_framework" not in source, (
-        "tool_wrapper.py 仍含 by_framework 导入，解耦未完成"
-    )
+    source = _read_module_source("datacloud_analysis.orchestration.execution.tool_wrapper")
+    assert "from by_framework" not in source, "tool_wrapper.py 仍含 by_framework 导入，解耦未完成"
 
 
 def test_tc_gd7_formatter_no_by_framework_import() -> None:
@@ -222,9 +208,5 @@ def test_tc_gd7_formatter_no_by_framework_import() -> None:
          含懒导入 from by_framework import ...。
     GREEN：全部替换为 adispatch_custom_event。
     """
-    source = _read_module_source(
-        "datacloud_analysis.orchestration.respond.formatter"
-    )
-    assert "from by_framework" not in source, (
-        "formatter.py 仍含 by_framework 导入，解耦未完成"
-    )
+    source = _read_module_source("datacloud_analysis.orchestration.respond.formatter")
+    assert "from by_framework" not in source, "formatter.py 仍含 by_framework 导入，解耦未完成"

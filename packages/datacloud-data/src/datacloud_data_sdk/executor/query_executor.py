@@ -24,6 +24,7 @@ from typing import Any
 
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError
 from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.result_term_converter import ResultTermConverter
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 from datacloud_data_sdk.virtual_action.validator import (
     VirtualActionValidator,
@@ -235,6 +236,12 @@ class QueryExecutor:
         records = [
             dict(zip(col_keys, row)) if isinstance(row, (list, tuple)) else row for row in rows
         ]
+        records = ResultTermConverter(
+            getattr(self._loader._config, "term_loader", None)
+        ).convert_by_fields(
+            records,
+            select_fields,
+        )
 
         columns = [
             {

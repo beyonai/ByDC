@@ -1348,3 +1348,81 @@ async def test_object_virtual_action_converts_rel_term_code_result_to_name(tmp_p
     )
 
     assert result["records"][0]["priority"] == "高"
+
+
+@pytest.mark.asyncio
+async def test_view_virtual_action_converts_rel_term_code_result_to_name(tmp_path) -> None:
+    from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
+
+    db_path = tmp_path / "view_virtual_terms.db"
+    loader = OntologyLoader()
+    loader.configure(
+        term_loader=KbTermLoader(
+            {"priority.code": [{"code": "HIGH", "label": "高", "aliases": []}]}
+        )
+    )
+    loader.load_from_content(
+        {
+            "objects": [
+                {
+                    "object_code": "todo_items",
+                    "object_name": "待办",
+                    "source_type": "DB",
+                    "source_config": {
+                        "alias": "todo_db",
+                        "db_type": "SQLITE",
+                        "jdbc_url": f"jdbc:sqlite:{db_path}",
+                    },
+                    "table_name": "todo_items",
+                    "fields": [
+                        {
+                            "field_code": "id",
+                            "field_name": "ID",
+                            "field_type": "INTEGER",
+                            "source_column": "id",
+                            "is_primary_key": True,
+                        },
+                        {
+                            "field_code": "priority",
+                            "field_name": "优先级",
+                            "field_type": "STRING",
+                            "source_column": "priority_code",
+                            "termMeta": {
+                                "termMasterType": "dict",
+                                "termTypeCode": "priority",
+                                "termField": "code",
+                            },
+                        },
+                    ],
+                }
+            ],
+            "views": [
+                {
+                    "view_id": "todo_view",
+                    "view_name": "待办视图",
+                    "objects": ["todo_items"],
+                    "fields": [
+                        {
+                            "property_code": "priority_view",
+                            "property_name": "优先级",
+                            "source_object_code": "todo_items",
+                            "source_object_column_code": "priority",
+                            "field_type": "STRING",
+                        }
+                    ],
+                }
+            ],
+            "relations": [],
+        }
+    )
+    inject_virtual_actions(loader)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE todo_items (id INTEGER, priority_code TEXT)")
+        conn.execute("INSERT INTO todo_items VALUES (1, 'HIGH')")
+        conn.commit()
+
+    result = await loader.get_view("todo_view").invoke_action(
+        "query_todo_view", {"select": ["priority_view"], "filters": []}
+    )
+
+    assert result["records"][0]["priority_view"] == "高"

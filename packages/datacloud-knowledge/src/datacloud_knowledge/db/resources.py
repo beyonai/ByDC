@@ -39,4 +39,6 @@ def sql_texts(kind: str) -> list[tuple[str, str]]:
     fallback_dir = _repo_sql_dir(kind)
     if not fallback_dir.exists():
         return []
-    return [(path.name, path.read_text(encoding="utf-8")) for path in sorted(fallback_dir.glob("*.sql"))]
+    return [
+        (path.name, path.read_text(encoding="utf-8")) for path in sorted(fallback_dir.glob("*.sql"))
+    ]

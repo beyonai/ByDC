@@ -36,6 +36,7 @@ def __getattr__(name: str):
     globals()[name] = value
     return value
 
+
 __all__ = [
     "CACHE_DIR_ENV",
     "DEFAULT_CACHE_DIR",

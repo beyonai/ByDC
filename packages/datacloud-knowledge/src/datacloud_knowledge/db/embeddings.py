@@ -32,7 +32,9 @@ def backfill_name_embeddings(
     if not force:
         predicate += sql.SQL(" AND name_embedding IS NULL")
 
-    with psycopg.connect(build_postgres_connection_uri(schema=resolved_schema, db_url=db_url)) as conn:
+    with psycopg.connect(
+        build_postgres_connection_uri(schema=resolved_schema, db_url=db_url)
+    ) as conn:
         updated = 0
         try:
             while True:
