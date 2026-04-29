@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -155,18 +156,30 @@ class OntologyLoader:
         # self._load_from_owl_content(content)
         self.load_from_owl_resource_directory(base_dir=base_dir)
 
-    def load_from_owl_resource_directory(self, base_dir: str | Path) -> None:
+    def load_from_owl_resource_directory(
+        self,
+        base_dir: str | Path,
+        *,
+        object_codes: Iterable[str] | None = None,
+        view_codes: Iterable[str] | None = None,
+    ) -> None:
         """
         从新的 resource/object + resource/view 目录结构加载本体定义。
 
         Args:
             base_dir: resource 根目录，包含 object/ 和 view/ 子目录
+            object_codes: 指定加载的对象编码列表，为空时不限制
+            view_codes: 指定加载的视图编码列表，为空时不限制
         """
         from datacloud_data_sdk.ontology.owl_parser import OwlParser
 
         base_path = Path(base_dir)
         parser = OwlParser()
-        content = parser.parse_resource_directory(base_path)
+        content = parser.parse_resource_directory(
+            base_path,
+            object_codes=object_codes,
+            view_codes=view_codes,
+        )
         self._load_from_owl_content(content)
 
     def _load_from_owl_content(self, content: dict[str, Any]) -> None:

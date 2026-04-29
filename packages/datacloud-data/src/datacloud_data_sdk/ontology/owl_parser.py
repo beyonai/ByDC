@@ -16,6 +16,7 @@ import json
 import logging
 import re
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -58,6 +59,13 @@ def _normalize_owl_xml(content: str) -> str:
         return "<rdf:RDF " + " ".join(deduped) + ">"
 
     return re.sub(r"<rdf:RDF\b([^>]*)>", replace_root, content, count=1, flags=re.DOTALL)
+
+
+def _normalize_code_filter(codes: Iterable[str] | None) -> set[str] | None:
+    if codes is None:
+        return None
+    normalized = {str(code).strip() for code in codes if str(code).strip()}
+    return normalized or None
 
 
 @dataclass
@@ -763,9 +771,25 @@ class OwlParser:
         self._apply_mappings_to_objects()
         return self._build_content()
 
-    def parse_resource_directory(self, base_dir: Path) -> dict[str, Any]:
+    def parse_resource_directory(
+        self,
+        base_dir: Path,
+        *,
+        object_codes: Iterable[str] | None = None,
+        view_codes: Iterable[str] | None = None,
+    ) -> dict[str, Any]:
         """解析新的 resource/object + resource/view 目录结构。"""
-        self._parse_new_layout_directory(base_dir)
+        selected_object_codes = _normalize_code_filter(object_codes)
+        selected_view_codes = _normalize_code_filter(view_codes)
+        object_filter_enabled = selected_object_codes is not None
+        view_filter_enabled = selected_view_codes is not None
+        self._parse_new_layout_directory(
+            base_dir,
+            object_codes=selected_object_codes,
+            view_codes=selected_view_codes,
+            object_filter_enabled=object_filter_enabled,
+            view_filter_enabled=view_filter_enabled,
+        )
         self._apply_mappings_to_objects()
         return self._build_content()
 
@@ -953,13 +977,36 @@ class OwlParser:
             "views": views,
         }
 
-    def _parse_new_layout_directory(self, base_dir: Path) -> None:
+    def _parse_new_layout_directory(
+        self,
+        base_dir: Path,
+        *,
+        object_codes: set[str] | None = None,
+        view_codes: set[str] | None = None,
+        object_filter_enabled: bool = False,
+        view_filter_enabled: bool = False,
+    ) -> None:
         object_dir = base_dir / "object"
         view_dir = base_dir / "view"
+
+        selected_object_codes = set(object_codes or set())
+        selected_view_codes = set(view_codes or set())
+        effective_object_filter_enabled = object_filter_enabled or view_filter_enabled
+        effective_view_filter_enabled = view_filter_enabled or object_filter_enabled
+
+        if view_dir.is_dir() and selected_view_codes:
+            selected_object_codes.update(
+                self._discover_view_object_codes(view_dir, selected_view_codes)
+            )
 
         if object_dir.is_dir():
             for object_path in sorted(object_dir.iterdir()):
                 if not object_path.is_dir():
+                    continue
+                if (
+                    effective_object_filter_enabled
+                    and object_path.name not in selected_object_codes
+                ):
                     continue
                 self._parse_new_layout_object_directory(object_path)
 
@@ -967,7 +1014,42 @@ class OwlParser:
             for view_path in sorted(view_dir.iterdir()):
                 if not view_path.is_dir():
                     continue
+                if effective_view_filter_enabled and view_path.name not in selected_view_codes:
+                    continue
                 self._parse_new_layout_view_directory(view_path)
+
+    def _discover_view_object_codes(self, view_dir: Path, view_codes: set[str]) -> set[str]:
+        object_codes: set[str] = set()
+        for view_code in sorted(view_codes):
+            view_path = view_dir / view_code
+            if not view_path.is_dir():
+                logger.warning("Selected view directory not found: %s", view_path)
+                continue
+
+            parser = OwlParser()
+            parser._parse_new_layout_view_directory(view_path)
+            for view in parser._views.values():
+                object_codes.update(code for code in view.object_codes if code)
+            object_codes.update(parser._discover_view_object_codes_from_mappings(view_code))
+            object_codes.update(parser._discover_view_object_codes_from_relations(view_code))
+        return object_codes
+
+    def _discover_view_object_codes_from_mappings(self, view_code: str) -> set[str]:
+        mappings = self._view_field_mappings.get(view_code, [])
+        return {
+            str(mapping["source_object_code"])
+            for mapping in mappings
+            if mapping.get("source_object_code")
+        }
+
+    def _discover_view_object_codes_from_relations(self, view_code: str) -> set[str]:
+        object_codes: set[str] = set()
+        for relation in self._relations.values():
+            if relation.source_class == view_code and relation.target_class:
+                object_codes.add(relation.target_class)
+            if relation.target_class == view_code and relation.source_class:
+                object_codes.add(relation.source_class)
+        return object_codes
 
     def _parse_new_layout_object_directory(self, object_dir: Path) -> None:
         definition_files = sorted(object_dir.glob("*_definition.owl"))
