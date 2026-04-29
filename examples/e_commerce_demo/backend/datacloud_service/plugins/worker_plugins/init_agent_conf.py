@@ -287,7 +287,7 @@ class InitDataCloudDigitalEmployeePlugin(Plugin):
     @staticmethod
     def _compile_task_prompt(detail: dict[str, Any]) -> str:
         parts: list[str] = []
-        parts.append(f"{detail['corePersonaDefinition']}")
+        parts.append(f"{detail.get('corePersonaDefinition', '')}")
         return "\n\n".join(parts)
 
     @staticmethod
