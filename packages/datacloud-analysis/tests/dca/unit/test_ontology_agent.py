@@ -16,12 +16,9 @@
 from __future__ import annotations
 
 import uuid
-from collections import OrderedDict
 from collections.abc import AsyncGenerator
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from datacloud_analysis.ontology_agent import (
     AnswerEvent,
@@ -31,10 +28,8 @@ from datacloud_analysis.ontology_agent import (
     OntologyAgentConfig,
     OntologyAgentEvent,
     ParadigmAnswer,
-    ParadigmGroup,
     ParadigmGroupSelection,
     ParadigmOption,
-    StepEvent,
     ThinkingEvent,
     _make_cache_key,
 )
@@ -84,6 +79,7 @@ def _make_mock_compiled(
 
 # ── TC-T3-1: ask() 返回 AsyncGenerator ───────────────────────────────────────
 
+
 def test_ask_returns_async_generator() -> None:
     agent = OntologyAgent(_CONFIG)
     with patch.object(agent, "_get_or_build_graph", return_value=_make_mock_compiled()):
@@ -92,6 +88,7 @@ def test_ask_returns_async_generator() -> None:
 
 
 # ── TC-T3-2: ask() 正常流程 yield AnswerEvent ────────────────────────────────
+
 
 async def test_ask_yields_answer_event_on_normal_flow() -> None:
     agent = OntologyAgent(_CONFIG)
@@ -112,6 +109,7 @@ async def test_ask_yields_answer_event_on_normal_flow() -> None:
 
 
 # ── TC-T3-3: ask() 在中断时 yield InterruptEvent ─────────────────────────────
+
 
 async def test_ask_yields_interrupt_event_on_paradigm_clarification() -> None:
     interrupt_value = {
@@ -160,6 +158,7 @@ async def test_ask_yields_interrupt_event_on_paradigm_clarification() -> None:
 
 # ── TC-T3-4: resume() 在恢复后 yield AnswerEvent ────────────────────────────
 
+
 async def test_resume_yields_answer_event() -> None:
     compiled = _make_mock_compiled(final_answer="恢复后答案")
 
@@ -189,6 +188,7 @@ async def test_resume_yields_answer_event() -> None:
 
 # ── TC-T3-5: InterruptEvent.thread_id 与 ask() 传入一致 ─────────────────────
 
+
 async def test_interrupt_event_thread_id_matches_ask_thread_id() -> None:
     custom_tid = "my-thread-abc"
     mock_interrupt = MagicMock()
@@ -202,9 +202,7 @@ async def test_interrupt_event_thread_id_matches_ask_thread_id() -> None:
     agent = OntologyAgent(_CONFIG)
     with patch.object(agent, "_get_or_build_graph", return_value=compiled):
         events: list[OntologyAgentEvent] = []
-        async for ev in agent.ask(
-            question="Q", view_codes=_VIEW_CODES, thread_id=custom_tid
-        ):
+        async for ev in agent.ask(question="Q", view_codes=_VIEW_CODES, thread_id=custom_tid):
             events.append(ev)
 
     interrupt_events = [e for e in events if isinstance(e, InterruptEvent)]
@@ -212,6 +210,7 @@ async def test_interrupt_event_thread_id_matches_ask_thread_id() -> None:
 
 
 # ── TC-T3-6: ErrorEvent 在图抛异常时被 yield ─────────────────────────────────
+
 
 async def test_ask_yields_error_event_on_exception() -> None:
     compiled = MagicMock()
@@ -235,6 +234,7 @@ async def test_ask_yields_error_event_on_exception() -> None:
 
 # ── TC-T3: resume() with str user_input ──────────────────────────────────────
 
+
 async def test_resume_with_str_user_input() -> None:
     compiled = _make_mock_compiled(final_answer="文本回复答案")
     agent = OntologyAgent(_CONFIG)
@@ -252,6 +252,7 @@ async def test_resume_with_str_user_input() -> None:
 
 
 # ── TC-T6-1: 图缓存命中时不重新构建 ─────────────────────────────────────────
+
 
 async def test_graph_cache_hit_skips_rebuild() -> None:
     agent = OntologyAgent(_CONFIG)
@@ -274,6 +275,7 @@ async def test_graph_cache_hit_skips_rebuild() -> None:
 
 # ── TC-T6-2: 不同 codes 组合各自构建 ────────────────────────────────────────
 
+
 async def test_graph_cache_miss_on_different_codes() -> None:
     agent = OntologyAgent(_CONFIG)
 
@@ -285,19 +287,16 @@ async def test_graph_cache_miss_on_different_codes() -> None:
         return _make_mock_compiled()
 
     with patch.object(agent, "_build_and_compile", side_effect=_fake_build):
-        async for _ in agent.ask(
-            question="Q1", view_codes=["scene_sales"], thread_id=_THREAD_ID
-        ):
+        async for _ in agent.ask(question="Q1", view_codes=["scene_sales"], thread_id=_THREAD_ID):
             pass
-        async for _ in agent.ask(
-            question="Q2", view_codes=["scene_crm"], thread_id=_THREAD_ID
-        ):
+        async for _ in agent.ask(question="Q2", view_codes=["scene_crm"], thread_id=_THREAD_ID):
             pass
 
     assert build_count == 2
 
 
 # ── TC-T6-3: cache key 隔离 view/object 命名空间 ────────────────────────────
+
 
 def test_make_cache_key_view_object_namespace_isolation() -> None:
     """view_code="x" 和 object_code="x" 应产生不同的 cache key。"""
@@ -322,13 +321,10 @@ def test_make_cache_key_none_codes() -> None:
 
 # ── TC-T6-4: LRU 超限淘汰 ───────────────────────────────────────────────────
 
+
 async def test_graph_cache_lru_eviction() -> None:
     """当缓存超过 CACHE_MAX 时，最旧的条目被淘汰。"""
-    from datacloud_analysis.ontology_agent import _CACHE_MAX
-
     agent = OntologyAgent(_CONFIG)
-    # 将 CACHE_MAX 临时调小以加速测试
-    original_max = _CACHE_MAX
 
     build_count = 0
 
@@ -337,27 +333,30 @@ async def test_graph_cache_lru_eviction() -> None:
         build_count += 1
         return _make_mock_compiled()
 
-    with patch("datacloud_analysis.ontology_agent._CACHE_MAX", 2):
-        with patch.object(agent, "_build_and_compile", side_effect=_fake_build):
-            # 填满缓存 (2 个条目)
-            async for _ in agent.ask(question="Q", view_codes=["v1"], thread_id="t1"):
-                pass
-            async for _ in agent.ask(question="Q", view_codes=["v2"], thread_id="t2"):
-                pass
+    with (
+        patch("datacloud_analysis.ontology_agent._CACHE_MAX", 2),
+        patch.object(agent, "_build_and_compile", side_effect=_fake_build),
+    ):
+        # 填满缓存 (2 个条目)
+        async for _ in agent.ask(question="Q", view_codes=["v1"], thread_id="t1"):
+            pass
+        async for _ in agent.ask(question="Q", view_codes=["v2"], thread_id="t2"):
+            pass
 
-            # 第三个不同 key → 淘汰最旧 (v1)，重建
-            async for _ in agent.ask(question="Q", view_codes=["v3"], thread_id="t3"):
-                pass
+        # 第三个不同 key → 淘汰最旧 (v1)，重建
+        async for _ in agent.ask(question="Q", view_codes=["v3"], thread_id="t3"):
+            pass
 
-            # v1 已被淘汰，再访问 v1 时重建
-            async for _ in agent.ask(question="Q", view_codes=["v1"], thread_id="t1"):
-                pass
+        # v1 已被淘汰，再访问 v1 时重建
+        async for _ in agent.ask(question="Q", view_codes=["v1"], thread_id="t1"):
+            pass
 
     # 共构建：v1(1次) + v2(1次) + v3(1次) + v1再次(1次) = 4次
     assert build_count == 4
 
 
 # ── TC-T3: ThinkingEvent 过滤 (非 respond 节点) ──────────────────────────────
+
 
 async def test_ask_yields_thinking_events_from_non_respond_node() -> None:
     """on_chat_model_stream 来自非 respond 节点时 yield ThinkingEvent。"""

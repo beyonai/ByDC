@@ -615,7 +615,7 @@ def format_main_confirm_context(
     recall_map: dict[str, list[dict[str, Any]]],
     pre_resolve: PreResolveResult,
     *,
-    mode: str = "query"
+    mode: str = "query",
 ) -> tuple[str, dict[int, TermMeta]]:
     """格式化主结构 LLM 确认上下文（编号术语模式）。
 

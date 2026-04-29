@@ -122,7 +122,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum number of term names to process in this run. Default: no limit.",
     )
 
-    bootstrap_parser = subparsers.add_parser("bootstrap", help="Ensure schema, import, and backfill")
+    bootstrap_parser = subparsers.add_parser(
+        "bootstrap", help="Ensure schema, import, and backfill"
+    )
     _add_connection_args(bootstrap_parser)
     bootstrap_parser.add_argument("package", type=Path, help="Knowledge import package directory")
     bootstrap_parser.add_argument(
@@ -210,7 +212,9 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911
                 seed=not args.no_seed,
                 create_vector_extension=args.create_vector_extension,
             )
-            import_result = import_package(str(args.package), schema=args.schema, db_url=args.db_url)
+            import_result = import_package(
+                str(args.package), schema=args.schema, db_url=args.db_url
+            )
             results["import_terms"] = import_result
             if import_result.get("status") == "failed":
                 _print_result(results)

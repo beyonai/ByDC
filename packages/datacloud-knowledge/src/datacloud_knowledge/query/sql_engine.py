@@ -1587,7 +1587,9 @@ def get_singleton_service(
     resolved_schema = resolve_knowledge_schema(schema)
     key = (resolved_schema, n_hops)
     if key not in _singleton_services:
-        _singleton_services[key] = SQLKnowledgeGraphQuery(default_hops=n_hops, schema=resolved_schema)
+        _singleton_services[key] = SQLKnowledgeGraphQuery(
+            default_hops=n_hops, schema=resolved_schema
+        )
         # Prewarm: load vocabulary and name_index into memory
         # By default, skip pool warmup for faster first query
         _singleton_services[key].prewarm(fast=fast, warm_pool=warm_pool)

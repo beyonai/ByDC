@@ -11,6 +11,7 @@ from datacloud_data_sdk.executor.sqlite_local_federation_engine import SQLiteLoc
 from datacloud_data_sdk.executor.view_analyze_executor import ViewAnalyzeExecutor
 from datacloud_data_sdk.executor.view_lookup_executor import ViewLookupExecutor
 from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.sql_executor.base_connector import BaseSourceConnector
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 from datacloud_data_sdk.virtual_action.models import ViewFieldMeta
@@ -153,6 +154,27 @@ def _build_loader() -> OntologyLoader:
     return loader
 
 
+class _CaptureConnector(BaseSourceConnector):
+    def __init__(self, config: DataSourceConfig) -> None:
+        super().__init__(config)
+        self.sql = ""
+        self.params: dict[str, object] | None = None
+
+    @classmethod
+    def supported_type(cls) -> str:
+        return "capture"
+
+    async def execute(
+        self, sql: str, params: dict[str, object] | None = None
+    ) -> list[dict[str, object]]:
+        self.sql = sql
+        self.params = params
+        return []
+
+    async def test_connection(self) -> bool:
+        return True
+
+
 @pytest.fixture
 def cross_db_context(tmp_path: Path) -> tuple[OntologyLoader, DataSourceManager]:
     users_db = tmp_path / "users.sqlite3"
@@ -273,6 +295,28 @@ async def test_cross_db_view_analyze_federated_join(
         {"user_name": "Bob", "total_amount": 20.0},
         {"user_name": "Alice", "total_amount": 10.0},
     ]
+
+
+@pytest.mark.asyncio
+async def test_view_analyze_orders_time_group_by_selected_alias() -> None:
+    loader = _build_loader()
+    view = loader.get_view("cross_db_view")
+    connector = _CaptureConnector(DataSourceConfig(alias="db_users", db_type="POSTGRESQL"))
+    ds_manager = DataSourceManager({"db_users": connector.config, "db_orders": connector.config})
+    ds_manager._connectors["db_users"] = connector
+
+    await ViewAnalyzeExecutor(loader, ds_manager=ds_manager).execute(
+        view,
+        {
+            "dimensions": [{"field": "user_name", "group_op": "month"}],
+            "metrics": [{"agg": "count_all", "as": "project_count"}],
+            "order_by": [{"field": "user_name", "direction": "asc"}],
+            "limit": 100,
+        },
+    )
+
+    assert 'ORDER BY "user_name_month" ASC' in connector.sql
+    assert 'ORDER BY t0."user_name" ASC' not in connector.sql
 
 
 @pytest.mark.asyncio

@@ -13,6 +13,8 @@ from datacloud_knowledge.db.url import (
     resolve_knowledge_schema_for_connection,
 )
 
+ConnectionRow = tuple[object, ...]
+
 logger = logging.getLogger(__name__)
 
 CORE_TABLES = (
@@ -32,14 +34,14 @@ def _connect(
     schema: str,
     db_url: str | None = None,
     autocommit: bool = False,
-) -> psycopg.Connection[tuple]:
+) -> psycopg.Connection[ConnectionRow]:
     return psycopg.connect(
         build_postgres_connection_uri(schema=schema, db_url=db_url),
         autocommit=autocommit,
     )
 
 
-def _set_search_path(cur: psycopg.Cursor[tuple], schema: str) -> None:
+def _set_search_path(cur: psycopg.Cursor[ConnectionRow], schema: str) -> None:
     cur.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(schema)))
 
 

@@ -189,6 +189,14 @@ class OwlGenConfig:
     # key = term_type_code
     term_type_configs: dict[str, TermTypeConfig] = field(default_factory=dict)
 
+    # ── 字段值与术语 code/name 的关联规则（可选）──
+    # 名称型术语类型：直接绑定这些术语类型的字段默认按 name 关联，其余按 code 关联。
+    name_term_type_codes: set[str] = field(default_factory=set)
+    # 对象身份字段别名：key = (table_code, column_name), value = (term_type_code, rel_term_codeorname)。
+    object_identity_term_aliases: dict[tuple[str, str], tuple[str, str]] = field(default_factory=dict)
+    # 外键/编码字段别名：key = (table_code, column_name), value = term_type_code，统一按 code 关联。
+    object_property_term_aliases: dict[tuple[str, str], str] = field(default_factory=dict)
+
     def resolved_views(self) -> list[ViewConfig]:
         """返回视图列表：优先 views，否则从旧字段自动包装。"""
         if self.views:

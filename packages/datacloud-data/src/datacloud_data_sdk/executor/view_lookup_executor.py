@@ -30,6 +30,7 @@ from datacloud_data_sdk.executor.view_federation_support import (
     object_source_alias,
 )
 from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.result_term_converter import ResultTermConverter
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 
 _PKEY_RE = re.compile(r"[^a-zA-Z0-9]")
@@ -188,6 +189,12 @@ class ViewLookupExecutor:
             dict(zip(col_keys, row, strict=False)) if isinstance(row, (list, tuple)) else row
             for row in rows
         ]
+        records = ResultTermConverter(
+            getattr(self._loader._config, "term_loader", None)
+        ).convert_by_fields(
+            records,
+            list(getattr(view, "fields", []) or []),
+        )
         columns_meta = build_view_result_columns_meta(view, col_keys, loader=self._loader)
         return {
             "records": records,

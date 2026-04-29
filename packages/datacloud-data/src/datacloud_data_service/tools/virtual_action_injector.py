@@ -372,6 +372,14 @@ def _resolve_source_field_type(
     loader: Any, source_object_code: str, source_column_code: str
 ) -> str | None:
     """根据视图映射回查源对象字段类型。"""
+    field = _resolve_source_field(loader, source_object_code, source_column_code)
+    return getattr(field, "field_type", None) if field is not None else None
+
+
+def _resolve_source_field(
+    loader: Any, source_object_code: str, source_column_code: str
+) -> Any | None:
+    """根据视图映射回查源对象字段。"""
     if not source_object_code or not source_column_code:
         return None
     try:
@@ -384,8 +392,18 @@ def _resolve_source_field_type(
             field.field_code == source_column_code
             or getattr(field, "source_column", None) == source_column_code
         ):
-            return field.field_type
+            return field
     return None
+
+
+def _apply_source_term_meta(view_field: Any, source_field: Any | None) -> None:
+    """将源字段术语元数据复制到视图字段。"""
+    if source_field is None:
+        return
+    view_field.term_set = getattr(source_field, "term_set", None)
+    view_field.term_type = getattr(source_field, "term_type", None)
+    view_field.term_field = getattr(source_field, "term_field", None)
+    view_field.dataset_id = getattr(source_field, "dataset_id", None)
 
 
 def _extract_view_fields(scene: dict, loader: Any) -> list:
@@ -412,10 +430,23 @@ def _extract_view_fields(scene: dict, loader: Any) -> list:
             if isinstance(rf, ViewFieldMeta):
                 if rf.secondary_role is None:
                     rf.secondary_role = infer_secondary_role(rf.analytic_role, rf.analytic_kind)
+                _apply_source_term_meta(
+                    rf,
+                    _resolve_source_field(
+                        loader,
+                        rf.source_object_code,
+                        rf.source_object_column_code,
+                    ),
+                )
                 result.append(rf)
             elif isinstance(rf, dict):
                 role, kind = parse_analytic_role(rf.get("ext_property") or "")
                 fops, gops, aops, rfg = derive_field_ops(role, kind)
+                source_field = _resolve_source_field(
+                    loader,
+                    rf.get("source_object_code", ""),
+                    rf.get("source_object_column_code", ""),
+                )
                 vf = ViewFieldMeta(
                     property_code=rf.get("property_code", ""),
                     property_name=rf.get("property_name", ""),
@@ -435,6 +466,7 @@ def _extract_view_fields(scene: dict, loader: Any) -> list:
                     aggregate_ops=aops,
                     required_filter_group=rfg,
                 )
+                _apply_source_term_meta(vf, source_field)
                 result.append(vf)
         return result
 
@@ -445,6 +477,11 @@ def _extract_view_fields(scene: dict, loader: Any) -> list:
             if isinstance(m, dict):
                 role, kind = parse_analytic_role(m.get("ext_property") or "")
                 fops, gops, aops, rfg = derive_field_ops(role, kind)
+                source_field = _resolve_source_field(
+                    loader,
+                    m.get("source_object_code", ""),
+                    m.get("source_object_column_code", ""),
+                )
                 vf = ViewFieldMeta(
                     property_code=m.get("property_code", ""),
                     property_name=m.get("property_name", ""),
@@ -464,6 +501,7 @@ def _extract_view_fields(scene: dict, loader: Any) -> list:
                     aggregate_ops=aops,
                     required_filter_group=rfg,
                 )
+                _apply_source_term_meta(vf, source_field)
                 result.append(vf)
         return result
 

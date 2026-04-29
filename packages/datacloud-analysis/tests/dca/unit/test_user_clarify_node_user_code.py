@@ -9,9 +9,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from datacloud_analysis.orchestration.clarification.user_clarify_node import (
     user_clarify_node,
@@ -19,9 +17,13 @@ from datacloud_analysis.orchestration.clarification.user_clarify_node import (
 
 # ── patch 路径 ────────────────────────────────────────────────────────────────
 _INTERRUPT_PATCH = "datacloud_analysis.orchestration.clarification.user_clarify_node.interrupt"
-_FORMAT_PATCH = "datacloud_analysis.orchestration.clarification.user_clarify_node._format_clarification"
+_FORMAT_PATCH = (
+    "datacloud_analysis.orchestration.clarification.user_clarify_node._format_clarification"
+)
 _NORMALIZE_PATCH = "datacloud_analysis.orchestration.clarification.user_clarify_node.normalize_clarification_params"
-_PERSIST_PATCH = "datacloud_analysis.orchestration.clarification.user_clarify_node.persist_confirmed_synonyms"
+_PERSIST_PATCH = (
+    "datacloud_analysis.orchestration.clarification.user_clarify_node.persist_confirmed_synonyms"
+)
 
 _TOOL_NAME = "query_ads_enterprise"
 _QUERY = "查询高营收企业"
@@ -59,6 +61,7 @@ def _make_state(paradigm_list: list[dict[str, Any]] | None = None) -> dict[str, 
 
 # ── TC-T2-1: configurable["user_code"] 被使用（无 gateway_context） ────────────
 
+
 async def test_user_code_from_configurable_used_when_no_gateway_context() -> None:
     """user_code 直接在 configurable 中时，persist_confirmed_synonyms 以该 user_code 调用。"""
     config: dict[str, Any] = {
@@ -89,6 +92,7 @@ async def test_user_code_from_configurable_used_when_no_gateway_context() -> Non
 
 # ── TC-T2-2: gateway_context 存在时仍走原有路径 ──────────────────────────────
 
+
 async def test_gateway_context_takes_priority_over_direct_user_code() -> None:
     """gateway_context 存在时，get_gateway_user_id 路径不受 user_code 干扰。"""
     mock_ctx = MagicMock()
@@ -112,7 +116,7 @@ async def test_gateway_context_takes_priority_over_direct_user_code() -> None:
             return_value="gw_user_001",
         ),
     ):
-        result = await user_clarify_node(_make_state(), config)  # type: ignore[arg-type]
+        await user_clarify_node(_make_state(), config)  # type: ignore[arg-type]
 
     mock_persist.assert_called_once()
     _, kwargs = mock_persist.call_args
@@ -121,6 +125,7 @@ async def test_gateway_context_takes_priority_over_direct_user_code() -> None:
 
 
 # ── TC-T2-3: 两者都没有时 persist 不被调用 ────────────────────────────────────
+
 
 async def test_no_user_id_skips_persistence() -> None:
     """user_code 和 gateway_context 都不存在时，persist_confirmed_synonyms 不被调用。"""

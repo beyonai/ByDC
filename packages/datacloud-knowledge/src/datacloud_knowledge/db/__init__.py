@@ -1,5 +1,7 @@
 """统一数据库基础设施层。"""
 
+from typing import Any
+
 from .url import (
     ParsedDatabaseUrl,
     build_postgres_connection_uri,
@@ -21,7 +23,7 @@ _LAZY_EXPORTS = {
 }
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """Lazily import SQLAlchemy-backed database helpers."""
 
     if name not in _LAZY_EXPORTS:
@@ -32,6 +34,7 @@ def __getattr__(name: str):
     value = getattr(import_module(module_name), attr_name)
     globals()[name] = value
     return value
+
 
 __all__ = [
     "DatabaseContext",

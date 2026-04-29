@@ -26,6 +26,66 @@ def _build_binding_lookup(
     return {(b.table_code, b.column_name): b for b in config.term_bindings}
 
 
+def _term_data_type_for_term_type(config: OwlGenConfig, term_type_code: str) -> str:
+    for binding in config.term_bindings:
+        if binding.term_type_code == term_type_code:
+            return binding.term_data_type
+    return ""
+
+
+def _empty_term_meta() -> dict[str, str]:
+    return {
+        "term_type_code_path": "",
+        "library_code": "",
+        "rel_term_codeorname": "",
+        "term_data_type": "",
+    }
+
+
+def _term_meta_for_alias(config: OwlGenConfig, term_type_code: str, rel_term_codeorname: str) -> dict[str, str]:
+    term_data_type = _term_data_type_for_term_type(config, term_type_code)
+    if not term_data_type:
+        return _empty_term_meta()
+    return {
+        "term_type_code_path": f"{config.library_code}#{term_type_code}",
+        "library_code": config.library_code,
+        "rel_term_codeorname": rel_term_codeorname,
+        "term_data_type": term_data_type,
+    }
+
+
+def _rel_term_codeorname_for_binding(config: OwlGenConfig, binding: TermBinding) -> str:
+    if binding.term_type_code in config.name_term_type_codes or binding.column_name.endswith("_name"):
+        return "name"
+    return "code"
+
+
+def _term_meta_for_object_field(
+    config: OwlGenConfig,
+    table_code: str,
+    column_name: str,
+    binding_lookup: dict[tuple[str, str], TermBinding],
+) -> dict[str, str]:
+    identity_alias = config.object_identity_term_aliases.get((table_code, column_name))
+    if identity_alias is not None:
+        term_type_code, rel_term_codeorname = identity_alias
+        return _term_meta_for_alias(config, term_type_code, rel_term_codeorname)
+
+    property_alias = config.object_property_term_aliases.get((table_code, column_name))
+    if property_alias is not None:
+        return _term_meta_for_alias(config, property_alias, "code")
+
+    binding = binding_lookup.get((table_code, column_name))
+    if binding is None:
+        return _empty_term_meta()
+    return {
+        "term_type_code_path": f"{config.library_code}#{binding.term_type_code}",
+        "library_code": config.library_code,
+        "rel_term_codeorname": _rel_term_codeorname_for_binding(config, binding),
+        "term_data_type": binding.term_data_type,
+    }
+
+
 def _field_role_json(
     config: OwlGenConfig,
     table_code: str,
@@ -79,12 +139,8 @@ def render_object(config: OwlGenConfig, table: Table) -> str:
     field_items: list[str] = []
     for col in table.columns:
         dtype = map_data_type(col.sql_type, col.name)
-        binding = binding_lookup.get((table.code, col.name))
         resolved_prop = resolved_props[col.name]
-        term_path = f"{config.library_code}#{binding.term_type_code}" if binding else ""
-        lib_code = config.library_code if binding else ""
-        rel_term = "name" if binding else ""
-        term_dt = binding.term_data_type if binding else ""
+        term_meta = _term_meta_for_object_field(config, table.code, col.name, binding_lookup)
         ext_prop = _field_role_json(config, table.code, col.name, col.is_primary_key)
         prop_group = _property_group_for_field(config, table.code, col.name)
         field_items.append(
@@ -115,14 +171,14 @@ def render_object(config: OwlGenConfig, table: Table) -> str:
         <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
 {ext_prop}</ext_property>
         <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{term_path}</term_type_code_path>
+{term_meta["term_type_code_path"]}</term_type_code_path>
         <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{lib_code}</library_code>
+{term_meta["library_code"]}</library_code>
         <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
         <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{rel_term}</rel_term_codeorname>
+{term_meta["rel_term_codeorname"]}</rel_term_codeorname>
         <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{term_dt}</term_data_type>
+{term_meta["term_data_type"]}</term_data_type>
     </owl:NamedIndividual>"""
         )
 

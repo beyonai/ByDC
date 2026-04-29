@@ -701,11 +701,11 @@ class Action:
             dataset_id=param.dataset_id,
             term_type_code=term_type_code,
         )
-        enum_codes = [entry["code"] for entry in entries if entry.get("code")]
-        if not enum_codes:
+        enum_names = [entry["label"] for entry in entries if entry.get("label")]
+        if not enum_names:
             return
 
-        enum_schema["enum"] = enum_codes
+        enum_schema["enum"] = enum_names
 
     @staticmethod
     def _get_enum_target_schema(schema: dict[str, object]) -> dict[str, object] | None:
@@ -736,7 +736,7 @@ class Action:
         dataset_id: int | None,
         term_type_code: str | None,
     ) -> list[dict[str, str]]:
-        """获取术语条目列表，优先使用条目接口，失败时回退到 code/value。"""
+        """获取术语条目列表，优先使用条目接口，失败时回退到 label/value。"""
         try:
             entries = term_loader.get_entries(
                 term_set,
@@ -749,26 +749,27 @@ class Action:
         normalized_entries: list[dict[str, str]] = []
         for entry in entries:
             code = entry.get("code")
-            if not code:
+            label = entry.get("label") or entry.get("name")
+            if not code and not label:
                 continue
             normalized_entries.append(
                 {
-                    "code": str(code),
-                    "label": str(entry.get("label", code)),
+                    "code": str(code or label),
+                    "label": str(label or code),
                 }
             )
         if normalized_entries:
             return normalized_entries
 
         try:
-            codes = term_loader.get_codes(
+            labels = term_loader.get_available_values(
                 term_set,
                 dataset_id=dataset_id,
                 term_type_code=term_type_code,
             )
         except Exception:
-            codes = []
-        return [{"code": str(code), "label": str(code)} for code in codes if code]
+            labels = []
+        return [{"code": str(label), "label": str(label)} for label in labels if label]
 
     def _map_names(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """

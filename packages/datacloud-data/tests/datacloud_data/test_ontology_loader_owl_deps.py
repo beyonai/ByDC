@@ -12,9 +12,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 
@@ -42,6 +40,7 @@ _STUB_CONTENT: dict = {
 
 # ── TC-T1-1: view_dir 不存在时静默跳过 ───────────────────────────────────────
 
+
 def test_load_view_with_deps_missing_dir_does_not_raise(tmp_path: Path) -> None:
     """view_dir 不存在时不抛异常，也不调用 parser。"""
     loader = OntologyLoader()
@@ -61,6 +60,7 @@ def test_load_view_with_deps_missing_dir_does_not_load(tmp_path: Path) -> None:
 
 
 # ── TC-T1-2: view_dir 存在时调用 parser 并加载依赖 object ────────────────────
+
 
 def test_load_view_with_deps_calls_parser_when_dir_exists(tmp_path: Path) -> None:
     """view_dir 存在时调用 _parse_new_layout_view_directory。"""
@@ -125,6 +125,7 @@ def test_load_view_with_deps_skips_missing_object_dir(tmp_path: Path) -> None:
 
 # ── TC-T1-3: 追加语义，不清空现有 _classes ───────────────────────────────────
 
+
 def test_load_view_with_deps_is_additive(tmp_path: Path) -> None:
     """load_view_with_deps 使用 load_from_content（追加），不清空已有类。"""
     view_dir = tmp_path / "view" / "v1"
@@ -161,6 +162,7 @@ def test_load_view_with_deps_is_additive(tmp_path: Path) -> None:
 
 # ── TC-T1-4: load_object_with_deps - object_dir 不存在时静默跳过 ─────────────
 
+
 def test_load_object_with_deps_missing_dir_does_not_raise(tmp_path: Path) -> None:
     loader = OntologyLoader()
     loader.load_object_with_deps(tmp_path, "no_such_object")
@@ -174,6 +176,7 @@ def test_load_object_with_deps_missing_dir_no_load(tmp_path: Path) -> None:
 
 
 # ── TC-T1-5: load_object_with_deps - object_dir 存在时调用 parser ────────────
+
 
 def test_load_object_with_deps_calls_parser_when_dir_exists(tmp_path: Path) -> None:
     obj_code = "by_order"
@@ -192,6 +195,7 @@ def test_load_object_with_deps_calls_parser_when_dir_exists(tmp_path: Path) -> N
 
 
 # ── TC-T1-6: load_object_with_deps 是追加语义 ────────────────────────────────
+
 
 def test_load_object_with_deps_is_additive(tmp_path: Path) -> None:
     obj_code = "by_order"

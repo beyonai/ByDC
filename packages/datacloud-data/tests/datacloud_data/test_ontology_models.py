@@ -1,9 +1,13 @@
+from datacloud_data_sdk.action import Action
+from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.ontology.models import (
     OntologyAction,
+    OntologyActionParam,
     OntologyClass,
     OntologyField,
     OntologyRelation,
 )
+from datacloud_data_sdk.ontology.term_loader import KbTermLoader
 
 
 def test_ontology_field_has_term_type_and_dataset_id() -> None:
@@ -70,6 +74,42 @@ def test_ontology_action_script_defaults_to_none() -> None:
         action_type="query",
     )
     assert action.script is None
+
+
+def test_action_schema_uses_term_names_for_enum() -> None:
+    loader = OntologyLoader()
+    loader.configure(
+        term_loader=KbTermLoader(
+            {
+                "status.code": [
+                    {"code": "TODO", "label": "待办"},
+                    {"code": "DONE", "label": "已完成"},
+                ],
+            }
+        )
+    )
+    action = OntologyAction(
+        action_code="update_status",
+        action_name="更新状态",
+        description="",
+        belong_class="task",
+        params=[
+            OntologyActionParam(
+                param_code="status",
+                param_name="状态",
+                direction="IN",
+                param_type="STRING",
+                term_set="status.code",
+                term_type="enum",
+            )
+        ],
+        function_refs=[],
+        action_type="operation",
+    )
+
+    schema = Action(action, loader=loader).get_schema()
+
+    assert schema["inputSchema"]["properties"]["status"]["enum"] == ["待办", "已完成"]
 
 
 def test_ontology_relation_has_join_keys() -> None:
