@@ -29,6 +29,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from psycopg import sql
+
+from datacloud_knowledge.db.url import resolve_knowledge_schema
+
 # Default cache directory
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "datacloud_knowledge"
 
@@ -79,7 +83,7 @@ class CacheMetadata:
 class VocabularyCache:
     """mmap-based persistent cache for vocabulary and name index."""
 
-    def __init__(self, schema: str = "whale_datacloud", cache_dir: Path | None = None):
+    def __init__(self, schema: str | None = None, cache_dir: Path | None = None):
         """Initialize cache manager.
 
         Args:
@@ -87,7 +91,7 @@ class VocabularyCache:
             cache_dir: Cache directory path (default: ~/.cache/datacloud_knowledge
                       or DATACLOUD_KNOWLEDGE_CACHE_DIR env var)
         """
-        self.schema = schema
+        self.schema = resolve_knowledge_schema(schema)
 
         # Determine cache directory
         if cache_dir is not None:
@@ -99,7 +103,7 @@ class VocabularyCache:
             else:
                 self.cache_dir = DEFAULT_CACHE_DIR
 
-        self.cache_file = self.cache_dir / CACHE_FILE_NAME.format(schema=schema)
+        self.cache_file = self.cache_dir / CACHE_FILE_NAME.format(schema=self.schema)
 
         # Ensure cache directory exists
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -137,14 +141,24 @@ class VocabularyCache:
             relfilenodes = {row[0]: (row[1], row[2]) for row in cur.fetchall()}
 
             # Get counts and max updated times
-            cur.execute(f"""
-                SELECT
-                    (SELECT COUNT(*) FROM {self.schema}.term) as count_term,
-                    (SELECT COUNT(*) FROM {self.schema}.term_name) as count_name,
-                    (SELECT COUNT(*) FROM {self.schema}.term_vocabulary) as count_vocab,
-                    (SELECT MAX(updated_time) FROM {self.schema}.term) as max_term,
-                    (SELECT MAX(updated_time) FROM {self.schema}.term_name) as max_name
-            """)
+            cur.execute(
+                sql.SQL(
+                    """
+                    SELECT
+                        (SELECT COUNT(*) FROM {}.term) as count_term,
+                        (SELECT COUNT(*) FROM {}.term_name) as count_name,
+                        (SELECT COUNT(*) FROM {}.term_vocabulary) as count_vocab,
+                        (SELECT MAX(updated_time) FROM {}.term) as max_term,
+                        (SELECT MAX(updated_time) FROM {}.term_name) as max_name
+                    """
+                ).format(
+                    sql.Identifier(self.schema),
+                    sql.Identifier(self.schema),
+                    sql.Identifier(self.schema),
+                    sql.Identifier(self.schema),
+                    sql.Identifier(self.schema),
+                )
+            )
 
             row = cur.fetchone()
 
