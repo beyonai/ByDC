@@ -3,6 +3,8 @@
 该包位于 `packages/datacloud-knowledge/src/datacloud_knowledge/`。
 """
 
+from typing import Any
+
 __version__ = "0.2.0"
 
 _LAZY_EXPORTS = {
@@ -20,7 +22,7 @@ _LAZY_EXPORTS = {
 }
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """Lazily import optional SDK surfaces.
 
     This keeps lightweight CLI commands from importing query/file-store

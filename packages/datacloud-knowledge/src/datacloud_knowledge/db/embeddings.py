@@ -28,7 +28,7 @@ def backfill_name_embeddings(
 
     resolved_schema = resolve_knowledge_schema_for_connection(schema=schema, db_url=db_url)
     embedding_service = get_embedding_service()
-    predicate = sql.SQL("name_text IS NOT NULL")
+    predicate: sql.Composable = sql.SQL("name_text IS NOT NULL")
     if not force:
         predicate += sql.SQL(" AND name_embedding IS NULL")
 

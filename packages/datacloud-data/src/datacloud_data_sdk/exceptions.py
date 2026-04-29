@@ -362,6 +362,29 @@ class ActionNotConfiguredError(ExecutionError):
         self.action_code = action_code
 
 
+class PermissionNotConfiguredError(ExecutionError):
+    """Permission provider is required but not configured."""
+
+    def __init__(self) -> None:
+        super().__init__("Permission provider is not configured")
+
+
+class PermissionDeniedError(ExecutionError):
+    """Permission check denied access to a resource."""
+
+    def __init__(
+        self,
+        resource: str,
+        reason_code: str = "permission_denied",
+        message: str | None = None,
+    ) -> None:
+        detail = message or reason_code
+        super().__init__(f"Permission denied for {resource!r}: {detail}")
+        self.resource = resource
+        self.reason_code = reason_code
+        self.message = message
+
+
 class DataSourceUnavailableError(ExecutionError):
     """
     数据源不可用异常

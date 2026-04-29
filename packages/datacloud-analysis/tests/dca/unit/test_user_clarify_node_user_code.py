@@ -9,9 +9,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from datacloud_analysis.orchestration.clarification.user_clarify_node import (
     user_clarify_node,
@@ -118,7 +116,7 @@ async def test_gateway_context_takes_priority_over_direct_user_code() -> None:
             return_value="gw_user_001",
         ),
     ):
-        result = await user_clarify_node(_make_state(), config)  # type: ignore[arg-type]
+        await user_clarify_node(_make_state(), config)  # type: ignore[arg-type]
 
     mock_persist.assert_called_once()
     _, kwargs = mock_persist.call_args

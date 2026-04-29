@@ -16,12 +16,9 @@
 from __future__ import annotations
 
 import uuid
-from collections import OrderedDict
 from collections.abc import AsyncGenerator
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from datacloud_analysis.ontology_agent import (
     AnswerEvent,
@@ -31,10 +28,8 @@ from datacloud_analysis.ontology_agent import (
     OntologyAgentConfig,
     OntologyAgentEvent,
     ParadigmAnswer,
-    ParadigmGroup,
     ParadigmGroupSelection,
     ParadigmOption,
-    StepEvent,
     ThinkingEvent,
     _make_cache_key,
 )
@@ -329,11 +324,7 @@ def test_make_cache_key_none_codes() -> None:
 
 async def test_graph_cache_lru_eviction() -> None:
     """当缓存超过 CACHE_MAX 时，最旧的条目被淘汰。"""
-    from datacloud_analysis.ontology_agent import _CACHE_MAX
-
     agent = OntologyAgent(_CONFIG)
-    # 将 CACHE_MAX 临时调小以加速测试
-    original_max = _CACHE_MAX
 
     build_count = 0
 
@@ -342,21 +333,23 @@ async def test_graph_cache_lru_eviction() -> None:
         build_count += 1
         return _make_mock_compiled()
 
-    with patch("datacloud_analysis.ontology_agent._CACHE_MAX", 2):
-        with patch.object(agent, "_build_and_compile", side_effect=_fake_build):
-            # 填满缓存 (2 个条目)
-            async for _ in agent.ask(question="Q", view_codes=["v1"], thread_id="t1"):
-                pass
-            async for _ in agent.ask(question="Q", view_codes=["v2"], thread_id="t2"):
-                pass
+    with (
+        patch("datacloud_analysis.ontology_agent._CACHE_MAX", 2),
+        patch.object(agent, "_build_and_compile", side_effect=_fake_build),
+    ):
+        # 填满缓存 (2 个条目)
+        async for _ in agent.ask(question="Q", view_codes=["v1"], thread_id="t1"):
+            pass
+        async for _ in agent.ask(question="Q", view_codes=["v2"], thread_id="t2"):
+            pass
 
-            # 第三个不同 key → 淘汰最旧 (v1)，重建
-            async for _ in agent.ask(question="Q", view_codes=["v3"], thread_id="t3"):
-                pass
+        # 第三个不同 key → 淘汰最旧 (v1)，重建
+        async for _ in agent.ask(question="Q", view_codes=["v3"], thread_id="t3"):
+            pass
 
-            # v1 已被淘汰，再访问 v1 时重建
-            async for _ in agent.ask(question="Q", view_codes=["v1"], thread_id="t1"):
-                pass
+        # v1 已被淘汰，再访问 v1 时重建
+        async for _ in agent.ask(question="Q", view_codes=["v1"], thread_id="t1"):
+            pass
 
     # 共构建：v1(1次) + v2(1次) + v3(1次) + v1再次(1次) = 4次
     assert build_count == 4
