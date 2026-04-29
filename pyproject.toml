@@ -92,6 +92,9 @@ packages = ["src/by_datacloud"]
 "packages/datacloud-data/src/datacloud_data_sdk" = "datacloud_data_sdk"
 "packages/datacloud-data/src/datacloud_data_service" = "datacloud_data_service"
 "packages/datacloud-knowledge/src/datacloud_knowledge" = "datacloud_knowledge"
+"packages/datacloud-knowledge/db/ddl/knowledge" = "datacloud_knowledge/resources/sql/ddl"
+"packages/datacloud-knowledge/db/seed/knowledge" = "datacloud_knowledge/resources/sql/seed"
+"packages/datacloud-knowledge/db/migrations" = "datacloud_knowledge/resources/sql/migrations"
 
 # ============================================
 # Workspace 配置 - uv 多子项目管理

@@ -9,14 +9,13 @@ _SQL_PACKAGE = "datacloud_knowledge.resources.sql"
 
 
 def _repo_sql_dir(kind: str) -> Path:
-    package_root = Path(__file__).resolve().parents[2]
-    repo_root = package_root.parents[2]
+    package_root = Path(__file__).resolve().parents[3]
     if kind == "ddl":
-        return repo_root / "db" / "ddl" / "knowledge"
+        return package_root / "db" / "ddl" / "knowledge"
     if kind == "seed":
-        return repo_root / "db" / "seed" / "knowledge"
+        return package_root / "db" / "seed" / "knowledge"
     if kind == "migrations":
-        return repo_root / "db" / "migrations"
+        return package_root / "db" / "migrations"
     raise ValueError(f"Unknown SQL resource kind: {kind}")
 
 
