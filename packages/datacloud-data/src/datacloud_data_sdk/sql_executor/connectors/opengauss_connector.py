@@ -94,3 +94,11 @@ class OpenGaussConnector(BaseSourceConnector):
         if self._engine:
             await self._engine.dispose()
             self._engine = None
+
+    def __getstate__(self) -> dict[str, Any]:
+        return {"config": self.config}
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.config = state["config"]
+        self._engine = None
+        self._init_engine()

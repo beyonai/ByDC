@@ -88,3 +88,12 @@ class ClickHouseConnector(BaseSourceConnector):
         if self._session:
             await self._session.close()
             self._session = None
+
+    def __getstate__(self) -> dict[str, Any]:
+        return {"config": self.config, "_params": self._params}
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.config = state["config"]
+        self._params = state["_params"]
+        self._client = None
+        self._session = None
