@@ -60,18 +60,29 @@ def _add_connection_args(parser: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="datacloud-knowledge")
+    parser = argparse.ArgumentParser(
+        prog="datacloud-knowledge",
+        description="Initialize, import, and maintain DataCloud knowledge schemas.",
+    )
     parser.add_argument("--verbose", action="store_true", help="Enable INFO logging")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     ensure_parser = subparsers.add_parser("ensure-schema", help="Create/update knowledge tables")
     _add_connection_args(ensure_parser)
-    ensure_parser.add_argument("--reset", action="store_true", help="Run destructive reset DDL")
-    ensure_parser.add_argument("--no-seed", action="store_true", help="Skip built-in seed data")
+    ensure_parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Drop and recreate knowledge tables before applying DDL. Destructive; off by default.",
+    )
+    ensure_parser.add_argument(
+        "--no-seed",
+        action="store_true",
+        help="Do not insert built-in term types and system seed records after DDL.",
+    )
     ensure_parser.add_argument(
         "--create-vector-extension",
         action="store_true",
-        help="Try CREATE EXTENSION IF NOT EXISTS vector before DDL",
+        help="Try CREATE EXTENSION IF NOT EXISTS vector before DDL for PostgreSQL/pgvector.",
     )
 
     verify_parser = subparsers.add_parser("verify-schema", help="Verify core tables exist")
@@ -83,24 +94,63 @@ def build_parser() -> argparse.ArgumentParser:
 
     tsvector_parser = subparsers.add_parser("backfill-tsvector", help="Backfill term_name tsvector")
     _add_connection_args(tsvector_parser)
-    tsvector_parser.add_argument("--force", action="store_true", help="Refill existing vectors")
+    tsvector_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Recompute all name_keywords values instead of only rows where the column is NULL.",
+    )
 
     embedding_parser = subparsers.add_parser(
         "backfill-embeddings", help="Backfill term_name vector embeddings"
     )
     _add_connection_args(embedding_parser)
-    embedding_parser.add_argument("--batch-size", type=int, default=50)
-    embedding_parser.add_argument("--force", action="store_true", help="Regenerate existing embeddings")
-    embedding_parser.add_argument("--limit", type=int, default=None)
+    embedding_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=50,
+        help="Number of term names to embed per API batch. Default: 50.",
+    )
+    embedding_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Regenerate embeddings for all term names instead of only NULL embeddings.",
+    )
+    embedding_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Maximum number of term names to process in this run. Default: no limit.",
+    )
 
     bootstrap_parser = subparsers.add_parser("bootstrap", help="Ensure schema, import, and backfill")
     _add_connection_args(bootstrap_parser)
     bootstrap_parser.add_argument("package", type=Path, help="Knowledge import package directory")
-    bootstrap_parser.add_argument("--reset", action="store_true", help="Run destructive reset DDL")
-    bootstrap_parser.add_argument("--no-seed", action="store_true", help="Skip built-in seed data")
-    bootstrap_parser.add_argument("--with-embeddings", action="store_true")
-    bootstrap_parser.add_argument("--embed-batch-size", type=int, default=50)
-    bootstrap_parser.add_argument("--create-vector-extension", action="store_true")
+    bootstrap_parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Drop and recreate knowledge tables before importing. Destructive; off by default.",
+    )
+    bootstrap_parser.add_argument(
+        "--no-seed",
+        action="store_true",
+        help="Skip built-in seed records during schema initialization.",
+    )
+    bootstrap_parser.add_argument(
+        "--with-embeddings",
+        action="store_true",
+        help="After import and tsvector backfill, also generate name_embedding vectors.",
+    )
+    bootstrap_parser.add_argument(
+        "--embed-batch-size",
+        type=int,
+        default=50,
+        help="Embedding API batch size used with --with-embeddings. Default: 50.",
+    )
+    bootstrap_parser.add_argument(
+        "--create-vector-extension",
+        action="store_true",
+        help="Try CREATE EXTENSION IF NOT EXISTS vector before DDL for PostgreSQL/pgvector.",
+    )
     return parser
 
 
