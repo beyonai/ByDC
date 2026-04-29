@@ -32,6 +32,11 @@ def _get_gateway_user_id(config: RunnableConfig) -> str | None:
             type(configurable).__name__,
         )
         return None
+    # SDK 直调模式：user_code 直接写入 configurable，无 gateway_context
+    direct_user_code = str(configurable.get("user_code") or "").strip()
+    if direct_user_code and not configurable.get("gateway_context"):
+        return direct_user_code
+
     gateway_context = configurable.get("gateway_context")
     logger.info(
         "[user_clarify] user_id lookup: configurable_keys=%s gateway_context_type=%s "

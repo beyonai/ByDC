@@ -30,4 +30,52 @@ def create_agent(*args: Any, **kwargs: Any) -> Any:
     return factory(*args, **kwargs)
 
 
-__all__ = ["bootstrap", "create_agent"]
+def _ontology_agent_exports() -> dict[str, Any]:
+    """Lazily import OntologyAgent exports to avoid import-time side effects."""
+    from .ontology_agent import (  # noqa: PLC0415
+        AnswerEvent,
+        ErrorEvent,
+        InterruptEvent,
+        OntologyAgent,
+        OntologyAgentConfig,
+        OntologyAgentEvent,
+        ParadigmAnswer,
+        ParadigmGroup,
+        ParadigmGroupSelection,
+        ParadigmOption,
+        StepEvent,
+        ThinkingEvent,
+    )
+
+    return {
+        "OntologyAgent": OntologyAgent,
+        "OntologyAgentConfig": OntologyAgentConfig,
+        "OntologyAgentEvent": OntologyAgentEvent,
+        "ThinkingEvent": ThinkingEvent,
+        "StepEvent": StepEvent,
+        "InterruptEvent": InterruptEvent,
+        "AnswerEvent": AnswerEvent,
+        "ErrorEvent": ErrorEvent,
+        "ParadigmAnswer": ParadigmAnswer,
+        "ParadigmGroup": ParadigmGroup,
+        "ParadigmGroupSelection": ParadigmGroupSelection,
+        "ParadigmOption": ParadigmOption,
+    }
+
+
+__all__ = [
+    "bootstrap",
+    "create_agent",
+    "OntologyAgent",
+    "OntologyAgentConfig",
+    "OntologyAgentEvent",
+    "ThinkingEvent",
+    "StepEvent",
+    "InterruptEvent",
+    "AnswerEvent",
+    "ErrorEvent",
+    "ParadigmAnswer",
+    "ParadigmGroup",
+    "ParadigmGroupSelection",
+    "ParadigmOption",
+]

@@ -5,7 +5,7 @@ DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'whale_datacloud' AND table_name = 'term' AND column_name = 'ext_attrs'
+        WHERE table_schema = current_schema() AND table_name = 'term' AND column_name = 'ext_attrs'
     ) THEN
         ALTER TABLE term ADD COLUMN ext_attrs JSONB NOT NULL DEFAULT '{}'::jsonb;
     END IF;
@@ -16,7 +16,7 @@ DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'whale_datacloud' AND table_name = 'term_relation' AND column_name = 'ext_attrs'
+        WHERE table_schema = current_schema() AND table_name = 'term_relation' AND column_name = 'ext_attrs'
     ) THEN
         ALTER TABLE term_relation ADD COLUMN ext_attrs JSONB NOT NULL DEFAULT '{}'::jsonb;
     END IF;

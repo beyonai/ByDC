@@ -13,8 +13,8 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
 
-_engine: Engine | None = None
-_session_local: sessionmaker[Session] | None = None
+_engines: dict[str, Engine] = {}
+_session_locals: dict[str, sessionmaker[Session]] = {}
 _SQL_ECHO = False
 
 
@@ -23,38 +23,39 @@ def _patch_pgdialect_opengauss() -> None:
     PGDialect._get_server_version_info = lambda _self, _conn: (15, 0)  # type: ignore[method-assign]
 
 
-def _get_engine() -> Engine:
-    global _engine
-    if _engine is None:
+def _get_engine(schema: str | None = None) -> Engine:
+    database_url, connect_args = build_sqlalchemy_database_config("psycopg", schema=schema)
+    engine_key = f"{database_url}|{connect_args.get('options', '')}"
+    if engine_key not in _engines:
         db_type = infer_database_type_from_url()
         if db_type.lower() == "opengauss":
             _patch_pgdialect_opengauss()
 
-        database_url, connect_args = build_sqlalchemy_database_config("psycopg")
-        _engine = create_engine(
+        _engines[engine_key] = create_engine(
             database_url,
             echo=_SQL_ECHO,
             pool_pre_ping=True,
             connect_args=connect_args,
         )
-    return _engine
+    return _engines[engine_key]
 
 
-def _get_session_local() -> sessionmaker[Session]:
-    global _session_local
-    if _session_local is None:
-        _session_local = sessionmaker(
-            bind=_get_engine(),
+def _get_session_local(schema: str | None = None) -> sessionmaker[Session]:
+    database_url, connect_args = build_sqlalchemy_database_config("psycopg", schema=schema)
+    session_key = f"{database_url}|{connect_args.get('options', '')}"
+    if session_key not in _session_locals:
+        _session_locals[session_key] = sessionmaker(
+            bind=_get_engine(schema),
             class_=Session,
             expire_on_commit=False,
             autoflush=False,
         )
-    return _session_local
+    return _session_locals[session_key]
 
 
 @contextmanager
-def get_session() -> Generator[Session, None, None]:
-    session = _get_session_local()()
+def get_session(schema: str | None = None) -> Generator[Session, None, None]:
+    session = _get_session_local(schema)()
     try:
         yield session
         session.commit()

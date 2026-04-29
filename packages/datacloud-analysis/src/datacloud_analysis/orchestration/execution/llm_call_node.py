@@ -43,9 +43,12 @@ def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> st
 
     _header_meta: dict[str, Any] = {}
     with contextlib.suppress(AttributeError):
-        _header_meta = gateway_context.current_command.header.metadata or {}
+        _header_meta = gateway_context.current_command.header.metadata or {}  # type: ignore[union-attr]
 
-    _header = getattr(gateway_context.current_command, "header", None)
+    _current_command = (
+        getattr(gateway_context, "current_command", None) if gateway_context is not None else None
+    )
+    _header = getattr(_current_command, "header", None)
     _user_code = str(getattr(_header, "user_code", "") or "").strip()
     _user_name = str(getattr(_header, "user_name", "") or "").strip()
     logger.info(
@@ -118,7 +121,8 @@ def make_llm_call_node(
 
         tools_map = {t.name: t for t in tools_list}
         tools_map["finish_react"] = finish_react
-        llm = _build_llm(state)
+        _llm_config: dict[str, Any] | None = (config.get("configurable") or {}).get("llm_config")
+        llm = _build_llm(state, llm_config=_llm_config)
         fallback_llm = _build_fallback_llm()
         llm_with_tools = llm.bind_tools(list(tools_map.values()))
         fallback_with_tools = (

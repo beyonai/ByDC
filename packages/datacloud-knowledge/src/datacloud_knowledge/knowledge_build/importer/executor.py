@@ -58,14 +58,14 @@ logger = logging.getLogger(__name__)
 # ── DB 连接 ───────────────────────────────────────────────────────────────────
 
 
-def _connect() -> Connection:
+def _connect(*, schema: str | None = None, conninfo: str | None = None) -> Connection:
     """从环境变量建立 psycopg3 连接。
 
     可选环境变量：
     - DATACLOUD_DB_CONNECT_TIMEOUT：连接超时（秒），默认 30；仅影响建连阶段。
     - DATACLOUD_DB_LOCK_TIMEOUT_MS：锁等待超时（毫秒）。>0 时执行 SET lock_timeout，
       避免 INSERT/UPDATE 在等表锁/行锁时无限挂起；未设置则不启用（与 PostgreSQL 默认一致）。
-    若入库卡在 domain 首条 INSERT，多为其他会话持有 whale_datacloud.* 上的锁且未提交，
+    若入库卡在 domain 首条 INSERT，多为其他会话持有知识 schema 表锁且未提交，
     请在库上查阻塞会话或设置 DATACLOUD_DB_LOCK_TIMEOUT_MS=30000 快速得到 lock timeout 报错。
     """
 
@@ -75,7 +75,7 @@ def _connect() -> Connection:
     app_name = "datacloud_knowledge_import"
 
     _kw: dict[str, Any] = {
-        "conninfo": build_postgres_connection_uri(),
+        "conninfo": conninfo or build_postgres_connection_uri(schema=schema),
         "connect_timeout": connect_timeout,
     }
     try:
@@ -234,7 +234,13 @@ def _convert_owl_entities(
 # ── 公开入口 ──────────────────────────────────────────────────────────────────
 
 
-def run(folder_path: str) -> dict[str, Any]:
+def run(
+    folder_path: str,
+    *,
+    schema: str | None = None,
+    db_url: str | None = None,
+    conninfo: str | None = None,
+) -> dict[str, Any]:
     """按 manifest 顺序在单个事务内导入所有数据。
 
     Args:
@@ -268,10 +274,13 @@ def run(folder_path: str) -> dict[str, Any]:
         logger.info("manifest.json 不存在，已切换到目录扫描模式: %s 个 OWL 文件", len(import_steps))
     batch_size = _import_batch_size()
 
-    conn = _connect()
+    db_ctx = DatabaseContext(schema=schema)
+    conn = _connect(
+        schema=db_ctx.schema,
+        conninfo=conninfo or build_postgres_connection_uri(schema=db_ctx.schema, db_url=db_url),
+    )
     try:
         conn.autocommit = False
-        db_ctx = DatabaseContext()
         with conn.cursor() as cur:
             cur.execute(
                 sql.SQL("SET LOCAL search_path TO {}").format(sql.Identifier(db_ctx.schema))

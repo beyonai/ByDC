@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-_COLUMN_CAPS_CACHE: dict[str, bool | None] = {"name_keywords": None}
+_COLUMN_CAPS_CACHE: dict[str, bool] = {}
 
 _TABLE = "term_name"
 _TSV_COLUMN = "name_keywords"
@@ -46,7 +46,9 @@ def _rollback_quietly(session: Session) -> None:
 
 
 def _has_name_keywords_column(session: Session) -> bool:
-    cached = _COLUMN_CAPS_CACHE["name_keywords"]
+    schema = resolve_knowledge_schema()
+    cache_key = f"{schema}.name_keywords"
+    cached = _COLUMN_CAPS_CACHE.get(cache_key)
     if cached is not None:
         return cached
 
@@ -64,18 +66,18 @@ def _has_name_keywords_column(session: Session) -> bool:
         rows = session.execute(
             sql,
             {
-                "table_schema": resolve_knowledge_schema(),
+                "table_schema": schema,
                 "table_name": _TABLE,
                 "column_name": _TSV_COLUMN,
             },
         ).fetchall()
-        _COLUMN_CAPS_CACHE["name_keywords"] = bool(rows)
+        _COLUMN_CAPS_CACHE[cache_key] = bool(rows)
     except Exception as exc:
         _rollback_quietly(session)
         log.warning("BM25 column capability check failed, fallback to expression mode: %s", exc)
-        _COLUMN_CAPS_CACHE["name_keywords"] = False
+        _COLUMN_CAPS_CACHE[cache_key] = False
 
-    return bool(_COLUMN_CAPS_CACHE["name_keywords"])
+    return bool(_COLUMN_CAPS_CACHE[cache_key])
 
 
 def _build_search_sql(*, with_type_filter: bool = False) -> object:
@@ -326,12 +328,14 @@ def bm25_search_with_or_partitioned(
 # ── jieba 词级 BM25 搜索（使用 name_keywords_jieba 列）──────────────
 
 
-_JIEBA_COLUMN_CACHE: dict[str, bool | None] = {"name_keywords_jieba": None}
+_JIEBA_COLUMN_CACHE: dict[str, bool] = {}
 
 
 def _has_jieba_column(session: Session) -> bool:
     """name_keywords_jieba 列是否存在。"""
-    cached = _JIEBA_COLUMN_CACHE["name_keywords_jieba"]
+    schema = resolve_knowledge_schema()
+    cache_key = f"{schema}.name_keywords_jieba"
+    cached = _JIEBA_COLUMN_CACHE.get(cache_key)
     if cached is not None:
         return cached
     sql = text(
@@ -344,17 +348,17 @@ def _has_jieba_column(session: Session) -> bool:
         rows = session.execute(
             sql,
             {
-                "table_schema": resolve_knowledge_schema(),
+                "table_schema": schema,
                 "table_name": _TABLE,
                 "column_name": "name_keywords_jieba",
             },
         ).fetchall()
-        _JIEBA_COLUMN_CACHE["name_keywords_jieba"] = bool(rows)
+        _JIEBA_COLUMN_CACHE[cache_key] = bool(rows)
     except Exception as exc:
         _rollback_quietly(session)
         log.warning("jieba column check failed, disabling: %s", exc)
-        _JIEBA_COLUMN_CACHE["name_keywords_jieba"] = False
-    return bool(_JIEBA_COLUMN_CACHE["name_keywords_jieba"])
+        _JIEBA_COLUMN_CACHE[cache_key] = False
+    return bool(_JIEBA_COLUMN_CACHE[cache_key])
 
 
 def _jieba_tokenize(text_input: str) -> str:

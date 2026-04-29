@@ -5,7 +5,7 @@ DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'whale_datacloud' AND table_name = 'term_name' AND column_name = 'search_scope'
+        WHERE table_schema = current_schema() AND table_name = 'term_name' AND column_name = 'search_scope'
     ) THEN
         ALTER TABLE term_name ADD COLUMN search_scope JSONB NOT NULL DEFAULT '{}'::jsonb;
     END IF;

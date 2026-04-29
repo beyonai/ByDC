@@ -1,12 +1,13 @@
 # DataCloud SDK 直接调用方案
 
-> 版本：v1.0 · 日期：2026-04-29
+> 版本：v1.2 · 日期：2026-04-29
 
 ---
 
 ## 1. 背景
 
-当前架构中，第三方通过 Gateway 协议（`GatewayCommand` / `ResumeCommand`）与 `DataCloudWorker` 交互，Worker 负责图构建、流式执行、中断检测与回调。
+当前架构中，第三方通过 Gateway 协议（`GatewayCommand` / `ResumeCommand`）与 `DataCloudWorker` 交互，
+Worker 负责图构建、流式执行、中断检测与回调。
 
 本方案目标：**第三方直接调用 `by-datacloud` SDK，无需 Gateway 中间层。**
 
@@ -23,15 +24,21 @@
 | 流式执行 | `_stream_graph()` → astream_events | 同，内部封装 |
 | 中断检测 | 读 `snapshot.interrupts` → 回调 `context.ask_user()` | 读 `snapshot.interrupts` → 作为流事件返回 |
 | 中断恢复 | `Command(resume=paradigm_input)` | 同，由 `resume()` 方法传入 |
-| View/对象解析 | 从 agent_config DB 加载 OWL+工具 | 通过 `ViewRegistry` 接口，第三方实现 |
+| View/对象解析 | 从 agent_config DB 加载 OWL + 工具 | `OntologyLoader.load_view_with_deps()` 按需解析 |
 | 用户身份 | `ByclawDataClarification.user_id` | 由调用方在 `ask()` 中传入 |
 
 ### 核心设计决策
 
-1. **流式事件模型**：所有输出（思考过程、中断、最终答案）统一作为异步事件流返回，中断不打断流，而是作为 `InterruptEvent` 自然出现在流末尾。
-2. **thread_id 外置**：调用方负责保存 `thread_id`。首次调用由 SDK 生成并在 `InterruptEvent` 中返回，恢复时显式传入。
-3. **ViewRegistry 接口**：SDK 定义 `ViewRegistry` 抽象，调用方实现 ID → 配置的映射，SDK 不绑定任何数据库或服务。
-4. **runner.py 作为内部基础**：现有 `run_agent()` 是基础层，`ChatBIClient` 在其上封装事件转换与中断处理。
+1. **Python 直接调用**：第三方 `import` SDK，无 HTTP 层。
+2. **流式事件模型**：所有输出（思考过程、中断、最终答案）统一作为异步事件流返回。
+   中断不打断流，而是作为 `InterruptEvent` 自然出现在流末尾。
+3. **thread_id 外置，历史自动维护**：调用方负责保存 `thread_id`。多轮对话复用同一
+   `thread_id`，LangGraph checkpointer 自动存储消息历史，无需调用方手动传入历史记录。
+   首次调用传 `None` 由 SDK 内部生成；中断恢复时显式传入已保存的 `thread_id`。
+4. **OWL 按需解析**：每次调用时按 `view_codes` / `object_codes` 解析对应 OWL 目录及
+   其依赖，不全量加载整个 resource 目录。后续可按需叠加缓存层。
+5. **`runner.py` 作为内部基础**：现有 `run_agent()` 是基础层，`OntologyAgent` 在其上
+   封装事件转换与中断处理。
 
 ---
 
@@ -40,35 +47,41 @@
 ### 3.1 客户端接口
 
 ```python
-class ChatBIClient:
-    def __init__(
-        self,
-        config: ChatBIConfig,
-        view_registry: ViewRegistry | None = None,
-    ) -> None: ...
+class OntologyAgent:
+    def __init__(self, config: OntologyAgentConfig) -> None: ...
 
     def ask(
         self,
         question: str,
         *,
-        view_id: str | None = None,
-        object_id: str | None = None,
-        thread_id: str | None = None,   # None = 新会话（SDK 内部生成）
-        user_id: str | None = None,     # 用于同义词持久化等用户级功能
+        view_codes: list[str] | None = None,    # 视图编码列表
+        object_codes: list[str] | None = None,  # 对象编码列表
+        thread_id: str | None = None,           # None = 新会话（SDK 内部生成）
+        user_code: str | None = None,           # 用于同义词持久化等用户级功能
         locale: str = "zh_CN",
-    ) -> AsyncIterator[ChatBIEvent]:
+    ) -> AsyncIterator[OntologyAgentEvent]:
         """发起一次问答，流式返回事件。
 
         流必须被完整消费。当收到 InterruptEvent 时流自动结束，
         调用方需保存 interrupt.thread_id 并在用户确认后调用 resume()。
+
+        多轮对话：复用同一 thread_id 即可，SDK 通过 checkpointer 自动维护历史，
+        无需调用方手动传入历史消息。
         """
 
     def resume(
         self,
         thread_id: str,
         user_input: str | ParadigmAnswer,
-    ) -> AsyncIterator[ChatBIEvent]:
+        *,
+        view_codes: list[str] | None = None,    # 与 ask() 保持一致
+        object_codes: list[str] | None = None,  # 与 ask() 保持一致
+        user_code: str | None = None,
+    ) -> AsyncIterator[OntologyAgentEvent]:
         """在中断后恢复图执行，继续流式返回事件。
+
+        view_codes / object_codes 须与触发中断的 ask() 调用保持一致，
+        初始版本不缓存编译图，resume 时需重新解析 OWL 构建工具。
 
         user_input:
           - str：简单文本回复（对应 ASK_USER 场景）
@@ -80,69 +93,60 @@ class ChatBIClient:
 
 ```python
 @dataclass
-class ChatBIConfig:
+class OntologyAgentConfig:
     api_key: str
     model: str
+    resource_path: str | Path   # resource 根目录（含 object/ 和 view/ 子目录）
     base_url: str | None = None
     locale: str = "zh_CN"
     temperature: float = 0.7
 ```
 
-### 3.3 ViewRegistry 接口（调用方实现）
-
-```python
-class ViewConfig(TypedDict):
-    tools: list[dict[str, Any]]           # 工具定义列表
-    prompts_overwrite: dict[str, str]     # 系统提示覆盖（可为空）
-    mounted_objects: list[Any]            # OWL 本体对象（可为空）
-
-class ViewRegistry(Protocol):
-    def resolve(self, view_id: str) -> ViewConfig:
-        """根据 view_id 或 object_id 返回视图配置。"""
-        ...
-```
-
-**为什么这样设计**：SDK 只负责推理，视图配置（数据源、schema、工具）属于业务层知识，由调用方掌握。SDK 不绑定任何配置数据库，第三方可用文件、DB、内存任意方式实现。
+`resource_path` 在部署时全局配置一次，指向包含 `object/` 和 `view/` 子目录的根目录，
+例如：`/data/byclaw-data/resource`。
 
 ---
 
 ## 4. 事件模型
 
-所有事件继承自 `ChatBIEvent`（sealed union，用 `isinstance` 区分）：
+所有事件继承自 `OntologyAgentEvent`，用 `isinstance` 区分：
 
 ```python
+class OntologyAgentEvent:
+    """所有事件的基类，用于类型注解。"""
+
 # 思考过程（增量 token，LLM 推理中持续发出）
 @dataclass
-class ThinkingEvent(ChatBIEvent):
-    content: str            # 增量文本
+class ThinkingEvent(OntologyAgentEvent):
+    content: str
 
 # 执行阶段标题（如"正在查询数据"、"分析结果"）
 @dataclass
-class StepEvent(ChatBIEvent):
+class StepEvent(OntologyAgentEvent):
     title: str
     detail: str | None = None
 
-# 中断事件（流在此处自动结束）
+# 中断事件（流在此处自动结束，调用方需处理后调用 resume()）
 @dataclass
-class InterruptEvent(ChatBIEvent):
-    thread_id: str                          # 调用方必须保存，用于 resume()
-    reason: str                             # "PARADIGM_CLARIFICATION" | "ASK_USER" | ...
-    prompt: str                             # 展示给用户的提示语
-    paradigm_list: list[ParadigmGroup] | None  # 维度选项，非空时需展示选择 UI
+class InterruptEvent(OntologyAgentEvent):
+    thread_id: str                              # 调用方必须保存
+    reason: str                                 # "PARADIGM_CLARIFICATION" | "ASK_USER" | ...
+    prompt: str                                 # 展示给用户的提示语
+    paradigm_list: list[ParadigmGroup] | None   # 非空时需展示选择 UI
 
 # 最终答案（增量 token）
 @dataclass
-class AnswerChunkEvent(ChatBIEvent):
+class AnswerChunkEvent(OntologyAgentEvent):
     content: str
 
 # 流结束标志（携带完整答案）
 @dataclass
-class AnswerEvent(ChatBIEvent):
+class AnswerEvent(OntologyAgentEvent):
     content: str
 
 # 错误（流异常终止）
 @dataclass
-class ErrorEvent(ChatBIEvent):
+class ErrorEvent(OntologyAgentEvent):
     message: str
     code: str | None = None
 ```
@@ -152,13 +156,13 @@ class ErrorEvent(ChatBIEvent):
 ```python
 @dataclass
 class ParadigmOption:
-    choice_keyword: str     # 展示给用户的选项文字
-    recall: str             # 内部映射值
+    choice_keyword: str   # 展示给用户的选项文字
+    recall: str           # 内部映射值
 
 @dataclass
 class ParadigmGroup:
     paradigm_id: str
-    paradigm_name: str      # 维度名称，如"部门"
+    paradigm_name: str    # 维度名称，如"部门"
     options: list[ParadigmOption]
 
 @dataclass
@@ -170,20 +174,117 @@ class ParadigmAnswer:
 class ParadigmGroupSelection:
     paradigm_id: str
     paradigm_name: str
-    chosen_options: list[ParadigmOption]    # 用户选中的项
+    chosen_options: list[ParadigmOption]
 ```
 
 ---
 
-## 5. 中断处理流程
+## 5. OWL 按需解析设计
 
-### 5.1 正常场景
+### 5.1 目录结构约定
 
 ```
-ask(question, view_id)
+resource/
+├── object/
+│   ├── by_customer/
+│   │   ├── by_customer_definition.owl
+│   │   ├── by_customer_mapping.owl
+│   │   ├── by_customer_dbsource.owl
+│   │   └── by_customer_object_relations.owl
+│   └── ...
+└── view/
+    ├── scene_crm_comprehensive_analysis/
+    │   ├── scene_crm_comprehensive_analysis_definition.owl
+    │   └── scene_crm_comprehensive_analysis_relations.owl
+    └── ...
+```
+
+### 5.2 新增方法：`OntologyLoader.load_view_with_deps()`
+
+在 `packages/datacloud-data/src/datacloud_data_sdk/ontology/loader.py` 新增：
+
+```python
+def load_view_with_deps(self, resource_path: Path, view_id: str) -> None:
+    """按需加载指定 view 及其依赖的 objects，追加到当前 loader（不清空）。
+
+    流程：
+    1. 解析 resource/view/{view_id}/ 目录，从 view 定义中读取依赖的 object_codes
+    2. 逐一解析 resource/object/{object_code}/ 目录
+    3. 使用 load_from_content()（追加语义）写入 self，不影响已有数据
+    """
+    from datacloud_data_sdk.ontology.owl_parser import OwlParser
+
+    parser = OwlParser()
+
+    # 第一步：解析 view 目录，读取 object_codes
+    view_dir = resource_path / "view" / view_id
+    parser._parse_new_layout_view_directory(view_dir)
+
+    object_codes: list[str] = []
+    if parsed_view := parser._views.get(view_id):
+        object_codes = parsed_view.object_codes
+
+    # 第二步：解析依赖的每个 object 目录
+    for obj_code in object_codes:
+        obj_dir = resource_path / "object" / obj_code
+        if obj_dir.is_dir():
+            parser._parse_new_layout_object_directory(obj_dir)
+
+    # 第三步：构建内容并追加（不清空现有数据）
+    parser._apply_mappings_to_objects()
+    self.load_from_content(parser._build_content())
+```
+
+### 5.3 配套方法：`OntologyLoader.load_object_with_deps()`
+
+`object_codes` 直接传入时（无 view 包装），需要一个对等方法直接加载 object 目录：
+
+```python
+def load_object_with_deps(self, resource_path: Path, object_code: str) -> None:
+    """按需加载指定 object，追加到当前 loader（不清空）。"""
+    from datacloud_data_sdk.ontology.owl_parser import OwlParser
+
+    parser = OwlParser()
+    obj_dir = resource_path / "object" / object_code
+    if obj_dir.is_dir():
+        parser._parse_new_layout_object_directory(obj_dir)
+    parser._apply_mappings_to_objects()
+    self.load_from_content(parser._build_content())
+```
+
+`OntologyAgent._build_loader()` 内部遍历两个列表：
+```python
+for view_code in (view_codes or []):
+    loader.load_view_with_deps(resource_path, view_code)   # 含依赖 objects
+for obj_code in (object_codes or []):
+    loader.load_object_with_deps(resource_path, obj_code)  # 直接加载 object
+mounted = list(view_codes or []) + list(object_codes or [])
+tools = OntologyToolLoader(mounted_objects=mounted, loader=loader).load()
+```
+
+### 5.4 为什么用追加而不是清空
+
+`_load_from_owl_content()`（现有的全量加载路径）每次都 `clear()`，不适合按需场景。
+`load_from_content()` 是追加语义，多次调用安全叠加，这是按需加载的基础。
+
+### 5.4 每次调用都解析（无缓存，初始版本）
+
+初始版本不加缓存机制，每次 `ask(view_id=...)` 都重新解析 OWL 文件。
+后续可在 `OntologyAgent` 层按 `view_id` 缓存 `OntologyLoader` 实例，作为独立优化。
+
+---
+
+## 6. 中断处理流程
+
+### 6.1 正常场景
+
+```
+ask(question, view_codes=["scene_sales"], object_codes=["by_customer"])
     │
-    ├─ resolve view_id → ViewConfig
-    ├─ build_analysis_graph() + compile (可缓存)
+    ├─ 逐一 load_view_with_deps(resource_path, view_code) → OntologyLoader（追加）
+    ├─ 逐一 load_object_with_deps(resource_path, object_code) → OntologyLoader（追加）
+    ├─ OntologyToolLoader(mounted_objects=view_codes+object_codes, loader=...).load() → tools
+    ├─ build_analysis_graph() + compile
     ├─ astream_events() 流式执行
     │      ├─ on_chat_model_stream → yield ThinkingEvent(chunk)
     │      └─ on_custom_event("step_title") → yield StepEvent(title)
@@ -192,24 +293,23 @@ ask(question, view_id)
     │      └─ state.interrupts 为空
     │
     └─ 从 state.values["final_answer"] 提取答案
-           └─ yield AnswerEvent(content)  ← 流结束
+           └─ yield AnswerEvent(content)
 ```
 
-### 5.2 中断场景
+### 6.2 中断场景
 
 ```
-ask(question, view_id)
+ask(question, view_codes=[...], object_codes=[...])
     │
     ├─ ... (同上执行，直到 user_clarify_node 调用 interrupt())
     │
     ├─ astream_events() 流暂停
-    │
     ├─ aget_state(config).interrupts 非空
-    │      └─ interrupt.value = {
-    │              "reason_code": "PARADIGM_CLARIFICATION",
-    │              "ask_user_payload": {"paradigmList": [...], "query": "..."},
-    │              "prompt": "查询条件存在歧义，请确认查询维度"
-    │         }
+    │      interrupt.value = {
+    │          "reason_code": "PARADIGM_CLARIFICATION",
+    │          "ask_user_payload": {"paradigmList": [...], "query": "..."},
+    │          "prompt": "查询条件存在歧义，请确认查询维度"
+    │      }
     │
     └─ yield InterruptEvent(
                thread_id=thread_id,   ← 调用方保存此值
@@ -219,11 +319,12 @@ ask(question, view_id)
            )
            ← 流结束，等待用户操作
 
-# 用户在 UI 上选择维度后：
-resume(thread_id=saved_tid, user_input=ParadigmAnswer(...))
+# 用户在 UI 选择维度后：
+resume(thread_id=saved_tid, user_input=ParadigmAnswer(...),
+       view_codes=[...], object_codes=[...])  # 与 ask() 保持一致
     │
-    ├─ 将 ParadigmAnswer → LangGraph resume_value 格式转换
-    │      resume_value = {"paradigmList": [{"paradigmList": [chosen_items]}]}
+    ├─ ParadigmAnswer → LangGraph resume_value 格式转换
+    │      {"paradigmList": [{"paradigmList": [chosen_items]}]}
     │
     ├─ Command(resume=resume_value)
     ├─ astream_events() 恢复执行
@@ -233,131 +334,91 @@ resume(thread_id=saved_tid, user_input=ParadigmAnswer(...))
     └─ yield AnswerEvent(content)
 ```
 
-### 5.3 中断内部机制说明
+### 6.3 resume_value 格式转换
 
-`user_clarify_node` 内部在 `interrupt()` 返回（resume 时）会自动执行：
-- `_format_clarification()` — 将用户选择格式化为工具参数
-- `normalize_clarification_params()` — 归一化参数
-- `persist_confirmed_synonyms()` — 持久化同义词（需要 `user_id`，可选）
+`user_clarify_node` 内部期望的格式：
+```python
+{"paradigmList": [{"paradigmList": [{"choiceKeyword": "华东", "recall": "east_china"}]}]}
+```
 
-SDK 通过在 `run_config["configurable"]["user_id"]` 传入调用方提供的 `user_id` 来支持同义词持久化。若未提供，跳过持久化，其余逻辑不受影响。
+`OntologyAgent.resume()` 负责将 `ParadigmAnswer` 转换为此格式，调用方无需感知。
+
+### 6.4 user_id 兼容
+
+`user_clarify_node` 原通过 `config["configurable"]["gateway_context"]` 获取 `user_id`
+用于同义词持久化。SDK 模式下将 `user_id` 直接写入 `config["configurable"]["user_id"]`，
+并在 `user_clarify_node` 中增加兼容读取（约 3 行改动）。未提供 `user_id` 时跳过持久化，
+其余逻辑不受影响。
 
 ---
 
-## 6. Demo 结构设计
+## 7. Demo 结构设计
 
 ```
 examples/chatbi_demo/
-├── pyproject.toml              # 依赖：by-datacloud（本地路径）
+├── pyproject.toml          # 依赖：datacloud-analysis（本地路径）
 ├── README.md
-│
-├── mock_registry/              # ViewRegistry 的 mock 实现（演示用）
-│   ├── __init__.py
-│   ├── registry.py             # FileViewRegistry: 从 YAML 加载 view 配置
-│   └── views/
-│       └── sales_view.yaml     # 示例视图配置（工具、数据源、提示词）
-│
-├── demo_normal.py              # 场景一：正常流程（无中断）
-└── demo_interrupt.py           # 场景二：中断 + 用户确认 + 恢复
+├── demo_normal.py          # 场景一：正常流程（无中断）
+└── demo_interrupt.py       # 场景二：中断 + 用户确认 + 恢复
 ```
 
 ---
 
-## 7. 示例代码
+## 8. 示例代码
 
-### 7.1 场景一：正常流程
+### 8.1 场景一：正常流程
 
 ```python
 # examples/chatbi_demo/demo_normal.py
-"""正常场景：问题 + view_id → 流式思考过程 + 最终答案"""
-
 import asyncio
-from datacloud_analysis.client import (
-    ChatBIClient,
-    ChatBIConfig,
-    ThinkingEvent,
-    StepEvent,
-    AnswerEvent,
-    ErrorEvent,
-    InterruptEvent,
+from datacloud_analysis.ontology_agent import (
+    OntologyAgent, OntologyAgentConfig,
+    ThinkingEvent, StepEvent, AnswerEvent, ErrorEvent, InterruptEvent,
 )
-from mock_registry.registry import FileViewRegistry
-
 
 async def main() -> None:
-    config = ChatBIConfig(
+    config = OntologyAgentConfig(
         api_key="sk-xxx",
         model="deepseek-v3",
         base_url="https://api.example.com/v1",
+        resource_path="/data/byclaw-data/resource",
     )
-    registry = FileViewRegistry("mock_registry/views")
-    client = ChatBIClient(config, view_registry=registry)
+    agent = OntologyAgent(config)
 
-    question = "各部门本月销售额是多少？"
-    view_id = "sales_view"
-
-    async for event in client.ask(question=question, view_id=view_id):
+    async for event in agent.ask(
+        question="各部门本月销售额是多少？",
+        view_codes=["scene_sales"],
+    ):
         match event:
             case ThinkingEvent(content=c):
                 print(c, end="", flush=True)
             case StepEvent(title=t):
                 print(f"\n[{t}]")
             case AnswerEvent(content=a):
-                print(f"\n\n=== 最终答案 ===\n{a}")
+                print(f"\n\n=== 答案 ===\n{a}")
             case ErrorEvent(message=m):
                 print(f"\n[错误] {m}")
             case InterruptEvent():
-                # 正常场景不应出现，防御性处理
                 print("\n[意外中断]")
-
 
 asyncio.run(main())
 ```
 
-### 7.2 场景二：中断 + 恢复
+### 8.2 场景二：中断 + 恢复
 
 ```python
 # examples/chatbi_demo/demo_interrupt.py
-"""中断场景：SDK 返回 InterruptEvent → 用户选择维度 → resume() 继续"""
-
 import asyncio
-from datacloud_analysis.client import (
-    ChatBIClient,
-    ChatBIConfig,
-    ThinkingEvent,
-    StepEvent,
-    AnswerEvent,
-    ErrorEvent,
-    InterruptEvent,
-    ParadigmAnswer,
-    ParadigmGroupSelection,
+from collections.abc import AsyncIterator
+from datacloud_analysis.ontology_agent import (
+    OntologyAgent, OntologyAgentConfig, OntologyAgentEvent,
+    ThinkingEvent, StepEvent, AnswerEvent, ErrorEvent, InterruptEvent,
+    ParadigmAnswer, ParadigmGroupSelection,
 )
-from mock_registry.registry import FileViewRegistry
 
-
-def _mock_user_select(event: InterruptEvent) -> ParadigmAnswer:
-    """模拟用户在 UI 上选择维度（真实场景由前端交互完成）。"""
-    print(f"\n[需要澄清] {event.prompt}")
-    selections = []
-    for group in (event.paradigm_list or []):
-        print(f"  维度「{group.paradigm_name}」选项：")
-        for i, opt in enumerate(group.options):
-            print(f"    {i}. {opt.choice_keyword}")
-        # 自动选第一个（demo 用）
-        chosen = group.options[:1]
-        print(f"  → 选择：{chosen[0].choice_keyword}")
-        selections.append(
-            ParadigmGroupSelection(
-                paradigm_id=group.paradigm_id,
-                paradigm_name=group.paradigm_name,
-                chosen_options=chosen,
-            )
-        )
-    return ParadigmAnswer(selections=selections)
-
-
-async def stream_events(client: ChatBIClient, iterator: any) -> InterruptEvent | None:
-    """消费事件流，遇到 InterruptEvent 时返回它。"""
+async def stream_until_interrupt(
+    iterator: AsyncIterator[OntologyAgentEvent],
+) -> InterruptEvent | None:
     async for event in iterator:
         match event:
             case ThinkingEvent(content=c):
@@ -365,7 +426,7 @@ async def stream_events(client: ChatBIClient, iterator: any) -> InterruptEvent |
             case StepEvent(title=t):
                 print(f"\n[{t}]")
             case AnswerEvent(content=a):
-                print(f"\n\n=== 最终答案 ===\n{a}")
+                print(f"\n\n=== 答案 ===\n{a}")
             case ErrorEvent(message=m):
                 print(f"\n[错误] {m}")
             case InterruptEvent() as ie:
@@ -373,91 +434,203 @@ async def stream_events(client: ChatBIClient, iterator: any) -> InterruptEvent |
     return None
 
 
+def mock_user_select(event: InterruptEvent) -> ParadigmAnswer:
+    """模拟用户在 UI 选择维度（真实场景由前端完成）。"""
+    print(f"\n[需要澄清] {event.prompt}")
+    selections = []
+    for group in (event.paradigm_list or []):
+        print(f"  维度「{group.paradigm_name}」→ 自动选第一项：{group.options[0].choice_keyword}")
+        selections.append(
+            ParadigmGroupSelection(
+                paradigm_id=group.paradigm_id,
+                paradigm_name=group.paradigm_name,
+                chosen_options=group.options[:1],
+            )
+        )
+    return ParadigmAnswer(selections=selections)
+
+
 async def main() -> None:
-    config = ChatBIConfig(
+    config = OntologyAgentConfig(
         api_key="sk-xxx",
         model="deepseek-v3",
         base_url="https://api.example.com/v1",
+        resource_path="/data/byclaw-data/resource",
     )
-    registry = FileViewRegistry("mock_registry/views")
-    client = ChatBIClient(config, view_registry=registry)
+    agent = OntologyAgent(config)
 
-    question = "华东区域的销售额是多少？"  # 「华东」存在维度歧义，会触发中断
-    view_id = "sales_view"
+    view_codes = ["scene_sales"]
 
-    # ── 第一轮：发起问题 ──────────────────────────────
-    print(f"问：{question}\n")
-    interrupt_event = await stream_events(client, client.ask(question=question, view_id=view_id))
-
+    # 第一轮：发起问题
+    print("问：华东区域的销售额是多少？\n")
+    interrupt_event = await stream_until_interrupt(
+        agent.ask(
+            question="华东区域的销售额是多少？",
+            view_codes=view_codes,
+            user_code="user_001",
+        )
+    )
     if interrupt_event is None:
-        return  # 无中断，正常结束
+        return
 
-    # ── 中断：用户选择 ──────────────────────────────
-    saved_thread_id = interrupt_event.thread_id  # 调用方必须保存
-    user_answer = _mock_user_select(interrupt_event)
+    # 用户选择
+    saved_thread_id = interrupt_event.thread_id
+    user_answer = mock_user_select(interrupt_event)
 
-    # ── 第二轮：恢复执行 ──────────────────────────────
+    # 第二轮：恢复（view_codes 与 ask() 保持一致）
     print("\n[继续执行...]\n")
-    await stream_events(client, client.resume(thread_id=saved_thread_id, user_input=user_answer))
-
+    await stream_until_interrupt(
+        agent.resume(
+            thread_id=saved_thread_id,
+            user_input=user_answer,
+            view_codes=view_codes,
+            user_code="user_001",
+        )
+    )
 
 asyncio.run(main())
 ```
 
 ---
 
-## 8. 内部实现关键点
+## 9. 内部实现关键点
 
-### 8.1 ChatBIClient 内部结构
+### 9.1 OntologyAgent 内部结构
 
 ```
-ChatBIClient
-├── _graph_cache: dict[str, CompiledGraph]  # view_id → 编译图（避免重复编译）
-├── _config: ChatBIConfig
-├── _view_registry: ViewRegistry | None
+OntologyAgent
+├── _config: OntologyAgentConfig
 │
-├── _resolve_view(view_id) → ViewConfig
-├── _get_or_build_graph(view_id) → CompiledGraph
-├── _make_run_config(thread_id, user_id, locale) → dict
-├── _iter_events(compiled, input_payload, run_config) → AsyncIterator[ChatBIEvent]
-│       ├─ astream_events() 消费原始事件
-│       ├─ 转换 on_chat_model_stream → ThinkingEvent
+├── _build_loader(view_id) → OntologyLoader
+│       ├─ loader = OntologyLoader()
+│       ├─ loader.load_view_with_deps(resource_path, view_id)
+│       ├─ inject_virtual_actions(loader)
+│       └─ configure_loader(loader, model, api_key, ...)
+│
+├── _iter_events(compiled, input_payload, run_config) → AsyncIterator[OntologyAgentEvent]
+│       ├─ astream_events(version="v2") 消费原始事件
+│       ├─ on_chat_model_stream → yield ThinkingEvent(chunk)
 │       ├─ 流结束后 aget_state() 检查 interrupts
 │       ├─ interrupts 非空 → yield InterruptEvent，结束
 │       └─ interrupts 为空 → yield AnswerChunkEvent* + AnswerEvent，结束
 │
-├── ask() → 调用 _get_or_build_graph + _iter_events
-└── resume() → 用 Command(resume=...) 调用 _iter_events
+├── ask()    → _build_loader → build_graph → _iter_events
+└── resume() → Command(resume=...) → _iter_events
 ```
 
-### 8.2 与 runner.py 的关系
+### 9.2 与 runner.py 的关系
 
-`runner.py` 中的 `run_agent()` 使用 `stream_mode="values"`（返回完整状态快照），适合批处理场景。
-
-`ChatBIClient` 内部改用 `astream_events(version="v2")`，可以拿到增量 LLM token（`on_chat_model_stream` 事件），才能实现真正的流式思考过程展示。两者并不冲突，分别服务不同场景。
-
-### 8.3 resume_value 格式转换
-
-`user_clarify_node` 期望的内部格式：
-```python
-{"paradigmList": [{"paradigmList": [{"choiceKeyword": "华东", "recall": "east_china"}]}]}
-```
-
-`ChatBIClient.resume()` 负责将 `ParadigmAnswer` 转换为上述格式，调用方无需感知内部结构。
-
-### 8.4 gateway_context 的替代
-
-原 `user_clarify_node` 通过 `config["configurable"]["gateway_context"]` 获取 `user_id` 用于同义词持久化。
-
-SDK 模式下，将 `user_id` 直接注入 `config["configurable"]["user_id"]`，并在 `user_clarify_node` 中兼容两种来源：优先读 `gateway_context`，回退到直接的 `user_id` key。这是对现有代码的最小修改。
+`runner.py` 使用 `stream_mode="values"`（完整状态快照），适合批处理。
+`OntologyAgent` 内部改用 `astream_events(version="v2")`，拿增量 LLM token，
+实现真正的流式思考过程。两者并行存在，分别服务不同场景。
 
 ---
 
-## 9. 待确认问题
+## 10. 待实现清单
 
-| 问题 | 说明 |
-|------|------|
-| graph 缓存粒度 | 当前方案按 `view_id` 缓存编译图。若 `ViewConfig` 会动态变化（如工具配置热更新），缓存需加版本号或 TTL |
-| 多轮对话 | 同一 `thread_id` 可连续调用 `ask()`（不经过中断），LangGraph checkpoint 自动维护上下文。Demo 目前只展示单轮，是否需要演示多轮？ |
-| `ViewRegistry` 实现位置 | mock 实现放在 `examples/chatbi_demo/`；若有真实项目需要，可提升到独立包 |
-| `user_clarify_node` 修改 | 需在现有代码中添加 `user_id` 直接读取兜底（约 3 行改动）。是否现在做？ |
+| 编号 | 内容 | 位置 |
+|------|------|------|
+| T1 | `OntologyLoader.load_view_with_deps()` + `load_object_with_deps()` | `packages/datacloud-data/.../loader.py` |
+| T2 | `user_clarify_node` 兼容直接读 `user_id`（约 3 行） | `packages/datacloud-analysis/.../user_clarify_node.py` |
+| T3 | `OntologyAgent` + 事件模型 + `ParadigmAnswer` 转换 | `packages/datacloud-analysis/src/datacloud_analysis/ontology_agent.py`（新建）<br>+ `__init__.py` 追加导出 |
+| T4 | Demo 脚本 | `examples/chatbi_demo/` |
+| T5 | `worker.py` 重构：动态路径改用 `OntologyAgent` 驱动 | `byclaw-data/src/byclaw_data/worker.py` |
+
+---
+
+## 11. worker.py 重构架构
+
+### 11.1 现状与目标
+
+**现状**：`worker.py` 中 `DataCloudWorker` 直接持有图构建、OWL 加载、流式事件处理、中断检测的全部逻辑。
+**目标**：`OntologyAgent` 成为**唯一的核心引擎**，`worker.py` 退化为薄协议适配层。
+
+```
+# 现状
+Gateway ──→ DataCloudWorker（图构建 + 流式 + 中断 + OWL 全耦合）
+
+# 目标
+Gateway ──→ DataCloudWorker（协议解析 + 生命周期）
+                   │
+                   └──→ OntologyAgent（图构建 + 流式 + 中断 + OWL）
+                              ↑
+                   第三方也直接调用 OntologyAgent
+```
+
+### 11.2 worker.py 中的两条路径
+
+当前 `DataCloudWorker.process_command` 内部存在**两条互斥路径**：
+
+| 维度 | 静态路径（现有） | 动态路径（`_is_dynamic_agent`） |
+|------|-----------------|-------------------------------|
+| 触发条件 | `extra_payload.agent_id` 匹配 `plugin_registry.agent_configs` | `extra_payload.call_object_ids` 或 `call_view_ids` 非空 |
+| Graph 配置来源 | `AgentConfig`：`prompts_dict`、`tools_dict`、`loader`、`skip_action_families` | `_dyn_object_ids + _dyn_view_ids` 直接组装 `mounted_objects` |
+| OWL 加载 | AgentConfig 的 `extra["loader"]`（全量预加载） | `self._extract_shared_loader()`（取第一个 loader，无 OWL 选择） |
+| Graph 缓存 key | `{agent_id}:{conf_hash}` | `dynamic:{sha1[:12]}` |
+| 重构优先级 | **Phase 2**（需扩展 OntologyAgent 支持 prompts/tools 注入） | **Phase 1**（直接替换，OntologyAgent 已具备能力） |
+
+### 11.3 Phase 1：动态路径重构
+
+**改动范围**：仅 `_is_dynamic_agent == True` 时的分支（约 40 行）。
+
+```python
+# 重构后的动态路径（伪代码）
+if _is_dynamic_agent:
+    agent = OntologyAgent(
+        OntologyAgentConfig(
+            api_key=self.api_key,
+            model=self.model_name,
+            base_url=self.base_url,
+            resource_path=self._resource_path,   # 新增配置项
+        )
+    )
+    view_codes = _dyn_view_ids
+    object_codes = _dyn_object_ids
+    thread_id = self._build_thread_id(session_id=context.session_id, agent_key=runtime_agent_key)
+
+    if isinstance(command, ResumeCommand) or _paradigm_resume_value is not None:
+        resume_input = _to_paradigm_answer(_paradigm_resume_value or command.reply_data)
+        event_iter = agent.resume(thread_id, resume_input,
+                                  view_codes=view_codes, object_codes=object_codes)
+    else:
+        event_iter = agent.ask(question=latest_user_text,
+                               view_codes=view_codes, object_codes=object_codes,
+                               thread_id=thread_id,
+                               user_code=_extract_user_code(context))
+
+    async for event in event_iter:
+        await _translate_event_to_gateway(event, context)
+
+    return stream_result
+```
+
+**`_translate_event_to_gateway`** 负责将 `OntologyAgentEvent` 映射为 Gateway SSE：
+
+| OntologyAgentEvent | Gateway 操作 |
+|--------------------|-------------|
+| `ThinkingEvent` | `context.emit_chunk(..., REASONING_LOG_START, think_text)` |
+| `StepEvent` | `context.emit_chunk(..., REASONING_LOG_START, think_text)`（或 `sub_step`） |
+| `AnswerChunkEvent` | `context.emit_chunk(..., ANSWER_DELTA, text)` |
+| `AnswerEvent` | `context.flush_to_history()` → `return {"status": "done"}` |
+| `InterruptEvent(reason="PARADIGM_CLARIFICATION")` | `context.complex_ask_user(AskUserEvent(...))` → `return {"status": "waiting"}` |
+| `InterruptEvent(其他)` | `context.ask_user(AskUserEvent(...))` → `return {"status": "waiting"}` |
+| `ErrorEvent` | `logger.error(...)` → 向用户 emit 错误内容 |
+
+### 11.4 Phase 2：静态路径重构（规划）
+
+静态路径依赖 `AgentConfig` 中的 `prompts_dict`、`tools_dict`、`skip_action_families`，
+需要在 `OntologyAgentConfig` 或 `OntologyAgent.ask()` 中扩展对应参数后才能迁移。
+
+暂时**保留现有静态路径不变**，等 Phase 1 稳定后再规划 Phase 2。
+
+### 11.5 保留在 worker.py 的职责
+
+重构后 `worker.py` 继续负责以下与 Gateway 协议强绑定的逻辑，**不迁入 `OntologyAgent`**：
+
+- **协议解析**：`GatewayCommand` / `ResumeCommand` → question / view_codes / object_codes / thread_id
+- **Agent config 加载**：动态从 `plugin_registry` 加载 `AgentConfig`
+- **Resume 幂等去重**：`_resume_result_cache` + `_resume_inflight`
+- **闲聊检测**：`_is_light_chitchat()` 快速回复
+- **推荐问题任务**：`reco_plugin.generate_recommended_questions()` 后台并发
+- **心跳保活**：`_heartbeat_loop()`
+- **Graph 缓存管理**：静态路径的 LRU `self.graphs`（动态路径迁 OntologyAgent 后无需此缓存）

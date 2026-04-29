@@ -7,7 +7,7 @@ import logging
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
-from .url import resolve_knowledge_schema
+from .url import resolve_knowledge_schema, validate_schema_name
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,14 @@ class DatabaseContext:
     def __init__(self, schema: str | None = None) -> None:
         self.schema = schema or resolve_knowledge_schema()
 
+    @property
+    def quoted_schema(self) -> str:
+        """Return a SQL-safe quoted schema identifier."""
+
+        schema = validate_schema_name(self.schema)
+        return '"' + schema.replace('"', '""') + '"'
+
     def apply_search_path(self, conn: Connection) -> None:
         """在当前事务内设置 search_path。"""
-        conn.execute(text(f"SET LOCAL search_path TO {self.schema}"))
+        conn.execute(text(f"SET LOCAL search_path TO {self.quoted_schema}"))
         logger.debug("search_path set to: %s", self.schema)
