@@ -209,6 +209,8 @@ class VirtualActionValidator:
 
         # 校验维度
         for dim in dimensions:
+            if isinstance(dim, str):
+                dim = {"field": dim}
             fc = dim.get("field", "")
             f = self._get_field(fc)
 
