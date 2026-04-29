@@ -361,7 +361,16 @@ class Object:
             ds_manager = (
                 DataSourceManager(config.datasource_configs) if config.datasource_configs else None
             )
-            sql_exec = SqlExecutor(ds_manager, config.csv_base_dir) if ds_manager else None
+            sql_exec = (
+                SqlExecutor(
+                    ds_manager,
+                    config.csv_base_dir,
+                    payload=payload,
+                    term_loader=getattr(config, "term_loader", None),
+                )
+                if ds_manager
+                else None
+            )
             api_exec = ApiExecutor(loader, config.csv_base_dir) if loader else None
             script_exec = ScriptExecutor(loader)
             kb_exec = (
@@ -415,6 +424,11 @@ class Object:
                     records = await DirectAggregator().aggregate(plan.aggregation, step_results)
             else:
                 records = []
+            term_loader = getattr(config, "term_loader", None)
+            if records and term_loader:
+                from datacloud_data_sdk.result_term_converter import ResultTermConverter
+
+                records = ResultTermConverter(term_loader).convert_by_payload(records, payload)
             columns = plan.aggregation.columns if plan.aggregation else []
             if gw_reporter:
                 try:

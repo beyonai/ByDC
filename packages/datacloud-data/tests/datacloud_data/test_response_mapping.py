@@ -79,3 +79,39 @@ def test_extract_nested_fields_in_array_items() -> None:
         {"userId": "u1", "userName": "Alice"},
         {"userId": "u2", "userName": "Bob"},
     ]
+
+
+def test_extract_mixed_root_fields_and_rows_array() -> None:
+    data = {
+        "total": 75,
+        "rows": [
+            {
+                "id": 75,
+                "projectCode": "PROJ00000055",
+                "taskName": "福州银行BI故障分析",
+            }
+        ],
+        "code": 0,
+        "msg": None,
+    }
+    output_params = [
+        ("code", "$.code"),
+        ("msg", "$.msg"),
+        ("total", "$.total"),
+        ("id", "$.rows[].id"),
+        ("projectCode", "$.rows[].projectCode"),
+        ("taskName", "$.rows[].taskName"),
+    ]
+
+    records = extract_by_mapping_path(data, output_params)
+
+    assert records == [
+        {
+            "code": 0,
+            "msg": None,
+            "total": 75,
+            "id": 75,
+            "projectCode": "PROJ00000055",
+            "taskName": "福州银行BI故障分析",
+        }
+    ]

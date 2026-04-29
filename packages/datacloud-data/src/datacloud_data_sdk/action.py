@@ -64,6 +64,34 @@ def _append_execution_step(
     steps.append(payload)
 
 
+def _build_action_columns_meta(
+    column_names: list[str],
+    params: list[OntologyActionParam],
+) -> list[dict[str, str]]:
+    """基于动作输出参数构建标准 columns 元数据。"""
+    if not column_names:
+        return []
+
+    param_by_code = {param.param_code: param for param in params}
+    columns: list[dict[str, str]] = []
+    for name in column_names:
+        param = param_by_code.get(name)
+        label = param.param_name if param and param.param_name else name
+        raw_type = param.param_type if param and param.param_type else "STRING"
+        columns.append({"name": name, "label": label, "type": raw_type.lower()})
+    return columns
+
+
+def _build_action_output_columns_meta(
+    output_params: list[OntologyActionParam],
+) -> list[dict[str, str]]:
+    """基于动作 OUT/INOUT 参数构建标准 columns 元数据。"""
+    return _build_action_columns_meta(
+        [param.param_code for param in output_params],
+        output_params,
+    )
+
+
 async def _emit_execution_step(
     *,
     step: str,
@@ -1294,6 +1322,7 @@ class Action:
                 execution_steps=execution_steps,
             )
             normalized = self._normalize_to_unified_format(result)
+            normalized = self._convert_result_terms(normalized, term_loader)
             normalized = await self._attach_execution_steps(normalized, execution_steps)
             return build_query_response(
                 normalized,
@@ -1386,6 +1415,7 @@ class Action:
             )
             result = await self._execute_script(params)
             normalized = self._normalize_to_unified_format(result)
+            normalized = self._convert_result_terms(normalized, term_loader)
             normalized.update(operation_result_extra)
             normalized = await self._attach_execution_steps(normalized, execution_steps)
             return build_query_response(
@@ -1408,6 +1438,7 @@ class Action:
             )
             result = await self._execute_api(params)
             normalized = self._normalize_to_unified_format(result)
+            normalized = self._convert_result_terms(normalized, term_loader)
             normalized.update(operation_result_extra)
             normalized = await self._attach_execution_steps(normalized, execution_steps)
             return build_query_response(
@@ -1837,25 +1868,30 @@ class Action:
                 "total": 0,
                 "meta": {"viewId": "auto_view", "columns": [], "total": 0},
             }
-        out_params = [
-            (p.param_code, p.mapping_path)
+        output_params = [
+            p
             for p in self._action.params
             if getattr(p, "direction", "IN") in ("OUT", "INOUT") and getattr(p, "mapping_path", "")
         ]
-        if out_params:
+        if output_params:
             from datacloud_data_sdk.executor.response_mapping import extract_by_mapping_path
 
+            out_params = [(p.param_code, p.mapping_path) for p in output_params]
             records = extract_by_mapping_path(result, out_params)
             if records:
-                columns = [p[0] for p in out_params]
+                columns = _build_action_output_columns_meta(output_params)
             else:
                 records = self._extract_records_fallback(result)
-                columns = (
+                column_names = (
                     list(records[0].keys()) if records and isinstance(records[0], dict) else []
                 )
+                columns = _build_action_columns_meta(column_names, self._action.params)
         else:
             records = self._extract_records_fallback(result)
-            columns = list(records[0].keys()) if records and isinstance(records[0], dict) else []
+            column_names = (
+                list(records[0].keys()) if records and isinstance(records[0], dict) else []
+            )
+            columns = _build_action_columns_meta(column_names, self._action.params)
         return {
             "records": records,
             "total": len(records),
@@ -1922,25 +1958,30 @@ class Action:
             raise ApiExecutionError(function_code, resp.status_code, resp.text)
 
         raw = resp.json()
-        out_params = [
-            (p.param_code, p.mapping_path)
+        output_params = [
+            p
             for p in self._action.params
             if getattr(p, "direction", "IN") in ("OUT", "INOUT") and getattr(p, "mapping_path", "")
         ]
-        if out_params:
+        if output_params:
             from datacloud_data_sdk.executor.response_mapping import extract_by_mapping_path
 
+            out_params = [(p.param_code, p.mapping_path) for p in output_params]
             records = extract_by_mapping_path(raw, out_params)
             if records:
-                columns = [p[0] for p in out_params]
+                columns = _build_action_output_columns_meta(output_params)
             else:
                 records = self._extract_records_fallback(raw)
-                columns = (
+                column_names = (
                     list(records[0].keys()) if records and isinstance(records[0], dict) else []
                 )
+                columns = _build_action_columns_meta(column_names, self._action.params)
         else:
             records = self._extract_records_fallback(raw)
-            columns = list(records[0].keys()) if records and isinstance(records[0], dict) else []
+            column_names = (
+                list(records[0].keys()) if records and isinstance(records[0], dict) else []
+            )
+            columns = _build_action_columns_meta(column_names, self._action.params)
         return {
             "records": records,
             "total": len(records),
@@ -2072,3 +2113,58 @@ class Action:
             "total": total,
             "meta": {"viewId": "auto_view", "columns": columns, "total": total},
         }
+
+    def _convert_result_terms(
+        self,
+        normalized: dict[str, Any],
+        term_loader: Any | None,
+    ) -> dict[str, Any]:
+        """转换 action 返回记录中 rel_term_codeorname=code 的术语值。"""
+        records = normalized.get("records")
+        if not isinstance(records, list) or not records or not isinstance(records[0], dict):
+            return normalized
+
+        from datacloud_data_sdk.result_term_converter import ResultTermConverter
+
+        extra_fields = self._get_action_result_fields()
+        converted_records = ResultTermConverter(term_loader).convert_by_action(
+            records,
+            self._action,
+            extra_fields=extra_fields,
+        )
+        if converted_records is records:
+            return normalized
+        return {**normalized, "records": converted_records}
+
+    def _get_action_result_fields(self) -> list[Any]:
+        """获取 action 所属对象字段，补充用于返回记录术语转换。"""
+        if not self._loader:
+            return []
+        if getattr(self._action, "scope_type", "object") == "view":
+            view_code = getattr(self._action, "scope_code", "") or ""
+            if not view_code:
+                return []
+            try:
+                view = self._loader.get_view(view_code)
+            except Exception:
+                logger.debug(
+                    "Failed to load action result fields: view_code=%s", view_code, exc_info=True
+                )
+                return []
+            return self._build_view_runtime_fields(view)
+
+        object_code = (
+            getattr(self._action, "scope_code", "")
+            or getattr(self._action, "belong_class", "")
+            or ""
+        )
+        if not object_code:
+            return []
+        try:
+            cls = self._loader.get_ontology_class(object_code)
+        except Exception:
+            logger.debug(
+                "Failed to load action result fields: object_code=%s", object_code, exc_info=True
+            )
+            return []
+        return list(getattr(cls, "fields", []))

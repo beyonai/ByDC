@@ -20,15 +20,21 @@ from __future__ import annotations
 import csv
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
 from datacloud_data_sdk.executor.models import SqlExecTask
 from datacloud_data_sdk.executor.step_results import StepResults
+from datacloud_data_sdk.result_term_converter import ResultTermConverter
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 from datacloud_data_sdk.sql_executor.models import SqlExecResult
 from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
 from datacloud_data_sdk.sql_executor.select_column_parser import extract_select_columns
 from datacloud_data_sdk.sql_executor.sql_alias_quoter import quote_aliases
+
+if TYPE_CHECKING:
+    from datacloud_data_sdk.ontology.term_loader import TermLoader
+    from datacloud_data_sdk.plan.models import ObjectViewPayload
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +54,13 @@ class SqlExecutor:
         result = await executor.execute(sql_task, "req_001", step_results)
     """
 
-    def __init__(self, ds_manager: DataSourceManager, csv_base_dir: str | None = None) -> None:
+    def __init__(
+        self,
+        ds_manager: DataSourceManager,
+        csv_base_dir: str | None = None,
+        payload: ObjectViewPayload | None = None,
+        term_loader: TermLoader | None = None,
+    ) -> None:
         """
         初始化 SQL 执行器
 
@@ -58,6 +70,8 @@ class SqlExecutor:
         """
         self._ds = ds_manager
         self._csv = CsvStorageManager(csv_base_dir)
+        self._payload = payload
+        self._term_result_converter = ResultTermConverter(term_loader)
 
     async def execute(
         self,
@@ -94,6 +108,11 @@ class SqlExecutor:
         sql = quote_aliases(sql, connector.config.db_type)
         logger.info("[SQL] step=%s ds=%s\n%s", task.output_ref, task.datasource_alias, sql)
         records = await connector.execute(sql)
+        records = self._term_result_converter.convert_by_datasource_payload(
+            records,
+            self._payload,
+            task.datasource_alias,
+        )
         logger.info("[SQL] executed, got %d records", len(records))
 
         out_path = self._csv.get_path(request_id, task.output_ref)

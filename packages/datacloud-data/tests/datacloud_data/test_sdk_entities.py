@@ -1,4 +1,5 @@
 import asyncio
+import sqlite3
 from unittest.mock import patch
 
 import pytest
@@ -112,6 +113,45 @@ def test_action_get_schema_returns_input_output() -> None:
     assert request_body_schema["properties"]["ownerId"]["type"] == "string"
     assert schema["outputSchema"]["properties"]["bo_list"]["type"] == "array"
     assert schema["outputSchema"]["properties"]["bo_list"]["items"] == {"type": "string"}
+
+
+def test_api_action_columns_use_output_param_metadata() -> None:
+    loader = OntologyLoader()
+    loader.load_from_content(REGISTRY)
+    obj = loader.get_object("sales_bo")
+
+    class _MockResponse:
+        status_code = 200
+        text = "ok"
+
+        @staticmethod
+        def json() -> dict[str, object]:
+            return {"response": {"data": ["BO001", "BO002"]}}
+
+    class _MockAsyncClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+
+        async def __aenter__(self) -> "_MockAsyncClient":
+            return self
+
+        async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
+            del exc_type, exc, tb
+
+        async def request(self, method: str, url: str, **kwargs: object) -> _MockResponse:
+            del method, url, kwargs
+            return _MockResponse()
+
+    async def _run() -> dict[str, object]:
+        with patch("httpx.AsyncClient", _MockAsyncClient):
+            return await obj.invoke_action("query_bo_by_owner", {"owner_id": "U001"})
+
+    result = asyncio.run(_run())
+
+    assert result["records"] == [{"bo_list": ["BO001", "BO002"]}]
+    assert result["meta"]["columns"] == [
+        {"name": "bo_list", "label": "商机列表", "type": "array"},
+    ]
 
 
 def test_action_get_schema_preserves_decimal_and_datetime_hints() -> None:
@@ -496,6 +536,9 @@ def test_action_execute_supports_get_query_and_path_params() -> None:
         "params": {"keyword": "alice"},
     }
     assert result["records"] == [{"userId": "U001"}]
+    assert result["meta"]["columns"] == [
+        {"name": "userId", "label": "userId", "type": "string"},
+    ]
 
 
 def test_action_get_schema_supports_structured_request_body_and_root_array() -> None:
@@ -1243,3 +1286,65 @@ async def test_operation_true_with_matching_cache_executes_and_returns_params() 
         "user_confirmed": True,
         "cache_status": "confirmed",
     }
+
+
+@pytest.mark.asyncio
+async def test_object_virtual_action_converts_rel_term_code_result_to_name(tmp_path) -> None:
+    from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
+
+    db_path = tmp_path / "virtual_terms.db"
+    loader = OntologyLoader()
+    loader.configure(
+        term_loader=KbTermLoader(
+            {"priority.code": [{"code": "HIGH", "label": "高", "aliases": []}]}
+        )
+    )
+    loader.load_from_content(
+        {
+            "objects": [
+                {
+                    "object_code": "todo_items",
+                    "object_name": "待办",
+                    "source_type": "DB",
+                    "source_config": {
+                        "alias": "todo_db",
+                        "db_type": "SQLITE",
+                        "jdbc_url": f"jdbc:sqlite:{db_path}",
+                    },
+                    "table_name": "todo_items",
+                    "fields": [
+                        {
+                            "field_code": "id",
+                            "field_name": "ID",
+                            "field_type": "INTEGER",
+                            "source_column": "id",
+                            "is_primary_key": True,
+                        },
+                        {
+                            "field_code": "priority",
+                            "field_name": "优先级",
+                            "field_type": "STRING",
+                            "source_column": "priority_code",
+                            "termMeta": {
+                                "termMasterType": "dict",
+                                "termTypeCode": "priority",
+                                "termField": "code",
+                            },
+                        },
+                    ],
+                }
+            ],
+            "relations": [],
+        }
+    )
+    inject_virtual_actions(loader)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE todo_items (id INTEGER, priority_code TEXT)")
+        conn.execute("INSERT INTO todo_items VALUES (1, 'HIGH')")
+        conn.commit()
+
+    result = await loader.get_object("todo_items").invoke_action(
+        "query_todo_items", {"filters": []}
+    )
+
+    assert result["records"][0]["priority"] == "高"

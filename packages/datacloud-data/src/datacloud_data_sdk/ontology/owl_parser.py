@@ -479,6 +479,7 @@ class OwlParser:
             return
 
         field_type = self._get_predicate_value(g, subject, "fieldType") or "string"
+        description = self._get_predicate_value(g, subject, "description") or ""
         term_type_code_path = self._get_predicate_value(g, subject, "term_type_code_path")
         library_code = self._get_predicate_value(g, subject, "library_code")
         rel_term_codeorname = self._get_predicate_value(g, subject, "rel_term_codeorname")
@@ -492,8 +493,9 @@ class OwlParser:
 
         fld = ParsedField(
             field_code=field_code,
-            field_name=field_code,
+            field_name=description or field_code,
             field_type=field_type.upper(),
+            description=description,
             term_type_code_path=term_type_code_path if term_type_code_path else None,
             library_code=library_code if library_code else None,
             rel_term_codeorname=rel_term_codeorname if rel_term_codeorname else None,
@@ -732,6 +734,8 @@ class OwlParser:
             return None
 
         object_field = self._resolve_object_field(object_code, param_field.field_code)
+        if object_field is None and param_field.object_property:
+            object_field = self._resolve_object_field(object_code, param_field.object_property)
         if object_field is None:
             return param_field
 
