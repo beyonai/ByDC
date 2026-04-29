@@ -26,6 +26,7 @@ class ActionToolGenerator:
                 "inputSchema": schema["inputSchema"],
             }
             tool["_meta"] = {
+                "is_virtual": action.is_virtual,
                 "object_code": object_code,
                 "action_type": action.action_type,  # 族名，如 "query" / "compute" / "search"
                 "action_code": action.action_code,  # 唯一码，如 "query_ads_manage_grid_analysis"

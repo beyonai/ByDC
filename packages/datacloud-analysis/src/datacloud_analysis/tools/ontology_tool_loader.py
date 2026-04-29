@@ -620,6 +620,7 @@ class OntologyToolLoader:
 
                 meta = tool_def.get("_meta", {})
                 action_family: str = meta.get("action_type", "")
+                is_virtaul: bool = meta.get("is_virtaul", False)
 
                 # 跳过需要排除的族（db_query 模式下跳过 query / compute 虚拟注入动作）
                 if action_family in self._skip_action_families:
@@ -630,19 +631,23 @@ class OntologyToolLoader:
                 action_code: str = meta.get("action_code") or name
 
                 input_schema: dict[str, Any] = tool_def.get("inputSchema", {})
-                if self._agent_friendly and action_family in {"query", "compute"}:
+
+                if is_virtaul and self._agent_friendly and action_family in {"query", "compute"}:
                     input_schema = self._apply_agent_schema_patches(
                         obj_code, input_schema, action_type=action_family
+                    )
+                args_schema = input_schema
+                if is_virtaul:
+                    args_schema = _json_schema_to_pydantic(
+                        input_schema,
+                        f"_{name}_Schema",
                     )
 
                 try:
                     result[name] = StructuredTool(
                         name=name,
                         description=tool_def.get("description", name),
-                        args_schema=_json_schema_to_pydantic(
-                            input_schema,
-                            f"_{name}_Schema",
-                        ),
+                        args_schema=args_schema,
                         coroutine=_make_object_action_coroutine(
                             obj_code, action_code, self._loader
                         ),
