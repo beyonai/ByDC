@@ -9,10 +9,10 @@
 from __future__ import annotations
 
 import logging
-import os
 from typing import TYPE_CHECKING
 
-from pydantic_settings import BaseSettings
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -31,13 +31,13 @@ class EmbeddingConfig(BaseSettings):
         DATACLOUD_EMBEDDING_DIMS: 向量维度
     """
 
-    embedding_api_base: str = os.environ["DATACLOUD_EMBEDDING_API_BASE"]
-    embedding_api_key: str = os.environ["DATACLOUD_EMBEDDING_API_KEY"]
-    embedding_model: str = os.environ["DATACLOUD_EMBEDDING_MODEL"]
-    embedding_batch_size: int = int(os.environ.get("DATACLOUD_EMBEDDING_BATCH_SIZE", "10"))
-    embedding_dims: int = int(os.environ.get("DATACLOUD_EMBEDDING_DIMS", "1024"))
+    embedding_api_base: str = Field(default="", alias="DATACLOUD_EMBEDDING_API_BASE")
+    embedding_api_key: str = Field(default="", alias="DATACLOUD_EMBEDDING_API_KEY")
+    embedding_model: str = Field(default="", alias="DATACLOUD_EMBEDDING_MODEL")
+    embedding_batch_size: int = Field(default=10, alias="DATACLOUD_EMBEDDING_BATCH_SIZE")
+    embedding_dims: int = Field(default=1024, alias="DATACLOUD_EMBEDDING_DIMS")
 
-    model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore"}
+    model_config = SettingsConfigDict(env_prefix="", env_file=".env", extra="ignore")
 
 
 class EmbeddingService:
@@ -59,6 +59,17 @@ class EmbeddingService:
         """延迟初始化模型。"""
         if self._model is not None:
             return
+        missing = [
+            name
+            for name, value in (
+                ("DATACLOUD_EMBEDDING_API_BASE", self._config.embedding_api_base),
+                ("DATACLOUD_EMBEDDING_API_KEY", self._config.embedding_api_key),
+                ("DATACLOUD_EMBEDDING_MODEL", self._config.embedding_model),
+            )
+            if not value
+        ]
+        if missing:
+            raise RuntimeError("Missing embedding configuration: " + ", ".join(missing))
 
         try:
             from llama_index.embeddings.openai import OpenAIEmbedding

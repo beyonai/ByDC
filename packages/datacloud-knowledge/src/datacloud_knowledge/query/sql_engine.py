@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 from psycopg.sql import SQL, Composed, Identifier
 from psycopg_pool import ConnectionPool
 
-from datacloud_knowledge.db_url import build_postgres_connection_uri
+from datacloud_knowledge.db_url import build_postgres_connection_uri, resolve_knowledge_schema
 
 from .fuzzy import (
     FuzzyConfig,
@@ -111,7 +111,7 @@ class SQLKnowledgeGraphQuery:
     def __init__(
         self,
         db_config: dict[str, Any] | None = None,
-        schema: str = "whale_datacloud",
+        schema: str | None = None,
         default_hops: int = 4,
         pool_min: int = 2,
         pool_max: int = 10,
@@ -124,7 +124,7 @@ class SQLKnowledgeGraphQuery:
         Args:
             db_config: Dict with explicit psycopg connection kwargs.
                       If None, reads from DATACLOUD_DB_HOST/PORT/DATABASE/USER/PASS
-            schema: Database schema name (default: whale_datacloud)
+            schema: Database schema name. Required unless DATACLOUD_DB_SCHEMA is set.
             default_hops: Default number of hops for queries
             pool_min: Minimum connection pool size
             pool_max: Maximum connection pool size
@@ -133,7 +133,7 @@ class SQLKnowledgeGraphQuery:
             enable_query_cache: Enable LRU cache for query results (default: True)
             query_cache_maxsize: Max entries in LRU cache (default: 1000)
         """
-        self.schema = schema
+        self.schema = resolve_knowledge_schema(schema)
         self.default_hops = default_hops
         self.db_config = db_config or self._load_db_config_from_env()
         self._name_index: dict[str, list[tuple[str, str, str]]] | None = None
@@ -143,7 +143,7 @@ class SQLKnowledgeGraphQuery:
         self._pool_max = pool_max
 
         # mmap-based cache for vocabulary and name index
-        self._cache = VocabularyCache(schema=schema, cache_dir=cache_dir)
+        self._cache = VocabularyCache(schema=self.schema, cache_dir=cache_dir)
 
         # Fuzzy matching config (using rapidfuzz, no pre-built index needed)
         self._fuzzy_config: FuzzyConfig = FuzzyConfig()
@@ -160,7 +160,7 @@ class SQLKnowledgeGraphQuery:
 
     def _load_db_config_from_env(self) -> dict[str, Any]:
         """Load DB config from environment variables."""
-        return {"conninfo": build_postgres_connection_uri()}
+        return {"conninfo": build_postgres_connection_uri(schema=self.schema)}
 
     def _get_pool(self) -> ConnectionPool:
         """Get or create connection pool."""
@@ -1534,14 +1534,14 @@ def create_sql_graph_query(
     user: str | None = None,
     password: str | None = None,
     database: str | None = None,
-    schema: str = "whale_datacloud",
+    schema: str | None = None,
 ) -> SQLKnowledgeGraphQuery:
     """Factory function to create SQLKnowledgeGraphQuery with explicit config.
 
     Args override environment variables.
     """
     if host is None and port is None and user is None and password is None and database is None:
-        config = {"conninfo": build_postgres_connection_uri()}
+        config = {"conninfo": build_postgres_connection_uri(schema=schema)}
     else:
         config = {
             "host": host or "localhost",
@@ -1558,12 +1558,14 @@ def create_sql_graph_query(
 # ============================================================================
 
 # Global singleton service instance
-_singleton_service: SQLKnowledgeGraphQuery | None = None
-_singleton_n_hops: int = 4
+_singleton_services: dict[tuple[str, int], SQLKnowledgeGraphQuery] = {}
 
 
 def get_singleton_service(
-    n_hops: int = 4, fast: bool = True, warm_pool: bool = False
+    n_hops: int = 4,
+    fast: bool = True,
+    warm_pool: bool = False,
+    schema: str | None = None,
 ) -> SQLKnowledgeGraphQuery:
     """Get or create singleton service instance with prewarm.
 
@@ -1582,16 +1584,15 @@ def get_singleton_service(
     Returns:
         Pre-warmed SQLKnowledgeGraphQuery instance
     """
-    global _singleton_service, _singleton_n_hops
-
-    if _singleton_service is None or _singleton_n_hops != n_hops:
-        _singleton_service = SQLKnowledgeGraphQuery(default_hops=n_hops)
-        _singleton_n_hops = n_hops
+    resolved_schema = resolve_knowledge_schema(schema)
+    key = (resolved_schema, n_hops)
+    if key not in _singleton_services:
+        _singleton_services[key] = SQLKnowledgeGraphQuery(default_hops=n_hops, schema=resolved_schema)
         # Prewarm: load vocabulary and name_index into memory
         # By default, skip pool warmup for faster first query
-        _singleton_service.prewarm(fast=fast, warm_pool=warm_pool)
+        _singleton_services[key].prewarm(fast=fast, warm_pool=warm_pool)
 
-    return _singleton_service
+    return _singleton_services[key]
 
 
 def reset_singleton_service(timeout: float = 0.5) -> None:
@@ -1600,11 +1601,10 @@ def reset_singleton_service(timeout: float = 0.5) -> None:
     Args:
         timeout: Max seconds to wait for pool close (default: 0.5s)
     """
-    global _singleton_service
-    if _singleton_service is not None:
+    for service in _singleton_services.values():
         with suppress(Exception):
-            _singleton_service.close(timeout=timeout)
-        _singleton_service = None
+            service.close(timeout=timeout)
+    _singleton_services.clear()
 
 
 def nl_to_semantic_tree(

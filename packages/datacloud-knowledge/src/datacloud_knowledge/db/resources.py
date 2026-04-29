@@ -1,0 +1,43 @@
+"""Locate SQL resources from an installed wheel or a source checkout."""
+
+from __future__ import annotations
+
+from importlib import resources
+from pathlib import Path
+
+_SQL_PACKAGE = "datacloud_knowledge.resources.sql"
+
+
+def _repo_sql_dir(kind: str) -> Path:
+    package_root = Path(__file__).resolve().parents[2]
+    repo_root = package_root.parents[2]
+    if kind == "ddl":
+        return repo_root / "db" / "ddl" / "knowledge"
+    if kind == "seed":
+        return repo_root / "db" / "seed" / "knowledge"
+    if kind == "migrations":
+        return repo_root / "db" / "migrations"
+    raise ValueError(f"Unknown SQL resource kind: {kind}")
+
+
+def sql_texts(kind: str) -> list[tuple[str, str]]:
+    """Return ordered ``(name, SQL text)`` resources for ``kind``.
+
+    Wheels contain these files under ``datacloud_knowledge.resources.sql``.
+    Source checkouts use the repository ``db/`` directory as a fallback so the
+    package remains editable without duplicating SQL content.
+    """
+
+    traversable = resources.files(f"{_SQL_PACKAGE}.{kind}")
+    packaged_files = sorted(
+        (path for path in traversable.iterdir() if path.name.endswith(".sql")),
+        key=lambda path: path.name,
+    )
+    materialized = [(path.name, path.read_text(encoding="utf-8")) for path in packaged_files]
+    if materialized:
+        return materialized
+
+    fallback_dir = _repo_sql_dir(kind)
+    if not fallback_dir.exists():
+        return []
+    return [(path.name, path.read_text(encoding="utf-8")) for path in sorted(fallback_dir.glob("*.sql"))]
