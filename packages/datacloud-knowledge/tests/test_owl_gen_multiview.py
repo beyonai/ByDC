@@ -18,6 +18,7 @@ from datacloud_knowledge.owl_gen.models import (
 )
 from datacloud_knowledge.owl_gen.renderers.manifest import render_manifest
 from datacloud_knowledge.owl_gen.renderers.ontology import (
+    render_object,
     render_single_view,
     render_view,
     render_view_mapping,
@@ -470,6 +471,63 @@ def test_generate_from_tables_uses_business_term_type_config(tmp_path: Path) -> 
         '<parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_level</parent_term_code>'
         in object_terms
     )
+
+
+def test_render_object_distinguishes_code_and_name_term_bindings() -> None:
+    config = _build_config()
+    config.term_bindings = [
+        TermBinding("ads_enterprise_analysis", "enterprise_name", "enterprise_name", "LIST_TERM"),
+        TermBinding("ads_enterprise_analysis", "level_code", "enterprise_level", "DICT_TERM"),
+    ]
+    config.name_term_type_codes = {"enterprise_name"}
+    table = Table(
+        code="ads_enterprise_analysis",
+        name="企业综合分析表",
+        desc="企业",
+        columns=[
+            Column("enterprise_name", "varchar", False, "企业名称"),
+            Column("level_code", "varchar", False, "企业等级编码"),
+        ],
+    )
+
+    result = render_object(config, table)
+
+    assert "L1#enterprise_name" in result
+    assert "L1#enterprise_level" in result
+    assert result.count(">name</rel_term_codeorname>") == 1
+    assert result.count(">code</rel_term_codeorname>") == 1
+
+
+def test_render_object_applies_identity_and_property_alias_term_rules() -> None:
+    config = _build_config()
+    config.term_bindings = [
+        TermBinding("ads_enterprise_analysis", "enterprise_name", "enterprise_name", "LIST_TERM"),
+        TermBinding("ads_grid_analysis", "grid_name", "grid_name", "LIST_TERM"),
+    ]
+    config.object_identity_term_aliases = {
+        ("ads_enterprise_analysis", "enterprise_id"): ("enterprise_name", "code"),
+        ("ads_enterprise_analysis", "enterprise_name"): ("enterprise_name", "name"),
+    }
+    config.object_property_term_aliases = {
+        ("ads_enterprise_analysis", "grid_id"): "grid_name",
+    }
+    table = Table(
+        code="ads_enterprise_analysis",
+        name="企业综合分析表",
+        desc="企业",
+        columns=[
+            Column("enterprise_id", "varchar", False, "企业编码"),
+            Column("enterprise_name", "varchar", False, "企业名称"),
+            Column("grid_id", "varchar", False, "所属网格编码"),
+        ],
+    )
+
+    result = render_object(config, table)
+
+    assert result.count("L1#enterprise_name") == 2
+    assert "L1#grid_name" in result
+    assert result.count(">code</rel_term_codeorname>") == 2
+    assert result.count(">name</rel_term_codeorname>") == 1
 
 
 def test_render_terms_for_view_emits_only_view_term() -> None:
