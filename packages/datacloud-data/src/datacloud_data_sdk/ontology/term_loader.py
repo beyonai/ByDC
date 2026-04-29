@@ -254,7 +254,7 @@ class KbTermLoader(TermLoader):
         if memory_entries:
             return [e.label for e in memory_entries]
         tc = self._resolve_term_type_code(term_set, term_type_code)
-        entries = self._search(tc, keyword=keyword)
+        entries = self._get_cached_entries(tc, keyword)
         return [e.label for e in entries]
 
     def get_codes(
@@ -268,7 +268,7 @@ class KbTermLoader(TermLoader):
         if memory_entries:
             return [e.code for e in memory_entries]
         tc = self._resolve_term_type_code(term_set, term_type_code)
-        entries = self._search(tc, keyword="")
+        entries = self._get_cached_entries(tc, "")
         return [e.code for e in entries]
 
     def get_entries(
@@ -283,5 +283,5 @@ class KbTermLoader(TermLoader):
         if memory_entries:
             return [{"code": e.code, "label": e.label} for e in memory_entries]
         tc = self._resolve_term_type_code(term_set, term_type_code)
-        entries = self._search(tc, keyword=keyword)
+        entries = self._get_cached_entries(tc, keyword)
         return [{"code": e.code, "label": e.label} for e in entries]
