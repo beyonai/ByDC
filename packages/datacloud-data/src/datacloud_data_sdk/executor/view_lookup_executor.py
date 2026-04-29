@@ -60,17 +60,19 @@ def _build_join_clauses(
 
 
 def _build_filters_where(
-    filters: list[dict],
+    filters: list[dict[str, Any]],
     field_to_alias_col: dict[str, tuple[str, str]],
     db_type: str,
     filter_relation: str = "AND",
-) -> tuple[str, dict]:
+    field_kind_map: dict[str, str] | None = None,
+) -> tuple[str, dict[str, Any]]:
     return _support_build_filters_where(
         filters,
         field_to_alias_col,
         db_type,
         _safe_pkey,
         filter_relation,
+        field_kind_map,
     )
 
 
@@ -138,6 +140,7 @@ class ViewLookupExecutor:
             field_to_alias_col,
             db_type,
             str(arguments.get("filter_relation") or "AND"),
+            context.field_to_analytic_kind,
         )
 
         # ORDER BY

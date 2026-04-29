@@ -42,7 +42,9 @@ def _empty_term_meta() -> dict[str, str]:
     }
 
 
-def _term_meta_for_alias(config: OwlGenConfig, term_type_code: str, rel_term_codeorname: str) -> dict[str, str]:
+def _term_meta_for_alias(
+    config: OwlGenConfig, term_type_code: str, rel_term_codeorname: str
+) -> dict[str, str]:
     term_data_type = _term_data_type_for_term_type(config, term_type_code)
     if not term_data_type:
         return _empty_term_meta()
@@ -55,7 +57,9 @@ def _term_meta_for_alias(config: OwlGenConfig, term_type_code: str, rel_term_cod
 
 
 def _rel_term_codeorname_for_binding(config: OwlGenConfig, binding: TermBinding) -> str:
-    if binding.term_type_code in config.name_term_type_codes or binding.column_name.endswith("_name"):
+    if binding.term_type_code in config.name_term_type_codes or binding.column_name.endswith(
+        "_name"
+    ):
         return "name"
     return "code"
 

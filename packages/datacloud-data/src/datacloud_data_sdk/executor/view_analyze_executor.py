@@ -199,6 +199,7 @@ class ViewAnalyzeExecutor:
             db_type,
             _safe_pkey,
             str(arguments.get("filter_relation") or "AND"),
+            context.field_to_analytic_kind,
         )
 
         # HAVING

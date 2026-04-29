@@ -111,7 +111,7 @@ _FILTER_OPS: dict[tuple[str, str], list[str]] = {
 _GROUP_OPS: dict[tuple[str, str], list[str]] = {
     ("dimension", "id"): ["self"],
     ("dimension", "name"): ["self"],
-    ("dimension", "datetime"): ["day", "month", "quarter", "year"],
+    ("dimension", "datetime"): ["self", "day", "month", "quarter", "year"],
     ("dimension", "period"): ["month", "quarter", "year"],
     ("dimension", "numeric"): [],  # 数值维度不允许分组
     ("dimension", "virtual_tag"): ["self"],

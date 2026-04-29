@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
@@ -18,6 +19,7 @@ class ViewExecutionContext:
     anchor_table: str
     field_to_alias_col: dict[str, tuple[str, str]]
     field_to_object_code: dict[str, str]
+    field_to_analytic_kind: dict[str, str]
 
 
 def quote_identifier(ident: str, db_type: str) -> str:
@@ -55,7 +57,7 @@ def build_view_execution_context(
 ) -> ViewExecutionContext:
     """构建视图执行的通用上下文。"""
     if not getattr(view, "objects", None):
-        return ViewExecutionContext("", "SQLITE", "", {}, {})
+        return ViewExecutionContext("", "SQLITE", "", {}, {}, {})
 
     anchor_cls = view.objects[0]._cls
     datasource_alias = anchor_cls.datasource_alias or ""
@@ -73,6 +75,7 @@ def build_view_execution_context(
     anchor_table = anchor_cls.table_name or anchor_cls.object_code
     field_to_alias_col: dict[str, tuple[str, str]] = {}
     field_to_object_code: dict[str, str] = {}
+    field_to_analytic_kind: dict[str, str] = {}
     all_view_fields = getattr(view, "fields", [])
     if all_view_fields:
         for vf in all_view_fields:
@@ -81,6 +84,9 @@ def build_view_execution_context(
                 continue
             source_object_code = getattr(vf, "source_object_code", "")
             source_column_code = getattr(vf, "source_object_column_code", field_code)
+            analytic_kind = getattr(vf, "analytic_kind", None)
+            if analytic_kind:
+                field_to_analytic_kind[field_code] = analytic_kind
             for idx, obj in enumerate(view.objects):
                 if obj.object_code == source_object_code:
                     source_column = _resolve_source_column(obj._cls, source_column_code)
@@ -97,6 +103,9 @@ def build_view_execution_context(
                     field.source_column or field.field_code,
                 )
                 field_to_object_code[field.field_code] = obj.object_code
+                analytic_kind = getattr(field, "analytic_kind", None)
+                if analytic_kind:
+                    field_to_analytic_kind[field.field_code] = analytic_kind
 
     return ViewExecutionContext(
         datasource_alias=datasource_alias,
@@ -104,6 +113,7 @@ def build_view_execution_context(
         anchor_table=anchor_table,
         field_to_alias_col=field_to_alias_col,
         field_to_object_code=field_to_object_code,
+        field_to_analytic_kind=field_to_analytic_kind,
     )
 
 
@@ -115,12 +125,23 @@ def _resolve_source_column(cls: Any, field_code: str) -> str:
     return field_code
 
 
+def _coerce_param(value: object, kind: str | None) -> object:
+    """将参数值强制转换为数据库期望的类型。
+
+    目前处理 datetime 类型：asyncpg 要求 DATE 列传入 datetime.date 对象。
+    """
+    if kind == "datetime" and isinstance(value, str):
+        return date.fromisoformat(value)
+    return value
+
+
 def build_filters_where(
     filters: list[dict[str, Any]],
     field_to_alias_col: dict[str, tuple[str, str]],
     db_type: str,
     param_key_builder: Any,
     filter_relation: str = "AND",
+    field_kind_map: dict[str, str] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """构建支持表别名的 WHERE 子句。"""
     if not filters:
@@ -140,6 +161,7 @@ def build_filters_where(
         col_expr = f"{alias}.{quote_identifier(col, db_type)}"
         param_key = param_key_builder("p", field_code, idx)
 
+        kind = (field_kind_map or {}).get(field_code)
         if op == "is_null":
             clauses.append(f"{col_expr} IS NULL")
         elif op == "is_not_null":
@@ -147,14 +169,14 @@ def build_filters_where(
         elif op == "between":
             values = value if isinstance(value, list) else [value, value]
             clauses.append(f"{col_expr} BETWEEN :{param_key}_0 AND :{param_key}_1")
-            params[f"{param_key}_0"] = values[0]
-            params[f"{param_key}_1"] = values[1]
+            params[f"{param_key}_0"] = _coerce_param(values[0], kind)
+            params[f"{param_key}_1"] = _coerce_param(values[1], kind)
         elif op == "in":
             values = value if isinstance(value, list) else [value]
             param_keys = [f"{param_key}_{i}" for i in range(len(values))]
             clauses.append(f"{col_expr} IN ({', '.join(f':{key}' for key in param_keys)})")
             for key, item_value in zip(param_keys, values, strict=False):
-                params[key] = item_value
+                params[key] = _coerce_param(item_value, kind)
         elif op == "like":
             like_value = value if (isinstance(value, str) and "%" in value) else f"%{value}%"
             clauses.append(f"{col_expr} LIKE :{param_key}")
@@ -162,7 +184,7 @@ def build_filters_where(
         else:
             op_map = {"eq": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
             clauses.append(f"{col_expr} {op_map.get(op, '=')} :{param_key}")
-            params[param_key] = value
+            params[param_key] = _coerce_param(value, kind)
 
     relation = filter_relation.upper()
     return f" {relation} ".join(clauses), params

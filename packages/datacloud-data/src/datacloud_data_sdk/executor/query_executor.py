@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Any
 
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError
@@ -79,6 +80,17 @@ def _resolve_col_expr(f: Any) -> str:
     return f.source_column or f.field_code
 
 
+def _coerce_param(value: object, f: object | None) -> object:
+    """将字符串值按字段 analytic_kind 转换为正确的 Python 类型。
+
+    DATE 列（analytic_kind == "datetime"）要求 asyncpg 绑定 datetime.date 对象。
+    """
+    kind = getattr(f, "analytic_kind", None)
+    if kind == "datetime" and isinstance(value, str):
+        return date.fromisoformat(value)
+    return value
+
+
 def _build_where(
     filters: list[dict[str, Any]],
     field_map: dict[str, Any],
@@ -107,15 +119,15 @@ def _build_where(
         elif op == "between":
             vals = value if isinstance(value, list) else [value, value]
             clauses.append(f"{col} BETWEEN :{pkey}_0 AND :{pkey}_1")
-            params[f"{pkey}_0"] = vals[0]
-            params[f"{pkey}_1"] = vals[1]
+            params[f"{pkey}_0"] = _coerce_param(vals[0], f)
+            params[f"{pkey}_1"] = _coerce_param(vals[1], f)
         elif op == "in":
             vals = value if isinstance(value, list) else [value]
             pkeys = [f"{pkey}_{i}" for i in range(len(vals))]
             placeholders = ", ".join(f":{k}" for k in pkeys)
             clauses.append(f"{col} IN ({placeholders})")
             for k, v in zip(pkeys, vals):
-                params[k] = v
+                params[k] = _coerce_param(v, f)
         elif op == "like":
             like_val = value if (isinstance(value, str) and "%" in value) else f"%{value}%"
             clauses.append(f"{col} LIKE :{pkey}")
@@ -123,7 +135,7 @@ def _build_where(
         else:
             op_map = {"eq": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
             clauses.append(f"{col} {op_map.get(op, '=')} :{pkey}")
-            params[pkey] = value
+            params[pkey] = _coerce_param(value, f)
 
     relation = filter_relation.upper()
     return f" {relation} ".join(clauses), params
