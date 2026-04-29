@@ -6,7 +6,7 @@ import os
 import re
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse, urlunparse
 
 _SCHEMA_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
 
@@ -119,8 +119,8 @@ def parse_database_url(db_url: str) -> ParsedDatabaseUrl:
         host=parsed.hostname,
         port=parsed.port or 5432,
         database=parsed.path.lstrip("/"),
-        user=parsed.username or "postgres",
-        password=parsed.password or "",
+        user=unquote(parsed.username or "postgres"),
+        password=unquote(parsed.password or ""),
         schema=validate_schema_name(schema) if schema else None,
         query_params=tuple(remaining_query),
     )

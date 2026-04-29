@@ -47,7 +47,7 @@ BEGIN
     CREATE TRIGGER tsvector_update_term_name
         BEFORE INSERT OR UPDATE ON term_name
         FOR EACH ROW
-        EXECUTE FUNCTION term_name_tsv_trigger();
+        EXECUTE PROCEDURE term_name_tsv_trigger();
 END $$;
 
 -- 步骤 5: 为存量数据填充 tsvector（仅执行一次，可手动运行）

@@ -1,8 +1,5 @@
 """统一数据库基础设施层。"""
 
-from .connection import get_session
-from .context import DatabaseContext
-from .models import Term, TermRelation, TermType
 from .url import (
     ParsedDatabaseUrl,
     build_postgres_connection_uri,
@@ -14,6 +11,27 @@ from .url import (
     resolve_knowledge_schema_for_connection,
     validate_schema_name,
 )
+
+_LAZY_EXPORTS = {
+    "DatabaseContext": ("datacloud_knowledge.db.context", "DatabaseContext"),
+    "Term": ("datacloud_knowledge.db.models", "Term"),
+    "TermRelation": ("datacloud_knowledge.db.models", "TermRelation"),
+    "TermType": ("datacloud_knowledge.db.models", "TermType"),
+    "get_session": ("datacloud_knowledge.db.connection", "get_session"),
+}
+
+
+def __getattr__(name: str):
+    """Lazily import SQLAlchemy-backed database helpers."""
+
+    if name not in _LAZY_EXPORTS:
+        raise AttributeError(f"module 'datacloud_knowledge.db' has no attribute {name!r}")
+    module_name, attr_name = _LAZY_EXPORTS[name]
+    from importlib import import_module
+
+    value = getattr(import_module(module_name), attr_name)
+    globals()[name] = value
+    return value
 
 __all__ = [
     "DatabaseContext",
