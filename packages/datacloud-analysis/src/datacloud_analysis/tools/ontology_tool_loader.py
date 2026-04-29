@@ -41,6 +41,13 @@ except ImportError:
 
 _LOADER_NOT_PROVIDED: object = object()
 
+# ---------------------------------------------------------------------------
+# 动态 Pydantic 类注册表：防止 dill PicklingError
+# 同名类只创建一次；后续调用直接返回缓存实例，保证 id() 不变。
+# ---------------------------------------------------------------------------
+
+_DYNAMIC_SCHEMA_REGISTRY: dict[str, type] = {}
+
 
 # ---------------------------------------------------------------------------
 # 内部工具：JSON Schema → Pydantic BaseModel
@@ -122,10 +129,14 @@ def _json_schema_to_pydantic(schema: dict[str, Any], model_name: str) -> type:
     """
     from pydantic import BaseModel, Field, create_model  # noqa: PLC0415
 
+    if model_name in _DYNAMIC_SCHEMA_REGISTRY:
+        return _DYNAMIC_SCHEMA_REGISTRY[model_name]
+
     if not isinstance(schema, dict) or schema.get("type") != "object":
         _m = create_model(model_name, __base__=BaseModel)
         _m.__module__ = __name__
         setattr(sys.modules[__name__], model_name, _m)
+        _DYNAMIC_SCHEMA_REGISTRY[model_name] = _m
         return _m
 
     properties: dict[str, Any] = schema.get("properties", {})
@@ -163,6 +174,7 @@ def _json_schema_to_pydantic(schema: dict[str, Any], model_name: str) -> type:
     _m = create_model(model_name, __base__=base, **pydantic_fields)
     _m.__module__ = __name__
     setattr(sys.modules[__name__], model_name, _m)
+    _DYNAMIC_SCHEMA_REGISTRY[model_name] = _m
     return _m
 
 
@@ -740,22 +752,22 @@ class OntologyToolLoader:
         loader = self._loader
         tool_name = f"data_query_{resource_code}"
 
-        model_fields: dict[str, Any] = {
-            "query": (str, Field(description="自然语言查询问题")),
-        }
-        if inject_context_knowledge:
-            model_fields["contextKnowledge"] = (
-                str,
-                Field(default="", description="知识增强上下文，由系统注入，请勿填写"),
-            )
-
-        schema_cls = create_model(
-            f"_NLQuery{resource_code}Schema",
-            __base__=BaseModel,
-            **model_fields,
-        )
-        schema_cls.__module__ = __name__
-        setattr(sys.modules[__name__], schema_cls.__name__, schema_cls)
+        schema_name = f"_NLQuery{resource_code}Schema"
+        if schema_name in _DYNAMIC_SCHEMA_REGISTRY:
+            schema_cls = _DYNAMIC_SCHEMA_REGISTRY[schema_name]
+        else:
+            model_fields: dict[str, Any] = {
+                "query": (str, Field(description="自然语言查询问题")),
+            }
+            if inject_context_knowledge:
+                model_fields["contextKnowledge"] = (
+                    str,
+                    Field(default="", description="知识增强上下文，由系统注入，请勿填写"),
+                )
+            schema_cls = create_model(schema_name, __base__=BaseModel, **model_fields)
+            schema_cls.__module__ = __name__
+            setattr(sys.modules[__name__], schema_name, schema_cls)
+            _DYNAMIC_SCHEMA_REGISTRY[schema_name] = schema_cls
 
         async def _execute(query: str, contextKnowledge: str = "") -> Any:  # noqa: N803
             if resource_biz_type == "VIEW":
