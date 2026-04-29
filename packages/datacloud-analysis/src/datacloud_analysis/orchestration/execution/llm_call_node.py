@@ -165,6 +165,7 @@ def make_llm_call_node(
             state=state,
             round_idx=current_round,
             thinking_message_id=thinking_id,
+            config=config,
         )
 
         calls = list(getattr(ai_msg, "tool_calls", None) or [])

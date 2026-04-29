@@ -157,17 +157,16 @@ def _delegate_resume_parent_message_id(gateway_context: Any) -> str:
 async def _emit_think(gateway_context: Any, text: str) -> None:
     """在 sub_step 内推送 think_text 内容。"""
     try:
-        from by_framework import StreamChunkEvent  # type: ignore
+        from langchain_core.callbacks import adispatch_custom_event  # noqa: PLC0415
 
-        chunk = StreamChunkEvent(content=coerce_stream_chunk_text(text))
-    except ImportError:
-        chunk = text  # type: ignore[assignment]
-    try:
-        emit_kwargs: dict[str, Any] = {
-            "event_type": _THINK_EVENT_TYPE,
-            "content_type": _THINK_CONTENT_TYPE,
-        }
-        await gateway_context.emit_chunk(chunk, **emit_kwargs)
+        await adispatch_custom_event(
+            "dc_stream_chunk",
+            {
+                "content": coerce_stream_chunk_text(text),
+                "event_type": _THINK_EVENT_TYPE,
+                "content_type": _THINK_CONTENT_TYPE,
+            },
+        )
     except Exception as exc:
         logger.debug("_emit_think failed: %s", exc)
 
@@ -185,20 +184,22 @@ async def _emit_child_think(
         if parent_message_id is not None
         else getattr(gateway_context, "message_id", "") or ""
     )
-    # Gateway history join() requires str; tool outputs are often dict/list.
     content = coerce_stream_chunk_text(text)
+    emit_payload: dict[str, Any] = {
+        "content": content,
+        "event_type": _THINK_EVENT_TYPE,
+        "content_type": _THINK_CONTENT_TYPE,
+    }
+    if child_message_id:
+        emit_payload["message_id"] = child_message_id
+    if child_parent_message_id:
+        emit_payload["parent_message_id"] = child_parent_message_id
     try:
-        from by_framework import StreamChunkEvent  # type: ignore
+        from langchain_core.callbacks import adispatch_custom_event  # noqa: PLC0415
 
-        child_chunk: Any = StreamChunkEvent(content=content)
-    except ImportError:
-        child_chunk = content
-
-    emit_kwargs: dict[str, Any] = _reasoning_emit_kwargs(
-        message_id=child_message_id,
-        parent_message_id=child_parent_message_id,
-    )
-    await gateway_context.emit_chunk(child_chunk, **emit_kwargs)
+        await adispatch_custom_event("dc_stream_chunk", emit_payload)
+    except Exception as exc:
+        logger.debug("_emit_child_think failed: %s", exc)
 
 
 async def _emit_tool_detail_under_parent(

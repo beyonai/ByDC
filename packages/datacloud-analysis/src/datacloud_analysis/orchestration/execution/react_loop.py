@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, tool
 
 try:
@@ -21,6 +22,12 @@ except ImportError:  # pragma: no cover - langgraph not installed or older versi
 from datacloud_analysis.orchestration.execution.tool_wrapper import dispatch_tool
 
 logger = logging.getLogger(__name__)
+
+# SSE 协议常量 — 与 by_framework EventType / SseMessageType 保持一致
+_EVENT_TYPE_ANSWER_DELTA = "answerDelta"
+_EVENT_TYPE_REASONING_LOG_DELTA = "reasoningLogDelta"
+_EVENT_TYPE_REASONING_LOG_START = "reasoningLogStart"
+_CONTENT_TYPE_TEXT = "1002"  # SseMessageType.text / SseReasonMessageType.think_text
 
 # ── Thinking token 辅助函数 ──────────────────────────────────────────────────
 
@@ -105,90 +112,109 @@ def _is_meaningful_thinking(text: str) -> bool:
     )
 
 
-async def _emit_thinking_token(gateway_context: Any, token: str, *, message_id: str) -> None:
-    """向 gateway_context 推送单个 thinking token（静默降级，不抛异常）。
+async def _emit_thinking_token(
+    token: str, *, message_id: str, config: RunnableConfig | None = None
+) -> None:
+    """推送单个 thinking token（静默降级，不抛异常）。
 
-    - gateway_context 为 None → 静默跳过
-    - token 为空 → 不调用 emit_chunk
-    - emit_chunk 抛异常 → 捕获并记录 debug 日志，不向上传播
+    - token 为空 → 不推送
     - message_id：由调用方按轮次生成，同一轮 LLM 思考共享同一个 ID
     """
-    if not gateway_context or not token:
+    if not token:
         return
     try:
-        from by_framework import EventType, StreamChunkEvent  # type: ignore
-        from by_framework.core.protocol.content_type import SseReasonMessageType  # type: ignore
-        from datacloud_data_sdk.stream_text import coerce_stream_chunk_text  # type: ignore
+        from datacloud_data_sdk.stream_text import (
+            coerce_stream_chunk_text,  # type: ignore  # noqa: PLC0415
+        )
+        from langchain_core.callbacks import adispatch_custom_event  # noqa: PLC0415
 
-        await gateway_context.emit_chunk(
-            StreamChunkEvent(content=coerce_stream_chunk_text(token)),
-            event_type=EventType.REASONING_LOG_DELTA.value,
-            content_type=SseReasonMessageType.think_text.value,
-            message_id=message_id,
+        await adispatch_custom_event(
+            "dc_stream_chunk",
+            {
+                "content": coerce_stream_chunk_text(token),
+                "event_type": _EVENT_TYPE_REASONING_LOG_DELTA,
+                "content_type": _CONTENT_TYPE_TEXT,
+                "message_id": message_id,
+            },
+            config=config,
         )
     except Exception as exc:
         logger.debug("[react_loop] thinking_token emit failed: %s", exc)
 
 
-async def _emit_stream_token(gateway_context: Any, token: str, *, message_id: str) -> None:
-    """向 gateway_context 推送单个流式文字 token（ReAct 中间思考过程 → 思考区）。
+async def _emit_stream_token(
+    token: str, *, message_id: str, config: RunnableConfig | None = None
+) -> None:
+    """推送单个流式文字 token（ReAct 中间思考过程 → 思考区）。
 
     - message_id：由调用方按轮次生成，同一轮 LLM 思考共享同一个 ID
     """
-    if not gateway_context or not token:
+    if not token:
         return
     try:
-        from by_framework import EventType, StreamChunkEvent  # type: ignore
-        from by_framework.core.protocol.content_type import SseReasonMessageType  # type: ignore
-        from datacloud_data_sdk.stream_text import coerce_stream_chunk_text  # type: ignore
+        from datacloud_data_sdk.stream_text import (
+            coerce_stream_chunk_text,  # type: ignore  # noqa: PLC0415
+        )
+        from langchain_core.callbacks import adispatch_custom_event  # noqa: PLC0415
 
-        await gateway_context.emit_chunk(
-            StreamChunkEvent(content=coerce_stream_chunk_text(token)),
-            event_type=EventType.REASONING_LOG_DELTA.value,
-            content_type=SseReasonMessageType.think_text.value,
-            message_id=message_id,
+        await adispatch_custom_event(
+            "dc_stream_chunk",
+            {
+                "content": coerce_stream_chunk_text(token),
+                "event_type": _EVENT_TYPE_REASONING_LOG_DELTA,
+                "content_type": _CONTENT_TYPE_TEXT,
+                "message_id": message_id,
+            },
+            config=config,
         )
     except Exception as exc:
         logger.debug("[react_loop] stream_token emit failed: %s", exc)
 
 
-async def _emit_answer_token(gateway_context: Any, token: str, *, message_id: str) -> None:
-    """向 gateway_context 推送 finish_react.answer 增量 token（→ 答案区 ANSWER_DELTA）。"""
-    if not gateway_context or not token:
+async def _emit_answer_token(
+    token: str, *, message_id: str, config: RunnableConfig | None = None
+) -> None:
+    """推送 finish_react.answer 增量 token（→ 答案区 ANSWER_DELTA）。"""
+    if not token:
         return
     try:
-        from by_framework import EventType, StreamChunkEvent  # type: ignore
-        from by_framework.core.protocol.content_type import SseMessageType  # type: ignore
-        from datacloud_data_sdk.stream_text import coerce_stream_chunk_text  # type: ignore
+        from datacloud_data_sdk.stream_text import (
+            coerce_stream_chunk_text,  # type: ignore  # noqa: PLC0415
+        )
+        from langchain_core.callbacks import adispatch_custom_event  # noqa: PLC0415
 
-        await gateway_context.emit_chunk(
-            StreamChunkEvent(content=coerce_stream_chunk_text(token)),
-            event_type=EventType.ANSWER_DELTA.value,
-            content_type=SseMessageType.text.value,
-            message_id=message_id,
+        await adispatch_custom_event(
+            "dc_stream_chunk",
+            {
+                "content": coerce_stream_chunk_text(token),
+                "event_type": _EVENT_TYPE_ANSWER_DELTA,
+                "content_type": _CONTENT_TYPE_TEXT,
+                "message_id": message_id,
+            },
+            config=config,
         )
     except Exception as exc:
-        logger.debug("[react_loop] answer_token emit failed: %s", exc)
+        logger.warning("[react_loop] answer_token emit failed: %s", exc)
 
 
 async def _emit_thinking_done_notification(
-    gateway_context: Any,
-    elapsed_secs: float,
+    elapsed_secs: float, *, config: RunnableConfig | None = None
 ) -> None:
     """首轮 LLM 收到第一个 chunk 时推送耗时通知到思考气泡区（无论耗时长短）。"""
-    if gateway_context is None:
-        return
     try:
-        from by_framework import EventType, StreamChunkEvent  # type: ignore
-        from by_framework.core.protocol.content_type import SseReasonMessageType  # type: ignore
+        from langchain_core.callbacks import adispatch_custom_event  # noqa: PLC0415
 
         msg_id = f"thinking_done_{int(time.time() * 1000)}"
         text = f"久等了，我思考了 {elapsed_secs:.0f} 秒，继续干活"
-        await gateway_context.emit_chunk(
-            StreamChunkEvent(content=text),
-            event_type=EventType.REASONING_LOG_START.value,
-            content_type=SseReasonMessageType.think_text.value,
-            message_id=msg_id,
+        await adispatch_custom_event(
+            "dc_stream_chunk",
+            {
+                "content": text,
+                "event_type": _EVENT_TYPE_REASONING_LOG_START,
+                "content_type": _CONTENT_TYPE_TEXT,
+                "message_id": msg_id,
+            },
+            config=config,
         )
         logger.info("[thinking_notify] elapsed=%.1fs notified", elapsed_secs)
     except Exception as exc:  # noqa: BLE001
@@ -203,6 +229,7 @@ async def _stream_llm_call(
     thinking_message_id: str = "model_thinking",
     query_received_at: float | None = None,
     round_idx: int = 0,
+    config: RunnableConfig | None = None,
 ) -> tuple[Any, bool]:
     """流式调用 LLM，实时向 gateway_context 推送文字 token。
 
@@ -258,7 +285,7 @@ async def _stream_llm_call(
                 _thinking_notified = True
                 if round_idx == 0 and query_received_at is not None:
                     elapsed = time.monotonic() - query_received_at
-                    await _emit_thinking_done_notification(gateway_context, elapsed)
+                    await _emit_thinking_done_notification(elapsed, config=config)
 
             # 累加 chunk
             if full_msg is None:
@@ -270,60 +297,59 @@ async def _stream_llm_call(
                     # 部分 provider 的 chunk 不支持 +，保留最后一个 chunk
                     full_msg = chunk
 
-            if gateway_context is not None:
-                # ① 推送 thinking block（MiniMax reasoning_split=true / Claude extended_thinking）
-                # MiniMax 为累积式：每个 chunk 含截至当前的完整 thinking，需提取增量后推送；
-                # Anthropic 原生 extended thinking 为增量式，直接追加即可。
-                _thinking_raw = _extract_thinking_text(chunk.content)
-                if _thinking_raw:
-                    if _thinking_raw.startswith(_thinking_acc) and len(_thinking_raw) > len(
-                        _thinking_acc
-                    ):
-                        # 累积式：本 chunk 是上一次的超集，取新增部分
-                        _thinking_delta = _thinking_raw[len(_thinking_acc) :]
-                        _thinking_acc = _thinking_raw
-                    else:
-                        # 增量式：直接追加
-                        _thinking_delta = _thinking_raw
-                        _thinking_acc += _thinking_raw
-                    if _thinking_delta:
-                        await _emit_thinking_token(
-                            gateway_context, _thinking_delta, message_id=thinking_message_id
-                        )
+            # ① 推送 thinking block（MiniMax reasoning_split=true / Claude extended_thinking）
+            # MiniMax 为累积式：每个 chunk 含截至当前的完整 thinking，需提取增量后推送；
+            # Anthropic 原生 extended thinking 为增量式，直接追加即可。
+            _thinking_raw = _extract_thinking_text(chunk.content)
+            if _thinking_raw:
+                if _thinking_raw.startswith(_thinking_acc) and len(_thinking_raw) > len(
+                    _thinking_acc
+                ):
+                    # 累积式：本 chunk 是上一次的超集，取新增部分
+                    _thinking_delta = _thinking_raw[len(_thinking_acc) :]
+                    _thinking_acc = _thinking_raw
+                else:
+                    # 增量式：直接追加
+                    _thinking_delta = _thinking_raw
+                    _thinking_acc += _thinking_raw
+                if _thinking_delta:
+                    await _emit_thinking_token(
+                        _thinking_delta, message_id=thinking_message_id, config=config
+                    )
 
-                # ② 推送 LLM content 文字 token（ReAct 思考过程）
-                # 仅在无 tool_call_chunks 时推送：部分模型生成 tool_call 时 content 里会带工具名，
-                # 这类内容由 worker.py on_tool_start 的 sub_step 处理，避免重复推送。
-                # 注意：did_stream_text 不在此处设为 True——
-                # 此处推送的是 REASONING_LOG_DELTA（思考区），不是 ANSWER_DELTA（答案区）。
-                # 若 LLM 绕过 finish_react 直接输出 content，formatter 仍需通过 _emit_text
-                # 走 ANSWER_DELTA 正式推送，answer_streamed 必须保持 False 才能触发该路径。
-                _has_tool_calls = bool(getattr(chunk, "tool_call_chunks", None))
-                if not _has_tool_calls:
-                    _content_delta = _extract_content_text(chunk.content)
-                    if _content_delta:
-                        await _emit_stream_token(
-                            gateway_context, _content_delta, message_id=thinking_message_id
-                        )
-                        # 不设 did_stream_text = True，保证 formatter 仍走 _emit_text → ANSWER_DELTA
+            # ② 推送 LLM content 文字 token（ReAct 思考过程）
+            # 仅在无 tool_call_chunks 时推送：部分模型生成 tool_call 时 content 里会带工具名，
+            # 这类内容由 worker.py on_tool_start 的 sub_step 处理，避免重复推送。
+            # 注意：did_stream_text 不在此处设为 True——
+            # 此处推送的是 REASONING_LOG_DELTA（思考区），不是 ANSWER_DELTA（答案区）。
+            # 若 LLM 绕过 finish_react 直接输出 content，formatter 仍需通过 _emit_text
+            # 走 ANSWER_DELTA 正式推送，answer_streamed 必须保持 False 才能触发该路径。
+            _has_tool_calls = bool(getattr(chunk, "tool_call_chunks", None))
+            if not _has_tool_calls:
+                _content_delta = _extract_content_text(chunk.content)
+                if _content_delta:
+                    await _emit_stream_token(
+                        _content_delta, message_id=thinking_message_id, config=config
+                    )
+                    # 不设 did_stream_text = True，保证 formatter 仍走 _emit_text → ANSWER_DELTA
 
-                # 实时推送 finish_react.answer 参数的增量内容（→ 答案区 ANSWER_DELTA）
-                for tcc in getattr(chunk, "tool_call_chunks", None) or []:
-                    # 第一个 chunk 上有 name，后续 chunk name 为 None
-                    if tcc.get("name") == "finish_react":
-                        _fr_idx = tcc.get("index")
-                    if _fr_idx is not None and tcc.get("index") == _fr_idx:
-                        _fr_args_acc += tcc.get("args") or ""
-                        m = re.search(r'"answer"\s*:\s*"((?:[^"\\]|\\.)*)', _fr_args_acc)
-                        if m:
-                            current = m.group(1)
-                            if len(current) > _fr_answer_emitted:
-                                delta = current[_fr_answer_emitted:]
-                                await _emit_answer_token(
-                                    gateway_context, delta, message_id=_answer_msg_id
-                                )
-                                did_stream_text = True
-                                _fr_answer_emitted = len(current)
+            # 实时推送 finish_react.answer 参数的增量内容（→ 答案区 ANSWER_DELTA）
+            for tcc in getattr(chunk, "tool_call_chunks", None) or []:
+                # 第一个 chunk 上有 name，后续 chunk name 为 None
+                if tcc.get("name") == "finish_react":
+                    _fr_idx = tcc.get("index")
+                if _fr_idx is not None and tcc.get("index") == _fr_idx:
+                    _fr_args_acc += tcc.get("args") or ""
+                    m = re.search(r'"answer"\s*:\s*"((?:[^"\\]|\\.)*)', _fr_args_acc)
+                    if m:
+                        current = m.group(1)
+                        if len(current) > _fr_answer_emitted:
+                            delta = current[_fr_answer_emitted:]
+                            await _emit_answer_token(
+                                delta, message_id=_answer_msg_id, config=config
+                            )
+                            did_stream_text = True
+                            _fr_answer_emitted = len(current)
     except Exception as exc:
         logger.warning("[react_loop] astream failed (%s), fallback to ainvoke", exc)
         full_msg = None
@@ -357,6 +383,7 @@ async def _invoke_llm_with_fallback(
     state: Any,
     round_idx: int,
     thinking_message_id: str,
+    config: RunnableConfig | None = None,
 ) -> tuple[Any, bool]:
     """调用 LLM，内置三层容错：
 
@@ -389,6 +416,7 @@ async def _invoke_llm_with_fallback(
             thinking_message_id=thinking_message_id,
             query_received_at=_query_received_at,
             round_idx=round_idx,
+            config=config,
         )
     except Exception as primary_exc:
         logger.warning("[LLM] 主模型全部重试失败 round=%d: %s", round_idx + 1, primary_exc)
@@ -406,6 +434,7 @@ async def _invoke_llm_with_fallback(
                 thinking_message_id=thinking_message_id,
                 # 备用模型切换时通知已由主模型分支处理（或主模型连首 chunk 都未产生）
                 # 不再重复推送，query_received_at 保持 None
+                config=config,
             )
         except Exception as fallback_exc:
             logger.error("[LLM] 备用模型也失败 round=%d: %s", round_idx + 1, fallback_exc)
@@ -417,7 +446,7 @@ async def _invoke_llm_with_fallback(
         gateway_context, "_redis_client", None
     )
     await save_llm_failure_checkpoint(redis_client, session_id, state, round_idx, last_exc)
-    await _emit_stream_token(gateway_context, CHECKPOINT_REPLY, message_id=thinking_message_id)
+    await _emit_stream_token(CHECKPOINT_REPLY, message_id=thinking_message_id, config=config)
     raise _LlmUnavailableError(CHECKPOINT_REPLY) from last_exc
 
 
