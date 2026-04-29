@@ -11,7 +11,7 @@ DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'whale_datacloud' AND table_name = 'term_name' AND column_name = 'name_keywords'
+        WHERE table_schema = current_schema() AND table_name = 'term_name' AND column_name = 'name_keywords'
     ) THEN
         ALTER TABLE term_name ADD COLUMN name_keywords tsvector;
         COMMENT ON COLUMN term_name.name_keywords IS 'BM25 全文搜索向量，基于 name_text 单字分词';
@@ -23,7 +23,7 @@ DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'whale_datacloud' AND table_name = 'term_name' AND column_name = 'name_embedding'
+        WHERE table_schema = current_schema() AND table_name = 'term_name' AND column_name = 'name_embedding'
     ) THEN
         ALTER TABLE term_name ADD COLUMN name_embedding vector(1024);
         COMMENT ON COLUMN term_name.name_embedding IS '向量语义召回，1024 维 embedding';
@@ -47,7 +47,7 @@ BEGIN
     CREATE TRIGGER tsvector_update_term_name
         BEFORE INSERT OR UPDATE ON term_name
         FOR EACH ROW
-        EXECUTE FUNCTION term_name_tsv_trigger();
+        EXECUTE PROCEDURE term_name_tsv_trigger();
 END $$;
 
 -- 步骤 5: 为存量数据填充 tsvector（仅执行一次，可手动运行）
@@ -63,7 +63,7 @@ DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'whale_datacloud' AND table_name = 'term_name' AND column_name = 'name_keywords_jieba'
+        WHERE table_schema = current_schema() AND table_name = 'term_name' AND column_name = 'name_keywords_jieba'
     ) THEN
         ALTER TABLE term_name ADD COLUMN name_keywords_jieba tsvector;
         COMMENT ON COLUMN term_name.name_keywords_jieba IS 'BM25 全文搜索向量，基于 jieba 中文分词（词级粒度，由应用层填充）';

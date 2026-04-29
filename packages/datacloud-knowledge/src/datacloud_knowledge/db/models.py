@@ -7,10 +7,6 @@ from sqlalchemy import Boolean, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from .url import resolve_knowledge_schema
-
-KNOWLEDGE_SCHEMA = resolve_knowledge_schema()
-
 
 class Base(DeclarativeBase):
     pass
@@ -18,7 +14,6 @@ class Base(DeclarativeBase):
 
 class Term(Base):
     __tablename__ = "term"
-    __table_args__ = {"schema": KNOWLEDGE_SCHEMA}  # noqa: RUF012
 
     term_id: Mapped[str] = mapped_column(String(1000), primary_key=True)
     term_code: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -36,7 +31,6 @@ class Term(Base):
 
 class TermRelation(Base):
     __tablename__ = "term_relation"
-    __table_args__ = {"schema": KNOWLEDGE_SCHEMA}  # noqa: RUF012
 
     relation_id: Mapped[str] = mapped_column(String(1000), primary_key=True)
     source_term_id: Mapped[str] = mapped_column(String(1000), nullable=False)
@@ -51,7 +45,6 @@ class TermRelation(Base):
 
 class TermType(Base):
     __tablename__ = "term_type"
-    __table_args__ = {"schema": KNOWLEDGE_SCHEMA}  # noqa: RUF012
 
     type_code: Mapped[str] = mapped_column(String(32), primary_key=True)
     type_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -62,7 +55,6 @@ class TermType(Base):
 
 class TermName(Base):
     __tablename__ = "term_name"
-    __table_args__ = {"schema": KNOWLEDGE_SCHEMA}  # noqa: RUF012
 
     name_id: Mapped[str] = mapped_column(String(1000), primary_key=True)
     term_id: Mapped[str] = mapped_column(String(1000), nullable=False)
@@ -74,7 +66,6 @@ class TermName(Base):
 
 class TermKnowledge(Base):
     __tablename__ = "term_knowledge"
-    __table_args__ = {"schema": KNOWLEDGE_SCHEMA}  # noqa: RUF012
 
     knowledge_id: Mapped[str] = mapped_column(String(1000), primary_key=True)
     term_id: Mapped[str] = mapped_column(String(1000), nullable=False)

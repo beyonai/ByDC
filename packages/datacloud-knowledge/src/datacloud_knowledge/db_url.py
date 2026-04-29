@@ -6,8 +6,11 @@ from datacloud_knowledge.db.url import (
     build_postgres_connection_uri,
     build_sqlalchemy_database_config,
     infer_database_type_from_url,
+    parse_database_url,
     parse_env_database_url,
     resolve_knowledge_schema,
+    resolve_knowledge_schema_for_connection,
+    validate_schema_name,
 )
 
 __all__ = [
@@ -15,6 +18,9 @@ __all__ = [
     "build_postgres_connection_uri",
     "build_sqlalchemy_database_config",
     "infer_database_type_from_url",
+    "parse_database_url",
     "parse_env_database_url",
     "resolve_knowledge_schema",
+    "resolve_knowledge_schema_for_connection",
+    "validate_schema_name",
 ]

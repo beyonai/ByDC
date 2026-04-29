@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from datacloud_data_sdk.stream_text import coerce_stream_chunk_text
+from langchain_core.runnables import RunnableConfig
 
 from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
 
@@ -20,6 +21,11 @@ logger = logging.getLogger(__name__)
 _CHUNK_ROWS = 100
 # 匹配 Markdown 表格分隔行：| --- |、|---|、| :--- |、| ---: | 等变体
 _TABLE_SEP_RE = re.compile(r"\| *:?-{2,}:? *\|")
+
+# SSE 协议常量 — 与 by_framework EventType / SseMessageType 保持一致
+_EVENT_TYPE_ANSWER_DELTA = "answerDelta"
+_CONTENT_TYPE_TEXT = "1002"
+_CONTENT_TYPE_DATA_TABLE = "6001"
 
 
 def _new_msg_id(prefix: str) -> str:
@@ -147,6 +153,7 @@ async def format_result(
     react_final: dict[str, Any],
     gateway_context: Any,
     workspace_dir: str | None = None,
+    config: RunnableConfig | None = None,
 ) -> str | None:
     """Format and emit final ReAct result."""
     result_type = react_final.get("result_type", "text")
@@ -176,12 +183,12 @@ async def format_result(
 
         if answer and not answer_was_streamed and not query_data:
             final_text = str(answer)
-            await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+            await _emit_text(final_text, message_id=_text_msg_id, config=config)
             return final_text
         if not query_data:
             if not answer:
                 final_text = "(query_data 为空)"
-                await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+                await _emit_text(final_text, message_id=_text_msg_id, config=config)
                 return final_text
             return str(answer)
 
@@ -191,13 +198,13 @@ async def format_result(
             answer_has_table = bool(_TABLE_SEP_RE.search(answer))
             if not (answer_was_streamed and answer_has_table):
                 formatted_answer = await _emit_query_result_as_markdown(
-                    gateway_context, query_data, message_id=_text_msg_id
+                    gateway_context, query_data, message_id=_text_msg_id, config=config
                 )
                 return _merge_final_answer(streamed_answer, formatted_answer)
             return str(answer) if answer else None
         else:
             formatted_answer = await _emit_query_result_as_6001(
-                gateway_context, query_data, message_id=_data_msg_id
+                gateway_context, query_data, message_id=_data_msg_id, config=config
             )
             return _merge_final_answer(streamed_answer, formatted_answer)
 
@@ -205,22 +212,22 @@ async def format_result(
         csv_path = react_final.get("csv_file_path", "")
         if not csv_path:
             final_text = "(CSV 路径为空，无法输出)"
-            await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+            await _emit_text(final_text, message_id=_text_msg_id, config=config)
             return final_text
 
         resolved = _resolve_result_path(csv_path, workspace_dir)
         if not resolved.exists():
             final_text = f"(CSV 文件不存在: {csv_path})"
-            await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+            await _emit_text(final_text, message_id=_text_msg_id, config=config)
             return final_text
 
         if output_fmt == "markdown":
             formatted_answer = await _stream_csv_as_markdown(
-                gateway_context, resolved, message_id=_text_msg_id
+                gateway_context, resolved, message_id=_text_msg_id, config=config
             )
         else:
             formatted_answer = await _stream_csv_as_6001(
-                gateway_context, resolved, message_id=_data_msg_id
+                gateway_context, resolved, message_id=_data_msg_id, config=config
             )
         return _merge_final_answer(streamed_answer, formatted_answer)
 
@@ -228,16 +235,16 @@ async def format_result(
         data = react_final.get("data")
         if data is None:
             final_text = "(JSON 数据为空)"
-            await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+            await _emit_text(final_text, message_id=_text_msg_id, config=config)
             return final_text
 
         if output_fmt == "markdown":
             formatted_answer = await _emit_json_as_markdown(
-                gateway_context, data, message_id=_text_msg_id
+                gateway_context, data, message_id=_text_msg_id, config=config
             )
         else:
             formatted_answer = await _emit_json_as_6001(
-                gateway_context, data, message_id=_data_msg_id
+                gateway_context, data, message_id=_data_msg_id, config=config
             )
         return _merge_final_answer(streamed_answer, formatted_answer)
 
@@ -245,23 +252,23 @@ async def format_result(
         json_path = react_final.get("csv_file_path") or react_final.get("json_file_path") or ""
         if not json_path:
             final_text = "(JSON 文件路径为空)"
-            await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+            await _emit_text(final_text, message_id=_text_msg_id, config=config)
             return final_text
 
         resolved = _resolve_result_path(json_path, workspace_dir)
         if not resolved.exists():
             final_text = f"(文件不存在: {json_path})"
-            await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+            await _emit_text(final_text, message_id=_text_msg_id, config=config)
             return final_text
 
         if resolved.suffix.lower() == ".csv":
             if output_fmt == "markdown":
                 formatted_answer = await _stream_csv_as_markdown(
-                    gateway_context, resolved, message_id=_text_msg_id
+                    gateway_context, resolved, message_id=_text_msg_id, config=config
                 )
             else:
                 formatted_answer = await _stream_csv_as_6001(
-                    gateway_context, resolved, message_id=_data_msg_id
+                    gateway_context, resolved, message_id=_data_msg_id, config=config
                 )
             return _merge_final_answer(streamed_answer, formatted_answer)
 
@@ -270,46 +277,48 @@ async def format_result(
         except Exception as exc:  # noqa: BLE001
             logger.error("format_result json_file read failed: %s", exc)
             final_text = f"(读取 JSON 文件失败: {exc})"
-            await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+            await _emit_text(final_text, message_id=_text_msg_id, config=config)
             return final_text
 
         if output_fmt == "markdown":
             formatted_answer = await _emit_json_as_markdown(
-                gateway_context, data, message_id=_text_msg_id
+                gateway_context, data, message_id=_text_msg_id, config=config
             )
         else:
             formatted_answer = await _emit_json_as_6001(
-                gateway_context, data, message_id=_data_msg_id
+                gateway_context, data, message_id=_data_msg_id, config=config
             )
         return _merge_final_answer(streamed_answer, formatted_answer)
 
     answer = react_final.get("answer", "")
     if not answer_was_streamed:
         final_text = str(answer)
-        await _emit_text(gateway_context, final_text, message_id=_text_msg_id)
+        await _emit_text(final_text, message_id=_text_msg_id, config=config)
         return final_text
     return str(answer) if answer else None
 
 
-async def _emit_text(gateway_context: Any, text: str, *, message_id: str) -> None:
-    if gateway_context is None:
-        return
-
+async def _emit_text(text: str, *, message_id: str, config: RunnableConfig | None = None) -> None:
     try:
-        from by_framework import EventType, StreamChunkEvent
-        from by_framework.core.protocol.content_type import SseMessageType
+        from langchain_core.callbacks import adispatch_custom_event  # noqa: PLC0415
 
-        await gateway_context.emit_chunk(
-            StreamChunkEvent(content=coerce_stream_chunk_text(text)),
-            event_type=EventType.ANSWER_DELTA.value,
-            content_type=SseMessageType.text.value,
-            message_id=message_id,
+        await adispatch_custom_event(
+            "dc_stream_chunk",
+            {
+                "content": coerce_stream_chunk_text(text),
+                "event_type": _EVENT_TYPE_ANSWER_DELTA,
+                "content_type": _CONTENT_TYPE_TEXT,
+                "message_id": message_id,
+            },
+            config=config,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("format_result: emit_text failed: %s", exc)
 
 
-async def _emit_json_as_markdown(gateway_context: Any, data: Any, *, message_id: str) -> str:
+async def _emit_json_as_markdown(
+    gateway_context: Any, data: Any, *, message_id: str, config: RunnableConfig | None = None
+) -> str:
     """Emit arbitrary JSON-like payload as markdown table."""
     if isinstance(data, str):
         with suppress(Exception):
@@ -330,19 +339,19 @@ async def _emit_json_as_markdown(gateway_context: Any, data: Any, *, message_id:
         rows = [[json.dumps(data, ensure_ascii=False, default=str)]]
 
     markdown_text = _data_to_markdown(columns, rows)
-    await _emit_text(gateway_context, markdown_text, message_id=message_id)
+    await _emit_text(markdown_text, message_id=message_id, config=config)
     return markdown_text
 
 
 async def _stream_csv_as_markdown(
-    gateway_context: Any, csv_path: Path, *, message_id: str
+    gateway_context: Any, csv_path: Path, *, message_id: str, config: RunnableConfig | None = None
 ) -> str | None:
     try:
         rows = await asyncio.to_thread(_load_csv_rows, csv_path)
     except Exception as exc:  # noqa: BLE001
         logger.error("_stream_csv_as_markdown read failed: %s", exc)
         final_text = f"(读取 CSV 文件失败: {exc})"
-        await _emit_text(gateway_context, final_text, message_id=message_id)
+        await _emit_text(final_text, message_id=message_id, config=config)
         return final_text
 
     if not rows:
@@ -351,12 +360,16 @@ async def _stream_csv_as_markdown(
     header = rows[0]
     data_rows = rows[1:]
     markdown_text = _data_to_markdown(header, data_rows)
-    await _emit_text(gateway_context, markdown_text, message_id=message_id)
+    await _emit_text(markdown_text, message_id=message_id, config=config)
     return markdown_text
 
 
 async def _emit_query_result_as_markdown(
-    gateway_context: Any, query_data: dict[str, Any], *, message_id: str
+    gateway_context: Any,
+    query_data: dict[str, Any],
+    *,
+    message_id: str,
+    config: RunnableConfig | None = None,
 ) -> str:
     columns, record_keys = _query_result_headers_and_record_keys(query_data)
     records = query_data.get("records") or []
@@ -371,30 +384,15 @@ async def _emit_query_result_as_markdown(
     if notice:
         markdown_text = markdown_text + "\n\n> " + str(notice)
 
-    await _emit_text(gateway_context, markdown_text, message_id=message_id)
+    await _emit_text(markdown_text, message_id=message_id, config=config)
     return markdown_text
 
 
-async def _emit_json_as_6001(gateway_context: Any, data: Any, *, message_id: str) -> str | None:
-    if gateway_context is None:
-        return None
-
+async def _emit_json_as_6001(
+    gateway_context: Any, data: Any, *, message_id: str, config: RunnableConfig | None = None
+) -> str | None:
     try:
-        from by_framework import EventType, StreamChunkEvent
-    except ImportError:
-        logger.warning("by_framework not available, skipping 6001 json emit")
-        return None
-
-    try:
-        content_type_6001 = "6001"
-        try:
-            from by_framework.core.protocol.content_type import SseMessageType
-
-            content_type_candidate = getattr(SseMessageType, "data_table_json", None)
-            if content_type_candidate is not None:
-                content_type_6001 = content_type_candidate.value
-        except Exception:  # noqa: BLE001
-            pass
+        from langchain_core.callbacks import adispatch_custom_event  # noqa: PLC0415
 
         if isinstance(data, str):
             with suppress(Exception):
@@ -426,11 +424,15 @@ async def _emit_json_as_6001(gateway_context: Any, data: Any, *, message_id: str
                 "columns": columns,
                 "data": chunk_rows,
             }
-            await gateway_context.emit_chunk(
-                StreamChunkEvent(content=json.dumps(payload, ensure_ascii=False)),
-                event_type=EventType.ANSWER_DELTA.value,
-                content_type=content_type_6001,
-                message_id=message_id,
+            await adispatch_custom_event(
+                "dc_stream_chunk",
+                {
+                    "content": json.dumps(payload, ensure_ascii=False),
+                    "event_type": _EVENT_TYPE_ANSWER_DELTA,
+                    "content_type": _CONTENT_TYPE_DATA_TABLE,
+                    "message_id": message_id,
+                },
+                config=config,
             )
         return final_text
     except Exception as exc:  # noqa: BLE001
@@ -439,27 +441,10 @@ async def _emit_json_as_6001(gateway_context: Any, data: Any, *, message_id: str
 
 
 async def _stream_csv_as_6001(
-    gateway_context: Any, csv_path: Path, *, message_id: str
+    gateway_context: Any, csv_path: Path, *, message_id: str, config: RunnableConfig | None = None
 ) -> str | None:
-    if gateway_context is None:
-        return None
-
     try:
-        from by_framework import EventType, StreamChunkEvent
-    except ImportError:
-        logger.warning("by_framework not available, skipping 6001 emit")
-        return None
-
-    try:
-        content_type_6001 = "6001"
-        try:
-            from by_framework.core.protocol.content_type import SseMessageType
-
-            content_type_candidate = getattr(SseMessageType, "data_table_json", None)
-            if content_type_candidate is not None:
-                content_type_6001 = content_type_candidate.value
-        except Exception:  # noqa: BLE001
-            pass
+        from langchain_core.callbacks import adispatch_custom_event  # noqa: PLC0415
 
         rows = await asyncio.to_thread(_load_csv_rows, csv_path)
 
@@ -480,11 +465,15 @@ async def _stream_csv_as_6001(
                 "columns": header,
                 "data": chunk_rows,
             }
-            await gateway_context.emit_chunk(
-                StreamChunkEvent(content=json.dumps(payload, ensure_ascii=False)),
-                event_type=EventType.ANSWER_DELTA.value,
-                content_type=content_type_6001,
-                message_id=message_id,
+            await adispatch_custom_event(
+                "dc_stream_chunk",
+                {
+                    "content": json.dumps(payload, ensure_ascii=False),
+                    "event_type": _EVENT_TYPE_ANSWER_DELTA,
+                    "content_type": _CONTENT_TYPE_DATA_TABLE,
+                    "message_id": message_id,
+                },
+                config=config,
             )
         return final_text
     except Exception as exc:  # noqa: BLE001
@@ -493,27 +482,14 @@ async def _stream_csv_as_6001(
 
 
 async def _emit_query_result_as_6001(
-    gateway_context: Any, query_data: dict[str, Any], *, message_id: str
+    gateway_context: Any,
+    query_data: dict[str, Any],
+    *,
+    message_id: str,
+    config: RunnableConfig | None = None,
 ) -> str | None:
-    if gateway_context is None:
-        return None
-
     try:
-        from by_framework import EventType, StreamChunkEvent
-    except ImportError:
-        logger.warning("by_framework not available, skipping query_result emit")
-        return None
-
-    try:
-        content_type_6001 = "6001"
-        try:
-            from by_framework.core.protocol.content_type import SseMessageType
-
-            content_type_candidate = getattr(SseMessageType, "data_table_json", None)
-            if content_type_candidate is not None:
-                content_type_6001 = content_type_candidate.value
-        except Exception:  # noqa: BLE001
-            pass
+        from langchain_core.callbacks import adispatch_custom_event  # noqa: PLC0415
 
         meta_raw = query_data.get("meta")
         meta: Mapping[str, Any] = meta_raw if isinstance(meta_raw, Mapping) else {}
@@ -566,11 +542,15 @@ async def _emit_query_result_as_6001(
             final_text = final_text + "\n\n> " + str(notice)
 
         text = json.dumps(payload, ensure_ascii=False, default=str)
-        await gateway_context.emit_chunk(
-            StreamChunkEvent(content=coerce_stream_chunk_text(text)),
-            event_type=EventType.ANSWER_DELTA.value,
-            content_type=content_type_6001,
-            message_id=message_id,
+        await adispatch_custom_event(
+            "dc_stream_chunk",
+            {
+                "content": coerce_stream_chunk_text(text),
+                "event_type": _EVENT_TYPE_ANSWER_DELTA,
+                "content_type": _CONTENT_TYPE_DATA_TABLE,
+                "message_id": message_id,
+            },
+            config=config,
         )
         return final_text
     except Exception as exc:  # noqa: BLE001

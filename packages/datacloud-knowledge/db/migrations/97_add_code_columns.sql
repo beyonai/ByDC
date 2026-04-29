@@ -6,7 +6,7 @@ DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'whale_datacloud' AND table_name = 'term_library' AND column_name = 'library_code'
+        WHERE table_schema = current_schema() AND table_name = 'term_library' AND column_name = 'library_code'
     ) THEN
         ALTER TABLE term_library ADD COLUMN library_code VARCHAR(32);
     END IF;
@@ -43,7 +43,7 @@ DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'whale_datacloud' AND table_name = 'term' AND column_name = 'term_code'
+        WHERE table_schema = current_schema() AND table_name = 'term' AND column_name = 'term_code'
     ) THEN
         ALTER TABLE term ADD COLUMN term_code VARCHAR(64);
     END IF;

@@ -336,20 +336,16 @@ dependencies = [
     { name = "aiosqlite" },
     { name = "asyncpg" },
     { name = "boto3" },
-    { name = "by-framework" },
-    { name = "deepagents" },
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "jieba" },
     { name = "langchain" },
     { name = "langchain-core" },
-    { name = "langchain-mcp-adapters" },
     { name = "langchain-openai" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint-postgres" },
     { name = "llama-index-embeddings-openai" },
-    { name = "matplotlib" },
     { name = "mcp" },
-    { name = "networkx" },
     { name = "numpy" },
     { name = "opengauss-sqlalchemy" },
     { name = "pandas" },
@@ -398,21 +394,17 @@ requires-dist = [
     { name = "aiosqlite", specifier = ">=0.19" },
     { name = "asyncpg", specifier = ">=0.29" },
     { name = "boto3", specifier = ">=1.34" },
-    { name = "by-framework", specifier = ">=0.1.13", index = "https://pypi.org/simple/" },
-    { name = "deepagents", specifier = ">=0.4.7" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.27" },
+    { name = "jieba", specifier = ">=0.42.1" },
     { name = "langchain", specifier = ">=0.3.0" },
     { name = "langchain-core", specifier = ">=0.3.0" },
-    { name = "langchain-mcp-adapters", specifier = ">=0.2.2" },
     { name = "langchain-openai", specifier = ">=1.1.11" },
     { name = "langgraph", specifier = ">=1.0.10" },
     { name = "langgraph-checkpoint-postgres", specifier = ">=2.0.0" },
     { name = "llama-index-embeddings-openai", specifier = ">=0.3.0" },
-    { name = "matplotlib", specifier = ">=3.7" },
     { name = "mcp", specifier = ">=1.18.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11" },
-    { name = "networkx", specifier = ">=3.0" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "opengauss-sqlalchemy", specifier = ">=2.4.0" },
     { name = "pandas", specifier = ">=2.0" },
@@ -882,7 +874,6 @@ name = "datacloud-analysis"
 version = "0.1.0"
 source = { editable = "packages/datacloud-analysis" }
 dependencies = [
-    { name = "by-framework" },
     { name = "datacloud-data", extra = ["sql"] },
     { name = "datacloud-knowledge" },
     { name = "deepagents" },
@@ -909,7 +900,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "by-framework", specifier = ">=0.1.2", index = "https://pypi.org/simple/" },
     { name = "datacloud-data", extras = ["sql"], editable = "packages/datacloud-data" },
     { name = "datacloud-knowledge", editable = "packages/datacloud-knowledge" },
     { name = "deepagents", specifier = ">=0.4.7" },
@@ -2063,20 +2053,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/14/63/e7d148f903cebfef50109da71378f411166f068d66f79b9e16a62dbacf41/langchain_google_genai-4.2.1.tar.gz", hash = "sha256:7f44487a0337535897e3bba9a1d6605d722629e034f757ffa8755af0aa85daa8", size = 278288, upload-time = "2026-02-19T19:29:19.416Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/7e/46c5973bd8b10a5c4c8a77136cf536e658796380a17c740246074901b038/langchain_google_genai-4.2.1-py3-none-any.whl", hash = "sha256:a7735289cf94ca3a684d830e09196aac8f6e75e647e3a0a1c3c9dc534ceb985e", size = 66500, upload-time = "2026-02-19T19:29:18.002Z" },
-]
-
-[[package]]
-name = "langchain-mcp-adapters"
-version = "0.2.2"
-source = { registry = "https://pypi.org/simple/" }
-dependencies = [
-    { name = "langchain-core" },
-    { name = "mcp" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/0e/66/1cc7039e2daaddcdea9d8887851fe6eb67401925999b2aa394aa855c7132/langchain_mcp_adapters-0.2.2.tar.gz", hash = "sha256:12d39e91ae4389c54b61b221094e53850b6e152934d8bc10c80665d600e76530", size = 37942, upload-time = "2026-03-16T17:13:30.35Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7d/2f/15d5e6c1765d8404a9cce38d8c81d7b33fb3392f9db5b992c000dddbd2a3/langchain_mcp_adapters-0.2.2-py3-none-any.whl", hash = "sha256:d08e64954e86281002653071b7430e0377c9a577cb4ac3143abfeb3e24ef8797", size = 23288, upload-time = "2026-03-16T17:13:29.073Z" },
 ]
 
 [[package]]

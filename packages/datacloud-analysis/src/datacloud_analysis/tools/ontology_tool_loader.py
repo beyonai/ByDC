@@ -794,6 +794,7 @@ def configure_loader(
     model_kwargs: dict[str, Any] | None = None,
     csv_base_dir: str = "",
     sql_execution_mode: str = "internal",
+    result_file_storage: Any = None,
 ) -> None:
     """为 OntologyLoader 配置查询规划器和词条加载器。
 
@@ -809,6 +810,8 @@ def configure_loader(
         model_kwargs: 额外模型参数（透传给 LangGraphPlanGenerator）。
         csv_base_dir: CSV 文件基础目录。
         sql_execution_mode: SQL 执行模式，默认 "internal"。
+        result_file_storage: 结果文件存储实现；为 None 且 csv_base_dir 非空时
+            自动创建 LocalResultFileStorage(csv_base_dir)。
     """
     pg_kwargs: dict[str, Any] = {
         "model": model,
@@ -821,9 +824,16 @@ def configure_loader(
 
     plan_generator = LangGraphPlanGenerator(**pg_kwargs)  # type: ignore[operator]
     term_loader = TermLoader.from_config({})  # type: ignore[union-attr]
+
+    if result_file_storage is None and csv_base_dir:
+        from datacloud_data_sdk.file_storage import LocalResultFileStorage  # noqa: PLC0415
+
+        result_file_storage = LocalResultFileStorage(csv_base_dir)
+
     loader.configure(
         plan_generator=plan_generator,
         term_loader=term_loader,
         csv_base_dir=csv_base_dir,
         sql_execution_mode=sql_execution_mode,
+        result_file_storage=result_file_storage,
     )

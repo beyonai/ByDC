@@ -182,6 +182,52 @@ class OntologyLoader:
         )
         self._load_from_owl_content(content)
 
+    def load_view_with_deps(self, resource_path: Path, view_id: str) -> None:
+        """按需加载指定 view 及其依赖的 objects，追加到当前 loader（不清空）。
+
+        Args:
+            resource_path: resource 根目录（含 object/ 和 view/ 子目录）
+            view_id: view 编码，对应 resource/view/{view_id}/ 目录
+        """
+        from datacloud_data_sdk.ontology.owl_parser import OwlParser
+
+        view_dir = resource_path / "view" / view_id
+        if not view_dir.is_dir():
+            return
+
+        parser = OwlParser()
+        parser._parse_new_layout_view_directory(view_dir)
+
+        object_codes: list[str] = []
+        if parsed_view := parser._views.get(view_id):
+            object_codes = parsed_view.object_codes
+
+        for obj_code in object_codes:
+            obj_dir = resource_path / "object" / obj_code
+            if obj_dir.is_dir():
+                parser._parse_new_layout_object_directory(obj_dir)
+
+        parser._apply_mappings_to_objects()
+        self.load_from_content(parser._build_content())
+
+    def load_object_with_deps(self, resource_path: Path, object_code: str) -> None:
+        """按需加载指定 object，追加到当前 loader（不清空）。
+
+        Args:
+            resource_path: resource 根目录（含 object/ 子目录）
+            object_code: object 编码，对应 resource/object/{object_code}/ 目录
+        """
+        from datacloud_data_sdk.ontology.owl_parser import OwlParser
+
+        obj_dir = resource_path / "object" / object_code
+        if not obj_dir.is_dir():
+            return
+
+        parser = OwlParser()
+        parser._parse_new_layout_object_directory(obj_dir)
+        parser._apply_mappings_to_objects()
+        self.load_from_content(parser._build_content())
+
     def _load_from_owl_content(self, content: dict[str, Any]) -> None:
         """
         从 OWL 解析后的内容加载本体定义

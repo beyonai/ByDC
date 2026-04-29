@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import contextlib
 import os
-import sys
 import uuid
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -147,70 +146,39 @@ async def test_tt1_thinking_token_emitted_in_v04_graph() -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def _make_by_framework_mocks() -> dict[str, Any]:
-    """构造 by_framework 相关模块的 mock，供 sys.modules patch 使用。
-
-    by_framework 在测试环境中依赖 dill（未安装），需要 mock 整个模块树。
-    """
-    mock_event_type = MagicMock()
-    mock_event_type.REASONING_LOG_DELTA.value = "REASONING_LOG_DELTA"
-
-    mock_bf = MagicMock()
-    mock_bf.EventType = mock_event_type
-    mock_bf.StreamChunkEvent = MagicMock(side_effect=lambda content: MagicMock(content=content))
-
-    mock_content_type_mod = MagicMock()
-    mock_content_type_mod.SseReasonMessageType.think_text.value = "think_text"
-
-    mock_stream_text_mod = MagicMock()
-    mock_stream_text_mod.coerce_stream_chunk_text = lambda t: t
-
-    mock_dcs = MagicMock()
-
-    return {
-        "by_framework": mock_bf,
-        "by_framework.core": MagicMock(),
-        "by_framework.core.protocol": MagicMock(),
-        "by_framework.core.protocol.content_type": mock_content_type_mod,
-        "datacloud_data_sdk": mock_dcs,
-        "datacloud_data_sdk.stream_text": mock_stream_text_mod,
-    }
-
-
 @pytest.mark.asyncio
 async def test_tt2_emit_thinking_token_calls_emit_chunk() -> None:
-    """TC-TT-2: _emit_thinking_token 以正确参数调用 gateway_context.emit_chunk。
+    """TC-TT-2: _emit_thinking_token 通过 adispatch_custom_event 推送 dc_stream_chunk。
 
     直接测试推送函数本身，不走完整图。
-    by_framework 在测试环境缺少 dill 依赖，通过 sys.modules mock 绕过。
-    懒导入在函数调用时查找 sys.modules，只需在调用期间注入 mock 即可。
+    函数签名已更新为 (token, *, message_id)，不再需要 gateway_context 和 by_framework mock。
     """
     from datacloud_analysis.orchestration.execution.react_loop import (  # noqa: PLC0415
         _emit_thinking_token,
     )
 
-    mock_gw_ctx = MagicMock()
-    emit_calls: list[dict[str, Any]] = []
+    dispatched: list[tuple[str, Any]] = []
 
-    async def _capture_emit(*args: Any, **kwargs: Any) -> None:
-        emit_calls.append({"args": args, **kwargs})
-
-    mock_gw_ctx.emit_chunk = _capture_emit
+    async def _fake_dispatch(name: str, data: Any) -> None:
+        dispatched.append((name, data))
 
     thinking_text = "这是一段有意义的推理内容，超过10个字符。"
     message_id = "thinking-msg-001"
 
-    with patch.dict(sys.modules, _make_by_framework_mocks()):
-        await _emit_thinking_token(mock_gw_ctx, thinking_text, message_id=message_id)
+    with patch("langchain_core.callbacks.adispatch_custom_event", side_effect=_fake_dispatch):
+        await _emit_thinking_token(thinking_text, message_id=message_id)
 
-    assert len(emit_calls) >= 1, "emit_chunk 应至少被调用一次"
+    assert len(dispatched) >= 1, "adispatch_custom_event 应至少被调用一次"
 
     found_reasoning = any(
-        str(c.get("event_type", "")).lower().find("reasoning") != -1
-        or str(c.get("event_type", "")).lower().find("log") != -1
-        for c in emit_calls
+        isinstance(d, dict)
+        and (
+            str(d.get("event_type", "")).find("reasoning") != -1
+            or str(d.get("event_type", "")).find("log") != -1
+        )
+        for _, d in dispatched
     )
-    assert found_reasoning, f"emit_chunk 应有 REASONING_LOG_DELTA 类型调用，实际 calls={emit_calls}"
+    assert found_reasoning, f"dc_stream_chunk 应含 reasoning 类型 event_type，实际：{dispatched}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -229,16 +197,18 @@ async def test_tt3_thinking_via_llm_stream_in_v04_graph() -> None:
     thread_id = f"test-tt3-{uuid.uuid4().hex[:8]}"
     config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
 
+    # gateway_context 仍需注入（llm_call_node._build_runtime_dynamic_prompt 等会访问它）
     mock_gw_ctx = MagicMock()
-    reasoning_emit_calls: list[Any] = []
-
-    async def _capture_emit(*args: Any, **kwargs: Any) -> None:
-        event_type = str(kwargs.get("event_type", ""))
-        if "reasoning" in event_type.lower() or "log" in event_type.lower():
-            reasoning_emit_calls.append(kwargs)
-
-    mock_gw_ctx.emit_chunk = _capture_emit
     config["configurable"]["gateway_context"] = mock_gw_ctx
+
+    reasoning_dispatch_calls: list[dict[str, Any]] = []
+
+    async def _capture_dispatch(name: str, data: Any) -> None:
+        if isinstance(data, dict) and (
+            "reasoning" in str(data.get("event_type", "")).lower()
+            or "log" in str(data.get("event_type", "")).lower()
+        ):
+            reasoning_dispatch_calls.append(dict(data))
 
     # 构造流式 chunks：先 thinking 再结束（含 tool_call finish_react）
     finish_react_tc = {
@@ -278,9 +248,11 @@ async def test_tt3_thinking_via_llm_stream_in_v04_graph() -> None:
     mock_hook_manager.run_before = _run_before
     mock_hook_manager.run_after = AsyncMock(return_value=({"tool_name": "x"}, None))
 
-    # by_framework 懒导入在测试环境因缺少 dill 失败，需 mock sys.modules
     with (
-        patch.dict(sys.modules, _make_by_framework_mocks()),
+        patch(
+            "langchain_core.callbacks.adispatch_custom_event",
+            side_effect=_capture_dispatch,
+        ),
         patch(
             "datacloud_analysis.orchestration.intend.node.intend_node",
             side_effect=_fake_intend,
@@ -316,7 +288,7 @@ async def test_tt3_thinking_via_llm_stream_in_v04_graph() -> None:
                 config,
             )
 
-    assert len(reasoning_emit_calls) >= 1, (
-        f"流式 thinking block 应触发 emit_chunk（REASONING_LOG_DELTA），"
-        f"实际 reasoning_emit_calls={len(reasoning_emit_calls)}"
+    assert len(reasoning_dispatch_calls) >= 1, (
+        f"流式 thinking block 应触发 adispatch_custom_event（reasoning_log_delta），"
+        f"实际 reasoning_dispatch_calls={len(reasoning_dispatch_calls)}"
     )
