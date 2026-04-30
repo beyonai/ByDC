@@ -307,11 +307,14 @@ class OntologyAgent:
 
         resource_path = Path(self._config.resource_path)
         loader = OntologyLoader()
+        loader.load_from_owl_resource_directory(
+            resource_path, object_codes=object_codes, view_codes=view_codes
+        )
 
-        for view_code in view_codes or []:
-            loader.load_view_with_deps(resource_path, view_code)
-        for obj_code in object_codes or []:
-            loader.load_object_with_deps(resource_path, obj_code)
+        # for view_code in view_codes or []:
+        #     loader.load_view_with_deps(resource_path, view_code)
+        # for obj_code in object_codes or []:
+        #     loader.load_object_with_deps(resource_path, obj_code)
 
         inject_virtual_actions(loader)
         configure_loader(

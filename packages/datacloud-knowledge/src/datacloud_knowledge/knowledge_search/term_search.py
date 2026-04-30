@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import and_, cast, func, literal, or_, select
 from sqlalchemy.dialects.postgresql import JSONB, NUMERIC, TIMESTAMP
 from sqlalchemy.orm import aliased
+
+from datacloud_knowledge.query.search import bm25_search_with_or
 
 from .db import get_session
 from .db.models import Term, TermName, TermRelation
@@ -26,6 +29,20 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class _TermSearchRow:
+    term_id: str
+    term_code: str
+    term_name: str
+    term_type_code: str
+    desc_summary: str | None
+    term_tags: dict[str, Any]
+    owl_doc_id: str | None
+    created_time: Any | None
+    updated_time: Any | None
+    score: float | None = None
+
+
 def search_terms_by_type(
     *,
     term_type_code: str,
@@ -42,6 +59,7 @@ def search_terms_by_type(
         raise ValueError("offset 必须 >= 0")
 
     canonical_type = _normalize_type_code(term_type_code)
+    normalized_keyword = (keyword or "").strip()
 
     try:
         with get_session() as session:
@@ -51,33 +69,56 @@ def search_terms_by_type(
                 keyword=keyword,
                 tags=tags,
             )
+            bm25_filters = _build_filters(
+                canonical_type=canonical_type,
+                term_codes=term_codes,
+                keyword=None,
+                tags=tags,
+            )
 
             total = int(
                 session.execute(
                     select(func.count()).select_from(Term).where(*base_filters)
                 ).scalar_one()
             )
-
-            stmt = (
-                select(
-                    Term.term_id,
-                    Term.term_code,
-                    Term.term_name,
-                    Term.term_type_code,
-                    Term.desc_summary,
-                    Term.term_tags,
-                    Term.owl_doc_id,
-                    Term.created_time,
-                    Term.updated_time,
+            if total > 0:
+                stmt = (
+                    select(
+                        Term.term_id,
+                        Term.term_code,
+                        Term.term_name,
+                        Term.term_type_code,
+                        Term.desc_summary,
+                        Term.term_tags,
+                        Term.owl_doc_id,
+                        Term.created_time,
+                        Term.updated_time,
+                    )
+                    .where(*base_filters)
+                    .limit(limit)
+                    .offset(offset)
                 )
-                .where(*base_filters)
-                .limit(limit)
-                .offset(offset)
-            )
-
-            stmt = _apply_order_by(stmt, order_by=order_by)
-
-            rows = session.execute(stmt).all()
+                stmt = _apply_order_by(stmt, order_by=order_by)
+                rows = [
+                    _convert_db_row_to_term_row(row) for row in session.execute(stmt).all()
+                ]
+            elif normalized_keyword:
+                bm25_rows = bm25_search_with_or(
+                    session,
+                    normalized_keyword,
+                    top_k=limit + offset,
+                    min_score=0.001,
+                    term_type_codes={canonical_type},
+                )
+                rows = _convert_bm25_rows_to_term_rows(
+                    session=session,
+                    bm25_rows=bm25_rows,
+                    filters=bm25_filters,
+                )
+                total = len(rows)
+                rows = rows[offset : offset + limit]
+            else:
+                rows = []
     except Exception:
         logger.exception(
             "search_terms_by_type failed: term_type_code=%s, term_codes=%s, keyword=%s, tags=%s, limit=%s, offset=%s",
@@ -92,32 +133,70 @@ def search_terms_by_type(
 
     items: list[TermItem] = []
     for row in rows:
-        term_id = str(row[0])
-        term_code = str(row[1])
-        term_name = str(row[2])
-        ttype = str(row[3])
-        desc_summary = row[4]
-        term_tags = row[5] or {}
-        owl_doc_id = row[6]
-        created_time = row[7]
-        updated_time = row[8]
-
         items.append(
             TermItem(
-                term_id=term_id,
-                term_code=term_code,
-                term_name=term_name,
-                term_type_code=ttype,
-                desc_summary=desc_summary,
-                term_tags=term_tags,
-                owl_doc_id=owl_doc_id,
-                created_time=created_time,
-                updated_time=updated_time,
-                score=None,
+                term_id=row.term_id,
+                term_code=row.term_code,
+                term_name=row.term_name,
+                term_type_code=row.term_type_code,
+                desc_summary=row.desc_summary,
+                term_tags=row.term_tags,
+                owl_doc_id=row.owl_doc_id,
+                created_time=row.created_time,
+                updated_time=row.updated_time,
+                score=row.score,
             )
         )
 
     return SearchTermsResult(total=total, items=items)
+
+
+def _convert_db_row_to_term_row(row: Any, *, score: float | None = None) -> _TermSearchRow:
+    term_tags = row[5] if isinstance(row[5], dict) else {}
+    return _TermSearchRow(
+        term_id=str(row[0]),
+        term_code=str(row[1]),
+        term_name=str(row[2]),
+        term_type_code=str(row[3]),
+        desc_summary=row[4],
+        term_tags=term_tags,
+        owl_doc_id=row[6],
+        created_time=row[7],
+        updated_time=row[8],
+        score=score,
+    )
+
+
+def _convert_bm25_rows_to_term_rows(
+    *,
+    session: Any,
+    bm25_rows: list[Any],
+    filters: list[Any],
+) -> list[_TermSearchRow]:
+    if not bm25_rows:
+        return []
+
+    score_by_term_id = {str(row.term_id): float(row.score) for row in bm25_rows}
+    ordered_term_ids = list(score_by_term_id)
+    db_rows = session.execute(
+        select(
+            Term.term_id,
+            Term.term_code,
+            Term.term_name,
+            Term.term_type_code,
+            Term.desc_summary,
+            Term.term_tags,
+            Term.owl_doc_id,
+            Term.created_time,
+            Term.updated_time,
+        ).where(Term.term_id.in_(ordered_term_ids), *filters)
+    ).all()
+    row_by_term_id = {
+        str(row[0]): _convert_db_row_to_term_row(row, score=score_by_term_id[str(row[0])])
+        for row in db_rows
+    }
+    rows = [row_by_term_id[term_id] for term_id in ordered_term_ids if term_id in row_by_term_id]
+    return rows
 
 
 def _normalize_type_code(type_code: str) -> str:
@@ -157,8 +236,8 @@ def _build_filters(
     if normalized_keyword:
         filters.append(
             or_(
+                Term.term_name == normalized_keyword,
                 Term.term_code == normalized_keyword,
-                func.coalesce(Term.term_name, "").ilike(f"%{normalized_keyword}%"),
             )
         )
 

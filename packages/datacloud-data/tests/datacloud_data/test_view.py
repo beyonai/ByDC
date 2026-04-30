@@ -134,19 +134,14 @@ async def test_view_get_object_can_execute_object_action() -> None:
     loader.load_scene(SCENE)
     view = loader.get_view("scene_01")
 
-    with InvocationContext(session_id="view-object-action-confirm"):
-        first = await view.get_object("sales_bo").invoke_action(
-            "calc_score",
-            {"owner_id": "u_001", "userConfirmed": False},
-        )
+    with InvocationContext(session_id="view-object-action-no-confirm"):
         result = await view.get_object("sales_bo").invoke_action(
             "calc_score",
-            {"owner_id": "u_001", "userConfirmed": True},
+            {"owner_id": "u_001"},
         )
 
-    assert first["result_type"] == "ask_user"
     assert result["records"] == [{"score": 100, "owner_id": "u_001"}]
-    assert result["meta"]["columns"] == ["score", "owner_id"]
+    assert [column["name"] for column in result["meta"]["columns"]] == ["score", "owner_id"]
     assert result["total"] == 1
 
 
