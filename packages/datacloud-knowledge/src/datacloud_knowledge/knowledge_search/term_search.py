@@ -99,9 +99,7 @@ def search_terms_by_type(
                     .offset(offset)
                 )
                 stmt = _apply_order_by(stmt, order_by=order_by)
-                rows = [
-                    _convert_db_row_to_term_row(row) for row in session.execute(stmt).all()
-                ]
+                rows = [_convert_db_row_to_term_row(row) for row in session.execute(stmt).all()]
             elif normalized_keyword:
                 bm25_rows = bm25_search_with_or(
                     session,
@@ -195,8 +193,7 @@ def _convert_bm25_rows_to_term_rows(
         str(row[0]): _convert_db_row_to_term_row(row, score=score_by_term_id[str(row[0])])
         for row in db_rows
     }
-    rows = [row_by_term_id[term_id] for term_id in ordered_term_ids if term_id in row_by_term_id]
-    return rows
+    return [row_by_term_id[term_id] for term_id in ordered_term_ids if term_id in row_by_term_id]
 
 
 def _normalize_type_code(type_code: str) -> str:
