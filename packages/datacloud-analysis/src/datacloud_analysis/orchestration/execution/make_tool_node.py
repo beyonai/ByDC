@@ -109,10 +109,6 @@ def make_tool_node(
 
         update: dict[str, Any] = {
             "messages": [tool_msg],
-            "execution_status": None,
-            "clarification_formatted_params": None,
-            "pending_clarification_context": None,
-            "clarification_analyze_result": None,
         }
         if _query_data is not None:
             update["react_last_query_data"] = _query_data
