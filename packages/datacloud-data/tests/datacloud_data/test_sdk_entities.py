@@ -194,15 +194,12 @@ def test_action_get_schema_preserves_decimal_and_datetime_hints() -> None:
     )
     obj = loader.get_object("expense")
     schema = obj.get_action_schema("apply_expense")
-    assert schema["inputSchema"]["required"] == ["userConfirmed"]
     amount_schema = schema["inputSchema"]["properties"]["expense_amount"]
     assert amount_schema["type"] == "number"
     assert amount_schema["format"] == "decimal"
     time_schema = schema["inputSchema"]["properties"]["apply_time"]
     assert time_schema["type"] == "string"
     assert time_schema["format"] == "date-time"
-    confirm_schema = schema["inputSchema"]["properties"]["userConfirmed"]
-    assert confirm_schema["type"] == "boolean"
 
 
 def test_action_get_schema_supports_array_and_term_enum() -> None:
@@ -266,7 +263,6 @@ def test_action_get_schema_supports_array_and_term_enum() -> None:
 
     obj = loader.get_object("todo_items")
     schema = obj.get_action_schema("create_todo")
-    assert schema["inputSchema"]["required"] == ["userConfirmed"]
 
     handler_ids_schema = schema["inputSchema"]["properties"]["handlerIds"]
     assert handler_ids_schema["type"] == "array"
@@ -344,11 +340,6 @@ async def test_invoke_action_returns_execution_steps_in_detail_mode() -> None:
 
     obj = loader.get_object("todo_items")
     gateway_context = _FakeGatewayContext()
-    with InvocationContext(session_id="detail-confirm-cache"):
-        first_result = await obj.invoke_action(
-            "create_todo",
-            {"优先级": "高", "userConfirmed": False},
-        )
     with InvocationContext(
         session_id="detail-confirm-cache",
         tool_call_detail=True,
@@ -356,30 +347,23 @@ async def test_invoke_action_returns_execution_steps_in_detail_mode() -> None:
     ):
         result = await obj.invoke_action(
             "create_todo",
-            {"优先级": "高", "userConfirmed": True},
+            {"优先级": "高"},
         )
 
-    assert first_result["result_type"] == "ask_user"
     assert result["records"] == [{"priority": "HIGH"}]
     assert [item["step"] for item in result["execution_steps"]] == [
         "request_received",
         "param_mapping",
         "param_validation",
         "term_resolved",
-        "user_confirmation",
+        "operation_validation",
         "action_executing",
         "action_completed",
     ]
-    assert result["execution_steps"][1]["data"]["params"] == {
-        "priority": "高",
-        "userConfirmed": True,
-    }
+    assert result["execution_steps"][1]["data"]["params"] == {"priority": "高"}
     assert result["execution_steps"][2]["data"]["missing_required_params"] == []
     assert result["execution_steps"][3]["data"]["params"] == {"priority": "HIGH"}
-    assert result["execution_steps"][4]["data"] == {
-        "cache_status": "confirmed",
-        "user_confirmed": True,
-    }
+    assert result["execution_steps"][4]["data"] == {"validation_status": "passed"}
     assert result["execution_steps"][5]["data"]["mode"] == "script"
     assert gateway_context.events == []
 
@@ -613,7 +597,7 @@ def test_action_get_schema_supports_structured_request_body_and_root_array() -> 
     batch_schema = obj.get_action_schema("accept_todo_batch")
     batch_request_body_schema = batch_schema["inputSchema"]["properties"]["requestBody"]
 
-    assert schema["inputSchema"]["required"] == ["userConfirmed"]
+    assert schema["inputSchema"]["required"] == ["requestBody"]
     assert request_body_schema["type"] == "object"
     assert request_body_schema["properties"]["todoId"]["type"] == "string"
     assert request_body_schema["properties"]["user"]["type"] == "object"
@@ -622,9 +606,9 @@ def test_action_get_schema_supports_structured_request_body_and_root_array() -> 
         request_body_schema["properties"]["org"]["items"]["properties"]["org_id"]["type"]
         == "string"
     )
-    assert "required" not in request_body_schema
-    assert "required" not in request_body_schema["properties"]["user"]
-    assert batch_schema["inputSchema"]["required"] == ["userConfirmed"]
+    assert request_body_schema["required"] == ["todoId", "user"]
+    assert request_body_schema["properties"]["user"]["required"] == ["user_id"]
+    assert batch_schema["inputSchema"]["required"] == ["requestBody"]
     assert batch_request_body_schema["type"] == "array"
     assert batch_request_body_schema["items"]["properties"]["user_code"]["type"] == "string"
 
@@ -769,18 +753,7 @@ def test_action_execute_supports_structured_request_body_and_root_array() -> Non
                     "requestBody": {
                         "todoId": "T001",
                         "user": {"user_id": "U001", "user_code": "A001"},
-                    },
-                    "userConfirmed": False,
-                },
-            )
-            await obj.invoke_action(
-                "accept_todo",
-                {
-                    "requestBody": {
-                        "todoId": "T001",
-                        "user": {"user_id": "U001", "user_code": "A001"},
-                    },
-                    "userConfirmed": True,
+                    }
                 },
             )
             await obj.invoke_action(
@@ -789,18 +762,7 @@ def test_action_execute_supports_structured_request_body_and_root_array() -> Non
                     "requestBody": [
                         {"user_id": "U001", "user_code": "A001"},
                         {"user_id": "U002", "user_code": "A002"},
-                    ],
-                    "userConfirmed": False,
-                },
-            )
-            await obj.invoke_action(
-                "accept_todo_batch",
-                {
-                    "requestBody": [
-                        {"user_id": "U001", "user_code": "A001"},
-                        {"user_id": "U002", "user_code": "A002"},
-                    ],
-                    "userConfirmed": True,
+                    ]
                 },
             )
 
@@ -823,7 +785,7 @@ def test_action_execute_supports_structured_request_body_and_root_array() -> Non
     }
 
 
-def _build_confirmable_operation_loader() -> OntologyLoader:
+def _build_operation_loader() -> OntologyLoader:
     loader = OntologyLoader()
     loader.configure(
         term_loader=KbTermLoader(
@@ -901,7 +863,7 @@ def _build_confirmable_operation_loader() -> OntologyLoader:
     return loader
 
 
-def _build_confirmable_batch_loader() -> OntologyLoader:
+def _build_operation_batch_loader() -> OntologyLoader:
     loader = OntologyLoader()
     loader.load_from_content(
         {
@@ -948,7 +910,7 @@ def _build_confirmable_batch_loader() -> OntologyLoader:
     return loader
 
 
-def _build_confirmable_nested_array_term_loader() -> OntologyLoader:
+def _build_operation_nested_array_term_loader() -> OntologyLoader:
     loader = OntologyLoader()
     loader.configure(
         term_loader=KbTermLoader(
@@ -1012,21 +974,21 @@ def _build_confirmable_nested_array_term_loader() -> OntologyLoader:
     return loader
 
 
-def test_operation_schema_only_requires_user_confirmed() -> None:
-    loader = _build_confirmable_operation_loader()
+def test_operation_schema_requires_business_params() -> None:
+    loader = _build_operation_loader()
     obj = loader.get_object("approval_task")
 
     schema = obj.get_action_schema("submit_approval")
 
-    assert schema["inputSchema"]["required"] == ["userConfirmed"]
+    assert schema["inputSchema"]["required"] == ["title", "priority", "owner_id"]
     assert schema["inputSchema"]["properties"]["title"]["type"] == "string"
     assert schema["inputSchema"]["properties"]["priority"]["enum"] == ["HIGH", "LOW"]
-    assert schema["inputSchema"]["properties"]["userConfirmed"]["type"] == "boolean"
+    assert "userConfirmed" not in schema["inputSchema"]["properties"]
 
 
 @pytest.mark.asyncio
 async def test_operation_returns_all_missing_required_and_term_errors() -> None:
-    loader = _build_confirmable_operation_loader()
+    loader = _build_operation_loader()
     obj = loader.get_object("approval_task")
 
     result = await obj.invoke_action(
@@ -1052,15 +1014,12 @@ async def test_operation_returns_all_missing_required_and_term_errors() -> None:
         "priority": "重复优先级",
         "owner_id": "重复负责人",
     }
-    assert result["confirmation"] == {
-        "user_confirmed": False,
-        "cache_status": "validation_failed",
-    }
+    assert result["operation_validation"] == {"validation_status": "validation_failed"}
 
 
 @pytest.mark.asyncio
 async def test_operation_array_required_param_detects_missing_items() -> None:
-    loader = _build_confirmable_batch_loader()
+    loader = _build_operation_batch_loader()
     obj = loader.get_object("batch_task")
 
     result = await obj.invoke_action(
@@ -1082,15 +1041,12 @@ async def test_operation_array_required_param_detects_missing_items() -> None:
         "userId": ["U001", None],
         "userCode": ["A001", "A002"],
     }
-    assert result["confirmation"] == {
-        "user_confirmed": False,
-        "cache_status": "validation_failed",
-    }
+    assert result["operation_validation"] == {"validation_status": "validation_failed"}
 
 
 @pytest.mark.asyncio
 async def test_operation_term_resolution_supports_nested_array_values() -> None:
-    loader = _build_confirmable_nested_array_term_loader()
+    loader = _build_operation_nested_array_term_loader()
     obj = loader.get_object("nested_batch_task")
 
     result = await obj.invoke_action(
@@ -1104,8 +1060,8 @@ async def test_operation_term_resolution_supports_nested_array_values() -> None:
         },
     )
 
-    assert result["result_type"] == "ask_user"
-    assert result["term_errors"] == []
+    assert result["result_type"] == "normal"
+    assert result["records"] == [{"handlerIds": [["U001"], ["U002"]]}]
     assert result["normalized_params"] == {
         "title": ["你好", "世界"],
         "handlerIds": [["胡永春"], ["李四"]],
@@ -1114,10 +1070,7 @@ async def test_operation_term_resolution_supports_nested_array_values() -> None:
         "title": ["你好", "世界"],
         "handlerIds": [["U001"], ["U002"]],
     }
-    assert result["confirmation"] == {
-        "user_confirmed": False,
-        "cache_status": "cached",
-    }
+    assert result["operation_validation"] == {"validation_status": "passed"}
 
 
 def test_term_resolver_skips_none_and_blank_values_in_nested_arrays() -> None:
@@ -1145,11 +1098,11 @@ def test_term_resolver_skips_none_and_blank_values_in_nested_arrays() -> None:
 
 
 @pytest.mark.asyncio
-async def test_operation_false_confirmation_caches_and_asks_user() -> None:
-    loader = _build_confirmable_operation_loader()
+async def test_operation_executes_after_validation_passes() -> None:
+    loader = _build_operation_loader()
     obj = loader.get_object("approval_task")
 
-    with InvocationContext(session_id="operation-cache-pending"):
+    with InvocationContext(session_id="operation-validation-passed"):
         result = await obj.invoke_action(
             "submit_approval",
             {
@@ -1160,21 +1113,19 @@ async def test_operation_false_confirmation_caches_and_asks_user() -> None:
             },
         )
 
-    assert result["result_type"] == "ask_user"
+    assert result["result_type"] == "normal"
+    assert result["records"] == [{"priority": "HIGH", "owner_id": "U001"}]
     assert result["resolved_params"] == {
         "title": "发起审批",
         "priority": "HIGH",
         "owner_id": "U001",
     }
-    assert result["confirmation"] == {
-        "user_confirmed": False,
-        "cache_status": "cached",
-    }
+    assert result["operation_validation"] == {"validation_status": "passed"}
 
 
 @pytest.mark.asyncio
-async def test_operation_true_without_cache_returns_for_reconfirmation() -> None:
-    loader = _build_confirmable_operation_loader()
+async def test_operation_ignores_legacy_true_confirmation_param() -> None:
+    loader = _build_operation_loader()
     obj = loader.get_object("approval_task")
 
     with InvocationContext(session_id="operation-no-cache"):
@@ -1188,11 +1139,9 @@ async def test_operation_true_without_cache_returns_for_reconfirmation() -> None
             },
         )
 
-    assert result["result_type"] == "ask_user"
-    assert result["confirmation"] == {
-        "user_confirmed": True,
-        "cache_status": "confirm_without_cache",
-    }
+    assert result["result_type"] == "normal"
+    assert result["records"] == [{"priority": "HIGH", "owner_id": "U001"}]
+    assert result["operation_validation"] == {"validation_status": "passed"}
     assert result["resolved_params"] == {
         "title": "发起审批",
         "priority": "HIGH",
@@ -1201,11 +1150,11 @@ async def test_operation_true_without_cache_returns_for_reconfirmation() -> None
 
 
 @pytest.mark.asyncio
-async def test_operation_true_with_mismatched_cache_returns_for_reconfirmation() -> None:
-    loader = _build_confirmable_operation_loader()
+async def test_operation_validation_does_not_use_cache() -> None:
+    loader = _build_operation_loader()
     obj = loader.get_object("approval_task")
 
-    with InvocationContext(session_id="operation-cache-mismatch"):
+    with InvocationContext(session_id="operation-validation-no-cache"):
         first = await obj.invoke_action(
             "submit_approval",
             {
@@ -1225,12 +1174,10 @@ async def test_operation_true_with_mismatched_cache_returns_for_reconfirmation()
             },
         )
 
-    assert first["confirmation"]["cache_status"] == "cached"
-    assert second["result_type"] == "ask_user"
-    assert second["confirmation"] == {
-        "user_confirmed": True,
-        "cache_status": "confirm_mismatch",
-    }
+    assert first["operation_validation"]["validation_status"] == "passed"
+    assert second["result_type"] == "normal"
+    assert second["records"] == [{"priority": "LOW", "owner_id": "U002"}]
+    assert second["operation_validation"] == {"validation_status": "passed"}
     assert second["resolved_params"] == {
         "title": "重新发起审批",
         "priority": "LOW",
@@ -1239,20 +1186,11 @@ async def test_operation_true_with_mismatched_cache_returns_for_reconfirmation()
 
 
 @pytest.mark.asyncio
-async def test_operation_true_with_matching_cache_executes_and_returns_params() -> None:
-    loader = _build_confirmable_operation_loader()
+async def test_operation_returns_params_with_validation_status() -> None:
+    loader = _build_operation_loader()
     obj = loader.get_object("approval_task")
 
-    with InvocationContext(session_id="operation-cache-confirmed"):
-        first = await obj.invoke_action(
-            "submit_approval",
-            {
-                "title": "发起审批",
-                "priority": "高",
-                "owner_id": "张三",
-                "userConfirmed": False,
-            },
-        )
+    with InvocationContext(session_id="operation-validation-result-extra"):
         result = await obj.invoke_action(
             "submit_approval",
             {
@@ -1263,7 +1201,6 @@ async def test_operation_true_with_matching_cache_executes_and_returns_params() 
             },
         )
 
-    assert first["result_type"] == "ask_user"
     assert result["result_type"] == "normal"
     assert result["records"] == [{"priority": "HIGH", "owner_id": "U001"}]
     assert result["submitted_params"] == {
@@ -1282,10 +1219,7 @@ async def test_operation_true_with_matching_cache_executes_and_returns_params() 
         "priority": "HIGH",
         "owner_id": "U001",
     }
-    assert result["confirmation"] == {
-        "user_confirmed": True,
-        "cache_status": "confirmed",
-    }
+    assert result["operation_validation"] == {"validation_status": "passed"}
 
 
 @pytest.mark.asyncio

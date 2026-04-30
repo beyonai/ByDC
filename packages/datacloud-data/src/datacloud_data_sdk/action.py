@@ -247,7 +247,6 @@ _WRAPPER_INPUT_KEYS = frozenset(
 _MISSING = object()
 _OPERATION_CONFIRM_PARAM = "userConfirmed"
 _OPERATION_CONFIRM_PARAM_ALIASES = frozenset({_OPERATION_CONFIRM_PARAM, "user_confirmed"})
-_OPERATION_CONFIRMATION_CACHE: dict[str, dict[str, Any]] = {}
 
 
 def _normalize_mapping_location(location: str) -> str:
@@ -419,15 +418,6 @@ def _coerce_sequence(value: Any) -> list[Any]:
     return [value]
 
 
-def _coerce_confirm_flag(value: Any) -> bool:
-    """将确认参数归一化为布尔值。"""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes", "on"}
-    return bool(value)
-
-
 def _is_missing_required_value(value: Any) -> bool:
     """判断必填参数是否缺失。"""
     if value is None:
@@ -571,23 +561,20 @@ class Action:
     def _build_input_schema(self, params: list[OntologyActionParam]) -> dict[str, object]:
         """为非虚拟动作构造输入 schema，支持 requestBody/query/path 分层。"""
         schema: dict[str, Any] = {"type": "object", "properties": {}}
-        is_confirmable_operation = self._is_confirmable_operation()
         if not params:
-            if is_confirmable_operation:
-                self._inject_operation_confirm_schema(schema)
             return schema
 
         has_structured_mapping = any(
             getattr(param, "mapping_path", "").startswith("$.") for param in params
         )
-        if not has_structured_mapping and not is_confirmable_operation:
+        if not has_structured_mapping:
             return self._build_schema(params)
 
         wrapper_required: set[str] = set()
         properties = schema["properties"]
         for param in params:
             leaf_schema = self._build_param_schema(param)
-            schema_required = False if is_confirmable_operation else param.required
+            schema_required = param.required
             location, path_parts = _parse_mapping_path(
                 getattr(param, "mapping_path", ""),
                 default_location="body",
@@ -614,23 +601,7 @@ class Action:
 
         if wrapper_required:
             schema["required"] = sorted(wrapper_required)
-        if is_confirmable_operation:
-            self._inject_operation_confirm_schema(schema)
         return schema
-
-    @staticmethod
-    def _inject_operation_confirm_schema(schema: dict[str, Any]) -> None:
-        """为操作类动作注入统一的用户确认参数。"""
-        properties = schema.setdefault("properties", {})
-        if isinstance(properties, dict):
-            properties[_OPERATION_CONFIRM_PARAM] = {
-                "type": "boolean",
-                "description": (
-                    "用户是否确认提交当前完整表单数据。只有在系统已返回完整表单数据、"
-                    "反问用户是否确定提交且用户明确确认后，才可传 true；首次提交或未获用户确认时请传 false。"
-                ),
-            }
-        schema["required"] = [_OPERATION_CONFIRM_PARAM]
 
     def _build_schema(self, params: list[OntologyActionParam]) -> dict[str, object]:
         """
@@ -853,37 +824,6 @@ class Action:
             getattr(self._action, "action_type", "") == "operation"
         )
 
-    def _build_operation_confirmation_cache_key(self) -> str:
-        """构造操作确认缓存 key。"""
-        try:
-            from datacloud_data_sdk.context import get_current_context
-
-            ctx = get_current_context()
-            return (
-                f"{ctx.tenant_id}|{ctx.user_id}|{ctx.session_id}|{ctx.system_code}|"
-                f"{self._action.belong_class}|{self._action.action_code}"
-            )
-        except Exception:
-            return (
-                f"loader:{id(self._loader)}|{self._action.belong_class}|{self._action.action_code}"
-            )
-
-    def _get_cached_operation_confirmation(self) -> dict[str, Any] | None:
-        """获取当前动作的待确认缓存。"""
-        return _safe_copy(
-            _OPERATION_CONFIRMATION_CACHE.get(self._build_operation_confirmation_cache_key())
-        )
-
-    def _set_cached_operation_confirmation(self, params: dict[str, Any]) -> None:
-        """写入当前动作的待确认缓存。"""
-        _OPERATION_CONFIRMATION_CACHE[self._build_operation_confirmation_cache_key()] = _safe_copy(
-            params
-        )
-
-    def _clear_cached_operation_confirmation(self) -> None:
-        """清理当前动作的待确认缓存。"""
-        _OPERATION_CONFIRMATION_CACHE.pop(self._build_operation_confirmation_cache_key(), None)
-
     @staticmethod
     def _build_operation_feedback_message(
         *,
@@ -903,17 +843,6 @@ class Action:
             lines.extend(
                 f"- {item['param_name']}({item['param_code']}): {item['message']}"
                 for item in term_errors
-            )
-        if confirmation_state == "pending_confirmation":
-            lines.append("参数校验通过，请确认以下参数后再次提交，并将 userConfirmed 设为 true。")
-        elif confirmation_state == "confirm_without_cache":
-            lines.append(
-                "需要用户确认本次参数。已为你缓存本次参数，请核对后将 userConfirmed 设为 true 再次提交。"
-            )
-        elif confirmation_state == "confirm_mismatch":
-            lines.append(
-                "需要用户重新确认本次参数。本次确认参数与上次待确认参数不一致，"
-                "已更新缓存，请核对后将 userConfirmed 设为 true 再次提交。"
             )
         return "\n".join(lines)
 
@@ -993,7 +922,7 @@ class Action:
                 )
         return resolved, errors
 
-    async def _build_operation_ask_user_response(
+    async def _build_operation_validation_error_response(
         self,
         *,
         message: str,
@@ -1002,25 +931,22 @@ class Action:
         resolved_params: dict[str, Any],
         missing_required: list[dict[str, str]],
         term_errors: list[dict[str, Any]],
-        user_confirmed: bool,
-        cache_status: str,
         execution_steps: list[dict[str, Any]] | None,
     ) -> dict[str, Any]:
-        """构造操作类动作的 ask_user 返回。"""
+        """构造操作类动作的参数校验失败返回。"""
         from datacloud_data_sdk.result_formatter import build_error_data
 
         payload = build_error_data(
             message,
-            result_type="ask_user",
+            result_type="rejected",
             extra={
                 "submitted_params": _safe_copy(original_params),
                 "normalized_params": _safe_copy(normalized_params),
                 "resolved_params": _safe_copy(resolved_params),
                 "missing_required_params": _safe_copy(missing_required),
                 "term_errors": _safe_copy(term_errors),
-                "confirmation": {
-                    "user_confirmed": user_confirmed,
-                    "cache_status": cache_status,
+                "operation_validation": {
+                    "status": "failed",
                 },
             },
         )
@@ -1036,8 +962,8 @@ class Action:
         term_loader: Any = None,
         execution_steps: list[dict[str, Any]] | None = None,
     ) -> tuple[dict[str, Any] | None, dict[str, Any], dict[str, Any]]:
-        """处理操作类动作的必填/术语/确认缓存逻辑。"""
-        user_confirmed = _coerce_confirm_flag(params.pop(_OPERATION_CONFIRM_PARAM, False))
+        """处理操作类动作的必填参数与术语校验逻辑。"""
+        params.pop(_OPERATION_CONFIRM_PARAM, None)
         for alias in _OPERATION_CONFIRM_PARAM_ALIASES:
             if alias != _OPERATION_CONFIRM_PARAM:
                 params.pop(alias, None)
@@ -1078,29 +1004,19 @@ class Action:
         )
 
         if missing_required or term_errors:
-            self._clear_cached_operation_confirmation()
             message = self._build_operation_feedback_message(
                 missing_required=missing_required,
                 term_errors=term_errors,
                 confirmation_state="validation_failed",
             )
-            await self._record_operation_step(
-                execution_steps,
-                step="user_confirmation",
-                title="用户确认",
-                status="waiting",
-                data={"cache_status": "cleared", "user_confirmed": user_confirmed},
-            )
             return (
-                await self._build_operation_ask_user_response(
+                await self._build_operation_validation_error_response(
                     message=message,
                     original_params=original_params,
                     normalized_params=params,
                     resolved_params=resolved_params,
                     missing_required=missing_required,
                     term_errors=term_errors,
-                    user_confirmed=user_confirmed,
-                    cache_status="validation_failed",
                     execution_steps=execution_steps,
                 ),
                 {},
@@ -1108,132 +1024,18 @@ class Action:
                     "submitted_params": _safe_copy(original_params),
                     "normalized_params": _safe_copy(params),
                     "resolved_params": _safe_copy(resolved_params),
-                    "confirmation": {
-                        "user_confirmed": user_confirmed,
-                        "cache_status": "validation_failed",
+                    "operation_validation": {
+                        "status": "failed",
                     },
                 },
             )
 
-        cached = self._get_cached_operation_confirmation()
-        if not user_confirmed:
-            self._set_cached_operation_confirmation(resolved_params)
-            await self._record_operation_step(
-                execution_steps,
-                step="user_confirmation",
-                title="用户确认",
-                status="waiting",
-                data={"cache_status": "cached", "user_confirmed": False},
-            )
-            return (
-                await self._build_operation_ask_user_response(
-                    message=self._build_operation_feedback_message(
-                        missing_required=[],
-                        term_errors=[],
-                        confirmation_state="pending_confirmation",
-                    ),
-                    original_params=original_params,
-                    normalized_params=params,
-                    resolved_params=resolved_params,
-                    missing_required=[],
-                    term_errors=[],
-                    user_confirmed=False,
-                    cache_status="cached",
-                    execution_steps=execution_steps,
-                ),
-                {},
-                {
-                    "submitted_params": _safe_copy(original_params),
-                    "normalized_params": _safe_copy(params),
-                    "resolved_params": _safe_copy(resolved_params),
-                    "confirmation": {
-                        "user_confirmed": False,
-                        "cache_status": "cached",
-                    },
-                },
-            )
-
-        if cached is None:
-            self._set_cached_operation_confirmation(resolved_params)
-            await self._record_operation_step(
-                execution_steps,
-                step="user_confirmation",
-                title="用户确认",
-                status="waiting",
-                data={"cache_status": "confirm_without_cache", "user_confirmed": True},
-            )
-            return (
-                await self._build_operation_ask_user_response(
-                    message=self._build_operation_feedback_message(
-                        missing_required=[],
-                        term_errors=[],
-                        confirmation_state="confirm_without_cache",
-                    ),
-                    original_params=original_params,
-                    normalized_params=params,
-                    resolved_params=resolved_params,
-                    missing_required=[],
-                    term_errors=[],
-                    user_confirmed=True,
-                    cache_status="confirm_without_cache",
-                    execution_steps=execution_steps,
-                ),
-                {},
-                {
-                    "submitted_params": _safe_copy(original_params),
-                    "normalized_params": _safe_copy(params),
-                    "resolved_params": _safe_copy(resolved_params),
-                    "confirmation": {
-                        "user_confirmed": True,
-                        "cache_status": "confirm_without_cache",
-                    },
-                },
-            )
-
-        if cached != resolved_params:
-            self._set_cached_operation_confirmation(resolved_params)
-            await self._record_operation_step(
-                execution_steps,
-                step="user_confirmation",
-                title="用户确认",
-                status="waiting",
-                data={"cache_status": "confirm_mismatch", "user_confirmed": True},
-            )
-            return (
-                await self._build_operation_ask_user_response(
-                    message=self._build_operation_feedback_message(
-                        missing_required=[],
-                        term_errors=[],
-                        confirmation_state="confirm_mismatch",
-                    ),
-                    original_params=original_params,
-                    normalized_params=params,
-                    resolved_params=resolved_params,
-                    missing_required=[],
-                    term_errors=[],
-                    user_confirmed=True,
-                    cache_status="confirm_mismatch",
-                    execution_steps=execution_steps,
-                ),
-                {},
-                {
-                    "submitted_params": _safe_copy(original_params),
-                    "normalized_params": _safe_copy(params),
-                    "resolved_params": _safe_copy(resolved_params),
-                    "confirmation": {
-                        "user_confirmed": True,
-                        "cache_status": "confirm_mismatch",
-                    },
-                },
-            )
-
-        self._clear_cached_operation_confirmation()
         await self._record_operation_step(
             execution_steps,
-            step="user_confirmation",
-            title="用户确认",
+            step="operation_validation",
+            title="操作校验",
             status="completed",
-            data={"cache_status": "confirmed", "user_confirmed": True},
+            data={"status": "passed"},
         )
         return (
             None,
@@ -1242,9 +1044,8 @@ class Action:
                 "submitted_params": _safe_copy(original_params),
                 "normalized_params": _safe_copy(params),
                 "resolved_params": _safe_copy(resolved_params),
-                "confirmation": {
-                    "user_confirmed": True,
-                    "cache_status": "confirmed",
+                "operation_validation": {
+                    "status": "passed",
                 },
             },
         )
