@@ -234,15 +234,6 @@ def _build_filters_schema(fields: list[Any], *, strict_field_code: bool = False)
         "type": "array",
         "description": description,
         "items": {"oneOf": items},
-        "x-dc-filterable-fields": [
-            {
-                "field": f.field_code if hasattr(f, "field_code") else f.property_code,
-                "ops": getattr(f, "filter_ops", []),
-                "role": getattr(f, "analytic_role", None),
-                "kind": getattr(f, "analytic_kind", None),
-            }
-            for f in filterable
-        ],
     }
 
 
