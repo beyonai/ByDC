@@ -49,8 +49,13 @@ def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> st
         getattr(gateway_context, "current_command", None) if gateway_context is not None else None
     )
     _header = getattr(_current_command, "header", None)
-    _user_code = str(getattr(_header, "user_code", "") or "").strip()
-    _user_name = str(getattr(_header, "user_name", "") or "").strip()
+    # 优先读 header 直接字段，缺失时回退到 header.metadata dict（两处存储路径均支持）
+    _user_code = str(
+        getattr(_header, "user_code", "") or _header_meta.get("user_code") or ""
+    ).strip()
+    _user_name = str(
+        getattr(_header, "user_name", "") or _header_meta.get("user_name") or ""
+    ).strip()
     logger.info(
         "[_build_runtime_dynamic_prompt] gateway_context=%s header=%s user_code=%r user_name=%r",
         type(gateway_context).__name__,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, MutableMapping, Sequence
-from typing import Any
+from typing import Annotated, Any
 
 from langgraph.graph.message import MessagesState
 
@@ -86,7 +86,8 @@ class AgentState(MessagesState):
     react_messages: list[dict[str, Any]] | None  # 中断时的消息历史（序列化为 dict 列表）
     react_pending_tool_calls: list[dict[str, Any]] | None  # 中断时未执行的 tool calls
     react_round_idx: int | None  # 中断时的 round 索引
-    react_last_query_data: dict[str, Any] | None  # 中断时缓存的 query data block
+    # 并行工具节点可同时写入，取最后一个非 None 值
+    react_last_query_data: Annotated[dict[str, Any] | None, lambda a, b: b if b is not None else a]
     answer_streamed: bool | None  # llm_call_node 是否已流式输出 answer
 
     # --- 澄清插件 interrupt/resume 缓存（方案 A）---
