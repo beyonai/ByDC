@@ -129,6 +129,8 @@ class DataSourceManager:
         如果连接器已缓存则直接返回，否则根据配置创建新连接器。
         如果本地配置中找不到，尝试从 fallback_loader 获取。
 
+        如果配置中 datasource_id 不为空，则强制使用 HTTP_SQL 连接器。
+
         Args:
             alias: 数据源别名
 
@@ -159,7 +161,12 @@ class DataSourceManager:
         if config is None:
             raise DataSourceUnavailableError(alias)
 
-        connector_cls = ConnectorRegistry.get(config.db_type)
+        # 如果 datasource_id 不为空，强制使用 HTTP_SQL 连接器
+        if config.datasource_id is not None:
+            connector_cls = ConnectorRegistry.get("HTTP_SQL")
+        else:
+            connector_cls = ConnectorRegistry.get(config.db_type)
+
         connector = connector_cls(config)
         self._connectors[alias] = connector
         return _LoggingConnectorProxy(connector)

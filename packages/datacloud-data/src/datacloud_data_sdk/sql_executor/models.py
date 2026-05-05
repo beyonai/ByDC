@@ -22,7 +22,7 @@ class DataSourceConfig:
 
     Attributes:
         alias: 数据源别名，用于在查询中引用
-        db_type: 数据库类型，支持 SQLITE/MYSQL/POSTGRESQL/OPENGAUSS/CLICKHOUSE
+        db_type: 数据库类型，支持 SQLITE/MYSQL/POSTGRESQL/OPENGAUSS/CLICKHOUSE/HTTP_SQL
         jdbc_url: JDBC 连接 URL（可选，用于解析连接参数）
         user: 数据库用户名
         password: 数据库密码
@@ -30,6 +30,7 @@ class DataSourceConfig:
         pool_max: 连接池最大连接数
         pool_timeout: 连接池超时时间（秒）
         open_gauss_compat: 是否启用 openGauss 兼容模式
+        datasource_id: 数据源ID（不为空时使用 HTTP SQL 服务执行）
 
     Example:
         config = DataSourceConfig(
@@ -50,6 +51,7 @@ class DataSourceConfig:
     pool_max: int = 5
     pool_timeout: float = 30.0
     open_gauss_compat: bool = False
+    datasource_id: int | None = None
 
 
 @dataclass

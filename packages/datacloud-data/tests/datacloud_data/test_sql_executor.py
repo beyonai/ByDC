@@ -71,9 +71,7 @@ async def test_sql_executor_supports_http_sql_connector(tmp_path: Path) -> None:
     config = DataSourceConfig(
         alias="domain_model",
         db_type="HTTP_SQL",
-        endpoint_url="http://localhost:8000/knowledgeService/callDomainModel/executeSql",
         datasource_id=86039,
-        request_cookie="121",
     )
     manager = DataSourceManager({"domain_model": config})
     executor = SqlExecutor(manager, csv_base_dir=str(tmp_path))
@@ -105,9 +103,17 @@ async def test_sql_executor_supports_http_sql_connector(tmp_path: Path) -> None:
             }
 
     mock_post = AsyncMock(return_value=MockResponse())
-    with InvocationContext(token="token-1", tenant_id="tenant-1", user_id="user-1"):
-        with patch("httpx.AsyncClient.post", mock_post):
-            result = await executor.execute(task, request_id="req1", step_results=StepResults())
+    with InvocationContext(
+        token="token-1", tenant_id="tenant-1", user_id="user-1", cookie="session=abc123"
+    ):
+        with patch.dict(
+            "os.environ",
+            {
+                "DATACLOUD_SQL_SERVICE_URL": "http://localhost:8000/knowledgeService/callDomainModel/executeSql"
+            },
+        ):
+            with patch("httpx.AsyncClient.post", mock_post):
+                result = await executor.execute(task, request_id="req1", step_results=StepResults())
 
     mock_post.assert_awaited_once()
     assert mock_post.await_args is not None
@@ -116,10 +122,10 @@ async def test_sql_executor_supports_http_sql_connector(tmp_path: Path) -> None:
         "datasourceId": 86039,
         "sql": "select * from prt339179_sankai_new_day_z_view_a limit 5",
     }
-    assert kwargs["headers"]["cookie"] == "121"
     assert kwargs["headers"]["Authorization"] == "Bearer token-1"
     assert kwargs["headers"]["X-Tenant-Id"] == "tenant-1"
     assert kwargs["headers"]["X-User-Id"] == "user-1"
+    assert kwargs["headers"]["cookie"] == "session=abc123"
 
     content = Path(result.csv_path).read_text(encoding="utf-8")
     assert "DATE_CD" in content
@@ -178,3 +184,53 @@ async def test_sql_executor_converts_rel_term_code_result_to_name(tmp_path: Path
     content = Path(result.csv_path).read_text(encoding="utf-8")
     assert "已签约" in content
     assert "SIGNED" not in content
+
+
+@pytest.mark.asyncio
+async def test_datasource_id_forces_http_sql_connector(tmp_path: Path) -> None:
+    """当 datasource_id 不为空时，即使 db_type 是 MYSQL，也会使用 HTTP_SQL 连接器。"""
+    config = DataSourceConfig(
+        alias="auto_http_sql",
+        db_type="MYSQL",
+        jdbc_url="jdbc:mysql://localhost:3306/test",
+        datasource_id=12345,
+    )
+    manager = DataSourceManager({"auto_http_sql": config})
+    executor = SqlExecutor(manager, csv_base_dir=str(tmp_path))
+    task = SqlExecTask(
+        datasource_alias="auto_http_sql",
+        sql_template="SELECT * FROM users LIMIT 10",
+        output_ref="result",
+    )
+
+    class MockResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "resultCode": "0",
+                "resultObject": {
+                    "resultData": [
+                        {"id": 1, "name": "Alice"},
+                        {"id": 2, "name": "Bob"},
+                    ]
+                },
+            }
+
+    mock_post = AsyncMock(return_value=MockResponse())
+    with patch.dict(
+        "os.environ", {"DATACLOUD_SQL_SERVICE_URL": "http://localhost:8000/api/sql/execute"}
+    ):
+        with patch("httpx.AsyncClient.post", mock_post):
+            result = await executor.execute(task, request_id="req1", step_results=StepResults())
+
+    mock_post.assert_awaited_once()
+    assert mock_post.await_args is not None
+    _, kwargs = mock_post.await_args
+    assert kwargs["json"]["datasourceId"] == 12345
+    assert kwargs["json"]["sql"] == "SELECT * FROM users LIMIT 10"
+
+    content = Path(result.csv_path).read_text(encoding="utf-8")
+    assert "Alice" in content
+    assert "Bob" in content

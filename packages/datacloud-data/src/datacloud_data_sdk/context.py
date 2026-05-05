@@ -39,6 +39,7 @@ class RequestContext:
         session_id: 会话ID，用于追踪用户会话
         token: 认证令牌，用于API调用时的身份验证
         system_code: 系统代码，标识调用来源系统
+        cookie: Cookie 字符串，用于 HTTP 请求认证
         tool_list_mode: 工具列表模式，控制 MCP/Skills 返回的工具列表格式
             - "unified": 统一模式，返回所有工具的合并列表
             - "per_object": 按对象模式，按对象分组返回工具列表
@@ -51,6 +52,7 @@ class RequestContext:
     session_id: str = ""
     token: str = ""
     system_code: str = ""
+    cookie: str = ""
     tool_list_mode: str = "unified"
     view_id: str = ""
     object_ids: list[str] | None = None
@@ -103,6 +105,7 @@ class InvocationContext:
             session_id=kwargs.get("session_id", ""),
             token=kwargs.get("token", ""),
             system_code=kwargs.get("system_code", ""),
+            cookie=kwargs.get("cookie", ""),
             tool_list_mode=tool_mode,
             view_id=kwargs.get("view_id", ""),
             object_ids=kwargs.get("object_ids"),

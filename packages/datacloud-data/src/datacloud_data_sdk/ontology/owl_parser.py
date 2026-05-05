@@ -75,6 +75,7 @@ class ParsedObject:
     description: str = ""
     source_type: str = "DB"
     datasource_alias: str | None = None
+    datasource_id: int | None = None
     table_name: str | None = None
     source_config: dict[str, Any] | None = None
     tags: list[str] = field(default_factory=list)
@@ -133,6 +134,7 @@ class ParsedRelation:
 class ParsedDatasource:
     alias: str
     db_type: str
+    datasource_id: int | None = None
     config: dict[str, Any] = field(default_factory=dict)
 
 
@@ -536,15 +538,22 @@ class OwlParser:
 
         db_type = self._get_predicate_value(g, subject, "dbType") or "mysql"
         db_params_str = self._get_predicate_value(g, subject, "dbParams") or "{}"
+        datasource_id_str = self._get_predicate_value(g, subject, "datasourceId")
 
         try:
             db_params = json.loads(db_params_str)
         except json.JSONDecodeError:
             db_params = {}
 
+        try:
+            datasource_id = int(datasource_id_str) if datasource_id_str else None
+        except (TypeError, ValueError):
+            datasource_id = None
+
         datasource = ParsedDatasource(
             alias=db_code,
             db_type=db_type,
+            datasource_id=datasource_id,
             config=db_params,
         )
         self._datasources[db_code] = datasource
@@ -664,6 +673,11 @@ class OwlParser:
         for entity_code, datasource_code in self._mapping_datasource.items():
             if entity_code in self._objects:
                 self._objects[entity_code].datasource_alias = datasource_code
+                # 从已解析的数据源中获取 datasource_id
+                if datasource_code in self._datasources:
+                    self._objects[entity_code].datasource_id = self._datasources[
+                        datasource_code
+                    ].datasource_id
 
         for entity_code, table_name in self._mapping_table.items():
             if entity_code in self._objects:
@@ -904,6 +918,7 @@ class OwlParser:
                 source_config = {
                     "alias": ds.alias,
                     "db_type": ds.db_type.upper(),
+                    "datasource_id": ds.datasource_id,
                     **ds.config,
                 }
 
@@ -940,6 +955,7 @@ class OwlParser:
             datasource_configs[ds_code] = {
                 "alias": ds.alias,
                 "db_type": ds.db_type.upper(),
+                "datasource_id": ds.datasource_id,
                 **ds.config,
             }
 

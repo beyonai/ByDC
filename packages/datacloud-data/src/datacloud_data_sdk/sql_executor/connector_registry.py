@@ -117,3 +117,12 @@ try:
     ConnectorRegistry.register("CLICKHOUSE", ClickHouseConnector)
 except ImportError:
     pass
+
+try:
+    from datacloud_data_sdk.sql_executor.connectors.http_sql_connector import (
+        HttpSqlConnector,
+    )
+
+    ConnectorRegistry.register("HTTP_SQL", HttpSqlConnector)
+except ImportError:
+    pass
