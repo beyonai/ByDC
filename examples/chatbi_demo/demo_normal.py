@@ -20,7 +20,7 @@ from datacloud_analysis.ontology_agent import (
 
 async def main() -> None:
     config = OntologyAgentConfig(
-        api_key="sk-DRwRYfqi5HpHFbpTjVWRr",
+        api_key="sk-DRwRYfqi5HpHFbpTjVWRrBRck1nLrwkaGvf4ywv49lFAgWRH",
         model="kimi-k2.6",
         base_url="https://api.moonshot.cn/v1",
         resource_path=r"D:\data\code\baiying\byclaw-all\byclaw-data\resource",

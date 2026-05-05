@@ -54,6 +54,9 @@ def inject_query_fields(
         original_schema = t.args_schema
         if original_schema is None:
             return t
+        # JSON Schema dict 无法用 create_model 注入字段，跳过
+        if isinstance(original_schema, dict) or not hasattr(original_schema, "__name__"):
+            return t
 
         from datacloud_analysis.tools._agent_schema_patches import (  # noqa: PLC0415
             AGENT_COMPLEX_CONDITIONS_DESCRIPTION,
