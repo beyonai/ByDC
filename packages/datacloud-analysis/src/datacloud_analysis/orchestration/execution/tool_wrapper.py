@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from contextlib import nullcontext
-from typing import Any
+from typing import Any, TypedDict
 
 from datacloud_data_sdk.stream_text import coerce_stream_chunk_text
 from langchain_core.tools import BaseTool
@@ -20,6 +20,16 @@ from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
 logger = logging.getLogger(__name__)
 
 _SENSITIVE_KEYS = frozenset({"password", "token", "secret", "api_key", "apikey"})
+
+
+class ToolErrorDict(TypedDict):
+    """Fully-classified tool error passed back to the agent as ToolMessage content."""
+
+    error_type: str
+    message: str
+    retryable: bool
+    hint: str
+    context: dict[str, Any]
 
 
 def _append_local_sdk_src_for_tests() -> None:
@@ -59,6 +69,147 @@ def _summarize_output(output: Any) -> str:
     if len(text) > 200:
         return text[:200] + "..."
     return text
+
+
+def _build_tool_error(exc: Exception) -> ToolErrorDict:  # noqa: C901, PLR0912
+    """Convert an exception to a structured ToolErrorDict with classification metadata."""
+    from datacloud_data_sdk.exceptions import (  # noqa: PLC0415
+        ActionNotConfiguredError,
+        ActionNotFoundError,
+        ApiExecutionError,
+        CannotAnswerError,
+        DataSourceUnavailableError,
+        ObjectNotFoundError,
+        PermissionDeniedError,
+        ScriptExecutionError,
+        SqlExecutionError,
+        StepDependencyError,
+        TermAmbiguousError,
+        TermNotFoundError,
+    )
+
+    error_type = type(exc).__name__
+    message = str(exc)
+    context: dict[str, Any] = {}
+    retryable = False
+    hint = f"工具执行失败（{error_type}），请告知用户并联系技术支持。"
+
+    if isinstance(exc, TermNotFoundError):
+        retryable = True
+        context = {"term_set": exc.term_set, "value": exc.value}
+        if exc.available_entries:
+            context["available_entries"] = exc.available_entries[:10]
+        elif exc.available_values:
+            context["available_values"] = exc.available_values[:10]
+        hint = (
+            f"术语集「{exc.term_set}」中不存在「{exc.value}」，"
+            "请从 available_values/available_entries 中选择正确的值后重试。"
+        )
+    elif isinstance(exc, TermAmbiguousError):
+        retryable = True
+        context = {"term_set": exc.term_set, "value": exc.value, "matches": exc.matches[:10]}
+        hint = f"「{exc.value}」匹配到多个术语，请从 matches 中明确指定其中一个后重试。"
+    elif isinstance(exc, ObjectNotFoundError):
+        context = {"object_code": exc.object_code}
+        hint = f"对象「{exc.object_code}」不存在，请确认对象代码是否正确。"
+    elif isinstance(exc, ActionNotFoundError):
+        context = {"object_code": exc.object_code, "action_code": exc.action_code}
+        hint = f"对象「{exc.object_code}」上不存在动作「{exc.action_code}」，请确认动作代码。"
+    elif isinstance(exc, ActionNotConfiguredError):
+        context = {"action_code": exc.action_code}
+        hint = f"动作「{exc.action_code}」未配置脚本或 API，请联系管理员完成配置。"
+    elif isinstance(exc, PermissionDeniedError):
+        context = {"resource": exc.resource, "reason_code": exc.reason_code}
+        hint = f"访问「{exc.resource}」被拒绝（{exc.reason_code}），请申请权限后重试。"
+    elif isinstance(exc, ApiExecutionError):
+        context = {"function_code": exc.function_code, "status_code": exc.status_code}
+        if exc.status_code >= 500:
+            retryable = True
+            hint = f"API「{exc.function_code}」发生服务端错误（{exc.status_code}），可稍后重试。"
+        else:
+            hint = (
+                f"API「{exc.function_code}」发生客户端错误（{exc.status_code}），请检查请求参数。"
+            )
+    elif isinstance(exc, SqlExecutionError):
+        context = {"datasource_alias": exc.datasource_alias}
+        hint = f"数据源「{exc.datasource_alias}」SQL 执行失败，请检查 SQL 语句或联系管理员。"
+    elif isinstance(exc, ScriptExecutionError):
+        context = {"action_code": exc.action_code}
+        if exc.line_no is not None:
+            context["line_no"] = exc.line_no
+        hint = f"动作脚本「{exc.action_code}」执行失败，请联系管理员检查脚本逻辑。"
+    elif isinstance(exc, DataSourceUnavailableError):
+        retryable = True
+        context = {"datasource_alias": exc.alias}
+        hint = f"数据源「{exc.alias}」暂不可用，请稍后重试或联系管理员检查连接。"
+    elif isinstance(exc, CannotAnswerError):
+        hint = "当前问题无法直接回答，请尝试拆解为更小的子问题后重新提问。"
+    elif isinstance(exc, StepDependencyError):
+        context = {"step_id": exc.step_id, "depends_on": exc.depends_on}
+        hint = f"步骤「{exc.step_id}」的依赖步骤「{exc.depends_on}」缺失，请检查执行计划。"
+    else:
+        try:
+            from datacloud_knowledge.file_store.errors import (  # noqa: PLC0415
+                BackendMisconfiguredError,
+                FileNotFoundInStoreError,
+                FileStoreError,
+            )
+            from datacloud_knowledge.query.search.vector_validation import (  # noqa: PLC0415
+                TermVectorValidationError,
+            )
+        except ImportError:
+            pass
+        else:
+            if isinstance(exc, TermVectorValidationError):
+                hint = (
+                    "术语向量知识库未就绪或校验失败，当前无法执行向量召回。"
+                    "请告知用户知识库暂不可用，或联系管理员检查向量索引状态。"
+                )
+            elif isinstance(exc, FileNotFoundInStoreError):
+                context = {"md5": exc.md5}
+                hint = f"文件存储中未找到文件（md5={exc.md5}），请确认文件是否已上传。"
+            elif isinstance(exc, BackendMisconfiguredError):
+                hint = "文件存储后端配置错误（如缺少 S3 密钥），请联系管理员检查存储配置。"
+            elif isinstance(exc, FileStoreError):
+                hint = "文件存储操作失败，请联系管理员检查存储后端状态。"
+
+    return ToolErrorDict(
+        error_type=error_type,
+        message=message,
+        retryable=retryable,
+        hint=hint,
+        context=context,
+    )
+
+
+def _format_agent_error_message(tool_error: ToolErrorDict) -> str:
+    """Format a ToolErrorDict into a multi-line, agent-readable error string."""
+    error_type = tool_error.get("error_type", "UnknownError")
+    message = tool_error.get("message", "未知错误")
+    hint = tool_error.get("hint", "请告知用户并联系技术支持。")
+    context = tool_error.get("context") or {}
+    retryable = tool_error.get("retryable", False)
+
+    lines: list[str] = [
+        f"[工具调用失败: {error_type}]",
+        f"错误详情：{message}",
+    ]
+    if "available_entries" in context:
+        entries = context["available_entries"]
+        entry_strs = [f"[{e['code']}] {e['label']}" for e in entries if isinstance(e, dict)]
+        lines.append(f"可用条目：{', '.join(entry_strs)}")
+    elif "available_values" in context:
+        vals = context["available_values"]
+        lines.append(f"可用值：{', '.join(str(v) for v in vals)}")
+    if "matches" in context:
+        matches = context["matches"]
+        match_strs = [f"[{m['code']}] {m['label']}" for m in matches if isinstance(m, dict)]
+        lines.append(f"候选术语：{', '.join(match_strs)}")
+    if "status_code" in context:
+        lines.append(f"HTTP 状态码：{context['status_code']}")
+    lines.append(f"可重试：{'是' if retryable else '否'}")
+    lines.append(f"建议：{hint}")
+    return "\n".join(lines)
 
 
 _THINK_EVENT_TYPE = "reasoningLogDelta"
@@ -467,10 +618,13 @@ async def dispatch_tool(
                         redirect_tool_name,
                     )
                     ctx["tool_output"] = None
-                    ctx["tool_error"] = {
-                        "error_type": "ToolNotFound",
-                        "message": f"Redirect target '{redirect_tool_name}' not found",
-                    }
+                    ctx["tool_error"] = ToolErrorDict(
+                        error_type="ToolNotFound",
+                        message=f"Redirect target '{redirect_tool_name}' not found",
+                        retryable=False,
+                        hint=f"重定向目标工具「{redirect_tool_name}」不存在，请检查 hook 配置。",
+                        context={},
+                    )
                 else:
                     try:
                         output = await _invoke_tool_with_runtime_context(
@@ -484,13 +638,14 @@ async def dispatch_tool(
                     except GraphBubbleUp:
                         raise
                     except Exception as exc:  # noqa: BLE001
-                        logger.warning(
-                            "dispatch_tool: redirect tool='%s' raised: %s",
+                        logger.error(
+                            "dispatch_tool: redirect tool='%s' raised %s: %s",
                             redirect_tool_name,
+                            type(exc).__name__,
                             exc,
                         )
                         ctx["tool_output"] = None
-                        ctx["tool_error"] = {"error_type": type(exc).__name__, "message": str(exc)}
+                        ctx["tool_error"] = _build_tool_error(exc)
                 return
 
         # --- 实际工具调用 ---
@@ -498,10 +653,13 @@ async def dispatch_tool(
         if t is None:
             logger.warning("dispatch_tool: tool '%s' not found in tools_map", tool_name)
             ctx["tool_output"] = None
-            ctx["tool_error"] = {
-                "error_type": "ToolNotFound",
-                "message": f"Tool '{tool_name}' not found",
-            }
+            ctx["tool_error"] = ToolErrorDict(
+                error_type="ToolNotFound",
+                message=f"Tool '{tool_name}' not found",
+                retryable=False,
+                hint=f"工具「{tool_name}」不存在，请检查工具名称是否正确。",
+                context={},
+            )
         else:
             try:
                 # 将 gateway_context 注入 InvocationContext，使 SDK 内的 GatewayProgressReporter
@@ -537,10 +695,17 @@ async def dispatch_tool(
                 ctx["tool_error"] = None
             except GraphBubbleUp:
                 raise
+            except HookSignalError:
+                raise
             except Exception as exc:  # noqa: BLE001
-                logger.warning("dispatch_tool: tool='%s' raised: %s", tool_name, exc)
+                logger.error(
+                    "dispatch_tool: tool='%s' raised %s: %s",
+                    tool_name,
+                    type(exc).__name__,
+                    exc,
+                )
                 ctx["tool_output"] = None
-                ctx["tool_error"] = {"error_type": type(exc).__name__, "message": str(exc)}
+                ctx["tool_error"] = _build_tool_error(exc)
 
         # --- after hook ---
         base_ctx = ctx
@@ -612,10 +777,14 @@ async def dispatch_tool(
 
     # --- 日志 & 错误返回 ---
     if ctx.get("tool_error"):
-        err_msg = ctx["tool_error"].get("message", "未知错误")
-        logger.info("[tool_return] tool=%s error=%s", tool_name, err_msg)
-        # 将错误信息作为 ToolMessage 内容返回给 LLM，使其能理解错误并修正参数重试
-        final_output = f"[工具调用失败] {err_msg}\n请分析以上错误，修正参数后重新调用该工具。"
+        tool_error: ToolErrorDict = ctx["tool_error"]  # type: ignore[assignment]
+        logger.info(
+            "[tool_return] tool=%s error_type=%s retryable=%s",
+            tool_name,
+            tool_error.get("error_type", ""),
+            tool_error.get("retryable", False),
+        )
+        final_output = _format_agent_error_message(tool_error)
     else:
         try:
             full_output_str = json.dumps(final_output, ensure_ascii=False, default=str)

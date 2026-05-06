@@ -38,6 +38,9 @@ class HookError(TypedDict, total=False):
     error_type: str
     message: str
     stack: str
+    retryable: bool
+    hint: str
+    context: dict[str, Any]
 
 
 class HookContext(TypedDict, total=False):

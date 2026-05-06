@@ -432,11 +432,17 @@ def test_build_loader_passes_result_file_storage_to_configure_loader() -> None:
     assert kwargs.get("result_file_storage") is sentinel
 
 
-# ── 方案 A 红测试：gateway_context 透传 ─────────────────────────────────────
+# ── 方案 A 红测试：user_code / session_id 透传(对外不暴露 gateway_context)──
 
 
-async def test_ask_injects_gateway_context_into_configurable() -> None:
-    """ask(gateway_context=...) 应把它写入 run_config["configurable"]["gateway_context"]。"""
+async def test_ask_packs_user_code_and_session_id_into_internal_ctx() -> None:
+    """ask(user_code=..., session_id=...) 应在内部组装 duck-typed ctx 注入 configurable。
+
+    解耦原则:datacloud-analysis 不在公开 API 暴露 `gateway_context`;
+    内部仍可使用 `configurable["gateway_context"]` 槽位(SDK RequestContext 既有约定),
+    但其值由 OntologyAgent 用传入的具体字段在内部组装,duck-typed 兼容下游
+    `tool_wrapper.py` 的 `getattr(gateway_context, "user_id" / "session_id")`。
+    """
     agent = OntologyAgent(_CONFIG)
     captured: dict[str, Any] = {}
 
@@ -449,23 +455,26 @@ async def test_ask_injects_gateway_context_into_configurable() -> None:
 
     compiled = _make_mock_compiled()
     compiled.astream_events = _capture
-    sentinel_ctx = MagicMock(name="gateway_context")
 
     with patch.object(agent, "_get_or_build_graph", return_value=compiled):
         async for _ in agent.ask(
             question="Q?",
             view_codes=_VIEW_CODES,
             thread_id=_THREAD_ID,
-            gateway_context=sentinel_ctx,
+            user_code="u-123",
+            session_id="s-456",
         ):
             pass
 
     configurable = captured["config"]["configurable"]
-    assert configurable.get("gateway_context") is sentinel_ctx
+    ctx = configurable.get("gateway_context")
+    assert ctx is not None, "应在 configurable 注入内部 ctx 容器"
+    assert getattr(ctx, "user_id", None) == "u-123"
+    assert getattr(ctx, "session_id", None) == "s-456"
 
 
-async def test_resume_injects_gateway_context_into_configurable() -> None:
-    """resume(gateway_context=...) 应把它写入 run_config["configurable"]["gateway_context"]。"""
+async def test_resume_packs_user_code_and_session_id_into_internal_ctx() -> None:
+    """resume 同样要把 user_code/session_id 透传到内部 ctx 容器。"""
     agent = OntologyAgent(_CONFIG)
     captured: dict[str, Any] = {}
 
@@ -478,16 +487,37 @@ async def test_resume_injects_gateway_context_into_configurable() -> None:
 
     compiled = _make_mock_compiled()
     compiled.astream_events = _capture
-    sentinel_ctx = MagicMock(name="gateway_context")
 
     with patch.object(agent, "_get_or_build_graph", return_value=compiled):
         async for _ in agent.resume(
             thread_id=_THREAD_ID,
             user_input="hi",
             view_codes=_VIEW_CODES,
-            gateway_context=sentinel_ctx,
+            user_code="u-789",
+            session_id="s-abc",
         ):
             pass
 
     configurable = captured["config"]["configurable"]
-    assert configurable.get("gateway_context") is sentinel_ctx
+    ctx = configurable.get("gateway_context")
+    assert ctx is not None
+    assert getattr(ctx, "user_id", None) == "u-789"
+    assert getattr(ctx, "session_id", None) == "s-abc"
+
+
+def test_ask_does_not_accept_gateway_context_kwarg() -> None:
+    """对外不暴露 gateway_context 形参(解耦原则:不感知 gateway 概念)。"""
+    import inspect
+
+    sig = inspect.signature(OntologyAgent.ask)
+    assert "gateway_context" not in sig.parameters
+    assert "session_id" in sig.parameters
+
+
+def test_resume_does_not_accept_gateway_context_kwarg() -> None:
+    """resume 也不暴露 gateway_context 形参。"""
+    import inspect
+
+    sig = inspect.signature(OntologyAgent.resume)
+    assert "gateway_context" not in sig.parameters
+    assert "session_id" in sig.parameters

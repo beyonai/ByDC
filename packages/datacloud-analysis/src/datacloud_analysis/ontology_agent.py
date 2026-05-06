@@ -11,6 +11,7 @@ from collections import OrderedDict
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -247,8 +248,8 @@ class OntologyAgent:
         object_codes: list[str] | None = None,
         thread_id: str | None = None,
         user_code: str | None = None,
+        session_id: str | None = None,
         locale: str | None = None,
-        gateway_context: Any = None,
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """发起一次问答，流式返回事件。
 
@@ -257,9 +258,10 @@ class OntologyAgent:
           - 一次性问答：传 None，SDK 内部生成，调用方无需保存。
           - 中断恢复：resume() 使用与本次 ask() 相同的 thread_id。
 
-        gateway_context: 可选的 Gateway AgentContext。若提供，会被注入到 LangGraph
-        configurable，下游工具节点（tool_wrapper / HookAwareToolNode）可借此
-        通过 InvocationContext 将 user_id / session_id 透传至 SDK 内部。
+        user_code / session_id: datacloud 自己的请求级上下文字段。会被 OntologyAgent
+        在内部组装成 duck-typed 容器并注入 LangGraph configurable，供下游
+        tool_wrapper / HookAwareToolNode 通过 InvocationContext 透传至 SDK
+        result_file_storage 等需要这两个字段的位置。本接口不感知 Gateway 概念。
         """
         effective_tid = thread_id or str(uuid.uuid4())
         return self._iter_events(
@@ -268,9 +270,9 @@ class OntologyAgent:
             object_codes=object_codes,
             thread_id=effective_tid,
             user_code=user_code,
+            session_id=session_id,
             locale=locale,
             resume_input=None,
-            gateway_context=gateway_context,
         )
 
     def resume(
@@ -281,7 +283,7 @@ class OntologyAgent:
         view_codes: list[str] | None = None,
         object_codes: list[str] | None = None,
         user_code: str | None = None,
-        gateway_context: Any = None,
+        session_id: str | None = None,
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """在中断后恢复图执行，继续流式返回事件。
 
@@ -289,7 +291,7 @@ class OntologyAgent:
         user_input:
           - str：文本回复（ASK_USER 场景）
           - ParadigmAnswer：维度选择（PARADIGM_CLARIFICATION 场景）
-        gateway_context: 同 ask()。
+        user_code / session_id: 同 ask()。
         """
         return self._iter_events(
             question="",
@@ -297,9 +299,9 @@ class OntologyAgent:
             object_codes=object_codes,
             thread_id=thread_id,
             user_code=user_code,
+            session_id=session_id,
             locale=None,
             resume_input=user_input,
-            gateway_context=gateway_context,
         )
 
     # ── 内部实现 ──────────────────────────────────────────────────────────────
@@ -387,9 +389,9 @@ class OntologyAgent:
         object_codes: list[str] | None,
         thread_id: str,
         user_code: str | None,
+        session_id: str | None,
         locale: str | None,
         resume_input: str | ParadigmAnswer | None,
-        gateway_context: Any = None,
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """核心事件迭代器：构建图、执行、转换事件。"""
         try:
@@ -400,11 +402,19 @@ class OntologyAgent:
             return
 
         effective_locale = locale or self._config.locale
+        # 内部组装 duck-typed 上下文容器，复用 SDK 既有的
+        # configurable["gateway_context"] 槽位（RequestContext.gateway_context: Any）
+        # 让下游 tool_wrapper / HookAwareToolNode 可经 InvocationContext
+        # 透传 user_id / session_id。本模块对外不暴露 gateway 概念。
+        ctx_container = SimpleNamespace(
+            user_id=user_code or "",
+            session_id=session_id or "",
+        )
         run_config: dict[str, Any] = {
             "configurable": {
                 "thread_id": thread_id,
                 "user_code": user_code,
-                "gateway_context": gateway_context,
+                "gateway_context": ctx_container,
                 "llm_config": {
                     "model": self._config.model,
                     "api_key": self._config.api_key,
