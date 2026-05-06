@@ -110,6 +110,9 @@ class OntologyAgentConfig:
     locale: str = "zh_CN"
     temperature: float = 0.7
     model_kwargs: dict[str, Any] | None = None
+    # 结果文件存储后端（如 byclaw 的 ByclawResultFileStorage）。由调用方注入，
+    # OntologyAgent 内不感知具体类型，仅透传给 configure_loader。
+    result_file_storage: Any = None
 
 
 # ── 缓存 key ──────────────────────────────────────────────────────────────────
@@ -245,6 +248,7 @@ class OntologyAgent:
         thread_id: str | None = None,
         user_code: str | None = None,
         locale: str | None = None,
+        gateway_context: Any = None,
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """发起一次问答，流式返回事件。
 
@@ -252,6 +256,10 @@ class OntologyAgent:
           - 多轮对话：调用方自行生成（如 str(uuid.uuid4())）并在每轮传入相同值。
           - 一次性问答：传 None，SDK 内部生成，调用方无需保存。
           - 中断恢复：resume() 使用与本次 ask() 相同的 thread_id。
+
+        gateway_context: 可选的 Gateway AgentContext。若提供，会被注入到 LangGraph
+        configurable，下游工具节点（tool_wrapper / HookAwareToolNode）可借此
+        通过 InvocationContext 将 user_id / session_id 透传至 SDK 内部。
         """
         effective_tid = thread_id or str(uuid.uuid4())
         return self._iter_events(
@@ -262,6 +270,7 @@ class OntologyAgent:
             user_code=user_code,
             locale=locale,
             resume_input=None,
+            gateway_context=gateway_context,
         )
 
     def resume(
@@ -272,6 +281,7 @@ class OntologyAgent:
         view_codes: list[str] | None = None,
         object_codes: list[str] | None = None,
         user_code: str | None = None,
+        gateway_context: Any = None,
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """在中断后恢复图执行，继续流式返回事件。
 
@@ -279,6 +289,7 @@ class OntologyAgent:
         user_input:
           - str：文本回复（ASK_USER 场景）
           - ParadigmAnswer：维度选择（PARADIGM_CLARIFICATION 场景）
+        gateway_context: 同 ask()。
         """
         return self._iter_events(
             question="",
@@ -288,6 +299,7 @@ class OntologyAgent:
             user_code=user_code,
             locale=None,
             resume_input=user_input,
+            gateway_context=gateway_context,
         )
 
     # ── 内部实现 ──────────────────────────────────────────────────────────────
@@ -323,6 +335,7 @@ class OntologyAgent:
             api_key=self._config.api_key,
             base_url=self._config.base_url,
             temperature=self._config.temperature,
+            result_file_storage=self._config.result_file_storage,
         )
 
         mounted = list(view_codes or []) + list(object_codes or [])
@@ -376,6 +389,7 @@ class OntologyAgent:
         user_code: str | None,
         locale: str | None,
         resume_input: str | ParadigmAnswer | None,
+        gateway_context: Any = None,
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """核心事件迭代器：构建图、执行、转换事件。"""
         try:
@@ -390,6 +404,7 @@ class OntologyAgent:
             "configurable": {
                 "thread_id": thread_id,
                 "user_code": user_code,
+                "gateway_context": gateway_context,
                 "llm_config": {
                     "model": self._config.model,
                     "api_key": self._config.api_key,

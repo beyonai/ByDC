@@ -385,3 +385,109 @@ async def test_ask_yields_thinking_events_from_non_respond_node() -> None:
     # 只有来自非 "respond" 节点的 chunk 应被 yield
     assert len(thinking_events) == 1
     assert thinking_events[0].content == "思考中..."
+
+
+# ── 方案 A 红测试：result_file_storage 透传 ─────────────────────────────────
+
+
+def test_config_accepts_result_file_storage_field() -> None:
+    """OntologyAgentConfig 需要新增 result_file_storage 字段，默认 None。"""
+    cfg = OntologyAgentConfig(api_key="k", model="m", resource_path="/x")
+    assert hasattr(cfg, "result_file_storage")
+    assert cfg.result_file_storage is None
+    sentinel = object()
+    cfg2 = OntologyAgentConfig(
+        api_key="k",
+        model="m",
+        resource_path="/x",
+        result_file_storage=sentinel,
+    )
+    assert cfg2.result_file_storage is sentinel
+
+
+def test_build_loader_passes_result_file_storage_to_configure_loader() -> None:
+    """_build_loader 应把 config.result_file_storage 透传给 configure_loader。"""
+    sentinel = object()
+    cfg = OntologyAgentConfig(
+        api_key="k",
+        model="m",
+        resource_path="/x",
+        result_file_storage=sentinel,
+    )
+    agent = OntologyAgent(cfg)
+    with (
+        patch("datacloud_data_sdk.ontology.loader.OntologyLoader") as m_loader_cls,
+        patch(
+            "datacloud_data_service.tools.virtual_action_injector.inject_virtual_actions"
+        ) as _m_inject,
+        patch(
+            "datacloud_analysis.tools.ontology_tool_loader.configure_loader"
+        ) as m_configure,
+    ):
+        m_loader_cls.return_value = MagicMock()
+        agent._build_loader(view_codes=["v"], object_codes=["o"])
+
+    assert m_configure.called, "configure_loader 应被调用"
+    kwargs = m_configure.call_args.kwargs
+    assert kwargs.get("result_file_storage") is sentinel
+
+
+# ── 方案 A 红测试：gateway_context 透传 ─────────────────────────────────────
+
+
+async def test_ask_injects_gateway_context_into_configurable() -> None:
+    """ask(gateway_context=...) 应把它写入 run_config["configurable"]["gateway_context"]。"""
+    agent = OntologyAgent(_CONFIG)
+    captured: dict[str, Any] = {}
+
+    async def _capture(
+        graph_input: Any, *, config: dict[str, Any], version: str
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        captured["config"] = config
+        if False:  # pragma: no cover - generator with no yields
+            yield  # type: ignore[unreachable]
+
+    compiled = _make_mock_compiled()
+    compiled.astream_events = _capture
+    sentinel_ctx = MagicMock(name="gateway_context")
+
+    with patch.object(agent, "_get_or_build_graph", return_value=compiled):
+        async for _ in agent.ask(
+            question="Q?",
+            view_codes=_VIEW_CODES,
+            thread_id=_THREAD_ID,
+            gateway_context=sentinel_ctx,
+        ):
+            pass
+
+    configurable = captured["config"]["configurable"]
+    assert configurable.get("gateway_context") is sentinel_ctx
+
+
+async def test_resume_injects_gateway_context_into_configurable() -> None:
+    """resume(gateway_context=...) 应把它写入 run_config["configurable"]["gateway_context"]。"""
+    agent = OntologyAgent(_CONFIG)
+    captured: dict[str, Any] = {}
+
+    async def _capture(
+        graph_input: Any, *, config: dict[str, Any], version: str
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        captured["config"] = config
+        if False:  # pragma: no cover - generator with no yields
+            yield  # type: ignore[unreachable]
+
+    compiled = _make_mock_compiled()
+    compiled.astream_events = _capture
+    sentinel_ctx = MagicMock(name="gateway_context")
+
+    with patch.object(agent, "_get_or_build_graph", return_value=compiled):
+        async for _ in agent.resume(
+            thread_id=_THREAD_ID,
+            user_input="hi",
+            view_codes=_VIEW_CODES,
+            gateway_context=sentinel_ctx,
+        ):
+            pass
+
+    configurable = captured["config"]["configurable"]
+    assert configurable.get("gateway_context") is sentinel_ctx
