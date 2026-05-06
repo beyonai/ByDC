@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import contextvars
 import json
 import logging
@@ -221,6 +222,78 @@ async def _emit_thinking_done_notification(
         logger.warning("[thinking_notify] emit failed: %s", exc)
 
 
+# 错误信息中触发 tools schema 诊断 dump 的关键词（命中即说明是 schema 过大/格式错误）
+_TOOLS_SCHEMA_ERR_KEYWORDS: tuple[str, ...] = (
+    "schema exceeds",
+    "tools.function",
+    "is not a valid moonshot",
+    "Invalid request",
+)
+# 单条日志最大输出长度，超过则分段（避免被某些 logging handler 截断）
+_TOOLS_DUMP_CHUNK_SIZE = 8000
+
+
+def _extract_bound_tools(llm_with_tools: Any) -> Any:
+    """沿 RunnableBinding 链向下查找已绑定的 tools schema（OpenAI 协议格式）。"""
+    bound: Any = llm_with_tools
+    for _ in range(5):
+        kw = getattr(bound, "kwargs", None)
+        if isinstance(kw, dict) and "tools" in kw:
+            return kw["tools"]
+        bound = getattr(bound, "bound", None)
+        if bound is None:
+            break
+    return None
+
+
+def _dump_bound_tools_diagnostic(llm_with_tools: Any, exc: BaseException) -> None:
+    """schema 过大类 400 错误时 dump tools schema 用于离线分析。
+
+    仅当错误信息命中 ``_TOOLS_SCHEMA_ERR_KEYWORDS`` 时触发，避免正常错误污染日志。
+    """
+    err_str = str(exc)
+    if not any(kw in err_str for kw in _TOOLS_SCHEMA_ERR_KEYWORDS):
+        return
+    try:
+        tools = _extract_bound_tools(llm_with_tools)
+    except Exception as diag_exc:  # noqa: BLE001
+        logger.warning("[react_loop] tools 提取失败: %s", diag_exc)
+        return
+    if tools is None:
+        logger.warning("[react_loop] tools dump: 未能从 llm_with_tools 提取 tools")
+        return
+    try:
+        tools_json = json.dumps(tools, ensure_ascii=False)
+    except Exception as diag_exc:  # noqa: BLE001
+        logger.warning("[react_loop] tools 序列化失败: %s", diag_exc)
+        return
+
+    per_tool: list[tuple[int, str]] = []
+    if isinstance(tools, list):
+        for t in tools:
+            name = "?"
+            if isinstance(t, dict):
+                fn = t.get("function") if isinstance(t.get("function"), dict) else t
+                name = str(fn.get("name", "?")) if isinstance(fn, dict) else "?"
+            with contextlib.suppress(Exception):
+                per_tool.append((len(json.dumps(t, ensure_ascii=False)), name))
+    per_tool.sort(reverse=True)
+    logger.error(
+        "[react_loop][TOOLS_DUMP] total_size=%d count=%d top10=%s",
+        len(tools_json),
+        len(tools) if isinstance(tools, list) else -1,
+        per_tool[:10],
+    )
+    total_chunks = (len(tools_json) - 1) // _TOOLS_DUMP_CHUNK_SIZE + 1
+    for idx in range(0, len(tools_json), _TOOLS_DUMP_CHUNK_SIZE):
+        logger.error(
+            "[react_loop][TOOLS_DUMP_BODY %d/%d] %s",
+            idx // _TOOLS_DUMP_CHUNK_SIZE + 1,
+            total_chunks,
+            tools_json[idx : idx + _TOOLS_DUMP_CHUNK_SIZE],
+        )
+
+
 async def _stream_llm_call(
     llm_with_tools: Any,
     messages_window: list,
@@ -351,13 +424,18 @@ async def _stream_llm_call(
                             did_stream_text = True
                             _fr_answer_emitted = len(current)
     except Exception as exc:
+        _dump_bound_tools_diagnostic(llm_with_tools, exc)
         logger.warning("[react_loop] astream failed (%s), fallback to ainvoke", exc)
         full_msg = None
         did_stream_text = False
 
     if full_msg is None:
         logger.warning("[react_loop] astream returned nothing, fallback to ainvoke")
-        full_msg = await llm_with_tools.ainvoke(messages_window)
+        try:
+            full_msg = await llm_with_tools.ainvoke(messages_window)
+        except Exception as exc:
+            _dump_bound_tools_diagnostic(llm_with_tools, exc)
+            raise
         did_stream_text = False
 
     # [DIAG] 诊断日志：记录本次 LLM 调用流式推送的 finish_react.answer 内容

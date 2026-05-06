@@ -26,18 +26,50 @@ _RETRYABLE_HTTP: frozenset[int] = frozenset({429, 500, 502, 503, 504})
 _NON_RETRYABLE_HTTP: frozenset[int] = frozenset({400, 401, 403})
 
 
+# 流式 ``openai.APIError``（基类）不带 status_code 属性，需要从消息文本里兜底解析
+# HTTP 状态码。仅匹配明确带状态码的格式，避免吞掉错误信息里的随机三位数。
+_STATUS_FROM_MESSAGE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"API错误\s*\(\s*(\d{3})\s*\)"),
+    re.compile(r"Error\s*code\s*:\s*(\d{3})", re.IGNORECASE),
+    re.compile(r"\b(?:HTTP|status[\s_-]?code)\s*[:=/]\s*(\d{3})\b", re.IGNORECASE),
+    re.compile(
+        r"\b(\d{3})\s+(?:Bad\s+Request|Unauthorized|Forbidden|Not\s+Found|"
+        r"Too\s+Many\s+Requests|Internal\s+Server\s+Error|Bad\s+Gateway|"
+        r"Service\s+Unavailable|Gateway\s+Timeout)\b",
+        re.IGNORECASE,
+    ),
+)
+
+
+def _parse_status_from_message(exc: BaseException) -> int | None:
+    """从异常消息里兜底解析 HTTP 状态码（仅在异常对象未带 status 属性时使用）。"""
+    text = str(exc)
+    for pat in _STATUS_FROM_MESSAGE_PATTERNS:
+        m = pat.search(text)
+        if m:
+            try:
+                return int(m.group(1))
+            except (ValueError, IndexError):
+                continue
+    return None
+
+
 def _is_retryable(exc: BaseException) -> bool:
     """判断异常是否值得重试。
 
     规则：
     - 有 status_code / status 属性 → 查表
-    - 无 status 的网络层异常（TimeoutError / ConnectionError 等）→ 一律重试
+    - 无 status 属性但消息里含已知格式的状态码（如流式 ``openai.APIError``）→ 解析后查表
+    - 真无 status 的网络层异常（TimeoutError / ConnectionError 等）→ 一律重试
     """
     status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+    if status is None:
+        status = _parse_status_from_message(exc)
     if status is not None:
-        if status in _NON_RETRYABLE_HTTP:
+        status_int = int(status)
+        if status_int in _NON_RETRYABLE_HTTP:
             return False
-        return int(status) in _RETRYABLE_HTTP
+        return status_int in _RETRYABLE_HTTP
     # 无 HTTP status：网络层异常，默认可重试
     return True
 

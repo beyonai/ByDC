@@ -154,8 +154,22 @@ def _json_schema_to_pydantic(schema: dict[str, Any], model_name: str) -> type:
         is_list_like = py_type is list or origin is list
         is_dict_like = py_type is dict or origin is dict
 
+        # 透传 array 类字段的长度约束到 Pydantic Field（→ JSON Schema minItems/maxItems），
+        # 避免源 schema 中的 minItems/maxItems 在转换过程中被静默丢弃。
+        list_constraints: dict[str, int] = {}
+        if is_list_like:
+            min_items = field_schema.get("minItems")
+            max_items = field_schema.get("maxItems")
+            if isinstance(min_items, int):
+                list_constraints["min_length"] = min_items
+            if isinstance(max_items, int):
+                list_constraints["max_length"] = max_items
+
         if field_name in required_fields:
-            pydantic_fields[field_name] = (py_type, Field(..., description=description))
+            pydantic_fields[field_name] = (
+                py_type,
+                Field(..., description=description, **list_constraints),
+            )
         else:
             # 为 dict/list 类型追加类型说明，提示 LLM 不需要时传 null 而非 ""
             if is_list_like:
@@ -167,7 +181,7 @@ def _json_schema_to_pydantic(schema: dict[str, Any], model_name: str) -> type:
                 coerce_fields.add(field_name)
             pydantic_fields[field_name] = (
                 py_type | None,
-                Field(default=None, description=description),
+                Field(default=None, description=description, **list_constraints),
             )
 
     base = _make_coerce_base(frozenset(coerce_fields)) if coerce_fields else BaseModel
@@ -632,7 +646,7 @@ class OntologyToolLoader:
 
                 meta = tool_def.get("_meta", {})
                 action_family: str = meta.get("action_type", "")
-                is_virtaul: bool = meta.get("is_virtaul", False)
+                is_virtual: bool = meta.get("is_virtual", False)
 
                 # 跳过需要排除的族（db_query 模式下跳过 query / compute 虚拟注入动作）
                 if action_family in self._skip_action_families:
@@ -644,12 +658,12 @@ class OntologyToolLoader:
 
                 input_schema: dict[str, Any] = tool_def.get("inputSchema", {})
 
-                if is_virtaul and self._agent_friendly and action_family in {"query", "compute"}:
+                if is_virtual and self._agent_friendly and action_family in {"query", "compute"}:
                     input_schema = self._apply_agent_schema_patches(
                         obj_code, input_schema, action_type=action_family
                     )
                 args_schema = input_schema
-                if is_virtaul:
+                if is_virtual:
                     args_schema = _json_schema_to_pydantic(
                         input_schema,
                         f"_{name}_Schema",
