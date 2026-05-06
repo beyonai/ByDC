@@ -32,6 +32,39 @@ class ToolErrorDict(TypedDict):
     context: dict[str, Any]
 
 
+def _resolve_gateway_user_id(gateway_context: Any) -> str:
+    """从 gateway_context 中按多源回退提取用户标识。
+
+    回退顺序：
+    1. ``gateway_context.user_id``（动态路径 SimpleNamespace 直接挂的字段）
+    2. ``gateway_context.current_command.header.user_code``（静态路径真实网关上下文）
+    3. ``gateway_context.current_command.header.metadata["user_code"]``（兜底）
+    所有源都缺失时返回空字符串。
+    """
+    if gateway_context is None:
+        return ""
+
+    direct = str(getattr(gateway_context, "user_id", "") or "").strip()
+    if direct:
+        return direct
+
+    header = getattr(getattr(gateway_context, "current_command", None), "header", None)
+    if header is None:
+        return ""
+
+    user_code = str(getattr(header, "user_code", "") or "").strip()
+    if user_code:
+        return user_code
+
+    metadata = getattr(header, "metadata", None) or {}
+    if isinstance(metadata, dict):
+        meta_user_code = metadata.get("user_code")
+        if isinstance(meta_user_code, str) and meta_user_code.strip():
+            return meta_user_code.strip()
+
+    return ""
+
+
 def _append_local_sdk_src_for_tests() -> None:
     """Append the local datacloud-data src path for test/dev fallback imports."""
     import os
@@ -672,8 +705,13 @@ async def dispatch_tool(
 
                 workspace_root = resolve_shared_workspace_dir(ctx.get("workspace_dir"))
                 # 从 gateway_context 提取 user_id / session_id，使 SDK 内可通过
-                # get_current_context() 拿到正确的用户/会话标识
-                _gc_user_id = str(getattr(gateway_context, "user_id", "") or "")
+                # get_current_context() 拿到正确的用户/会话标识。
+                #
+                # 两类 gateway_context 都要兼容：
+                # - 动态路径：``OntologyAgent`` 用 ``SimpleNamespace(user_id=...)`` 直接挂字段
+                # - 静态路径：``ByclawDataClarification`` 等真实网关上下文，user 信息在
+                #   ``current_command.header.user_code`` 或 ``header.metadata["user_code"]`` 上
+                _gc_user_id = _resolve_gateway_user_id(gateway_context)
                 _gc_session_id = str(getattr(gateway_context, "session_id", "") or "")
                 _inv_ctx: Any = InvocationContext(
                     user_id=_gc_user_id,
