@@ -146,10 +146,10 @@ class CsvStorageManager:
         file_id = str(uuid.uuid4())
         file_path = self._export_file_path(file_id, ".csv")
         csv_content = ResultConverter.to_csv_text(records, columns=columns)
-        self._result_file_storage.write_text(file_path, csv_content)
+        stored_path = self._result_file_storage.write_text(file_path, csv_content) or file_path
 
         stored_meta = dict(meta or {})
-        stored_meta.setdefault("file_url", file_path)
+        stored_meta.setdefault("file_url", stored_path)
         stored_meta["storage_type"] = self._result_file_storage.storage_type
         meta_path = self._export_file_path(file_id, "_meta.json")
         self._result_file_storage.write_text(
@@ -157,7 +157,7 @@ class CsvStorageManager:
             json.dumps(stored_meta, ensure_ascii=False, default=str),
         )
 
-        return file_id, Path(file_path)
+        return file_id, Path(stored_path)
 
     def _export_file_path(self, file_id: str, suffix: str) -> str:
         return f"{self._export_root_dir}/exports/{file_id}{suffix}"
