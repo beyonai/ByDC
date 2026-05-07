@@ -26,6 +26,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import date
 from typing import Any
@@ -294,7 +295,8 @@ class ComputeExecutor:
     ) -> None:
         self._loader = loader
         self._ds = ds_manager or DataSourceManager(
-            getattr(loader._config, "datasource_configs", None) or {}
+            getattr(loader._config, "datasource_configs", None) or {},
+            fallback_loader=loader,
         )
 
     async def execute(

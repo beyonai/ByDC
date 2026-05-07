@@ -182,6 +182,7 @@ class FederatedViewExecutorBase:
         self._loader = loader
         self._ds = ds_manager or DataSourceManager(
             getattr(loader._config, "datasource_configs", None) or {},
+            fallback_loader=loader,
         )
         self._local_federation_engine = create_local_federation_engine(
             getattr(loader, "_config", None)

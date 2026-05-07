@@ -420,9 +420,7 @@ def test_build_loader_passes_result_file_storage_to_configure_loader() -> None:
         patch(
             "datacloud_data_service.tools.virtual_action_injector.inject_virtual_actions"
         ) as _m_inject,
-        patch(
-            "datacloud_analysis.tools.ontology_tool_loader.configure_loader"
-        ) as m_configure,
+        patch("datacloud_analysis.tools.ontology_tool_loader.configure_loader") as m_configure,
     ):
         m_loader_cls.return_value = MagicMock()
         agent._build_loader(view_codes=["v"], object_codes=["o"])

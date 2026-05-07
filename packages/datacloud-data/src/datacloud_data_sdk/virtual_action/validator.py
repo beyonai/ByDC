@@ -6,7 +6,10 @@ JSON Schema 结构校验由 MCP inputSchema 负责，此处只做业务规则校
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+_logger = logging.getLogger(__name__)
 
 
 class VirtualActionValidationError(Exception):
@@ -197,6 +200,12 @@ class VirtualActionValidator:
         required_filter_groups: list[str] | None = None,
     ) -> None:
         """校验 analyze 动作入参。"""
+        _logger.debug(
+            "[validate_analyze] arguments_keys=%s metrics_raw=%r metrics_type=%s",
+            sorted(arguments.keys()),
+            arguments.get("metrics"),
+            type(arguments.get("metrics")).__name__,
+        )
         dimensions = _list_or_empty(arguments, "dimensions")
         metrics = _list_or_empty(arguments, "metrics")
 

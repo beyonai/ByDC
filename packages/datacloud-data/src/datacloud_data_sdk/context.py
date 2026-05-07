@@ -43,12 +43,20 @@ class RequestContext:
         tool_list_mode: 工具列表模式，控制 MCP/Skills 返回的工具列表格式
             - "unified": 统一模式，返回所有工具的合并列表
             - "per_object": 按对象模式，按对象分组返回工具列表
-        gateway_context: Gateway AgentContext 实例，用于向前端推送执行进度事件。
-            类型声明为 Any 以避免 datacloud-data 依赖 gateway_sdk。
+        gateway_context: 执行上报对象（实现 ``datacloud_analysis.reporter.ExecutionReporter``
+            协议）。可以是真实 Gateway AgentContext（生产部署）或
+            ``NoOpExecutionReporter``（demo / 单测 / 独立调用）。类型声明为 ``Any``
+            以避免 ``datacloud-data`` 反向依赖 ``datacloud-analysis``；下游通过
+            duck-type 调用协议方法（``sub_step`` / ``mark_execution_start`` 等）。
+            注：字段名保留 ``gateway_context`` 以维持向后兼容（byclaw-data 历史调用方）。
         result_file_storage: 结果文件存储后端实例（实现 ResultFileStorage 抽象），
             用于工具/SDK 内的文件读写。类型声明为 Any 以避免 datacloud-data 与
             落地项目（如 byclaw-data 的 ByclawResultFileStorage）形成静态依赖。
             由调用方在构造 InvocationContext 时注入。
+        extras: 请求级扩展上下文（chatbi 等调用方携带的任意键值，例如
+            ``{"cookie": "...", "biz_token": [...]}``）。SDK 内部不感知键含义，
+            仅做透传。工具/connector 通过 ``get_current_context().extras`` 读取。
+            可能含敏感数据（cookie / token），故 ``repr=False``。
     """
 
     tenant_id: str = ""
@@ -64,6 +72,7 @@ class RequestContext:
     gateway_context: Any = field(default=None, repr=False)
     workspace_dir: str = ""
     result_file_storage: Any = field(default=None, repr=False)
+    extras: dict[str, Any] | None = field(default=None, repr=False)
 
 
 _ctx_var: contextvars.ContextVar[RequestContext | None] = contextvars.ContextVar(
@@ -118,6 +127,7 @@ class InvocationContext:
             gateway_context=kwargs.get("gateway_context"),
             workspace_dir=kwargs.get("workspace_dir", ""),
             result_file_storage=kwargs.get("result_file_storage"),
+            extras=kwargs.get("extras"),
         )
         self._token: contextvars.Token[RequestContext | None] | None = None
 

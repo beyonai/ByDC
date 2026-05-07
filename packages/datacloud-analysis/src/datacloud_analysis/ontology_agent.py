@@ -11,11 +11,12 @@ from collections import OrderedDict
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
+
+from datacloud_analysis.reporter import NoOpExecutionReporter
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,9 @@ class OntologyAgentConfig:
     # 结果文件存储后端（如 byclaw 的 ByclawResultFileStorage）。由调用方注入，
     # OntologyAgent 内不感知具体类型，仅透传给 configure_loader。
     result_file_storage: Any = None
+    # HTTP_SQL 后端服务地址。非空时强制走 HttpSqlConnector 并注入此地址，
+    # 取代历史的 DATACLOUD_SQL_SERVICE_URL 环境变量。
+    sql_execute_url: str | None = None
 
 
 # ── 缓存 key ──────────────────────────────────────────────────────────────────
@@ -250,6 +254,7 @@ class OntologyAgent:
         user_code: str | None = None,
         session_id: str | None = None,
         locale: str | None = None,
+        extras: dict[str, Any] | None = None,
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """发起一次问答，流式返回事件。
 
@@ -273,6 +278,7 @@ class OntologyAgent:
             session_id=session_id,
             locale=locale,
             resume_input=None,
+            extras=extras,
         )
 
     def resume(
@@ -284,6 +290,7 @@ class OntologyAgent:
         object_codes: list[str] | None = None,
         user_code: str | None = None,
         session_id: str | None = None,
+        extras: dict[str, Any] | None = None,
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """在中断后恢复图执行，继续流式返回事件。
 
@@ -302,6 +309,7 @@ class OntologyAgent:
             session_id=session_id,
             locale=None,
             resume_input=user_input,
+            extras=extras,
         )
 
     # ── 内部实现 ──────────────────────────────────────────────────────────────
@@ -338,6 +346,7 @@ class OntologyAgent:
             base_url=self._config.base_url,
             temperature=self._config.temperature,
             result_file_storage=self._config.result_file_storage,
+            sql_execute_url=self._config.sql_execute_url,
         )
 
         mounted = list(view_codes or []) + list(object_codes or [])
@@ -392,6 +401,7 @@ class OntologyAgent:
         session_id: str | None,
         locale: str | None,
         resume_input: str | ParadigmAnswer | None,
+        extras: dict[str, Any] | None = None,
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """核心事件迭代器：构建图、执行、转换事件。"""
         try:
@@ -402,13 +412,14 @@ class OntologyAgent:
             return
 
         effective_locale = locale or self._config.locale
-        # 内部组装 duck-typed 上下文容器，复用 SDK 既有的
-        # configurable["gateway_context"] 槽位（RequestContext.gateway_context: Any）
-        # 让下游 tool_wrapper / HookAwareToolNode 可经 InvocationContext
-        # 透传 user_id / session_id。本模块对外不暴露 gateway 概念。
-        ctx_container = SimpleNamespace(
+        # 无 Gateway 部署使用 NoOpExecutionReporter（实现 ExecutionReporter 协议），
+        # 让 tool_wrapper.py 等业务代码不需感知是否有真实 Gateway。
+        # 真实 Gateway（如 byclaw-data 的 AgentContext）走另一条路径直接被注入到
+        # configurable["gateway_context"]，duck-type 自然满足同一协议。
+        ctx_container: Any = NoOpExecutionReporter(
             user_id=user_code or "",
             session_id=session_id or "",
+            extras=extras,
         )
         run_config: dict[str, Any] = {
             "configurable": {

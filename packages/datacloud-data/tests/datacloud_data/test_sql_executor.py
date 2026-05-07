@@ -72,6 +72,7 @@ async def test_sql_executor_supports_http_sql_connector(tmp_path: Path) -> None:
         alias="domain_model",
         db_type="HTTP_SQL",
         datasource_id=86039,
+        endpoint_url="http://localhost:8000/knowledgeService/callDomainModel/executeSql",
     )
     manager = DataSourceManager({"domain_model": config})
     executor = SqlExecutor(manager, csv_base_dir=str(tmp_path))
@@ -103,21 +104,19 @@ async def test_sql_executor_supports_http_sql_connector(tmp_path: Path) -> None:
             }
 
     mock_post = AsyncMock(return_value=MockResponse())
-    with InvocationContext(
-        token="token-1", tenant_id="tenant-1", user_id="user-1", cookie="session=abc123"
+    with (
+        InvocationContext(
+            token="token-1", tenant_id="tenant-1", user_id="user-1", cookie="session=abc123"
+        ),
+        patch("httpx.AsyncClient.post", mock_post),
     ):
-        with patch.dict(
-            "os.environ",
-            {
-                "DATACLOUD_SQL_SERVICE_URL": "http://localhost:8000/knowledgeService/callDomainModel/executeSql"
-            },
-        ):
-            with patch("httpx.AsyncClient.post", mock_post):
-                result = await executor.execute(task, request_id="req1", step_results=StepResults())
+        result = await executor.execute(task, request_id="req1", step_results=StepResults())
 
     mock_post.assert_awaited_once()
     assert mock_post.await_args is not None
-    _, kwargs = mock_post.await_args
+    args, kwargs = mock_post.await_args
+    posted_url = args[0] if args else kwargs.get("url")
+    assert posted_url == "http://localhost:8000/knowledgeService/callDomainModel/executeSql"
     assert kwargs["json"] == {
         "datasourceId": 86039,
         "sql": "select * from prt339179_sankai_new_day_z_view_a limit 5",
@@ -194,6 +193,7 @@ async def test_datasource_id_forces_http_sql_connector(tmp_path: Path) -> None:
         db_type="MYSQL",
         jdbc_url="jdbc:mysql://localhost:3306/test",
         datasource_id=12345,
+        endpoint_url="http://localhost:8000/api/sql/execute",
     )
     manager = DataSourceManager({"auto_http_sql": config})
     executor = SqlExecutor(manager, csv_base_dir=str(tmp_path))
@@ -219,15 +219,14 @@ async def test_datasource_id_forces_http_sql_connector(tmp_path: Path) -> None:
             }
 
     mock_post = AsyncMock(return_value=MockResponse())
-    with patch.dict(
-        "os.environ", {"DATACLOUD_SQL_SERVICE_URL": "http://localhost:8000/api/sql/execute"}
-    ):
-        with patch("httpx.AsyncClient.post", mock_post):
-            result = await executor.execute(task, request_id="req1", step_results=StepResults())
+    with patch("httpx.AsyncClient.post", mock_post):
+        result = await executor.execute(task, request_id="req1", step_results=StepResults())
 
     mock_post.assert_awaited_once()
     assert mock_post.await_args is not None
-    _, kwargs = mock_post.await_args
+    args, kwargs = mock_post.await_args
+    posted_url = args[0] if args else kwargs.get("url")
+    assert posted_url == "http://localhost:8000/api/sql/execute"
     assert kwargs["json"]["datasourceId"] == 12345
     assert kwargs["json"]["sql"] == "SELECT * FROM users LIMIT 10"
 

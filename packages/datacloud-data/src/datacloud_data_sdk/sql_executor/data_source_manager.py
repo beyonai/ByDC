@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
 from typing import Any
@@ -161,9 +162,22 @@ class DataSourceManager:
         if config is None:
             raise DataSourceUnavailableError(alias)
 
-        # 如果 datasource_id 不为空，强制使用 HTTP_SQL 连接器
-        if config.datasource_id is not None:
+        # 选型规则：
+        # 1. fallback_loader.sql_execute_url 非空 → 强制 HTTP_SQL，并把 URL 注入 config 副本
+        # 2. config.datasource_id 非空（兼容历史路径）→ 强制 HTTP_SQL（URL 由调用方自带）
+        # 3. 否则按 config.db_type 走本地 connector
+        sql_execute_url = (
+            getattr(self._fallback_loader, "sql_execute_url", None)
+            if self._fallback_loader is not None
+            else None
+        )
+        force_http = bool(sql_execute_url) or config.datasource_id is not None
+
+        if force_http:
             connector_cls = ConnectorRegistry.get("HTTP_SQL")
+            if sql_execute_url:
+                # 用副本承载 endpoint_url，避免污染原配置（可能被多个 manager 共享）
+                config = dataclasses.replace(config, endpoint_url=sql_execute_url)
         else:
             connector_cls = ConnectorRegistry.get(config.db_type)
 

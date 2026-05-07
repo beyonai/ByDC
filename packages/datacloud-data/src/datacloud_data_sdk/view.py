@@ -315,7 +315,9 @@ class View:
                     logger.debug("observer/reporter callback failed", exc_info=True)
 
             ds_manager = (
-                DataSourceManager(config.datasource_configs) if config.datasource_configs else None
+                DataSourceManager(config.datasource_configs, fallback_loader=loader)
+                if config.datasource_configs
+                else None
             )
             sql_exec = SqlExecutor(ds_manager, config.csv_base_dir) if ds_manager else None
             api_exec = ApiExecutor(loader, config.csv_base_dir) if loader else None

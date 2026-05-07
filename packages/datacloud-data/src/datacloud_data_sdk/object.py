@@ -359,7 +359,9 @@ class Object:
             from datacloud_data_sdk.sql_executor.sql_executor import SqlExecutor
 
             ds_manager = (
-                DataSourceManager(config.datasource_configs) if config.datasource_configs else None
+                DataSourceManager(config.datasource_configs, fallback_loader=loader)
+                if config.datasource_configs
+                else None
             )
             sql_exec = (
                 SqlExecutor(

@@ -31,6 +31,9 @@ class DataSourceConfig:
         pool_timeout: 连接池超时时间（秒）
         open_gauss_compat: 是否启用 openGauss 兼容模式
         datasource_id: 数据源ID（不为空时使用 HTTP SQL 服务执行）
+        endpoint_url: HTTP_SQL 后端服务地址（仅 HTTP_SQL 使用）。
+            由 ``DataSourceManager`` 在选择 HTTP connector 时根据
+            ``OntologyAgentConfig.sql_execute_url`` 注入；其他 connector 忽略。
 
     Example:
         config = DataSourceConfig(
@@ -52,6 +55,7 @@ class DataSourceConfig:
     pool_timeout: float = 30.0
     open_gauss_compat: bool = False
     datasource_id: int | None = None
+    endpoint_url: str = ""
 
 
 @dataclass

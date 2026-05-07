@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 
 import httpx
@@ -23,10 +22,12 @@ class HttpSqlConnector(BaseSourceConnector):
         return "HTTP_SQL"
 
     async def execute(self, sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-        endpoint_url = os.environ.get("DATACLOUD_SQL_SERVICE_URL")
+        endpoint_url = self.config.endpoint_url
         if not endpoint_url:
             raise SqlExecutionError(
-                self.config.alias, sql, "DATACLOUD_SQL_SERVICE_URL environment variable is required"
+                self.config.alias,
+                sql,
+                "HTTP SQL endpoint_url is required (set via OntologyAgentConfig.sql_execute_url)",
             )
         if self.config.datasource_id is None:
             raise SqlExecutionError(self.config.alias, sql, "HTTP SQL datasource_id is required")
@@ -55,7 +56,7 @@ class HttpSqlConnector(BaseSourceConnector):
     async def test_connection(self) -> bool:
         try:
             await self.execute("SELECT 1")
-        except Exception:
+        except Exception:  # noqa: BLE001
             return False
         return True
 
@@ -77,8 +78,18 @@ class HttpSqlConnector(BaseSourceConnector):
             headers["X-Session-Id"] = ctx.session_id
         if ctx.system_code:
             headers["X-System-Code"] = ctx.system_code
-        if ctx.cookie:
-            headers["cookie"] = ctx.cookie
+
+        # cookie 取值优先级：extras["cookie"] (str, 非空) > ctx.cookie。
+        # chatbi 调用方通过 agent.ask(extras={"cookie": "..."}) 传入；
+        # 既有 byclaw-data 路径仍可使用 InvocationContext(cookie=...) 保持兼容。
+        cookie = ctx.cookie
+        if isinstance(ctx.extras, dict):
+            extras_cookie = ctx.extras.get("cookie")
+            if isinstance(extras_cookie, str) and extras_cookie:
+                cookie = extras_cookie
+        if cookie:
+            headers["cookie"] = cookie
+
         return headers
 
     def _extract_records(self, body: Any) -> list[dict[str, Any]]:

@@ -538,7 +538,7 @@ class OwlParser:
 
         db_type = self._get_predicate_value(g, subject, "dbType") or "mysql"
         db_params_str = self._get_predicate_value(g, subject, "dbParams") or "{}"
-        datasource_id_str = self._get_predicate_value(g, subject, "datasourceId")
+        datasource_id_str = self._get_predicate_value(g, subject, "dbId")
 
         try:
             db_params = json.loads(db_params_str)

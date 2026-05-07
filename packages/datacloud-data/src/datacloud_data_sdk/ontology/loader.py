@@ -68,6 +68,7 @@ class LoaderConfig:
     sql_execution_mode: str = "internal"
     term_loader: Any = None
     query_result_csv_threshold: int = 10  # 0 = 不启用溢出截断
+    sql_execute_url: str | None = None  # HTTP_SQL 后端服务地址（chatbi 等调用方注入）
 
 
 class OntologyLoader:
@@ -358,6 +359,11 @@ class OntologyLoader:
     def result_file_storage(self) -> Any:
         """暴露已配置的结果文件存储后端，供工具运行时（如 file_io）注入到 InvocationContext。"""
         return self._config.result_file_storage
+
+    @property
+    def sql_execute_url(self) -> str | None:
+        """暴露 HTTP_SQL 后端地址，供 DataSourceManager 在选 connector 时读取。"""
+        return self._config.sql_execute_url
 
     def _extract_datasource_configs_from_objects(self) -> dict[str, Any]:
         """从 source_type=DB 且含 source_config 的对象提取 DataSourceConfig，按 alias 去重。"""

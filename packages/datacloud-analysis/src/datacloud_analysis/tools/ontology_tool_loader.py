@@ -824,6 +824,7 @@ def configure_loader(
     csv_base_dir: str = "",
     sql_execution_mode: str = "internal",
     result_file_storage: Any = None,
+    sql_execute_url: str | None = None,
 ) -> None:
     """为 OntologyLoader 配置查询规划器和词条加载器。
 
@@ -841,6 +842,8 @@ def configure_loader(
         sql_execution_mode: SQL 执行模式，默认 "internal"。
         result_file_storage: 结果文件存储实现；为 None 且 csv_base_dir 非空时
             自动创建 LocalResultFileStorage(csv_base_dir)。
+        sql_execute_url: HTTP_SQL 后端服务地址；非空时 DataSourceManager 强制
+            走 HttpSqlConnector，并把该 URL 注入 connector 配置副本。
     """
     pg_kwargs: dict[str, Any] = {
         "model": model,
@@ -865,4 +868,5 @@ def configure_loader(
         csv_base_dir=csv_base_dir,
         sql_execution_mode=sql_execution_mode,
         result_file_storage=result_file_storage,
+        sql_execute_url=sql_execute_url,
     )

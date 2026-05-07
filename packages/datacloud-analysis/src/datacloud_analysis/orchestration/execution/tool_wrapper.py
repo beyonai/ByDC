@@ -714,12 +714,14 @@ async def dispatch_tool(
                 _gc_user_id = _resolve_gateway_user_id(gateway_context)
                 _gc_session_id = str(getattr(gateway_context, "session_id", "") or "")
                 _result_file_storage = getattr(loader, "result_file_storage", None)
+                _extras = getattr(gateway_context, "extras", None)
                 _inv_ctx: Any = InvocationContext(
                     user_id=_gc_user_id,
                     session_id=_gc_session_id,
                     gateway_context=gateway_context,
                     workspace_dir=str(workspace_root) if workspace_root is not None else "",
                     result_file_storage=_result_file_storage,
+                    extras=_extras,
                 )
                 _inv_ctx.__enter__()
                 try:

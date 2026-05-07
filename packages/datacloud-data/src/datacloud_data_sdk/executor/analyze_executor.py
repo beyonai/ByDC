@@ -193,7 +193,8 @@ class AnalyzeExecutor:
     ) -> None:
         self._loader = loader
         self._ds = ds_manager or DataSourceManager(
-            getattr(loader._config, "datasource_configs", None) or {}
+            getattr(loader._config, "datasource_configs", None) or {},
+            fallback_loader=loader,
         )
 
     async def execute(

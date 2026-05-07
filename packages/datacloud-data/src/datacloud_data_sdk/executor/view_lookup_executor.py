@@ -82,7 +82,8 @@ class ViewLookupExecutor:
     def __init__(self, loader: OntologyLoader, ds_manager: DataSourceManager | None = None) -> None:
         self._loader = loader
         self._ds = ds_manager or DataSourceManager(
-            getattr(loader._config, "datasource_configs", None) or {}
+            getattr(loader._config, "datasource_configs", None) or {},
+            fallback_loader=loader,
         )
 
     async def execute(self, view: Any, arguments: dict[str, Any]) -> dict[str, Any]:
