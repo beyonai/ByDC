@@ -8,12 +8,15 @@
 - 注入幂等：同名动作不重复追加
 - 同时注册到全局 VirtualActionRegistry，供 MCP 路由使用
 - 动作字段统一使用字段编码（field_code / property_code），不再使用中文名
+- 虚拟工具前缀（query_/compute_）由 Settings 配置决定，可通过环境变量覆盖
 """
 
 from __future__ import annotations
 
 import logging
 from typing import Any
+
+from datacloud_data_service.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +166,7 @@ def _inject_db_object_actions(cls, existing_codes: set, registry) -> None:
     )
     from datacloud_data_sdk.virtual_action.registry import ActionRoute
 
+    settings = get_settings()
     obj_code = cls.object_code
     obj_name = cls.object_name or obj_code
     obj_desc = cls.description or ""
@@ -170,7 +174,7 @@ def _inject_db_object_actions(cls, existing_codes: set, registry) -> None:
     req_groups = _required_filter_groups(fields)
 
     # query
-    query_code = f"query_{obj_code}"
+    query_code = f"{settings.virtual_action_query_prefix}{obj_code}"
     if query_code not in existing_codes:
         schema = build_query_schema(
             obj_name,
@@ -196,7 +200,7 @@ def _inject_db_object_actions(cls, existing_codes: set, registry) -> None:
 
     # compute（仅当存在度量字段时）
     if _has_measure(fields):
-        compute_code = f"compute_{obj_code}"
+        compute_code = f"{settings.virtual_action_compute_prefix}{obj_code}"
         if compute_code not in existing_codes:
             schema = build_compute_schema(
                 obj_name,
@@ -268,6 +272,7 @@ def _inject_view_actions(loader, registry) -> None:
     )
     from datacloud_data_sdk.virtual_action.registry import ActionRoute
 
+    settings = get_settings()
     scenes = getattr(loader, "_scenes", {})
     for view_id, scene in scenes.items():
         # 只处理 DB 视图（有对象列表的场景）
@@ -313,7 +318,7 @@ def _inject_view_actions(loader, registry) -> None:
         existing_codes = {a.action_code for a in view_actions}
 
         # query
-        query_code = f"query_{view_id}"
+        query_code = f"{settings.virtual_action_query_prefix}{view_id}"
         if query_code not in existing_codes:
             schema = build_query_schema(
                 view_name,
@@ -341,7 +346,7 @@ def _inject_view_actions(loader, registry) -> None:
 
         # compute
         if _has_measure(view_fields):
-            compute_code = f"compute_{view_id}"
+            compute_code = f"{settings.virtual_action_compute_prefix}{view_id}"
             if compute_code not in existing_codes:
                 schema = build_compute_schema(
                     view_name,

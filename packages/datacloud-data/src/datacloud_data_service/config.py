@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -70,8 +70,26 @@ class Settings(BaseSettings):
         default="http://localhost:3000,http://127.0.0.1:3000",
         validation_alias="DATACLOUD_CORS_ORIGINS",
     )
+    # 虚拟工具命名前缀（与资源码直接拼接，例如 query_by_project / compute_by_project）
+    virtual_action_query_prefix: str = Field(
+        default="query_",
+        validation_alias="DATACLOUD_VIRTUAL_ACTION_QUERY_PREFIX",
+        description="虚拟 query 工具的命名前缀，与资源码直接拼接",
+    )
+    virtual_action_compute_prefix: str = Field(
+        default="compute_",
+        validation_alias="DATACLOUD_VIRTUAL_ACTION_COMPUTE_PREFIX",
+        description="虚拟 compute 工具的命名前缀，与资源码直接拼接",
+    )
 
     model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore"}
+
+    @field_validator("virtual_action_query_prefix", "virtual_action_compute_prefix")
+    @classmethod
+    def _reject_whitespace_prefix(cls, v: str) -> str:
+        if any(ch.isspace() for ch in v):
+            raise ValueError("虚拟工具前缀不允许包含空白字符")
+        return v
 
     @model_validator(mode="after")
     def _resolve_relative_paths(self) -> Settings:

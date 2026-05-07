@@ -1,8 +1,27 @@
-"""Provide locale-specific system prompts for DataCloud agent."""
+"""Provide locale-specific system prompts for DataCloud agent.
+
+虚拟工具前缀（query_/compute_）由 ``datacloud_data_service.config.Settings``
+配置决定，可通过环境变量 ``DATACLOUD_VIRTUAL_ACTION_QUERY_PREFIX`` /
+``DATACLOUD_VIRTUAL_ACTION_COMPUTE_PREFIX`` 覆盖。
+"""
 
 from __future__ import annotations
 
 import os
+
+from datacloud_data_service.config import get_settings
+
+
+def _virtual_prefixes() -> tuple[str, str]:
+    """返回 (query_prefix, compute_prefix)，与工具生成层共享同一配置源。"""
+    s = get_settings()
+    return s.virtual_action_query_prefix, s.virtual_action_compute_prefix
+
+
+def _bare_prefix(prefix: str) -> str:
+    """剥离尾部下划线，得到提示词中"裸名"形态；前缀本身无下划线时原样返回。"""
+    return prefix.rstrip("_") if prefix.endswith("_") else prefix
+
 
 _SYSTEM_PROMPTS: dict[str, str] = {
     "zh_CN": (
@@ -24,24 +43,28 @@ _FALLBACK_LOCALE = "zh_CN"
 
 
 def _get_query_tool_hint_zh() -> str:
-    """返回统一查询工具命名规则提示（不再依赖 DATACLOUD_ONTOLOGY_LOAD_MODE）。"""
+    """返回统一查询工具命名规则提示（前缀由 Settings 决定）。"""
+    q, c = _virtual_prefixes()
+    qb, cb = _bare_prefix(q), _bare_prefix(c)
     return (
         "## 查询工具命名规则\n"
-        "- 查询工具名称格式为 query_{对象编码}（如 query_ads_enterprise_analysis），"
-        "聚合计算工具格式为 compute_{对象编码}（如 compute_ads_enterprise_analysis）。\n"
+        f"- 查询工具名称格式为 {q}{{对象编码}}（如 {q}ads_enterprise_analysis），"
+        f"聚合计算工具格式为 {c}{{对象编码}}（如 {c}ads_enterprise_analysis）。\n"
         "- 复杂查询（complex_conditions 非空）系统后端自动处理，agent 无需手动调用其他工具。\n"
-        "- 禁止调用不含对象编码的裸工具名（如直接调用 query 或 compute）。\n"
+        f"- 禁止调用不含对象编码的裸工具名（如直接调用 {qb} 或 {cb}）。\n"
     )
 
 
 def _get_query_tool_hint_en() -> str:
-    """Return fixed query tool naming hint (no longer reads DATACLOUD_ONTOLOGY_LOAD_MODE)."""
+    """Return query tool naming hint with prefixes resolved from Settings."""
+    q, c = _virtual_prefixes()
+    qb, cb = _bare_prefix(q), _bare_prefix(c)
     return (
         "## Query tool naming\n"
-        "- Tool format: query_{object_code} (e.g. query_ads_enterprise_analysis), "
-        "compute_{object_code} (e.g. compute_ads_enterprise_analysis).\n"
+        f"- Tool format: {q}{{object_code}} (e.g. {q}ads_enterprise_analysis), "
+        f"{c}{{object_code}} (e.g. {c}ads_enterprise_analysis).\n"
         "- Complex queries (complex_conditions non-empty) are handled automatically by the backend.\n"
-        "- Do NOT call bare names like 'query' or 'compute' without the object suffix.\n"
+        f"- Do NOT call bare names like '{qb}' or '{cb}' without the object suffix.\n"
     )
 
 
@@ -120,10 +143,11 @@ def _build_exec_zh() -> str:
             "并在 answer 中写出要问用户的内容，勿再试图调用 ask_user。\n"
         )
     )
+    q, c = _virtual_prefixes()
     parts.extend(
         [
             "## compute 统计工具参数规则\n",
-            "- 调用 compute_{对象编码} 时，`metrics` 数组每项必须包含：`field`（字段中文名如'企业总营收（万元）'或字段编码如 total_revenue，系统自动识别映射）、"
+            f"- 调用 {c}{{对象编码}} 时，`metrics` 数组每项必须包含：`field`（字段中文名如'企业总营收（万元）'或字段编码如 total_revenue，系统自动识别映射）、"
             "**`agg`**（聚合名，如 count、sum、count_distinct）、`as`（结果列别名）。\n",
             "- metrics 和 dimensions 中指定字段使用 `field` 键，可填中文名或字段编码，系统自动映射。\n",
             "- 禁止使用 `func` 作为聚合键名；协议与校验只识别 **`agg`**。\n",
@@ -133,10 +157,10 @@ def _build_exec_zh() -> str:
             "- 如果用户原始问题较短，应结合上下文将其改写为完整、清晰的自然语言查询。\n",
             "## 工具选择引导\n",
             "- 调用工具前，先在心中完成贪心预判：\n",
-            "  1. 目标对象：从问题中识别要查询的本体（如'企业'→query_enterprise_view）。\n",
-            "  2. 任务类型：明细查询 → query_*；统计聚合 → compute_*。\n",
+            f"  1. 目标对象：从问题中识别要查询的本体（如'企业'→{q}enterprise_view）。\n",
+            f"  2. 任务类型：明细查询 → {q}*；统计聚合 → {c}*。\n",
             "  3. 参数预填：对照工具描述中的字段能力表，提前确定 select/filters/dimensions/metrics。\n",
-            "## query_*/compute_* 核心参数规则\n",
+            f"## {q}*/{c}* 核心参数规则\n",
             "- **query（必填）**：完整自然语言问题，不得为空，不得使用 */%/ALL 等通配符。\n",
             "  如用户原始问题较短，结合上下文改写为完整清晰的查询描述。\n",
             "- **标准参数**（select / filters / dimensions / metrics）：\n",
@@ -154,12 +178,12 @@ def _build_exec_zh() -> str:
             "  此列表非空时系统后端自动路由到全能查询路径，无需手动调用其他工具。\n",
             "- **禁止**：同时将同一条件既写入 filters 又写入 complex_conditions。\n",
             "## 查询工具返回结构规则\n",
-            "- query_*/compute_* 返回结构：{data: {result_type, records, file: {file_url}, meta}}。\n",
+            f"- {q}*/{c}* 返回结构：{{data: {{result_type, records, file: {{file_url}}, meta}}}}。\n",
             "- 如果返回中包含 file_url 字段或顶层 _hint 字段，说明数据已存入本地文件，直接使用该文件路径。\n",
             "- 如果 result_type=rejected，数据查询被拒绝，应告知用户并说明原因。\n",
             ask_user_result_line,
             "## 结果类型规则\n",
-            "- 调用 query_*/compute_* 工具后，返回中含 _hint 字段：必须使用 result_type=query_result，"
+            f"- 调用 {q}*/{c}* 工具后，返回中含 _hint 字段：必须使用 result_type=query_result，"
             "系统会自动透传完整的 records/pagination/meta/file 结构。\n",
             "- 如需同时返回文字分析+结构化数据：result_type=query_result，answer 填写文字分析，系统会先推文字再推 6001 内容。\n",
             "- 禁止将查询工具返回的 records 序列化后填入 data 字段，会丢失 meta/pagination/file 信息。\n",
@@ -173,6 +197,7 @@ def _build_exec_zh() -> str:
 def _build_exec_en() -> str:
 
     hint = _get_query_tool_hint_en()
+    q, c = _virtual_prefixes()
 
     return (
         "## Execution rules\n"
@@ -180,9 +205,10 @@ def _build_exec_en() -> str:
         "- Each tool call must include a reason field.\n"
         + (hint if hint else "")
         + "## Compute tool rules\n"
-        "- For compute_{object}, each metrics item must use the key **`agg`** "
-        "(e.g. count_distinct), never `func`.\n" + "## Query tool return structure\n"
-        "- query_*/compute_* return: {data: {result_type, records, file: {file_url}, meta}}.\n"
+        + f"- For {c}{{object}}, each metrics item must use the key **`agg`** "
+        "(e.g. count_distinct), never `func`.\n"
+        + "## Query tool return structure\n"
+        + f"- {q}*/{c}* return: {{data: {{result_type, records, file: {{file_url}}, meta}}}}.\n"
         "- If file_url or _hint present, data is saved. Do NOT call write_file.\n"
         "## Result type rules\n"
         "- records: result_type=json. file_url or _result: result_type=json_file.\n"

@@ -22,6 +22,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from datacloud_data_service.config import get_settings
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -395,8 +397,9 @@ class OntologyToolLoader:
 
                 # 降级兜底：若未产出 query 族工具且未要求跳过，尝试 DynamicQueryToolGenerator
                 # 场景：inject_virtual_actions 未调用（旧环境或直接调用方跳过了注入）
+                _query_prefix = get_settings().virtual_action_query_prefix
                 if "query" not in self._skip_action_families and not any(
-                    k.startswith(f"query_{obj_code}") for k in action_tools
+                    k.startswith(f"{_query_prefix}{obj_code}") for k in action_tools
                 ):
                     query_tool = self._build_query_tool(query_gen, obj_code)
                     if query_tool is not None:

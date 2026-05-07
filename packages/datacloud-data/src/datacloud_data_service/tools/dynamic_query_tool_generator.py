@@ -6,6 +6,8 @@ from typing import Any
 
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 
+from datacloud_data_service.config import get_settings
+
 
 def _ops_for_field(field: Any, has_term: bool) -> list[str]:
     """根据字段类型和是否绑定术语返回允许的操作符。含 is_null、is_not_null。"""
@@ -83,8 +85,9 @@ class DynamicQueryToolGenerator:
         """DB 对象：filters 对象（每字段独立 schema）+ aggregates + group_by。"""
         field_codes = [f.field_code for f in cls.fields]
         filters_schema = self._build_filters_object_schema(cls.fields)
+        query_prefix = get_settings().virtual_action_query_prefix
         return {
-            "name": f"query_{cls.object_code}",
+            "name": f"{query_prefix}{cls.object_code}",
             "title": f"查询{cls.object_name}",
             "description": f"按条件查询 {cls.object_name} 数据，支持过滤、聚合、分组",
             "inputSchema": {
@@ -195,8 +198,9 @@ class DynamicQueryToolGenerator:
     def _generate_kb_tool(self, cls: Any) -> dict[str, Any]:
         """KB 对象：query + filters 对象（每字段独立 schema），无 aggregates。"""
         filters_schema = self._build_filters_object_schema(cls.fields)
+        query_prefix = get_settings().virtual_action_query_prefix
         return {
-            "name": f"query_{cls.object_code}",
+            "name": f"{query_prefix}{cls.object_code}",
             "title": f"检索{cls.object_name}",
             "description": f"向量检索 {cls.object_name}，支持 query 和按字段过滤",
             "inputSchema": {

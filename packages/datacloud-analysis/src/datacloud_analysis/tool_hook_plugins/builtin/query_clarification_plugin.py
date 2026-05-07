@@ -49,6 +49,8 @@ except ImportError:  # pragma: no cover
     resolve_field_aliases = None  # type: ignore[assignment]
     _HAS_RESOLVE_ALIASES = False
 
+from datacloud_data_service.config import get_settings
+
 from datacloud_analysis.orchestration.gateway_user import get_gateway_user_id
 from datacloud_analysis.tool_hook_plugins.types import (
     ClarificationNeededError,
@@ -67,8 +69,18 @@ ENABLED = True
 
 logger = logging.getLogger(__name__)
 
-_QUERY_PREFIXES: frozenset[str] = frozenset({"query_", "compute_"})
-_DATA_TOOL_PREFIXES: frozenset[str] = frozenset({"query_", "data_query_", "compute_"})
+
+def _query_or_compute_prefixes() -> tuple[str, str]:
+    """返回 (query_prefix, compute_prefix)，与虚拟工具生成层共享同一配置源。"""
+    s = get_settings()
+    return (s.virtual_action_query_prefix, s.virtual_action_compute_prefix)
+
+
+def _data_tool_prefixes() -> tuple[str, ...]:
+    """返回数据类工具识别前缀集合，包含 query_/compute_ 与固定的 data_query_。"""
+    q, c = _query_or_compute_prefixes()
+    return (q, "data_query_", c)
+
 
 # query_* schema 中不存在的 compute-only 字段；LLM 误填时静默丢弃，确保日志与 schema 一致
 _QUERY_STRIP_FIELDS: frozenset[str] = frozenset({"dimensions", "metrics", "having"})
@@ -146,19 +158,19 @@ def _normalize_json_fields(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def _is_query_or_compute_tool(tool_name: str) -> bool:
-    """仅匹配 query_* / compute_*（不含 data_query_*）。"""
-    return any(tool_name.startswith(p) for p in _QUERY_PREFIXES)
+    """仅匹配 query_* / compute_*（不含 data_query_*），前缀来自 Settings。"""
+    return any(tool_name.startswith(p) for p in _query_or_compute_prefixes() if p)
 
 
 def _is_data_tool(tool_name: str) -> bool:
-    """判断是否为数据类工具（query_/data_query_/compute_ 前缀）。"""
-    return any(tool_name.startswith(p) for p in _DATA_TOOL_PREFIXES)
+    """判断是否为数据类工具（query_/data_query_/compute_ 前缀），前缀来自 Settings。"""
+    return any(tool_name.startswith(p) for p in _data_tool_prefixes() if p)
 
 
 def _scope_code_from_tool(tool_name: str) -> str:
-    """从 query_ads_foo → ads_foo，compute_ads_foo → ads_foo。"""
-    for prefix in ("query_", "compute_"):
-        if tool_name.startswith(prefix):
+    """从 {query_prefix}{code} / {compute_prefix}{code} 中剥离前缀返回 code。"""
+    for prefix in _query_or_compute_prefixes():
+        if prefix and tool_name.startswith(prefix):
             return tool_name[len(prefix) :]
     return tool_name
 
