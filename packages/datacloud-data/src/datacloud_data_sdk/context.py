@@ -45,6 +45,10 @@ class RequestContext:
             - "per_object": 按对象模式，按对象分组返回工具列表
         gateway_context: Gateway AgentContext 实例，用于向前端推送执行进度事件。
             类型声明为 Any 以避免 datacloud-data 依赖 gateway_sdk。
+        result_file_storage: 结果文件存储后端实例（实现 ResultFileStorage 抽象），
+            用于工具/SDK 内的文件读写。类型声明为 Any 以避免 datacloud-data 与
+            落地项目（如 byclaw-data 的 ByclawResultFileStorage）形成静态依赖。
+            由调用方在构造 InvocationContext 时注入。
     """
 
     tenant_id: str = ""
@@ -59,6 +63,7 @@ class RequestContext:
     tool_call_detail: bool = False
     gateway_context: Any = field(default=None, repr=False)
     workspace_dir: str = ""
+    result_file_storage: Any = field(default=None, repr=False)
 
 
 _ctx_var: contextvars.ContextVar[RequestContext | None] = contextvars.ContextVar(
@@ -112,6 +117,7 @@ class InvocationContext:
             tool_call_detail=bool(kwargs.get("tool_call_detail", False)),
             gateway_context=kwargs.get("gateway_context"),
             workspace_dir=kwargs.get("workspace_dir", ""),
+            result_file_storage=kwargs.get("result_file_storage"),
         )
         self._token: contextvars.Token[RequestContext | None] | None = None
 

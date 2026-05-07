@@ -2,130 +2,71 @@ from __future__ import annotations
 
 import logging
 import os
-from pathlib import Path
-from typing import Any
 
+import httpx
 from datacloud_data_sdk.context import get_current_context
 from datacloud_data_sdk.exceptions import DatacloudError
+from datacloud_data_sdk.file_storage import LocalResultFileStorage, ResultFileStorage
 from langchain_core.tools import tool
-
-from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
 
 logger = logging.getLogger(__name__)
 
 
-def _get_file_manager(context: Any):
-    """从 gateway_context 中取 FileManager，不可用时返回 None。"""
-    try:
-        return context.agent_runtime_state.session_manager.file_manager
-    except AttributeError:
-        return None
-
-
-def _workspace_root_path(workspace_dir: str | None) -> Path | None:
-    raw = resolve_shared_workspace_dir(workspace_dir)
-    if raw is None:
-        return None
-    return Path(str(raw))
-
-
-def _resolve_fallback_workspace_dir() -> str:
-    """Resolve fallback workspace from InvocationContext, then current directory."""
+def _resolve_workspace_dir() -> str:
+    """从 InvocationContext 取 workspace_dir，缺失时退化到当前工作目录。"""
     try:
         ctx = get_current_context()
     except DatacloudError:
         return os.getcwd()
 
     workspace_dir = str(getattr(ctx, "workspace_dir", "") or "").strip()
-    if workspace_dir:
-        return workspace_dir
-    return os.getcwd()
+    return workspace_dir or os.getcwd()
 
 
-def _resolve_safe_path(path: str, workspace_dir: str | None) -> Path:
-    """Resolve path within workspace_dir. Raises ValueError if escaping."""
-    workspace_root = _workspace_root_path(workspace_dir)
-    p = Path(path)
-    if not p.is_absolute() and workspace_root:
-        p = workspace_root / p
-    p = p.resolve()
-    if workspace_root:
-        ws = workspace_root.resolve()
-        try:
-            p.relative_to(ws)
-        except ValueError as err:
-            raise ValueError(f"Path {path!r} is outside workspace_dir {workspace_dir!r}") from err
-    return p
+def _resolve_storage() -> ResultFileStorage:
+    """优先取 InvocationContext 注入的 ResultFileStorage；否则降级到 LocalResultFileStorage。
+
+    LocalResultFileStorage 内部会从 context 拿 workspace_dir / user_id / session_id 做
+    会话级隔离，并通过 normalize_logical_file_path 拒绝 ``..`` 越权路径。
+    """
+    try:
+        ctx = get_current_context()
+    except DatacloudError:
+        ctx = None
+
+    storage = getattr(ctx, "result_file_storage", None) if ctx is not None else None
+    if isinstance(storage, ResultFileStorage):
+        return storage
+
+    return LocalResultFileStorage(_resolve_workspace_dir())
 
 
 @tool("read_file")
 async def read_file(
     path: str,
-    encoding: str = "utf-8",
-    _context: Any = None,
+    begin_line: int = 0,
+    end_line: int = -1,
+    encoding: str = "utf-8",  # noqa: ARG001 - 预留参数，当前后端统一 utf-8
 ) -> str:
     """读取 workspace 内指定文件，返回文本内容。
 
     Args:
-        path: 文件路径（相对于 workspace_dir 或绝对路径）
-        encoding: 文件编码，默认 utf-8
-    """
-    file_manager = _get_file_manager(_context)
-    if file_manager is not None:
-        result = await file_manager.read_file(path, encoding=encoding)
-        if not result["success"]:
-            return f"错误：{result['error']}"
-        return result["data"]["content"]
+        path: 文件路径（逻辑路径，相对于 workspace_dir 或绝对逻辑路径）
+        begin_line: 起始行号（0 起，含），默认 0；与 ``end_line`` 同时为默认值时返回全文
+        end_line: 结束行号（不含），-1 表示读到文件末尾，默认 -1
+        encoding: 预留参数，当前 ResultFileStorage 抽象固定使用 utf-8
 
-    # 降级：本地路径实现（本地开发 / 单测场景）
-    workspace_dir = _resolve_fallback_workspace_dir()
+    不传 ``begin_line`` 和 ``end_line`` 则返回文件全部内容。
+    """
+    storage = _resolve_storage()
     try:
-        resolved = _resolve_safe_path(path, workspace_dir)
-    except ValueError as e:
-        return f"错误：{e}"
-    if not resolved.exists():
-        return f"错误：文件不存在 {path}"
-    if not resolved.is_file():
-        return f"错误：路径不是文件 {path}"
-    try:
-        return resolved.read_text(encoding=encoding)
-    except Exception as exc:
+        content = storage.read_text(path, begin_line=begin_line, end_line=end_line)
+    except ValueError as exc:
+        return f"错误：{exc}"
+    except (OSError, httpx.HTTPError) as exc:
         logger.error("read_file failed path=%s error=%s", path, exc)
         return f"错误：读取失败 {exc}"
 
-
-@tool("write_file")
-async def write_file(
-    path: str,
-    content: str,
-    encoding: str = "utf-8",
-    _context: Any = None,
-) -> dict[str, Any]:
-    """将内容写入 workspace 内指定文件（自动创建父目录）。
-
-    Args:
-        path: 文件路径（相对于 workspace_dir 或绝对路径）
-        content: 要写入的文本内容
-        encoding: 文件编码，默认 utf-8
-
-    Returns:
-        {"success": bool, "path": str, "size": int}
-    """
-    file_manager = _get_file_manager(_context)
-    if file_manager is not None:
-        result = await file_manager.write_file(path, content, encoding=encoding)
-        return result
-
-    # 降级：本地路径实现（本地开发 / 单测场景）
-    workspace_dir = _resolve_fallback_workspace_dir()
-    try:
-        resolved = _resolve_safe_path(path, workspace_dir)
-    except ValueError as e:
-        return {"success": False, "error": str(e), "path": path}
-    try:
-        resolved.parent.mkdir(parents=True, exist_ok=True)
-        resolved.write_text(content, encoding=encoding)
-        return {"success": True, "path": str(resolved), "size": len(content)}
-    except Exception as exc:
-        logger.error("write_file failed path=%s error=%s", path, exc)
-        return {"success": False, "error": str(exc), "path": path}
+    if content is None:
+        return f"错误：文件不存在 {path}"
+    return content

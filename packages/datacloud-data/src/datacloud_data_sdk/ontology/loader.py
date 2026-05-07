@@ -354,6 +354,11 @@ class OntologyLoader:
             if hasattr(self._config, k):
                 setattr(self._config, k, v)
 
+    @property
+    def result_file_storage(self) -> Any:
+        """暴露已配置的结果文件存储后端，供工具运行时（如 file_io）注入到 InvocationContext。"""
+        return self._config.result_file_storage
+
     def _extract_datasource_configs_from_objects(self) -> dict[str, Any]:
         """从 source_type=DB 且含 source_config 的对象提取 DataSourceConfig，按 alias 去重。"""
         from datacloud_data_sdk.sql_executor.config_loader import (

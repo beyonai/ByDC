@@ -4,9 +4,9 @@ Tool              Module          Design symbol
 -------           ------          -------------
 search_knowledge  knowledge       T_KNOW_SEARCH
 
-File I/O tools (read_file, write_file) are registered directly in
-``orchestration/execution/node.py`` and delegate to the Gateway
-``FileManager`` when ``gateway_context`` is available.
+File I/O tool ``read_file`` is registered directly in
+``orchestration/execution/node.py`` and reads through the
+``ResultFileStorage`` injected via ``InvocationContext``.
 
 .. note::
     ``sbx_read_file``, ``sbx_write_file``, ``sbx_run_code`` from
