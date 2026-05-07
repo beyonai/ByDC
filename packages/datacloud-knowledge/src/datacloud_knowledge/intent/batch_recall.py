@@ -836,55 +836,55 @@ def _build_tsquery_sql(
         sql = f"""
             WITH input(keyword_key, tsquery_text) AS (
               VALUES {input_values}
+            ), ranked AS (
+              SELECT i.keyword_key,
+                     tn.term_id,
+                     tn.name_text AS term_name,
+                     tn.name_id,
+                     t.term_type_code,
+                     ts_rank_cd(tn.{tsvector_column}, to_tsquery('simple', i.tsquery_text), 32) AS score,
+                     t.term_code,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY i.keyword_key, t.term_type_code
+                       ORDER BY ts_rank_cd(tn.{tsvector_column}, to_tsquery('simple', i.tsquery_text), 32) DESC
+                     ) AS rn
+              FROM input i
+              JOIN term_name tn ON tn.{tsvector_column} @@ to_tsquery('simple', i.tsquery_text)
+              JOIN term t ON tn.term_id = t.term_id
+              WHERE tn.{tsvector_column} IS NOT NULL{type_clause}{scope_clause}
             )
-            SELECT i.keyword_key, s.term_id, s.term_name, s.name_id, s.term_type_code, s.score, s.term_code
-            FROM input i
-            CROSS JOIN LATERAL (
-              SELECT term_id, term_name, name_id, term_type_code, score, term_code
-              FROM (
-                SELECT tn.term_id,
-                       tn.name_text AS term_name,
-                       tn.name_id,
-                       t.term_type_code,
-                       ts_rank_cd(tn.{tsvector_column}, to_tsquery('simple', i.tsquery_text), 32) AS score,
-                       t.term_code,
-                       ROW_NUMBER() OVER (
-                         PARTITION BY t.term_type_code
-                         ORDER BY ts_rank_cd(tn.{tsvector_column}, to_tsquery('simple', i.tsquery_text), 32) DESC
-                       ) AS rn
-                FROM term_name tn
-                JOIN term t ON tn.term_id = t.term_id
-                WHERE tn.{tsvector_column} @@ to_tsquery('simple', i.tsquery_text)
-                  AND tn.{tsvector_column} IS NOT NULL{type_clause}{scope_clause}
-              ) ranked
-              WHERE ranked.rn <= :per_type_limit AND ranked.score >= :min_score
-            ) s
-            ORDER BY i.keyword_key, s.score DESC
+            SELECT keyword_key, term_id, term_name, name_id, term_type_code, score, term_code
+            FROM ranked
+            WHERE rn <= :per_type_limit AND score >= :min_score
+            ORDER BY keyword_key, score DESC
         """
         sql_obj = text(sql)
     else:
         sql = f"""
             WITH input(keyword_key, tsquery_text) AS (
               VALUES {input_values}
-            )
-            SELECT i.keyword_key, s.term_id, s.term_name, s.name_id, s.term_type_code, s.score, s.term_code
-            FROM input i
-            CROSS JOIN LATERAL (
-              SELECT tn.term_id,
+            ), ranked AS (
+              SELECT i.keyword_key,
+                     tn.term_id,
                      tn.name_text AS term_name,
                      tn.name_id,
                      t.term_type_code,
                      ts_rank_cd(tn.{tsvector_column}, to_tsquery('simple', i.tsquery_text), 32) AS score,
-                     t.term_code
-              FROM term_name tn
+                     t.term_code,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY i.keyword_key
+                       ORDER BY ts_rank_cd(tn.{tsvector_column}, to_tsquery('simple', i.tsquery_text), 32) DESC
+                     ) AS rn
+              FROM input i
+              JOIN term_name tn ON tn.{tsvector_column} @@ to_tsquery('simple', i.tsquery_text)
               JOIN term t ON tn.term_id = t.term_id
-              WHERE tn.{tsvector_column} @@ to_tsquery('simple', i.tsquery_text)
-                AND tn.{tsvector_column} IS NOT NULL{type_clause}{scope_clause}
+              WHERE tn.{tsvector_column} IS NOT NULL{type_clause}{scope_clause}
                 AND ts_rank_cd(tn.{tsvector_column}, to_tsquery('simple', i.tsquery_text), 32) >= :min_score
-              ORDER BY {order_expr}
-              LIMIT :per_kw_limit
-            ) s
-            ORDER BY i.keyword_key, s.score DESC
+            )
+            SELECT keyword_key, term_id, term_name, name_id, term_type_code, score, term_code
+            FROM ranked
+            WHERE rn <= :per_kw_limit
+            ORDER BY keyword_key, score DESC
         """
         sql_obj = text(sql)
 
@@ -908,58 +908,60 @@ def _build_substring_sql(
         sql = f"""
             WITH input(keyword_key, keyword_text) AS (
               VALUES {input_values}
+            ), ranked AS (
+              SELECT i.keyword_key,
+                     tn.term_id,
+                     tn.name_text AS term_name,
+                     tn.name_id,
+                     t.term_type_code,
+                     LENGTH(tn.name_text)::float AS score,
+                     t.term_code,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY i.keyword_key, t.term_type_code
+                       ORDER BY LENGTH(tn.name_text) DESC
+                     ) AS rn
+              FROM input i
+              JOIN term_name tn ON (
+                    POSITION(tn.name_text IN i.keyword_text) > 0
+                    OR POSITION(i.keyword_text IN tn.name_text) > 0
+                  )
+              JOIN term t ON tn.term_id = t.term_id
+              WHERE 1 = 1{type_clause}{scope_clause}
             )
-            SELECT i.keyword_key, s.term_id, s.term_name, s.name_id, s.term_type_code, s.score, s.term_code
-            FROM input i
-            CROSS JOIN LATERAL (
-              SELECT term_id, term_name, name_id, term_type_code, score, term_code
-              FROM (
-                SELECT tn.term_id,
-                       tn.name_text AS term_name,
-                       tn.name_id,
-                       t.term_type_code,
-                       LENGTH(tn.name_text)::float AS score,
-                       t.term_code,
-                       ROW_NUMBER() OVER (
-                         PARTITION BY t.term_type_code
-                         ORDER BY LENGTH(tn.name_text) DESC
-                       ) AS rn
-                FROM term_name tn
-                JOIN term t ON tn.term_id = t.term_id
-                WHERE (
-                        POSITION(tn.name_text IN i.keyword_text) > 0
-                        OR POSITION(i.keyword_text IN tn.name_text) > 0
-                      ){type_clause}{scope_clause}
-              ) ranked
-              WHERE ranked.rn <= :per_type_limit
-            ) s
-            ORDER BY i.keyword_key, s.score DESC
+            SELECT keyword_key, term_id, term_name, name_id, term_type_code, score, term_code
+            FROM ranked
+            WHERE rn <= :per_type_limit
+            ORDER BY keyword_key, score DESC
         """
         sql_obj = text(sql)
     else:
         sql = f"""
             WITH input(keyword_key, keyword_text) AS (
               VALUES {input_values}
-            )
-            SELECT i.keyword_key, s.term_id, s.term_name, s.name_id, s.term_type_code, s.score, s.term_code
-            FROM input i
-            CROSS JOIN LATERAL (
-              SELECT tn.term_id,
+            ), ranked AS (
+              SELECT i.keyword_key,
+                     tn.term_id,
                      tn.name_text AS term_name,
                      tn.name_id,
                      t.term_type_code,
                      LENGTH(tn.name_text)::float AS score,
-                     t.term_code
-              FROM term_name tn
+                     t.term_code,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY i.keyword_key
+                       ORDER BY LENGTH(tn.name_text) DESC
+                     ) AS rn
+              FROM input i
+              JOIN term_name tn ON (
+                    POSITION(tn.name_text IN i.keyword_text) > 0
+                    OR POSITION(i.keyword_text IN tn.name_text) > 0
+                  )
               JOIN term t ON tn.term_id = t.term_id
-              WHERE (
-                      POSITION(tn.name_text IN i.keyword_text) > 0
-                      OR POSITION(i.keyword_text IN tn.name_text) > 0
-                    ){type_clause}{scope_clause}
-              ORDER BY LENGTH(tn.name_text) DESC
-              LIMIT :per_kw_limit
-            ) s
-            ORDER BY i.keyword_key, s.score DESC
+              WHERE 1 = 1{type_clause}{scope_clause}
+            )
+            SELECT keyword_key, term_id, term_name, name_id, term_type_code, score, term_code
+            FROM ranked
+            WHERE rn <= :per_kw_limit
+            ORDER BY keyword_key, score DESC
         """
         sql_obj = text(sql)
 
