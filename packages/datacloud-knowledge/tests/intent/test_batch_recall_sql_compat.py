@@ -40,10 +40,7 @@ def test_batch_recall_sql_uses_set_based_window_form(
     batch_module = _get_batch_module()
     builder = getattr(batch_module, builder_name)
 
-    if builder_name == "_build_tsquery_sql":
-        stmt = builder(**kwargs)
-    else:
-        stmt = builder(**kwargs)
+    stmt = builder(**kwargs)
 
     sql_text = str(stmt)
     assert "CROSS JOIN LATERAL" not in sql_text
