@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -34,6 +35,10 @@ _FORMATTED_PARAMS: dict[str, Any] = {
     "select": ["total_revenue"],
     "filters": [],
 }
+
+
+def _expected_form(paradigm_list: list[dict[str, Any]]) -> str:
+    return json.dumps({"paradigmList": paradigm_list}, ensure_ascii=False)
 
 
 def _make_state(
@@ -67,26 +72,21 @@ def _make_state(
 # ── TC-2-2b: is_complex=False ─────────────────────────────────────────────────
 
 _INTERRUPT_PATCH = "datacloud_analysis.orchestration.clarification.user_clarify_node.interrupt"
-_FORMAT_PATCH = (
-    "datacloud_analysis.orchestration.clarification.user_clarify_node._format_clarification"
-)
-_NORMALIZE_PATCH = (
-    "datacloud_analysis.orchestration.clarification.user_clarify_node."
-    "normalize_clarification_params"
-)
-_PERSIST_PATCH = (
-    "datacloud_analysis.orchestration.clarification.user_clarify_node.persist_confirmed_synonyms"
+_FINALIZE_PATCH = (
+    "datacloud_analysis.orchestration.clarification.user_clarify_node.finalize_query_clarification"
 )
 
 
 async def test_tc2_2b_is_complex_false_in_formatted_params() -> None:
     """TC-2-2b: is_complex=False → clarification_formatted_params.is_complex=False。"""
     state = _make_state(is_complex=False)
+    finalized = MagicMock()
+    finalized.structured_input = _FORMATTED_PARAMS
+    finalized.persisted_synonyms = None
 
     with (
         patch(_INTERRUPT_PATCH, return_value=None),
-        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
-        patch(_NORMALIZE_PATCH, return_value=_FORMATTED_PARAMS),
+        patch(_FINALIZE_PATCH, return_value=finalized),
     ):
         result = await user_clarify_node(state, MagicMock())  # type: ignore[arg-type]
 
@@ -101,11 +101,13 @@ async def test_tc2_2b_is_complex_false_in_formatted_params() -> None:
 async def test_tc2_3b_is_complex_true_in_formatted_params() -> None:
     """TC-2-3b: is_complex=True → clarification_formatted_params.is_complex=True。"""
     state = _make_state(is_complex=True)
+    finalized = MagicMock()
+    finalized.structured_input = _FORMATTED_PARAMS
+    finalized.persisted_synonyms = None
 
     with (
         patch(_INTERRUPT_PATCH, return_value=None),
-        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
-        patch(_NORMALIZE_PATCH, return_value=_FORMATTED_PARAMS),
+        patch(_FINALIZE_PATCH, return_value=finalized),
     ):
         result = await user_clarify_node(state, MagicMock())  # type: ignore[arg-type]
 
@@ -121,11 +123,13 @@ async def test_tc2_8_state_keys_cleared_after_format() -> None:
     clarification_analyze_result 保留供 before_call_back 兜底读取。
     """
     state = _make_state()
+    finalized = MagicMock()
+    finalized.structured_input = _FORMATTED_PARAMS
+    finalized.persisted_synonyms = None
 
     with (
         patch(_INTERRUPT_PATCH, return_value=None),
-        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
-        patch(_NORMALIZE_PATCH, return_value=_FORMATTED_PARAMS),
+        patch(_FINALIZE_PATCH, return_value=finalized),
     ):
         result = await user_clarify_node(state, MagicMock())  # type: ignore[arg-type]
 
@@ -144,26 +148,15 @@ async def test_tc2_8_state_keys_cleared_after_format() -> None:
 async def test_tc2_10_empty_resume_value_does_not_raise() -> None:
     """TC-2-10: resume_value 为空 → _format_clarification 接收空 form_str，不抛异常。"""
     state = _make_state(resume_value=None)
+    finalized = MagicMock()
+    finalized.structured_input = _FORMATTED_PARAMS
+    finalized.persisted_synonyms = None
 
     with (
         patch(_INTERRUPT_PATCH, return_value=None),
-        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS) as mock_fmt,
-        patch(_NORMALIZE_PATCH, return_value=_FORMATTED_PARAMS),
+        patch(_FINALIZE_PATCH, return_value=finalized),
     ):
         result = await user_clarify_node(state, MagicMock())  # type: ignore[arg-type]
-
-    # _format_clarification 应被调用，第三参数为 '{"paradigmList": []}' (resume_value=None 时)
-    assert mock_fmt.called
-    call_kwargs = mock_fmt.call_args
-    form_str_arg = (
-        call_kwargs.args[2]
-        if len(call_kwargs.args) >= 3
-        else call_kwargs.kwargs.get("form_str", "")
-    )
-    import json as _json
-
-    parsed = _json.loads(form_str_arg) if form_str_arg else {}
-    assert parsed.get("paradigmList") == [], f"form_str 应含空 paradigmList，实际: {form_str_arg!r}"
 
     assert result.get("clarification_formatted_params") is not None
 
@@ -173,30 +166,36 @@ async def test_gateway_user_id_controls_synonym_persistence() -> None:
     state = _make_state()
     resume_value = {"paradigmList": [{"paradigmList": _PARADIGM_LIST}]}
     config = {"configurable": {"gateway_context": SimpleNamespace(user_id="user-1")}}
+    finalized = MagicMock()
+    finalized.structured_input = _FORMATTED_PARAMS
+    finalized.persisted_synonyms = MagicMock(created_ids=["name-1"])
 
     with (
         patch(_INTERRUPT_PATCH, return_value=resume_value),
-        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
-        patch(_NORMALIZE_PATCH, return_value=_FORMATTED_PARAMS),
-        patch(_PERSIST_PATCH, return_value=["name-1"]) as mock_persist,
+        patch(_FINALIZE_PATCH, return_value=finalized) as mock_finalize,
     ):
         await user_clarify_node(state, config)  # type: ignore[arg-type]
 
-    mock_persist.assert_called_once_with(
-        paradigm_list=_PARADIGM_LIST,
+    mock_finalize.assert_called_once_with(
+        query="查询高营收企业",
         ontology_code="ads_enterprise",
+        structured_input={"select": ["营收"]},
+        mode="query",
+        needs_clarification=True,
+        form=_expected_form(_PARADIGM_LIST),
+        metadata="知识",
         user_id="user-1",
+        persist_confirmed_synonyms=True,
     )
 
+    finalized.persisted_synonyms = None
     with (
         patch(_INTERRUPT_PATCH, return_value=resume_value),
-        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
-        patch(_NORMALIZE_PATCH, return_value=_FORMATTED_PARAMS),
-        patch(_PERSIST_PATCH, return_value=["name-1"]) as mock_persist_no_user,
+        patch(_FINALIZE_PATCH, return_value=finalized) as mock_finalize_no_user,
     ):
         await user_clarify_node(state, {"configurable": {}})  # type: ignore[arg-type]
 
-    mock_persist_no_user.assert_not_called()
+    mock_finalize_no_user.assert_called_once()
 
 
 async def test_gateway_header_user_code_is_user_identity() -> None:
@@ -210,19 +209,26 @@ async def test_gateway_header_user_code_is_user_identity() -> None:
             )
         }
     }
+    finalized = MagicMock()
+    finalized.structured_input = _FORMATTED_PARAMS
+    finalized.persisted_synonyms = MagicMock(created_ids=["name-1"])
 
     with (
         patch(_INTERRUPT_PATCH, return_value=resume_value),
-        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
-        patch(_NORMALIZE_PATCH, return_value=_FORMATTED_PARAMS),
-        patch(_PERSIST_PATCH, return_value=["name-1"]) as mock_persist,
+        patch(_FINALIZE_PATCH, return_value=finalized) as mock_finalize,
     ):
         await user_clarify_node(state, config)  # type: ignore[arg-type]
 
-    mock_persist.assert_called_once_with(
-        paradigm_list=_PARADIGM_LIST,
+    mock_finalize.assert_called_once_with(
+        query="查询高营收企业",
         ontology_code="ads_enterprise",
+        structured_input={"select": ["营收"]},
+        mode="query",
+        needs_clarification=True,
+        form=_expected_form(_PARADIGM_LIST),
+        metadata="知识",
         user_id="adminvip",
+        persist_confirmed_synonyms=True,
     )
 
 
@@ -239,17 +245,24 @@ async def test_gateway_current_command_header_user_code_is_user_identity() -> No
             )
         }
     }
+    finalized = MagicMock()
+    finalized.structured_input = _FORMATTED_PARAMS
+    finalized.persisted_synonyms = MagicMock(created_ids=["name-1"])
 
     with (
         patch(_INTERRUPT_PATCH, return_value=resume_value),
-        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
-        patch(_NORMALIZE_PATCH, return_value=_FORMATTED_PARAMS),
-        patch(_PERSIST_PATCH, return_value=["name-1"]) as mock_persist,
+        patch(_FINALIZE_PATCH, return_value=finalized) as mock_finalize,
     ):
         await user_clarify_node(state, config)  # type: ignore[arg-type]
 
-    mock_persist.assert_called_once_with(
-        paradigm_list=_PARADIGM_LIST,
+    mock_finalize.assert_called_once_with(
+        query="查询高营收企业",
         ontology_code="ads_enterprise",
+        structured_input={"select": ["营收"]},
+        mode="query",
+        needs_clarification=True,
+        form=_expected_form(_PARADIGM_LIST),
+        metadata="知识",
         user_id="adminvip",
+        persist_confirmed_synonyms=True,
     )
