@@ -52,6 +52,7 @@ dependencies = [
     "python-multipart>=0.0.12",
     "uvicorn>=0.32.0",
     "watchfiles>=1.0",
+    "datacloud-knowledge[all]>=0.1.0",
 ]
 
 [dependency-groups]
