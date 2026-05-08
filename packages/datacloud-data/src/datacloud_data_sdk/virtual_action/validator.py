@@ -266,6 +266,12 @@ class VirtualActionValidator:
                 if alias:
                     metric_aliases.add(alias)
                 continue
+            # expr 模式：LLM 传入自定义表达式，不对应单一字段编码，跳过字段存在性校验
+            if mtr.get("expr"):
+                alias = mtr.get("as", "")
+                if alias:
+                    metric_aliases.add(alias)
+                continue
             fc = mtr.get("field", "")
             agg = mtr.get("agg", "")
             f = self._get_field(fc)

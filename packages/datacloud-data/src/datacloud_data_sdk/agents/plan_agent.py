@@ -194,7 +194,11 @@ def _extract_text_from_chunk(chunk: Any) -> str:
 
 def parse_json_response(content: str) -> dict[str, Any]:
     """从 LLM 响应中提取 JSON。"""
+    import re
+
     content = content.strip()
+    # 剥离 <think>...</think> 推理块（部分模型开启 thinking 时会输出）
+    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
     if content.startswith("```"):
         lines = content.split("\n")
         start = 1

@@ -412,15 +412,20 @@ class ComputeExecutor:
             if agg == "count_all":
                 expr = "COUNT(*)"
             else:
+                raw_expr = mtr.get("expr", "")
                 fc = mtr.get("field", "")
-                f = field_map.get(fc)
-                formula = getattr(f, "formula", None) if f else None
-                kind = getattr(f, "analytic_kind", None) if f else None
-                if formula and kind in _FORMULA_KINDS:
-                    col_expr = f"({formula})"
+                if raw_expr:
+                    # expr 模式：LLM 传入自定义表达式，直接用作 SQL col_expr
+                    col_expr = f"({raw_expr})"
                 else:
-                    col = _resolve_col_expr(f, fc)
-                    col_expr = _quote(col, db_type)
+                    f = field_map.get(fc)
+                    formula = getattr(f, "formula", None) if f else None
+                    kind = getattr(f, "analytic_kind", None) if f else None
+                    if formula and kind in _FORMULA_KINDS:
+                        col_expr = f"({formula})"
+                    else:
+                        col = _resolve_col_expr(f, fc)
+                        col_expr = _quote(col, db_type)
                 expr = _agg_expr(agg, col_expr)
             select_parts.append(f"{expr} AS {_quote(col_alias, db_type)}")
             col_keys.append(col_alias)
