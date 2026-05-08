@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from datacloud_data_sdk.exceptions import TermAmbiguousError, TermNotFoundError
 
+search_terms_by_type: Callable[..., Any] | None
 try:
-    from datacloud_knowledge.knowledge_search.term_search import search_terms_by_type
+    from datacloud_knowledge.provider import search_terms_by_type as _search_terms_by_type
 except ImportError:
-    search_terms_by_type = None  # type: ignore[assignment]
+    search_terms_by_type = None
+else:
+    search_terms_by_type = _search_terms_by_type
 
 
 @dataclass
@@ -170,9 +175,7 @@ class KbTermLoader(TermLoader):
         memory_matches: list[dict[str, str]] = []
         for entry in self._mapping_entries(term_set):
             if value in (entry.code, entry.label, *entry.aliases):
-                memory_matches.append(
-                    {"code": entry.code, "label": entry.label, "aliases": entry.aliases}
-                )
+                memory_matches.append({"code": entry.code, "label": entry.label})
         if len(memory_matches) == 1:
             return memory_matches[0]["code"]
         if len(memory_matches) > 1:
@@ -184,18 +187,12 @@ class KbTermLoader(TermLoader):
         matches: list[dict[str, str]] = []
         for entry in cached:
             if value in (entry.code, entry.label, *entry.aliases):
-                matches.append(
-                    {
-                        "code": entry.code,
-                        "label": entry.label,
-                        "aliases": entry.aliases,
-                    }
-                )
+                matches.append({"code": entry.code, "label": entry.label})
         if len(matches) == 1:
             return matches[0]["code"]
         if len(matches) > 1:
             raise TermAmbiguousError(term_set, value, matches, param_name)
-        available_entries = self.get_entries(term_set, dataset_id, term_type_code, keyword)
+        available_entries = self.get_entries(term_set, dataset_id, term_type_code, keyword or "")
         raise TermNotFoundError(term_set, value, None, param_name, available_entries)
 
     def resolve_value(
@@ -213,9 +210,7 @@ class KbTermLoader(TermLoader):
             memory_matches: list[dict[str, str]] = []
             for entry in self._mapping_entries(term_set):
                 if value in (entry.code, entry.label, *entry.aliases):
-                    memory_matches.append(
-                        {"code": entry.code, "label": entry.label, "aliases": entry.aliases}
-                    )
+                    memory_matches.append({"code": entry.code, "label": entry.label})
             if len(memory_matches) == 1:
                 return memory_matches[0]["label"]
             if len(memory_matches) > 1:
@@ -227,18 +222,14 @@ class KbTermLoader(TermLoader):
             matches: list[dict[str, str]] = []
             for entry in cached:
                 if value in (entry.code, entry.label, *entry.aliases):
-                    matches.append(
-                        {
-                            "code": entry.code,
-                            "label": entry.label,
-                            "aliases": entry.aliases,
-                        }
-                    )
+                    matches.append({"code": entry.code, "label": entry.label})
             if len(matches) == 1:
                 return matches[0]["label"]
             if len(matches) > 1:
                 raise TermAmbiguousError(term_set, value, matches, param_name)
-            available_entries = self.get_entries(term_set, dataset_id, term_type_code, keyword)
+            available_entries = self.get_entries(
+                term_set, dataset_id, term_type_code, keyword or ""
+            )
             raise TermNotFoundError(term_set, value, None, param_name, available_entries)
         return self.resolve_code(term_set, value, dataset_id, term_type_code, keyword, param_name)
 
