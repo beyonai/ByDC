@@ -191,3 +191,4 @@ packages/datacloud-analysis-bak/
 packages/datacloud-analysis/src/datacloud_analysis/demo.py
 package.json
 package-lock.json
+examples/chatbi_demo/.demo_env

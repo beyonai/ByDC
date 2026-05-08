@@ -2,6 +2,7 @@
 """场景一：正常流程（无中断）。"""
 
 import asyncio
+import os
 import sys
 import uuid
 
@@ -20,15 +21,13 @@ from datacloud_analysis.ontology_agent import (
 
 async def main() -> None:
     config = OntologyAgentConfig(
-        api_key="sk-DRwRYfqi5HpHFbpTjVWRrBRck1nLrwkaGvf4ywv49lFAgWRH",
-        model="kimi-k2.6",
-        base_url="https://api.moonshot.cn/v1",
-        resource_path=r"D:\data\code\baiying\byclaw-all\byclaw-data\resource",
-        temperature=0.6,
+        api_key=os.environ["DEMO_API_KEY"],
+        model=os.environ["DEMO_MODEL"],
+        base_url=os.environ["DEMO_BASE_URL"],
+        resource_path=os.environ["DEMO_RESOURCE_PATH"],
+        temperature=float(os.environ["DEMO_TEMPERATURE"]),
         model_kwargs={"extra_body": {"thinking": {"type": "disabled"}}},
-        # HTTP_SQL 后端服务地址；非空时强制走 HttpSqlConnector，
-        # 取代历史的 DATACLOUD_SQL_SERVICE_URL 环境变量。
-        sql_execute_url="http://172.21.72.156:8570/knowledgeService/callDomainModel/executeSql",
+        sql_execute_url=os.environ["DEMO_SQL_EXECUTE_URL"],
     )
     agent = OntologyAgent(config)
 

@@ -128,6 +128,19 @@
       "justMyCode": false
     },
     {
+      "name": "chatbi demo [normal]",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "program": "${workspaceFolder}/examples/chatbi_demo/demo_normal.py",
+      "cwd": "${workspaceFolder}/examples/chatbi_demo",
+      "envFile": "${workspaceFolder}/examples/chatbi_demo/.demo_env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/packages/datacloud-analysis/src;${workspaceFolder}/packages/datacloud-data/src;${workspaceFolder}/packages/datacloud-knowledge/src;${env:PYTHONPATH}",
+      },
+      "justMyCode": false
+    },
+    {
       "name": "Python: 运行当前文件",
       "type": "debugpy",
       "request": "launch",
