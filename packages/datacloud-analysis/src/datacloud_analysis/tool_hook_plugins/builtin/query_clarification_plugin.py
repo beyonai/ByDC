@@ -136,12 +136,17 @@ def _normalize_json_fields(params: dict[str, Any]) -> dict[str, Any]:
     LLM tool call 有时将 select / order_by 等字段序列化为 JSON 字符串
     （如 ``'["管理网格名称", "企业数量"]'``），而非原生 list。
     逐字符迭代字符串会导致术语提取逐字拆分，产生 119 个单字"术语"。
+
+    同时处理 LLM 传入 "null" / "undefined" 字符串的情况，统一转为 None。
     """
     normalized = dict(params)
     for key in _JSON_LIST_FIELDS:
         val = normalized.get(key)
         if isinstance(val, str):
             val = val.strip()
+            if val in ("null", "undefined", ""):
+                normalized[key] = None
+                continue
             if val.startswith("["):
                 try:
                     parsed = json.loads(val)
