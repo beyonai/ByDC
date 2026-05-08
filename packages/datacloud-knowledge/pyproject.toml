@@ -20,49 +20,27 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 
-dependencies = []
-
-[project.optional-dependencies]
-import = [
-    "psycopg[binary]>=3.1",
-    "rdflib>=7.0",
-]
-embedding = [
-    "llama-index-embeddings-openai>=0.3.0",
-    "pydantic-settings>=2.0",
-]
-bootstrap = [
-    "datacloud-knowledge[import,embedding]",
-]
-query = [
-    "jieba>=0.42.1",
-    "numpy>=1.26",
-    "pypinyin>=0.50",
-    "psycopg[binary,pool]>=3.1",
-    "rapidfuzz>=3.14.3",
-    "SQLAlchemy>=2.0",
-]
-file-store = [
+dependencies = [
     "boto3>=1.34",
+    "fastapi>=0.115.0",
+    "jieba>=0.42.1",
+    "llama-index-embeddings-openai>=0.3.0",
+    "matplotlib>=3.7",
+    "networkx>=3.0",
+    "numpy>=1.26",
+    "psycopg[binary,pool]>=3.1",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
-]
-api = [
-    "fastapi>=0.115.0",
-    "python-multipart>=0.0.12", # Required for FastAPI form data/upload file support
+    "pypinyin>=0.50",
+    "python-multipart>=0.0.12",
+    "rapidfuzz>=3.14.3",
+    "rdflib>=7.0",
+    "SQLAlchemy>=2.0",
     "uvicorn>=0.32.0",
 ]
-owl-gen = []
-visualization = [
-    "numpy>=1.26",
-    "networkx>=3.0",
-    "matplotlib>=3.7",
-]
-all = [
-    "datacloud-knowledge[api,bootstrap,file-store,owl-gen,query,visualization]",
-]
+
+[project.optional-dependencies]
 dev = [
-    "datacloud-knowledge[all]",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "httpx>=0.27",
