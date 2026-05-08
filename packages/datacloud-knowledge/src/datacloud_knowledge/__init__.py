@@ -10,8 +10,6 @@ __version__ = "0.2.0"
 _LAZY_EXPORTS = {
     "CACHE_DIR_ENV": ("datacloud_knowledge.query.vocab_cache", "CACHE_DIR_ENV"),
     "DEFAULT_CACHE_DIR": ("datacloud_knowledge.query.vocab_cache", "DEFAULT_CACHE_DIR"),
-    "FileManager": ("datacloud_knowledge.file_store.manager", "FileManager"),
-    "FileStoreSettings": ("datacloud_knowledge.file_store.settings", "FileStoreSettings"),
     "SQLKnowledgeGraphQuery": ("datacloud_knowledge.query", "SQLKnowledgeGraphQuery"),
     "TreeNode": ("datacloud_knowledge.query", "TreeNode"),
     "VocabularyCache": ("datacloud_knowledge.query.vocab_cache", "VocabularyCache"),
@@ -42,8 +40,6 @@ def __getattr__(name: str) -> Any:
 __all__ = [
     "CACHE_DIR_ENV",
     "DEFAULT_CACHE_DIR",
-    "FileManager",
-    "FileStoreSettings",
     "SQLKnowledgeGraphQuery",
     "TreeNode",
     "VocabularyCache",

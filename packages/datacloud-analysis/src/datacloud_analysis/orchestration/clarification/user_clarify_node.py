@@ -6,17 +6,13 @@ import json
 import logging
 from typing import Any
 
-from datacloud_knowledge.intent.clarification import (
-    normalize_clarification_params,
-    persist_confirmed_synonyms,
-)
+from datacloud_knowledge.provider import finalize_query_clarification
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
 from datacloud_analysis.orchestration.gateway_user import get_gateway_user_id
 from datacloud_analysis.orchestration.state import AgentState
 from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
-    _format_clarification,
     _scope_code_from_tool,
 )
 
@@ -155,7 +151,7 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
     )
 
     # resume_value 结构：{"paradigmList": [{"paradigmList": [...items...], ...}]}
-    # _format_clarification 期望：{"paradigmList": [...items...]}（一层展开）
+    # 这里展开为 provider.finalize_query_clarification 需要的顶层 paradigmList
     paradigm_list_from_resume: list[dict[str, Any]] = []
     if isinstance(resume_value, dict):
         outer = list(resume_value.get("paradigmList") or [])
@@ -163,34 +159,27 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             paradigm_list_from_resume = list(outer[0].get("paradigmList") or [])
     form_str = json.dumps({"paradigmList": paradigm_list_from_resume}, ensure_ascii=False)
 
-    formatted_params: dict[str, Any] = _format_clarification(
-        query,
-        structured_input,
-        form_str,
-        clarify_knowledge,
-        is_compute=is_compute,
-    )
-
     scope_code = _scope_code_from_tool(tool_name)
     user_id = _get_gateway_user_id(config)
-    formatted_params = normalize_clarification_params(
-        formatted_params,
+    finalized = finalize_query_clarification(
+        query=query,
         ontology_code=scope_code,
+        structured_input=structured_input,
+        mode="compute" if is_compute else "query",
+        needs_clarification=True,
+        form=form_str,
+        metadata=clarify_knowledge,
         user_id=user_id,
+        persist_confirmed_synonyms=True,
     )
-
-    if user_id:
-        created_ids = persist_confirmed_synonyms(
-            paradigm_list=paradigm_list_from_resume,
-            ontology_code=scope_code,
-            user_id=user_id,
-        )
+    formatted_params = finalized.structured_input
+    if finalized.persisted_synonyms is not None:
         logger.info(
             "[user_clarify] persisted confirmed synonyms user_id=%s count=%d",
-            user_id,
-            len(created_ids),
+            user_id or "",
+            len(finalized.persisted_synonyms.created_ids),
         )
-    else:
+    elif not user_id:
         logger.info("[user_clarify] skip synonym persistence: gateway user_id is empty")
 
     logger.info("[user_clarify] formatted params keys=%s", sorted(formatted_params.keys()))

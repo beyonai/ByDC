@@ -17,12 +17,8 @@ from datacloud_analysis.orchestration.clarification.user_clarify_node import (
 
 # ── patch 路径 ────────────────────────────────────────────────────────────────
 _INTERRUPT_PATCH = "datacloud_analysis.orchestration.clarification.user_clarify_node.interrupt"
-_FORMAT_PATCH = (
-    "datacloud_analysis.orchestration.clarification.user_clarify_node._format_clarification"
-)
-_NORMALIZE_PATCH = "datacloud_analysis.orchestration.clarification.user_clarify_node.normalize_clarification_params"
-_PERSIST_PATCH = (
-    "datacloud_analysis.orchestration.clarification.user_clarify_node.persist_confirmed_synonyms"
+_FINALIZE_PATCH = (
+    "datacloud_analysis.orchestration.clarification.user_clarify_node.finalize_query_clarification"
 )
 
 _TOOL_NAME = "query_ads_enterprise"
@@ -71,22 +67,18 @@ async def test_user_code_from_configurable_used_when_no_gateway_context() -> Non
             # 无 gateway_context
         }
     }
+    finalized = MagicMock()
+    finalized.structured_input = _FORMATTED_PARAMS
+    finalized.persisted_synonyms = MagicMock(created_ids=[])
 
     with (
         patch(_INTERRUPT_PATCH, return_value=_RESUME_VALUE),
-        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
-        patch(_NORMALIZE_PATCH, side_effect=lambda p, **_kw: p),
-        patch(_PERSIST_PATCH, return_value=[]) as mock_persist,
+        patch(_FINALIZE_PATCH, return_value=finalized) as mock_finalize,
     ):
         result = await user_clarify_node(_make_state(), config)  # type: ignore[arg-type]
 
-    mock_persist.assert_called_once()
-    call_kwargs = mock_persist.call_args.kwargs
-    assert call_kwargs.get("user_id") == "direct_user_001" or (
-        # 也接受 positional 传参
-        len(mock_persist.call_args.args) >= 3
-        and mock_persist.call_args.args[2] == "direct_user_001"
-    )
+    mock_finalize.assert_called_once()
+    assert mock_finalize.call_args.kwargs.get("user_id") == "direct_user_001"
     assert result.get("clarification_formatted_params") is not None
 
 
@@ -105,12 +97,13 @@ async def test_gateway_context_takes_priority_over_direct_user_code() -> None:
             "user_code": "should_not_be_used",
         }
     }
+    finalized = MagicMock()
+    finalized.structured_input = _FORMATTED_PARAMS
+    finalized.persisted_synonyms = MagicMock(created_ids=[])
 
     with (
         patch(_INTERRUPT_PATCH, return_value=_RESUME_VALUE),
-        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
-        patch(_NORMALIZE_PATCH, side_effect=lambda p, **_kw: p),
-        patch(_PERSIST_PATCH, return_value=[]) as mock_persist,
+        patch(_FINALIZE_PATCH, return_value=finalized) as mock_finalize,
         patch(
             "datacloud_analysis.orchestration.clarification.user_clarify_node.get_gateway_user_id",
             return_value="gw_user_001",
@@ -118,10 +111,8 @@ async def test_gateway_context_takes_priority_over_direct_user_code() -> None:
     ):
         await user_clarify_node(_make_state(), config)  # type: ignore[arg-type]
 
-    mock_persist.assert_called_once()
-    _, kwargs = mock_persist.call_args
-    # 应使用 gateway_context 中的 user_id，不是 direct user_code
-    assert kwargs.get("user_id") == "gw_user_001"
+    mock_finalize.assert_called_once()
+    assert mock_finalize.call_args.kwargs.get("user_id") == "gw_user_001"
 
 
 # ── TC-T2-3: 两者都没有时 persist 不被调用 ────────────────────────────────────
@@ -135,14 +126,16 @@ async def test_no_user_id_skips_persistence() -> None:
             # 无 gateway_context, 无 user_code
         }
     }
+    finalized = MagicMock()
+    finalized.structured_input = _FORMATTED_PARAMS
+    finalized.persisted_synonyms = None
 
     with (
         patch(_INTERRUPT_PATCH, return_value=_RESUME_VALUE),
-        patch(_FORMAT_PATCH, return_value=_FORMATTED_PARAMS),
-        patch(_NORMALIZE_PATCH, side_effect=lambda p, **_kw: p),
-        patch(_PERSIST_PATCH, return_value=[]) as mock_persist,
+        patch(_FINALIZE_PATCH, return_value=finalized) as mock_finalize,
     ):
         result = await user_clarify_node(_make_state(), config)  # type: ignore[arg-type]
 
-    mock_persist.assert_not_called()
+    mock_finalize.assert_called_once()
+    assert mock_finalize.call_args.kwargs.get("user_id") is None
     assert result.get("clarification_formatted_params") is not None

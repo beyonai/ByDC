@@ -24,25 +24,21 @@ import re
 from typing import Any
 
 try:
-    from datacloud_knowledge.intent.clarification import (
-        analyze_query_clarification as _sdk_analyze_clarification,
+    from datacloud_knowledge.provider import (
+        finalize_query_clarification as _sdk_finalize_clarification,
     )
-    from datacloud_knowledge.intent.clarification import (
-        format_clarification_compute as _sdk_format_compute,
-    )
-    from datacloud_knowledge.intent.clarification import (
-        format_clarification_query as _sdk_format_query,
+    from datacloud_knowledge.provider import (
+        prepare_query_clarification as _sdk_analyze_clarification,
     )
 
     _HAS_SDK_CLARIFICATION = True
 except ImportError:  # pragma: no cover
     _HAS_SDK_CLARIFICATION = False
     _sdk_analyze_clarification = None  # type: ignore[assignment]
-    _sdk_format_compute = None  # type: ignore[assignment]
-    _sdk_format_query = None  # type: ignore[assignment]
+    _sdk_finalize_clarification = None  # type: ignore[assignment]
 
 try:
-    from datacloud_knowledge.knowledge_search import resolve_field_aliases
+    from datacloud_knowledge.provider import resolve_field_aliases
 
     _HAS_RESOLVE_ALIASES = True
 except ImportError:  # pragma: no cover
@@ -460,24 +456,30 @@ def _analyze_clarification(
 
     mode = "compute" if is_compute else "query"
     logger.info(
-        "[KG-CHAIN] call: datacloud_knowledge.intent.clarification.%s("
+        "[KG-CHAIN] call: datacloud_knowledge.provider.%s("
         "query=%r, ontology_code=%r, structured_input=%s, mode=%r)",
-        "analyze_query_clarification",
+        "prepare_query_clarification",
         query[:100],
         ontology_code,
         json.dumps(structured_input, ensure_ascii=False, default=str)[:300],
         mode,
     )
-    result = _sdk_analyze_clarification(query, ontology_code, structured_input, mode=mode)
+    result = _sdk_analyze_clarification(
+        query=query,
+        ontology_code=ontology_code,
+        structured_input=structured_input,
+        mode=mode,
+    )
 
     logger.info(
         "[KG-CHAIN] result: needs=%s form_len=%d knowledge_len=%d raw_form=%s",
         result.needs_clarification,
         len(result.form or ""),
-        len(result.knowledge or ""),
+        len(result.metadata or ""),
         result.form,
     )
-    paradigm_list = json.loads(result.form or "{}").get("paradigmList", [])
+    form_payload = result.form if isinstance(result.form, str) else ""
+    paradigm_list = json.loads(form_payload or "{}").get("paradigmList", [])
     for _p in paradigm_list:
         _results = list(_p.get("paradigmResult") or [])
         if _results:
@@ -496,11 +498,12 @@ def _analyze_clarification(
                     for _r in _results
                 ],
             )
-    return paradigm_list, result.knowledge, result.needs_clarification
+    return paradigm_list, str(result.metadata or ""), result.needs_clarification
 
 
 def _format_clarification(
     query: str,
+    ontology_code: str,
     structured_input: dict[str, Any],
     form_str: str,
     knowledge: str,
@@ -510,9 +513,17 @@ def _format_clarification(
     """调用 SDK 格式化，返回写回后的参数 dict。SDK 不可用时原样返回。"""
     if not _HAS_SDK_CLARIFICATION:
         return dict(structured_input)
-    if is_compute:
-        return _sdk_format_compute(query, structured_input, form_str, knowledge)  # type: ignore[misc]
-    return _sdk_format_query(query, structured_input, form_str, knowledge)  # type: ignore[misc]
+    result = _sdk_finalize_clarification(  # type: ignore[misc]
+        query=query,
+        ontology_code=ontology_code,
+        structured_input=structured_input,
+        mode="compute" if is_compute else "query",
+        needs_clarification=True,
+        form=form_str,
+        metadata=knowledge,
+        persist_confirmed_synonyms=False,
+    )
+    return result.structured_input
 
 
 # ── Resume 路径共享逻辑 ───────────────────────────────────────────────────────
@@ -552,10 +563,12 @@ def _execute_resume(
     is_compute: bool = bool(cached.get("is_compute"))
     resolved: dict[str, str] = dict(cached.get("resolved") or {})
     is_complex: bool = bool(cached.get("is_complex"))
+    scope_code = _scope_code_from_tool(tool_name)
 
     form_str = json.dumps({"paradigmList": paradigm_list_from_resume}, ensure_ascii=False)
     tool_params = _format_clarification(
         query,
+        scope_code,
         structured_input,
         form_str,
         knowledge,
@@ -581,7 +594,6 @@ def _execute_resume(
     logger.info("[query_clarification] _clarification_cache cleared from state")
 
     # SDK 回填的可能是官方中文字段名（choiceKeyword），需做二次翻译
-    scope_code = _scope_code_from_tool(tool_name)
     user_id = _get_gateway_context_user_id(ctx)
     _fresh_field_terms, _ = _collect_terms_from_params(tool_params)
     _fresh_resolved, _fresh_unresolved = _resolve_via_aliases(
@@ -852,15 +864,20 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             # LLM 确认所有术语无歧义 → 直接应用替换，不弹表单
             logger.info("[query_clarification] needs_clarification=False, 直接应用 LLM 确认结果")
             form_str = json.dumps({"paradigmList": paradigm_list}, ensure_ascii=False)
-            patched = _format_clarification(
-                query,
-                structured_input,
-                form_str,
-                clarify_knowledge or "",
-                is_compute=is_compute,
+
+            finalized = _sdk_finalize_clarification(
+                query=query,
+                ontology_code=scope_code,
+                structured_input=structured_input,
+                mode="compute" if is_compute else "query",
+                needs_clarification=needs_clarification,
+                form=form_str,
+                metadata=clarify_knowledge,
+                user_id=user_id,
+                persist_confirmed_synonyms=True,
             )
-            tool_params = _apply_resolved_to_params(patched, resolved)
-            tool_params["query"] = query  # _format_clarification 回填结果不含 query，需补回
+
+            tool_params = finalized.structured_input
             tool_params["query"] = query  # _format_clarification 回填结果不含 query，需补回
             ctx["tool_params"] = tool_params
             if is_complex:

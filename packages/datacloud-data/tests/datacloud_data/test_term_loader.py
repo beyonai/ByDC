@@ -1,11 +1,37 @@
+import importlib.util
+import sys
+from pathlib import Path
+from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 import pytest
-from datacloud_data_sdk.exceptions import TermNotFoundError
-from datacloud_data_sdk.ontology.term_loader import (
-    KbTermLoader,
-    TermLoader,
+
+_SRC_ROOT = Path(__file__).resolve().parents[2] / "src"
+
+
+def _load_module(module_name: str, relative_path: str) -> ModuleType:
+    module_path = _SRC_ROOT / relative_path
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"无法加载模块: {module_name}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_exceptions = _load_module(
+    "datacloud_data_sdk.exceptions",
+    "datacloud_data_sdk/exceptions.py",
 )
+_term_loader = _load_module(
+    "datacloud_data_sdk.ontology.term_loader",
+    "datacloud_data_sdk/ontology/term_loader.py",
+)
+
+TermNotFoundError = _exceptions.TermNotFoundError
+KbTermLoader = _term_loader.KbTermLoader
+TermLoader = _term_loader.TermLoader
 
 
 def test_resolve_by_label() -> None:
@@ -28,9 +54,15 @@ def test_resolve_by_exact_code() -> None:
 
 
 def test_resolve_unknown_raises() -> None:
-    loader = KbTermLoader({"bo_stage": []})
-    with pytest.raises(TermNotFoundError, match="不存在"):
-        loader.resolve_code("bo_stage", "不存在的值")
+    mock_result = MagicMock()
+    mock_result.items = []
+    with patch(
+        "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
+        return_value=mock_result,
+    ):
+        loader = KbTermLoader({"bo_stage": []})
+        with pytest.raises(TermNotFoundError, match="不存在"):
+            loader.resolve_code("bo_stage", "不存在的值")
 
 
 def test_get_available_values() -> None:
