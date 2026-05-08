@@ -196,6 +196,13 @@ def _collect_terms_from_params(
     field_terms: list[str] = []
     value_terms: list[str] = []
 
+    # 收集 metrics 的 as 别名，order_by/having 引用这些别名时不应被当作字段名去 catalog 查询
+    metric_aliases: set[str] = {
+        str(m.get("as"))
+        for m in (tool_params.get("metrics") or [])
+        if isinstance(m, dict) and m.get("as")
+    }
+
     for f in tool_params.get("filters") or []:
         if isinstance(f, dict):
             t = _get_field_term(f)
@@ -216,6 +223,8 @@ def _collect_terms_from_params(
             t = _get_field_term(d)
             if t:
                 field_terms.append(t)
+        elif isinstance(d, str) and not _is_field_code(d):
+            field_terms.append(d)
     for m in tool_params.get("metrics") or []:
         if isinstance(m, dict):
             t = _get_field_term(m)
@@ -224,13 +233,20 @@ def _collect_terms_from_params(
     for o in tool_params.get("order_by") or []:
         if isinstance(o, dict):
             t = _get_field_term(o)
-            if t:
+            # order_by.field 如果是 metrics 的 as 别名，不是字段名，跳过
+            if t and t not in metric_aliases:
                 field_terms.append(t)
     for h in tool_params.get("having") or []:
         if isinstance(h, dict):
             t = _get_field_term(h)
-            if t:
+            # having.field 同理，是 metrics 的 as 别名，跳过
+            if t and t not in metric_aliases:
                 field_terms.append(t)
+    logger.warning(
+        "[query_clarification] _collect_terms: field_terms=%s value_terms=%s",
+        field_terms,
+        value_terms,
+    )
     return field_terms, value_terms
 
 
@@ -250,6 +266,12 @@ def _resolve_via_aliases(
     if not _HAS_RESOLVE_ALIASES or resolve_field_aliases is None or not all_terms or not scope_code:
         logger.warning("[query_clarification] resolve_field_aliases skip")
         return {}, all_terms
+    logger.warning(
+        "[query_clarification] resolve_field_aliases INPUT: scope=%s field_terms=%s value_terms=%s",
+        scope_code,
+        field_terms,
+        value_terms,
+    )
     try:
         result = resolve_field_aliases(
             terms=field_terms,
@@ -259,6 +281,12 @@ def _resolve_via_aliases(
             value_terms=value_terms,
         )
         unresolved = list(result.unresolved) + list(result.ambiguous.keys())
+        logger.warning(
+            "[query_clarification] resolve_field_aliases OUTPUT: resolved=%s ambiguous=%s unresolved=%s",
+            dict(result.resolved),
+            dict(result.ambiguous),
+            list(result.unresolved),
+        )
         logger.info(
             "[query_clarification] resolve_field_aliases: user_id=%s resolved=%d "
             "ambiguous=%d unresolved=%d",
@@ -363,7 +391,11 @@ def _apply_resolved_to_params(
     ]
     if "dimensions" in tool_params:
         patched["dimensions"] = [
-            _ensure_dim_group_op(_translate_field(d)) if isinstance(d, dict) else d
+            _ensure_dim_group_op(_translate_field(d))
+            if isinstance(d, dict)
+            else _ensure_dim_group_op({"field": _map(d) if not _is_field_code(d) else d})
+            if isinstance(d, str)
+            else d
             for d in patched.get("dimensions") or []
         ]
     if "metrics" in tool_params:
@@ -633,6 +665,12 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
     if not _is_query_or_compute_tool(tool_name):
         return None
 
+    logger.warning(
+        "[query_clarification] before_call_back ENTER: tool=%s raw_params=%s",
+        tool_name,
+        json.dumps(ctx.get("tool_params") or {}, ensure_ascii=False, default=str)[:500],
+    )
+
     # ── V0.3 早返回：clarification_formatted_params 已由 user_clarify_node 注入 ──
     # tool_dispatcher resume 时，state 已含格式化后参数，直接应用并返回，跳过全部分析
     _graph_state: dict[str, Any] | None = (ctx.get("metadata") or {}).get("state")
@@ -857,6 +895,12 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
     patched_params = _apply_resolved_to_params(tool_params, resolved)
     ctx["tool_params"] = patched_params
     tool_params = patched_params
+
+    logger.warning(
+        "[query_clarification] FINAL patched_params: dimensions=%s metrics=%s",
+        patched_params.get("dimensions"),
+        patched_params.get("metrics"),
+    )
 
     # ── 路由决策 ─────────────────────────────────────────────────────────────
     if is_complex:

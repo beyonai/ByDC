@@ -222,6 +222,14 @@ def _make_object_action_coroutine(obj_code: str, action_code: str, loader: Any) 
     """OBJECT 工具执行闭包：通过 ActionExecutor 路由，与 MCP call_tool 对象分支对齐。"""
 
     async def _execute(**kwargs: Any) -> Any:
+        logger.warning(
+            "[_make_object_action_coroutine] obj=%s action=%s kwargs_keys=%s metrics_raw=%r metrics_type=%s",
+            obj_code,
+            action_code,
+            sorted(kwargs.keys()),
+            kwargs.get("metrics"),
+            type(kwargs.get("metrics")).__name__,
+        )
         try:
             from datacloud_data_service.tools.action_executor import (  # noqa: PLC0415
                 ActionExecutor,

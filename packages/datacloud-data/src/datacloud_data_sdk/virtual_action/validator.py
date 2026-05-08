@@ -200,7 +200,7 @@ class VirtualActionValidator:
         required_filter_groups: list[str] | None = None,
     ) -> None:
         """校验 analyze 动作入参。"""
-        _logger.debug(
+        _logger.warning(
             "[validate_analyze] arguments_keys=%s metrics_raw=%r metrics_type=%s",
             sorted(arguments.keys()),
             arguments.get("metrics"),
@@ -212,7 +212,9 @@ class VirtualActionValidator:
         # metrics 不能为空
         if not metrics:
             raise VirtualActionValidationError(
-                "analyze 动作 metrics 不能为空，若只需明细请使用 query",
+                "compute/analyze 动作 metrics 不能为空。"
+                '请在 metrics 中指定聚合字段，例如：[{"field": "id", "agg": "count", "as": "数量"}]。'
+                "若只需明细数据请改用 query 动作。",
                 "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD",
             )
 

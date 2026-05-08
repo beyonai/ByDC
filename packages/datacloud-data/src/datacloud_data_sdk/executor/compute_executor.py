@@ -40,6 +40,7 @@ from datacloud_data_sdk.virtual_action.validator import (
 )
 
 _PKEY_RE = re.compile(r"[^a-zA-Z0-9]")
+_logger = logging.getLogger(__name__)
 
 # analytic_kind 中需要展开 formula 的类型
 _FORMULA_KINDS = frozenset({"derived_metric", "formula_metric", "virtual_tag"})
@@ -339,6 +340,13 @@ class ComputeExecutor:
                 "VIRTUAL_ACTION_ERR_INVALID",
             )
         validator = VirtualActionValidator(list(field_map.values()))
+        _logger.warning(
+            "[ComputeExecutor.execute] object=%s arguments_keys=%s metrics_raw=%r metrics_type=%s",
+            object_code,
+            sorted(arguments.keys()),
+            arguments.get("metrics"),
+            type(arguments.get("metrics")).__name__,
+        )
         validator.validate_analyze(arguments, required_groups or None)
 
         # ── 4. 构建 SQL ────────────────────────────────────────────────────────

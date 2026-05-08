@@ -504,7 +504,7 @@ def build_compute_schema(
 
     count_all_item: dict[str, Any] = {
         "type": "object",
-        "description": "内建行数统计，无需指定 field",
+        "description": '统计总行数（COUNT(*)），格式固定为 {"agg": "count_all", "as": "别名"}，不需要也不能填 field',
         "properties": {
             "agg": {"type": "string", "enum": ["count_all"]},
             "as": {"type": "string", "description": "结果列别名"},
