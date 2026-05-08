@@ -863,7 +863,45 @@ def _trim_messages_window(messages: list) -> list:
             len(tail),
             orphan_count,
         )
-    return head + tail
+    result = head + tail
+    # 检查消息历史中是否存在孤立的 AIMessage（有 tool_calls 但后面紧跟另一个 AIMessage 而非 ToolMessage）。
+    # checkpoint blob 丢失时会出现此情况，发给 LLM 会返回 400 (2013)。
+    # 修复：删除孤立的 AIMessage 及其后直到下一个 AIMessage 之间的所有 ToolMessage。
+    cleaned: list[Any] = []
+    i = 0
+    while i < len(result):
+        msg = result[i]
+        if isinstance(msg, AIMessage) and (msg.tool_calls or []):
+            # 收集该 AIMessage 对应的 tool_call_ids
+            tc_ids = {tc.get("id") for tc in (msg.tool_calls or []) if tc.get("id")}
+            # 向后扫描，找到对应的 ToolMessage 或下一个 AIMessage
+            j = i + 1
+            found_tool_msgs: list[Any] = []
+            matched_ids: set[str] = set()
+            while j < len(result):
+                m = result[j]
+                if isinstance(m, AIMessage):
+                    break  # 遇到下一个 AIMessage，停止扫描
+                if isinstance(m, ToolMessage):
+                    tid = getattr(m, "tool_call_id", None)
+                    if tid in tc_ids:
+                        matched_ids.add(tid)
+                    found_tool_msgs.append(m)
+                j += 1
+            if tc_ids and not matched_ids:
+                # 孤立 AIMessage：没有任何对应的 ToolMessage，删除该 AIMessage 及其后的孤立 ToolMessage
+                logger.warning(
+                    "[react_loop] trim_messages: orphan AIMessage tool_calls detected"
+                    " (no matching ToolMessage) → removing AIMessage and %d trailing ToolMessages"
+                    " to avoid 400 (2013) tool_call_ids=%s",
+                    len(found_tool_msgs),
+                    tc_ids,
+                )
+                i = j  # 跳过孤立的 AIMessage 和其后的 ToolMessage
+                continue
+        cleaned.append(msg)
+        i += 1
+    return cleaned
 
 
 async def run_react_loop(

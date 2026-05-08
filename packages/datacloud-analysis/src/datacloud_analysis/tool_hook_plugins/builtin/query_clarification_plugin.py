@@ -693,6 +693,17 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
     _graph_state: dict[str, Any] | None = (ctx.get("metadata") or {}).get("state")
     if _graph_state is not None:
         _clarify_result = _graph_state.get("clarification_formatted_params")
+        # [DIAG] 诊断：记录 clarification_formatted_params 的当前值，帮助排查死循环
+        logger.warning(
+            "[query_clarification] DIAG before_call_back: tool=%s"
+            " clarification_formatted_params=%s"
+            " _clarification_cache_key=%s"
+            " state_keys=%s",
+            tool_name,
+            "None" if _clarify_result is None else f"tool_name={_clarify_result.get('tool_name')} params_keys={sorted((_clarify_result.get('params') or {}).keys())}",
+            ((_graph_state.get("_clarification_cache") or {}).get("cache_key") or "None"),
+            sorted(str(k) for k in _graph_state if not str(k).startswith("__") and _graph_state[k] is not None),
+        )
         if _clarify_result and _clarify_result.get("tool_name") == tool_name:
             logger.info(
                 "[query_clarification] RESUME ENTRY → TOOL (not reAct): V0.3 early-return"
@@ -704,8 +715,11 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             _raw_query_fp = str((ctx.get("tool_params") or {}).get("query", "") or "")
             _fmt_params = dict(_clarify_result.get("params") or {})
             _is_complex_fp: bool = bool(_clarify_result.get("is_complex"))
-            _graph_state.pop("clarification_formatted_params", None)
-            logger.info("[query_clarification] clarification_formatted_params consumed and cleared")
+            # 不从内存 dict 中 pop clarification_formatted_params：
+            # pop 只影响当前 tick 的内存副本，但同一次 graph 执行里 LLM 可能重新生成工具调用，
+            # 后续 before_call_back 仍需读到澄清结果。LangGraph state 的清除由 user_clarify_node
+            # 返回值负责，此处 pop 会导致 LLM 重新调用时走正常澄清流程，再次触发中断。
+            logger.info("[query_clarification] clarification_formatted_params consumed (not cleared from memory)")
             # ── 打印知识图谱侧数据（paradigm_list 每条 paradigmResult）──
             _paradigm_list_fp = list(_clarify_result.get("paradigm_list") or [])
             if not _paradigm_list_fp:
@@ -770,14 +784,29 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         _ck = _make_cache_key(tool_name, _raw_query)
         _cached = _graph_state.get("_clarification_cache")
         if _cached and _cached.get("cache_key") == _ck:
-            logger.warning(
-                "[query_clarification] CACHE HIT (old path) — V0.3 应走 clarification_formatted_params"
-                " 路径，此处被触发说明 user_clarify_node 未写入 state，需排查"
-                " tool=%s cache_key=%s",
-                tool_name,
-                _ck,
-            )
-            return await _handle_resume(ctx, tool_name, _graph_state, _cached)
+            # checkpoint blob 丢失时，clarification_formatted_params 为 None 但 _clarification_cache
+            # 还存在。此时 _handle_resume() 会再次调用 interrupt()，导致死循环。
+            # 检测条件：_clarification_cache 存在但 clarification_formatted_params 为 None
+            # → 说明是 checkpoint 丢失场景，清除脏缓存，重新走正常澄清流程。
+            _has_fmt_params = bool(_graph_state.get("clarification_formatted_params"))
+            if not _has_fmt_params:
+                logger.warning(
+                    "[query_clarification] CACHE HIT but clarification_formatted_params=None"
+                    " → checkpoint blob lost, clearing stale cache to restart clarification"
+                    " tool=%s cache_key=%s",
+                    tool_name,
+                    _ck,
+                )
+                _graph_state.pop("_clarification_cache", None)
+            else:
+                logger.warning(
+                    "[query_clarification] CACHE HIT (old path) — V0.3 应走 clarification_formatted_params"
+                    " 路径，此处被触发说明 user_clarify_node 未写入 state，需排查"
+                    " tool=%s cache_key=%s",
+                    tool_name,
+                    _ck,
+                )
+                return await _handle_resume(ctx, tool_name, _graph_state, _cached)
 
     # ── 剥除元字段（before_callback 消费）────────────────────────────────────
     # query 保留在 tool_params 中（工具本身需要），仅 complex_conditions 是纯路由元字段。

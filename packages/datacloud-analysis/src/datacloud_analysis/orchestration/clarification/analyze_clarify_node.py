@@ -71,4 +71,8 @@ async def analyze_clarify_node(state: AgentState, config: RunnableConfig) -> dic
         len(clarify_knowledge),
     )
 
-    return {"clarification_analyze_result": analyze_result}
+    return {
+        "clarification_analyze_result": analyze_result,
+        # pending_clarification_context 已被消费，清除以防止 REPLAY GUARD 在下一轮再次触发
+        "pending_clarification_context": None,
+    }
