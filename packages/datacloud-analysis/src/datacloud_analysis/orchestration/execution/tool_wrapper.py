@@ -660,11 +660,34 @@ async def dispatch_tool(
                     )
                 else:
                     try:
-                        output = await _invoke_tool_with_runtime_context(
-                            redirect_t,
-                            redirect_params,
+                        try:
+                            from datacloud_data_sdk.context import InvocationContext  # type: ignore
+                        except ImportError:
+                            _append_local_sdk_src_for_tests()
+                            from datacloud_data_sdk.context import InvocationContext  # type: ignore
+
+                        workspace_root = resolve_shared_workspace_dir(ctx.get("workspace_dir"))
+                        _gc_user_id = _resolve_gateway_user_id(gateway_context)
+                        _gc_session_id = str(getattr(gateway_context, "session_id", "") or "")
+                        _result_file_storage = getattr(loader, "result_file_storage", None)
+                        _extras = getattr(gateway_context, "extras", None)
+                        _inv_ctx_redirect: Any = InvocationContext(
+                            user_id=_gc_user_id,
+                            session_id=_gc_session_id,
                             gateway_context=gateway_context,
+                            workspace_dir=str(workspace_root) if workspace_root is not None else "",
+                            result_file_storage=_result_file_storage,
+                            extras=_extras,
                         )
+                        _inv_ctx_redirect.__enter__()
+                        try:
+                            output = await _invoke_tool_with_runtime_context(
+                                redirect_t,
+                                redirect_params,
+                                gateway_context=gateway_context,
+                            )
+                        finally:
+                            _inv_ctx_redirect.__exit__(None, None, None)
                         output = _normalize_mcp_output(output)
                         ctx["tool_output"] = output
                         ctx["tool_error"] = None
