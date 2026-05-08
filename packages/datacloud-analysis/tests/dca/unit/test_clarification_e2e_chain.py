@@ -114,8 +114,13 @@ async def test_clarification_chain_resume_refill_then_second_dispatch_success() 
             return_value=resume_payload,
         ),
         patch(
-            "datacloud_analysis.orchestration.clarification.user_clarify_node._format_clarification",
-            return_value={"filters": [{"field": "企业总营收（万元）", "op": "gt", "value": 100}]},
+            "datacloud_analysis.orchestration.clarification.user_clarify_node.finalize_query_clarification",
+            return_value=MagicMock(
+                structured_input={
+                    "filters": [{"field": "企业总营收（万元）", "op": "gt", "value": 100}]
+                },
+                persisted_synonyms=None,
+            ),
         ),
     ):
         step3 = await user_clarify_node({**state_after_need, **step2}, MagicMock())
@@ -133,7 +138,11 @@ async def test_clarification_chain_resume_refill_then_second_dispatch_success() 
         },
         "metadata": {"state": plugin_state, "loader": _FakeLoader()},
     }
-    decision = await before_call_back(hook_ctx)
+    with patch(
+        "datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin._resolve_via_aliases",
+        return_value=({"企业总营收（万元）": "total_revenue"}, []),
+    ):
+        decision = await before_call_back(hook_ctx)
     assert decision is not None and decision.get("action") == "patch"
     assert (hook_ctx["tool_params"]["filters"][0]).get("field") == "total_revenue"
 
