@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from collections import defaultdict
 from collections.abc import Callable, Sequence
@@ -75,6 +76,15 @@ class PreparedBatch:
 _FIELD_ONLY_KTYPES: frozenset[str] = frozenset({"select", "groupBy", "orderBy", "whereKey"})
 _NON_FIELD_TYPE_CODES: frozenset[str] = frozenset({"view", "object", "action"})
 
+# 单字兜底只允许中文 CJK 字符进入 tsquery。
+# 业务上这是最后一道召回兜底，用来处理人名、地名、简称等短文本被 jieba/子串召回漏掉的情况；
+# 安全上必须禁止把用户原始输入里的 SQL/tsquery 操作符、英文标识符、标点直接拼进 to_tsquery。
+_CJK_CHAR_RE = re.compile(r"[\u4e00-\u9fff]")
+
+# “其他关键字检索都为空”只指文本关键字召回路径：单字 BM25、jieba 词级 BM25、子串召回。
+# vector 是语义召回，不属于关键字检索；即使 vector 有弱相关结果，只要关键字路径全空，仍允许单字兜底补充候选。
+_KEYWORD_RECALL_PATHS: frozenset[str] = frozenset({"bm25_and", "jieba", "substring"})
+
 
 def _post_filter_non_field_types(
     result: dict[str, list[CandidateDict]],
@@ -93,6 +103,24 @@ def _post_filter_non_field_types(
     return filtered
 
 
+def _dedupe_candidates_by_term_name(candidates: list[CandidateDict]) -> list[CandidateDict]:
+    """按展示名去重，同时保留已有排序。
+
+    召回链路里同一个业务名称可能因为别名、不同 term_id、不同召回路径重复出现。
+    澄清上下文最终是给用户/LLM 阅读的候选列表，重复展示名只会放大噪声，
+    因此这里在候选已经完成 RRF 排序后保留排名最高的一条。
+    """
+    deduped: list[CandidateDict] = []
+    seen_names: set[str] = set()
+    for candidate in candidates:
+        term_name = str(candidate.get("term_name", ""))
+        if term_name in seen_names:
+            continue
+        seen_names.add(term_name)
+        deduped.append(candidate)
+    return deduped
+
+
 def typed_multi_recall_batch(
     items: Sequence[TypedKeywordState],
     *,
@@ -104,7 +132,21 @@ def typed_multi_recall_batch(
     scope_code: str | None = None,
     scope_layers: Sequence[ScopeRecallLayer] | None = None,
 ) -> dict[str, list[CandidateDict]]:
-    """批量并发执行 typed multi recall。"""
+    """批量并发执行 typed multi recall。
+
+    业务含义：对澄清/意图解析阶段抽取出的结构化术语，按 ktype 限定候选类型后进行多路召回，
+    输出 ``ktype:keyword -> candidates``，供后续 LLM 确认、澄清卡片或自动消歧使用。
+
+    主流程：
+    1. 如果有 scope layers，走分层召回：每个 scope 单独召回，再按 layer 权重融合；
+    2. 否则先整理批量请求，跳过空 keyword 和禁用搜索的项；
+    3. 并发执行常规召回路径：单字 BM25 AND、jieba 词级 BM25、子串召回、可选向量召回；
+    4. 对“文本关键字召回全空”的 keyword 追加中文单字 OR 兜底；
+    5. 统一走 RRF 融合、类型过滤、展示名去重和字段类型后过滤。
+
+    单字兜底的动机：短中文值（尤其人名、简称）经常因为词级分词或子串条件过窄而漏召回。
+    它只能作为最后补救，不能抢占正常关键字召回结果，否则会显著增加噪声。
+    """
     started_at = time.monotonic()
     result: dict[str, list[CandidateDict]] = {}
     normalized_layers = _normalize_scope_layers(scope_layers)
@@ -136,6 +178,7 @@ def typed_multi_recall_batch(
             ", ".join(f"{r.ktype}:{r.keyword!r}" for r in batch.requests),
         )
         path_results = _run_paths_concurrent(batch, top_k=top_k, enable_vector=enable_vector)
+        _add_single_char_fallback_results(path_results, batch, top_k=top_k)
         fused = _fuse_and_shape(batch, path_results, top_k=top_k, rrf_k=rrf_k)
         result.update(fused)
         # 逐 keyword 记录召回结果
@@ -170,8 +213,22 @@ def _typed_multi_recall_layered(
     wv_per_type: int,
     scope_layers: tuple[ScopeRecallLayer, ...],
 ) -> dict[str, list[CandidateDict]]:
-    """Run recall per scope layer and fuse layer-ranked candidates with weighted RRF."""
+    """按 scope layer 执行召回，并用加权 RRF 融合每层结果。
+
+    分层召回用于“同一个字段名/值在不同业务场景含义不同”的情况，例如同名指标在 view scope
+    和 object scope 下候选不同。这里不能在每个 layer 内提前做单字兜底，否则某个空 layer 的噪声
+    会和另一个 layer 的正常命中一起参与融合，违反“正常关键字召回为空才兜底”的业务约束。
+
+    因此流程分两段：
+    1. 所有 layer 先只跑常规召回，并记录每层 bm25/jieba/substring/vector 的原始命中；
+    2. 如果某个 keyword 在所有 layer 的文本关键字路径都为空，则追加单字兜底；
+       vector 命中不阻止兜底，因为 vector 是语义召回，不属于“关键字检索”。
+    """
     per_layer_results: list[tuple[ScopeRecallLayer, dict[str, list[CandidateDict]]]] = []
+    per_layer_batches: list[tuple[ScopeRecallLayer, PreparedBatch]] = []
+    per_layer_path_results: list[
+        tuple[ScopeRecallLayer, dict[str, dict[str, list[tuple[str, str, str, str, str]]]]]
+    ] = []
     requests: tuple[RecallRequest, ...] = ()
 
     for layer in scope_layers:
@@ -184,11 +241,14 @@ def _typed_multi_recall_layered(
         )
         if not requests:
             requests = batch.requests
+        per_layer_batches.append((layer, batch))
         if not batch.requests:
             per_layer_results.append((layer, {}))
+            per_layer_path_results.append((layer, {}))
             continue
 
         path_results = _run_paths_concurrent(batch, top_k=top_k, enable_vector=enable_vector)
+        per_layer_path_results.append((layer, path_results))
         shaped = _fuse_and_shape(batch, path_results, top_k=top_k, rrf_k=rrf_k)
         per_layer_results.append((layer, shaped))
         for req in batch.requests:
@@ -243,12 +303,114 @@ def _typed_multi_recall_layered(
             )
         else:
             log.debug("[recall_layered] fused %s -> 0 候选", req.map_key)
+
+    _add_layered_single_char_fallback_results(
+        result,
+        requests,
+        per_layer_results,
+        per_layer_batches,
+        per_layer_path_results,
+        top_k=top_k,
+        rrf_k=rrf_k,
+    )
     return result
 
 
 def _candidate_top_names(candidates: Sequence[CandidateDict], *, limit: int = 3) -> list[str]:
     """Return a compact candidate-name preview for recall debug logs."""
     return [str(candidate.get("term_name", "")) for candidate in candidates[:limit]]
+
+
+def _add_layered_single_char_fallback_results(
+    result: dict[str, list[CandidateDict]],
+    requests: tuple[RecallRequest, ...],
+    per_layer_results: Sequence[tuple[ScopeRecallLayer, dict[str, list[CandidateDict]]]],
+    per_layer_batches: Sequence[tuple[ScopeRecallLayer, PreparedBatch]],
+    per_layer_path_results: Sequence[
+        tuple[ScopeRecallLayer, dict[str, dict[str, list[tuple[str, str, str, str, str]]]]]
+    ],
+    *,
+    top_k: int,
+    rrf_k: int,
+) -> None:
+    """在分层召回中，为文本关键字路径全空的请求补充单字兜底。
+
+    入口动机：分层召回不能只看最终候选是否为空。最终候选可能来自 vector，
+    但 vector 是语义召回，不属于“关键字检索”；用户要求的单字兜底语义是
+    “bm25/jieba/substring 等文本关键字路径都没有命中时，加回单字检索”。
+
+    因此这里按所有 layer 的原始 path_results 判断：只要任一 layer 的关键字路径命中，
+    就不兜底；如果所有 layer 关键字路径都为空，则把单字兜底作为额外 layer 结果
+    与已有正常结果一起加权融合，保持和非分层路径一致的 RRF 行为。
+    """
+    fallback_map_keys = {
+        request.map_key
+        for request in requests
+        if _all_layer_keyword_paths_empty(request, per_layer_path_results)
+        and _single_char_fallback_tsquery(request.keyword)
+    }
+    if not fallback_map_keys:
+        return
+
+    fallback_layers: list[tuple[ScopeRecallLayer, dict[str, list[CandidateDict]]]] = []
+    for layer, batch in per_layer_batches:
+        fallback_batch = _filter_batch_by_map_keys(batch, fallback_map_keys)
+        if not fallback_batch.requests:
+            continue
+        fallback_hits = _batch_single_char_fallback(fallback_batch, top_k=top_k)
+        if not fallback_hits:
+            continue
+        fallback_layers.append(
+            (
+                layer,
+                _fuse_and_shape(
+                    fallback_batch,
+                    {"single_char_fallback": fallback_hits},
+                    top_k=top_k,
+                    rrf_k=rrf_k,
+                ),
+            )
+        )
+
+    for request in requests:
+        if request.map_key not in fallback_map_keys:
+            continue
+        candidate_layers = [
+            (layer, layer_result.get(request.map_key, []))
+            for layer, layer_result in (*per_layer_results, *fallback_layers)
+            if layer_result.get(request.map_key)
+        ]
+        result[request.map_key] = _weighted_fuse_candidate_layers(
+            candidate_layers,
+            top_k=top_k,
+            rrf_k=rrf_k,
+        )
+
+
+def _all_layer_keyword_paths_empty(
+    request: RecallRequest,
+    per_layer_path_results: Sequence[
+        tuple[ScopeRecallLayer, dict[str, dict[str, list[tuple[str, str, str, str, str]]]]]
+    ],
+) -> bool:
+    """判断某请求在所有 scope layer 的文本关键字路径是否全空。"""
+    return all(
+        not path_results.get(path_name, {}).get(request.map_key)
+        for _layer, path_results in per_layer_path_results
+        for path_name in _KEYWORD_RECALL_PATHS
+    )
+
+
+def _filter_batch_by_map_keys(
+    batch: PreparedBatch,
+    map_keys: set[str],
+) -> PreparedBatch:
+    requests = tuple(request for request in batch.requests if request.map_key in map_keys)
+    return PreparedBatch(
+        requests=requests,
+        normal_requests=tuple(request for request in requests if not request.is_per_type),
+        per_type_requests=tuple(request for request in requests if request.is_per_type),
+    )
 
 
 def _normalize_scope_layers(
@@ -414,6 +576,144 @@ def _run_paths_concurrent(
     return results
 
 
+def _add_single_char_fallback_results(
+    path_results: dict[str, dict[str, list[tuple[str, str, str, str, str]]]],
+    batch: PreparedBatch,
+    *,
+    top_k: int,
+) -> None:
+    """为常规文本关键字召回全空的请求追加中文单字 OR 兜底结果。
+
+    业务含义：用户输入的短中文值可能无法通过完整词匹配，但其中的单字仍可能出现在候选名称中。
+    例如“黄升”没有完整命中时，可以退化为 ``黄 | 升``，召回“黄药师”“黄蓉”等弱候选，
+    让澄清阶段至少有可展示/可确认的备选项。
+
+    流程约束：
+    1. 先检查 bm25_and / jieba / substring 三类关键字召回是否都为空；
+    2. 只对包含 CJK 字符的 keyword 生成兜底请求；
+    3. 复用批量 tsquery 查询，保留 scope、type_filter、per-type 限制；
+    4. 将结果作为额外 path 写回 ``path_results``，继续走原有 RRF 和候选整形逻辑。
+    """
+    fallback_batch = _build_single_char_fallback_batch(batch, path_results)
+    if not fallback_batch.requests:
+        return
+
+    fallback_results = _batch_single_char_fallback(fallback_batch, top_k=top_k)
+    if fallback_results:
+        path_results["single_char_fallback"] = fallback_results
+
+
+def _build_single_char_fallback_batch(
+    batch: PreparedBatch,
+    path_results: dict[str, dict[str, list[tuple[str, str, str, str, str]]]],
+) -> PreparedBatch:
+    """从原始 batch 中筛出需要单字兜底的请求。
+
+    这里不直接查询数据库，只做“是否应该兜底”的业务判定：
+    文本关键字召回路径全空，并且 keyword 能生成安全的 CJK 单字 tsquery。
+    """
+    requests = tuple(
+        request
+        for request in batch.requests
+        if _all_existing_paths_empty(request, path_results)
+        and _single_char_fallback_tsquery(request.keyword)
+    )
+    return PreparedBatch(
+        requests=requests,
+        normal_requests=tuple(request for request in requests if not request.is_per_type),
+        per_type_requests=tuple(request for request in requests if request.is_per_type),
+    )
+
+
+def _all_existing_paths_empty(
+    request: RecallRequest,
+    path_results: dict[str, dict[str, list[tuple[str, str, str, str, str]]]],
+) -> bool:
+    """判断一个请求的文本关键字召回是否全空。"""
+    return all(
+        not path_results.get(path_name, {}).get(request.map_key)
+        for path_name in _KEYWORD_RECALL_PATHS
+    )
+
+
+def _batch_single_char_fallback(
+    batch: PreparedBatch,
+    *,
+    top_k: int,
+) -> dict[str, list[tuple[str, str, str, str, str]]]:
+    """执行中文单字兜底召回。
+
+    实现上复用现有 `_run_tsquery_batches()`，而不是直接调用 `bm25_search_with_or()`：
+    前者已经支持批量 VALUES 查询、scope 过滤、type_filter、whereValue per-type 分桶；
+    后者是单 keyword 底层搜索函数，直接使用会绕过这些业务约束。
+    """
+    started_at = time.monotonic()
+    with get_session() as session:
+        if not _has_name_keywords_column(session):
+            log.info(
+                "[recall_perf] single_char_fallback: %.3fs keywords=%d hits=0",
+                time.monotonic() - started_at,
+                len(batch.requests),
+            )
+            return {}
+
+        results = _run_tsquery_batches(
+            session,
+            normal_requests=batch.normal_requests,
+            per_type_requests=batch.per_type_requests,
+            top_k=top_k,
+            column_name="name_keywords",
+            tokenizer=_single_char_fallback_tsquery,
+        )
+        results = _dedupe_ranked_rows_by_term_name(results)
+
+    log.info(
+        "[recall_perf] single_char_fallback: %.3fs keywords=%d hits=%d",
+        time.monotonic() - started_at,
+        len(batch.requests),
+        sum(len(hits) for hits in results.values()),
+    )
+    return results
+
+
+def _single_char_fallback_tsquery(keyword: str) -> str:
+    """将 keyword 转换为安全的中文单字 OR tsquery。
+
+    只保留去重后的 CJK 单字，并由程序固定插入 ``|`` 操作符；用户输入里的英文、数字、下划线、
+    标点和 tsquery 操作符全部丢弃，避免 `to_tsquery('simple', ...)` 解析异常或语义注入。
+    """
+    seen: set[str] = set()
+    chars: list[str] = []
+    for char in keyword.strip():
+        if char in seen or not _CJK_CHAR_RE.fullmatch(char):
+            continue
+        seen.add(char)
+        chars.append(char)
+    return " | ".join(chars)
+
+
+def _dedupe_ranked_rows_by_term_name(
+    results: dict[str, list[tuple[str, str, str, str, str]]],
+) -> dict[str, list[tuple[str, str, str, str, str]]]:
+    """对兜底原始行按展示名去重。
+
+    单字 OR 召回天然更宽，容易把同一展示名的多个别名/类型行都召回来。
+    在进入 RRF 前先按 term_name 保留第一条，可以减少澄清上下文里的重复候选。
+    """
+    deduped: dict[str, list[tuple[str, str, str, str, str]]] = {}
+    for map_key, rows in results.items():
+        seen_names: set[str] = set()
+        unique_rows: list[tuple[str, str, str, str, str]] = []
+        for row in rows:
+            term_name = row[1]
+            if term_name in seen_names:
+                continue
+            seen_names.add(term_name)
+            unique_rows.append(row)
+        deduped[map_key] = unique_rows
+    return deduped
+
+
 def _fuse_and_shape(
     batch: PreparedBatch,
     path_results: dict[str, dict[str, list[tuple[str, str, str, str, str]]]],
@@ -458,7 +758,7 @@ def _fuse_and_shape(
                 candidates = serial_recall._shape_candidates(fused, req.type_filter, top_k=top_k)
         else:
             candidates = []
-        result[req.map_key] = candidates
+        result[req.map_key] = _dedupe_candidates_by_term_name(candidates)
     return result
 
 

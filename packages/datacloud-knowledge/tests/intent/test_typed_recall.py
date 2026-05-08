@@ -91,3 +91,185 @@ class TestKtypeCategoryMap:
         from datacloud_knowledge.intent.typed_recall import KTYPE_CATEGORY_MAP
 
         assert KTYPE_CATEGORY_MAP["aggregation"] is None
+
+
+class TestSingleCharFallback:
+    """单字符兜底召回只在常规召回全空时启用。"""
+
+    def test_single_char_tsquery_keeps_unique_cjk_chars_only(self) -> None:
+        from datacloud_knowledge.intent import batch_recall
+
+        assert batch_recall._single_char_fallback_tsquery("黄升") == "黄 | 升"
+        assert batch_recall._single_char_fallback_tsquery("黄黄A&升!") == "黄 | 升"
+        assert batch_recall._single_char_fallback_tsquery("task_status") == ""
+
+    def test_fallback_batch_keeps_only_requests_empty_in_all_paths(self) -> None:
+        from datacloud_knowledge.intent import batch_recall
+
+        empty_request = batch_recall.RecallRequest(
+            map_key="whereValue:黄升",
+            keyword="黄升",
+            ktype="whereValue",
+            type_filter=frozenset({"person_name"}),
+            is_per_type=False,
+            per_type_limit=0,
+            is_value_recall=True,
+        )
+        hit_request = batch_recall.RecallRequest(
+            map_key="select:任务状态",
+            keyword="任务状态",
+            ktype="select",
+            type_filter=frozenset({"prop"}),
+            is_per_type=False,
+            per_type_limit=0,
+        )
+        non_cjk_request = batch_recall.RecallRequest(
+            map_key="select:task_status",
+            keyword="task_status",
+            ktype="select",
+            type_filter=frozenset({"prop"}),
+            is_per_type=False,
+            per_type_limit=0,
+        )
+        batch = batch_recall.PreparedBatch(
+            requests=(empty_request, hit_request, non_cjk_request),
+            normal_requests=(empty_request, hit_request, non_cjk_request),
+            per_type_requests=(),
+        )
+        path_results = {
+            "bm25_and": {"select:任务状态": [("t1", "任务状态", "n1", "prop", "task_status")]},
+            "jieba": {},
+            "substring": {},
+            "vector": {"whereValue:黄升": [("v1", "向量命中", "vn1", "person_name", "vector_hit")]},
+        }
+
+        fallback_batch = batch_recall._build_single_char_fallback_batch(batch, path_results)
+
+        assert fallback_batch.requests == (empty_request,)
+        assert fallback_batch.normal_requests == (empty_request,)
+        assert fallback_batch.per_type_requests == ()
+
+    def test_fallback_dedupes_ranked_rows_by_term_name(self) -> None:
+        from datacloud_knowledge.intent import batch_recall
+
+        results = {
+            "whereValue:黄升": [
+                ("t1", "黄药师", "n1", "person_name", "huang_yaoshi"),
+                ("t2", "黄蓉", "n2", "person_name", "huang_rong"),
+                ("t3", "黄药师", "n3", "person_alias", "huang_yaoshi_alias"),
+            ]
+        }
+
+        deduped = batch_recall._dedupe_ranked_rows_by_term_name(results)
+
+        assert deduped == {
+            "whereValue:黄升": [
+                ("t1", "黄药师", "n1", "person_name", "huang_yaoshi"),
+                ("t2", "黄蓉", "n2", "person_name", "huang_rong"),
+            ]
+        }
+
+    def test_candidate_dedupe_preserves_first_display_name_rank(self) -> None:
+        from datacloud_knowledge.intent import batch_recall
+
+        candidates = [
+            {"term_id": "t1", "term_name": "王重阳"},
+            {"term_id": "t2", "term_name": "黄药师"},
+            {"term_id": "t3", "term_name": "王重阳"},
+        ]
+
+        deduped = batch_recall._dedupe_candidates_by_term_name(candidates)
+
+        assert [candidate["term_id"] for candidate in deduped] == ["t1", "t2"]
+
+    def test_layered_fallback_ignores_vector_but_respects_keyword_hits(self, monkeypatch) -> None:
+        from datacloud_knowledge.intent import batch_recall
+
+        empty_request = batch_recall.RecallRequest(
+            map_key="whereValue:黄升",
+            keyword="黄升",
+            ktype="whereValue",
+            type_filter=frozenset({"person_name"}),
+            is_per_type=False,
+            per_type_limit=0,
+            is_value_recall=True,
+        )
+        normal_hit_request = batch_recall.RecallRequest(
+            map_key="whereValue:黄蓉",
+            keyword="黄蓉",
+            ktype="whereValue",
+            type_filter=frozenset({"person_name"}),
+            is_per_type=False,
+            per_type_limit=0,
+            is_value_recall=True,
+        )
+        batch = batch_recall.PreparedBatch(
+            requests=(empty_request, normal_hit_request),
+            normal_requests=(empty_request, normal_hit_request),
+            per_type_requests=(),
+        )
+        result = {
+            "whereValue:黄升": [
+                {
+                    "term_id": "vector",
+                    "term_name": "王重阳",
+                    "term_type_code": "person_name",
+                    "name_id": "vector_name",
+                    "term_code": "wang_chongyang",
+                }
+            ],
+            "whereValue:黄蓉": [
+                {
+                    "term_id": "normal",
+                    "term_name": "黄蓉",
+                    "term_type_code": "person_name",
+                    "name_id": "normal_name",
+                    "term_code": "huang_rong",
+                }
+            ],
+        }
+
+        def _fake_fallback(
+            fallback_batch: batch_recall.PreparedBatch,
+            *,
+            top_k: int,
+        ) -> dict[str, list[tuple[str, str, str, str, str]]]:
+            assert top_k == 2
+            assert [request.map_key for request in fallback_batch.requests] == ["whereValue:黄升"]
+            return {"whereValue:黄升": [("fb", "黄药师", "fb_name", "person_name", "huang_yaoshi")]}
+
+        monkeypatch.setattr(batch_recall, "_batch_single_char_fallback", _fake_fallback)
+
+        batch_recall._add_layered_single_char_fallback_results(
+            result,
+            (empty_request, normal_hit_request),
+            [(batch_recall.ScopeRecallLayer(scope_code="scene", weight=1.0), result)],
+            [(batch_recall.ScopeRecallLayer(scope_code="scene", weight=1.0), batch)],
+            [
+                (
+                    batch_recall.ScopeRecallLayer(scope_code="scene", weight=1.0),
+                    {
+                        "bm25_and": {
+                            "whereValue:黄蓉": [
+                                ("normal", "黄蓉", "normal_name", "person_name", "huang_rong")
+                            ]
+                        },
+                        "jieba": {},
+                        "substring": {},
+                        "vector": {
+                            "whereValue:黄升": [
+                                ("vector", "王重阳", "vector_name", "person_name", "wang_chongyang")
+                            ]
+                        },
+                    },
+                )
+            ],
+            top_k=2,
+            rrf_k=60,
+        )
+
+        assert [candidate["term_name"] for candidate in result["whereValue:黄升"]] == [
+            "王重阳",
+            "黄药师",
+        ]
+        assert [candidate["term_name"] for candidate in result["whereValue:黄蓉"]] == ["黄蓉"]
