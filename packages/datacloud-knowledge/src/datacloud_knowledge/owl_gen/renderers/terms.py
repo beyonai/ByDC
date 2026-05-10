@@ -260,6 +260,8 @@ def render_terms_for_object(
 def render_terms_for_view(
     config: OwlGenConfig,
     view: ViewConfig,
+    term_values: dict[str, list[dict[str, str]]] | None = None,
+    term_type_defs: OrderedDict[str, tuple[str, str, str]] | None = None,
 ) -> tuple[str, int]:
     """渲染单个视图的术语定义。
 
@@ -287,7 +289,10 @@ def render_terms_for_view(
             mapping.source_object_code,
             mapping.source_object_column_code,
         )
-        if mapping.property_code in {mapping.source_object_column_code, object_prop_code}:
+        if not config.force_view_prop_terms and mapping.property_code in {
+            mapping.source_object_column_code,
+            object_prop_code,
+        }:
             continue
         items.append(
             _term_item(
@@ -301,4 +306,33 @@ def render_terms_for_view(
                 synonyms=mapping.synonyms,
             )
         )
+
+    if config.force_view_value_terms and term_values and term_type_defs:
+        binding_lookup = {
+            (binding.table_code, binding.column_name): binding for binding in config.term_bindings
+        }
+        emitted_props: set[str] = set()
+        for mapping in view.field_mappings:
+            binding = binding_lookup.get(
+                (mapping.source_object_code, mapping.source_object_column_code)
+            )
+            if binding is None or mapping.property_code in emitted_props:
+                continue
+
+            emitted_props.add(mapping.property_code)
+            type_name = term_type_defs.get(
+                binding.term_type_code, (binding.term_type_code, "", "")
+            )[0]
+            for entry in term_values.get(binding.term_type_code, []):
+                items.append(
+                    _term_item(
+                        config,
+                        code_path=f"VIEW_VALUE#{view.view_code}#{mapping.property_code}#{entry['code']}",
+                        term_code=entry["code"],
+                        term_name=entry["name"],
+                        term_type_code=binding.term_type_code,
+                        term_desc=f"{type_name}术语：{entry['name']}",
+                        parent_term_code=mapping.property_code,
+                    )
+                )
     return (_wrap_terms(items), len(items))

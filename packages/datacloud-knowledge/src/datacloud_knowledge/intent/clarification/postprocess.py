@@ -202,6 +202,8 @@ def collect_terms_from_params(tool_params: dict[str, Any]) -> tuple[list[str], l
                 field_term = _get_field_term(item)
                 if field_term:
                     field_terms.append(field_term)
+            elif key == "dimensions" and item and not _is_field_code(str(item)):
+                field_terms.append(str(item))
     return field_terms, value_terms
 
 
@@ -248,7 +250,11 @@ def apply_resolved_to_params(
     ]
     if "dimensions" in tool_params:
         patched["dimensions"] = [
-            _ensure_dim_group_op(_translate_field(item)) if isinstance(item, dict) else item
+            _ensure_dim_group_op(_translate_field(item))
+            if isinstance(item, dict)
+            else item
+            if _is_field_code(str(item))
+            else _map(str(item))
             for item in patched.get("dimensions") or []
         ]
     if "metrics" in tool_params:

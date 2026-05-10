@@ -45,11 +45,7 @@ from .writer import (
 _execute_values = _helpers._execute_values
 _import_batch_size = _helpers._import_batch_size
 _iter_jsonl_obj_batches = _helpers._iter_jsonl_obj_batches
-_lookup_term_ids_by_norm_codes = _helpers._lookup_term_ids_by_norm_codes
 _normalize_term_code = _helpers._normalize_term_code
-_optional_term_id_from_obj = _helpers._optional_term_id_from_obj
-_str_id_if_set = _helpers._str_id_if_set
-_term_id_from_obj_or_code = _helpers._term_id_from_obj_or_code
 _term_id_from_obj_or_code_direct = _helpers._term_id_from_obj_or_code_direct
 
 logger = logging.getLogger(__name__)
@@ -154,7 +150,7 @@ def _convert_owl_entities(
     step_type: str, rel_file: str, owl_entities: list[dict[str, Any]]
 ) -> dict[str, list[dict[str, Any]]]:
     """将 OWL 解析结果转换为各批处理器可消费的数据结构。"""
-    del step_type, rel_file
+    del step_type
 
     converter = owl_converter
     if converter is None:
@@ -175,6 +171,23 @@ def _convert_owl_entities(
         "ONTOLOGY_TERM": "本体术语",
         "DOC_NAME_TERM": "文档名称术语",
     }
+
+    path_parts = Path(rel_file).parts
+    scope_type = path_parts[0] if len(path_parts) >= 2 else ""
+    scope_code = path_parts[1] if len(path_parts) >= 2 else ""
+    scope_root_term_id: str | None = None
+    scope_root_term_id: str | None = None
+
+    for entity in owl_entities:
+        if str(entity.get("entity_type", "")).strip() != "term":
+            continue
+        if str(entity.get("term_type_code") or "").strip() != scope_type:
+            continue
+        if str(entity.get("term_code") or "").strip() != scope_code:
+            continue
+        scope_root_term_id = str(entity.get("term_id") or "").strip() or None
+        if scope_root_term_id:
+            break
 
     for entity in owl_entities:
         entity_type = str(entity.get("entity_type", "")).strip()
@@ -212,6 +225,25 @@ def _convert_owl_entities(
 
         if entity_type == "term":
             term_obj = converter.convert_term(entity)
+            if scope_type in {"object", "view"} and scope_code:
+                library_code = str(term_obj.get("library_code") or "").strip()
+                term_type_code = str(term_obj.get("term_type_code") or "").strip()
+                term_code = str(term_obj.get("term_code") or "").strip()
+                parent_term_code = str(term_obj.get("parent_term_code") or "").strip()
+                if library_code and term_type_code == "prop":
+                    scope_root_term_id = (
+                        scope_root_term_id or f"{library_code}#{scope_type}#{scope_code}"
+                    )
+                    term_obj["parent_term_code"] = scope_code
+                    term_obj["parent_term_id"] = scope_root_term_id
+                    term_obj["term_id"] = "#".join([scope_root_term_id, term_type_code, term_code])
+                elif library_code and parent_term_code:
+                    scope_root_term_id = (
+                        scope_root_term_id or f"{library_code}#{scope_type}#{scope_code}"
+                    )
+                    parent_prop_term_id = f"{scope_root_term_id}#prop#{parent_term_code}"
+                    term_obj["parent_term_id"] = parent_prop_term_id
+                    term_obj["term_id"] = "#".join([parent_prop_term_id, term_type_code, term_code])
             converted["term"].append(term_obj)
             # terms_knowledge 需要拆成独立 knowledge 记录，沿用原有 term_code 外键解析。
             for knowledge_obj in converter.extract_knowledge_records(entity, ""):
@@ -229,6 +261,171 @@ def _convert_owl_entities(
             converted["relation"].append(relation_obj)
 
     return converted
+
+
+def _collect_scope_root_term_ids(owl_entities: list[dict[str, Any]]) -> list[str]:
+    """收集当前 OWL 文件中的 view/object 根 term_id。"""
+    root_term_ids: list[str] = []
+    seen: set[str] = set()
+    for entity in owl_entities:
+        entity_type = str(entity.get("entity_type", "")).strip()
+        if entity_type not in ("view", "object"):
+            continue
+        library_code = str(entity.get("library_code") or "").strip()
+        term_type_code = str(entity.get("term_type_code") or "").strip()
+        term_code = str(entity.get("term_code") or "").strip()
+        term_id = (
+            f"{library_code}#{term_type_code}#{term_code}"
+            if library_code and term_type_code and term_code
+            else ""
+        )
+        if not term_id or term_id in seen:
+            continue
+        seen.add(term_id)
+        root_term_ids.append(term_id)
+    return root_term_ids
+
+
+def _delete_scope_terms(cur: Any, root_term_ids: list[str]) -> None:
+    """删除指定 view/object 根节点下的旧 term 子树。"""
+    if not root_term_ids:
+        return
+
+    cur.execute(
+        """
+        WITH RECURSIVE scope_terms AS (
+            SELECT term_id
+            FROM term
+            WHERE term_id = ANY(%s)
+            UNION
+            SELECT t.term_id
+            FROM term t
+            JOIN scope_terms s ON t.parent_term_id = s.term_id
+        )
+        DELETE FROM term_knowledge
+        WHERE term_id IN (SELECT term_id FROM scope_terms)
+        """,
+        (root_term_ids,),
+    )
+    cur.execute(
+        """
+        WITH RECURSIVE scope_terms AS (
+            SELECT term_id
+            FROM term
+            WHERE term_id = ANY(%s)
+            UNION
+            SELECT t.term_id
+            FROM term t
+            JOIN scope_terms s ON t.parent_term_id = s.term_id
+        )
+        DELETE FROM term_relation
+        WHERE source_term_id IN (SELECT term_id FROM scope_terms)
+           OR target_term_id IN (SELECT term_id FROM scope_terms)
+        """,
+        (root_term_ids,),
+    )
+    cur.execute(
+        """
+        WITH RECURSIVE scope_terms AS (
+            SELECT term_id
+            FROM term
+            WHERE term_id = ANY(%s)
+            UNION
+            SELECT t.term_id
+            FROM term t
+            JOIN scope_terms s ON t.parent_term_id = s.term_id
+        )
+        DELETE FROM term_name
+        WHERE term_id IN (SELECT term_id FROM scope_terms)
+        """,
+        (root_term_ids,),
+    )
+    cur.execute(
+        """
+        WITH RECURSIVE scope_terms AS (
+            SELECT term_id
+            FROM term
+            WHERE term_id = ANY(%s)
+            UNION
+            SELECT t.term_id
+            FROM term t
+            JOIN scope_terms s ON t.parent_term_id = s.term_id
+        )
+        DELETE FROM term
+        WHERE term_id IN (SELECT term_id FROM scope_terms)
+        """,
+        (root_term_ids,),
+    )
+
+
+def _delete_scoped_term_names(cur: Any, scopes: list[dict[str, str]]) -> None:
+    """删除导入包作用域内的 scoped term_name。"""
+
+    for scope in scopes:
+        cur.execute(
+            "DELETE FROM term_name WHERE search_scope @> %s::jsonb",
+            (json.dumps(scope, ensure_ascii=False),),
+        )
+
+
+def _collect_package_root_term_ids(import_steps: list[dict[str, Any]], root: Path) -> list[str]:
+    """收集整个导入包内所有 OWL 文件的 root term_id。"""
+
+    root_term_ids: list[str] = []
+    seen: set[str] = set()
+    for step in import_steps:
+        rel_file = str(step.get("file", "")).strip()
+        if not rel_file.endswith(".owl"):
+            continue
+        path_parts = Path(rel_file).parts
+        if len(path_parts) < 3:
+            continue
+        scope_type, scope_code = path_parts[0], path_parts[1]
+        if scope_type not in {"object", "view"}:
+            continue
+        if not rel_file.endswith("_terms.owl"):
+            continue
+        owl_entities = owl_parser.parse_owl_file(root / rel_file)
+        for entity in owl_entities:
+            entity_type = str(entity.get("entity_type", "")).strip()
+            if entity_type != "term":
+                continue
+            if str(entity.get("term_type_code") or "").strip() != scope_type:
+                continue
+            if str(entity.get("term_code") or "").strip() != scope_code:
+                continue
+            library_code = str(entity.get("library_code") or "").strip()
+            term_id = f"{library_code}#{scope_type}#{scope_code}" if library_code else ""
+            if term_id and term_id not in seen:
+                seen.add(term_id)
+                root_term_ids.append(term_id)
+            break
+    return root_term_ids
+
+
+def _collect_package_root_scopes(
+    import_steps: list[dict[str, Any]], root: Path
+) -> list[dict[str, str]]:
+    """收集整个导入包内所有 root scope。"""
+
+    scopes: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for step in import_steps:
+        rel_file = str(step.get("file", "")).strip()
+        if not rel_file.endswith(".owl"):
+            continue
+        path_parts = Path(rel_file).parts
+        if len(path_parts) < 3:
+            continue
+        scope_type, scope_code = path_parts[0], path_parts[1]
+        if scope_type not in {"object", "view"}:
+            continue
+        if rel_file.endswith("_terms.owl"):
+            key = (scope_type, scope_code)
+            if key not in seen:
+                seen.add(key)
+                scopes.append({"scope": scope_type, "code": scope_code})
+    return scopes
 
 
 # ── 公开入口 ──────────────────────────────────────────────────────────────────
@@ -285,6 +482,8 @@ def run(
             cur.execute(
                 sql.SQL("SET LOCAL search_path TO {}").format(sql.Identifier(db_ctx.schema))
             )
+            _delete_scoped_term_names(cur, _collect_package_root_scopes(import_steps, root))
+            _delete_scope_terms(cur, _collect_package_root_term_ids(import_steps, root))
             for step in import_steps:
                 rel_file: str = step.get("file", "")
                 step_type: str = step.get("type", "")

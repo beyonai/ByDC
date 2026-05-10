@@ -10,9 +10,8 @@ from psycopg import Cursor
 
 from ._helpers import (
     _execute_values,
-    _lookup_term_ids_by_norm_codes,
+    _lookup_term_ids_by_term_keys,
     _normalize_term_code,
-    _optional_term_id_from_obj,
     _str_id_if_set,
     _term_id_from_obj_or_code_direct,
 )
@@ -264,8 +263,10 @@ def _dedupe_term_name_sync_items(
 
 
 def _is_prop_term_id(term_id: str) -> bool:
-    """判断 term_id 是否为属性术语。"""
-    return "#prop#" in term_id
+    """判断 term_id 本身是否为属性术语，而不是属性下的值术语。"""
+
+    parts = term_id.split("#")
+    return len(parts) >= 2 and parts[-2] == "prop"
 
 
 def _term_name_search_scope_payload(search_scope: dict[str, str] | None) -> str:
@@ -305,13 +306,14 @@ def _delete_global_prop_term_names(
 
 
 def _split_term_name_items_by_prop_scope(
-    items: list[tuple[str, str, list[str]]],
+    items: list[tuple[str, str, str, list[str]]],
 ) -> tuple[list[tuple[str, str, list[str]]], list[tuple[str, str, list[str]]]]:
     """将属性术语与非属性术语的名称同步项拆分。"""
     prop_items: list[tuple[str, str, list[str]]] = []
     other_items: list[tuple[str, str, list[str]]] = []
-    for item in items:
-        if _is_prop_term_id(item[0]):
+    for term_id, term_type_code, term_name, aliases in items:
+        item = (term_id, term_name, aliases)
+        if term_type_code == "prop":
             prop_items.append(item)
         else:
             other_items.append(item)
@@ -526,6 +528,16 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
     """
     if not objs:
         return
+
+    def _term_key(obj: dict[str, Any]) -> tuple[str | None, str, str | None, str]:
+        parent_term_id = _str_id_if_set(obj, "parent_term_id")
+        return (
+            _str_id_if_set(obj, "library_id") or _str_id_if_set(obj, "library_code"),
+            str(obj["term_type_code"]),
+            parent_term_id,
+            _normalize_term_code(obj["term_code"]),
+        )
+
     deletes: list[dict[str, Any]] = []
     updates: list[dict[str, Any]] = []
     upserts: list[dict[str, Any]] = []
@@ -538,9 +550,8 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
         else:
             upserts.append(obj)
     if deletes:
-        delete_norms = [_normalize_term_code(o["term_code"]) for o in deletes]
-        delete_tid_map = _lookup_term_ids_by_norm_codes(cur, delete_norms)
-        tids = [delete_tid_map[n] for n in delete_norms if n in delete_tid_map]
+        delete_tid_map = _lookup_term_ids_by_term_keys(cur, [_term_key(o) for o in deletes])
+        tids = [delete_tid_map[_term_key(o)] for o in deletes if _term_key(o) in delete_tid_map]
         if tids:
             cur.execute(
                 "DELETE FROM term_name WHERE term_id = ANY(%s)",
@@ -552,10 +563,9 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
             )
             stats["terms"]["deleted"] += cur.rowcount
     if updates:
-        upd_codes = [_normalize_term_code(o["term_code"]) for o in updates]
-        upd_tid_by_code = _lookup_term_ids_by_norm_codes(cur, upd_codes)
+        upd_tid_by_code = _lookup_term_ids_by_term_keys(cur, [_term_key(o) for o in updates])
         for obj in updates:
-            term_id = upd_tid_by_code.get(_normalize_term_code(obj["term_code"]))
+            term_id = upd_tid_by_code.get(_term_key(obj))
             if not term_id:
                 continue
             new_name = obj.get("term_name")
@@ -570,8 +580,7 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
             stats["terms"]["updated"] += cur.rowcount
     need_sync_upd = [o for o in updates if o.get("term_name") or o.get("aliases") is not None]
     if need_sync_upd:
-        tids_nc = [_normalize_term_code(o["term_code"]) for o in need_sync_upd]
-        tid_by_code = _lookup_term_ids_by_norm_codes(cur, tids_nc)
+        tid_by_code = _lookup_term_ids_by_term_keys(cur, [_term_key(o) for o in need_sync_upd])
         id_list = list(dict.fromkeys(tid_by_code.values()))
         if id_list:
             cur.execute(
@@ -579,11 +588,18 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
                 (id_list,),
             )
             db_names = {r[0]: r[1] for r in cur.fetchall()}
-            sync_items: list[tuple[str, str, list[str]]] = []
+            sync_items: list[tuple[str, str, str, list[str]]] = []
             for o in need_sync_upd:
-                tid = tid_by_code.get(_normalize_term_code(o["term_code"]))
+                tid = tid_by_code.get(_term_key(o))
                 if tid and tid in db_names:
-                    sync_items.append((tid, db_names[tid], o.get("aliases") or []))
+                    sync_items.append(
+                        (
+                            tid,
+                            str(o.get("term_type_code") or ""),
+                            db_names[tid],
+                            o.get("aliases") or [],
+                        )
+                    )
             if sync_items:
                 prop_items, other_items = _split_term_name_items_by_prop_scope(sync_items)
                 if other_items:
@@ -682,9 +698,16 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
         )
         stats["terms"]["inserted"] += len(to_insert)
     # 直接使用 obj["term_id"]，不再依赖 existing_map
-    sync_upsert: list[tuple[str, str, list[str]]] = []
+    sync_upsert: list[tuple[str, str, str, list[str]]] = []
     for o in upserts:
-        sync_upsert.append((o["term_id"], o["term_name"], o.get("aliases") or []))
+        sync_upsert.append(
+            (
+                o["term_id"],
+                str(o.get("term_type_code") or ""),
+                o["term_name"],
+                o.get("aliases") or [],
+            )
+        )
     # 新增 term 无旧 name 行，跳过 DELETE 加速
     new_ids = {o["term_id"] for o in to_insert}
     prop_items, other_items = _split_term_name_items_by_prop_scope(sync_upsert)
@@ -761,14 +784,6 @@ def _batch_process_relation(cur: Cursor, objs: list[dict[str, Any]], stats: dict
     to_insert = [o for o in upserts if o["relation_code"] not in existing]
     to_update = [o for o in upserts if o["relation_code"] in existing]
 
-    # 收集需要查找 term_id 的 code（仅用于 action_term_code）
-    ref_codes: list[str] = [
-        _normalize_term_code(o["action_term_code"])
-        for o in to_insert + to_update
-        if _str_id_if_set(o, "action_term_id") is None and o.get("action_term_code")
-    ]
-    code_to_tid = _lookup_term_ids_by_norm_codes(cur, ref_codes) if ref_codes else {}
-
     if to_update:
         update_rows = [
             (
@@ -782,12 +797,7 @@ def _batch_process_relation(cur: Cursor, objs: list[dict[str, Any]], stats: dict
                 obj["relation_name"],
                 obj.get("relation_category", "BUSINESS"),
                 obj.get("cardinality"),
-                _optional_term_id_from_obj(
-                    obj,
-                    id_key="action_term_id",
-                    code_key="action_term_code",
-                    code_to_tid=code_to_tid,
-                ),
+                obj.get("action_term_id"),
                 obj.get("ext_field"),
             )
             for obj in to_update
@@ -837,12 +847,7 @@ def _batch_process_relation(cur: Cursor, objs: list[dict[str, Any]], stats: dict
                 o["relation_name"],
                 o.get("relation_category", "BUSINESS"),
                 o.get("cardinality"),
-                _optional_term_id_from_obj(
-                    o,
-                    id_key="action_term_id",
-                    code_key="action_term_code",
-                    code_to_tid=code_to_tid,
-                ),
+                o.get("action_term_id"),
                 o.get("ext_field"),
             )
             for o in to_insert
@@ -918,17 +923,11 @@ def _batch_process_knowledge(
     existing = {r[0] for r in cur.fetchall()}
     to_insert = [o for o in upserts if o["knowledge_id"] not in existing]
     to_update = [o for o in upserts if o["knowledge_id"] in existing]
-    kn_upd_codes: list[str] = [
-        _normalize_term_code(obj["term_code"])
-        for obj in to_update
-        if _str_id_if_set(obj, "term_id") is None and obj.get("term_code")
-    ]
-    kn_upd_tid_map = _lookup_term_ids_by_norm_codes(cur, kn_upd_codes)
     for obj in to_update:
         knowledge_id = obj["knowledge_id"]
         tid_new = _str_id_if_set(obj, "term_id")
         if tid_new is None and obj.get("term_code"):
-            tid_new = kn_upd_tid_map.get(_normalize_term_code(obj["term_code"]))
+            tid_new = _term_id_from_obj_or_code_direct(obj, id_key="term_id", code_key="term_code")
         cur.execute(
             """UPDATE term_knowledge
                   SET term_id      = COALESCE(%s, term_id),
@@ -953,17 +952,11 @@ def _batch_process_knowledge(
         )
         stats["knowledge"]["updated"] += 1
     if to_insert:
-        k_codes = [
-            _normalize_term_code(o["term_code"])
-            for o in to_insert
-            if _str_id_if_set(o, "term_id") is None
-        ]
-        k_code_to_tid = _lookup_term_ids_by_norm_codes(cur, k_codes)
         rows = []
         for o in to_insert:
             tid = _str_id_if_set(o, "term_id")
-            if tid is None:
-                tid = k_code_to_tid[_normalize_term_code(o["term_code"])]
+            if tid is None and o.get("term_code"):
+                tid = _term_id_from_obj_or_code_direct(o, id_key="term_id", code_key="term_code")
             rows.append(
                 (
                     o["knowledge_id"],

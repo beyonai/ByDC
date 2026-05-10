@@ -154,6 +154,10 @@ class OwlGenConfig:
     view_code: str = ""
     view_name: str = ""
     view_desc: str = ""
+    # 视图字段是否强制生成 prop 术语，即使其 code 与源对象字段相同。
+    force_view_prop_terms: bool = False
+    # 视图字段是否强制生成值术语（LIST_TERM / DICT_TERM 的视图副本）。
+    force_view_value_terms: bool = False
 
     # ── MySQL 连接参数（schema_reader 使用）──
     mysql_host: str = ""

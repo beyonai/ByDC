@@ -31,6 +31,7 @@ _ENTITY_TYPE_MAPPING: Final[dict[str, str]] = {
     "LibraryDefinition": "library",
     "TermTypeDefinition": "term_type",
     "TermDefinition": "term",
+    "SceneField": "scene_field",
     "TermRelation": "relation",
 }
 
