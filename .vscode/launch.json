@@ -2,6 +2,16 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "启动 chatbi_demo Flask Server",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/chatbi_demo/by_datacloud_flask_server.py",
+      "cwd": "${workspaceFolder}/examples/chatbi_demo",
+      "envFile": "${workspaceFolder}/examples/chatbi_demo/.env",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
       "name": "启动 Data Service",
       "type": "debugpy",
       "request": "launch",
@@ -63,7 +73,8 @@
       "envFile": "${workspaceFolder}/datacloud-mock/.env",
       "console": "integratedTerminal",
       "justMyCode": false
-    }, {
+    },
+    {
       "name": "DataCloud Worker (e_commerce_demo)",
       "type": "debugpy",
       "request": "launch",
@@ -106,7 +117,16 @@
       "type": "debugpy",
       "request": "launch",
       "module": "langgraph_cli",
-      "args": ["dev", "--host", "127.0.0.1", "--port", "2024", "--no-reload", "--no-browser", "--allow-blocking"],
+      "args": [
+        "dev",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "2024",
+        "--no-reload",
+        "--no-browser",
+        "--allow-blocking"
+      ],
       "cwd": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend",
       // envFile 让 VSCode 在启动进程前也加载 .env，与 langgraph dev 的读取保持一致
       "envFile": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend/.env",
@@ -121,7 +141,16 @@
       "type": "debugpy",
       "request": "launch",
       "module": "langgraph_cli",
-      "args": ["dev", "--host", "127.0.0.1", "--port", "2024", "--no-reload", "--no-browser", "--allow-blocking"],
+      "args": [
+        "dev",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "2024",
+        "--no-reload",
+        "--no-browser",
+        "--allow-blocking"
+      ],
       "cwd": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend",
       "envFile": "${workspaceFolder}/datacloud-apps/sales-analysis-agent/backend/.env",
       "env": {},
