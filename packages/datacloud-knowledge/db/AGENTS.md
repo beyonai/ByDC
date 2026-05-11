@@ -1,80 +1,68 @@
 # AGENTS.md
 
 **Module:** db
-**Purpose:** 数据库资产管理 — DDL/Seed/迁移/脚本
+**Purpose:** Source SQL assets, schema scripts, migrations, ER/docs
 
----
+## OVERVIEW
 
-## Overview
+This directory is the source-of-truth SQL asset tree. Wheel packaging copies `ddl/knowledge`, `seed/knowledge`, and `migrations` into `datacloud_knowledge.resources.sql.*`.
 
-自包含的数据库资产管理：完整建表 DDL、增量迁移、种子数据、数据修复脚本、ER 图。
+## STRUCTURE
 
-## Structure
-
-```
+```text
 db/
-├── er/                         # ER 图（Mermaid）
-├── ddl/whale_datacloud/        # 建表 DDL（完整表结构，00~99 顺序执行）
-│   ├── 00_create_schema.sql    # DROP + CREATE SCHEMA（破坏性）
-│   ├── 01~08_*.sql             # 各表建表语句
-│   └── 99_indexes_constraints.sql
-├── migrations/                 # 存量库增量迁移（幂等，IF NOT EXISTS）
-│   ├── 97_add_code_columns.sql
-│   ├── 98_add_ext_attrs.sql
-│   ├── 98_add_term_name_search.sql  # BM25 + 向量列 + 触发器
-│   ├── 98_add_term_name_tags.sql    # search_scope 列
-│   └── 98_alter_term_id_length.sql
-├── data_fixes/                 # 数据修复/同步脚本（非 DDL）
-│   └── 99_sync_ontology_ext_attrs.sql
-├── seed/whale_datacloud/       # 种子数据（ON CONFLICT DO NOTHING）
-│   └── 01_term_type_builtin.sql
-└── scripts/
-    ├── apply_whale_datacloud.py   # 执行 DDL → Seed
-    └── verify_whale_datacloud.py  # 校验表结构
+├── ddl/knowledge/              # Complete schema DDL, 00..99 order
+├── seed/knowledge/             # Built-in seed rows, idempotent
+├── migrations/                 # Existing DB upgrades; mostly idempotent
+├── data_fixes/                 # Manual data synchronization/fixes
+├── scripts/                    # Operational Python scripts
+├── er/                         # Mermaid ER source
+└── docs/                       # Ext attrs design notes
 ```
 
-## Where to Look
+## WHERE TO LOOK
 
-| Task | Location |
-|------|----------|
-| 初始化数据库 | `scripts/apply_whale_datacloud.py` |
-| 校验表结构 | `scripts/verify_whale_datacloud.py` |
-| ER 图 | `er/whale_datacloud.mmd` |
-| 存量库升级 | `migrations/98_*.sql` |
-| 本体冗余同步 | `data_fixes/99_sync_ontology_ext_attrs.sql` |
+| Task | Location | Notes |
+|------|----------|-------|
+| Full schema DDL | `ddl/knowledge/00_create_schema.sql` -> `99_indexes_constraints.sql` | `00_` is destructive |
+| Built-in term types | `seed/knowledge/01_term_type_builtin.sql` | `ON CONFLICT DO NOTHING` |
+| Existing DB upgrades | `migrations/` | Apply selectively to deployed DBs |
+| Ext attr sync | `data_fixes/99_sync_ontology_ext_attrs.sql` | Manual data fix |
+| ER diagram | `er/whale_datacloud.mmd` | Name still uses old schema label |
+| Apply schema | `scripts/apply_whale_datacloud.py` | DDL then seed |
+| Verify schema | `scripts/verify_whale_datacloud.py` | Table/structure checks |
+| Backfill jieba tsvector | `scripts/backfill_jieba_tsvector.py` | Uses `DATACLOUD_KNOWLEDGE_BACKFILL_BATCH_SIZE` |
+| Migrate embeddings | `scripts/migrate_term_name_embeddings.py` | Uses target `DATACLOUD_DB_*` and source `DATACLOUD_SOURCE_DB_*` |
 
-## Execution Order
+## EXECUTION ORDER
 
-| Phase | Directory | Notes |
-|-------|-----------|-------|
-| DDL | `ddl/whale_datacloud/` | `00_` 自动提交（DROP），其余事务内 |
-| Migrations | `migrations/` | 存量库增量，幂等，新建库无需执行 |
-| Seed | `seed/whale_datacloud/` | `ON CONFLICT DO NOTHING` 幂等 |
-| Data Fixes | `data_fixes/` | 按需手动执行 |
+| Phase | Directory | Rule |
+|-------|-----------|------|
+| DDL | `ddl/knowledge/` | New schema/bootstrap only; `00_create_schema.sql` can drop old objects |
+| Migrations | `migrations/` | Existing schema upgrades; do not run blindly after full DDL |
+| Seed | `seed/knowledge/` | Safe to repeat if statements remain idempotent |
+| Data fixes | `data_fixes/` | Manual, case-specific |
 
-## Commands
+## COMMANDS
 
 ```bash
-python db/scripts/apply_whale_datacloud.py            # DDL + Seed
-python db/scripts/apply_whale_datacloud.py --seed-only # 仅 Seed
-python db/scripts/verify_whale_datacloud.py            # 校验
-pytest tests/db/test_schema_apply.py                   # 测试
+python db/scripts/apply_whale_datacloud.py
+python db/scripts/apply_whale_datacloud.py --seed-only
+python db/scripts/verify_whale_datacloud.py
+python db/scripts/backfill_jieba_tsvector.py --help
+python db/scripts/migrate_term_name_embeddings.py --help
 ```
 
-## Environment
+## CONVENTIONS
 
-```bash
-export DATACLOUD_DB_HOST=localhost
-export DATACLOUD_DB_PORT=15432
-export DATACLOUD_DB_USER=postgres
-export DATACLOUD_DB_PASSWORD=your_password
-export DATACLOUD_DB_DATABASE=your_database
-export DATACLOUD_DB_SCHEMA=whale_datacloud  # 可选，默认 whale_datacloud
-```
+- Directory names are `knowledge`, not `whale_datacloud`; some script/ER filenames still retain historical names.
+- Keep DDL filenames ordered with numeric prefixes. DDL order is the dependency graph.
+- New full-schema columns belong in `ddl/knowledge/*`; deployed DB deltas also need a migration.
+- Scripts should consume `DATACLOUD_DB_*` via `datacloud_knowledge.db.url` helpers where possible.
+- SQL intended for app runtime should avoid schema-qualified table names; schema is injected through connection/search-path code.
 
-## Notes
+## ANTI-PATTERNS
 
-- **DDL 有破坏性**: `00_create_schema.sql` 会 DROP 旧表
-- **Seed 幂等**: 可重复执行
-- **DDL 已包含完整列**: `06_term_name.sql` 含 search_scope/name_keywords/name_embedding/name_keywords_jieba
-- 生产环境仅首次初始化执行 DDL；存量库用 `migrations/` 增量升级
+- Do not run destructive DDL against production unless explicitly requested.
+- Do not update `db/ddl/knowledge` without checking wheel `force-include` paths in package `pyproject.toml`.
+- Do not treat `migrations/` as bootstrap order for new databases; full DDL already includes current columns.
