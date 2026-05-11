@@ -532,3 +532,16 @@ class TestGraphBuilder:
         assert "knowledge_enhance" not in node_names
         assert "planning" not in node_names
         assert "end" not in node_names
+
+    def test_state_for_tool_call_injects_concrete_call(self) -> None:
+        """Per-tool Send state should carry the exact tool_call for parallel same-name nodes."""
+        from datacloud_analysis.orchestration.graph_builder import _state_for_tool_call
+
+        state: dict[str, Any] = {"messages": [], "react_round_idx": 1}
+        tool_call = {"name": "query_sales", "id": "tc_002", "args": {"query": "b"}}
+
+        next_state = _state_for_tool_call(state, tool_call)
+
+        assert next_state is not state
+        assert next_state["react_current_tool_call"] == tool_call
+        assert "react_current_tool_call" not in state

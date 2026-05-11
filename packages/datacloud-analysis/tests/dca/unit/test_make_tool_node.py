@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from datacloud_analysis.orchestration.execution.make_tool_node import make_tool_node
 from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
@@ -41,6 +41,25 @@ def _make_state_with_tool_call(
     return state
 
 
+def _make_state_with_parallel_tool_calls() -> dict[str, Any]:
+    ai_msg = AIMessage(
+        content="",
+        tool_calls=[
+            {"name": _TOOL_NAME, "id": "tc_001", "args": {"query": "营收A"}},
+            {"name": _TOOL_NAME, "id": "tc_002", "args": {"query": "营收B"}},
+        ],
+    )
+    return {
+        "messages": [HumanMessage(content="查询营收"), ai_msg],
+        "react_round_idx": 1,
+        "react_current_tool_call": {
+            "name": _TOOL_NAME,
+            "id": "tc_002",
+            "args": {"query": "营收B"},
+        },
+    }
+
+
 # ── TC-3-1: 正常执行 → ToolMessage 写入 ──────────────────────────────────────
 
 
@@ -62,6 +81,29 @@ async def test_tc3_1_single_tool_call_writes_tool_message() -> None:
     assert isinstance(result["messages"][0], ToolMessage)
     assert result["messages"][0].tool_call_id == _TOOL_CALL_ID
     assert result.get("execution_status") is None
+
+
+async def test_tc3_1b_current_tool_call_takes_priority_over_first_match() -> None:
+    """TC-3-1b: per-tool Send 注入的当前 tool_call 应优先于 messages 中的第一条同名 call。"""
+    state = _make_state_with_parallel_tool_calls()
+    mock_tool = MagicMock()
+    mock_tool.name = _TOOL_NAME
+    captured: dict[str, Any] = {}
+
+    async def _dispatch_tool(tool_call: dict[str, Any], tools_map: Any, state: Any, **kwargs: Any):
+        captured["tool_call"] = dict(tool_call)
+        return tool_call["id"], {"records": [], "total": 0}
+
+    with patch(
+        "datacloud_analysis.orchestration.execution.make_tool_node.dispatch_tool",
+        new=AsyncMock(side_effect=_dispatch_tool),
+    ):
+        node = make_tool_node(_TOOL_NAME, mock_tool)
+        result = await node(state, MagicMock())  # type: ignore[arg-type]
+
+    assert captured["tool_call"]["id"] == "tc_002"
+    assert captured["tool_call"]["args"]["query"] == "营收B"
+    assert result["messages"][0].tool_call_id == "tc_002"
 
 
 # ── TC-3-2: ClarificationNeededError → clarify_needed ───────────────────────
