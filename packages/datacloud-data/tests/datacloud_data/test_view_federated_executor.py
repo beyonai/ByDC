@@ -488,6 +488,104 @@ async def test_view_analyze_orders_metric_alias_instead_of_raw_column(
 
 
 @pytest.mark.asyncio
+async def test_view_analyze_orders_metric_field_when_unambiguous(
+    cross_db_context: tuple[OntologyLoader, DataSourceManager],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    loader, ds_manager = cross_db_context
+    view = loader.get_view("cross_db_view")
+    caplog.set_level(logging.WARNING, logger="datacloud_data_sdk.sql_executor.data_source_manager")
+
+    await ViewAnalyzeExecutor(loader, ds_manager=ds_manager).execute(
+        view,
+        {
+            "dimensions": [{"field": "user_name", "group_op": "self"}],
+            "metrics": [{"field": "order_amount", "agg": "sum", "as": "total_amount"}],
+            "order_by": [{"field": "order_amount", "direction": "desc"}],
+            "limit": 10,
+        },
+    )
+
+    sql_logs = [record.message for record in caplog.records if "SQL:" in record.message]
+    assert any('ORDER BY SUM(t1."amount") DESC' in msg for msg in sql_logs)
+    assert all('ORDER BY t1."amount" DESC' not in msg for msg in sql_logs)
+
+
+@pytest.mark.asyncio
+async def test_view_analyze_order_by_metric_field_ambiguity_raises(
+    cross_db_context: tuple[OntologyLoader, DataSourceManager],
+) -> None:
+    loader, ds_manager = cross_db_context
+    view = loader.get_view("cross_db_view")
+
+    with pytest.raises(VirtualActionValidationError, match="对应多个指标表达式"):
+        await ViewAnalyzeExecutor(loader, ds_manager=ds_manager).execute(
+            view,
+            {
+                "dimensions": [{"field": "user_name", "group_op": "self"}],
+                "metrics": [
+                    {"field": "order_amount", "agg": "sum", "as": "total_amount"},
+                    {"field": "order_amount", "agg": "max", "as": "max_amount"},
+                ],
+                "order_by": [{"field": "order_amount", "direction": "desc"}],
+                "limit": 10,
+            },
+        )
+
+
+@pytest.mark.asyncio
+async def test_view_analyze_orders_raw_metric_field_when_unique(
+    cross_db_context: tuple[OntologyLoader, DataSourceManager],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """聚合视图查询允许原始指标 field_code，在唯一映射时转为聚合表达式。"""
+
+    loader, ds_manager = cross_db_context
+    view = loader.get_view("cross_db_view")
+    caplog.set_level(logging.WARNING, logger="datacloud_data_sdk.sql_executor.data_source_manager")
+
+    await ViewAnalyzeExecutor(loader, ds_manager=ds_manager).execute(
+        view,
+        {
+            "dimensions": [{"field": "user_name", "group_op": "self"}],
+            "metrics": [{"field": "order_amount", "agg": "sum", "as": "total_amount"}],
+            "order_by": [{"field": "order_amount", "direction": "desc"}],
+            "limit": 10,
+        },
+    )
+
+    sql_logs = [record.message for record in caplog.records if "SQL:" in record.message]
+    assert any('ORDER BY SUM(t1."amount") DESC' in msg for msg in sql_logs)
+    assert all('ORDER BY t1."amount" DESC' not in msg for msg in sql_logs)
+
+
+@pytest.mark.asyncio
+async def test_view_analyze_orders_raw_metric_field_ambiguity_raises(
+    cross_db_context: tuple[OntologyLoader, DataSourceManager],
+) -> None:
+    """同一原始指标字段对应多个指标时，应在执行前要求使用别名消歧。"""
+
+    loader, ds_manager = cross_db_context
+    view = loader.get_view("cross_db_view")
+
+    with pytest.raises(VirtualActionValidationError, match="多个指标表达式") as exc_info:
+        await ViewAnalyzeExecutor(loader, ds_manager=ds_manager).execute(
+            view,
+            {
+                "dimensions": [{"field": "user_name", "group_op": "self"}],
+                "metrics": [
+                    {"field": "order_amount", "agg": "sum", "as": "total_amount"},
+                    {"field": "order_amount", "agg": "max", "as": "max_amount"},
+                ],
+                "order_by": [{"field": "order_amount", "direction": "desc"}],
+                "limit": 10,
+            },
+        )
+
+    assert exc_info.value.error_code == "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD"
+
+
+@pytest.mark.asyncio
 async def test_cross_db_view_analyze_requires_metrics(
     cross_db_context: tuple[OntologyLoader, DataSourceManager],
 ) -> None:

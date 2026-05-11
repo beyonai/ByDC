@@ -29,7 +29,10 @@ from datacloud_data_sdk.executor.view_federation_support import (
 )
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
-from datacloud_data_sdk.virtual_action.validator import VirtualActionValidator
+from datacloud_data_sdk.virtual_action.validator import (
+    VirtualActionValidationError,
+    VirtualActionValidator,
+)
 
 
 def _collect_view_validation_fields(view: Any) -> list[Any]:
@@ -195,6 +198,7 @@ class ViewAnalyzeExecutor:
 
         # Metrics
         metric_alias_to_expr: dict[str, str] = {}
+        metric_field_to_exprs: dict[str, list[str]] = {}
         for mtr in metrics:
             agg = mtr.get("agg", "count")
             mtr_alias = mtr.get("as") or f"{agg}_result"
@@ -217,6 +221,9 @@ class ViewAnalyzeExecutor:
             select_parts.append(f"{expr} AS {quote_identifier(mtr_alias, db_type)}")
             col_keys.append(mtr_alias)
             metric_alias_to_expr[mtr_alias] = expr
+            fc = mtr.get("field", "")
+            if fc:
+                metric_field_to_exprs.setdefault(fc, []).append(expr)
 
         # WHERE
         where_sql, params = build_filters_where(
@@ -256,6 +263,8 @@ class ViewAnalyzeExecutor:
                 direction = "DESC"
             if ob_field in metric_alias_to_expr:
                 order_clauses.append(f"{metric_alias_to_expr[ob_field]} {direction}")
+            elif ob_field in dim_aliases.values():
+                order_clauses.append(f"{quote_identifier(ob_field, db_type)} {direction}")
             elif ob_field in dim_aliases:
                 # dimension with group_op transform → reference the SELECT alias so the
                 # ORDER BY expression matches the GROUP BY expression (avoids PostgreSQL
@@ -264,17 +273,21 @@ class ViewAnalyzeExecutor:
                     f"{quote_identifier(dim_aliases[ob_field], db_type)} {direction}"
                 )
             else:
-                if ob_field in metric_alias_to_expr:
-                    order_clauses.append(f"{metric_alias_to_expr[ob_field]} {direction}")
-                elif ob_field in dim_aliases:
-                    order_clauses.append(
-                        f"{quote_identifier(dim_aliases[ob_field], db_type)} {direction}"
+                # 聚合查询里不能把原始物理列直接塞进 ORDER BY；
+                # 这里先做语义映射，避免把非法 SQL 发到数据库再炸 GROUP BY。
+                exprs = metric_field_to_exprs.get(ob_field, [])
+                if len(exprs) == 1:
+                    order_clauses.append(f"{exprs[0]} {direction}")
+                elif len(exprs) > 1:
+                    raise VirtualActionValidationError(
+                        f"排序字段 '{ob_field}' 对应多个指标表达式，请改用 metrics.as 别名消歧",
+                        "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD",
                     )
                 else:
-                    resolved = field_to_alias_col.get(ob_field)
-                    if resolved:
-                        ta, col = resolved
-                        order_clauses.append(f"{ta}.{quote_identifier(col, db_type)} {direction}")
+                    raise VirtualActionValidationError(
+                        f"排序字段 '{ob_field}' 不存在，或不能在聚合查询中直接作为排序字段",
+                        "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD",
+                    )
 
         required_fields = {item.get("field", "") for item in dimensions}
         required_fields.update(
