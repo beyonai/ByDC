@@ -28,10 +28,11 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
+from typing import Any, cast
 
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError
 from datacloud_data_sdk.executor.param_coercion import coerce_sql_param
+from datacloud_data_sdk.executor.time_grouping import build_time_group_expr
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 from datacloud_data_sdk.virtual_action.validator import (
@@ -59,71 +60,6 @@ def _quote(ident: str, db_type: str) -> str:
     if dt in ("MYSQL", "CLICKHOUSE"):
         return f"`{ident}`"
     return ident
-
-
-def _time_group_expr(col_expr: str, group_op: str, db_type: str) -> str:
-    """将 group_op=day/month/quarter/year 翻译为对应数据库的时间分组表达式。"""
-    dt = db_type.upper()
-    if group_op == "day":
-        if dt == "MYSQL":
-            return f"DATE({col_expr})"
-        if dt in ("POSTGRESQL", "OPENGAUSS"):
-            return f"DATE_TRUNC('day', {col_expr})::date"
-        if dt == "CLICKHOUSE":
-            return f"toDate({col_expr})"
-        return f"DATE({col_expr})"
-
-    if group_op == "month":
-        if dt == "MYSQL":
-            return f"DATE_FORMAT({col_expr}, '%Y-%m')"
-        if dt in ("POSTGRESQL", "OPENGAUSS"):
-            return f"TO_CHAR(DATE_TRUNC('month', {col_expr}), 'YYYY-MM')"
-        if dt == "CLICKHOUSE":
-            return f"toStartOfMonth({col_expr})"
-        return f"strftime('%Y-%m', {col_expr})"
-
-    if group_op == "quarter":
-        if dt == "MYSQL":
-            return f"CONCAT(YEAR({col_expr}), '-Q', QUARTER({col_expr}))"
-        if dt in ("POSTGRESQL", "OPENGAUSS"):
-            return f"CONCAT(DATE_PART('year', {col_expr})::int, '-Q', DATE_PART('quarter', {col_expr})::int)"
-        if dt == "CLICKHOUSE":
-            return f"toStartOfQuarter({col_expr})"
-        return (
-            f"CAST(strftime('%Y', {col_expr}) AS TEXT) || '-Q' || "
-            f"CAST((CAST(strftime('%m', {col_expr}) AS INTEGER) + 2) / 3 AS TEXT)"
-        )
-
-    if group_op == "year":
-        if dt == "MYSQL":
-            return f"YEAR({col_expr})"
-        if dt in ("POSTGRESQL", "OPENGAUSS"):
-            return f"DATE_PART('year', {col_expr})::int"
-        if dt == "CLICKHOUSE":
-            return f"toYear({col_expr})"
-        return f"strftime('%Y', {col_expr})"
-
-    return col_expr
-
-
-def _period_group_expr(col_expr: str, group_op: str) -> str:
-    """period analytic_kind 字段的分组表达式。
-
-    period 字段存储格式为 'YYYY-MM'，无需 strftime 转换。
-    - month:   取前 7 位 → 'YYYY-MM'
-    - year:    取前 4 位 → 'YYYY'
-    - quarter: 从月份计算季度 → 'YYYY-Q#'
-    """
-    if group_op == "month":
-        return f"substr({col_expr}, 1, 7)"
-    if group_op == "year":
-        return f"substr({col_expr}, 1, 4)"
-    if group_op == "quarter":
-        return (
-            f"substr({col_expr}, 1, 4) || '-Q' || "
-            f"CAST((CAST(substr({col_expr}, 6, 2) AS INTEGER) + 2) / 3 AS TEXT)"
-        )
-    return col_expr  # self
 
 
 def _range_case_expr(col_expr: str, buckets: list[dict[str, Any]], alias: str) -> str:
@@ -318,8 +254,10 @@ class ComputeExecutor:
         _check_snapshot_cross_period_sum(arguments, field_map)
 
         # ── 3. 参数校验（直接用 field_code，无需翻译） ─────────────────────────
-        required_groups = [
-            f.required_filter_group for f in cls.fields if getattr(f, "required_filter_group", None)
+        required_groups: list[str] = [
+            group
+            for group in (getattr(f, "required_filter_group", None) for f in cls.fields)
+            if group is not None
         ]
         filter_relation = (arguments.get("filter_relation") or "AND").upper()
         if filter_relation == "OR" and required_groups and "period_required" in required_groups:
@@ -356,10 +294,10 @@ class ComputeExecutor:
                 dim = {"field": dim}
             fc = dim.get("field", "")
             group_op = dim.get("group_op", "self")
-            buckets = dim.get("buckets")
+            buckets_raw = dim.get("buckets")
+            buckets = cast(list[dict[str, Any]] | None, buckets_raw)
             f = field_map.get(fc)
             col = _resolve_col_expr(f, fc)
-            analytic_kind = getattr(f, "analytic_kind", None) if f else None
 
             if group_op == "range" and buckets:
                 col_alias = f"{fc}_range"
@@ -369,13 +307,12 @@ class ComputeExecutor:
                 select_parts.append(case_expr)
                 group_by_parts.append(case_expr.split(f" AS {q_alias}")[0])
             elif group_op in ("day", "month", "quarter", "year"):
+                # 时间维度统一走元数据驱动的分组器：
+                # STRING 字段按 data_format 切片，DATE/DATETIME 走原生时间函数。
                 col_alias = f"{fc}_{group_op}"
                 dim_aliases[fc] = col_alias
                 q_alias = _quote(col_alias, db_type)
-                if analytic_kind == "period":
-                    group_expr = _period_group_expr(_quote(col, db_type), group_op)
-                else:
-                    group_expr = _time_group_expr(_quote(col, db_type), group_op, db_type)
+                group_expr = build_time_group_expr(_quote(col, db_type), group_op, db_type, f)
                 select_parts.append(f"{group_expr} AS {q_alias}")
                 group_by_parts.append(group_expr)
             else:
@@ -388,11 +325,11 @@ class ComputeExecutor:
 
         # metrics
         metric_alias_to_expr: dict[str, str] = {}
-        col_keys: list[str] = [
-            dim_aliases.get(dim.get("field", ""), dim.get("field", ""))
-            for dim in dimensions
-            if isinstance(dim, dict)
-        ]
+        col_keys: list[str] = []
+        for dim in dimensions:
+            if isinstance(dim, dict):
+                field_code = str(dim.get("field", "") or "")
+                col_keys.append(dim_aliases.get(field_code, field_code))
 
         for mtr in metrics:
             # 兼容 LLM 误用 func 代替 agg

@@ -557,6 +557,7 @@ class OntologyLoader:
                 field_code=f["field_code"],
                 field_name=f.get("field_name", f["field_code"]),
                 field_type=f.get("field_type", "STRING"),
+                data_format=f.get("data_format"),
                 description=f.get("description", ""),
                 aliases=f.get("aliases", []),
                 required=f.get("required", False),

@@ -20,10 +20,11 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, cast
 
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError
 from datacloud_data_sdk.executor.param_coercion import coerce_sql_param
+from datacloud_data_sdk.executor.time_grouping import build_time_group_expr
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 
@@ -247,9 +248,11 @@ class AnalyzeExecutor:
         for dim in dimensions:
             fc = dim.get("field", "")
             group_op = dim.get("group_op", "self")
-            buckets = dim.get("buckets")
+            buckets_raw = dim.get("buckets")
+            buckets = cast(list[dict[str, Any]] | None, buckets_raw)
             col = field_to_col.get(fc, fc)
             col_expr = f"{q(table)}.{q(col)}"
+            f = field_map.get(fc)
 
             if group_op == "range" and buckets:
                 col_alias = f"{fc}_range"
@@ -259,7 +262,7 @@ class AnalyzeExecutor:
                 # CASE WHEN 不直接放入 GROUP BY，需要重新写
                 group_by_parts.append(case_expr.split(f" AS {q(col_alias)}")[0])
             elif group_op in ("day", "month", "quarter", "year"):
-                time_expr = _time_group_expr(col_expr, group_op, db_type)
+                time_expr = build_time_group_expr(col_expr, group_op, db_type, f)
                 col_alias = f"{fc}_{group_op}"
                 dim_aliases[fc] = col_alias
                 select_parts.append(f"{time_expr} AS {q(col_alias)}")

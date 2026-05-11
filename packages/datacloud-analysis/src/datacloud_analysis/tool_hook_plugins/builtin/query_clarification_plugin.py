@@ -340,14 +340,22 @@ def _normalize_sort_key(item: dict[str, Any]) -> dict[str, Any]:
     return new_item
 
 
-def _ensure_dim_group_op(dim: dict[str, Any]) -> dict[str, Any]:
-    """dimensions 条目缺少 group_op 时补全默认值 'self'（按字段原值分组）。
+def _normalize_dim_group_op(dim: dict[str, Any]) -> dict[str, Any]:
+    """将 LLM 常用的分组别名字段规范为执行器协议字段 group_op。
 
-    tool schema 虽将 group_op 标记为 required，但 LLM 有时仅传 field 而省略 group_op。
-    executor 内部已有相同默认逻辑，此处在 before_call_back 阶段提前补全，
-    使日志和下游参数保持一致，避免 schema 校验层误报缺失字段。
+    granularity / level 表达的是同一个时间或层级分组语义，但底层执行器只识别
+    group_op。这里仅做字段名归一化，不注入任何默认分组方式，避免把“未指定”误
+    改成 self 导致时间维度按明细分组。
     """
-    return dim if "group_op" in dim else {**dim, "group_op": "self"}
+    new_dim = dict(dim)
+    if "group_op" not in new_dim:
+        for alias_key in ("granularity", "level"):
+            if alias_key in new_dim:
+                new_dim["group_op"] = new_dim[alias_key]
+                break
+    new_dim.pop("granularity", None)
+    new_dim.pop("level", None)
+    return new_dim
 
 
 def _apply_resolved_to_params(
@@ -392,9 +400,11 @@ def _apply_resolved_to_params(
     ]
     if "dimensions" in tool_params:
         patched["dimensions"] = [
-            _ensure_dim_group_op(_translate_field(d))
+            _normalize_dim_group_op(_translate_field(d))
             if isinstance(d, dict)
-            else _ensure_dim_group_op({"field": _map(d) if not _is_field_code(d) else d})
+            else d
+            if _is_field_code(str(d))
+            else _map(str(d))
             if isinstance(d, str)
             else d
             for d in patched.get("dimensions") or []

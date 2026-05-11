@@ -26,6 +26,7 @@ _KIND_MAP: dict[str, str] = {
     "description": "description",  # 新增
     "datetime": "datetime",
     "time": "datetime",  # 改名（旧 "time" → "datetime"）
+    "date": "datetime",
     "period": "period",
     "numeric": "numeric",
     "numerical": "numeric",  # 改名（旧 "number"）

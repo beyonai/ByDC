@@ -464,6 +464,30 @@ async def test_view_analyze_orders_time_group_by_selected_alias() -> None:
 
 
 @pytest.mark.asyncio
+async def test_view_analyze_orders_metric_alias_instead_of_raw_column(
+    cross_db_context: tuple[OntologyLoader, DataSourceManager],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    loader, ds_manager = cross_db_context
+    view = loader.get_view("cross_db_view")
+    caplog.set_level(logging.WARNING, logger="datacloud_data_sdk.sql_executor.data_source_manager")
+
+    await ViewAnalyzeExecutor(loader, ds_manager=ds_manager).execute(
+        view,
+        {
+            "dimensions": [{"field": "user_name", "group_op": "self"}],
+            "metrics": [{"field": "order_amount", "agg": "sum", "as": "total_amount"}],
+            "order_by": [{"field": "total_amount", "direction": "desc"}],
+            "limit": 10,
+        },
+    )
+
+    sql_logs = [record.message for record in caplog.records if "SQL:" in record.message]
+    assert any('ORDER BY SUM(t1."amount") DESC' in msg for msg in sql_logs)
+    assert all('ORDER BY t1."amount" DESC' not in msg for msg in sql_logs)
+
+
+@pytest.mark.asyncio
 async def test_cross_db_view_analyze_requires_metrics(
     cross_db_context: tuple[OntologyLoader, DataSourceManager],
 ) -> None:

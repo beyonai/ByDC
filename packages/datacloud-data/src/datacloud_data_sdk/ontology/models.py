@@ -46,6 +46,7 @@ class OntologyField:
         field_code: 字段代码
         field_name: 字段名称
         field_type: 字段类型（STRING/NUMBER/DATE/BOOLEAN/INTEGER/ARRAY/OBJECT）
+        data_format: 字段格式（如 yyyyMMdd、yyyy-MM-dd HH:mm:ss）
         description: 字段描述
         aliases: 字段别名列表
         required: 是否必填
@@ -73,6 +74,7 @@ class OntologyField:
     field_code: str
     field_name: str
     field_type: str
+    data_format: str | None = None
     description: str = ""
     aliases: list[str] = field(default_factory=list)
     required: bool = False
