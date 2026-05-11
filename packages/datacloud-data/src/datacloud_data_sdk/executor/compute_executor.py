@@ -325,6 +325,7 @@ class ComputeExecutor:
 
         # metrics
         metric_alias_to_expr: dict[str, str] = {}
+        metric_field_to_exprs: dict[str, list[str]] = {}
         col_keys: list[str] = []
         for dim in dimensions:
             if isinstance(dim, dict):
@@ -335,11 +336,11 @@ class ComputeExecutor:
             # 兼容 LLM 误用 func 代替 agg
             agg = mtr.get("agg") or mtr.get("func") or "count"
             col_alias = mtr.get("as") or f"{agg}_result"
+            fc = str(mtr.get("field", "") or "")
             if agg == "count_all":
                 expr = "COUNT(*)"
             else:
                 raw_expr = mtr.get("expr", "")
-                fc = mtr.get("field", "")
                 if raw_expr:
                     # expr 模式：LLM 传入自定义表达式，直接用作 SQL col_expr
                     col_expr = f"({raw_expr})"
@@ -356,6 +357,8 @@ class ComputeExecutor:
             select_parts.append(f"{expr} AS {_quote(col_alias, db_type)}")
             col_keys.append(col_alias)
             metric_alias_to_expr[col_alias] = expr
+            if fc:
+                metric_field_to_exprs.setdefault(fc, []).append(expr)
 
         # ── WHERE ─────────────────────────────────────────────────────────────
         where_sql, params = _build_filters_where(filters, field_map, db_type, filter_relation)
@@ -385,12 +388,31 @@ class ComputeExecutor:
             direction = ob.get("direction", "desc").upper()
             if direction not in ("ASC", "DESC"):
                 direction = "DESC"
+            order_expr = metric_alias_to_expr.get(ob_field)
             if ob_field in metric_alias_to_expr:
-                order_clauses.append(f"{metric_alias_to_expr[ob_field]} {direction}")
+                order_clauses.append(f"{order_expr} {direction}")
             elif ob_field in dim_aliases:
                 order_clauses.append(f"{_quote(dim_aliases[ob_field], db_type)} {direction}")
-            else:
+            elif ob_field in dim_aliases.values():
+                # 兼容 LLM 已经输出的维度别名（例如 day_month）；
+                # 这里只允许别名，不回退到原始物理列，避免再次触发 GROUP BY 错误。
                 order_clauses.append(f"{_quote(ob_field, db_type)} {direction}")
+            else:
+                # 聚合查询里不能把原始物理列直接塞进 ORDER BY；
+                # 这里先做语义映射，避免把非法 SQL 发到数据库再炸 GROUP BY。
+                exprs = metric_field_to_exprs.get(ob_field, [])
+                if len(exprs) == 1:
+                    order_clauses.append(f"{exprs[0]} {direction}")
+                elif len(exprs) > 1:
+                    raise VirtualActionValidationError(
+                        f"排序字段 '{ob_field}' 对应多个指标表达式，请改用 metrics.as 别名消歧",
+                        "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD",
+                    )
+                else:
+                    raise VirtualActionValidationError(
+                        f"排序字段 '{ob_field}' 不存在，或不能在聚合查询中直接作为排序字段",
+                        "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD",
+                    )
 
         # ── 拼接完整 SQL ──────────────────────────────────────────────────────
         select_sql = ", ".join(select_parts) or "COUNT(*) AS total_count"

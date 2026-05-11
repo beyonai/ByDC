@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -388,6 +389,94 @@ async def test_metrics_func_alias_normalized_like_agg(executor_with_data: Comput
     assert records[0]["total_revenue"] == pytest.approx(20_000_000)
     assert records[1]["region_name"] == "通州"
     assert records[1]["total_revenue"] == pytest.approx(3_000_000)
+
+
+async def test_order_by_metric_field_maps_to_aggregate_expr(
+    executor_with_data: ComputeExecutor,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """聚合查询中原始指标字段用于排序时，应映射到聚合表达式而非裸列。"""
+
+    caplog.set_level(logging.WARNING, logger="datacloud_data_sdk.sql_executor.data_source_manager")
+    executor = executor_with_data
+    await executor.execute(
+        "enterprise_base",
+        {
+            "dimensions": [{"field": "region_name", "group_op": "self"}],
+            "metrics": [{"field": "revenue", "agg": "sum", "as": "total_revenue"}],
+            "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
+            "order_by": [{"field": "revenue", "direction": "desc"}],
+        },
+    )
+
+    sql_logs = [record.message for record in caplog.records if "SQL:" in record.message]
+    assert any('ORDER BY SUM("revenue") DESC' in msg for msg in sql_logs)
+    assert all('ORDER BY "revenue" DESC' not in msg for msg in sql_logs)
+
+
+async def test_order_by_metric_field_ambiguity_raises(executor_with_data: ComputeExecutor) -> None:
+    """同一 raw 指标字段对应多个聚合表达式时，应在执行前报业务异常。"""
+
+    with pytest.raises(VirtualActionValidationError, match="对应多个指标表达式"):
+        await executor_with_data.execute(
+            "enterprise_base",
+            {
+                "dimensions": [{"field": "region_name", "group_op": "self"}],
+                "metrics": [
+                    {"field": "revenue", "agg": "sum", "as": "total_revenue"},
+                    {"field": "revenue", "agg": "max", "as": "max_revenue"},
+                ],
+                "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
+                "order_by": [{"field": "revenue", "direction": "desc"}],
+            },
+        )
+
+
+async def test_order_by_raw_metric_field_maps_to_aggregate_expr(
+    executor_with_data: ComputeExecutor,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """聚合查询的 order_by 允许原始指标 field_code，在唯一映射时转为聚合表达式。"""
+
+    executor = executor_with_data
+    caplog.set_level(logging.WARNING, logger="datacloud_data_sdk.sql_executor.data_source_manager")
+
+    result = await executor.execute(
+        "enterprise_base",
+        {
+            "dimensions": [{"field": "region_name", "group_op": "self"}],
+            "metrics": [{"field": "revenue", "agg": "sum", "as": "total_revenue"}],
+            "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
+            "order_by": [{"field": "revenue", "direction": "desc"}],
+        },
+    )
+
+    sql_logs = [record.message for record in caplog.records if "SQL:" in record.message]
+    assert any('ORDER BY SUM("revenue") DESC' in msg for msg in sql_logs)
+    assert all('ORDER BY "revenue" DESC' not in msg for msg in sql_logs)
+    assert result["records"][0]["region_name"] == "亦庄"
+
+
+async def test_order_by_raw_metric_field_ambiguity_raises(
+    executor_with_data: ComputeExecutor,
+) -> None:
+    """当同一原始指标字段对应多个聚合表达式时，必须要求 LLM 使用别名消歧。"""
+
+    with pytest.raises(VirtualActionValidationError, match="多个指标表达式") as exc_info:
+        await executor_with_data.execute(
+            "enterprise_base",
+            {
+                "dimensions": [{"field": "region_name", "group_op": "self"}],
+                "metrics": [
+                    {"field": "revenue", "agg": "sum", "as": "total_revenue"},
+                    {"field": "revenue", "agg": "max", "as": "max_revenue"},
+                ],
+                "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
+                "order_by": [{"field": "revenue", "direction": "desc"}],
+            },
+        )
+
+    assert exc_info.value.error_code == "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
