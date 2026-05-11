@@ -1,136 +1,129 @@
-# AGENTS.md
+# PROJECT KNOWLEDGE BASE
 
-**Package:** datacloud-knowledge
-**Version:** 0.2.0
-**Python:** >=3.12
-**工具链:** uv + ruff + mypy
+**Generated:** 2026-05-11
+**Commit:** d960caf2
+**Branch:** main
 
----
+## OVERVIEW
 
-## Overview
+`datacloud-knowledge` is the knowledge SDK package for term retrieval, ontology import/export, intent disambiguation, and NL-to-knowledge-query support. It is a Python >=3.12 `src/` package in the uv workspace, with SQL assets packaged into the wheel.
 
-知识服务 SDK — 术语检索、意图消歧、本体查询、N跳子图查询。
-将自然语言转化为结构化查询计划，支持多 schema 隔离。
+## STRUCTURE
 
-## Structure
-
-```
+```text
 packages/datacloud-knowledge/
 ├── src/datacloud_knowledge/
-│   ├── db/                    # DB 基础设施（连接、schema 上下文、ORM）
-│   ├── intent/                # 意图识别（消歧、召回、澄清、评分）
-│   │   └── clarification/     # 多轮澄清子模块
-│   ├── query/                 # NL→SQL 图查询、模糊匹配
-│   │   ├── search/            # BM25/向量/子串召回
-│   │   ├── fuzzy/             # RapidFuzz 模糊匹配
-│   │   └── embedding/         # 向量嵌入服务
-│   ├── knowledge_build/       # 知识构建（OWL 导入）
-│   │   └── importer/          # 导入管线（解析→转换→写入）
-│   ├── knowledge_search/      # 知识检索、OWL 关系解析
-│   ├── owl_gen/               # OWL 文件生成（表→OWL）
-│   └── file_store/            # 文件存储（S3/本地）
-├── db/                        # 数据库资产
-│   ├── ddl/whale_datacloud/   # 建表 DDL（完整表结构）
-│   ├── migrations/            # 存量库增量迁移
-│   ├── data_fixes/            # 数据修复脚本
-│   ├── seed/                  # 种子数据（幂等）
-│   └── scripts/               # 初始化/校验脚本
-├── tests/                     # pytest 测试
-└── scripts/manual/            # 手动评测脚本
+│   ├── db/                    # DB URL parsing, schema lifecycle, SQLAlchemy sessions
+│   ├── intent/                # recall, disambiguation, clarification, scoring
+│   ├── query/                 # NL semantic tree, search, fuzzy, embeddings
+│   ├── knowledge_build/       # OWL import API and DB writer pipeline
+│   ├── knowledge_search/      # typed term/alias/object-property lookup facade
+│   ├── owl_gen/               # business DB schema -> OWL import package generator
+│   └── resources/sql/         # packaged SQL resources from db/*
+├── db/                        # source SQL assets, migrations, scripts, ER/docs
+├── tests/                     # pytest tests by domain
+└── scripts/manual/            # manual/eval scripts, print allowed by root ruff override
 ```
 
-## Where to Look
+## WHERE TO LOOK
 
-| Task | Location |
-|------|----------|
-| 自然语言→语义树 | `query/sql_engine.py:SQLKnowledgeGraphQuery.query()` |
-| 术语提取（双向最大匹配） | `query/sql_engine.py:extract_entities()` |
-| BM25/向量/子串召回 | `query/search/bm25.py`, `vector.py`, `substring_recall.py` |
-| 模糊匹配 | `query/fuzzy/rapidfuzz_matcher.py` |
-| 意图消歧 | `intent/disambiguation.py:disambiguate_with_session()` |
-| 多轮澄清 | `intent/clarification/api.py` |
-| 术语召回 | `intent/batch_recall.py`, `intent/typed_recall.py` |
-| OWL 导入 | `knowledge_build/importer/runner.py` → `executor.py` → `writer.py` |
-| DB 连接/schema | `db/context.py:DatabaseContext`, `db/connection.py:get_session()` |
-| 文件上传/下载 | `file_store/manager.py:FileManager` |
-| 数据库 DDL | `db/ddl/whale_datacloud/*.sql` |
-| OWL 生成 | `owl_gen/generator.py:generate()` |
+| Task | Location | Notes |
+|------|----------|-------|
+| Public lightweight SDK exports | `src/datacloud_knowledge/__init__.py` | Lazy exports keep optional deps out of CLI imports |
+| CLI entry | `src/datacloud_knowledge/cli.py` | Console script: `datacloud-knowledge` |
+| DB URL/schema resolution | `src/datacloud_knowledge/db/url.py` | Parses split env vars and PostgreSQL/OpenGauss/JDBC URLs |
+| Schema lifecycle | `src/datacloud_knowledge/db/schema.py` | Uses packaged/fallback SQL resources |
+| NL -> query tree | `src/datacloud_knowledge/query/sql_engine.py` | Largest core file; singleton service surface |
+| Search recall | `src/datacloud_knowledge/query/search/` | BM25, vector, substring, jieba, RRF |
+| Intent service API | `src/datacloud_knowledge/intent/service.py` | `*_with_session` functions for external consumers |
+| Multi-turn clarification | `src/datacloud_knowledge/intent/clarification/api.py` | Uses postprocess/confirm/cartesian helpers |
+| Knowledge provider facade | `src/datacloud_knowledge/provider.py` | Thin function-mode provider facade |
+| OWL import HTTP router | `src/datacloud_knowledge/knowledge_build/router.py` | FastAPI `APIRouter(prefix="/build")` |
+| OWL import pipeline | `src/datacloud_knowledge/knowledge_build/importer/runner.py` | precheck -> executor -> callback |
+| Knowledge search facade | `src/datacloud_knowledge/knowledge_search/term_search.py` | Typed search, aliases, property values |
+| OWL package generation | `src/datacloud_knowledge/owl_gen/generator.py` | Reads DB schema, calls renderers, writes package |
+| SQL assets | `db/ddl/knowledge`, `db/seed/knowledge`, `db/migrations` | Force-included in wheel |
 
-## Code Map
+## CODE MAP
 
 | Symbol | Type | Location | Role |
 |--------|------|----------|------|
-| `SQLKnowledgeGraphQuery` | Class | `query/sql_engine.py` (1677L) | 主查询服务（单例） |
-| `VocabularyCache` | Class | `query/vocab_cache.py` | 术语缓存 |
-| `ParadigmResolutionState` | Class | `intent/paradigm_builder.py` | 范式解析状态机 |
-| `DatabaseContext` | Class | `db/context.py` | Schema 隔离（SET LOCAL search_path） |
-| `FileManager` | Class | `file_store/manager.py` | 文件存储抽象 |
-| `run()` | Function | `knowledge_build/importer/runner.py` | OWL 导入入口 |
-| `get_session()` | Function | `db/connection.py` | SQLAlchemy Session 上下文管理器 |
-| `resolve_knowledge_schema()` | Function | `db/url.py` | 读取 DATACLOUD_DB_SCHEMA 环境变量 |
+| `SQLKnowledgeGraphQuery` | class | `query/sql_engine.py` | Main NL knowledge-query service |
+| `DatabaseContext` | class | `db/context.py` | Transaction-local `search_path` management |
+| `ParsedDatabaseUrl` | dataclass | `db/url.py` | Normalized DB target from env/JDBC/libpq URL |
+| `KnowledgeProvider` | protocol | `provider.py` | Public provider facade contract |
+| `run()` | function | `knowledge_build/importer/runner.py` | Full OWL precheck/import/callback flow |
+| `generate()` | function | `owl_gen/generator.py` | End-to-end OWL package generator |
+| `search_terms_by_type()` | function | `knowledge_search/term_search.py` | Typed term search with filters/BM25 fallback |
+| `typed_multi_recall_batch()` | function | `intent/batch_recall.py` | Batched typed recall core |
+| `disambiguate()` | function | `intent/disambiguation.py` | Candidate disambiguation and path graph logic |
+| `analyze_query_clarification()` | function | `intent/clarification/api.py` | Clarification analysis entry |
 
-## DB 架构
+## CONVENTIONS
 
-- **驱动**: psycopg3（原生）+ SQLAlchemy 2.0（ORM）
-- **Schema 隔离**: `DatabaseContext` 在事务开始时执行 `SET LOCAL search_path TO <schema>`
-- **默认 schema**: `whale_datacloud`（通过 `DATACLOUD_DB_SCHEMA` 环境变量覆盖）
-- **连接方式**: importer 用 psycopg3 原生连接；intent/query/search 用 SQLAlchemy Session
-- **OpenGauss 兼容**: `db/connection.py` 含 PGDialect 补丁
+- Package metadata currently has `pyproject.toml` version `0.1.0`; runtime `__version__` is `0.2.0`. Check both before release/version work.
+- Root package exports only 10 lightweight lazy names. Do not expand top-level imports if it pulls in SQLAlchemy/boto3/matplotlib during CLI startup.
+- `intent/__init__.py` exports 56 legacy/public symbols. Preserve names unless coordinating downstream `datacloud-analysis` and byclaw-data changes.
+- DB code must use schema resolution and `search_path`; SQL should use bare table names except information_schema/schema-management code.
+- SQL resources live in source checkout under `db/ddl/knowledge`, `db/seed/knowledge`, `db/migrations`, and are packaged under `datacloud_knowledge.resources.sql.*`.
+- `db_url.py` and `knowledge_search/db/*` are compatibility shims. New imports should target `datacloud_knowledge.db.*`.
+- Ruff root config has package-specific ignores for legacy complexity and dynamic SQL. Do not add new ignores without narrowing them to the smallest file.
 
----
+## TESTS
 
-## 工具链
+| Area | Tests |
+|------|-------|
+| Importer | `tests/importer/`, `tests/test_importer.py` |
+| OWL generator | `tests/test_owl_gen_multiview.py` |
+| Intent/clarification | `tests/intent/` |
+| Provider facade | `tests/provider/test_provider.py` |
+| Query search validation | `tests/query/search/test_vector_validation.py` |
 
-| 用途 | 工具 | 命令 |
-|------|------|------|
-| 包管理 | `uv` | `uv sync` |
-| 格式化 | `ruff format` | `uv run ruff format .` |
-| Lint | `ruff check` | `uv run ruff check .` |
-| 类型检查 | `mypy` | `uv run mypy .` |
-| 测试 | `pytest` | `uv run pytest` |
+`pyproject.toml` sets `asyncio_mode = "auto"` and marker `db_integration`. Root pytest config only names older `tests/db`/`tests/ontology` paths, so prefer package-local pytest commands when working here.
 
-## 规范
-
-- Python >= 3.12，`uv` + `pyproject.toml`
-- Ruff: 行宽 100，双引号，4 空格缩进
-- MyPy strict mode，`# type: ignore` 必须带错误码
-- Commit 格式（中文）：`<type>(<scope>): <描述>`
-- 一个 commit 一个逻辑变更，实现与测试一起提交
-
-## Anti-Patterns
-
-- ❌ `from ... import *` — 禁用通配符导入
-- ❌ `# type: ignore` 不带错误码
-- ❌ `as any` — 禁用类型抑制
-- ❌ `eval()`, `exec()` — 禁用动态代码执行
-- ❌ 裸 `except:` — 必须指定异常类型
-- ❌ `print()` 生产代码 — 用 `logging`
-- ❌ SQL 中硬编码 `whale_datacloud.` — 用 `DatabaseContext` + `search_path`
-
-## Commands
+## COMMANDS
 
 ```bash
-# 安装依赖（从项目根目录）
 uv sync
-
-# 格式化 + Lint
-uv run ruff format packages/datacloud-knowledge/
-uv run ruff check packages/datacloud-knowledge/
-
-# 类型检查
-uv run mypy packages/datacloud-knowledge/src/
-
-# 运行测试
-uv run pytest packages/datacloud-knowledge/tests/
-uv run pytest -m db_integration  # 数据库集成测试
-
-# 数据库初始化
-python db/scripts/apply_whale_datacloud.py
+uv run ruff format packages/datacloud-knowledge
+uv run ruff check packages/datacloud-knowledge
+uv run mypy packages/datacloud-knowledge/src/datacloud_knowledge
+uv run pytest packages/datacloud-knowledge/tests
+uv run --package datacloud-knowledge datacloud-knowledge --help
 ```
 
-## Notes
+DB commands from package root:
 
-- **单例服务**: `get_singleton_service()` 返回全局实例，测试用 `reset_singleton_service()` 重置
-- **数据库测试**: 需要 `DATACLOUD_ENABLE_INTEGRATION_TESTS=1` + DB 环境变量
-- **Re-export shim**: `db_url.py` 和 `knowledge_search/db/` 保留向后兼容 shim，新代码应从 `db/` 导入
-- **TODO(ontology)**: `intent/clarification/api.py` 有待实现的 ontology_code 过滤
+```bash
+python db/scripts/apply_whale_datacloud.py
+python db/scripts/verify_whale_datacloud.py
+python db/scripts/backfill_jieba_tsvector.py
+python db/scripts/migrate_term_name_embeddings.py --help
+```
+
+## ENVIRONMENT
+
+| Variable | Purpose |
+|----------|---------|
+| `DATACLOUD_DB_HOST`, `DATACLOUD_DB_PORT`, `DATACLOUD_DB_DATABASE` | Target knowledge DB |
+| `DATACLOUD_DB_USER`, `DATACLOUD_DB_PASSWORD`, `DATACLOUD_DB_TYPE` | DB credentials/type |
+| `DATACLOUD_DB_SCHEMA` | Target schema; default behavior resolves to `whale_datacloud` |
+| `DATACLOUD_INTENT_DEBUG` | Enables intent package debug logger |
+| `DATACLOUD_INTENT_ENABLE_VECTOR` | Toggles vector recall in intent service tests/runtime |
+| `DATACLOUD_KNOWLEDGE_BACKFILL_BATCH_SIZE` | Jieba tsvector backfill batch size |
+| `DATACLOUD_SOURCE_DB_*` | Source DB for embedding migration script |
+
+## ANTI-PATTERNS
+
+- Do not hard-code `whale_datacloud.` in application SQL. Use `DatabaseContext` / connection `search_path`.
+- Do not import from compatibility shims in new code (`db_url.py`, `knowledge_search/db/*`).
+- Do not use wildcard imports except in existing compatibility shim files already covered by ruff exceptions.
+- Do not use unqualified `# type: ignore`; root mypy/ruff require error codes.
+- Do not add production `print()` calls; only `scripts/manual/*.py` has a package ruff override.
+- Do not bypass importer precheck or split importer writes across independent transactions; failure must roll back the whole import.
+
+## NOTES
+
+- `src/datacloud_knowledge/file_store/` currently has no implementation files; old local guidance was removed as stale.
+- LSP/Pyright currently reports pre-existing diagnostics in `query/sql_engine.py`, `query/search/bm25.py`, and the compatibility wildcard shim. Treat them as baseline unless your change touches those paths.
+- `TODO(ontology)` remains in clarification docs/AGENTS: ontology_code filtering is not complete.

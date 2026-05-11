@@ -1,74 +1,64 @@
 # AGENTS.md
 
 **Module:** intent
-**Purpose:** 意图识别 — 消歧、召回、澄清、评分、范式构建
+**Purpose:** Recall, disambiguation, clarification, scoring, paradigm building
 
----
+## OVERVIEW
 
-## Overview
+Largest source domain in this package. Public consumers call service/facade functions while internals coordinate typed recall, BM25/vector/substring matching, shortest-path disambiguation, and multi-turn clarification.
 
-意图理解原子能力：术语召回→消歧→多轮澄清→评分更新→范式构建。16 个文件，最复杂的子模块。
+## STRUCTURE
 
-## Structure
-
-```
+```text
 intent/
-├── service.py             # 对外服务层（with_session 系列函数）
-├── types.py               # 公共类型（MatchResult, ClarificationResult 等）
-├── batch_recall.py        # 批量术语召回（840L）
-├── typed_recall.py        # 按类型分区召回
-├── matching.py            # 术语匹配（BM25 + 子串 + 向量）
-├── disambiguation.py      # 三层消歧 + 最短路径树（598L）
-├── paradigm_builder.py    # 范式解析状态机 ParadigmResolutionState（619L）
-├── natquery.py            # NatQuery 结构化查询模型
-├── llm_confirm.py         # LLM 确认（ConfirmedQuery 等）
-├── score_update.py        # 术语评分更新
-├── cache.py               # UserNameCache
-├── storage.py             # 术语/知识写入
-├── dimension_values.py    # 维度值查询
-├── llm_utils.py           # LLM 工具函数
-├── clarification_legacy.py # 旧版澄清入口（兼容 shim）
-└── clarification/         # 多轮澄清子模块
-    ├── api.py             # 澄清 API 入口（411L）
-    ├── extract.py         # 意图提取
-    ├── confirm.py         # 确认逻辑
-    ├── cartesian.py       # 笛卡尔积展开（590L）
-    ├── format.py          # 格式化
-    └── models.py          # 澄清数据模型
+├── service.py                 # External `*_with_session` service functions
+├── batch_recall.py            # Batched typed recall and SQL/tsquery safety
+├── typed_recall.py            # Type-partitioned recall facade
+├── matching.py                # Mention matching helpers
+├── disambiguation.py          # Disambiguation + shortest path graph/tree
+├── clarification/             # Multi-turn clarification implementation
+├── clarification_legacy.py    # Backward-compatible import path
+├── paradigm_builder.py        # Five-stage paradigm state builder
+├── llm_confirm.py             # Structured LLM confirmation models/helpers
+├── score_update.py            # Score updates
+├── storage.py                 # User term/knowledge writes
+└── types.py                   # Shared public result/event types
 ```
 
-## Where to Look
+## WHERE TO LOOK
 
-| Task | Location |
-|------|----------|
-| 对外服务入口 | `service.py:*_with_session()` |
-| 术语召回 | `batch_recall.py`, `typed_recall.py` |
-| 消歧 | `disambiguation.py:disambiguate()` |
-| 最短路径树 | `disambiguation.py:build_shortest_path_tree()` |
-| 多轮澄清 | `clarification/api.py` |
-| 范式构建 | `paradigm_builder.py:build_paradigm_resolution_state()` |
-| 评分更新 | `score_update.py:update_score()` |
-| 公共类型 | `types.py` |
+| Task | Location | Notes |
+|------|----------|-------|
+| External service functions | `service.py` | `*_with_session` naming pattern |
+| Batched recall | `batch_recall.py` | Layered recall, fallback, tsquery safety |
+| Multi-turn clarification | `clarification/api.py` | Main entry used by provider facade |
+| Clarification finalization | `clarification/postprocess.py` | Normalize/apply resolved params |
+| Confirmation retries | `clarification/confirm.py` | Structured LLM confirmation |
+| Cartesian expansion | `clarification/cartesian.py` | Builds paradigm payload variants |
+| Disambiguation | `disambiguation.py` | Shortest-path tree helpers |
+| Paradigm resolution | `paradigm_builder.py` | `ParadigmResolutionState` |
+| Tests | `tests/intent/` | Most package tests live here |
 
-## External Consumers
+## PUBLIC SURFACE
 
-| 符号 | 消费方 |
-|------|--------|
-| `search_all_candidates_with_name_id` | datacloud-analysis, byclaw-data |
-| `disambiguate_with_session` | datacloud-analysis |
-| `typed_multi_recall_with_session` | byclaw-data |
-| `analyze_query_clarification` | byclaw-data |
-| `store_clarification_results` | datacloud-analysis |
-| `ScoreUpdateRecord`, `batch_update_scores_with_session` | datacloud-analysis |
+`intent/__init__.py` exports 56 names, including `search_all_candidates_with_name_id`, `typed_multi_recall_with_session`, `disambiguate_with_session`, `analyze_query_clarification`, and score-update symbols. Treat these exports as compatibility-sensitive.
 
-## Conventions
+## CONVENTIONS
 
-- **SQL 裸表名**: 所有 SQL 不硬编码 schema，依赖 SQLAlchemy engine `connect_args` 设置 `search_path`
-- **`__init__.py` 导出 58 个符号**: 保持向后兼容，新代码建议直接从子模块导入
-- **DEBUG 模式**: `DATACLOUD_INTENT_DEBUG=1` 开启全模块 DEBUG 日志
+- Set `DATACLOUD_INTENT_DEBUG=1` to enable the package logger without changing root logging.
+- Service APIs accept caller-managed SQLAlchemy sessions; do not open nested sessions in `*_with_session` paths.
+- SQL uses bare table names and relies on DB connection/search-path setup.
+- `batch_recall.py` must not pass raw user SQL/tsquery operators into `to_tsquery`; sanitize and parameterize.
+- Vector recall is controlled by `DATACLOUD_INTENT_ENABLE_VECTOR` in service tests/runtime.
 
-## Notes
+## ANTI-PATTERNS
 
-- `batch_recall.py` 840 行 — 最大的 intent 文件
-- `clarification/` 是独立子模块，有自己的 models.py
-- TODO(ontology): `clarification/api.py` 有待实现的 ontology_code 过滤
+- Do not remove legacy exports from `__init__.py` or `clarification_legacy.py` without downstream coordination.
+- Do not add schema-qualified SQL here.
+- Do not bypass clarification postprocess when persisting confirmed synonyms.
+- Do not weaken retry/error behavior in `clarification/confirm.py`; tests cover retryable status handling.
+
+## NOTES
+
+- Existing TODO: ontology_code filtering in `clarification/api.py` remains incomplete.
+- High-complexity files: `batch_recall.py`, `clarification/api.py`, `clarification/confirm.py`, `clarification/cartesian.py`, `paradigm_builder.py`, `disambiguation.py`.
