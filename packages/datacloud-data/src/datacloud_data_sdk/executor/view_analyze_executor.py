@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from types import SimpleNamespace
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -11,8 +12,8 @@ from datacloud_data_sdk.executor.analyze_executor import (
     _agg_expr,
     _range_case_expr,
     _safe_pkey,
-    _time_group_expr,
 )
+from datacloud_data_sdk.executor.time_grouping import build_time_group_expr
 from datacloud_data_sdk.executor.view_executor_support import (
     build_filters_where,
     build_join_clauses,
@@ -66,6 +67,13 @@ class ViewAnalyzeExecutor:
     async def execute(self, view: Any, arguments: dict[str, Any]) -> dict[str, Any]:
         """执行视图 analyze 查询，生成多对象 JOIN + GROUP BY + HAVING SQL。"""
         validation_fields = _collect_view_validation_fields(view)
+        # 视图字段在这里使用 property_code，不是 field_code；
+        # 这层映射用于把视图维度/指标重新关联回源对象字段元数据。
+        field_by_code = {
+            getattr(field, "property_code", getattr(field, "field_code", "")): field
+            for field in validation_fields
+            if getattr(field, "property_code", getattr(field, "field_code", ""))
+        }
         required_groups = _collect_required_filter_groups(validation_fields)
         validator = VirtualActionValidator(validation_fields)
         validator.validate_analyze(arguments, required_groups or None)
@@ -109,6 +117,16 @@ class ViewAnalyzeExecutor:
         alias = context.datasource_alias
         db_type = context.db_type
         field_to_alias_col = context.field_to_alias_col
+        field_to_field_type = context.field_to_field_type
+        field_to_analytic_kind = context.field_to_analytic_kind
+        validation_fields = _collect_view_validation_fields(view)
+        # 视图字段在这里使用 property_code，不是 field_code；
+        # 这层映射用于把视图维度/指标重新关联回源对象字段元数据。
+        field_by_code = {
+            getattr(field, "property_code", getattr(field, "field_code", "")): field
+            for field in validation_fields
+            if getattr(field, "property_code", getattr(field, "field_code", ""))
+        }
 
         dimensions = arguments.get("dimensions") or []
         metrics = arguments.get("metrics") or []
@@ -128,6 +146,7 @@ class ViewAnalyzeExecutor:
             group_op = dim.get("group_op", "self")
             buckets = dim.get("buckets")
             resolved = field_to_alias_col.get(fc)
+            f = None
             if not resolved:
                 # 字段不在视图映射中：降级使用裸字段名（无表别名前缀）。
                 # 比静默 continue 更安全：SQL 执行若失败会明确报错，而不是返回全量汇总误导调用方。
@@ -156,7 +175,13 @@ class ViewAnalyzeExecutor:
                 )
                 col_keys.append(alias_name)
             elif group_op in ("day", "month", "quarter", "year"):
-                time_expr = _time_group_expr(col_expr, group_op, db_type)
+                field_obj = field_by_code.get(fc)
+                field_meta = SimpleNamespace(
+                    field_type=field_to_field_type.get(fc, ""),
+                    data_format=getattr(field_obj, "data_format", None),
+                    analytic_kind=field_to_analytic_kind.get(fc, ""),
+                )
+                time_expr = build_time_group_expr(col_expr, group_op, db_type, field_meta)
                 alias_name = f"{fc}_{group_op}"
                 dim_aliases[fc] = alias_name
                 select_parts.append(f"{time_expr} AS {quote_identifier(alias_name, db_type)}")
@@ -239,10 +264,17 @@ class ViewAnalyzeExecutor:
                     f"{quote_identifier(dim_aliases[ob_field], db_type)} {direction}"
                 )
             else:
-                resolved = field_to_alias_col.get(ob_field)
-                if resolved:
-                    ta, col = resolved
-                    order_clauses.append(f"{ta}.{quote_identifier(col, db_type)} {direction}")
+                if ob_field in metric_alias_to_expr:
+                    order_clauses.append(f"{metric_alias_to_expr[ob_field]} {direction}")
+                elif ob_field in dim_aliases:
+                    order_clauses.append(
+                        f"{quote_identifier(dim_aliases[ob_field], db_type)} {direction}"
+                    )
+                else:
+                    resolved = field_to_alias_col.get(ob_field)
+                    if resolved:
+                        ta, col = resolved
+                        order_clauses.append(f"{ta}.{quote_identifier(col, db_type)} {direction}")
 
         required_fields = {item.get("field", "") for item in dimensions}
         required_fields.update(
