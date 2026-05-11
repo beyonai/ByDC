@@ -198,17 +198,14 @@ class FunctionKnowledgeProvider:
         warnings: list[str] = []
         persisted_synonyms: PersistedSynonyms | None = None
 
-        if needs_clarification:
-            if form is None or metadata is None:
-                raise ValueError("form and metadata are required when needs_clarification is True")
-            form_text = _serialize_payload(form)
-            metadata_text = _serialize_payload(metadata)
-            formatter = (
-                _format_clarification_query if mode == "query" else _format_clarification_compute
-            )
-            formatted = formatter(query, original_input, form_text, metadata_text)
-        else:
-            formatted = original_input
+        if form is None or metadata is None:
+            raise ValueError("form and metadata are required when needs_clarification is True")
+        form_text = _serialize_payload(form)
+        metadata_text = _serialize_payload(metadata)
+        formatter = (
+            _format_clarification_query if mode == "query" else _format_clarification_compute
+        )
+        formatted = formatter(query, original_input, form_text, metadata_text)
 
         normalized = _normalize_clarification_params(
             formatted,

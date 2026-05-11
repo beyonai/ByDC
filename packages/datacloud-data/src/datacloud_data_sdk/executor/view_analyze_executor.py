@@ -201,6 +201,7 @@ class ViewAnalyzeExecutor:
             _safe_pkey,
             str(arguments.get("filter_relation") or "AND"),
             context.field_to_analytic_kind,
+            context.field_to_field_type,
         )
 
         # HAVING

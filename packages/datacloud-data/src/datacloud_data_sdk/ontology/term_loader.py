@@ -214,6 +214,13 @@ class KbTermLoader(TermLoader):
             if len(memory_matches) == 1:
                 return memory_matches[0]["label"]
             if len(memory_matches) > 1:
+                # 同一个 label 对应多个 term_id 时，若最终返回值都是同一个名称，
+                # 对 term_field='name' 的回填没有实际歧义，直接返回名称即可。
+                # 注意：这只适合最终执行回填场景；如果是需要用户手动选择的澄清场景，
+                # 即使同名不同数据行，用户也无法仅靠名称区分，仍应保留歧义。
+                labels = {match["label"] for match in memory_matches}
+                if len(labels) == 1:
+                    return next(iter(labels))
                 raise TermAmbiguousError(term_set, value, memory_matches, param_name)
 
             tc = self._resolve_term_type_code(term_set, term_type_code)
@@ -226,6 +233,11 @@ class KbTermLoader(TermLoader):
             if len(matches) == 1:
                 return matches[0]["label"]
             if len(matches) > 1:
+                # cached 分支同理：多条候选如果 label 完全一致，则对 name 回填没有歧义。
+                # 但对需要用户选择的场景，这种“同名不同数据行”仍然不能算真正可区分。
+                labels = {match["label"] for match in matches}
+                if len(labels) == 1:
+                    return next(iter(labels))
                 raise TermAmbiguousError(term_set, value, matches, param_name)
             available_entries = self.get_entries(
                 term_set, dataset_id, term_type_code, keyword or ""

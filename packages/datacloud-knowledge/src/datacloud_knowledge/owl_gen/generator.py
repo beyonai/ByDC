@@ -74,8 +74,6 @@ def _write_package(
     # 术语类型定义
     term_type_defs = build_term_type_defs(config)
     enrich_term_type_names(term_type_defs, tables, config)
-    seen_prop_codes: set[str] = set()
-
     total_term_count = 0
     relation_file_count = 0
 
@@ -109,7 +107,6 @@ def _write_package(
             table,
             term_values,
             term_type_defs,
-            seen_prop_codes=seen_prop_codes,
         )
         write_text(obj_dir / f"{table.code}_terms.owl", terms_content)
         total_term_count += term_count
@@ -121,7 +118,12 @@ def _write_package(
         if view_relations:
             write_text(view_dir / f"{view.view_code}_relations.owl", view_relations)
             relation_file_count += 1
-        terms_content, term_count = render_terms_for_view(config, view)
+        terms_content, term_count = render_terms_for_view(
+            config,
+            view,
+            term_values=term_values,
+            term_type_defs=term_type_defs,
+        )
         write_text(view_dir / f"{view.view_code}_terms.owl", terms_content)
         total_term_count += term_count
 

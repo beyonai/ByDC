@@ -1,66 +1,66 @@
 # AGENTS.md
 
 **Module:** knowledge_build
-**Purpose:** 知识构建 — OWL 导入管线 + FastAPI 路由
+**Purpose:** OWL import API and database write pipeline
 
----
+## OVERVIEW
 
-## Overview
+Knowledge package import flow: parse OWL files, convert into internal rows, precheck references, write all entities in one transaction, then optionally notify a callback.
 
-OWL 格式知识包的导入管线：解析→转换→预检→批量写入 DB→回调通知。
+## STRUCTURE
 
-## Structure
-
-```
+```text
 knowledge_build/
-├── importer/              # OWL 导入管线（核心）
-│   ├── runner.py          # 入口：预检→入库→回调
-│   ├── executor.py        # 编排层：连接、路由分发、schema 设置
-│   ├── writer.py          # SQL 写入层：6 个 _batch_process_* 函数（728L）
-│   ├── _helpers.py        # 共享工具：_execute_values、ID 查找等
-│   ├── owl_parser.py      # OWL XML 解析
-│   ├── owl_converter.py   # OWL→内部格式转换
-│   ├── precheck.py        # 导入前全量校验
-│   ├── snowflake.py       # 雪花 ID 生成
-│   └── notifier.py        # 回调通知
-├── router.py              # FastAPI 路由（/build/import-package/*）
-└── schema.py              # Pydantic 请求/响应模型
+├── router.py                  # FastAPI APIRouter(prefix="/build")
+├── schema.py                  # Pydantic request/response models
+└── importer/
+    ├── runner.py              # precheck -> executor -> notifier
+    ├── precheck.py            # Full in-memory validation
+    ├── executor.py            # Transaction/schema orchestration
+    ├── writer.py              # Batched SQL writes
+    ├── _helpers.py            # Shared DB helper functions
+    ├── owl_parser.py          # OWL XML parsing
+    ├── owl_converter.py       # OWL -> internal structures
+    ├── notifier.py            # Callback delivery
+    └── snowflake.py           # ID generation
 ```
 
-## Where to Look
+## WHERE TO LOOK
 
-| Task | Location |
-|------|----------|
-| OWL 导入入口 | `importer/runner.py:run()` |
-| 编排 + schema 设置 | `importer/executor.py:run()` |
-| 批量 SQL 写入 | `importer/writer.py:_batch_process_*()` |
-| 共享工具函数 | `importer/_helpers.py` |
-| OWL 解析 | `importer/owl_parser.py` |
-| 数据转换 | `importer/owl_converter.py` |
-| 预检查 | `importer/precheck.py` |
+| Task | Location | Notes |
+|------|----------|-------|
+| HTTP precheck endpoint | `router.py:precheck_import_package()` | `/build/import-package/precheck` |
+| HTTP run endpoint | `router.py:run_import_package()` | `/build/import-package/run` |
+| Full import entry | `importer/runner.py:run()` | Precheck failure still can notify callback |
+| Transaction orchestration | `importer/executor.py` | Applies DB schema context |
+| Batched writes | `importer/writer.py` | Entity-specific `_batch_process_*` functions |
+| Shared DB helpers | `importer/_helpers.py` | Keep here to avoid cycles |
+| OWL parsing/conversion | `importer/owl_parser.py`, `importer/owl_converter.py` | XML model normalization |
+| Precheck rules | `importer/precheck.py` | Ontology files are validated but not inserted as rows |
+| Tests | `tests/importer/`, `tests/test_importer.py` | Converter/parser/writer/importer coverage |
 
-## Import Flow
+## FLOW
 
+```text
+folder_path
+  -> precheck.run()
+  -> executor.run() in one transaction
+  -> writer batch functions
+  -> notifier callback if configured
+  -> RunResult
 ```
-OWL 文件
-  → owl_parser.py (XML 解析)
-  → owl_converter.py (转换为内部格式)
-  → precheck.py (全量校验)
-  → executor.py (SET LOCAL search_path + 路由分发)
-  → writer.py (批量写入 DB，裸表名)
-  → notifier.py (回调通知)
-```
 
-## Conventions
+## CONVENTIONS
 
-- **Schema 隔离**: `executor.py` 通过 `DatabaseContext` + `SET LOCAL search_path` 注入 schema
-- **SQL 裸表名**: `writer.py` 中所有 SQL 使用裸表名，不硬编码 schema
-- **批量写入**: `_execute_values()` 模拟 psycopg2 的 execute_values（psycopg3 兼容）
-- **幂等导入**: UPSERT 模式，支持 add/update/delete 操作
-- **事务管理**: 整个导入在单事务内，失败整体回滚
+- Import writes must be all-or-nothing. Keep executor transaction boundaries intact.
+- Use `DatabaseContext` / search path rather than schema-qualified SQL.
+- `notifier.py` has a targeted `S310` ruff ignore for callback URLs; do not broaden it.
+- `owl_parser.py` has XML naming/security ruff ignores; keep parser-specific quirks isolated there.
+- Built-in term types are protected from deletion in writer logic.
 
-## Notes
+## ANTI-PATTERNS
 
-- `writer.py` 728 行 — 6 个实体的批量处理逻辑
-- `_helpers.py` 被 executor.py 和 writer.py 共享，避免循环导入
-- 导入前必须运行 `db/scripts/apply_whale_datacloud.py` 初始化表结构
+- Do not skip precheck before DB writes.
+- Do not insert ontology files directly; precheck documents that ontology files are not imported as DB rows.
+- Do not let callback delivery failure change the import result after DB work has succeeded/failed.
+- Do not move helper functions back into executor/writer if that creates circular imports.

@@ -1278,6 +1278,10 @@ def _build_effective_scope_clause(scope_code: str | None, *, strict: bool = Fals
         strict: If True, exclude legacy ``search_scope = '{}'`` rows.
                 Use strict=True for ontology-term recall (prop aliases only).
                 Use strict=False for value-term recall (enterprise names etc.).
+
+    Notes:
+        ``search_scope = '{}'`` rows are only allowed when their term belongs to the
+        current ontology root subtree anchored at ``scope_code``.
     """
     if not scope_code:
         return ""
@@ -1288,13 +1292,32 @@ def _build_effective_scope_clause(scope_code: str | None, *, strict: bool = Fals
                         OR tn.search_scope @> CAST('{"scope":"global"}' AS jsonb)"""
     if strict:
         return base + "\n                  )"
-    return base + "\n                        OR tn.search_scope = '{}'::jsonb\n                  )"
+    return (
+        base
+        + """
+                        OR (
+                             tn.search_scope = '{}'::jsonb
+                             AND EXISTS (
+                                 SELECT 1
+                                 FROM term root
+                                 JOIN term_relation tr ON tr.source_term_id = root.term_id
+                                 JOIN term prop ON prop.term_id = tr.target_term_id
+                                 JOIN term child ON child.parent_term_id = prop.term_id
+                                 WHERE root.term_code = :scope_code
+                                   AND root.term_type_code IN ('view', 'object')
+                                   AND root.library_id = t.library_id
+                                   AND child.term_id = t.term_id
+                             )
+                        )
+                  )"""
+    )
 
 
 def _build_scope_params(scope_code: str | None) -> dict[str, str]:
     if not scope_code:
         return {}
     return {
+        "scope_code": scope_code,
         "view_scope": json.dumps({"scope": "view", "code": scope_code}),
         "obj_scope": json.dumps({"scope": "object", "code": scope_code}),
     }

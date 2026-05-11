@@ -4,6 +4,7 @@ import logging
 import sqlite3
 from decimal import Decimal
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from datacloud_data_sdk.executor.local_federation_engine import LocalFederationTable
@@ -18,14 +19,19 @@ from datacloud_data_sdk.virtual_action.models import ViewFieldMeta
 from datacloud_data_sdk.virtual_action.validator import VirtualActionValidationError
 
 
-def _init_sqlite_db(path: Path, ddl: str, rows: list[tuple[object, ...]]) -> None:
+def _init_sqlite_db(
+    path: Path,
+    ddl: str,
+    rows: list[tuple[object, ...]],
+    table_name: str | None = None,
+) -> None:
     conn = sqlite3.connect(path)
     try:
         conn.executescript(ddl)
         if rows:
             placeholders = ", ".join("?" for _ in rows[0])
-            table_name = "users" if "users" in ddl else "orders"
-            conn.executemany(f"INSERT INTO {table_name} VALUES ({placeholders})", rows)
+            target_table = table_name or ("users" if "users" in ddl else "orders")
+            conn.executemany(f"INSERT INTO {target_table} VALUES ({placeholders})", rows)
         conn.commit()
     finally:
         conn.close()
@@ -154,6 +160,99 @@ def _build_loader() -> OntologyLoader:
     return loader
 
 
+def _build_join_key_coercion_loader() -> OntologyLoader:
+    """构造用于联邦 join-key 参数类型回归测试的本体。"""
+    loader = OntologyLoader()
+    loader.load_from_content(
+        {
+            "objects": [
+                {
+                    "object_code": "parent_orgs",
+                    "object_name": "父对象",
+                    "description": "父对象",
+                    "source_type": "DB",
+                    "datasource_alias": "db_parent",
+                    "table_name": "parent_orgs",
+                    "fields": [
+                        {
+                            "field_code": "org_code",
+                            "field_name": "组织编码",
+                            "field_type": "STRING",
+                            "source_column": "org_code",
+                        },
+                        {
+                            "field_code": "org_name",
+                            "field_name": "组织名称",
+                            "field_type": "STRING",
+                            "source_column": "org_name",
+                        },
+                    ],
+                    "actions": [],
+                },
+                {
+                    "object_code": "po_organization",
+                    "object_name": "组织",
+                    "description": "组织",
+                    "source_type": "DB",
+                    "datasource_alias": "db_orgs",
+                    "table_name": "po_organization",
+                    "fields": [
+                        {
+                            "field_code": "org_id",
+                            "field_name": "组织ID",
+                            "field_type": "INTEGER",
+                            "source_column": "org_id",
+                        },
+                        {
+                            "field_code": "org_name",
+                            "field_name": "组织名称",
+                            "field_type": "STRING",
+                            "source_column": "org_name",
+                        },
+                    ],
+                    "actions": [],
+                },
+            ],
+            "relations": [
+                {
+                    "relation_code": "parent_orgs_to_orgs",
+                    "relation_name": "父对象关联组织",
+                    "source_class": "parent_orgs",
+                    "target_class": "po_organization",
+                    "relation_type": "ONE_TO_MANY",
+                    "join_keys": [{"from_field": "org_code", "to_field": "org_id"}],
+                    "description": "父对象与组织关联",
+                }
+            ],
+        }
+    )
+    loader.load_scene(
+        {
+            "view_id": "join_key_coercion_view",
+            "view_name": "联邦 join 键回归视图",
+            "description": "用于验证联邦执行中整数主键参数归一化",
+            "objects": [{"object_code": "parent_orgs"}, {"object_code": "po_organization"}],
+            "fields": [
+                ViewFieldMeta(
+                    property_code="org_code",
+                    property_name="组织编码",
+                    source_object_code="parent_orgs",
+                    source_object_column_code="org_code",
+                    field_type="STRING",
+                ),
+                ViewFieldMeta(
+                    property_code="org_name",
+                    property_name="组织名称",
+                    source_object_code="po_organization",
+                    source_object_column_code="org_name",
+                    field_type="STRING",
+                ),
+            ],
+        }
+    )
+    return loader
+
+
 class _CaptureConnector(BaseSourceConnector):
     def __init__(self, config: DataSourceConfig) -> None:
         super().__init__(config)
@@ -272,6 +371,51 @@ async def test_cross_db_view_lookup_warms_join_keys(
 
     sql_logs = [record.message for record in caplog.records if "SQL:" in record.message]
     assert any('FROM "orders" WHERE user_id IN (' in msg for msg in sql_logs)
+
+
+@pytest.mark.asyncio
+async def test_cross_db_view_lookup_coerces_join_key_strings_to_integers(
+    tmp_path: Path,
+) -> None:
+    loader = _build_join_key_coercion_loader()
+    parent_db = tmp_path / "parent.sqlite3"
+    _init_sqlite_db(
+        parent_db,
+        "CREATE TABLE parent_orgs (org_code TEXT PRIMARY KEY, org_name TEXT);",
+        [("231", "杭州总部"), ("234", "上海分部")],
+        table_name="parent_orgs",
+    )
+
+    capture_connector = _CaptureConnector(DataSourceConfig(alias="db_orgs", db_type="POSTGRESQL"))
+    ds_manager = DataSourceManager(
+        {
+            "db_parent": DataSourceConfig(
+                alias="db_parent",
+                db_type="SQLITE",
+                jdbc_url=f"jdbc:sqlite:{parent_db}",
+            ),
+            "db_orgs": capture_connector.config,
+        }
+    )
+    ds_manager._connectors["db_orgs"] = capture_connector
+
+    view = loader.get_view("join_key_coercion_view")
+
+    await ViewLookupExecutor(loader, ds_manager=ds_manager).execute(
+        view,
+        {
+            "select": ["org_code", "org_name"],
+            "order_by": [{"field": "org_name", "direction": "asc"}],
+            "limit": 10,
+        },
+    )
+
+    assert capture_connector.params is not None
+    assert capture_connector.sql.startswith("SELECT ")
+    param_values = list(capture_connector.params.values())
+    int_values = [value for value in param_values if isinstance(value, int)]
+    assert len(int_values) == len(param_values)
+    assert sorted(int_values) == [231, 234]
 
 
 @pytest.mark.asyncio
@@ -425,7 +569,8 @@ async def test_cross_db_view_lookup_ignores_row_guard_threshold(
 ) -> None:
     loader, ds_manager = cross_db_context
     view = loader.get_view("cross_db_view")
-    loader._config.federated_row_guard_threshold = 1
+    config = cast(Any, loader._config)
+    config.federated_row_guard_threshold = 1
 
     result = await ViewLookupExecutor(loader, ds_manager=ds_manager).execute(
         view,

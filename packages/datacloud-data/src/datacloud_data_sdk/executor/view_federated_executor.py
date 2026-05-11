@@ -69,7 +69,9 @@ def _source_select_expression(cls: Any, column_code: str, db_type: str) -> str:
 def _build_view_object_field_map(view: Any, object_code: str, loader: Any) -> dict[str, Any]:
     """构建视图属性到源对象字段的映射。"""
     source_cls = loader.get_ontology_class(object_code)
-    field_map: dict[str, Any] = {}
+    field_map: dict[str, Any] = {
+        field.field_code: field for field in getattr(source_cls, "fields", [])
+    }
 
     for view_field in list(getattr(view, "fields", []) or []):
         source_object_code = str(getattr(view_field, "source_object_code", "") or "")

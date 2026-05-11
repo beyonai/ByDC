@@ -65,6 +65,7 @@ def _build_filters_where(
     db_type: str,
     filter_relation: str = "AND",
     field_kind_map: dict[str, str] | None = None,
+    field_type_map: dict[str, str] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     return _support_build_filters_where(
         filters,
@@ -73,6 +74,7 @@ def _build_filters_where(
         _safe_pkey,
         filter_relation,
         field_kind_map,
+        field_type_map,
     )
 
 
@@ -142,6 +144,7 @@ class ViewLookupExecutor:
             db_type,
             str(arguments.get("filter_relation") or "AND"),
             context.field_to_analytic_kind,
+            context.field_to_field_type,
         )
 
         # ORDER BY

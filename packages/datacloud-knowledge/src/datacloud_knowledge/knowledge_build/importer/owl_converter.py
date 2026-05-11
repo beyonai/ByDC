@@ -111,7 +111,9 @@ def convert_term(owl_entity: dict[str, Any]) -> dict[str, Any]:
     library_code = _pick_str(owl_entity, "library_code")
     domain_code = _pick_str(owl_entity, "domain_code")
     parent_term_code = _pick_str(owl_entity, "parent_term_code") or ""
-    parent_term_id = f"{library_code}#prop#{parent_term_code}" if parent_term_code else None
+    parent_term_type_code = _pick_str(owl_entity, "parent_term_type_code") or ""
+    parent_term_id = None
+    parent_term_key = f"{parent_term_code}" if parent_term_code else None
 
     synonyms = parse_json_field(_pick_str(owl_entity, "synonyms"), [])
     if not isinstance(synonyms, list):
@@ -128,12 +130,16 @@ def convert_term(owl_entity: dict[str, Any]) -> dict[str, Any]:
     ext_field = json.dumps(ext_field_json, ensure_ascii=False)
 
     return {
-        "term_id": "#".join(
-            [
-                str(library_code),
-                str(term_type_code),
-                str(term_code),
-            ]
+        "term_id": (
+            f"{parent_term_key}#{term_type_code}#{term_code}"
+            if parent_term_key
+            else "#".join(
+                [
+                    str(library_code),
+                    str(term_type_code),
+                    str(term_code),
+                ]
+            )
         ),
         "term_code": term_code,
         "term_name": term_name,
@@ -141,11 +147,26 @@ def convert_term(owl_entity: dict[str, Any]) -> dict[str, Any]:
         "domain_code": domain_code,
         "library_code": library_code,
         "term_type_code": term_type_code,
+        "parent_term_code": parent_term_code or None,
+        "parent_term_type_code": parent_term_type_code or None,
         "parent_term_id": parent_term_id,
         "synonyms": normalized_synonyms,
         "aliases": aliases,
         "owl_doc_file": _pick_str(owl_entity, "owl_doc_file"),
         "ext_field": ext_field,
+    }
+
+
+def convert_scene_field(owl_entity: dict[str, Any]) -> dict[str, Any]:
+    """转换视图字段实体。"""
+
+    return {
+        "field_code": _pick_str(owl_entity, "property_code"),
+        "field_name": _pick_str(owl_entity, "property_name"),
+        "source_object_code": _pick_str(owl_entity, "source_object_code"),
+        "source_object_column_code": _pick_str(owl_entity, "source_object_column_code"),
+        "synonyms": parse_json_field(_pick_str(owl_entity, "synonyms"), []),
+        "ext_property": parse_json_field(_pick_str(owl_entity, "ext_property"), {}),
     }
 
 
@@ -197,7 +218,12 @@ def convert_relation(owl_entity: dict[str, Any]) -> dict[str, Any]:
     target_type = _TYPE_ALIAS.get(target_type, target_type)
 
     source_term_code = f"{source_library}#{source_type}#{source_code}"
-    target_term_code = f"{target_library}#{target_type}#{target_code}"
+    if target_type == "prop" and source_type in {"object", "view"}:
+        target_term_code = (
+            f"{source_library}#{source_type}#{source_code}#{target_type}#{target_code}"
+        )
+    else:
+        target_term_code = f"{target_library}#{target_type}#{target_code}"
 
     # 解析 ext_field，合并 joinkeys
     ext_field_json = parse_json_field(_pick_str(owl_entity, "ext_field"), {})

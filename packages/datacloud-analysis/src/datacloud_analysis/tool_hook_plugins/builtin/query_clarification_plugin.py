@@ -700,9 +700,15 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             " _clarification_cache_key=%s"
             " state_keys=%s",
             tool_name,
-            "None" if _clarify_result is None else f"tool_name={_clarify_result.get('tool_name')} params_keys={sorted((_clarify_result.get('params') or {}).keys())}",
+            "None"
+            if _clarify_result is None
+            else f"tool_name={_clarify_result.get('tool_name')} params_keys={sorted((_clarify_result.get('params') or {}).keys())}",
             ((_graph_state.get("_clarification_cache") or {}).get("cache_key") or "None"),
-            sorted(str(k) for k in _graph_state if not str(k).startswith("__") and _graph_state[k] is not None),
+            sorted(
+                str(k)
+                for k in _graph_state
+                if not str(k).startswith("__") and _graph_state[k] is not None
+            ),
         )
         if _clarify_result and _clarify_result.get("tool_name") == tool_name:
             logger.info(
@@ -719,7 +725,9 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             # pop 只影响当前 tick 的内存副本，但同一次 graph 执行里 LLM 可能重新生成工具调用，
             # 后续 before_call_back 仍需读到澄清结果。LangGraph state 的清除由 user_clarify_node
             # 返回值负责，此处 pop 会导致 LLM 重新调用时走正常澄清流程，再次触发中断。
-            logger.info("[query_clarification] clarification_formatted_params consumed (not cleared from memory)")
+            logger.info(
+                "[query_clarification] clarification_formatted_params consumed (not cleared from memory)"
+            )
             # ── 打印知识图谱侧数据（paradigm_list 每条 paradigmResult）──
             _paradigm_list_fp = list(_clarify_result.get("paradigm_list") or [])
             if not _paradigm_list_fp:
