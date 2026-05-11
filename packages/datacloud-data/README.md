@@ -16,6 +16,32 @@
   `/api/v1/health`，以及可选 `/graphql` 路由。
 - 支持参数归一、逻辑参数到物理请求体映射、响应字段抽取、术语值转换和结果溢出导出。
 
+## 价值与特点
+
+- 以本体为中心统一对象、字段、动作和数据源配置，降低业务代码对底层表结构和接口细节的依赖。
+- 同一套能力可同时服务 SDK 调用、HTTP 服务、MCP 工具和 GraphQL 查询，减少重复适配成本。
+- 将自然语言查询、结构化动作调用和跨源执行收敛到统一结果格式，便于上层 Agent 和应用集成。
+- 内置参数映射、术语转换和结果溢出处理，适合面向真实业务数据的生产级数据访问场景。
+
+## 愿景
+
+`datacloud-data` 的目标是提供一层稳定的语义数据访问层。上层应用和 Agent 只面向“对象、字段、
+动作、视图”表达业务问题，而不用关心数据实际来自数据库、HTTP API、知识库还是本地脚本。
+
+在这个目标下，统一查询不仅是把 SQL 包一层接口，而是把自然语言查询、结构化参数调用、跨数据源
+关联、结果格式化和权限/追踪能力放到同一条执行链路中。
+
+## 设计与实现
+
+- **本体驱动**：对象、字段、关系、动作、视图和数据源都由本体描述，SDK 在加载阶段构建统一的运行时模型。
+- **统一执行入口**：对象查询、视图查询、动作调用、MCP Tools、REST API 和 GraphQL 最终复用同一套
+  loader、executor 和 result formatter。
+- **同源下沉查询**：当多个对象来自同一数据源时，优先把过滤、排序、聚合、分组和 JOIN 下推到对应数据库执行。
+- **跨源联邦执行**：当查询跨数据库或跨 DB / API 时，执行器会拆分为多阶段任务，先分别查询各数据源，
+  再通过本地联邦引擎完成关联和聚合。
+- **API 与 DB 统一查询**：API 动作通过参数映射和响应抽取转换为统一 `records`，可与 DB 查询结果进入同一结果处理链路。
+- **安全的计划边界**：计划校验会阻止在单个 SQL step 中直接跨源 JOIN，跨源场景交给联邦执行或分阶段执行处理。
+
 ## 参数与结果转换
 
 - 入参会做基础类型归一，常见字符串值可自动转成数值、布尔值和日期类型。
@@ -42,6 +68,7 @@ uv pip install -e "packages/datacloud-data[all]"
 ```bash
 cd packages/datacloud-data
 uv venv .venv --python 3.12
+source .venv/bin/activate
 uv pip install -e ".[all]"
 ```
 
@@ -448,9 +475,24 @@ packages/datacloud-data/
 │   │   └── virtual_action/         # 虚拟动作生成与校验
 │   └── datacloud_data_service/
 │       ├── api/                    # REST、MCP 与 GraphQL 路由
+│       ├── logs/                   # 服务运行日志目录
+│       ├── resource/               # 服务内置 Agent、对象与视图资源
 │       └── tools/                  # MCP 工具与技能包生成
 └── tests/                          # 单元测试与集成测试
 ```
+
+## 开发
+
+在仓库根目录运行检查：
+
+```bash
+uv run ruff format src/by_datacloud packages
+uv run ruff check src/by_datacloud packages
+uv run mypy src/by_datacloud packages
+uv run pytest packages/datacloud-data/tests
+```
+
+除非需要调整跨包 API 契约，改动应尽量收敛在当前包内。实现变更需要同步补充或更新测试。
 
 ## 许可证
 
