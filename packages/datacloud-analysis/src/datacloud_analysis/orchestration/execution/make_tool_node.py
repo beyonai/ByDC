@@ -51,8 +51,12 @@ def make_tool_node(
             "gateway_context"
         ) or gateway_context
 
-        # 1. 从 state["messages"] 最后一条 AIMessage 提取本工具的 tool_call
-        tc = _extract_tool_call(state, tool_name)
+        # 1. V0.3 per-tool Send 会注入当前 tool_call；同名并行工具必须优先按 id 精确执行。
+        # 如果这里仍按 tool_name 从 messages 里取第一条，同一轮两个同名工具会拿到同一个
+        # tool_call，后续 ToolMessage 就会写成重复的 tool_call_id，导致 LLM 拒绝消息历史。
+        tc = _extract_current_tool_call(state, tool_name)
+        if tc is None:
+            tc = _extract_tool_call(state, tool_name)
         if tc is None:
             # Resume 路径：从 pending_clarification_context 重建 tool_call
             tc = _extract_from_pending_context(state, tool_name)
@@ -129,6 +133,21 @@ def _extract_tool_call(state: AgentState, tool_name: str) -> dict[str, Any] | No
                     return dict(tc)
             return None
     return None
+
+
+def _extract_current_tool_call(state: AgentState, tool_name: str) -> dict[str, Any] | None:
+    """从 per-tool Send 注入的当前 tool_call 中提取精确调用。"""
+    current = state.get("react_current_tool_call")
+    if not isinstance(current, dict):
+        return None
+    if current.get("name") != tool_name:
+        logger.warning(
+            "[tool_node:%s] react_current_tool_call name mismatch: %s",
+            tool_name,
+            current.get("name"),
+        )
+        return None
+    return dict(current)
 
 
 def _extract_from_pending_context(state: AgentState, tool_name: str) -> dict[str, Any] | None:
