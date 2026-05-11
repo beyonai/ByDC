@@ -16,6 +16,7 @@ import re
 from typing import Any
 
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError
+from datacloud_data_sdk.executor.param_coercion import coerce_sql_param
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.result_term_converter import ResultTermConverter
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
@@ -50,6 +51,7 @@ def _quote(ident: str, db_type: str) -> str:
 def _build_filters_from_list(
     filters: list[dict[str, Any]],
     field_to_col: dict[str, str],
+    field_map: dict[str, Any],
     db_type: str,
 ) -> tuple[str, dict[str, Any]]:
     """
@@ -78,15 +80,15 @@ def _build_filters_from_list(
         elif op == "between":
             vals = value if isinstance(value, list) else [value, value]
             clauses.append(f"{q(col)} BETWEEN :{pkey}_0 AND :{pkey}_1")
-            params[f"{pkey}_0"] = vals[0]
-            params[f"{pkey}_1"] = vals[1]
+            params[f"{pkey}_0"] = coerce_sql_param(vals[0], field_map.get(fc))
+            params[f"{pkey}_1"] = coerce_sql_param(vals[1], field_map.get(fc))
         elif op == "in":
             vals = value if isinstance(value, list) else [value]
             pkeys = [f"{pkey}_{i}" for i in range(len(vals))]
             placeholders = ", ".join(f":{k}" for k in pkeys)
             clauses.append(f"{q(col)} IN ({placeholders})")
             for k, v in zip(pkeys, vals):
-                params[k] = v
+                params[k] = coerce_sql_param(v, field_map.get(fc))
         elif op == "like":
             # 若 value 不含通配符，自动补 %...% 实现 contains 语义
             like_val = value if (isinstance(value, str) and "%" in value) else f"%{value}%"
@@ -96,7 +98,7 @@ def _build_filters_from_list(
             # eq / gt / gte / lt / lte
             op_map = {"eq": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
             clauses.append(f"{q(col)} {op_map.get(op, '=')} :{pkey}")
-            params[pkey] = value
+            params[pkey] = coerce_sql_param(value, field_map.get(fc))
 
     return " AND ".join(clauses), params
 
@@ -156,7 +158,7 @@ class LookupExecutor:
 
         # WHERE
         filters = arguments.get("filters") or []
-        where_sql, params = _build_filters_from_list(filters, field_to_col, db_type)
+        where_sql, params = _build_filters_from_list(filters, field_to_col, field_map, db_type)
 
         # ORDER BY
         order_clauses: list[str] = []

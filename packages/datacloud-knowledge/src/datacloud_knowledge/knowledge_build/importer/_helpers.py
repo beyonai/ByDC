@@ -111,7 +111,9 @@ def _lookup_term_ids_by_term_keys(
         )
         params.extend([library_id, term_type_code, parent_term_id, term_code])
     cur.execute(
-        sql.SQL("SELECT library_id, term_type_code, parent_term_id, term_code, term_id FROM term WHERE ")
+        sql.SQL(
+            "SELECT library_id, term_type_code, parent_term_id, term_code, term_id FROM term WHERE "
+        )
         + sql.SQL(" OR ").join(clauses),
         params,
     )
@@ -142,7 +144,9 @@ def _lookup_term_ids_by_parent_keys(
         )
         params.extend([library_id, term_type_code, parent_term_id, term_code])
     cur.execute(
-        sql.SQL("SELECT library_id, term_type_code, parent_term_id, term_code, term_id FROM term WHERE ")
+        sql.SQL(
+            "SELECT library_id, term_type_code, parent_term_id, term_code, term_id FROM term WHERE "
+        )
         + sql.SQL(" OR ").join(clauses),
         params,
     )

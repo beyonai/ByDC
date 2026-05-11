@@ -176,7 +176,6 @@ def _convert_owl_entities(
     scope_type = path_parts[0] if len(path_parts) >= 2 else ""
     scope_code = path_parts[1] if len(path_parts) >= 2 else ""
     scope_root_term_id: str | None = None
-    scope_root_term_id: str | None = None
 
     for entity in owl_entities:
         if str(entity.get("entity_type", "")).strip() != "term":
