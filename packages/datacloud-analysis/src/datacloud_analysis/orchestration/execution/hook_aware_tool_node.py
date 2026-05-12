@@ -207,10 +207,10 @@ class HookAwareToolNode(ToolNode):
 
         # 推送工具调用详情（工具名 / 工具入参 / 工具返回）至 gateway_context，与 V0.3 保持一致
         if _gw_ctx is not None:
+            from datacloud_analysis.i18n.prompts import get_ui_text as _get_ui_text  # noqa: PLC0415
             from datacloud_analysis.orchestration.execution.tool_wrapper import (  # noqa: PLC0415
                 _emit_tool_detail,
             )
-            from datacloud_analysis.i18n.prompts import get_ui_text as _get_ui_text  # noqa: PLC0415
 
             _locale = str(((config or {}).get("configurable") or {}).get("locale") or "zh_CN")
             logger.debug(

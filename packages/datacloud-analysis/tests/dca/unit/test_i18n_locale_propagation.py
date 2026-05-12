@@ -15,11 +15,10 @@ from __future__ import annotations
 
 import os
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import HumanMessage
-
 
 # ── 辅助 ──────────────────────────────────────────────────────────────────────
 
@@ -410,7 +409,7 @@ async def test_tc_i18n_08_tool_wrapper_passes_language_to_invocation_context() -
         def __init__(self, **kwargs: Any) -> None:
             captured_kwargs.append(dict(kwargs))
 
-        def __enter__(self) -> "_FakeInvocationContext":
+        def __enter__(self) -> _FakeInvocationContext:
             return self
 
         def __exit__(self, *args: Any) -> None:

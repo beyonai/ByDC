@@ -18,6 +18,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 
+from datacloud_analysis.i18n.prompts import get_execution_prompt, get_system_prompt
 from datacloud_analysis.orchestration.execution.llm_retry import _build_fallback_llm
 from datacloud_analysis.orchestration.execution.react_loop import (
     _build_llm,
@@ -27,7 +28,6 @@ from datacloud_analysis.orchestration.execution.react_loop import (
     finish_react,
 )
 from datacloud_analysis.orchestration.state import AgentState
-from datacloud_analysis.i18n.prompts import get_system_prompt, get_execution_prompt
 
 logger = logging.getLogger(__name__)
 
