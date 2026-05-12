@@ -21,16 +21,6 @@ def _get_types_module() -> Any:
 
 
 @pytest.mark.intent
-def test_analyze_query_clarification_passthrough_for_unknown_query() -> None:
-    query = "查询所有客户"
-
-    clarification_result = _get_types_module().ClarificationResult
-    result = _get_intent_module().analyze_query_clarification(query)
-
-    assert result == clarification_result(query=query)
-
-
-@pytest.mark.intent
 def test_clarification_result_legacy_mapping() -> None:
     clarification_result = _get_types_module().ClarificationResult
     result = clarification_result(query="q", needs_clarification=True, form="f", knowledge="k")

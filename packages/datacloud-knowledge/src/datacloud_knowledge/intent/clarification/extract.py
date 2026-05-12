@@ -257,7 +257,7 @@ def extract_terms_complex_conditions(
     Returns:
         ExtractedTerm 列表。
     """
-    from datacloud_knowledge.intent.natquery import expand_query
+    from datacloud_knowledge.intent.clarification._expand_query import expand_query
 
     terms: list[ExtractedTerm] = []
     for idx, sentence in enumerate(complex_conditions):
