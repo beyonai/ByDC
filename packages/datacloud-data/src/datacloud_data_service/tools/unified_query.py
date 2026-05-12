@@ -19,7 +19,7 @@ import logging
 from typing import Any
 
 from datacloud_data_sdk.context import get_current_language
-from datacloud_data_sdk.i18n import localized_text
+from datacloud_data_sdk.i18n import format_auto_view_name, translate_exception
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.result_formatter import build_error_data
 from datacloud_data_sdk.utils.json_utils import dump_json
@@ -130,11 +130,7 @@ class UnifiedQuery:
                 ]
                 view = View(
                     view_id="auto_view",
-                    view_name=localized_text(
-                        get_current_language(),
-                        zh_cn="自动视图",
-                        en_us="Auto view",
-                    ),
+                    view_name=format_auto_view_name(get_current_language()),
                     description="",
                     objects=objects,
                     relations=relations,
@@ -151,4 +147,8 @@ class UnifiedQuery:
             from datacloud_data_sdk.events.trace_logger import log_exception_stack
 
             log_exception_stack(e)
-            return _wrap_error(str(e), "rejected", {"question": question, "view_id": view_id})
+            return _wrap_error(
+                translate_exception(e, get_current_language()),
+                "rejected",
+                {"question": question, "view_id": view_id},
+            )

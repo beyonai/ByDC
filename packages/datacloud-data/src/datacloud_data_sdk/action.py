@@ -882,7 +882,9 @@ class Action:
         if term_loader is None:
             return resolved, errors
 
+        from datacloud_data_sdk.context import get_current_language
         from datacloud_data_sdk.exceptions import TermAmbiguousError, TermNotFoundError
+        from datacloud_data_sdk.i18n import translate_exception
         from datacloud_data_sdk.plan.term_resolver import TermResolver
 
         resolver = TermResolver(term_loader)
@@ -905,7 +907,7 @@ class Action:
                     {
                         "param_code": param.param_code,
                         "param_name": param.param_name or param.param_code,
-                        "message": str(exc),
+                        "message": translate_exception(exc, get_current_language()),
                         "error_type": exc.__class__.__name__,
                         "raw_value": _safe_copy(params[param.param_code]),
                     }
@@ -915,7 +917,7 @@ class Action:
                     {
                         "param_code": param.param_code,
                         "param_name": param.param_name or param.param_code,
-                        "message": str(exc),
+                        "message": translate_exception(exc, get_current_language()),
                         "error_type": "ValueError",
                         "raw_value": _safe_copy(params[param.param_code]),
                     }

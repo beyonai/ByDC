@@ -14,7 +14,13 @@ from langgraph.graph import END, START, StateGraph
 
 from datacloud_data_sdk.context import get_current_language
 from datacloud_data_sdk.exceptions import PlanGenerationError
-from datacloud_data_sdk.i18n import localized_text
+from datacloud_data_sdk.i18n import (
+    format_plan_prompt_current_time,
+    format_plan_prompt_instruction,
+    format_plan_prompt_knowledge_context,
+    format_plan_prompt_object_view,
+    format_plan_prompt_question,
+)
 from datacloud_data_sdk.plan.models import ObjectViewPayload, QueryExecutionPlan, parse_plan
 from datacloud_data_sdk.plan.plan_validator import PlanValidator, ValidationResult
 from datacloud_data_sdk.utils.case_utils import camel_to_snake_keys, snake_to_camel_keys
@@ -322,50 +328,17 @@ def _build_user_message(
     """构造用户消息。"""
     language = get_current_language()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    parts = [
-        localized_text(
-            language,
-            zh_cn=f"## 当前时间：\n{now}\n",
-            en_us=f"## Current time:\n{now}\n",
-        )
-    ]
+    parts = [format_plan_prompt_current_time(language, now)]
 
     if validation_errors:
         errors_text = "\n".join(f"- {e}" for e in validation_errors)
         parts.append(RETRY_PROMPT_TEMPLATE.format(validation_errors=errors_text))
 
-    parts.append(
-        localized_text(
-            language,
-            zh_cn=f"## 输入内容\n\n**对象视图：**\n{object_view_json}",
-            en_us=f"## Input\n\n**Object view:**\n{object_view_json}",
-        )
-    )
-    parts.append(
-        localized_text(
-            language,
-            zh_cn=f"\n**用户问题：**\n{question}",
-            en_us=f"\n**User question:**\n{question}",
-        )
-    )
+    parts.append(format_plan_prompt_object_view(language, object_view_json))
+    parts.append(format_plan_prompt_question(language, question))
     if knowledge_context and knowledge_context.strip():
-        parts.append(
-            localized_text(
-                language,
-                zh_cn=f"\n**知识增强上下文（可选）：**\n{knowledge_context.strip()}",
-                en_us=f"\n**Knowledge context (optional):**\n{knowledge_context.strip()}",
-            )
-        )
-    parts.append(
-        localized_text(
-            language,
-            zh_cn="\n请直接输出 QueryExecutionPlan 的 JSON，不要输出其他内容。",
-            en_us=(
-                "\nOutput only the QueryExecutionPlan JSON. "
-                "If canAnswer is false, write clarification in English."
-            ),
-        )
-    )
+        parts.append(format_plan_prompt_knowledge_context(language, knowledge_context))
+    parts.append(format_plan_prompt_instruction(language))
     return "\n".join(parts)
 
 

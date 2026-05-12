@@ -5,7 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from datacloud_data_sdk.context import InvocationContext, get_current_context
-from datacloud_data_sdk.i18n import localized_text
+from datacloud_data_sdk.i18n import (
+    format_loader_not_initialized,
+    format_method_not_found,
+    format_unknown_tool,
+    format_use_post_for_jsonrpc,
+    translate_exception,
+)
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
@@ -14,6 +20,10 @@ router = APIRouter()
 
 def _parse_object_ids_header(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _request_language(request: Request) -> str:
+    return request.headers.get("X-Language", request.headers.get("Accept-Language", ""))
 
 
 def _extract_context(request: Request) -> dict[str, Any]:
@@ -36,7 +46,7 @@ def _extract_context(request: Request) -> dict[str, Any]:
         "tool_list_mode": tool_mode,
         "view_id": view_id,
         "object_ids": object_ids or None,
-        "language": request.headers.get("X-Language", request.headers.get("Accept-Language", "")),
+        "language": _request_language(request),
     }
 
 
@@ -54,13 +64,7 @@ async def mcp_get_not_supported(request: Request) -> JSONResponse:
     """Streamable HTTP：本服务不提供 GET/SSE 流，客户端应直接 POST。返回 405 供客户端识别。"""
     return JSONResponse(
         status_code=405,
-        content={
-            "detail": localized_text(
-                request.headers.get("X-Language", request.headers.get("Accept-Language", "")),
-                zh_cn="请使用 POST 发送 JSON-RPC 消息",
-                en_us="Use POST for JSON-RPC messages",
-            )
-        },
+        content={"detail": format_use_post_for_jsonrpc(_request_language(request))},
         headers={"Allow": "POST"},
     )
 
@@ -91,11 +95,7 @@ async def mcp_endpoint(request: Request) -> JSONResponse:
                 _jsonrpc_error(
                     rpc_id,
                     -32601,
-                    localized_text(
-                        language,
-                        zh_cn=f"未找到方法：{method}",
-                        en_us=f"Method not found: {method}",
-                    ),
+                    format_method_not_found(language, method),
                 )
             )
 
@@ -154,11 +154,7 @@ async def _handle_tools_call(request: Request, params: dict) -> dict:
             "content": [
                 {
                     "type": "text",
-                    "text": localized_text(
-                        get_current_context().language,
-                        zh_cn="OntologyLoader 未初始化 (OntologyLoader not initialized)",
-                        en_us="OntologyLoader not initialized",
-                    ),
+                    "text": format_loader_not_initialized(get_current_context().language),
                 }
             ],
             "isError": True,
@@ -182,11 +178,7 @@ async def _handle_tools_call(request: Request, params: dict) -> dict:
             "content": [
                 {
                     "type": "text",
-                    "text": localized_text(
-                        language,
-                        zh_cn=f"未找到工具：{tool_name} (Unknown tool: {tool_name})",
-                        en_us=f"Unknown tool: {tool_name}",
-                    ),
+                    "text": format_unknown_tool(language, tool_name),
                 }
             ],
             "isError": True,
@@ -199,7 +191,9 @@ async def _handle_tools_call(request: Request, params: dict) -> dict:
         return await executor.execute(object_code, tool_name, arguments)
     except Exception as e:
         return {
-            "content": [{"type": "text", "text": str(e)}],
+            "content": [
+                {"type": "text", "text": translate_exception(e, get_current_context().language)}
+            ],
             "isError": True,
         }
 

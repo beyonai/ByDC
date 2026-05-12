@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import json
 import logging
-from types import SimpleNamespace
 
 import pytest
 from datacloud_data_sdk.executor.compute_executor import ComputeExecutor
@@ -717,8 +716,6 @@ async def test_metric_field_in_dimensions_rejected(
     assert metric_field_code in str(exc_info.value)
 
 
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # 时间字段格式化回归
 # ─────────────────────────────────────────────────────────────────────────────
@@ -750,7 +747,9 @@ def test_coerce_sql_param_keeps_string_dates_and_parses_native_dates() -> None:
 
     assert coerce_sql_param("20260131", day_field) == "20260131"
     assert coerce_sql_param("2026-01-31", date_field).isoformat() == "2026-01-31"
-    assert coerce_sql_param("2026-01-31 08:09:10", datetime_field).isoformat() == "2026-01-31T08:09:10"
+    assert (
+        coerce_sql_param("2026-01-31 08:09:10", datetime_field).isoformat() == "2026-01-31T08:09:10"
+    )
 
 
 @pytest.mark.asyncio
@@ -776,9 +775,14 @@ async def test_string_date_grouping_uses_data_format() -> None:
                         "data_format": "yyyyMMdd",
                         "source_column": "day",
                         "property_kind": "physical",
-                        "ext_property": json.dumps({
-                            "property_role_rule": {"property_role": "DIMENSION", "rule_type": "datetime"}
-                        }),
+                        "ext_property": json.dumps(
+                            {
+                                "property_role_rule": {
+                                    "property_role": "DIMENSION",
+                                    "rule_type": "datetime",
+                                }
+                            }
+                        ),
                     },
                     {
                         "field_code": "revenue",
@@ -786,9 +790,14 @@ async def test_string_date_grouping_uses_data_format() -> None:
                         "field_type": "NUMBER",
                         "source_column": "revenue",
                         "property_kind": "physical",
-                        "ext_property": json.dumps({
-                            "property_role_rule": {"property_role": "MEASURE", "rule_type": "basic_metric"}
-                        }),
+                        "ext_property": json.dumps(
+                            {
+                                "property_role_rule": {
+                                    "property_role": "MEASURE",
+                                    "rule_type": "basic_metric",
+                                }
+                            }
+                        ),
                     },
                 ],
             }
@@ -798,9 +807,7 @@ async def test_string_date_grouping_uses_data_format() -> None:
     loader.load_from_content(ontology)
     ds = DataSourceManager(loader._config.datasource_configs)
     conn = ds.get_connector("test_db")
-    await conn.execute(
-        "CREATE TABLE day_tbl (day TEXT, revenue REAL)"
-    )
+    await conn.execute("CREATE TABLE day_tbl (day TEXT, revenue REAL)")
     await conn.execute(
         "INSERT INTO day_tbl VALUES ('20260101', 10.0), ('20260102', 20.0), ('20260201', 30.0)"
     )

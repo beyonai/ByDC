@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from datacloud_data_sdk.context import get_current_language
+from datacloud_data_sdk.i18n import translate_exception
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.utils.json_utils import dump_json
 
@@ -81,10 +83,11 @@ class ActionExecutor:
             from datacloud_data_sdk.events.trace_logger import log_exception_stack
 
             log_exception_stack(exc)
+            message = translate_exception(exc, get_current_language())
             error_payload = {
                 "code": 500,
-                "message": str(exc),
-                "data": {"result_type": "rejected", "overflow_notice": str(exc)},
+                "message": message,
+                "data": {"result_type": "rejected", "overflow_notice": message},
             }
             return {
                 "content": [{"type": "text", "text": dump_json(error_payload)}],
@@ -94,7 +97,7 @@ class ActionExecutor:
         result_type = result.get("result_type", "normal")
         if result_type in ("rejected", "ask_user"):
             code = 500
-            message = result.get("overflow_notice") or result_type
+            message = str(result.get("overflow_notice") or result_type)
         else:
             code = 0
             message = "success"

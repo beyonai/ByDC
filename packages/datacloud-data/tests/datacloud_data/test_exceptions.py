@@ -7,6 +7,7 @@ from datacloud_data_sdk.exceptions import (
     ScriptExecutionError,
     SqlExecutionError,
 )
+from datacloud_data_sdk.i18n import translate_exception
 
 
 def test_error_hierarchy() -> None:
@@ -38,3 +39,8 @@ def test_script_execution_error_carries_details() -> None:
 def test_action_not_configured_error() -> None:
     err = ActionNotConfiguredError("empty_action")
     assert "empty_action" in str(err)
+
+
+def test_translate_exception_uses_requested_language() -> None:
+    err = ObjectNotFoundError("sales_bo")
+    assert translate_exception(err, "en-US") == "Object not found: 'sales_bo'"

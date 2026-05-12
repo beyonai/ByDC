@@ -42,6 +42,27 @@
 
 from __future__ import annotations
 
+from datacloud_data_sdk.i18n import (
+    format_action_not_configured,
+    format_action_not_found,
+    format_aggregation,
+    format_api_execution,
+    format_cannot_answer,
+    format_datasource_unavailable,
+    format_invalid_ontology,
+    format_kb_execution,
+    format_object_not_found,
+    format_permission_denied,
+    format_permission_not_configured,
+    format_plan_generation,
+    format_plan_validation,
+    format_script_execution,
+    format_sql_execution,
+    format_step_dependency,
+    format_term_ambiguous,
+    format_term_not_found,
+)
+
 
 class DatacloudError(Exception):
     """
@@ -105,26 +126,13 @@ class TermNotFoundError(TermResolutionError):
     ) -> None:
         self.available_values = available_values
         self.available_entries = available_entries
-        lines = [f"值「{value}」不存在。"]
-        if available_entries:
-            if len(available_entries) <= 10:
-                entries_str = ", ".join(f"[{e['code']}] {e['label']}" for e in available_entries)
-                lines.append(f"可选值: {entries_str}")
-            else:
-                entries_str = ", ".join(
-                    f"[{e['code']}] {e['label']}" for e in available_entries[:10]
-                )
-                lines.append(f"可选值: {entries_str}... 等共 {len(available_entries)} 个")
-        elif available_values:
-            if len(available_values) <= 10:
-                lines.append(f"可选值: {', '.join(available_values)}")
-            else:
-                lines.append(
-                    f"可选值: {', '.join(available_values[:10])}... 等共 {len(available_values)} 个"
-                )
-        else:
-            lines.append(f"术语集: {term_set}")
-        message = "\n".join(lines)
+        message = format_term_not_found(
+            None,
+            term_set,
+            value,
+            available_values,
+            available_entries,
+        )
         super().__init__(term_set, value, message, param_name)
 
 
@@ -149,11 +157,7 @@ class TermAmbiguousError(TermResolutionError):
         param_name: str | None = None,
     ) -> None:
         self.matches = matches
-        lines = [f"值「{value}」匹配到多个结果，请选择其中一个:"]
-        for i, m in enumerate(matches, 1):
-            aliases_str = f" (别名: {', '.join(m.get('aliases', []))})" if m.get("aliases") else ""
-            lines.append(f"  {i}. [{m['code']}] {m['label']}{aliases_str}")
-        message = "\n".join(lines)
+        message = format_term_ambiguous(None, term_set, value, matches)
         super().__init__(term_set, value, message, param_name)
 
 
@@ -168,7 +172,7 @@ class ObjectNotFoundError(OntologyError):
     """
 
     def __init__(self, object_code: str) -> None:
-        super().__init__(f"Object not found: {object_code!r}")
+        super().__init__(format_object_not_found(None, object_code))
         self.object_code = object_code
 
 
@@ -184,7 +188,7 @@ class ActionNotFoundError(OntologyError):
     """
 
     def __init__(self, object_code: str, action_code: str) -> None:
-        super().__init__(f"Action {action_code!r} not found on {object_code!r}")
+        super().__init__(format_action_not_found(None, object_code, action_code))
         self.object_code = object_code
         self.action_code = action_code
 
@@ -201,7 +205,7 @@ class InvalidOntologyFormatError(OntologyError):
     """
 
     def __init__(self, path: str, reason: str) -> None:
-        super().__init__(f"Invalid ontology at {path!r}: {reason}")
+        super().__init__(format_invalid_ontology(None, path, reason))
         self.path = path
         self.reason = reason
 
@@ -226,7 +230,7 @@ class PlanGenerationError(PlanError):
     """
 
     def __init__(self, question: str, cause: str) -> None:
-        super().__init__(f"Plan generation failed for {question!r}: {cause}")
+        super().__init__(format_plan_generation(None, question, cause))
         self.question = question
         self.cause = cause
 
@@ -243,7 +247,7 @@ class PlanValidationError(PlanError):
     """
 
     def __init__(self, errors: list[str], plan: object = None) -> None:
-        super().__init__(f"Plan validation failed: {errors}")
+        super().__init__(format_plan_validation(None, errors))
         self.errors = errors
         self.plan = plan
 
@@ -260,7 +264,7 @@ class CannotAnswerError(PlanError):
     """
 
     def __init__(self, clarification: str) -> None:
-        super().__init__(clarification)
+        super().__init__(format_cannot_answer(None, clarification))
         self.clarification = clarification
 
 
@@ -285,7 +289,7 @@ class ApiExecutionError(ExecutionError):
     """
 
     def __init__(self, function_code: str, status_code: int, body: str) -> None:
-        super().__init__(f"API {function_code!r} failed [{status_code}]: {body}")
+        super().__init__(format_api_execution(None, function_code, status_code, body))
         self.function_code = function_code
         self.status_code = status_code
         self.body = body
@@ -304,7 +308,7 @@ class SqlExecutionError(ExecutionError):
     """
 
     def __init__(self, datasource_alias: str, sql: str, cause: str) -> None:
-        super().__init__(f"SQL failed on {datasource_alias!r}: {cause}\nSQL: {sql}")
+        super().__init__(format_sql_execution(None, datasource_alias, sql, cause))
         self.datasource_alias = datasource_alias
         self.sql = sql
         self.cause = cause
@@ -322,7 +326,7 @@ class KbExecutionError(ExecutionError):
     """
 
     def __init__(self, datasource_alias: str, cause: str) -> None:
-        super().__init__(f"KB execution failed on {datasource_alias!r}: {cause}")
+        super().__init__(format_kb_execution(None, datasource_alias, cause))
         self.datasource_alias = datasource_alias
         self.cause = cause
 
@@ -340,8 +344,7 @@ class ScriptExecutionError(ExecutionError):
     """
 
     def __init__(self, action_code: str, cause: str, line_no: int | None = None) -> None:
-        loc = f" (line {line_no})" if line_no else ""
-        super().__init__(f"Script {action_code!r} failed{loc}: {cause}")
+        super().__init__(format_script_execution(None, action_code, cause, line_no))
         self.action_code = action_code
         self.cause = cause
         self.line_no = line_no
@@ -358,7 +361,7 @@ class ActionNotConfiguredError(ExecutionError):
     """
 
     def __init__(self, action_code: str) -> None:
-        super().__init__(f"Action {action_code!r} has neither script nor function_refs")
+        super().__init__(format_action_not_configured(None, action_code))
         self.action_code = action_code
 
 
@@ -366,7 +369,7 @@ class PermissionNotConfiguredError(ExecutionError):
     """Permission provider is required but not configured."""
 
     def __init__(self) -> None:
-        super().__init__("Permission provider is not configured")
+        super().__init__(format_permission_not_configured())
 
 
 class PermissionDeniedError(ExecutionError):
@@ -379,7 +382,7 @@ class PermissionDeniedError(ExecutionError):
         message: str | None = None,
     ) -> None:
         detail = message or reason_code
-        super().__init__(f"Permission denied for {resource!r}: {detail}")
+        super().__init__(format_permission_denied(None, resource, detail))
         self.resource = resource
         self.reason_code = reason_code
         self.message = message
@@ -396,7 +399,7 @@ class DataSourceUnavailableError(ExecutionError):
     """
 
     def __init__(self, alias: str) -> None:
-        super().__init__(f"Datasource unavailable: {alias!r}")
+        super().__init__(format_datasource_unavailable(None, alias))
         self.alias = alias
 
 
@@ -412,7 +415,7 @@ class StepDependencyError(ExecutionError):
     """
 
     def __init__(self, step_id: str, depends_on: str) -> None:
-        super().__init__(f"Step {step_id!r} depends on {depends_on!r} which is missing")
+        super().__init__(format_step_dependency(None, step_id, depends_on))
         self.step_id = step_id
         self.depends_on = depends_on
 
@@ -430,7 +433,7 @@ class AggregationError(DatacloudError):
     """
 
     def __init__(self, strategy: str, sql: str, cause: str) -> None:
-        super().__init__(f"Aggregation [{strategy}] failed: {cause}\nSQL: {sql}")
+        super().__init__(format_aggregation(None, strategy, sql, cause))
         self.strategy = strategy
         self.sql = sql
         self.cause = cause

@@ -481,10 +481,12 @@ class Object:
             )
 
         except CannotAnswerError as exc:
+            from datacloud_data_sdk.context import get_current_language
+            from datacloud_data_sdk.i18n import translate_exception
             from datacloud_data_sdk.result_formatter import build_error_data
 
             return build_error_data(
-                str(exc),
+                translate_exception(exc, get_current_language()),
                 result_type="rejected",
                 trace={
                     "request_id": request_id,
@@ -493,10 +495,12 @@ class Object:
                 },
             )
         except (TermNotFoundError, TermAmbiguousError) as exc:
+            from datacloud_data_sdk.context import get_current_language
+            from datacloud_data_sdk.i18n import translate_exception
             from datacloud_data_sdk.result_formatter import build_error_data
 
             return build_error_data(
-                str(exc),
+                translate_exception(exc, get_current_language()),
                 result_type="ask_user",
                 trace={
                     "request_id": request_id,
