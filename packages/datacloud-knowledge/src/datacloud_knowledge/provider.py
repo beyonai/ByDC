@@ -94,6 +94,7 @@ class KnowledgeProvider(Protocol):
         user_id: str | None = None,
         resolve_values: bool = False,
         value_terms: Sequence[str] | None = None,
+        language: str = "zh_CN",
     ) -> FieldResolutionResult: ...
 
     def prepare_query_clarification(
@@ -103,6 +104,7 @@ class KnowledgeProvider(Protocol):
         ontology_code: str,
         structured_input: Mapping[str, Any],
         mode: ClarificationMode,
+        language: str = "zh_CN",
     ) -> ClarificationAnalysis: ...
 
     def finalize_query_clarification(
@@ -118,6 +120,7 @@ class KnowledgeProvider(Protocol):
         user_id: str | None = None,
         persist_confirmed_synonyms: bool = True,
         idempotency_key: str | None = None,
+        language: str = "zh_CN",
     ) -> FinalizedClarification: ...
 
     def search_terms_by_type(
@@ -145,6 +148,7 @@ class FunctionKnowledgeProvider:
         user_id: str | None = None,
         resolve_values: bool = False,
         value_terms: Sequence[str] | None = None,
+        language: str = "zh_CN",
     ) -> FieldResolutionResult:
         return _resolve_field_aliases(
             terms=list(terms),
@@ -162,6 +166,7 @@ class FunctionKnowledgeProvider:
         ontology_code: str,
         structured_input: Mapping[str, Any],
         mode: ClarificationMode,
+        language: str = "zh_CN",
     ) -> ClarificationAnalysis:
         _validate_mode(mode)
         analysis = _analyze_query_clarification(
@@ -169,6 +174,7 @@ class FunctionKnowledgeProvider:
             ontology_code=ontology_code,
             structured_input=dict(structured_input),
             mode=mode,
+            language=language,
         )
         return ClarificationAnalysis(
             needs_clarification=analysis.needs_clarification,
@@ -189,6 +195,7 @@ class FunctionKnowledgeProvider:
         user_id: str | None = None,
         persist_confirmed_synonyms: bool = True,
         idempotency_key: str | None = None,
+        language: str = "zh_CN",
     ) -> FinalizedClarification:
         del idempotency_key
 
@@ -276,6 +283,7 @@ def resolve_field_aliases(
     user_id: str | None = None,
     resolve_values: bool = False,
     value_terms: Sequence[str] | None = None,
+    language: str = "zh_CN",
 ) -> FieldResolutionResult:
     return get_provider().resolve_field_aliases(
         terms=terms,
@@ -284,6 +292,7 @@ def resolve_field_aliases(
         user_id=user_id,
         resolve_values=resolve_values,
         value_terms=value_terms,
+        language=language,
     )
 
 
@@ -293,12 +302,14 @@ def prepare_query_clarification(
     ontology_code: str,
     structured_input: Mapping[str, Any],
     mode: ClarificationMode,
+    language: str = "zh_CN",
 ) -> ClarificationAnalysis:
     return get_provider().prepare_query_clarification(
         query=query,
         ontology_code=ontology_code,
         structured_input=structured_input,
         mode=mode,
+        language=language,
     )
 
 
@@ -314,6 +325,7 @@ def finalize_query_clarification(
     user_id: str | None = None,
     persist_confirmed_synonyms: bool = True,
     idempotency_key: str | None = None,
+    language: str = "zh_CN",
 ) -> FinalizedClarification:
     return get_provider().finalize_query_clarification(
         query=query,
@@ -326,6 +338,7 @@ def finalize_query_clarification(
         user_id=user_id,
         persist_confirmed_synonyms=persist_confirmed_synonyms,
         idempotency_key=idempotency_key,
+        language=language,
     )
 
 

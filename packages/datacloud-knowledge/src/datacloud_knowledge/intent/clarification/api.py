@@ -91,6 +91,7 @@ def analyze_query_clarification(
     structured_input: dict[str, Any],
     *,
     mode: ClarificationMode,
+    language: str = "zh_CN",
     on_event: Callable[[Any], None] | None = None,
 ) -> ClarificationResult:
     """分析结构化查询或统计参数是否需要用户澄清。
@@ -196,8 +197,9 @@ def analyze_query_clarification(
             recall_map,
             pre,
             mode=mode,
+            language=language,
         )
-        main_result = llm_confirm_main(context=main_context, on_event=on_event)
+        main_result = llm_confirm_main(context=main_context, language=language, on_event=on_event)
         emit.result({"has_result": main_result is not None})
 
     # 主结构确认结果与 cc 预解析结果共同形成复用提示表。
@@ -226,8 +228,9 @@ def analyze_query_clarification(
                     recall_map,
                     sentence,
                     idx,
+                    language=language,
                 )
-                cc_result = llm_confirm_cc(context=cc_context, on_event=on_event)
+                cc_result = llm_confirm_cc(context=cc_context, language=language, on_event=on_event)
                 cc_result = _normalize_cc_result_with_hints(
                     cc_result,
                     cc_registry,
@@ -261,6 +264,7 @@ def analyze_query_clarification(
             confirmed,
             all_terms,
             recall_map,
+            language=language,
             complex_conditions=complex_conditions,
             original_structured=structured_input,
         )
