@@ -13,7 +13,6 @@ import os
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
 
@@ -109,39 +108,6 @@ def _normalize_search_payload(raw: dict[str, Any], *, query: str) -> dict[str, A
         "term_subgraphs": term_subgraphs,
         "message": str(raw.get("message", "")),
     }
-
-
-@tool
-async def search_knowledge(query: str, n_hops: int = 4) -> dict[str, Any]:
-    """搜索知识图谱，返回结构化载荷供 prompt 上下文使用。"""
-    from datacloud_knowledge.query import get_singleton_service
-
-    def _run_query() -> dict[str, Any]:
-        service = get_singleton_service(n_hops=n_hops, fast=True, warm_pool=False)
-        raw = service.query(query, n_hops=n_hops, include_knowledge=True)
-        if not isinstance(raw, dict):
-            return {
-                "query": query,
-                "term_matches": [],
-                "fuzzy_term_matches": [],
-                "term_subgraphs": [],
-                "message": "",
-                "error": "invalid_search_payload",
-            }
-        return _normalize_search_payload(raw, query=query)
-
-    try:
-        return await asyncio.to_thread(_run_query)
-    except Exception as exc:  # noqa: BLE001
-        logger.error("search_knowledge failed: %s", exc)
-        return {
-            "query": query,
-            "term_matches": [],
-            "fuzzy_term_matches": [],
-            "term_subgraphs": [],
-            "message": "",
-            "error": str(exc),
-        }
 
 
 async def search_all_candidates(
