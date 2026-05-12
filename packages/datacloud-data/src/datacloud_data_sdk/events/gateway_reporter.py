@@ -16,6 +16,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from datacloud_data_sdk.context import get_current_language
+from datacloud_data_sdk.i18n import localized_text
+
 logger = logging.getLogger(__name__)
 
 _THINK_EVENT_TYPE = "reasoningLogDelta"
@@ -40,11 +43,22 @@ class GatewayProgressReporter:
         self._plan_gen_m_id: str = ""
         self._plan_gen_p_m_id: str = ""
 
+    def _language(self) -> str:
+        """Resolve the current request language for progress messages."""
+        return get_current_language()
+
+    def _text(self, zh_cn: str, en_us: str) -> str:
+        """Return localized progress text."""
+        return localized_text(self._language(), zh_cn=zh_cn, en_us=en_us)
+
     async def on_plan_generating(self, question: str) -> None:
         """推送：开始生成查询计划，并让后续 JSON token 挂在问题标题下。"""
         try:
             title_m_id, _ = await self._emit_reasoning_title(
-                f"正在生成查询计划问题：{question}",
+                self._text(
+                    f"正在生成查询计划问题：{question}",
+                    f"Generating a query plan for: {question}",
+                ),
             )
             self._plan_gen_m_id = self._new_message_id()
             self._plan_gen_p_m_id = title_m_id
@@ -66,14 +80,20 @@ class GatewayProgressReporter:
         """推送：计划生成完成摘要，并清除流式 token 的挂载 id。"""
         self._plan_gen_m_id = ""
         self._plan_gen_p_m_id = ""
-        await self._emit("查询计划已生成", summary)
+        await self._emit(
+            self._text("查询计划已生成", "Query plan generated"),
+            summary,
+        )
 
     async def on_plan_validation_retry(self, retry_count: int, errors: list[str]) -> None:
         """推送：计划校验失败，正在重试。"""
         errors_text = "；".join(errors[:3])
         await self._emit(
-            f"计划校验失败，正在重试（第 {retry_count} 次）",
-            f"错误：{errors_text}",
+            self._text(
+                f"计划校验失败，正在重试（第 {retry_count} 次）",
+                f"Plan validation failed; retrying (attempt {retry_count})",
+            ),
+            self._text(f"错误：{errors_text}", f"Errors: {errors_text}"),
         )
 
     async def on_step_executing(self, step_id: str, step_type: str, desc: str = "") -> None:
@@ -81,22 +101,25 @@ class GatewayProgressReporter:
         detail = f"▶ 步骤 {step_id}（{step_type}）"
         if desc:
             detail += f"：{desc}"
-        await self._emit("执行查询步骤", detail)
+        await self._emit(self._text("执行查询步骤", "Executing query step"), detail)
 
     async def on_step_completed(self, step_id: str, row_count: int | None = None) -> None:
         """推送：某个查询步骤执行完成。"""
         detail = f"✓ 步骤 {step_id} 完成"
         if row_count is not None:
             detail += f"，返回 {row_count} 条记录"
-        await self._emit("查询步骤完成", detail)
+        await self._emit(self._text("查询步骤完成", "Query step completed"), detail)
 
     async def on_aggregating(self, strategy: str) -> None:
         """推送：开始聚合结果。"""
-        await self._emit("正在聚合结果", f"策略：{strategy}")
+        await self._emit(self._text("正在聚合结果", "Aggregating results"), f"策略：{strategy}")
 
     async def on_aggregation_completed(self, record_count: int) -> None:
         """推送：聚合完成。"""
-        await self._emit("结果聚合完成", f"共 {record_count} 条记录")
+        await self._emit(
+            self._text("结果聚合完成", "Aggregation completed"),
+            self._text(f"共 {record_count} 条记录", f"{record_count} records total"),
+        )
 
     # ------------------------------------------------------------------
     # 内部辅助

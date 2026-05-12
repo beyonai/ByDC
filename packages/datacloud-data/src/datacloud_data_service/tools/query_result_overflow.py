@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from datacloud_data_sdk.context import get_current_language
+from datacloud_data_sdk.i18n import format_overflow_notice
+
 ResultType = Literal["normal", "rejected", "ask_user"]
 
 
@@ -80,9 +83,11 @@ def apply_query_result_overflow(
             "download_url": download_url,
             "file_id": file_id,
         },
-        "overflow_notice": (
-            f"【重要】数据量较大（共 {total} 条），此处仅返回前 {len(preview)} 条预览。"
-            f"完整数据请通过以下地址下载 CSV：{download_url}"
+        "overflow_notice": format_overflow_notice(
+            language=get_current_language(),
+            total=total,
+            preview_count=len(preview),
+            download_url=download_url,
         ),
         **{k: v for k, v in result.items() if k not in ("records", "meta", "total", "result_type")},
     }

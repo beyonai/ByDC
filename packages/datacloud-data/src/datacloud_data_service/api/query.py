@@ -19,6 +19,7 @@ from typing import Any
 import anyio
 from datacloud_data_sdk.context import InvocationContext
 from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
+from datacloud_data_sdk.i18n import format_overflow_notice, localized_text
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -29,7 +30,7 @@ router = APIRouter()
 _INCLUDE_PLAN_IN_RESPONSE = False
 
 
-def _build_context_kwargs(request: Request) -> dict[str, str]:
+def _build_context_kwargs(request: Request) -> dict[str, Any]:
     """Build invocation context kwargs from HTTP headers."""
     return {
         "tenant_id": request.headers.get("X-Tenant-Id", ""),
@@ -37,6 +38,7 @@ def _build_context_kwargs(request: Request) -> dict[str, str]:
         "session_id": request.headers.get("X-Session-Id", ""),
         "token": request.headers.get("Authorization", "").removeprefix("Bearer ").strip(),
         "system_code": request.headers.get("X-System-Code", ""),
+        "language": request.headers.get("X-Language", request.headers.get("Accept-Language", "")),
     }
 
 
@@ -101,11 +103,26 @@ async def query_endpoint(body: QueryRequest, request: Request) -> QueryResponse:
     """
     tenant_id = request.headers.get("X-Tenant-Id", "")
     if not tenant_id:
-        raise HTTPException(status_code=400, detail="X-Tenant-Id required")
+        raise HTTPException(
+            status_code=400,
+            detail=localized_text(
+                request.headers.get("X-Language", request.headers.get("Accept-Language", "")),
+                zh_cn="X-Tenant-Id 必填",
+                en_us="X-Tenant-Id is required",
+            ),
+        )
 
     snapshot = await get_request_loader_snapshot(request, reason="rest_query")
     if snapshot is None:
-        return QueryResponse(code=500, message="OntologyLoader not initialized", data={})
+        return QueryResponse(
+            code=500,
+            message=localized_text(
+                request.headers.get("X-Language", request.headers.get("Accept-Language", "")),
+                zh_cn="OntologyLoader 未初始化 (OntologyLoader not initialized)",
+                en_us="OntologyLoader not initialized",
+            ),
+            data={},
+        )
     loader = snapshot.loader
 
     if body.file_id:
@@ -161,7 +178,16 @@ async def _query_by_file_id(
         stored_meta = csv_manager.get_export_meta(body.file_id)
 
     if csv_content is None:
-        return QueryResponse(code=404, message="File not found or invalid file_id", data={})
+        language = request.headers.get("X-Language", request.headers.get("Accept-Language", ""))
+        return QueryResponse(
+            code=404,
+            message=localized_text(
+                language,
+                zh_cn="文件未找到或 file_id 无效 (File not found or invalid file_id)",
+                en_us="File not found or invalid file_id",
+            ),
+            data={},
+        )
 
     try:
         page = body.page if body.page > 0 else 1
@@ -196,9 +222,14 @@ async def _query_by_file_id(
 
         overflow_notice = ""
         if meta["overflow"] and file_url:
-            overflow_notice = (
-                f"【重要】数据量较大（共 {total} 条），此处仅返回前 {len(records)} 条预览。"
-                f"完整数据请通过以下文件路径获取：{file_url}"
+            overflow_notice = format_overflow_notice(
+                language=request.headers.get(
+                    "X-Language",
+                    request.headers.get("Accept-Language", ""),
+                ),
+                total=total,
+                preview_count=len(records),
+                file_path=file_url,
             )
 
         response_data: dict[str, Any] = {

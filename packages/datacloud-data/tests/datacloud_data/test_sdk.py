@@ -243,7 +243,7 @@ async def main7() -> None:
     print("actions:", obj.list_action_codes())
     print("schema:", obj.get_action_schema("query_scene_enterprise_analysis"))
 
-    with InvocationContext(tenant_id="t1", user_id="u1"):
+    with InvocationContext(tenant_id="t1", user_id="u1", language=""):
         result = await obj.invoke_action(
             "query_scene_enterprise_analysis",
             {"select": [], "order_by": [], "limit": 10, "offset": 0},

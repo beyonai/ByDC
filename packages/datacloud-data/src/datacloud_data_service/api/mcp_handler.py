@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from datacloud_data_sdk.context import InvocationContext
+from datacloud_data_sdk.context import InvocationContext, get_current_context
+from datacloud_data_sdk.i18n import localized_text
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
@@ -15,7 +16,7 @@ def _parse_object_ids_header(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
-def _extract_context(request: Request) -> dict[str, str]:
+def _extract_context(request: Request) -> dict[str, Any]:
     tenant_id = request.headers.get("X-Tenant-Id", "")
     tool_mode = request.headers.get("X-Tool-List-Mode", "unified")
     if tool_mode not in ("unified", "per_object"):
@@ -35,6 +36,7 @@ def _extract_context(request: Request) -> dict[str, str]:
         "tool_list_mode": tool_mode,
         "view_id": view_id,
         "object_ids": object_ids or None,
+        "language": request.headers.get("X-Language", request.headers.get("Accept-Language", "")),
     }
 
 
@@ -48,11 +50,17 @@ def _jsonrpc_error(id: Any, code: int, message: str) -> dict:
 
 @router.get("/mcp")
 @router.get("/mcp/")
-async def mcp_get_not_supported() -> JSONResponse:
+async def mcp_get_not_supported(request: Request) -> JSONResponse:
     """Streamable HTTP：本服务不提供 GET/SSE 流，客户端应直接 POST。返回 405 供客户端识别。"""
     return JSONResponse(
         status_code=405,
-        content={"detail": "Use POST for JSON-RPC messages"},
+        content={
+            "detail": localized_text(
+                request.headers.get("X-Language", request.headers.get("Accept-Language", "")),
+                zh_cn="请使用 POST 发送 JSON-RPC 消息",
+                en_us="Use POST for JSON-RPC messages",
+            )
+        },
         headers={"Allow": "POST"},
     )
 
@@ -78,7 +86,18 @@ async def mcp_endpoint(request: Request) -> JSONResponse:
             result = await _handle_tools_call(request, params)
             return JSONResponse(_jsonrpc_response(rpc_id, result))
         else:
-            return JSONResponse(_jsonrpc_error(rpc_id, -32601, f"Method not found: {method}"))
+            language = get_current_context().language
+            return JSONResponse(
+                _jsonrpc_error(
+                    rpc_id,
+                    -32601,
+                    localized_text(
+                        language,
+                        zh_cn=f"未找到方法：{method}",
+                        en_us=f"Method not found: {method}",
+                    ),
+                )
+            )
 
 
 def _handle_initialize(rpc_id: Any, params: dict) -> dict:
@@ -132,7 +151,16 @@ async def _handle_tools_call(request: Request, params: dict) -> dict:
     loader = getattr(request.app.state, "loader", None)
     if loader is None:
         return {
-            "content": [{"type": "text", "text": "OntologyLoader not initialized"}],
+            "content": [
+                {
+                    "type": "text",
+                    "text": localized_text(
+                        get_current_context().language,
+                        zh_cn="OntologyLoader 未初始化 (OntologyLoader not initialized)",
+                        en_us="OntologyLoader not initialized",
+                    ),
+                }
+            ],
             "isError": True,
         }
 
@@ -149,8 +177,18 @@ async def _handle_tools_call(request: Request, params: dict) -> dict:
 
     object_code = _find_action_object(loader, tool_name)
     if object_code is None:
+        language = get_current_context().language
         return {
-            "content": [{"type": "text", "text": f"Unknown tool: {tool_name}"}],
+            "content": [
+                {
+                    "type": "text",
+                    "text": localized_text(
+                        language,
+                        zh_cn=f"未找到工具：{tool_name} (Unknown tool: {tool_name})",
+                        en_us=f"Unknown tool: {tool_name}",
+                    ),
+                }
+            ],
             "isError": True,
         }
 

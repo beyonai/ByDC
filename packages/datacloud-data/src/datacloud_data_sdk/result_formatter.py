@@ -26,6 +26,9 @@ from __future__ import annotations
 from math import ceil
 from typing import Any
 
+from datacloud_data_sdk.context import get_current_language
+from datacloud_data_sdk.i18n import format_overflow_notice
+
 
 def build_query_response(
     raw_result: dict[str, Any],
@@ -122,9 +125,11 @@ def build_query_response(
             "file_url": str(file_path),
             "file_id": file_id,
         }
-        data["overflow_notice"] = (
-            f"【重要】数据量较大（共 {total} 条），此处仅返回前 {len(preview)} 条预览。"
-            f"完整数据请通过以下文件路径获取：{file_path}"
+        data["overflow_notice"] = format_overflow_notice(
+            language=get_current_language(),
+            total=total,
+            preview_count=len(preview),
+            file_path=str(file_path),
         )
 
     return data

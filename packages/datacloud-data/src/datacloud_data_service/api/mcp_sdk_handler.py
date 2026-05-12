@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 from uuid import uuid4
 
+from datacloud_data_sdk.i18n import localized_text
 from datacloud_data_sdk.utils.json_utils import dump_json
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
@@ -211,6 +212,84 @@ def _build_sdk_envelope_text(data: Any) -> str:
     return dump_json({"code": code, "message": message, "data": data})
 
 
+def _resolve_tool_input_schema(tool_name: str, loader: Any) -> dict[str, Any]:
+    """Resolve the tool input schema for validation."""
+    scope = _find_action_scope(loader, tool_name)
+    if scope is None:
+        return {"type": "object", "properties": {}}
+
+    scope_type, scope_code = scope
+    if scope_type == "view":
+        view = loader.get_view(scope_code)
+        schema = view.get_action_schema(tool_name)
+    else:
+        obj = loader.get_object(scope_code)
+        schema = obj.get_action_schema(tool_name)
+
+    input_schema = schema.get("inputSchema")
+    if isinstance(input_schema, dict):
+        return input_schema
+    return {"type": "object", "properties": {}}
+
+
+def _validate_tool_arguments(
+    tool_name: str,
+    arguments: dict[str, Any],
+    *,
+    loader: Any,
+) -> list[TextContent] | None:
+    """Validate tool arguments against the resolved input schema."""
+    schema = _resolve_tool_input_schema(tool_name, loader)
+    errors: list[str] = []
+
+    def _validate_value(value: Any, node: dict[str, Any], path: str) -> None:
+        expected_type = node.get("type")
+        if "enum" in node:
+            enum_values = list(node.get("enum") or [])
+            if value not in enum_values:
+                errors.append(f"{value!r} is not one of {enum_values}")
+                return
+        if expected_type == "object":
+            if not isinstance(value, dict):
+                errors.append(f"{path or 'value'} must be an object")
+                return
+            properties = node.get("properties") if isinstance(node.get("properties"), dict) else {}
+            required = node.get("required") if isinstance(node.get("required"), list) else []
+            for required_name in required:
+                if required_name not in value:
+                    errors.append(f"{required_name} is required")
+            for key, child in properties.items():
+                if key in value and isinstance(child, dict):
+                    child_path = f"{path}.{key}" if path else key
+                    _validate_value(value[key], child, child_path)
+        elif expected_type == "array":
+            if not isinstance(value, list):
+                errors.append(f"{path or 'value'} must be an array")
+                return
+            items_schema = node.get("items")
+            if isinstance(items_schema, dict):
+                for index, item in enumerate(value):
+                    _validate_value(item, items_schema, f"{path}[{index}]")
+        elif expected_type == "string" and not isinstance(value, str):
+            errors.append(f"{path or 'value'} must be a string")
+        elif expected_type == "integer" and not isinstance(value, int):
+            errors.append(f"{path or 'value'} must be an integer")
+        elif expected_type == "number" and not isinstance(value, (int, float)):
+            errors.append(f"{path or 'value'} must be a number")
+        elif expected_type == "boolean" and not isinstance(value, bool):
+            errors.append(f"{path or 'value'} must be a boolean")
+
+    _validate_value(arguments, schema, "")
+    if not errors:
+        return None
+    logger.exception(
+        "call_tool input validation failed: tool=%s arguments=%s",
+        tool_name,
+        json.dumps(arguments, ensure_ascii=False, separators=(",", ":")),
+    )
+    return [TextContent(type="text", text=f"Input validation error: {errors[0]}")]
+
+
 def _wrap_raw_data_as_payload(data: Any) -> dict[str, Any]:
     """将原始 data 结果包装成与 SDK 一致的 MCP payload。"""
     return {
@@ -331,11 +410,20 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
             _log_tool_call(name, tool_arguments)
             snapshot = await _get_loader_snapshot("mcp_tools_call")
             if snapshot is None:
+                from datacloud_data_sdk.context import get_current_language
+
                 return [
                     TextContent(
                         type="text",
                         text=json.dumps(
-                            {"error": "OntologyLoader not initialized"}, ensure_ascii=False
+                            {
+                                "error": localized_text(
+                                    get_current_language(),
+                                    zh_cn="OntologyLoader 未初始化 (OntologyLoader not initialized)",
+                                    en_us="OntologyLoader not initialized",
+                                )
+                            },
+                            ensure_ascii=False,
                         ),
                     )
                 ]
@@ -548,6 +636,7 @@ def create_mcp_asgi_app(session_manager: StreamableHTTPSessionManager):
             "view_id": view_id,
             "object_ids": object_ids or None,
             "tool_call_detail": _parse_bool_header(headers.get(_TOOL_CALL_DETAIL_HEADER)),
+            "language": headers.get("x-language", headers.get("accept-language", "")),
         }
         try:
             with InvocationContext(**ctx_kwargs):

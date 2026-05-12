@@ -98,6 +98,7 @@ def _make_performance_log_handler() -> tuple[Any, dict[str, list]]:
                     ensure_ascii=False,
                 )
                 logger.info(log_line)
+                logging.getLogger().warning(log_line)
             except Exception:
                 pass
             del spans_by_request[rid]

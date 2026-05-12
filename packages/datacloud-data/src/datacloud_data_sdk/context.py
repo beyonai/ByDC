@@ -23,6 +23,7 @@ from types import TracebackType
 from typing import Any
 
 from datacloud_data_sdk.exceptions import DatacloudError
+from datacloud_data_sdk.i18n import DEFAULT_LANGUAGE, normalize_language
 
 
 @dataclass
@@ -43,6 +44,7 @@ class RequestContext:
         tool_list_mode: 工具列表模式，控制 MCP/Skills 返回的工具列表格式
             - "unified": 统一模式，返回所有工具的合并列表
             - "per_object": 按对象模式，按对象分组返回工具列表
+        language: 运行时语言编码，支持 zh-CN / en_US 及常见别名
         gateway_context: 执行上报对象（实现 ``datacloud_analysis.reporter.ExecutionReporter``
             协议）。可以是真实 Gateway AgentContext（生产部署）或
             ``NoOpExecutionReporter``（demo / 单测 / 独立调用）。类型声明为 ``Any``
@@ -69,6 +71,7 @@ class RequestContext:
     view_id: str = ""
     object_ids: list[str] | None = None
     tool_call_detail: bool = False
+    language: str = DEFAULT_LANGUAGE
     gateway_context: Any = field(default=None, repr=False)
     workspace_dir: str = ""
     result_file_storage: Any = field(default=None, repr=False)
@@ -91,7 +94,7 @@ class InvocationContext:
 
     Args:
         **kwargs: 上下文字段，支持 tenant_id, user_id, session_id, token, system_code,
-            tool_list_mode, view_id, object_ids
+            tool_list_mode, view_id, object_ids, language
 
     Example:
         基本用法::
@@ -113,6 +116,7 @@ class InvocationContext:
         tool_mode = kwargs.get("tool_list_mode", "unified")
         if tool_mode not in ("unified", "per_object"):
             tool_mode = "unified"
+        language = kwargs.get("language", kwargs.get("locale", ""))
         self._ctx = RequestContext(
             tenant_id=kwargs.get("tenant_id", ""),
             user_id=kwargs.get("user_id", ""),
@@ -124,6 +128,7 @@ class InvocationContext:
             view_id=kwargs.get("view_id", ""),
             object_ids=kwargs.get("object_ids"),
             tool_call_detail=bool(kwargs.get("tool_call_detail", False)),
+            language=normalize_language(language),
             gateway_context=kwargs.get("gateway_context"),
             workspace_dir=kwargs.get("workspace_dir", ""),
             result_file_storage=kwargs.get("result_file_storage"),
@@ -170,6 +175,14 @@ def get_current_context() -> RequestContext:
     if ctx is None:
         raise DatacloudError("InvocationContext not set. Use `with InvocationContext(...):`")
     return ctx
+
+
+def get_current_language() -> str:
+    """Get the current request language, falling back to the default language."""
+    ctx = _ctx_var.get()
+    if ctx is None:
+        return DEFAULT_LANGUAGE
+    return normalize_language(ctx.language)
 
 
 def get_tool_list_mode() -> str:

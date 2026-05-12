@@ -18,6 +18,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from datacloud_data_sdk.context import get_current_language
+from datacloud_data_sdk.i18n import localized_text
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.result_formatter import build_error_data
 from datacloud_data_sdk.utils.json_utils import dump_json
@@ -128,7 +130,11 @@ class UnifiedQuery:
                 ]
                 view = View(
                     view_id="auto_view",
-                    view_name="自动视图",
+                    view_name=localized_text(
+                        get_current_language(),
+                        zh_cn="自动视图",
+                        en_us="Auto view",
+                    ),
                     description="",
                     objects=objects,
                     relations=relations,
