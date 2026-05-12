@@ -781,13 +781,20 @@ class OntologyToolLoader:
         if schema_name in _DYNAMIC_SCHEMA_REGISTRY:
             schema_cls = _DYNAMIC_SCHEMA_REGISTRY[schema_name]
         else:
+            from datacloud_analysis.tools._agent_schema_patches import (  # noqa: PLC0415
+                AGENT_QUERY_DESCRIPTION,
+            )
+
             model_fields: dict[str, Any] = {
-                "query": (str, Field(description="自然语言查询问题")),
+                "query": (str, Field(description=AGENT_QUERY_DESCRIPTION)),
             }
             if inject_context_knowledge:
                 model_fields["contextKnowledge"] = (
                     str,
-                    Field(default="", description="知识增强上下文，由系统注入，请勿填写"),
+                    Field(
+                        default="",
+                        description="Context knowledge injected by the system — do not fill.",
+                    ),
                 )
             schema_cls = create_model(schema_name, __base__=BaseModel, **model_fields)
             schema_cls.__module__ = __name__
