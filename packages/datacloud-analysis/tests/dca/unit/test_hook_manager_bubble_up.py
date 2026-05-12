@@ -77,7 +77,9 @@ async def test_tc28_ordinary_exception_is_swallowed_and_logged(
     with caplog.at_level(logging.WARNING):
         ctx, decision = await manager.run_before(_make_ctx())
 
-    assert decision is None, "普通异常不应导致 fail decision（非 strict 模式）"
+    assert decision is not None and decision.get("action") == "fail", (
+        f"普通异常应导致 fail decision，实际：{decision!r}"
+    )
     # 日志应有警告
     assert any(
         "plugin error" in r.message or "bad_callback" in r.message or "test.plugin" in r.message

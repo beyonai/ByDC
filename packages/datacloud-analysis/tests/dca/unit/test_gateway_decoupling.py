@@ -54,7 +54,7 @@ async def test_tc_gd1_thinking_token_dispatches_custom_event() -> None:
 
     dispatched: list[tuple[str, dict[str, Any]]] = []
 
-    async def _fake_dispatch(name: str, data: Any) -> None:
+    async def _fake_dispatch(name: str, data: Any, *, config: Any = None, **kw: Any) -> None:
         dispatched.append((name, dict(data) if isinstance(data, dict) else {"raw": data}))
 
     with patch("langchain_core.callbacks.adispatch_custom_event", side_effect=_fake_dispatch):
@@ -81,7 +81,7 @@ async def test_tc_gd2_thinking_token_payload_structure() -> None:
 
     dispatched: list[tuple[str, dict[str, Any]]] = []
 
-    async def _fake_dispatch(name: str, data: Any) -> None:
+    async def _fake_dispatch(name: str, data: Any, *, config: Any = None, **kw: Any) -> None:
         dispatched.append((name, dict(data) if isinstance(data, dict) else {"raw": data}))
 
     token_text = "这是一段有意义的推理内容，超过十个字符。"
@@ -92,11 +92,11 @@ async def test_tc_gd2_thinking_token_payload_structure() -> None:
 
     assert dispatched, "adispatch_custom_event 未被调用"
     _, payload = dispatched[0]
-    assert payload.get("event_type") == "reasoning_log_delta", (
-        f"event_type 应为 reasoning_log_delta，实际：{payload}"
+    assert payload.get("event_type") == "reasoningLogDelta", (
+        f"event_type 应为 reasoningLogDelta，实际：{payload}"
     )
-    assert payload.get("content_type") == "think_text", (
-        f"content_type 应为 think_text，实际：{payload}"
+    assert payload.get("content_type") == "1002", (
+        f"content_type 应为 1002，实际：{payload}"
     )
     assert payload.get("message_id") == msg_id, f"message_id 应为 {msg_id!r}，实际：{payload}"
     assert payload.get("content"), "content 不应为空"
@@ -122,7 +122,7 @@ async def test_tc_gd3_answer_token_dispatches_custom_event() -> None:
 
     dispatched: list[tuple[str, dict[str, Any]]] = []
 
-    async def _fake_dispatch(name: str, data: Any) -> None:
+    async def _fake_dispatch(name: str, data: Any, *, config: Any = None, **kw: Any) -> None:
         dispatched.append((name, dict(data) if isinstance(data, dict) else {"raw": data}))
 
     with patch("langchain_core.callbacks.adispatch_custom_event", side_effect=_fake_dispatch):
@@ -131,10 +131,10 @@ async def test_tc_gd3_answer_token_dispatches_custom_event() -> None:
     assert dispatched, "adispatch_custom_event 未被调用"
     event_name, payload = dispatched[0]
     assert event_name == "dc_stream_chunk", f"事件名应为 dc_stream_chunk，实际：{event_name!r}"
-    assert payload.get("event_type") == "answer_delta", (
-        f"event_type 应为 answer_delta，实际：{payload}"
+    assert payload.get("event_type") == "answerDelta", (
+        f"event_type 应为 answerDelta，实际：{payload}"
     )
-    assert payload.get("content_type") == "text", f"content_type 应为 text，实际：{payload}"
+    assert payload.get("content_type") == "1002", f"content_type 应为 1002，实际：{payload}"
     assert payload.get("message_id") == "ans-001"
 
 
@@ -158,7 +158,7 @@ async def test_tc_gd4_emit_text_dispatches_custom_event() -> None:
 
     dispatched: list[tuple[str, dict[str, Any]]] = []
 
-    async def _fake_dispatch(name: str, data: Any) -> None:
+    async def _fake_dispatch(name: str, data: Any, *, config: Any = None, **kw: Any) -> None:
         dispatched.append((name, dict(data) if isinstance(data, dict) else {"raw": data}))
 
     with patch("langchain_core.callbacks.adispatch_custom_event", side_effect=_fake_dispatch):
@@ -167,10 +167,10 @@ async def test_tc_gd4_emit_text_dispatches_custom_event() -> None:
     assert dispatched, "adispatch_custom_event 未被调用"
     event_name, payload = dispatched[0]
     assert event_name == "dc_stream_chunk", f"事件名应为 dc_stream_chunk，实际：{event_name!r}"
-    assert payload.get("event_type") == "answer_delta", (
-        f"event_type 应为 answer_delta，实际：{payload}"
+    assert payload.get("event_type") == "answerDelta", (
+        f"event_type 应为 answerDelta，实际：{payload}"
     )
-    assert payload.get("content_type") == "text", f"content_type 应为 text，实际：{payload}"
+    assert payload.get("content_type") == "1002", f"content_type 应为 1002，实际：{payload}"
     assert payload.get("message_id") == "text-001"
     assert payload.get("content"), "content 不应为空"
 

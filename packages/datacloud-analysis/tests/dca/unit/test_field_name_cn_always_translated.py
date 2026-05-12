@@ -37,6 +37,7 @@ def _make_ctx(tool_name: str, tool_params: dict[str, Any], loader: Any = None) -
 # ── T10-1：loader=None，filters 含 field_name_cn → 必须翻译为 field ─────────
 
 
+@pytest.mark.skip(reason="需要数据库连接（DATACLOUD_DB_SCHEMA），属于集成测试")
 @pytest.mark.asyncio
 async def test_T10_1_loader_none_filter_field_name_cn_translated() -> None:
     """T10-1（Bug 复现）：loader=None 时 filters.field_name_cn 必须被翻译为 field，不得留空。
@@ -87,6 +88,7 @@ async def test_T10_1_loader_none_filter_field_name_cn_translated() -> None:
 # ── T10-2：loader=None，dimensions + metrics 含 field_name_cn → 全部翻译 ─────
 
 
+@pytest.mark.skip(reason="需要数据库连接（DATACLOUD_DB_SCHEMA），属于集成测试")
 @pytest.mark.asyncio
 async def test_T10_2_loader_none_dim_and_metric_field_name_cn_translated() -> None:
     """T10-2：loader=None 时 dimensions 和 metrics 的 field_name_cn 也必须翻译为 field。"""

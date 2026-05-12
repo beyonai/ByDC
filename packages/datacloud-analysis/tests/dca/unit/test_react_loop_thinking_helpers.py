@@ -217,74 +217,68 @@ def _mock_emit_runtime_modules() -> Any:
 
 
 class TestEmitThinkingToken:
-    # 单测：gateway 为 None → 不报错
+    # 单测：token 为空 → 不调用 adispatch_custom_event
     def test_no_gateway_no_error(self) -> None:
         asyncio.get_event_loop().run_until_complete(
-            _emit_thinking_token(None, "some thought", message_id="test_msg")
+            _emit_thinking_token("some thought", message_id="test_msg")
         )
 
     # 单测：token 为空 → 不调用 emit_chunk
     def test_empty_token_no_emit(self) -> None:
-        gw = AsyncMock()
-        asyncio.get_event_loop().run_until_complete(
-            _emit_thinking_token(gw, "", message_id="test_msg")
-        )
-        gw.emit_chunk.assert_not_called()
+        with patch("langchain_core.callbacks.adispatch_custom_event") as mock_dispatch:
+            asyncio.get_event_loop().run_until_complete(
+                _emit_thinking_token("", message_id="test_msg")
+            )
+            mock_dispatch.assert_not_called()
 
-    # 单测：emit_chunk 抛异常 → 静默降级，不向上传播（B-TC-07）
+    # 单测：emit 抛异常 → 静默降级，不向上传播（B-TC-07）
     def test_emit_chunk_exception_silent(self) -> None:
-        gw = MagicMock()
-        gw.emit_chunk = AsyncMock(side_effect=RuntimeError("network error"))
+        async def _raise(*args: Any, **kwargs: Any) -> None:
+            raise RuntimeError("network error")
 
-        # 不应抛出异常
-        with _mock_emit_runtime_modules():
+        with patch("langchain_core.callbacks.adispatch_custom_event", side_effect=_raise):
             asyncio.get_event_loop().run_until_complete(
-                _emit_thinking_token(gw, "some thought", message_id="test_msg")
+                _emit_thinking_token("some thought", message_id="test_msg")
             )
 
-    # 正常推送：emit_chunk 被调用一次
+    # 正常推送：adispatch_custom_event 被调用一次
     def test_normal_emit_called(self) -> None:
-        gw = MagicMock()
-        gw.emit_chunk = AsyncMock(return_value=None)
+        dispatched: list = []
 
-        with _mock_emit_runtime_modules():
+        async def _capture(name: str, data: Any, **kw: Any) -> None:
+            dispatched.append((name, data))
+
+        with patch("langchain_core.callbacks.adispatch_custom_event", side_effect=_capture):
             asyncio.get_event_loop().run_until_complete(
-                _emit_thinking_token(gw, "用户想查营收数据", message_id="test_msg")
+                _emit_thinking_token("用户想查营收数据", message_id="test_msg")
             )
-        gw.emit_chunk.assert_called_once()
+        assert len(dispatched) == 1
 
     # 推送时使用正确的 event_type
     def test_emit_uses_reasoning_log_delta_event_type(self) -> None:
-        gw = MagicMock()
-        call_kwargs: dict = {}
+        captured: dict = {}
 
-        async def _capture_emit(chunk, *, event_type="", content_type="", **kw):
-            call_kwargs["event_type"] = event_type
-            call_kwargs["content_type"] = content_type
+        async def _capture(name: str, data: Any, **kw: Any) -> None:
+            captured.update(data if isinstance(data, dict) else {})
 
-        gw.emit_chunk = _capture_emit
-
-        with _mock_emit_runtime_modules():
+        with patch("langchain_core.callbacks.adispatch_custom_event", side_effect=_capture):
             asyncio.get_event_loop().run_until_complete(
-                _emit_thinking_token(gw, "推理过程文字", message_id="test_msg")
+                _emit_thinking_token("推理过程文字", message_id="test_msg")
             )
-        assert call_kwargs.get("event_type") == "reasoningLogDelta"
-        assert call_kwargs.get("content_type") == "1002"
+        assert captured.get("event_type") == "reasoningLogDelta"
+        assert captured.get("content_type") == "1002"
 
     # 推送时 message_id 按传入值透传
     def test_emit_uses_passed_message_id(self) -> None:
-        gw = MagicMock()
-        call_kwargs: dict = {}
+        captured: dict = {}
 
-        async def _capture_emit(chunk, *, message_id="", **kw):
-            call_kwargs["message_id"] = message_id
+        async def _capture(name: str, data: Any, **kw: Any) -> None:
+            captured.update(data if isinstance(data, dict) else {})
 
-        gw.emit_chunk = _capture_emit
-
-        with _mock_emit_runtime_modules():
+        with patch("langchain_core.callbacks.adispatch_custom_event", side_effect=_capture):
             asyncio.get_event_loop().run_until_complete(
-                _emit_thinking_token(gw, "推理过程文字", message_id="round_abc123")
+                _emit_thinking_token("推理过程文字", message_id="round_abc123")
             )
-        assert call_kwargs.get("message_id") == "round_abc123", (
-            "emit_chunk 收到的 message_id 应与传入值完全一致"
+        assert captured.get("message_id") == "round_abc123", (
+            "adispatch_custom_event 收到的 message_id 应与传入值完全一致"
         )

@@ -416,7 +416,10 @@ class TestFormatResult:
                 {"result_type": "text", "answer": "hello"},
                 gateway_context=mock_gw,
             )
-        mock_emit.assert_called_once_with(mock_gw, "hello")
+        mock_emit.assert_called_once()
+        # _emit_text(text, *, message_id, config) — text is the first positional arg
+        call_text = mock_emit.call_args[0][0]
+        assert call_text == "hello"
 
     @pytest.mark.asyncio
     async def test_csv_file_missing_path(self) -> None:
@@ -434,7 +437,8 @@ class TestFormatResult:
                 gateway_context=mock_gw,
             )
 
-        call_args = mock_emit.call_args[0][1]
+        # _emit_text(text, *, message_id, config) — text is the first positional arg
+        call_args = mock_emit.call_args[0][0]
         assert "CSV" in call_args
 
     @pytest.mark.asyncio
@@ -470,7 +474,8 @@ class TestFormatResult:
                 },
                 gateway_context=mock_gw,
             )
-        md = mock_emit.call_args[0][1]
+        # _emit_text(text, *, message_id, config) — text is the first positional arg
+        md = mock_emit.call_args[0][0]
         assert "列 A" in md
         assert "列 B" in md
         assert "v1" in md
@@ -500,7 +505,8 @@ class TestFormatResult:
                 },
                 gateway_context=mock_gw,
             )
-        md = mock_emit.call_args[0][1]
+        # _emit_text(text, *, message_id, config) — text is the first positional arg
+        md = mock_emit.call_args[0][0]
         assert "管理网格编码" in md
         assert "grid_id" not in md.split("\n")[0]
 

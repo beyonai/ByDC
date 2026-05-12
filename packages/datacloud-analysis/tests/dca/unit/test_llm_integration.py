@@ -123,6 +123,9 @@ async def test_scenario1_primary_fails_fallback_takes_over(
         ctx: Any,
         *,
         thinking_message_id: str,
+        query_received_at: float | None = None,
+        round_idx: int = 0,
+        config: Any = None,
     ) -> tuple:
         if llm_with_tools is primary_llm:
             call_log.append("primary_called")
@@ -177,6 +180,9 @@ async def test_scenario1_primary_retries_then_fallback(
         ctx: Any,
         *,
         thinking_message_id: str,
+        query_received_at: float | None = None,
+        round_idx: int = 0,
+        config: Any = None,
     ) -> tuple:
         if llm_with_tools is primary_llm:
             call_log.append("primary")
@@ -375,6 +381,9 @@ async def test_scenario3_end_to_end_degradation_to_fallback(
         ctx: Any,
         *,
         thinking_message_id: str,
+        query_received_at: float | None = None,
+        round_idx: int = 0,
+        config: Any = None,
     ) -> tuple:
         if llm_with_tools is primary_llm_tools:
             exc = Exception("Primary unavailable")

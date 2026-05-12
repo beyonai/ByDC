@@ -26,6 +26,7 @@ async def test_json_markdown_uses_dict_row_values_for_columns_data_shape() -> No
             gateway_context=gateway_context,
         )
 
-    markdown_text = emit_text.call_args[0][1]
+    # _emit_text(text, *, message_id, config) — text is the first positional arg
+    markdown_text = emit_text.call_args[0][0]
     row_line = markdown_text.splitlines()[2]
     assert row_line == "| 1 | 2 |"

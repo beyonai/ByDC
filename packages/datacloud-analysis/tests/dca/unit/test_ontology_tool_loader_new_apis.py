@@ -106,7 +106,7 @@ class TestBuildNlQueryTool:
         """TC-A4：inject_context_knowledge=False 时 schema 不含 contextKnowledge。"""
         sut = self._make_sut()
         tool = sut.build_nl_query_tool(
-            resource_code="enterprise",
+            resource_code="enterprise_no_ctx",  # 不同 code 避免与 TC-A3 共享 schema 缓存
             resource_biz_type="OBJECT",
             resource_name="企业分析",
             resource_desc="",
