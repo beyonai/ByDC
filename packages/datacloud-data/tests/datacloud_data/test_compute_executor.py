@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import json
 import logging
-from types import SimpleNamespace
 
 import pytest
 from datacloud_data_sdk.executor.compute_executor import ComputeExecutor
