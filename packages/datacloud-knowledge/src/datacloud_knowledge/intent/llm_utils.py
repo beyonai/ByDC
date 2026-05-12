@@ -134,12 +134,17 @@ _KW_PATTERN = re.compile(
 _TRAILING_TOKEN_RE = re.compile(r"[A-Za-z_]+$")
 
 
-def _localize_thinking(text: str) -> tuple[str, str]:
+def _localize_thinking(text: str, *, language: str = "zh_CN") -> tuple[str, str]:
     """将 thinking 文本中的 SQL/schema 英文关键字替换为中文。
+
+    当 ``language`` 不为 ``"zh_CN"`` 时，不做翻译，直接返回原文。
 
     Returns:
         (safe, pending): safe 是可以安全输出的部分，pending 是尾部可能未完成的 token。
     """
+    if language != "zh_CN":
+        return text, ""
+
     # 检查尾部是否有未完成的英文 token，且它是某个关键字的严格前缀
     m = _TRAILING_TOKEN_RE.search(text)
     if m:
@@ -166,6 +171,8 @@ def stream_invoke_with_thinking(
     llm_with_tool: Any,
     messages: list[dict[str, str]],
     on_event: Callable[[Any], None] | None = None,
+    *,
+    language: str = "zh_CN",
 ) -> Any:
     """用 stream() 替代 invoke()，同时通过回调推送 thinking 内容。
 
@@ -213,7 +220,7 @@ def stream_invoke_with_thinking(
                 thinking_acc += raw_delta
 
         if thinking_acc:
-            safe, _pending = _localize_thinking(thinking_acc)
+            safe, _pending = _localize_thinking(thinking_acc, language=language)
             if safe != prev_emitted:
                 on_event(
                     StreamEvent(

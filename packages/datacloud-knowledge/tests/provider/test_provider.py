@@ -115,6 +115,7 @@ def test_prepare_query_clarification_facade_delegates() -> None:
         ontology_code="sales",
         structured_input={"select": ["销售额"]},
         mode="query",
+        language="zh_CN",
     )
 
 
