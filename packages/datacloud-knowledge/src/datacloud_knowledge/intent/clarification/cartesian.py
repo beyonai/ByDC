@@ -13,6 +13,8 @@ import json
 import logging
 from typing import Any
 
+from datacloud_knowledge.i18n import get_annotation_format, get_paradigm_labels
+
 from .models import (
     ClarifyItem,
     ConditionTermMapping,
@@ -173,6 +175,8 @@ def truncate_candidates(
 def expand_condition_cartesian(
     condition: ConfirmedCondition,
     max_combinations: int = MAX_COMBINATIONS,
+    *,
+    language: str = "zh_CN",
 ) -> list[str]:
     """对单条 complex_condition 做笛卡尔积展开。
 
@@ -215,7 +219,9 @@ def expand_condition_cartesian(
 
     results: list[str] = []
     for combo in combos:
-        result = _apply_replacements(sentence, confirmed_mappings, unconfirmed_mappings, combo)
+        result = _apply_replacements(
+            sentence, confirmed_mappings, unconfirmed_mappings, combo, language=language
+        )
         results.append(result)
 
     return results
@@ -225,9 +231,12 @@ def _apply_replacements(
     sentence: str,
     confirmed: list[ConditionTermMapping],
     unconfirmed: list[ConditionTermMapping],
-    combo: tuple[str, ...],
+    combo: list[str],
+    *,
+    language: str = "zh_CN",
 ) -> str:
     """按 start/end 位置替换术语，生成带括号注释的句子。"""
+    fmt = get_annotation_format(language)
     # 合并所有替换，按 start 降序排列（从后往前替换，避免位移）
     replacements: list[tuple[int, int, str, str]] = []
 
@@ -242,8 +251,8 @@ def _apply_replacements(
     replacements.sort(key=lambda r: r[0], reverse=True)
 
     result = sentence
-    for start, end, original, replacement in replacements:
-        annotated = f"{original}（{replacement}）"
+    for start, end, _original, replacement in replacements:
+        annotated = fmt.format(text=replacement)
         result = result[:start] + annotated + result[end:]
 
     return result
@@ -257,6 +266,7 @@ def build_paradigm_list(
     terms: list[ExtractedTerm],
     recall_map: dict[str, list[dict[str, Any]]],
     *,
+    language: str = "zh_CN",
     complex_conditions: list[str] | None = None,
     original_structured: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], KnowledgeMeta]:
@@ -420,7 +430,7 @@ def build_paradigm_list(
             original = (
                 complex_conditions[idx] if idx < len(complex_conditions) else cc.original_sentence
             )
-            expanded = expand_condition_cartesian(cc)
+            expanded = expand_condition_cartesian(cc, language=language)
             filter_result.append(
                 {
                     "keyword": original,
@@ -459,12 +469,14 @@ def build_paradigm_list(
     # ── paradigmId=5: 统计函数（空）──
     agg_result: list[dict[str, Any]] = []
 
+    p_labels = get_paradigm_labels(language)
+
     paradigm_list = [
-        {"paradigmId": "1", "paradigmName": "查询值", "paradigmResult": select_result},
-        {"paradigmId": "2", "paradigmName": "分组条件", "paradigmResult": group_result},
-        {"paradigmId": "3", "paradigmName": "过滤条件", "paradigmResult": filter_result},
-        {"paradigmId": "4", "paradigmName": "排序目标", "paradigmResult": order_result},
-        {"paradigmId": "5", "paradigmName": "统计函数", "paradigmResult": agg_result},
+        {"paradigmId": "1", "paradigmName": p_labels["1"], "paradigmResult": select_result},
+        {"paradigmId": "2", "paradigmName": p_labels["2"], "paradigmResult": group_result},
+        {"paradigmId": "3", "paradigmName": p_labels["3"], "paradigmResult": filter_result},
+        {"paradigmId": "4", "paradigmName": p_labels["4"], "paradigmResult": order_result},
+        {"paradigmId": "5", "paradigmName": p_labels["5"], "paradigmResult": agg_result},
     ]
 
     meta = KnowledgeMeta(
