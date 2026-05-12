@@ -86,7 +86,7 @@ def load_env() -> None:
 
 def get_db_connection() -> psycopg2.extensions.connection:
     """创建数据库连接。"""
-    from datacloud_knowledge.db_url import parse_env_database_url
+    from datacloud_knowledge.db.url import parse_env_database_url
 
     if not any(os.getenv(name, "").strip() for name in _DB_CONFIG_TRIGGER_ENV_VARS):
         raise ValueError(f"缺少环境变量: {list(_DB_CONFIG_TRIGGER_ENV_VARS)}")

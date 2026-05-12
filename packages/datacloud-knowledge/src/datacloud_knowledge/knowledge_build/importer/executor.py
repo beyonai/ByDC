@@ -30,7 +30,7 @@ import psycopg
 from psycopg import Connection, sql
 
 from datacloud_knowledge.db.context import DatabaseContext
-from datacloud_knowledge.db_url import build_postgres_connection_uri
+from datacloud_knowledge.db.url import build_postgres_connection_uri
 
 from . import _helpers, owl_converter, owl_parser
 from .writer import (

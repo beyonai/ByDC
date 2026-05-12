@@ -86,7 +86,7 @@ def _jieba_tokenize(text: str) -> str:
 
 
 def _connect() -> psycopg.Connection:  # type: ignore[type-arg]
-    from datacloud_knowledge.db_url import build_postgres_connection_uri
+    from datacloud_knowledge.db.url import build_postgres_connection_uri
 
     return psycopg.connect(build_postgres_connection_uri(), autocommit=True)
 

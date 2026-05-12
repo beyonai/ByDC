@@ -55,7 +55,7 @@ def _load_env_if_needed() -> None:
 
 
 def _connect() -> psycopg2.extensions.connection:
-    from datacloud_knowledge.db_url import build_postgres_connection_uri
+    from datacloud_knowledge.db.url import build_postgres_connection_uri
 
     return psycopg2.connect(dsn=build_postgres_connection_uri())
 
@@ -69,7 +69,7 @@ def _sql_files(directory: Path) -> list[Path]:
 
 def apply_ddl() -> None:
     """Drop existing tables and re-create schema from DDL files."""
-    from datacloud_knowledge.db_url import resolve_knowledge_schema
+    from datacloud_knowledge.db.url import resolve_knowledge_schema
 
     files = _sql_files(_DDL_DIR)
     if not files:

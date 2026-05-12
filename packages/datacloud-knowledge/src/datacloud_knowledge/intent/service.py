@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import bindparam, text
 
-from datacloud_knowledge.knowledge_search.db.connection import get_session
+from datacloud_knowledge.db.connection import get_session
 from datacloud_knowledge.query.search.vector_validation import (
     TermVectorValidationError,
     validate_term_vector_readiness,

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from sqlalchemy import bindparam, text
 
-from datacloud_knowledge.knowledge_search.db.connection import get_session
+from datacloud_knowledge.db.connection import get_session
 from datacloud_knowledge.query.search.bm25 import (
     _has_jieba_column,
     _has_name_keywords_column,

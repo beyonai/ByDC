@@ -8,6 +8,7 @@ from typing import Any
 
 from sqlalchemy import select
 
+from datacloud_knowledge.db.connection import get_session
 from datacloud_knowledge.db.models import Term
 from datacloud_knowledge.intent.service import store_clarification_results
 from datacloud_knowledge.knowledge_search import (
@@ -15,7 +16,6 @@ from datacloud_knowledge.knowledge_search import (
     get_prop_values_with_aliases,
     resolve_field_aliases,
 )
-from datacloud_knowledge.knowledge_search.db.connection import get_session
 
 logger = logging.getLogger(__name__)
 

@@ -8,10 +8,10 @@ from sqlalchemy import and_, cast, func, literal, or_, select
 from sqlalchemy.dialects.postgresql import JSONB, NUMERIC, TIMESTAMP
 from sqlalchemy.orm import aliased
 
+from datacloud_knowledge.db.connection import get_session
+from datacloud_knowledge.db.models import Term, TermName, TermRelation
 from datacloud_knowledge.query.search import bm25_search_with_or
 
-from .db import get_session
-from .db.models import Term, TermName, TermRelation
 from .types import (
     AmbiguousCandidate,
     FieldResolutionResult,

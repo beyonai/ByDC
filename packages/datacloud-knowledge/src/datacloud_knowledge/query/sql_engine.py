@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 from psycopg.sql import SQL, Composed, Identifier
 from psycopg_pool import ConnectionPool
 
-from datacloud_knowledge.db_url import build_postgres_connection_uri, resolve_knowledge_schema
+from datacloud_knowledge.db.url import build_postgres_connection_uri, resolve_knowledge_schema
 
 from .fuzzy import (
     FuzzyConfig,

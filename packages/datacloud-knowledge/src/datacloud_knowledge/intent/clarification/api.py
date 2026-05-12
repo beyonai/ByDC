@@ -406,9 +406,9 @@ def _build_scope_recall_layers(
     from sqlalchemy import func, select
     from sqlalchemy.orm import aliased
 
+    from datacloud_knowledge.db.connection import get_session
     from datacloud_knowledge.db.models import Term, TermRelation
     from datacloud_knowledge.intent.batch_recall import ScopeRecallLayer
-    from datacloud_knowledge.knowledge_search.db.connection import get_session
 
     layers: list[ScopeRecallLayer] = []
     field_codes = _collect_confirmed_field_codes(pre, cc_pre)
@@ -477,13 +477,13 @@ def _vector_only_recall(
     英文编码（如 stat_date）无法通过 BM25/子串匹配命中中文术语名，
     但向量语义检索可以将 "stat_date" 匹配到 "统计日期"。
     """
+    from datacloud_knowledge.db.connection import get_session
     from datacloud_knowledge.intent.batch_recall import RecallRequest, _batch_vector
     from datacloud_knowledge.intent.typed_recall import (
         KTYPE_CATEGORY_MAP,
         _load_type_codes_by_category,
         _shape_candidates,
     )
-    from datacloud_knowledge.knowledge_search.db.connection import get_session
 
     # 构建 RecallRequest（需要 type_filter）
     with get_session() as session:

@@ -4,8 +4,9 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
-from .db import get_session
-from .db.models import Term, TermRelation
+from datacloud_knowledge.db.connection import get_session
+from datacloud_knowledge.db.models import Term, TermRelation
+
 from .types import TermBrief
 
 if TYPE_CHECKING:

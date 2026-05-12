@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from sqlalchemy import text
 
-from datacloud_knowledge.db_url import (
+from datacloud_knowledge.db.url import (
     parse_env_database_url,
     resolve_knowledge_schema,
     validate_schema_name,

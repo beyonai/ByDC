@@ -91,7 +91,7 @@ class DimensionValueResolver:
         try:
             from sqlalchemy import text
 
-            from datacloud_knowledge.knowledge_search.db.connection import (
+            from datacloud_knowledge.db.connection import (
                 get_session,
             )
 
