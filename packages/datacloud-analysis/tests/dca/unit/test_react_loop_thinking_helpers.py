@@ -11,7 +11,7 @@ import sys
 import types
 from contextlib import contextmanager
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 # ── 被测目标（尚未实现，导入会失败 → 红）────────────────────────────────────
 from datacloud_analysis.orchestration.execution.react_loop import (
