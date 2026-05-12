@@ -130,6 +130,7 @@ class HookAwareToolNode(ToolNode):
                     "loader": self._loader,
                     "state": state_dict,
                     "gateway_context": _gw_ctx,
+                    "configurable": (config or {}).get("configurable") or {},
                 },
             }
 

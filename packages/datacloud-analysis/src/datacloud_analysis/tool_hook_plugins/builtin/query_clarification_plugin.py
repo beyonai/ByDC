@@ -47,6 +47,7 @@ except ImportError:  # pragma: no cover
 
 from datacloud_data_service.config import get_settings
 
+from datacloud_analysis.i18n.prompts import get_ui_text
 from datacloud_analysis.orchestration.gateway_user import get_gateway_user_id
 from datacloud_analysis.tool_hook_plugins.types import (
     ClarificationNeededError,
@@ -256,6 +257,7 @@ def _resolve_via_aliases(
     value_terms: list[str],
     scope_code: str,
     user_id: str | None = None,
+    language: str = "zh_CN",
 ) -> tuple[dict[str, str], list[str]]:
     """轻量级别名消歧（字段 + 值，单次 DB 往返）。
 
@@ -280,6 +282,7 @@ def _resolve_via_aliases(
             user_id=user_id,
             resolve_values=bool(value_terms),
             value_terms=value_terms,
+            language=language,
         )
         unresolved = list(result.unresolved) + list(result.ambiguous.keys())
         logger.warning(
@@ -463,6 +466,7 @@ def _analyze_clarification(
     structured_input: dict[str, Any],
     *,
     is_compute: bool,
+    language: str = "zh_CN",
 ) -> tuple[list[dict[str, Any]], str, bool]:
     """调用 SDK 澄清分析，返回 (paradigmList, knowledge, needs_clarification)。"""
     if not _HAS_SDK_CLARIFICATION or _sdk_analyze_clarification is None:
@@ -484,6 +488,7 @@ def _analyze_clarification(
         ontology_code=ontology_code,
         structured_input=structured_input,
         mode=mode,
+        language=language,
     )
 
     logger.info(
@@ -524,6 +529,7 @@ def _format_clarification(
     knowledge: str,
     *,
     is_compute: bool,
+    language: str = "zh_CN",
 ) -> dict[str, Any]:
     """调用 SDK 格式化，返回写回后的参数 dict。SDK 不可用时原样返回。"""
     if not _HAS_SDK_CLARIFICATION:
@@ -537,6 +543,7 @@ def _format_clarification(
         form=form_str,
         metadata=knowledge,
         persist_confirmed_synonyms=False,
+        language=language,
     )
     return result.structured_input
 
@@ -551,6 +558,7 @@ def _execute_resume(
     cached: dict[str, Any],
     graph_state: dict[str, Any] | None,
     resume_value: Any,
+    language: str = "zh_CN",
 ) -> HookDecision | None:
     """parse resume_value → format_clarification → 清除缓存 → 返回 HookDecision。
 
@@ -588,6 +596,7 @@ def _execute_resume(
         form_str,
         knowledge,
         is_compute=is_compute,
+        language=language,
     )
     logger.info(
         "[query_clarification] format_clarification args:"
@@ -645,6 +654,13 @@ async def _handle_resume(
     LangGraph resume 时 interrupt() 直接返回用户提交的值，不再暂停。
     """
     query: str = str((ctx.get("tool_params") or {}).get("query", "") or "")
+    _metadata_resume = ctx.get("metadata") or {}
+    _configurable_resume = _metadata_resume.get("configurable") or {}
+    language = str(_configurable_resume.get("locale") or "")
+    if not language:
+        _state_r = _metadata_resume.get("state") or {}
+        _po_r = _state_r.get("prompts_overwrite") or {}
+        language = str(_po_r.get("locale") or "zh_CN")
     paradigm_list: list[dict[str, Any]] = list(cached.get("paradigm_list") or [])
     clarify_knowledge: str = str(cached.get("clarify_knowledge") or "")
 
@@ -655,7 +671,7 @@ async def _handle_resume(
     logger.info("[query_clarification] RESUME resume_value type=%s value=%s", "pending", "...")
     resume_value = interrupt(
         {
-            "prompt": "查询条件存在歧义，请确认查询维度",
+            "prompt": get_ui_text("clarify_interrupt_prompt", language),
             "reason_code": "PARADIGM_CLARIFICATION",
             "ask_user_payload": {"paradigmList": paradigm_list, "query": query},
             "_clarify_knowledge": clarify_knowledge,
@@ -668,7 +684,7 @@ async def _handle_resume(
         if resume_value is not None
         else "None",
     )
-    return _execute_resume(ctx, tool_name, query, cached, graph_state, resume_value)
+    return _execute_resume(ctx, tool_name, query, cached, graph_state, resume_value, language=language)
 
 
 # ── 主 hook 入口 ──────────────────────────────────────────────────────────────
@@ -687,6 +703,16 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         redirect decision  — COMPLEX + 歧义消除后，路由到 data_query_*
     """
     tool_name: str = ctx.get("tool_name", "")
+
+    # 提取 language：
+    # 优先从 configurable.locale（推荐路径），fallback 到 state.prompts_overwrite.locale
+    _metadata = ctx.get("metadata") or {}
+    _configurable = _metadata.get("configurable") or {}
+    language = str(_configurable.get("locale") or "")
+    if not language:
+        _state = _metadata.get("state") or {}
+        _po = _state.get("prompts_overwrite") or {}
+        language = str(_po.get("locale") or "zh_CN")
 
     # 非 query_*/compute_* 工具直接跳过
     if not _is_query_or_compute_tool(tool_name):
@@ -860,7 +886,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
 
     # 轻量级别名消歧（字段 + 值，单次 DB 往返）
     resolved, unresolved = (
-        _resolve_via_aliases(field_terms, value_terms, scope_code, user_id=user_id)
+        _resolve_via_aliases(field_terms, value_terms, scope_code, user_id=user_id, language=language)
         if terms
         else ({}, [])
     )
@@ -891,6 +917,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             scope_code,
             structured_input,
             is_compute=is_compute,
+            language=language,
         )
         if _graph_state is not None:
             _graph_state["_clarification_cache"] = {
@@ -927,6 +954,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 metadata=clarify_knowledge,
                 user_id=user_id,
                 persist_confirmed_synonyms=True,
+                language=language,
             )
 
             tool_params = finalized.structured_input

@@ -326,6 +326,10 @@ _UI_TEXT: dict[str, dict[str, str]] = {
         "zh_CN": "(JSON 数据为空)",
         "en_US": "(JSON data is empty)",
     },
+    "clarify_interrupt_prompt": {
+        "zh_CN": "查询条件存在歧义，请确认查询维度",
+        "en_US": "The query has ambiguous terms — please clarify the selections below",
+    },
 }
 
 

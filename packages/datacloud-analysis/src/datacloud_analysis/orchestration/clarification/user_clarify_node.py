@@ -10,6 +10,7 @@ from datacloud_knowledge.provider import finalize_query_clarification
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
+from datacloud_analysis.i18n.prompts import get_ui_text
 from datacloud_analysis.orchestration.gateway_user import get_gateway_user_id
 from datacloud_analysis.orchestration.state import AgentState
 from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
@@ -77,6 +78,10 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
     clarify_knowledge = str(analyze_result.get("clarify_knowledge") or "")
     paradigm_list: list[dict[str, Any]] = list(analyze_result.get("paradigm_list") or [])
 
+    # 提取 language（从 configurable.locale，格式为 zh_CN / en_US）
+    _configurable_cl = config.get("configurable") or {}
+    language = str(_configurable_cl.get("locale") or "zh_CN")
+
     # DIAG: 记录 paradigm 结构（首个条目）以核查 choiceKeyword/recall 格式
     if paradigm_list:
         _sample = paradigm_list[0]
@@ -132,7 +137,7 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
     )
     resume_value: Any = interrupt(
         {
-            "prompt": "查询条件存在歧义，请确认查询维度",
+            "prompt": get_ui_text("clarify_interrupt_prompt", language),
             "reason_code": "PARADIGM_CLARIFICATION",
             "ask_user_payload": {"paradigmList": paradigm_list, "query": query},
             "_clarify_knowledge": clarify_knowledge,
@@ -171,6 +176,7 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
         metadata=clarify_knowledge,
         user_id=user_id,
         persist_confirmed_synonyms=True,
+        language=language,
     )
     formatted_params = finalized.structured_input
     if finalized.persisted_synonyms is not None:
