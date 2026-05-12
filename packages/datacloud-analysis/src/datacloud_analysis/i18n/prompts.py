@@ -233,3 +233,113 @@ def get_execution_prompt(locale: str | None = None) -> str:
         return _build_exec_en()
 
     return _build_exec_zh()
+
+
+# ── UI 运行时文本（推送给用户可见的进度/状态字符串）────────────────────────────
+
+_UI_TEXT: dict[str, dict[str, str]] = {
+    "thinking_done": {
+        "zh_CN": "久等了，我思考了 {elapsed:.0f} 秒，继续干活",
+        "en_US": "Took {elapsed:.0f}s to think, let's continue",
+    },
+    "tool_input": {
+        "zh_CN": "工具入参",
+        "en_US": "Tool input",
+    },
+    "tool_output": {
+        "zh_CN": "工具返回",
+        "en_US": "Tool output",
+    },
+    "tool_error": {
+        "zh_CN": "工具错误",
+        "en_US": "Tool error",
+    },
+    "received_message": {
+        "zh_CN": "已接收到用户消息，开始处理",
+        "en_US": "Message received, processing...",
+    },
+    "summarizing": {
+        "zh_CN": "正在整理结果...",
+        "en_US": "Summarizing results...",
+    },
+    "understanding": {
+        "zh_CN": "正在理解问题并补充上下文...\n\n",
+        "en_US": "Understanding your question...\n\n",
+    },
+    "planning": {
+        "zh_CN": "正在生成任务计划...\n\n",
+        "en_US": "Generating task plan...\n\n",
+    },
+    "executing": {
+        "zh_CN": "正在执行任务...\n\n",
+        "en_US": "Executing tasks...\n\n",
+    },
+    "processing": {
+        "zh_CN": "正在处理，请稍候...\n\n",
+        "en_US": "Processing, please wait...\n\n",
+    },
+    "phase_understanding": {
+        "zh_CN": "问题理解",
+        "en_US": "Understanding",
+    },
+    "phase_execution": {
+        "zh_CN": "任务执行",
+        "en_US": "Execution",
+    },
+    "phase_result": {
+        "zh_CN": "结果生成",
+        "en_US": "Result",
+    },
+    "phase_planning": {
+        "zh_CN": "任务生成",
+        "en_US": "Planning",
+    },
+    "err_query_data_empty": {
+        "zh_CN": "(query_data 为空)",
+        "en_US": "(query_data is empty)",
+    },
+    "err_csv_path_empty": {
+        "zh_CN": "(CSV 路径为空，无法输出)",
+        "en_US": "(CSV path is empty, cannot output)",
+    },
+    "err_csv_not_found": {
+        "zh_CN": "(CSV 文件不存在: {path})",
+        "en_US": "(CSV file not found: {path})",
+    },
+    "err_csv_read_failed": {
+        "zh_CN": "(读取 CSV 文件失败: {exc})",
+        "en_US": "(Failed to read CSV file: {exc})",
+    },
+    "err_json_path_empty": {
+        "zh_CN": "(JSON 文件路径为空)",
+        "en_US": "(JSON file path is empty)",
+    },
+    "err_file_not_found": {
+        "zh_CN": "(文件不存在: {path})",
+        "en_US": "(File not found: {path})",
+    },
+    "err_json_read_failed": {
+        "zh_CN": "(读取 JSON 文件失败: {exc})",
+        "en_US": "(Failed to read JSON file: {exc})",
+    },
+    "err_json_data_empty": {
+        "zh_CN": "(JSON 数据为空)",
+        "en_US": "(JSON data is empty)",
+    },
+}
+
+
+def get_ui_text(key: str, locale: str | None = None, **kwargs: object) -> str:
+    """Return a localized UI string by key, with optional format kwargs.
+
+    Falls back to zh_CN when the key or locale is not found.
+    """
+    resolved = locale or os.getenv("DATACLOUD_AGENT_LOCALE", _FALLBACK_LOCALE) or _FALLBACK_LOCALE
+    entry = _UI_TEXT.get(key, {})
+    template = entry.get(resolved) or entry.get(_FALLBACK_LOCALE) or key
+    if kwargs:
+        try:
+            return template.format(**kwargs)
+        except (KeyError, ValueError):
+            return template
+    return template

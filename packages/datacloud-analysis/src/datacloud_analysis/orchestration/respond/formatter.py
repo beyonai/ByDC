@@ -15,6 +15,7 @@ from typing import Any
 from datacloud_data_sdk.stream_text import coerce_stream_chunk_text
 from langchain_core.runnables import RunnableConfig
 
+from datacloud_analysis.i18n.prompts import get_ui_text
 from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
 
 logger = logging.getLogger(__name__)
@@ -160,6 +161,7 @@ async def format_result(
     answer_was_streamed = bool(react_final.get("answer_streamed", False))
     streamed_answer = str(react_final.get("answer") or "") if answer_was_streamed else ""
     output_fmt = _get_output_format()
+    locale = str(((config or {}).get("configurable") or {}).get("locale") or "zh_CN")
 
     # 每次 format_result 调用生成独立时间戳，同轮文本与数据用不同前缀区分前端气泡
     _ts = int(time.time() * 1000)
@@ -168,11 +170,12 @@ async def format_result(
 
     logger.info(
         "[format_result] result_type=%s has_query_data=%s answer_streamed=%s output_format=%s"
-        " text_msg_id=%s data_msg_id=%s",
+        " locale=%s text_msg_id=%s data_msg_id=%s",
         result_type,
         bool(react_final.get("query_data")),
         answer_was_streamed,
         output_fmt,
+        locale,
         _text_msg_id,
         _data_msg_id,
     )
@@ -187,14 +190,12 @@ async def format_result(
             return final_text
         if not query_data:
             if not answer:
-                final_text = "(query_data 为空)"
+                final_text = get_ui_text("err_query_data_empty", locale)
                 await _emit_text(final_text, message_id=_text_msg_id, config=config)
                 return final_text
             return str(answer)
 
         if output_fmt == "markdown":
-            # answer 已流式推送且自身包含 MD 表格时跳过，避免重复推送；
-            # 短摘要型 answer（无表格）仍需补充推送原始数据表格。
             answer_has_table = bool(_TABLE_SEP_RE.search(answer))
             if not (answer_was_streamed and answer_has_table):
                 formatted_answer = await _emit_query_result_as_markdown(
@@ -211,19 +212,19 @@ async def format_result(
     if result_type == "csv_file":
         csv_path = react_final.get("csv_file_path", "")
         if not csv_path:
-            final_text = "(CSV 路径为空，无法输出)"
+            final_text = get_ui_text("err_csv_path_empty", locale)
             await _emit_text(final_text, message_id=_text_msg_id, config=config)
             return final_text
 
         resolved = _resolve_result_path(csv_path, workspace_dir)
         if not resolved.exists():
-            final_text = f"(CSV 文件不存在: {csv_path})"
+            final_text = get_ui_text("err_csv_not_found", locale, path=csv_path)
             await _emit_text(final_text, message_id=_text_msg_id, config=config)
             return final_text
 
         if output_fmt == "markdown":
             formatted_answer = await _stream_csv_as_markdown(
-                gateway_context, resolved, message_id=_text_msg_id, config=config
+                gateway_context, resolved, message_id=_text_msg_id, config=config, locale=locale
             )
         else:
             formatted_answer = await _stream_csv_as_6001(
@@ -234,7 +235,7 @@ async def format_result(
     if result_type == "json":
         data = react_final.get("data")
         if data is None:
-            final_text = "(JSON 数据为空)"
+            final_text = get_ui_text("err_json_data_empty", locale)
             await _emit_text(final_text, message_id=_text_msg_id, config=config)
             return final_text
 
@@ -251,20 +252,20 @@ async def format_result(
     if result_type == "json_file":
         json_path = react_final.get("csv_file_path") or react_final.get("json_file_path") or ""
         if not json_path:
-            final_text = "(JSON 文件路径为空)"
+            final_text = get_ui_text("err_json_path_empty", locale)
             await _emit_text(final_text, message_id=_text_msg_id, config=config)
             return final_text
 
         resolved = _resolve_result_path(json_path, workspace_dir)
         if not resolved.exists():
-            final_text = f"(文件不存在: {json_path})"
+            final_text = get_ui_text("err_file_not_found", locale, path=json_path)
             await _emit_text(final_text, message_id=_text_msg_id, config=config)
             return final_text
 
         if resolved.suffix.lower() == ".csv":
             if output_fmt == "markdown":
                 formatted_answer = await _stream_csv_as_markdown(
-                    gateway_context, resolved, message_id=_text_msg_id, config=config
+                    gateway_context, resolved, message_id=_text_msg_id, config=config, locale=locale
                 )
             else:
                 formatted_answer = await _stream_csv_as_6001(
@@ -276,7 +277,7 @@ async def format_result(
             data = await asyncio.to_thread(_load_json_file, resolved)
         except Exception as exc:  # noqa: BLE001
             logger.error("format_result json_file read failed: %s", exc)
-            final_text = f"(读取 JSON 文件失败: {exc})"
+            final_text = get_ui_text("err_json_read_failed", locale, exc=exc)
             await _emit_text(final_text, message_id=_text_msg_id, config=config)
             return final_text
 
@@ -344,13 +345,18 @@ async def _emit_json_as_markdown(
 
 
 async def _stream_csv_as_markdown(
-    gateway_context: Any, csv_path: Path, *, message_id: str, config: RunnableConfig | None = None
+    gateway_context: Any,
+    csv_path: Path,
+    *,
+    message_id: str,
+    config: RunnableConfig | None = None,
+    locale: str = "zh_CN",
 ) -> str | None:
     try:
         rows = await asyncio.to_thread(_load_csv_rows, csv_path)
     except Exception as exc:  # noqa: BLE001
         logger.error("_stream_csv_as_markdown read failed: %s", exc)
-        final_text = f"(读取 CSV 文件失败: {exc})"
+        final_text = get_ui_text("err_csv_read_failed", locale, exc=exc)
         await _emit_text(final_text, message_id=message_id, config=config)
         return final_text
 

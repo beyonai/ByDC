@@ -206,7 +206,15 @@ async def _emit_thinking_done_notification(
         from langchain_core.callbacks import adispatch_custom_event  # noqa: PLC0415
 
         msg_id = f"thinking_done_{int(time.time() * 1000)}"
-        text = f"久等了，我思考了 {elapsed_secs:.0f} 秒，继续干活"
+        _locale = str(((config or {}).get("configurable") or {}).get("locale") or "zh_CN")
+        from datacloud_analysis.i18n.prompts import get_ui_text  # noqa: PLC0415
+
+        text = get_ui_text("thinking_done", _locale, elapsed=elapsed_secs)
+        logger.debug(
+            "[i18n-diag] thinking_done: configurable.locale=%r → text=%r",
+            _locale,
+            text,
+        )
         await adispatch_custom_event(
             "dc_stream_chunk",
             {

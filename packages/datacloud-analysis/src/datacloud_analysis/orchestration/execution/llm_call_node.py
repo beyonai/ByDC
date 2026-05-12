@@ -27,6 +27,7 @@ from datacloud_analysis.orchestration.execution.react_loop import (
     finish_react,
 )
 from datacloud_analysis.orchestration.state import AgentState
+from datacloud_analysis.i18n.prompts import get_system_prompt, get_execution_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -63,14 +64,26 @@ def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> st
         _user_code,
         _user_name,
     )
-    _now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
-    _runtime_lines = ["\n\n## 当前会话信息", f"- 当前时间：{_now_str}"]
-    if _user_name and _user_code:
-        _runtime_lines.append(f"- 当前用户：{_user_name}（工号：{_user_code}）")
-    elif _user_name:
-        _runtime_lines.append(f"- 当前用户：{_user_name}")
-    elif _user_code:
-        _runtime_lines.append(f"- 当前用户工号：{_user_code}")
+    _now_str: str
+    _locale = str((state.get("prompts_overwrite") or {}).get("locale") or "zh_CN")
+    if _locale == "en_US":
+        _now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        _runtime_lines = ["\n\n## Current session", f"- Current time: {_now_str}"]
+        if _user_name and _user_code:
+            _runtime_lines.append(f"- Current user: {_user_name} (ID: {_user_code})")
+        elif _user_name:
+            _runtime_lines.append(f"- Current user: {_user_name}")
+        elif _user_code:
+            _runtime_lines.append(f"- Current user ID: {_user_code}")
+    else:
+        _now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
+        _runtime_lines = ["\n\n## 当前会话信息", f"- 当前时间：{_now_str}"]
+        if _user_name and _user_code:
+            _runtime_lines.append(f"- 当前用户：{_user_name}（工号：{_user_code}）")
+        elif _user_name:
+            _runtime_lines.append(f"- 当前用户：{_user_name}")
+        elif _user_code:
+            _runtime_lines.append(f"- 当前用户工号：{_user_code}")
     parts.append("\n".join(_runtime_lines))
 
     result = "".join(parts) if parts else None
@@ -124,6 +137,23 @@ def make_llm_call_node(
             "gateway_context"
         ) or gateway_context
 
+        # 运行时按 state locale 动态选择 system prompt，覆盖 build-time 闭包值
+        _runtime_locale = str((state.get("prompts_overwrite") or {}).get("locale") or "zh_CN")
+        _overwrite = state.get("prompts_overwrite") or {}
+        _custom_system = str(_overwrite.get("system_prompt") or "").strip()
+        _custom_task = str(_overwrite.get("task_prompt") or "").strip()
+        _base_system = get_system_prompt(_runtime_locale)
+        _base_exec = get_execution_prompt(_runtime_locale)
+        _system_parts = [_custom_system if _custom_system else _base_system, _base_exec]
+        if _custom_task:
+            _system_parts.append(_custom_task)
+        _runtime_system_prompt = "\n\n".join(p for p in _system_parts if p)
+        logger.debug(
+            "[i18n-diag] llm_call_node: runtime_locale=%r system_prompt_prefix=%r",
+            _runtime_locale,
+            _runtime_system_prompt[:80],
+        )
+
         tools_map = {t.name: t for t in tools_list}
         tools_map["finish_react"] = finish_react
         _llm_config: dict[str, Any] | None = (config.get("configurable") or {}).get("llm_config")
@@ -147,8 +177,8 @@ def make_llm_call_node(
         # dynamic 注入第一条 HumanMessage，不影响 system + tools 的缓存命中。
         _provider = os.getenv("DATACLOUD_LLM_MODEL_PROVIDER", "openai").strip().lower()
         system_msg = _build_system_message(
-            system_prompt,
-            stable_system_prompt,
+            _runtime_system_prompt,
+            _runtime_system_prompt,
             _dynamic if _provider == "anthropic" else None,
         )
         conv = list(state.get("messages") or [])
@@ -166,6 +196,19 @@ def make_llm_call_node(
 
         thinking_id = uuid.uuid4().hex[:12]
         messages_window = _trim_messages_window(messages)
+        logger.debug(
+            "[i18n-diag] llm_call_node messages_window: count=%d "
+            "system_preview=%r "
+            "first_human_preview=%r "
+            "dynamic_preview=%r",
+            len(messages_window),
+            str(getattr(messages_window[0], "content", "") if messages_window else "")[:120],
+            str(next(
+                (getattr(m, "content", "") for m in messages_window if type(m).__name__ == "HumanMessage"),
+                ""
+            ))[:120],
+            (_dynamic or "")[:120],
+        )
         ai_msg, _did_stream = await _invoke_llm_with_fallback(
             llm_with_tools,
             fallback_with_tools,
@@ -180,6 +223,13 @@ def make_llm_call_node(
         calls = list(getattr(ai_msg, "tool_calls", None) or [])
         _usage = getattr(ai_msg, "usage_metadata", None) or {}
         _resp_meta = getattr(ai_msg, "response_metadata", None) or {}
+        # 诊断：打印 finish_react 的 answer 参数，确认 LLM 用哪种语言回答
+        for _tc in calls:
+            if _tc.get("name") == "finish_react":
+                logger.debug(
+                    "[i18n-diag] finish_react answer preview: %r",
+                    str(_tc.get("args", {}).get("answer") or "")[:200],
+                )
         logger.info(
             "[llm_call] round=%d tool_calls=%d streamed=%s usage=%s resp_meta_keys=%s",
             current_round,

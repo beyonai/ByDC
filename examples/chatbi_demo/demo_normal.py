@@ -26,6 +26,7 @@ async def main() -> None:
         base_url=os.environ["DEMO_BASE_URL"],
         resource_path=os.environ["DEMO_RESOURCE_PATH"],
         temperature=float(os.environ["DEMO_TEMPERATURE"]),
+        locale=os.environ.get("DEMO_LOCALE", "zh_CN"),
         model_kwargs={"extra_body": {"thinking": {"type": "disabled"}}},
         sql_execute_url=os.environ["DEMO_SQL_EXECUTE_URL"],
     )
@@ -53,6 +54,7 @@ async def main() -> None:
         question="查询前3条客户清单数据",
         object_codes=["by_customer"],
         thread_id=thread_id,
+        locale=os.environ.get("DEMO_LOCALE", "zh_CN"),
         # extras 透传请求级扩展字段（chatbi 关注的 cookie 在此传入，
         # 由 HttpSqlConnector._build_headers 写入下游 SQL 服务请求头）
         extras={"cookie": real_cookie},

@@ -512,6 +512,18 @@ async def dispatch_tool(
     tool_name = tool_call["name"]
     raw_params = dict(tool_call.get("args") or {})
     tool_call_id = str(tool_call.get("id") or "")
+    _locale = str(
+        (getattr(state, "get", lambda k, d=None: d)("prompts_overwrite") or {}).get("locale")
+        or "zh_CN"
+    )
+    from datacloud_analysis.i18n.prompts import get_ui_text as _get_ui_text  # noqa: PLC0415
+
+    logger.debug(
+        "[i18n-diag] dispatch_tool: tool=%r state.prompts_overwrite=%r → _locale=%r",
+        tool_name,
+        getattr(state, "get", lambda k, d=None: d)("prompts_overwrite"),
+        _locale,
+    )
 
     # --- 特殊工具：finish_react ---
     if tool_name == "finish_react":
@@ -546,7 +558,7 @@ async def dispatch_tool(
             if gateway_context is not None:
                 await _emit_tool_detail(
                     gateway_context,
-                    "工具返回",
+                    _get_ui_text("tool_output", _locale),
                     result,
                     parent_message_id=_delegate_resume_parent_message_id(gateway_context),
                 )
@@ -572,7 +584,7 @@ async def dispatch_tool(
                 # interrupt 首次挂起时不会走到这里；恢复后若拿到子 agent 结果，则补发工具返回。
                 await _emit_tool_detail(
                     gateway_context,
-                    "工具返回",
+                    _get_ui_text("tool_output", _locale),
                     result,
                 )
                 return tool_call_id, result
@@ -671,6 +683,10 @@ async def dispatch_tool(
                         _gc_session_id = str(getattr(gateway_context, "session_id", "") or "")
                         _result_file_storage = getattr(loader, "result_file_storage", None)
                         _extras = getattr(gateway_context, "extras", None)
+                        _locale = str(
+                            (getattr(state, "get", lambda k, d=None: d)("prompts_overwrite") or {}).get("locale")
+                            or "zh_CN"
+                        )
                         _inv_ctx_redirect: Any = InvocationContext(
                             user_id=_gc_user_id,
                             session_id=_gc_session_id,
@@ -678,6 +694,7 @@ async def dispatch_tool(
                             workspace_dir=str(workspace_root) if workspace_root is not None else "",
                             result_file_storage=_result_file_storage,
                             extras=_extras,
+                            language=_locale,
                         )
                         _inv_ctx_redirect.__enter__()
                         try:
@@ -738,6 +755,10 @@ async def dispatch_tool(
                 _gc_session_id = str(getattr(gateway_context, "session_id", "") or "")
                 _result_file_storage = getattr(loader, "result_file_storage", None)
                 _extras = getattr(gateway_context, "extras", None)
+                _locale = str(
+                    (getattr(state, "get", lambda k, d=None: d)("prompts_overwrite") or {}).get("locale")
+                    or "zh_CN"
+                )
                 _inv_ctx: Any = InvocationContext(
                     user_id=_gc_user_id,
                     session_id=_gc_session_id,
@@ -745,6 +766,7 @@ async def dispatch_tool(
                     workspace_dir=str(workspace_root) if workspace_root is not None else "",
                     result_file_storage=_result_file_storage,
                     extras=_extras,
+                    language=_locale,
                 )
                 _inv_ctx.__enter__()
                 try:
@@ -805,23 +827,23 @@ async def dispatch_tool(
                     try:
                         await _emit_tool_detail(
                             gateway_context,
-                            "工具入参",
+                            _get_ui_text("tool_input", _locale),
                             ctx.get("tool_params"),
                         )
                     except Exception as _emit_exc:
-                        logger.debug("emit 工具入参 failed: %s", _emit_exc)
+                        logger.debug("emit tool_input failed: %s", _emit_exc)
                 # 工具返回内容 / 错误摘要
                 if ctx.get("tool_error"):
                     err_msg = ctx["tool_error"].get("message", "")
                     await _emit_tool_detail(
                         gateway_context,
-                        "工具错误",
-                        f"错误：{err_msg}",
+                        _get_ui_text("tool_error", _locale),
+                        f"错误：{err_msg}" if _locale != "en_US" else f"Error: {err_msg}",
                     )
                 else:
                     await _emit_tool_detail(
                         gateway_context,
-                        "工具返回",
+                        _get_ui_text("tool_output", _locale),
                         ctx.get("tool_output"),
                     )
         except ToolHookError:

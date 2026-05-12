@@ -190,8 +190,8 @@ def _build_legacy_graph(
     builder = StateGraph(AgentState)
 
     # ── 构建 system prompt（stable 部分，供 Prompt Caching）──────────────────────
-    locale = os.getenv("DATACLOUD_AGENT_LOCALE", "zh_CN")
     overwrite = prompts_overwrite or {}
+    locale = str(overwrite.get("locale") or os.getenv("DATACLOUD_AGENT_LOCALE", "zh_CN"))
     custom_system = str(overwrite.get("system_prompt") or "").strip()
     custom_task = str(overwrite.get("task_prompt") or "").strip()
     base_system = get_system_prompt(locale)
@@ -419,8 +419,8 @@ def _build_prebuilt_graph(
     builder: StateGraph[AgentState] = StateGraph(AgentState)
 
     # ── system prompt ────────────────────────────────────────────────────────────
-    locale = os.getenv("DATACLOUD_AGENT_LOCALE", "zh_CN")
     overwrite = prompts_overwrite or {}
+    locale = str(overwrite.get("locale") or os.getenv("DATACLOUD_AGENT_LOCALE", "zh_CN"))
     custom_system = str(overwrite.get("system_prompt") or "").strip()
     custom_task = str(overwrite.get("task_prompt") or "").strip()
     base_system = get_system_prompt(locale)

@@ -255,7 +255,16 @@ async def execution_node(
     redirect_tools: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Execute ReAct loop with tool dispatch and hook support."""
-    locale = os.getenv("DATACLOUD_AGENT_LOCALE", "zh_CN")
+    _overwrite_for_locale = state.get("prompts_overwrite") or {}
+    locale = str(
+        _overwrite_for_locale.get("locale")
+        or os.getenv("DATACLOUD_AGENT_LOCALE", "zh_CN")
+    )
+    logger.debug(
+        "[i18n-diag] execution_node: state.prompts_overwrite=%r → locale=%r",
+        _overwrite_for_locale,
+        locale,
+    )
 
     # 基础 prompt：系统角色 + 执行规则
     base_system = get_system_prompt(locale)
@@ -293,15 +302,24 @@ async def execution_node(
         _header_meta = {}
     _user_code = str(_header_meta.get("user_code") or "").strip()
     _user_name = str(_header_meta.get("user_name") or "").strip()
-    _now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
+    _now_str = datetime.now().strftime("%Y-%m-%d %H:%M") if locale == "en_US" else datetime.now().strftime("%Y年%m月%d日 %H:%M")
 
-    _runtime_lines = ["\n\n## 当前会话信息", f"- 当前时间：{_now_str}"]
-    if _user_name and _user_code:
-        _runtime_lines.append(f"- 当前用户：{_user_name}（工号：{_user_code}）")
-    elif _user_name:
-        _runtime_lines.append(f"- 当前用户：{_user_name}")
-    elif _user_code:
-        _runtime_lines.append(f"- 当前用户工号：{_user_code}")
+    if locale == "en_US":
+        _runtime_lines = ["\n\n## Current session", f"- Current time: {_now_str}"]
+        if _user_name and _user_code:
+            _runtime_lines.append(f"- Current user: {_user_name} (ID: {_user_code})")
+        elif _user_name:
+            _runtime_lines.append(f"- Current user: {_user_name}")
+        elif _user_code:
+            _runtime_lines.append(f"- Current user ID: {_user_code}")
+    else:
+        _runtime_lines = ["\n\n## 当前会话信息", f"- 当前时间：{_now_str}"]
+        if _user_name and _user_code:
+            _runtime_lines.append(f"- 当前用户：{_user_name}（工号：{_user_code}）")
+        elif _user_name:
+            _runtime_lines.append(f"- 当前用户：{_user_name}")
+        elif _user_code:
+            _runtime_lines.append(f"- 当前用户工号：{_user_code}")
     dynamic_parts.append("\n".join(_runtime_lines))
 
     # 拼接完整 system_prompt（用于不支持 cache_control 的回退路径）
