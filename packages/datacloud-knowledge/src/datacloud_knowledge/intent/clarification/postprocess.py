@@ -217,8 +217,17 @@ def _normalize_sort_key(item: dict[str, Any]) -> dict[str, Any]:
     return new_item
 
 
-def _ensure_dim_group_op(dim: dict[str, Any]) -> dict[str, Any]:
-    return dim if "group_op" in dim else {**dim, "group_op": "self"}
+def _normalize_dim_group_op(dim: dict[str, Any]) -> dict[str, Any]:
+    """Normalize LLM grouping aliases to the executor protocol without defaults."""
+    new_dim = dict(dim)
+    if "group_op" not in new_dim:
+        for alias_key in ("granularity", "level"):
+            if alias_key in new_dim:
+                new_dim["group_op"] = new_dim[alias_key]
+                break
+    new_dim.pop("granularity", None)
+    new_dim.pop("level", None)
+    return new_dim
 
 
 def apply_resolved_to_params(
@@ -250,7 +259,7 @@ def apply_resolved_to_params(
     ]
     if "dimensions" in tool_params:
         patched["dimensions"] = [
-            _ensure_dim_group_op(_translate_field(item))
+            _normalize_dim_group_op(_translate_field(item))
             if isinstance(item, dict)
             else item
             if _is_field_code(str(item))

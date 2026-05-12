@@ -433,7 +433,8 @@ class OntologyAgent:
                     "temperature": self._config.temperature,
                     "model_kwargs": self._config.model_kwargs,
                 },
-            }
+            },
+            "recursion_limit": 100,
         }
 
         if resume_input is None:

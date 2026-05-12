@@ -253,10 +253,15 @@ def _build_legacy_graph(
             return "finish_react"
 
         # Per-tool Send 路由（各工具并行执行）
+        # 这里必须把“当前 tool_call”连同 state 一起传下去：如果只传 state，
+        # make_tool_node 会退回按工具名找第一条同名 call，同一轮多个同名工具时会把
+        # 第二个 call 吃成第一个，最终写出错误的 tool_call_id，触发前面的配对问题。
         # Send(node, arg) 中 arg 是目标节点的完整 input state，必须传当前 state 而非 {}
         if _tool_node_names:
             sends = [
-                Send(tc["name"], state) for tc in non_finish if tc.get("name") in _tool_node_names
+                Send(tc["name"], _state_for_tool_call(state, tc))
+                for tc in non_finish
+                if tc.get("name") in _tool_node_names
             ]
             if sends:
                 return sends  # type: ignore[return-value]
@@ -308,13 +313,17 @@ def _build_legacy_graph(
             loader=loader,
             redirect_tools_map=redirect_tools_map,
         )
-        builder.add_node(
-            _tool_fn.name,
+        _per_tool_wrapper_fn = cast(
+            Any,
             _make_per_tool_wrapper(
                 _per_tool_node_fn,
                 _tool_fn.name,
                 lambda r, n: _as_state_update(r, node_name=n),
             ),
+        )
+        builder.add_node(
+            _tool_fn.name,
+            _per_tool_wrapper_fn,
         )
         builder.add_conditional_edges(
             _tool_fn.name,
@@ -368,6 +377,17 @@ def _build_legacy_graph(
     )
 
     return builder
+
+
+def _state_for_tool_call(state: AgentState, tool_call: dict[str, Any]) -> AgentState:
+    """复制图状态，并为 per-tool Send 节点附上当前的具体 tool_call。
+
+    这样每个并行工具节点都能拿到自己对应的 call，避免仅靠 tool_name 回退时
+    把多个同名工具错误配对成同一个 tool_call_id。
+    """
+    next_state = dict(state)
+    next_state["react_current_tool_call"] = dict(tool_call)
+    return next_state  # type: ignore[return-value]
 
 
 # ── V0.4 prebuilt 图构建（feature flag 新路径）────────────────────────────────

@@ -90,6 +90,7 @@ class ParsedField:
     field_code: str
     field_name: str
     field_type: str = "STRING"
+    data_format: str | None = None
     description: str = ""
     source_column: str | None = None
     is_primary_key: bool = False
@@ -370,6 +371,7 @@ class OwlParser:
 
         property_name = self._get_predicate_value(g, subject, "property_name") or property_code
         data_type = self._get_predicate_value(g, subject, "data_type") or "STRING"
+        data_format = self._get_predicate_value(g, subject, "data_format")
         source_column = self._get_predicate_value(g, subject, "source_column")
         is_required = self._get_predicate_value(g, subject, "is_required")
         term_type_code_path = self._get_predicate_value(g, subject, "term_type_code_path")
@@ -383,6 +385,7 @@ class OwlParser:
             field_code=property_code,
             field_name=property_name,
             field_type=data_type,
+            data_format=data_format if data_format else None,
             source_column=source_column,
             required=is_required.lower() == "true" if is_required else False,
             term_type_code_path=term_type_code_path if term_type_code_path else None,
@@ -825,6 +828,7 @@ class OwlParser:
                     "field_code": fld.field_code,
                     "field_name": fld.field_name,
                     "field_type": fld.field_type,
+                    "data_format": fld.data_format,
                     "source_column": fld.source_column,
                     "is_primary_key": fld.is_primary_key,
                     "required": fld.required,

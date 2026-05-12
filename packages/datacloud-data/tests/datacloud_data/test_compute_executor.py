@@ -22,10 +22,14 @@
 from __future__ import annotations
 
 import json
+import logging
+from types import SimpleNamespace
 
 import pytest
 from datacloud_data_sdk.executor.compute_executor import ComputeExecutor
+from datacloud_data_sdk.executor.param_coercion import coerce_sql_param
 from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.ontology.models import OntologyField
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 from datacloud_data_sdk.virtual_action.validator import VirtualActionValidationError
 
@@ -387,6 +391,94 @@ async def test_metrics_func_alias_normalized_like_agg(executor_with_data: Comput
     assert records[1]["total_revenue"] == pytest.approx(3_000_000)
 
 
+async def test_order_by_metric_field_maps_to_aggregate_expr(
+    executor_with_data: ComputeExecutor,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """聚合查询中原始指标字段用于排序时，应映射到聚合表达式而非裸列。"""
+
+    caplog.set_level(logging.WARNING, logger="datacloud_data_sdk.sql_executor.data_source_manager")
+    executor = executor_with_data
+    await executor.execute(
+        "enterprise_base",
+        {
+            "dimensions": [{"field": "region_name", "group_op": "self"}],
+            "metrics": [{"field": "revenue", "agg": "sum", "as": "total_revenue"}],
+            "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
+            "order_by": [{"field": "revenue", "direction": "desc"}],
+        },
+    )
+
+    sql_logs = [record.message for record in caplog.records if "SQL:" in record.message]
+    assert any('ORDER BY SUM("revenue") DESC' in msg for msg in sql_logs)
+    assert all('ORDER BY "revenue" DESC' not in msg for msg in sql_logs)
+
+
+async def test_order_by_metric_field_ambiguity_raises(executor_with_data: ComputeExecutor) -> None:
+    """同一 raw 指标字段对应多个聚合表达式时，应在执行前报业务异常。"""
+
+    with pytest.raises(VirtualActionValidationError, match="对应多个指标表达式"):
+        await executor_with_data.execute(
+            "enterprise_base",
+            {
+                "dimensions": [{"field": "region_name", "group_op": "self"}],
+                "metrics": [
+                    {"field": "revenue", "agg": "sum", "as": "total_revenue"},
+                    {"field": "revenue", "agg": "max", "as": "max_revenue"},
+                ],
+                "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
+                "order_by": [{"field": "revenue", "direction": "desc"}],
+            },
+        )
+
+
+async def test_order_by_raw_metric_field_maps_to_aggregate_expr(
+    executor_with_data: ComputeExecutor,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """聚合查询的 order_by 允许原始指标 field_code，在唯一映射时转为聚合表达式。"""
+
+    executor = executor_with_data
+    caplog.set_level(logging.WARNING, logger="datacloud_data_sdk.sql_executor.data_source_manager")
+
+    result = await executor.execute(
+        "enterprise_base",
+        {
+            "dimensions": [{"field": "region_name", "group_op": "self"}],
+            "metrics": [{"field": "revenue", "agg": "sum", "as": "total_revenue"}],
+            "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
+            "order_by": [{"field": "revenue", "direction": "desc"}],
+        },
+    )
+
+    sql_logs = [record.message for record in caplog.records if "SQL:" in record.message]
+    assert any('ORDER BY SUM("revenue") DESC' in msg for msg in sql_logs)
+    assert all('ORDER BY "revenue" DESC' not in msg for msg in sql_logs)
+    assert result["records"][0]["region_name"] == "亦庄"
+
+
+async def test_order_by_raw_metric_field_ambiguity_raises(
+    executor_with_data: ComputeExecutor,
+) -> None:
+    """当同一原始指标字段对应多个聚合表达式时，必须要求 LLM 使用别名消歧。"""
+
+    with pytest.raises(VirtualActionValidationError, match="多个指标表达式") as exc_info:
+        await executor_with_data.execute(
+            "enterprise_base",
+            {
+                "dimensions": [{"field": "region_name", "group_op": "self"}],
+                "metrics": [
+                    {"field": "revenue", "agg": "sum", "as": "total_revenue"},
+                    {"field": "revenue", "agg": "max", "as": "max_revenue"},
+                ],
+                "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
+                "order_by": [{"field": "revenue", "direction": "desc"}],
+            },
+        )
+
+    assert exc_info.value.error_code == "VIRTUAL_ACTION_ERR_UNSUPPORTED_FIELD"
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 用例5：metrics 为空报错
 # ─────────────────────────────────────────────────────────────────────────────
@@ -623,3 +715,104 @@ async def test_metric_field_in_dimensions_rejected(
         )
     assert exc_info.value.error_code == "VIRTUAL_ACTION_ERR_UNSUPPORTED_OP"
     assert metric_field_code in str(exc_info.value)
+
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 时间字段格式化回归
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_coerce_sql_param_keeps_string_dates_and_parses_native_dates() -> None:
+    """STRING 时间串保持原样，DATE/DATETIME 按格式解析。"""
+    day_field = OntologyField(
+        field_code="day",
+        field_name="日期",
+        field_type="STRING",
+        data_format="yyyyMMdd",
+        analytic_kind="datetime",
+    )
+    date_field = OntologyField(
+        field_code="create_date",
+        field_name="创建日期",
+        field_type="DATE",
+        data_format="yyyy-MM-dd",
+        analytic_kind="datetime",
+    )
+    datetime_field = OntologyField(
+        field_code="create_time",
+        field_name="创建时间",
+        field_type="DATETIME",
+        data_format="yyyy-MM-dd HH:mm:ss",
+        analytic_kind="datetime",
+    )
+
+    assert coerce_sql_param("20260131", day_field) == "20260131"
+    assert coerce_sql_param("2026-01-31", date_field).isoformat() == "2026-01-31"
+    assert coerce_sql_param("2026-01-31 08:09:10", datetime_field).isoformat() == "2026-01-31T08:09:10"
+
+
+@pytest.mark.asyncio
+async def test_string_date_grouping_uses_data_format() -> None:
+    """STRING + yyyyMMdd 的 day 字段按月分组时应生成字符串分组 SQL。"""
+    ontology = {
+        "objects": [
+            {
+                "object_code": "string_day_object",
+                "object_name": "字符串日期对象",
+                "source_type": "DB",
+                "source_config": {
+                    "alias": "test_db",
+                    "db_type": "SQLITE",
+                    "jdbc_url": "jdbc:sqlite::memory:",
+                },
+                "table_name": "day_tbl",
+                "fields": [
+                    {
+                        "field_code": "day",
+                        "field_name": "日期",
+                        "field_type": "STRING",
+                        "data_format": "yyyyMMdd",
+                        "source_column": "day",
+                        "property_kind": "physical",
+                        "ext_property": json.dumps({
+                            "property_role_rule": {"property_role": "DIMENSION", "rule_type": "datetime"}
+                        }),
+                    },
+                    {
+                        "field_code": "revenue",
+                        "field_name": "收入",
+                        "field_type": "NUMBER",
+                        "source_column": "revenue",
+                        "property_kind": "physical",
+                        "ext_property": json.dumps({
+                            "property_role_rule": {"property_role": "MEASURE", "rule_type": "basic_metric"}
+                        }),
+                    },
+                ],
+            }
+        ]
+    }
+    loader = OntologyLoader()
+    loader.load_from_content(ontology)
+    ds = DataSourceManager(loader._config.datasource_configs)
+    conn = ds.get_connector("test_db")
+    await conn.execute(
+        "CREATE TABLE day_tbl (day TEXT, revenue REAL)"
+    )
+    await conn.execute(
+        "INSERT INTO day_tbl VALUES ('20260101', 10.0), ('20260102', 20.0), ('20260201', 30.0)"
+    )
+    executor = ComputeExecutor(loader, ds_manager=ds)
+    result = await executor.execute(
+        "string_day_object",
+        {
+            "dimensions": [{"field": "day", "group_op": "month"}],
+            "metrics": [{"field": "revenue", "agg": "sum", "as": "total_revenue"}],
+            "filters": [{"field": "day", "op": "between", "value": ["20260101", "20260228"]}],
+            "order_by": [{"field": "day_month", "direction": "asc"}],
+        },
+    )
+    assert result["records"][0]["day_month"] == "2026-01"
+    assert result["records"][0]["total_revenue"] == pytest.approx(30.0)

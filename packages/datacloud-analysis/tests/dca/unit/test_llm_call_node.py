@@ -196,7 +196,7 @@ async def test_tc1_4_resumes_from_state_messages_without_reinit() -> None:
 
 
 async def test_tc1_4b_drops_unpaired_finish_react_before_llm_call() -> None:
-    """TC-1-4b: 下一轮调用前清理未配对 finish_react，避免 LLM API 拒绝孤儿 tool_call。"""
+    """TC-1-4b: 下一轮调用前删除未配对 finish_react，避免 LLM API 拒绝孤儿 tool_call。"""
     stale_ai = AIMessage(
         content="分析完成",
         tool_calls=[_FINISH_CALL],
@@ -239,9 +239,15 @@ async def test_tc1_4b_drops_unpaired_finish_react_before_llm_call() -> None:
         if len(call_args.args) >= 3
         else call_args.kwargs.get("messages_window", [])
     )
-    sanitized_ai = next(m for m in messages_window if isinstance(m, AIMessage))
-    assert sanitized_ai.tool_calls == []
-    assert "tool_calls" not in sanitized_ai.additional_kwargs
+    # 恢复态允许临时存在“不成对”的历史消息，但真正送入 LLM 前必须被清洗掉。
+    # 当前实现会删除孤儿 AIMessage 以及它后面的尾部上下文，避免把非法半截序列喂给 LLM。
+    assert not any(isinstance(m, AIMessage) and (m.tool_calls or []) for m in messages_window)
+    # 动态 prompt 会拼到首条 HumanMessage 前缀里，所以这里只校验保留下来的人类消息仍以原始问题结尾。
+    assert [
+        str(m.content).endswith("上一轮查询")
+        for m in messages_window
+        if isinstance(m, HumanMessage)
+    ] == [True]
 
 
 # ── TC-1-7: react_round_idx 自增 ───────────────────────────────────────────────

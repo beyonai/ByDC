@@ -830,6 +830,10 @@ def _trim_messages_window(messages: list) -> list:
     只裁剪送给 LLM 的副本，原始 messages 列表不受影响。
     裁剪后确保 tail 不以孤儿 ToolMessage 开头（其对应 AIMessage 已被截断），
     避免 LLM API 返回 400 tool_call_id not found 错误。
+
+    说明：中断恢复阶段允许 state 里暂时保留不成对的消息历史，但真正发送给 LLM
+    之前必须再次清洗成合法序列。这里的处理只针对“送入 LLM 的窗口副本”，不会
+    回写或破坏原始恢复态，目的是把非法半截消息拦在模型调用前。
     """
     head: list[Any] = []
     tail: list[Any] = []
@@ -865,8 +869,11 @@ def _trim_messages_window(messages: list) -> list:
         )
     result = head + tail
     # 检查消息历史中是否存在孤立的 AIMessage（有 tool_calls 但后面紧跟另一个 AIMessage 而非 ToolMessage）。
-    # checkpoint blob 丢失时会出现此情况，发给 LLM 会返回 400 (2013)。
-    # 修复：删除孤立的 AIMessage 及其后直到下一个 AIMessage 之间的所有 ToolMessage。
+    # checkpoint blob 丢失或中断恢复失败时会出现此情况，恢复态可以暂时不完整，
+    # 但发给 LLM 之前必须清成合法序列，否则会返回 400 (2013)。
+    # 修复策略：删除孤立的 AIMessage 及其后直到下一个 AIMessage 之间的所有 ToolMessage，
+    # 只影响本次送入 LLM 的副本，不回写原始 state。这样能把“恢复态可不成对”与
+    # “真正给 LLM 前必须成对”这两个边界分开，避免前面的工具 call 配对错继续传到模型侧。
     cleaned: list[Any] = []
     i = 0
     while i < len(result):

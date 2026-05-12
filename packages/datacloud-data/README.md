@@ -1,60 +1,36 @@
 # datacloud-data
 
-[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](https://www.apache.org/licenses/LICENSE-2.0)
-[![Code style](https://img.shields.io/badge/code%20style-ruff-black.svg)](https://docs.astral.sh/ruff/)
+## 简介
 
-`datacloud-data` 是 DataCloud 的数据服务与 SDK 包。它负责加载本体资源、生成查询计划，
-执行跨数据源动作，并通过 Python SDK、REST API、MCP Tools 和 GraphQL 暴露统一的数据访问能力。
+datacloud-data 是dataCloud平台的数据虚拟化模块，负责把本体语义语言转化为物理检索或物理操作的数据库语言，并返回执行结果。
 
-## 功能特性
 
-- 支持从 JSON、YAML、OWL 资源加载对象、关系、动作和视图定义。
-- 配置 LLM 后可通过 `LangGraphPlanGenerator` 生成自然语言查询计划。
-- 支持 SQL、API、知识库和虚拟动作等执行方式。
-- 提供 FastAPI 服务，包含 `/api/v1/query`、`/api/v1/mcp`、`/api/v1/skills`、
-  `/api/v1/health`，以及可选 `/graphql` 路由。
-- 支持参数归一、逻辑参数到物理请求体映射、响应字段抽取、术语值转换和结果溢出导出。
 
-## 价值与特点
+## 定位
 
-- 以本体为中心统一对象、字段、动作和数据源配置，降低业务代码对底层表结构和接口细节的依赖。
-- 同一套能力可同时服务 SDK 调用、HTTP 服务、MCP 工具和 GraphQL 查询，减少重复适配成本。
-- 将自然语言查询、结构化动作调用和跨源执行收敛到统一结果格式，便于上层 Agent 和应用集成。
-- 内置参数映射、术语转换和结果溢出处理，适合面向真实业务数据的生产级数据访问场景。
+面向本体语言提供跨数据源、跨数据服务、跨数据结构的数据虚拟化服务。
 
-## 愿景
+- **跨数据源**：允许把两个不同数据源的数据表虚拟成一个本体对象或本体数据。
 
-`datacloud-data` 的目标是提供一层稳定的语义数据访问层。上层应用和 Agent 只面向“对象、字段、
-动作、视图”表达业务问题，而不用关心数据实际来自数据库、HTTP API、知识库还是本地脚本。
+- **跨数据服务**：允许把两个不同数据服务（一个DB数据库表，一个是API）虚拟成一个本体对象或本体视图。
+- **跨数据结构**：允许把两个不同数据结构（一个DB数据库表，一个是文档）虚拟成一个本体对象或本体数据。
 
-在这个目标下，统一查询不仅是把 SQL 包一层接口，而是把自然语言查询、结构化参数调用、跨数据源
-关联、结果格式化和权限/追踪能力放到同一条执行链路中。
 
-## 设计与实现
 
-- **本体驱动**：对象、字段、关系、动作、视图和数据源都由本体描述，SDK 在加载阶段构建统一的运行时模型。
-- **统一执行入口**：对象查询、视图查询、动作调用、MCP Tools、REST API 和 GraphQL 最终复用同一套
-  loader、executor 和 result formatter。
+## 设计思想
+
+- **本体驱动**：对象、字段、关系、动作、视图和数据源都由本体描述，SDK 在加载阶段构建统一的运行时模型，业务代码不感知底层表结构和接口细节。
+- **统一执行入口**：对象查询、视图查询、动作调用、MCP Tools、REST API 和 GraphQL 最终复用同一套 loader、executor 和 result formatter。
 - **同源下沉查询**：当多个对象来自同一数据源时，优先把过滤、排序、聚合、分组和 JOIN 下推到对应数据库执行。
-- **跨源联邦执行**：当查询跨数据库或跨 DB / API 时，执行器会拆分为多阶段任务，先分别查询各数据源，
-  再通过本地联邦引擎完成关联和聚合。
-- **API 与 DB 统一查询**：API 动作通过参数映射和响应抽取转换为统一 `records`，可与 DB 查询结果进入同一结果处理链路。
+- **跨源联邦执行**：当查询跨数据库或跨 DB / API 时，执行器拆分为多阶段任务，先分别查询各数据源，再通过本地联邦引擎完成关联和聚合。
 - **安全的计划边界**：计划校验会阻止在单个 SQL step 中直接跨源 JOIN，跨源场景交给联邦执行或分阶段执行处理。
+- **参数与结果转换**：入参做基础类型归一，动作调用支持逻辑参数到物理请求体的映射，查询结果做术语值转换，并在需要时自动导出 CSV。
 
-## 参数与结果转换
+---
 
-- 入参会做基础类型归一，常见字符串值可自动转成数值、布尔值和日期类型。
-- 动作调用支持逻辑参数到物理请求体的映射，API 返回也会按映射规则抽取为统一结果。
-- 查询结果会做术语值转换，并在需要时自动导出 CSV 预览文件。
+## 快速开始
 
-## 环境要求
-
-- Python `>=3.12`
-- 本地开发推荐使用 `uv`
-- 按需安装数据库、服务和知识库相关扩展依赖
-
-## 安装
+### 安装
 
 在仓库根目录安装：
 
@@ -63,19 +39,10 @@ uv sync
 uv pip install -e "packages/datacloud-data[all]"
 ```
 
-在子包目录安装：
-
-```bash
-cd packages/datacloud-data
-uv venv .venv --python 3.12
-source .venv/bin/activate
-uv pip install -e ".[all]"
-```
-
 可选依赖：
 
 | Extra | 说明 |
-| --- | --- |
+|-------|------|
 | `langchain` | LangGraph 与 LangChain OpenAI 查询规划能力 |
 | `sql` | SQLAlchemy 与关系型数据库连接器 |
 | `clickhouse` | ClickHouse 异步连接器 |
@@ -84,16 +51,12 @@ uv pip install -e ".[all]"
 | `all` | SDK 与服务常用运行时依赖 |
 | `dev` | 测试、Lint 与类型检查依赖 |
 
-## 快速开始
-
-使用包内 OWL 示例资源启动本地服务：
+### 启动本地服务
 
 ```bash
 DATACLOUD_ONTOLOGY_PATH=packages/datacloud-data/resources \
 uv run uvicorn datacloud_data_service.api.routes:create_app \
-  --factory \
-  --host 0.0.0.0 \
-  --port 8080
+  --factory --host 0.0.0.0 --port 8080
 ```
 
 验证服务状态：
@@ -103,99 +66,24 @@ curl http://localhost:8080/api/v1/health
 curl http://localhost:8080/api/v1/loader/status
 ```
 
-运行 SDK 示例：
-
-```bash
-cd packages/datacloud-data
-PYTHONPATH=src uv run python examples/all_interfaces_example.py
-```
-
-## 配置
-
-在 `packages/datacloud-data` 目录下复制环境变量模板：
-
-```bash
-cp .env.example .env
-```
-
-服务会读取 `packages/datacloud-data/.env` 和
-`packages/datacloud-data/src/datacloud_data_service/.env`。相对路径会按仓库根目录解析。
-
-| 环境变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `DATACLOUD_ONTOLOGY_PATH` | `resources/ontology/crm_demo/objects_registry.json` | JSON、YAML、OWL 文件或资源目录。包内 OWL 示例可使用 `packages/datacloud-data/resources`。 |
-| `DATACLOUD_LLM_API_KEY` | 空 | 配置后启用 LLM 查询计划生成；为空时自然语言规划不可用。 |
-| `DATACLOUD_LLM_API_BASE` | 空 | LLM API 地址。 |
-| `DATACLOUD_LLM_MODEL` | `gpt-4o` | LLM 模型名称。 |
-| `DATACLOUD_LLM_TEMPERATURE` | `0.0` | LLM 温度参数。 |
-| `DATACLOUD_CSV_BASE_DIR` | `./tmp` | 中间 CSV 输出目录。 |
-| `DATACLOUD_RESULT_FILE_STORAGE_TYPE` | `local` | 结果文件存储后端。 |
-| `DATACLOUD_RESULT_FILE_BASE_DIR` | `./tmp` | 本地结果文件目录。 |
-| `DATACLOUD_QUERY_RESULT_CSV_THRESHOLD` | `5` | 查询结果超过该行数时写入 CSV。 |
-| `DATACLOUD_SQL_EXECUTION_MODE` | `internal` | SQL 执行模式。 |
-| `DATACLOUD_TRACE_ENABLED` | `false` | 是否启用查询链路日志。 |
-| `DATACLOUD_TRACE_LOG_PATH` | `logs/query_trace.log` | 查询链路日志路径。 |
-| `DATACLOUD_LOADER_MODE` | `watch` | Loader 刷新模式：`watch`、`lazy`、`static`。 |
-| `DATACLOUD_CORS_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | CORS 允许来源，多个值用逗号分隔。 |
-| `DATACLOUD_VIRTUAL_ACTION_QUERY_PREFIX` | `query_` | 生成查询动作的名称前缀。 |
-| `DATACLOUD_VIRTUAL_ACTION_COMPUTE_PREFIX` | `compute_` | 生成计算动作的名称前缀。 |
-
-数据源通常从本体对象的 `source_config` 中加载，也可以参考
-`config/datasources.yaml.example` 使用 YAML 配置。
-
-## Python SDK
-
-不依赖外部 LLM 的最小示例：
+### SDK 最小示例（无 LLM）
 
 ```python
-from __future__ import annotations
-
 import asyncio
-
 from datacloud_data_sdk import InvocationContext, OntologyLoader
 from datacloud_data_sdk.plan.query_plan_generator import MockPlanGenerator
 from datacloud_data_sdk.sql_executor.models import DataSourceConfig
 
-REGISTRY = {
-    "functions": [],
-    "objects": [
-        {
-            "object_code": "sales_bo",
-            "object_name": "销售商机",
-            "description": "商机对象",
-            "source_type": "DB",
-            "source_config": {
-                "alias": "test_db",
-                "db_type": "SQLITE",
-                "jdbc_url": "jdbc:sqlite::memory:",
-            },
-            "datasource_alias": "test_db",
-            "table_name": "sales_bo",
-            "fields": [
-                {"field_code": "bo_id", "field_name": "商机ID", "field_type": "STRING"},
-                {"field_code": "bo_name", "field_name": "商机名称", "field_type": "STRING"},
-            ],
-            "actions": [],
-        }
-    ],
-    "relations": [],
-}
-
 PLAN = {
     "can_answer": True,
-    "steps": [
-        {
-            "step_id": "s1",
-            "type": "SQL",
-            "source_id": "SRC_TEST_DB",
-            "datasource_alias": "test_db",
-            "sql_template": "SELECT '1' AS bo_id, '项目A' AS bo_name",
-            "output_ref": "bo_list",
-        }
-    ],
+    "steps": [{
+        "step_id": "s1", "type": "SQL",
+        "datasource_alias": "test_db",
+        "sql_template": "SELECT '1' AS bo_id, '项目A' AS bo_name",
+        "output_ref": "bo_list",
+    }],
     "aggregation": {
-        "strategy": "DIRECT",
-        "final_step_id": "s1",
+        "strategy": "DIRECT", "final_step_id": "s1",
         "columns": [
             {"name": "bo_id", "label": "商机ID", "type": "string"},
             {"name": "bo_name", "label": "商机名称", "type": "string"},
@@ -203,297 +91,218 @@ PLAN = {
     },
 }
 
-
 async def main() -> None:
     loader = OntologyLoader()
-    loader.load_from_content(REGISTRY)
+    loader.load_from_content({
+        "objects": [{
+            "object_code": "sales_bo", "object_name": "销售商机",
+            "source_type": "DB", "datasource_alias": "test_db",
+            "table_name": "sales_bo",
+            "fields": [
+                {"field_code": "bo_id", "field_name": "商机ID", "field_type": "STRING"},
+                {"field_code": "bo_name", "field_name": "商机名称", "field_type": "STRING"},
+            ],
+        }],
+        "relations": [],
+    })
     loader.configure(
         plan_generator=MockPlanGenerator(fixed_plan=PLAN),
-        datasource_configs={
-            "test_db": DataSourceConfig(
-                alias="test_db",
-                db_type="SQLITE",
-                jdbc_url="jdbc:sqlite::memory:",
-            )
-        },
+        datasource_configs={"test_db": DataSourceConfig(
+            alias="test_db", db_type="SQLITE", jdbc_url="jdbc:sqlite::memory:",
+        )},
         csv_base_dir="./tmp",
     )
-
     obj = loader.get_object("sales_bo")
     with InvocationContext(tenant_id="t1", user_id="u1"):
         result = await obj.query("查商机", include_plan=True)
-
-    records = result.get("records", [])
-    assert records == [{"bo_id": "1", "bo_name": "项目A"}]
-
+    print(result.get("records"))
 
 asyncio.run(main())
 ```
 
-需要真实自然语言规划时，配置 `DATACLOUD_LLM_*` 后将 `MockPlanGenerator` 替换为
-`LangGraphPlanGenerator`。
+需要真实自然语言规划时，配置 `DATACLOUD_LLM_*` 后将 `MockPlanGenerator` 替换为 `LangGraphPlanGenerator`。完整示例见 `examples/all_interfaces_example.py`。
 
-### 运行完整示例
+---
 
-```bash
-cd packages/datacloud-data
-PYTHONPATH=src uv run python examples/all_interfaces_example.py
+### 配置说明
+
+| 环境变量                               | 默认值                      | 说明                                       |
+| -------------------------------------- | --------------------------- | ------------------------------------------ |
+| `DATACLOUD_ONTOLOGY_PATH`              | `resources/...`             | JSON、YAML、OWL 文件或资源目录             |
+| `DATACLOUD_LLM_API_KEY`                | 空                          | 配置后启用 LLM 查询计划生成                |
+| `DATACLOUD_LLM_API_BASE`               | 空                          | LLM API 地址                               |
+| `DATACLOUD_LLM_MODEL`                  | `gpt-4o`                    | LLM 模型名称                               |
+| `DATACLOUD_LLM_TEMPERATURE`            | `0.0`                       | LLM 温度参数                               |
+| `DATACLOUD_SQL_EXECUTION_MODE`         | `internal`                  | SQL 执行模式                               |
+| `DATACLOUD_CSV_BASE_DIR`               | `./tmp`                     | 中间 CSV 输出目录                          |
+| `DATACLOUD_QUERY_RESULT_CSV_THRESHOLD` | `5`                         | 查询结果超过该行数时写入 CSV               |
+| `DATACLOUD_LOADER_MODE`                | `watch`                     | Loader 刷新模式：`watch`、`lazy`、`static` |
+| `DATACLOUD_TRACE_ENABLED`              | `false`                     | 是否启用查询链路日志                       |
+| `DATACLOUD_CORS_ORIGINS`               | `http://localhost:3000,...` | CORS 允许来源，多个值用逗号分隔            |
+
+数据源通常从本体对象的 `source_config` 中加载，也可参考 `config/datasources.yaml.example` 使用 YAML 配置。
+
+
+
+## 架构设计
+
+### 项目结构
+
 ```
-
-### SDK 常用入口
-
-| 方法 | 说明 |
-| --- | --- |
-| `loader.get_object(object_code)` | 获取单个对象。 |
-| `loader.get_view(view_id)` | 获取预定义视图。 |
-| `await obj.query(question, include_plan=True)` | 按对象执行自然语言查询。 |
-| `await view.query(question, include_plan=True)` | 按视图执行自然语言查询。 |
-| `obj.list_action_codes()` | 列出对象可执行动作。 |
-| `obj.get_action_schema(action_code)` | 查看动作参数 Schema。 |
-| `await obj.invoke_action(action_code, params)` | 直接执行对象动作。 |
-| `await view.invoke_object_action(object_code, action_code, params)` | 通过视图调用对象动作。 |
-
-### SDK 按对象查询
-
-适合问题只涉及单个对象的场景。`LangGraphPlanGenerator` 会真实调用 LLM 生成查询计划。
-
-```python
-from __future__ import annotations
-
-import asyncio
-import os
-from pathlib import Path
-
-from datacloud_data_sdk import InvocationContext, OntologyLoader
-from datacloud_data_sdk.ontology.term_loader import TermLoader
-from datacloud_data_sdk.plan.query_plan_generator import LangGraphPlanGenerator
-
-
-async def main() -> None:
-    loader = OntologyLoader()
-    loader.load_from_owl_resource_directory(os.environ["DATACLOUD_ONTOLOGY_PATH"])
-    loader.configure(
-        plan_generator=LangGraphPlanGenerator(
-            model=os.environ.get("DATACLOUD_LLM_MODEL", "gpt-4o"),
-            base_url=os.environ["DATACLOUD_LLM_API_BASE"],
-            api_key=os.environ["DATACLOUD_LLM_API_KEY"],
-            temperature=0.0,
-            max_retries=2,
-        ),
-        term_loader=TermLoader.from_config({}),
-        csv_base_dir=str(Path("./tmp").resolve()),
-        sql_execution_mode="internal",
-    )
-
-    obj = loader.get_object("sales_business_opportunity")
-    with InvocationContext(tenant_id="t1", user_id="u1"):
-        result = await obj.query("查询最近30天我的商机列表", include_plan=True)
-
-    records = result.get("records", [])
-    plan = result.get("plan", {})
-    assert isinstance(records, list)
-    assert plan
-
-
-asyncio.run(main())
-```
-
-### SDK 按视图查询
-
-视图查询适合跨对象、跨关系的分析问题。需要先加载对象注册表，再加载视图定义。
-
-```python
-from __future__ import annotations
-
-import asyncio
-import os
-from pathlib import Path
-
-from datacloud_data_sdk import InvocationContext, OntologyLoader
-from datacloud_data_sdk.ontology.term_loader import TermLoader
-from datacloud_data_sdk.plan.query_plan_generator import LangGraphPlanGenerator
-
-
-async def main() -> None:
-    loader = OntologyLoader()
-    loader.load_from_owl_resource_directory(os.environ["DATACLOUD_ONTOLOGY_PATH"])
-    loader.configure(
-        plan_generator=LangGraphPlanGenerator(
-            model=os.environ.get("DATACLOUD_LLM_MODEL", "gpt-4o"),
-            base_url=os.environ["DATACLOUD_LLM_API_BASE"],
-            api_key=os.environ["DATACLOUD_LLM_API_KEY"],
-            temperature=0.0,
-            max_retries=2,
-        ),
-        term_loader=TermLoader.from_config({}),
-        csv_base_dir=str(Path("./tmp").resolve()),
-        sql_execution_mode="internal",
-    )
-
-    view = loader.get_view("scene_01_data_analysis")
-    with InvocationContext(tenant_id="t1", user_id="u1"):
-        result = await view.query("按部门统计本月销售商机金额", include_plan=True)
-
-    records = result.get("records", [])
-    assert isinstance(records, list)
-
-
-asyncio.run(main())
-```
-
-### SDK 执行对象动作
-
-动作调用不经过 LLM 规划，适合直接调用本体中定义的 API、脚本或虚拟动作。
-
-```python
-from __future__ import annotations
-
-import asyncio
-import os
-
-from datacloud_data_sdk import InvocationContext, OntologyLoader
-
-
-async def main() -> None:
-    loader = OntologyLoader()
-    loader.load_from_owl_resource_directory(os.environ["DATACLOUD_ONTOLOGY_PATH"])
-
-    obj = loader.get_object("todo_items")
-    action_codes = obj.list_action_codes()
-    schema = obj.get_action_schema("query_todo_list")
-    assert "query_todo_list" in action_codes
-    assert schema
-
-    with InvocationContext(tenant_id="t1", user_id="u1"):
-        result = await obj.invoke_action(
-            "query_todo_list",
-            {
-                "status": "PENDING",
-                "page": "1",
-                "pageSize": "10",
-                "keyword": "审批",
-            },
-        )
-
-    assert isinstance(result, dict)
-
-
-asyncio.run(main())
-```
-
-### SDK 通过视图调用对象动作
-
-当上层只持有视图上下文时，可以通过视图转发到指定对象动作。
-
-```python
-from __future__ import annotations
-
-import asyncio
-import os
-
-from datacloud_data_sdk import InvocationContext, OntologyLoader
-
-
-async def main() -> None:
-    loader = OntologyLoader()
-    loader.load_from_owl_resource_directory(os.environ["DATACLOUD_ONTOLOGY_PATH"])
-
-    view = loader.get_view("scene_01_data_analysis")
-    with InvocationContext(tenant_id="t1", user_id="u1"):
-        result = await view.invoke_object_action(
-            "todo_items",
-            "query_todo_list",
-            {
-                "status": "PENDING",
-                "page": "1",
-                "pageSize": "10",
-            },
-        )
-
-    assert isinstance(result, dict)
-
-
-asyncio.run(main())
-```
-
-## REST API
-
-查询已加载的本体资源：
-
-```bash
-curl -X POST http://localhost:8080/api/v1/query \
-  -H "Content-Type: application/json" \
-  -H "X-Tenant-Id: tenant-001" \
-  -H "X-User-Id: user-001" \
-  -d '{
-    "question": "查询项目列表",
-    "object_ids": ["by_project"]
-  }'
-```
-
-列出某个对象范围内的 MCP Tools：
-
-```bash
-curl -X POST http://localhost:8080/api/v1/mcp \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -H "X-Tenant-Id: tenant-001" \
-  -H "X-Object-Ids: by_project" \
-  -d '{"jsonrpc":"2.0","id":"1","method":"tools/list","params":{}}'
-```
-
-获取生成的技能包：
-
-```bash
-curl -X GET "http://localhost:8080/api/v1/skills/package?object_ids=by_project" \
-  -H "X-Tenant-Id: tenant-001"
-```
-
-## 目录结构
-
-```text
 packages/datacloud-data/
 ├── config/                         # 数据源配置示例
 ├── docs/                           # 设计文档与实施计划
 ├── examples/                       # 可运行 SDK 示例
 ├── resources/                      # 包内 OWL 对象与视图资源
-├── scripts/                        # 导入、导出与迁移脚本
 ├── src/
 │   ├── datacloud_data_sdk/
-│   │   ├── agents/                 # LLM Agent
-│   │   ├── aggregator/             # 结果聚合
-│   │   ├── csv_storage/            # CSV 大文件存储
-│   │   ├── events/                 # 事件总线与追踪
+│   │   ├── ontology/               # 本体加载与解析（OntologyLoader）
+│   │   ├── plan/                   # 查询计划生成与校验（LangGraphPlanGenerator）
 │   │   ├── executor/               # 查询与动作执行器
-│   │   ├── file_storage/           # 本地结果文件存储
-│   │   ├── graphql/                # GraphQL 支持
-│   │   ├── ontology/               # 本体加载与解析
-│   │   ├── oql/                    # OQL 适配与路由
-│   │   ├── plan/                   # 查询计划生成与校验
 │   │   ├── sql_executor/           # SQL 执行与连接器
-│   │   ├── utils/                  # 通用工具函数
-│   │   └── virtual_action/         # 虚拟动作生成与校验
+│   │   ├── aggregator/             # 结果聚合
+│   │   ├── virtual_action/         # 虚拟动作生成与校验
+│   │   ├── oql/                    # OQL 适配与路由
+│   │   ├── agents/                 # LLM Agent
+│   │   ├── csv_storage/            # CSV 大文件存储
+│   │   ├── file_storage/           # 本地结果文件存储
+│   │   ├── events/                 # 事件总线与追踪
+│   │   ├── graphql/                # GraphQL 支持
+│   │   └── utils/                  # 通用工具函数
 │   └── datacloud_data_service/
 │       ├── api/                    # REST、MCP 与 GraphQL 路由
-│       ├── logs/                   # 服务运行日志目录
 │       ├── resource/               # 服务内置 Agent、对象与视图资源
 │       └── tools/                  # MCP 工具与技能包生成
 └── tests/                          # 单元测试与集成测试
 ```
 
-## 开发
+### 核心模块说明
 
-在仓库根目录运行检查：
+#### `OntologyLoader` — 本体加载入口
 
-```bash
-uv run ruff format src/by_datacloud packages
-uv run ruff check src/by_datacloud packages
-uv run mypy src/by_datacloud packages
-uv run pytest packages/datacloud-data/tests
+```python
+loader = OntologyLoader()
+loader.load_from_owl_resource_directory(path)   # 从 OWL 资源目录加载
+loader.load_from_content(registry_dict)          # 从字典加载（测试/内嵌场景）
+loader.configure(plan_generator=..., ...)        # 注入 LLM 规划器、数据源配置等
 ```
 
-除非需要调整跨包 API 契约，改动应尽量收敛在当前包内。实现变更需要同步补充或更新测试。
+加载后可通过 `loader.get_object(code)` / `loader.get_view(view_id)` 获取运行时对象。
 
-## 许可证
+#### 查询执行链路
 
-Apache License 2.0。详见仓库许可证文件。
+```
+用户问题（自然语言）
+  → LangGraphPlanGenerator（LLM 生成查询计划）
+  → 计划校验（跨源 JOIN 检测、字段合法性）
+  → Executor 分发：
+      ├── SQL 步骤 → SqlExecutor（SQLAlchemy / ClickHouse）
+      ├── API 步骤 → HttpExecutor（参数映射 + 响应抽取）
+      └── 虚拟动作 → VirtualActionExecutor
+  → Aggregator（同源下沉 / 跨源联邦合并）
+  → 结果格式化（术语值转换 + CSV 溢出导出）
+```
+
+#### SDK 常用入口
+
+| 方法 | 说明 |
+|------|------|
+| `loader.get_object(object_code)` | 获取单个对象 |
+| `loader.get_view(view_id)` | 获取预定义视图 |
+| `await obj.query(question)` | 按对象执行自然语言查询 |
+| `await view.query(question)` | 按视图执行自然语言查询 |
+| `obj.list_action_codes()` | 列出对象可执行动作 |
+| `obj.get_action_schema(action_code)` | 查看动作参数 Schema |
+| `await obj.invoke_action(action_code, params)` | 直接执行对象动作 |
+| `await view.invoke_object_action(obj_code, action_code, params)` | 通过视图调用对象动作 |
+
+### REST API
+
+```bash
+# 自然语言查询
+curl -X POST http://localhost:8080/api/v1/query \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-Id: tenant-001" -H "X-User-Id: user-001" \
+  -d '{"question": "查询项目列表", "object_ids": ["by_project"]}'
+
+# 列出 MCP Tools
+curl -X POST http://localhost:8080/api/v1/mcp \
+  -H "Content-Type: application/json" \
+  -H "X-Object-Ids: by_project" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/list","params":{}}'
+
+# 获取技能包
+curl "http://localhost:8080/api/v1/skills/package?object_ids=by_project" \
+  -H "X-Tenant-Id: tenant-001"
+```
+
+---
+
+## 插件与扩展
+
+### 自定义 PlanGenerator
+
+实现 `PlanGenerator` 协议即可替换默认的 LLM 规划器：
+
+```python
+from datacloud_data_sdk.plan.query_plan_generator import MockPlanGenerator
+
+loader.configure(plan_generator=MockPlanGenerator(fixed_plan=MY_PLAN))
+```
+
+生产环境使用 `LangGraphPlanGenerator`，测试环境使用 `MockPlanGenerator`。
+
+### 自定义数据源连接器
+
+在本体对象的 `source_config` 中配置 `db_type`，SDK 会自动选择对应连接器：
+
+| db_type | 连接器 | 依赖 Extra |
+|---------|--------|-----------|
+| `SQLITE` | SQLite（内置） | — |
+| `POSTGRESQL` / `MYSQL` | SQLAlchemy | `sql` |
+| `CLICKHOUSE` | ClickHouse 异步驱动 | `clickhouse` |
+| `HTTP_API` | HttpExecutor | — |
+
+### 虚拟动作（Virtual Action）
+
+`virtual_action/` 模块根据本体对象的字段定义自动生成 `query_*` / `compute_*` 工具描述和参数 Schema，供 `datacloud-analysis` 的 LLM 直接调用，无需手写工具定义。
+
+---
+
+
+
+---
+
+## 开发指南
+
+```bash
+# 格式化 + Lint
+uv run ruff format src/by_datacloud packages
+uv run ruff check src/by_datacloud packages --fix
+
+# 类型检查
+uv run mypy src/by_datacloud packages
+```
+
+关键约定：
+
+- Python >= 3.12，完整类型注解，MyPy strict mode
+- 改动应尽量收敛在当前包内，避免影响跨包 API 契约
+- 实现变更需同步补充或更新测试
+
+---
+
+## 测试
+
+```bash
+# 全部测试
+uv run pytest packages/datacloud-data/tests
+
+# 仅单元测试
+uv run pytest packages/datacloud-data/tests/unit -v
+
+# 带覆盖率
+uv run pytest packages/datacloud-data/tests --cov=datacloud_data_sdk --cov-report=term-missing
+```
+
+集成测试需要配置真实数据源连接，默认跳过，通过 `-m db_integration` 标记单独运行。

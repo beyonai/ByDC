@@ -99,6 +99,8 @@ class AgentState(MessagesState):
     # 通过正常 return 提交 → LangGraph checkpoint 自动持久化。
     # interrupt() 重跑 tool_dispatcher_node 时从 checkpoint 读取，不重调 LLM。
     react_messages_log: list[dict[str, Any]] | None
+    # legacy per-tool Send 路径会在每个节点输入里注入当前 tool_call，避免同名并行工具错配。
+    react_current_tool_call: dict[str, Any] | None
 
     # --- 性能追踪 ---
     query_received_at: float | None  # time.monotonic() at graph entry (round=0 thinking timer)
