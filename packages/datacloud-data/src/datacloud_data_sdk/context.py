@@ -23,7 +23,11 @@ from types import TracebackType
 from typing import Any
 
 from datacloud_data_sdk.exceptions import DatacloudError
-from datacloud_data_sdk.i18n import DEFAULT_LANGUAGE, normalize_language
+from datacloud_data_sdk.i18n import (
+    DEFAULT_LANGUAGE,
+    format_invocation_context_not_set,
+    normalize_language,
+)
 
 
 @dataclass
@@ -44,7 +48,7 @@ class RequestContext:
         tool_list_mode: 工具列表模式，控制 MCP/Skills 返回的工具列表格式
             - "unified": 统一模式，返回所有工具的合并列表
             - "per_object": 按对象模式，按对象分组返回工具列表
-        language: 运行时语言编码，支持 zh-CN / en_US 及常见别名
+        language: 运行时语言编码，支持 zh_CN / en_US 及常见别名
         gateway_context: 执行上报对象（实现 ``datacloud_analysis.reporter.ExecutionReporter``
             协议）。可以是真实 Gateway AgentContext（生产部署）或
             ``NoOpExecutionReporter``（demo / 单测 / 独立调用）。类型声明为 ``Any``
@@ -173,7 +177,7 @@ def get_current_context() -> RequestContext:
     """
     ctx = _ctx_var.get()
     if ctx is None:
-        raise DatacloudError("InvocationContext not set. Use `with InvocationContext(...):`")
+        raise DatacloudError(format_invocation_context_not_set())
     return ctx
 
 

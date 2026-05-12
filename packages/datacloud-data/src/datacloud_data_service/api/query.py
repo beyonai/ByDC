@@ -19,7 +19,13 @@ from typing import Any
 import anyio
 from datacloud_data_sdk.context import InvocationContext
 from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
-from datacloud_data_sdk.i18n import format_overflow_notice, localized_text
+from datacloud_data_sdk.i18n import (
+    format_file_not_found,
+    format_loader_not_initialized,
+    format_overflow_notice,
+    format_tenant_id_required,
+    translate_exception,
+)
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -30,6 +36,10 @@ router = APIRouter()
 _INCLUDE_PLAN_IN_RESPONSE = False
 
 
+def _request_language(request: Request) -> str:
+    return request.headers.get("X-Language", request.headers.get("Accept-Language", ""))
+
+
 def _build_context_kwargs(request: Request) -> dict[str, Any]:
     """Build invocation context kwargs from HTTP headers."""
     return {
@@ -38,7 +48,7 @@ def _build_context_kwargs(request: Request) -> dict[str, Any]:
         "session_id": request.headers.get("X-Session-Id", ""),
         "token": request.headers.get("Authorization", "").removeprefix("Bearer ").strip(),
         "system_code": request.headers.get("X-System-Code", ""),
-        "language": request.headers.get("X-Language", request.headers.get("Accept-Language", "")),
+        "language": _request_language(request),
     }
 
 
@@ -102,25 +112,18 @@ async def query_endpoint(body: QueryRequest, request: Request) -> QueryResponse:
         HTTPException: 缺少必要参数时抛出
     """
     tenant_id = request.headers.get("X-Tenant-Id", "")
+    language = _request_language(request)
     if not tenant_id:
         raise HTTPException(
             status_code=400,
-            detail=localized_text(
-                request.headers.get("X-Language", request.headers.get("Accept-Language", "")),
-                zh_cn="X-Tenant-Id 必填",
-                en_us="X-Tenant-Id is required",
-            ),
+            detail=format_tenant_id_required(language),
         )
 
     snapshot = await get_request_loader_snapshot(request, reason="rest_query")
     if snapshot is None:
         return QueryResponse(
             code=500,
-            message=localized_text(
-                request.headers.get("X-Language", request.headers.get("Accept-Language", "")),
-                zh_cn="OntologyLoader 未初始化 (OntologyLoader not initialized)",
-                en_us="OntologyLoader not initialized",
-            ),
+            message=format_loader_not_initialized(language),
             data={},
         )
     loader = snapshot.loader
@@ -158,7 +161,7 @@ async def query_endpoint(body: QueryRequest, request: Request) -> QueryResponse:
                 data=sdk_result.get("data", {}),
             )
         except Exception as e:
-            return QueryResponse(code=500, message=str(e), data={})
+            return QueryResponse(code=500, message=translate_exception(e, language), data={})
 
 
 async def _query_by_file_id(
@@ -169,6 +172,7 @@ async def _query_by_file_id(
     settings = get_settings()
     loader = snapshot.loader
     result_file_storage = getattr(getattr(loader, "_config", None), "result_file_storage", None)
+    language = _request_language(request)
     with InvocationContext(**_build_context_kwargs(request)):
         csv_manager = CsvStorageManager(
             settings.csv_base_dir,
@@ -178,14 +182,9 @@ async def _query_by_file_id(
         stored_meta = csv_manager.get_export_meta(body.file_id)
 
     if csv_content is None:
-        language = request.headers.get("X-Language", request.headers.get("Accept-Language", ""))
         return QueryResponse(
             code=404,
-            message=localized_text(
-                language,
-                zh_cn="文件未找到或 file_id 无效 (File not found or invalid file_id)",
-                en_us="File not found or invalid file_id",
-            ),
+            message=format_file_not_found(language),
             data={},
         )
 
@@ -223,10 +222,7 @@ async def _query_by_file_id(
         overflow_notice = ""
         if meta["overflow"] and file_url:
             overflow_notice = format_overflow_notice(
-                language=request.headers.get(
-                    "X-Language",
-                    request.headers.get("Accept-Language", ""),
-                ),
+                language=language,
                 total=total,
                 preview_count=len(records),
                 file_path=file_url,
@@ -259,4 +255,4 @@ async def _query_by_file_id(
             data=response_data,
         )
     except Exception as e:
-        return QueryResponse(code=500, message=str(e), data={})
+        return QueryResponse(code=500, message=translate_exception(e, language), data={})

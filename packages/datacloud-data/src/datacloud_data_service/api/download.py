@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datacloud_data_sdk.context import InvocationContext
 from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
-from datacloud_data_sdk.i18n import localized_text
+from datacloud_data_sdk.i18n import format_file_not_found
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
@@ -38,10 +38,8 @@ async def download_csv(file_id: str, request: Request) -> Response:
     if content is None:
         raise HTTPException(
             status_code=404,
-            detail=localized_text(
-                request.headers.get("X-Language", request.headers.get("Accept-Language", "")),
-                zh_cn="文件未找到或 file_id 无效",
-                en_us="File not found or invalid file_id",
+            detail=format_file_not_found(
+                request.headers.get("X-Language", request.headers.get("Accept-Language", ""))
             ),
         )
     return Response(

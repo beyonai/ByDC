@@ -12,7 +12,13 @@ from contextlib import asynccontextmanager
 from typing import Any
 from uuid import uuid4
 
-from datacloud_data_sdk.i18n import localized_text
+from datacloud_data_sdk.context import get_current_language
+from datacloud_data_sdk.i18n import (
+    format_input_validation_error,
+    format_loader_not_initialized,
+    format_unknown_tool,
+    translate_exception,
+)
 from datacloud_data_sdk.utils.json_utils import dump_json
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
@@ -287,7 +293,11 @@ def _validate_tool_arguments(
         tool_name,
         json.dumps(arguments, ensure_ascii=False, separators=(",", ":")),
     )
-    return [TextContent(type="text", text=f"Input validation error: {errors[0]}")]
+    return [
+        TextContent(
+            type="text", text=format_input_validation_error(get_current_language(), errors[0])
+        )
+    ]
 
 
 def _wrap_raw_data_as_payload(data: Any) -> dict[str, Any]:
@@ -410,19 +420,11 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
             _log_tool_call(name, tool_arguments)
             snapshot = await _get_loader_snapshot("mcp_tools_call")
             if snapshot is None:
-                from datacloud_data_sdk.context import get_current_language
-
                 return [
                     TextContent(
                         type="text",
                         text=json.dumps(
-                            {
-                                "error": localized_text(
-                                    get_current_language(),
-                                    zh_cn="OntologyLoader 未初始化 (OntologyLoader not initialized)",
-                                    en_us="OntologyLoader not initialized",
-                                )
-                            },
+                            {"error": format_loader_not_initialized(get_current_language())},
                             ensure_ascii=False,
                         ),
                     )
@@ -457,7 +459,10 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
                 return [
                     TextContent(
                         type="text",
-                        text=json.dumps({"error": f"Unknown tool: {name}"}, ensure_ascii=False),
+                        text=json.dumps(
+                            {"error": format_unknown_tool(get_current_language(), name)},
+                            ensure_ascii=False,
+                        ),
                     )
                 ]
 
@@ -470,7 +475,11 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
                 except Exception as exc:
                     return [
                         TextContent(
-                            type="text", text=json.dumps({"error": str(exc)}, ensure_ascii=False)
+                            type="text",
+                            text=json.dumps(
+                                {"error": translate_exception(exc, get_current_language())},
+                                ensure_ascii=False,
+                            ),
                         )
                     ]
                 payload = _wrap_raw_data_as_payload(raw)
@@ -487,7 +496,13 @@ def _create_mcp_app() -> tuple[Server, StreamableHTTPSessionManager]:
         except Exception as e:
             logger.exception("call_tool failed: %s", e)
             return [
-                TextContent(type="text", text=json.dumps({"error": str(e)}, ensure_ascii=False))
+                TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {"error": translate_exception(e, get_current_language())},
+                        ensure_ascii=False,
+                    ),
+                )
             ]
 
     @server.list_resources()
@@ -645,7 +660,10 @@ def create_mcp_asgi_app(session_manager: StreamableHTTPSessionManager):
             logger.exception("MCP request failed: %s", e)
             from starlette.responses import JSONResponse
 
-            resp = JSONResponse({"error": str(e)}, status_code=500)
+            resp = JSONResponse(
+                {"error": translate_exception(e, get_current_language())},
+                status_code=500,
+            )
             await resp(scope, receive, send)
 
     return handle_streamable_http
