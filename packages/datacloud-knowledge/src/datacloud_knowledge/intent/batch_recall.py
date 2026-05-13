@@ -25,7 +25,7 @@ from datacloud_knowledge.query.search.rrf import rrf_fuse
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-    from .typed_recall import CandidateDict
+    from ._recall_common import CandidateDict
 
 
 class TypedKeywordState(Protocol):
@@ -499,7 +499,7 @@ def _prepare_batch(
     wv_per_type: int,
     scope_code: str | None = None,
 ) -> PreparedBatch:
-    from . import typed_recall as serial_recall
+    from . import _recall_common as serial_recall
 
     requests: list[RecallRequest] = []
     seen: set[str] = set()
@@ -721,7 +721,7 @@ def _fuse_and_shape(
     top_k: int,
     rrf_k: int,
 ) -> dict[str, list[CandidateDict]]:
-    from . import typed_recall as serial_recall
+    from . import _recall_common as serial_recall
 
     result: dict[str, list[CandidateDict]] = {}
     for req in batch.requests:
@@ -870,7 +870,7 @@ def _batch_vector(
     if not batch.requests:
         return {}
 
-    from datacloud_knowledge.query.embedding import get_embedding_service
+    from datacloud_knowledge.embedding import get_embedding_service
 
     svc = get_embedding_service()
     vectors = svc.get_text_embedding_batch([req.keyword for req in batch.requests])

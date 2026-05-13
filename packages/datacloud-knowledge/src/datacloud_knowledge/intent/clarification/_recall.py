@@ -10,6 +10,11 @@ from typing import Any
 
 from datacloud_knowledge.db.connection import get_session
 from datacloud_knowledge.db.models import Term, TermRelation
+from datacloud_knowledge.intent._recall_common import (
+    KTYPE_CATEGORY_MAP,
+    _load_type_codes_by_category,
+    _shape_candidates,
+)
 from datacloud_knowledge.intent.batch_recall import (
     PreparedBatch,
     RecallRequest,
@@ -17,11 +22,6 @@ from datacloud_knowledge.intent.batch_recall import (
     _batch_vector,
 )
 from datacloud_knowledge.intent.service import typed_multi_recall_with_session
-from datacloud_knowledge.intent.typed_recall import (
-    KTYPE_CATEGORY_MAP,
-    _load_type_codes_by_category,
-    _shape_candidates,
-)
 from datacloud_knowledge.query.search.rrf import rrf_fuse
 
 from .models import ExtractedTerm, PreResolveResult
