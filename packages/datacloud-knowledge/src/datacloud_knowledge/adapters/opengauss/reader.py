@@ -23,7 +23,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import and_, cast, func, literal, or_, select
+from sqlalchemy import and_, cast, func, literal, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB, NUMERIC, TIMESTAMP
 from sqlalchemy.orm import Session, aliased
 
@@ -92,8 +92,107 @@ class PostgresTermReader:
         )
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # 公开方法 — 8 个协议方法
+    # 公开方法 — 协议方法
     # ═══════════════════════════════════════════════════════════════════════════
+
+    def search_terms_exact(
+        self,
+        *,
+        term_type_code: str,
+        keyword: str | None = None,
+        tags: Sequence[TagFilter] | None = None,
+        limit: int = 20,
+        offset: int = 0,
+        order_by: str = "relevance",
+    ) -> SearchTermsResult:
+        """按术语类型精确检索术语列表（原子查询，无 BM25 兜底）。
+
+        仅执行精确匹配（term_name == keyword 或 term_code == keyword）。
+        无匹配时返回空结果，由调用方决定是否降级到 BM25。
+
+        Args:
+            term_type_code: 术语类型编码（支持驼峰简写映射）。
+            keyword: 可选关键词（精确匹配 term_name/term_code）。
+            tags: 可选标签过滤条件列表。
+            limit: 返回条数（1..200）。
+            offset: 分页偏移（>=0）。
+            order_by: 排序方式（relevance/updated_time/created_time/term_name）。
+
+        Returns:
+            SearchTermsResult，无精确匹配时 total=0。
+        """
+        if not (1 <= limit <= 200):
+            raise ValueError("limit 必须在 1..200")
+        if offset < 0:
+            raise ValueError("offset 必须 >= 0")
+
+        canonical_type = self._normalize_type_code(term_type_code)
+        tags_list = list(tags) if tags is not None else None
+
+        try:
+            with self._session_factory() as session:
+                filters = self._build_filters(
+                    canonical_type=canonical_type,
+                    keyword=keyword,
+                    tags=tags_list,
+                )
+
+                total = int(
+                    session.execute(
+                        select(func.count()).select_from(Term).where(*filters)
+                    ).scalar_one()
+                )
+
+                if total == 0:
+                    return SearchTermsResult(total=0, items=[])
+
+                stmt = (
+                    select(
+                        Term.term_id,
+                        Term.term_code,
+                        Term.term_name,
+                        Term.term_type_code,
+                        Term.desc_summary,
+                        Term.term_tags,
+                        Term.owl_doc_id,
+                        Term.created_time,
+                        Term.updated_time,
+                    )
+                    .where(*filters)
+                    .limit(limit)
+                    .offset(offset)
+                )
+                stmt = self._apply_order_by(stmt, order_by=order_by)
+                rows = [
+                    self._convert_db_row_to_term_row(row) for row in session.execute(stmt).all()
+                ]
+        except Exception:
+            logger.exception(
+                "search_terms_exact failed: type=%s keyword=%s tags=%s",
+                term_type_code,
+                keyword,
+                tags,
+            )
+            raise
+
+        items: list[TermItem] = []
+        for row in rows:
+            items.append(
+                TermItem(
+                    term_id=row.term_id,
+                    term_code=row.term_code,
+                    term_name=row.term_name,
+                    term_type_code=row.term_type_code,
+                    desc_summary=row.desc_summary,
+                    term_tags=row.term_tags,
+                    owl_doc_id=row.owl_doc_id,
+                    created_time=row.created_time,
+                    updated_time=row.updated_time,
+                    score=row.score,
+                )
+            )
+
+        return SearchTermsResult(total=total, items=items)
 
     def search_terms(
         self,
@@ -663,39 +762,38 @@ class PostgresTermReader:
         if not scope_code:
             return []
 
-        source_row = self._session.execute(
-            select(Term.term_id).where(
-                Term.term_code == scope_code,
-                Term.term_type_code.in_(["view", "object"]),
-            )
-        ).scalar_one_or_none()
-
-        if source_row is None:
-            logger.warning("[get_object_props_by_code] scope_code 未找到: %s", scope_code)
-            return []
-
-        source_term_id = str(source_row)
-
-        try:
-            rows = self._session.execute(
-                select(
-                    TermRelation.source_term_id,
-                    Term.term_id,
-                    Term.term_code,
-                    Term.term_name,
+        with self._session_factory() as session:
+            source_row = session.execute(
+                select(Term.term_id).where(
+                    Term.term_code == scope_code,
+                    Term.term_type_code.in_(["view", "object"]),
                 )
-                .join(Term, Term.term_id == TermRelation.target_term_id)
-                .where(
-                    TermRelation.source_term_id == source_term_id,
-                    Term.term_type_code == "prop",
-                )
-                .order_by(Term.term_code)
-            ).all()
-        except Exception:
-            logger.exception(
-                "get_object_props_by_code failed: scope_code=%s", scope_code
-            )
-            raise
+            ).scalar_one_or_none()
+
+            if source_row is None:
+                logger.warning("[get_object_props_by_code] scope_code 未找到: %s", scope_code)
+                return []
+
+            source_term_id = str(source_row)
+
+            try:
+                rows = session.execute(
+                    select(
+                        TermRelation.source_term_id,
+                        Term.term_id,
+                        Term.term_code,
+                        Term.term_name,
+                    )
+                    .join(Term, Term.term_id == TermRelation.target_term_id)
+                    .where(
+                        TermRelation.source_term_id == source_term_id,
+                        Term.term_type_code == "prop",
+                    )
+                    .order_by(Term.term_code)
+                ).all()
+            except Exception:
+                logger.exception("get_object_props_by_code failed: scope_code=%s", scope_code)
+                raise
 
         return [
             PropItem(
@@ -874,6 +972,86 @@ class PostgresTermReader:
             {c: len(v) for c, v in result.items()},
         )
         return result
+
+    def get_bfs_distance(
+        self,
+        *,
+        source_term_id: str,
+        target_term_id: str,
+        max_depth: int = 4,
+    ) -> int | None:
+        """计算两个术语在图谱中的 BFS 最短距离。
+
+        通过 ``term_relation`` 表递归 CTE 搜索，相同节点返回 0。
+
+        Args:
+            source_term_id: 源术语 ID。
+            target_term_id: 目标术语 ID。
+            max_depth: 最大搜索深度。
+
+        Returns:
+            最短距离，不可达时返回 None。
+        """
+        if source_term_id == target_term_id:
+            return 0
+        if max_depth <= 0:
+            return None
+
+        try:
+            with self._session_factory() as session:
+                row = session.execute(
+                    text(
+                        """
+                        WITH RECURSIVE bfs AS (
+                            SELECT
+                                CAST(:source_id AS varchar) AS current_id,
+                                0 AS depth,
+                                ARRAY[CAST(:source_id AS varchar)]::varchar[] AS path
+                            UNION ALL
+                            SELECT
+                                CASE
+                                    WHEN tr.source_term_id = b.current_id THEN tr.target_term_id
+                                    ELSE tr.source_term_id
+                                END,
+                                b.depth + 1,
+                                b.path || CASE
+                                    WHEN tr.source_term_id = b.current_id THEN tr.target_term_id
+                                    ELSE tr.source_term_id
+                                END
+                            FROM bfs b
+                            JOIN term_relation tr
+                                ON tr.source_term_id = b.current_id
+                                OR tr.target_term_id = b.current_id
+                            WHERE b.depth < :max_depth
+                              AND NOT (
+                                    CASE
+                                        WHEN tr.source_term_id = b.current_id
+                                        THEN tr.target_term_id
+                                        ELSE tr.source_term_id
+                                    END
+                                ) = ANY(b.path)
+                        )
+                        SELECT depth FROM bfs
+                        WHERE current_id = :target_id
+                        ORDER BY depth LIMIT 1
+                        """
+                    ),
+                    {
+                        "source_id": source_term_id,
+                        "target_id": target_term_id,
+                        "max_depth": max_depth,
+                    },
+                ).fetchone()
+        except Exception:
+            logger.exception(
+                "get_bfs_distance failed: source=%s target=%s max_depth=%s",
+                source_term_id,
+                target_term_id,
+                max_depth,
+            )
+            raise
+
+        return int(row[0]) if row is not None else None
 
     # ═══════════════════════════════════════════════════════════════════════════
     # 内部辅助方法
