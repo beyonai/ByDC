@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import bindparam, text
 
-from datacloud_knowledge.db.connection import get_session
-from datacloud_knowledge.search.vector_validation import (
+from datacloud_knowledge.adapters.opengauss._db.connection import get_session
+from datacloud_knowledge.adapters.opengauss.writer import PostgresTermWriter
+from datacloud_knowledge.adapters.opengauss.vector_validation import (
     TermVectorValidationError,
     validate_term_vector_readiness,
 )
-from datacloud_knowledge.store.term_writer import PostgresTermWriter
 
 from .cache import UserNameCache
 from .disambiguation import build_shortest_path_tree, disambiguate

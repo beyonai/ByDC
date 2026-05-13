@@ -63,7 +63,7 @@ def _load_type_codes_by_category(
     categories: set[int],
 ) -> set[str]:
     """从 term_type 表按 type_category 加载 type_code 集合。"""
-    from datacloud_knowledge.db.models import TermType
+    from datacloud_knowledge.adapters.opengauss._db.models import TermType
 
     rows = (
         session.query(TermType.type_code)

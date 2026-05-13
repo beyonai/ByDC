@@ -8,10 +8,10 @@ from typing import Any
 
 from sqlalchemy import select
 
-from datacloud_knowledge.db.connection import get_session
-from datacloud_knowledge.db.models import Term
+from datacloud_knowledge.adapters.opengauss._db.connection import get_session
+from datacloud_knowledge.adapters.opengauss._db.models import Term
 from datacloud_knowledge.intent.service import store_clarification_results
-from datacloud_knowledge.search import (
+from datacloud_knowledge.retrieval import (
     get_object_props,
     get_prop_values_with_aliases,
     resolve_field_aliases,

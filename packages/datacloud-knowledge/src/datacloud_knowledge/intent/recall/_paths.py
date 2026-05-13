@@ -8,7 +8,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
-from datacloud_knowledge.search.bm25 import (
+from datacloud_knowledge.adapters.opengauss.bm25 import (
     _has_jieba_column,
     _has_name_keywords_column,
     _jieba_tokenize,
@@ -75,7 +75,7 @@ def _batch_bm25_and(
     top_k: int,
 ) -> dict[str, list[tuple[str, str, str, str, str]]]:
     """单字 BM25 AND 召回：强制所有单字同时出现才命中。"""
-    from datacloud_knowledge.db.connection import get_session
+    from datacloud_knowledge.adapters.opengauss._db.connection import get_session
 
     started_at = time.monotonic()
     with get_session() as session:
@@ -113,7 +113,7 @@ def _batch_jieba_bm25(
     """jieba 词级 BM25 召回：经 jieba 分词后再用 AND 连接进行 BM25 检索。"""
 
     started_at = time.monotonic()
-    from datacloud_knowledge.db.connection import get_session
+    from datacloud_knowledge.adapters.opengauss._db.connection import get_session
 
     with get_session() as session:
         if not _has_jieba_column(session):
@@ -150,7 +150,7 @@ def _batch_substring(
     """子串匹配召回：keyword 与 term_name 双向包含。"""
 
     started_at = time.monotonic()
-    from datacloud_knowledge.db.connection import get_session
+    from datacloud_knowledge.adapters.opengauss._db.connection import get_session
 
     with get_session() as session:
         results: dict[str, list[tuple[str, str, str, str, str]]] = {}
@@ -186,7 +186,7 @@ def _run_single_vector_query(
     min_similarity: float,
 ) -> dict[str, list[tuple[str, str, str, str, str]]]:
     """单 keyword 向量查询，使用 HNSW 索引 (ORDER BY <=> :constant LIMIT k)。"""
-    from datacloud_knowledge.db.connection import get_session
+    from datacloud_knowledge.adapters.opengauss._db.connection import get_session
 
     with get_session() as session:
         params: dict[str, Any] = {

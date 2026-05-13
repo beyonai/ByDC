@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from datacloud_knowledge.search.vector_validation import TermVectorValidationError
+from datacloud_knowledge.adapters.opengauss.vector_validation import TermVectorValidationError
 
 
 def _get_service_module() -> Any:

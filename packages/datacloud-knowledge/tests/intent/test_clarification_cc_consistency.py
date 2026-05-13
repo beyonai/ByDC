@@ -9,7 +9,7 @@ from datacloud_knowledge.intent.clarification.models import (
     ConditionTermMapping,
     ExtractedTerm,
 )
-from datacloud_knowledge.api.types import (
+from datacloud_knowledge.contracts.types import (
     FieldResolutionResultWithNames,
     ResolvedField,
 )

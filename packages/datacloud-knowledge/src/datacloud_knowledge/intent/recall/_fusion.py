@@ -6,8 +6,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from datacloud_knowledge.search.bm25 import _has_name_keywords_column
-from datacloud_knowledge.search.rrf import rrf_fuse
+from datacloud_knowledge.adapters.opengauss.bm25 import _has_name_keywords_column
+from datacloud_knowledge.retrieval.rrf import rrf_fuse
 
 from ._models import (
     _CJK_CHAR_RE,
@@ -225,7 +225,7 @@ def _batch_single_char_fallback(
     前者已经支持批量 VALUES 查询、scope 过滤、type_filter、whereValue per-type 分桶；
     后者是单 keyword 底层搜索函数，直接使用会绕过这些业务约束。
     """
-    from datacloud_knowledge.db.connection import get_session
+    from datacloud_knowledge.adapters.opengauss._db.connection import get_session
 
     started_at = time.monotonic()
     with get_session() as session:

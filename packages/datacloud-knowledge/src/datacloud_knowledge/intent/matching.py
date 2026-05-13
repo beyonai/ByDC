@@ -249,7 +249,7 @@ def _bm25_match(
     min_score: float = 0.01,
 ) -> list[MatchCandidate]:
     """使用 BM25 全文搜索进行匹配。"""
-    from datacloud_knowledge.search import bm25_search
+    from datacloud_knowledge.retrieval import bm25_search
 
     if not query or not query.strip():
         return []
@@ -280,7 +280,7 @@ def _vector_match(
     min_similarity: float = 0.5,
 ) -> list[MatchCandidate]:
     """使用向量语义搜索进行匹配。"""
-    from datacloud_knowledge.search import vector_search
+    from datacloud_knowledge.retrieval import vector_search
 
     if not query or not query.strip():
         return []

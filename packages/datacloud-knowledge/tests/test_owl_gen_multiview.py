@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections import OrderedDict
 from pathlib import Path
 
-from datacloud_knowledge.owl_gen.generator import generate_from_tables
-from datacloud_knowledge.owl_gen.models import (
+from datacloud_knowledge.ingestion.owl_generate.generator import generate_from_tables
+from datacloud_knowledge.ingestion.owl_generate.models import (
     Column,
     FieldRole,
     ObjectPropConfig,
@@ -16,18 +16,18 @@ from datacloud_knowledge.owl_gen.models import (
     ViewConfig,
     ViewFieldMapping,
 )
-from datacloud_knowledge.owl_gen.renderers.manifest import render_manifest
-from datacloud_knowledge.owl_gen.renderers.ontology import (
+from datacloud_knowledge.ingestion.owl_generate.renderers.manifest import render_manifest
+from datacloud_knowledge.ingestion.owl_generate.renderers.ontology import (
     render_object,
     render_single_view,
     render_view,
     render_view_mapping,
 )
-from datacloud_knowledge.owl_gen.renderers.relations import (
+from datacloud_knowledge.ingestion.owl_generate.renderers.relations import (
     render_relation_view,
     render_view_relations_for_view,
 )
-from datacloud_knowledge.owl_gen.renderers.terms import render_terms, render_terms_for_view
+from datacloud_knowledge.ingestion.owl_generate.renderers.terms import render_terms, render_terms_for_view
 
 
 def _build_config() -> OwlGenConfig:

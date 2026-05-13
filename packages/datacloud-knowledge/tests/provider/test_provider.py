@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-from datacloud_knowledge.api.types import FieldResolutionResult, SearchTermsResult
+from datacloud_knowledge.contracts.types import FieldResolutionResult, SearchTermsResult
 from datacloud_knowledge.intent.types import ClarificationResult
 from datacloud_knowledge.provider import (
     ClarificationAnalysis,

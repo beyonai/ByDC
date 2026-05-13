@@ -86,7 +86,7 @@ def load_env() -> None:
 
 def get_db_connection() -> psycopg2.extensions.connection:
     """创建数据库连接。"""
-    from datacloud_knowledge.db.url import parse_env_database_url
+    from datacloud_knowledge.adapters.opengauss._db.url import parse_env_database_url
 
     if not any(os.getenv(name, "").strip() for name in _DB_CONFIG_TRIGGER_ENV_VARS):
         raise ValueError(f"缺少环境变量: {list(_DB_CONFIG_TRIGGER_ENV_VARS)}")
@@ -140,7 +140,7 @@ def apply_ddl_and_seed() -> None:
 
 def import_package(folder_path: str) -> dict:
     """导入知识包。"""
-    from datacloud_knowledge.knowledge_build.importer.executor import run
+    from datacloud_knowledge.ingestion.owl_import.importer.executor import run
 
     logger.info("导入知识包: %s", folder_path)
     result = run(folder_path)

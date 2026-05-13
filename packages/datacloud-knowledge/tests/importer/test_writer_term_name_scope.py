@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, cast
 from unittest.mock import patch
 
-from datacloud_knowledge.knowledge_build.importer import writer
+from datacloud_knowledge.ingestion.owl_import.importer import writer
 from psycopg import Cursor
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]

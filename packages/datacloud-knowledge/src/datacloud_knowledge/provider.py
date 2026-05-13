@@ -18,10 +18,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from datacloud_knowledge.api.types import (
+from datacloud_knowledge.adapters.opengauss.reader import PostgresTermReader
+from datacloud_knowledge.contracts.types import (
     ClarificationMode as _ClarificationMode,
 )
-from datacloud_knowledge.api.types import (
+from datacloud_knowledge.contracts.types import (
     FieldResolutionResult,
     OpaquePayload,
     SearchTermsResult,
@@ -42,7 +43,6 @@ from datacloud_knowledge.intent.clarification.postprocess import (
 from datacloud_knowledge.intent.clarification.postprocess import (
     persist_confirmed_synonyms as _persist_confirmed_synonyms,
 )
-from datacloud_knowledge.search.term_reader import PostgresTermReader
 
 logger = logging.getLogger(__name__)
 

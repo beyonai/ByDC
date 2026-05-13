@@ -5,14 +5,14 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
-from datacloud_knowledge.search import vector_validation
-from datacloud_knowledge.search.vector_validation import (
+from datacloud_knowledge.adapters.opengauss import vector_validation
+from datacloud_knowledge.adapters.opengauss.vector_validation import (
     TermVectorValidationError,
     validate_term_vector_readiness,
 )
 
 if TYPE_CHECKING:
-    from datacloud_knowledge.search.vector_validation import EmbeddingServiceLike
+    from datacloud_knowledge.adapters.opengauss.vector_validation import EmbeddingServiceLike
     from sqlalchemy.orm import Session
 
 

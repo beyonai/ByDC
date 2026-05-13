@@ -7,7 +7,7 @@ import pytest
 
 
 def _get_bm25_module() -> Any:
-    return import_module("datacloud_knowledge.search.bm25")
+    return import_module("datacloud_knowledge.adapters.opengauss.bm25")
 
 
 class _FakeResult:
