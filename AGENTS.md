@@ -68,6 +68,20 @@ types: feat / fix / docs / style / refactor / test / chore
 - ❌ 裸 `except:` — 必须指定异常类型
 - ❌ `print()` 生产代码 — 用 `logging`
 
+### 导入规范
+
+- ❌ `from importlib import import_module` — 禁用动态 import。用正常 `import` / `from import`，循环导入问题通过调整模块结构解决，不通过延迟 import 规避。
+- ❌ 函数体内 `import` / `from import` — 除非是真正的外部可选依赖（如 `pymysql`），不允许用延迟 import 规避循环导入或隐藏模块缺失。ruff 检查不到函数体内的 import 错误。
+- ❌ `import_module(f"{__package__}.types")` — 禁止字符串拼接模块路径。直接 `from .types import ...`。
+- ❌ `if converter is None: import_module(...)` — 禁止死代码回退。模块导入不会返回 None，这种分支永不执行。
+- ❌ 模块路径拼写错误 — `datacloud_knowledge.embedding` 实际是 `datacloud_knowledge.retrieval.embedding`。错误的导入路径在 `import_module` 调用中 ruff 无法检测，只会在运行时静默失败。
+
+### 分层导入约束（knowledge 包）
+
+- ❌ 非 `adapters/` 代码直接 `import sqlalchemy` / `import psycopg` — 必须通过 adapter 协议访问数据库。
+- ❌ 非 `adapters/` 代码 `from ..._db.connection import get_session` — session 生命周期由 adapter 工厂管理。
+- ❌ 非 `adapters/` 代码 `from ..._db.models import Term/TermName/...` — ORM 模型不跨层暴露。
+
 ## Commands
 
 ```bash
