@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session, aliased
 
 from datacloud_knowledge.adapters.opengauss._db.connection import get_session
 from datacloud_knowledge.adapters.opengauss._db.models import Term, TermName, TermRelation
+from datacloud_knowledge.adapters.opengauss.bm25 import bm25_search_with_or
 from datacloud_knowledge.contracts.types import (
     AmbiguousCandidate,
     FieldResolutionResult,
@@ -40,7 +41,6 @@ from datacloud_knowledge.contracts.types import (
     ValueResolutionResult,
     ValueWithAliases,
 )
-from datacloud_knowledge.adapters.opengauss.bm25 import bm25_search_with_or
 
 logger = logging.getLogger(__name__)
 

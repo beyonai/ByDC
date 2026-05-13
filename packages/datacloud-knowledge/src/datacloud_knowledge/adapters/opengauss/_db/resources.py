@@ -5,11 +5,11 @@ from __future__ import annotations
 from importlib import resources
 from pathlib import Path
 
-_SQL_PACKAGE = "datacloud_knowledge.resources.sql"
+_SQL_PACKAGE = "datacloud_knowledge.adapters.opengauss._db.sql_assets.sql"
 
 
 def _repo_sql_dir(kind: str) -> Path:
-    package_root = Path(__file__).resolve().parents[3]
+    package_root = Path(__file__).resolve().parents[4]
     if kind == "ddl":
         return package_root / "db" / "ddl" / "knowledge"
     if kind == "seed":
@@ -22,10 +22,8 @@ def _repo_sql_dir(kind: str) -> Path:
 def sql_texts(kind: str) -> list[tuple[str, str]]:
     """Return ordered ``(name, SQL text)`` resources for ``kind``.
 
-    Wheels contain these files under ``datacloud_knowledge.resources.sql``.
-    Source checkouts use the repository ``db/`` directory as a fallback so the
-    package remains editable without duplicating SQL content.
-    """
+    Wheels contain these files under ``sql_assets.sql``.
+    Source checkouts use the repository ``db/`` directory as a fallback."""
 
     traversable = resources.files(f"{_SQL_PACKAGE}.{kind}")
     packaged_files = sorted(

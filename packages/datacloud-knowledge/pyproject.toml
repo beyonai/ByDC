@@ -77,9 +77,9 @@ build-backend = "hatchling.build"
 packages = ["src/datacloud_knowledge"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"db/ddl/knowledge" = "datacloud_knowledge/resources/sql/ddl"
-"db/seed/knowledge" = "datacloud_knowledge/resources/sql/seed"
-"db/migrations" = "datacloud_knowledge/resources/sql/migrations"
+"db/ddl/knowledge" = "datacloud_knowledge/adapters/opengauss/_db/sql_assets/sql/ddl"
+"db/seed/knowledge" = "datacloud_knowledge/adapters/opengauss/_db/sql_assets/sql/seed"
+"db/migrations" = "datacloud_knowledge/adapters/opengauss/_db/sql_assets/sql/migrations"
 
 [tool.uv]
 default-groups = ["dev"]
