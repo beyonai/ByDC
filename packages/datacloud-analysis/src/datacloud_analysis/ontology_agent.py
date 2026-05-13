@@ -53,6 +53,7 @@ class InterruptEvent(OntologyAgentEvent):
     reason: str  # "PARADIGM_CLARIFICATION" | "ASK_USER" | ...
     prompt: str
     paradigm_list: list[ParadigmGroup] | None = None
+    query: str = ""
 
 
 @dataclass
@@ -76,7 +77,10 @@ class ErrorEvent(OntologyAgentEvent):
 @dataclass
 class ParadigmOption:
     choice_keyword: str
-    recall: str
+    recall: list[str]
+    keyword: str = ""
+    kid: int = 0
+    ktype: str = ""
 
 
 @dataclass
@@ -213,7 +217,10 @@ def _interrupt_value_to_paradigm_list(
         options: list[ParadigmOption] = [
             ParadigmOption(
                 choice_keyword=str(r.get("choiceKeyword") or ""),
-                recall=str(r.get("recall") or ""),
+                recall=r.get("recall") if isinstance(r.get("recall"), list) else [],
+                keyword=str(r.get("keyword") or ""),
+                kid=int(r.get("kid") or 0),
+                ktype=str(r.get("ktype") or ""),
             )
             for r in raw_results
         ]
@@ -491,12 +498,14 @@ class OntologyAgent:
             prompt = str((iv or {}).get("prompt") or "")
             ask_payload: dict[str, Any] = dict((iv or {}).get("ask_user_payload") or {})
             paradigm_list = _interrupt_value_to_paradigm_list(ask_payload)
+            query = str(ask_payload.get("query") or "")
 
             yield InterruptEvent(
                 thread_id=thread_id,
                 reason=reason_code,
                 prompt=prompt,
                 paradigm_list=paradigm_list,
+                query=query,
             )
             return
 

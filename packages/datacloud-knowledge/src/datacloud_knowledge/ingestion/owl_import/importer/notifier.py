@@ -39,12 +39,12 @@ def notify(
 
     try:
         if method == "GET":
-            req = urllib.request.Request(url, headers=all_headers, method="GET")
+            req = urllib.request.Request(url, headers=all_headers, method="GET")  # noqa: S310
         else:
             body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-            req = urllib.request.Request(url, data=body, headers=all_headers, method="POST")
+            req = urllib.request.Request(url, data=body, headers=all_headers, method="POST")  # noqa: S310
 
-        with urllib.request.urlopen(req, timeout=_TIMEOUT_SECONDS) as resp:
+        with urllib.request.urlopen(req, timeout=_TIMEOUT_SECONDS) as resp:  # noqa: S310
             status_code = resp.status
             logger.info("callback notified: url=%s status=%d", url, status_code)
             return 200 <= status_code < 300
