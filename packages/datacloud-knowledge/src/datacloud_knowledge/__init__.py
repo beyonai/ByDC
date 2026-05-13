@@ -1,27 +1,10 @@
-"""DataCloud Knowledge SDK.
+"""DataCloud Knowledge SDK — 知识服务底座。
 
-该包位于 `packages/datacloud-knowledge/src/datacloud_knowledge/`。
+提供术语构建、术语查询、语义消歧等能力，
+解决"用户怎么说"和"系统怎么懂"之间的语义鸿沟。
 """
 
-from typing import Any
-
 __version__ = "0.2.0"
-
-_LAZY_EXPORTS: dict[str, tuple[str, str]] = {}
-
-
-def __getattr__(name: str) -> Any:
-    """Lazily import optional SDK surfaces."""
-
-    if name not in _LAZY_EXPORTS:
-        raise AttributeError(f"module 'datacloud_knowledge' has no attribute {name!r}")
-    module_name, attr_name = _LAZY_EXPORTS[name]
-    from importlib import import_module
-
-    value = getattr(import_module(module_name), attr_name)
-    globals()[name] = value
-    return value
-
 
 __all__ = [
     "__version__",
