@@ -15,15 +15,6 @@ from psycopg import Connection, sql
 from datacloud_knowledge.adapters.opengauss._db.context import DatabaseContext
 from datacloud_knowledge.adapters.opengauss._db.url import build_postgres_connection_uri
 
-from ..ingestion.owl_import.importer._helpers import (
-    _execute_values,
-    _import_batch_size,
-    _iter_jsonl_obj_batches,
-    _normalize_term_code,
-    _str_id_if_set,
-    _term_id_from_obj_or_code_direct,
-)
-
 logger = logging.getLogger(__name__)
 
 
@@ -65,8 +56,7 @@ class BulkImportAdapter:
         db_ctx = DatabaseContext(schema=schema)
         self._schema = db_ctx.schema
         self._conn = self._connect(
-            conninfo=conninfo
-            or build_postgres_connection_uri(schema=self._schema, db_url=db_url),
+            conninfo=conninfo or build_postgres_connection_uri(schema=self._schema, db_url=db_url),
         )
         self._conn.autocommit = False
 
@@ -97,11 +87,7 @@ class BulkImportAdapter:
     ) -> None:
         """设置 search_path，删除 scoped 数据（在事务内执行）。"""
         with self._conn.cursor() as cur:
-            cur.execute(
-                sql.SQL("SET LOCAL search_path TO {}").format(
-                    sql.Identifier(self._schema)
-                )
-            )
+            cur.execute(sql.SQL("SET LOCAL search_path TO {}").format(sql.Identifier(self._schema)))
             self._delete_scoped_term_names(cur, scopes)
             self._delete_scope_terms(cur, root_term_ids)
 
@@ -170,9 +156,7 @@ class BulkImportAdapter:
 
     # ── 实体批量写入（委托底层 writer 函数）─────────────────────────────
 
-    def batch_process_domain(
-        self, items: list[dict[str, Any]], stats: dict[str, Any]
-    ) -> None:
+    def batch_process_domain(self, items: list[dict[str, Any]], stats: dict[str, Any]) -> None:
         from datacloud_knowledge.ingestion.owl_import.importer.writer._domain import (
             _batch_process_domain,
         )
@@ -180,9 +164,7 @@ class BulkImportAdapter:
         with self._conn.cursor() as cur:
             _batch_process_domain(cur, items, stats)
 
-    def batch_process_library(
-        self, items: list[dict[str, Any]], stats: dict[str, Any]
-    ) -> None:
+    def batch_process_library(self, items: list[dict[str, Any]], stats: dict[str, Any]) -> None:
         from datacloud_knowledge.ingestion.owl_import.importer.writer._library import (
             _batch_process_library,
         )
@@ -190,9 +172,7 @@ class BulkImportAdapter:
         with self._conn.cursor() as cur:
             _batch_process_library(cur, items, stats)
 
-    def batch_process_term_type(
-        self, items: list[dict[str, Any]], stats: dict[str, Any]
-    ) -> None:
+    def batch_process_term_type(self, items: list[dict[str, Any]], stats: dict[str, Any]) -> None:
         from datacloud_knowledge.ingestion.owl_import.importer.writer._term_type import (
             _batch_process_term_type,
         )
@@ -200,9 +180,7 @@ class BulkImportAdapter:
         with self._conn.cursor() as cur:
             _batch_process_term_type(cur, items, stats)
 
-    def batch_process_term(
-        self, items: list[dict[str, Any]], stats: dict[str, Any]
-    ) -> None:
+    def batch_process_term(self, items: list[dict[str, Any]], stats: dict[str, Any]) -> None:
         from datacloud_knowledge.ingestion.owl_import.importer.writer._term import (
             _batch_process_term,
         )
@@ -210,9 +188,7 @@ class BulkImportAdapter:
         with self._conn.cursor() as cur:
             _batch_process_term(cur, items, stats)
 
-    def batch_process_relation(
-        self, items: list[dict[str, Any]], stats: dict[str, Any]
-    ) -> None:
+    def batch_process_relation(self, items: list[dict[str, Any]], stats: dict[str, Any]) -> None:
         from datacloud_knowledge.ingestion.owl_import.importer.writer._relation import (
             _batch_process_relation,
         )
@@ -220,9 +196,7 @@ class BulkImportAdapter:
         with self._conn.cursor() as cur:
             _batch_process_relation(cur, items, stats)
 
-    def batch_process_knowledge(
-        self, items: list[dict[str, Any]], stats: dict[str, Any]
-    ) -> None:
+    def batch_process_knowledge(self, items: list[dict[str, Any]], stats: dict[str, Any]) -> None:
         from datacloud_knowledge.ingestion.owl_import.importer.writer._knowledge import (
             _batch_process_knowledge,
         )

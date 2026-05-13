@@ -15,82 +15,36 @@
 
   雪花 ID：可选环境变量 DATACLOUD_KNOWLEDGE_SNOWFLAKE_DATACENTER_ID、
   DATACLOUD_KNOWLEDGE_SNOWFLAKE_WORKER_ID（各 0–31，默认 1）。
+
+数据库访问已通过 BulkImportAdapter 解耦：本模块不再直接导入 psycopg，
+连接、搜索路径、事务控制全部委托给适配器。
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 from importlib import import_module
 from pathlib import Path
 from typing import Any
 
-import psycopg
-from psycopg import Connection, sql
+from datacloud_knowledge.adapters import create_bulk_importer
 
-from datacloud_knowledge.adapters.opengauss._db.context import DatabaseContext
-from datacloud_knowledge.adapters.opengauss._db.url import build_postgres_connection_uri
-
-from . import _helpers, owl_converter, owl_parser
-from .writer import (
-    _batch_process_domain,
-    _batch_process_knowledge,
-    _batch_process_library,
-    _batch_process_relation,
-    _batch_process_term,
-    _batch_process_term_type,
-)
-
-_execute_values = _helpers._execute_values
-_import_batch_size = _helpers._import_batch_size
-_iter_jsonl_obj_batches = _helpers._iter_jsonl_obj_batches
-_normalize_term_code = _helpers._normalize_term_code
-_term_id_from_obj_or_code_direct = _helpers._term_id_from_obj_or_code_direct
+from . import owl_converter, owl_parser
 
 logger = logging.getLogger(__name__)
 
 
-# ── DB 连接 ───────────────────────────────────────────────────────────────────
+# ── 批量处理器路由映射 ───────────────────────────────────────────────────────
 
-
-def _connect(*, schema: str | None = None, conninfo: str | None = None) -> Connection:
-    """从环境变量建立 psycopg3 连接。
-
-    可选环境变量：
-    - DATACLOUD_DB_CONNECT_TIMEOUT：连接超时（秒），默认 30；仅影响建连阶段。
-    - DATACLOUD_DB_LOCK_TIMEOUT_MS：锁等待超时（毫秒）。>0 时执行 SET lock_timeout，
-      避免 INSERT/UPDATE 在等表锁/行锁时无限挂起；未设置则不启用（与 PostgreSQL 默认一致）。
-    若入库卡在 domain 首条 INSERT，多为其他会话持有知识 schema 表锁且未提交，
-    请在库上查阻塞会话或设置 DATACLOUD_DB_LOCK_TIMEOUT_MS=30000 快速得到 lock timeout 报错。
-    """
-
-    ct_raw = os.getenv("DATACLOUD_DB_CONNECT_TIMEOUT", "30").strip()
-    connect_timeout = int(ct_raw) if ct_raw.isdigit() else 30
-
-    app_name = "datacloud_knowledge_import"
-
-    _kw: dict[str, Any] = {
-        "conninfo": conninfo or build_postgres_connection_uri(schema=schema),
-        "connect_timeout": connect_timeout,
-    }
-    try:
-        conn = psycopg.connect(**_kw, application_name=app_name)
-    except TypeError:
-        conn = psycopg.connect(**_kw)
-
-    return conn
-
-
-# ── 路由分发 ──────────────────────────────────────────────────────────────────
-
-_STEP_BATCH_HANDLERS = {
-    "meta_domain": _batch_process_domain,
-    "meta_library": _batch_process_library,
-    "term_type": _batch_process_term_type,
-    "term": _batch_process_term,
-    "relation": _batch_process_relation,
-    "knowledge": _batch_process_knowledge,
+# 方法名字符串，在 run() 中通过 getattr(adapter, name) 调用。
+_STEP_BATCH_METHODS: dict[str, str] = {
+    "meta_domain": "batch_process_domain",
+    "meta_library": "batch_process_library",
+    "term_type": "batch_process_term_type",
+    "term": "batch_process_term",
+    "relation": "batch_process_relation",
+    "knowledge": "batch_process_knowledge",
 }
 
 
@@ -285,86 +239,8 @@ def _collect_scope_root_term_ids(owl_entities: list[dict[str, Any]]) -> list[str
     return root_term_ids
 
 
-def _delete_scope_terms(cur: Any, root_term_ids: list[str]) -> None:
-    """删除指定 view/object 根节点下的旧 term 子树。"""
-    if not root_term_ids:
-        return
-
-    cur.execute(
-        """
-        WITH RECURSIVE scope_terms AS (
-            SELECT term_id
-            FROM term
-            WHERE term_id = ANY(%s)
-            UNION
-            SELECT t.term_id
-            FROM term t
-            JOIN scope_terms s ON t.parent_term_id = s.term_id
-        )
-        DELETE FROM term_knowledge
-        WHERE term_id IN (SELECT term_id FROM scope_terms)
-        """,
-        (root_term_ids,),
-    )
-    cur.execute(
-        """
-        WITH RECURSIVE scope_terms AS (
-            SELECT term_id
-            FROM term
-            WHERE term_id = ANY(%s)
-            UNION
-            SELECT t.term_id
-            FROM term t
-            JOIN scope_terms s ON t.parent_term_id = s.term_id
-        )
-        DELETE FROM term_relation
-        WHERE source_term_id IN (SELECT term_id FROM scope_terms)
-           OR target_term_id IN (SELECT term_id FROM scope_terms)
-        """,
-        (root_term_ids,),
-    )
-    cur.execute(
-        """
-        WITH RECURSIVE scope_terms AS (
-            SELECT term_id
-            FROM term
-            WHERE term_id = ANY(%s)
-            UNION
-            SELECT t.term_id
-            FROM term t
-            JOIN scope_terms s ON t.parent_term_id = s.term_id
-        )
-        DELETE FROM term_name
-        WHERE term_id IN (SELECT term_id FROM scope_terms)
-        """,
-        (root_term_ids,),
-    )
-    cur.execute(
-        """
-        WITH RECURSIVE scope_terms AS (
-            SELECT term_id
-            FROM term
-            WHERE term_id = ANY(%s)
-            UNION
-            SELECT t.term_id
-            FROM term t
-            JOIN scope_terms s ON t.parent_term_id = s.term_id
-        )
-        DELETE FROM term
-        WHERE term_id IN (SELECT term_id FROM scope_terms)
-        """,
-        (root_term_ids,),
-    )
-
-
-def _delete_scoped_term_names(cur: Any, scopes: list[dict[str, str]]) -> None:
-    """删除导入包作用域内的 scoped term_name。"""
-
-    for scope in scopes:
-        cur.execute(
-            "DELETE FROM term_name WHERE search_scope @> %s::jsonb",
-            (json.dumps(scope, ensure_ascii=False),),
-        )
+# 注意：_delete_scope_terms / _delete_scoped_term_names 已迁移到
+# BulkImportAdapter.begin_import() 内部实现（adapters/opengauss/import_writer.py）。
 
 
 def _collect_package_root_term_ids(import_steps: list[dict[str, Any]], root: Path) -> list[str]:
@@ -439,6 +315,8 @@ def run(
 ) -> dict[str, Any]:
     """按 manifest 顺序在单个事务内导入所有数据。
 
+    数据库访问通过 BulkImportAdapter 完成，本函数负责文件解析和编排。
+
     Args:
         folder_path: 导入包根目录的本地绝对路径（预检已通过）。
 
@@ -468,62 +346,50 @@ def run(
             for step_type, path in discover_owl_files(root)
         ]
         logger.info("manifest.json 不存在，已切换到目录扫描模式: %s 个 OWL 文件", len(import_steps))
-    batch_size = _import_batch_size()
 
-    db_ctx = DatabaseContext(schema=schema)
-    conn = _connect(
-        schema=db_ctx.schema,
-        conninfo=conninfo or build_postgres_connection_uri(schema=db_ctx.schema, db_url=db_url),
-    )
+    adapter = create_bulk_importer(schema=schema, db_url=db_url, conninfo=conninfo)
     try:
-        conn.autocommit = False
-        with conn.cursor() as cur:
-            cur.execute(
-                sql.SQL("SET LOCAL search_path TO {}").format(sql.Identifier(db_ctx.schema))
-            )
-            _delete_scoped_term_names(cur, _collect_package_root_scopes(import_steps, root))
-            _delete_scope_terms(cur, _collect_package_root_term_ids(import_steps, root))
-            for step in import_steps:
-                rel_file: str = step.get("file", "")
-                step_type: str = step.get("type", "")
-                entity_type = _step_entity_type(step_type, rel_file)
-                batch_handler = _STEP_BATCH_HANDLERS.get(entity_type)
-                if batch_handler is None and step_type != "ontology":
-                    logger.warning("未知 step type '%s', 跳过 %s", step_type, rel_file)
-                    continue
-                if step_type == "ontology":
-                    logger.info("ontology %s (reference file, parse but skip DB)", rel_file)
+        adapter.begin_import(
+            scopes=_collect_package_root_scopes(import_steps, root),
+            root_term_ids=_collect_package_root_term_ids(import_steps, root),
+        )
+        for step in import_steps:
+            rel_file: str = step.get("file", "")
+            step_type: str = step.get("type", "")
+            entity_type = _step_entity_type(step_type, rel_file)
+            batch_method = _STEP_BATCH_METHODS.get(entity_type)
+            if batch_method is None and step_type != "ontology":
+                logger.warning("未知 step type '%s', 跳过 %s", step_type, rel_file)
+                continue
+            if step_type == "ontology":
+                logger.info("ontology %s (reference file, parse but skip DB)", rel_file)
+                continue
 
-                file_path = root / rel_file
-                logger.info(
-                    "importing %s (%s), batch_size=%s",
-                    rel_file,
-                    entity_type,
-                    batch_size,
-                )
-                if rel_file.endswith(".owl"):
-                    owl_entities = owl_parser.parse_owl_file(file_path)
-                    converted = _convert_owl_entities(step_type, rel_file, owl_entities)
-                    for entity_type_key, objs in converted.items():
-                        if not objs:
-                            continue
-                        handler = _STEP_BATCH_HANDLERS.get(entity_type_key)
-                        if handler is None:
-                            logger.warning(
-                                "OWL 实体类型 '%s', 无处理器, 跳过 %s", entity_type_key, rel_file
-                            )
-                            continue
-                        handler(cur, objs, stats)
-                else:
-                    logger.warning("不支持的文件扩展名, 跳过 %s", rel_file)
+            file_path = root / rel_file
+            logger.info("importing %s (%s)", rel_file, entity_type)
+            if rel_file.endswith(".owl"):
+                owl_entities = owl_parser.parse_owl_file(file_path)
+                converted = _convert_owl_entities(step_type, rel_file, owl_entities)
+                for entity_type_key, objs in converted.items():
+                    if not objs:
+                        continue
+                    method_name = _STEP_BATCH_METHODS.get(entity_type_key)
+                    if method_name is None:
+                        logger.warning(
+                            "OWL 实体类型 '%s', 无处理器, 跳过 %s", entity_type_key, rel_file
+                        )
+                        continue
+                    getattr(adapter, method_name)(objs, stats)
+            else:
+                logger.warning("不支持的文件扩展名, 跳过 %s", rel_file)
 
-        conn.commit()
+        adapter.commit()
         logger.info("import committed: %s", stats)
         return {"status": "success", "stats": stats, "error": None}
 
     except Exception as exc:
-        conn.rollback()
+        adapter.rollback()
         logger.exception("import failed, rolled back")
         return {"status": "failed", "stats": stats, "error": str(exc)}
     finally:
-        conn.close()
+        adapter.close()
