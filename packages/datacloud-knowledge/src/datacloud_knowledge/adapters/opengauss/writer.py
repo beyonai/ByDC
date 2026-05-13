@@ -409,6 +409,47 @@ class PostgresTermWriter:
             {"words": word_list},
         )
 
+    def get_name_search_scope(self, *, name_id: str) -> dict[str, object] | None:
+        """读取 term_name 记录上的 search_scope JSONB 字段。"""
+        row = self._session.execute(
+            text("SELECT search_scope FROM term_name WHERE name_id = :name_id"),
+            {"name_id": name_id},
+        ).fetchone()
+        if row is None or row[0] is None:
+            return None
+        if isinstance(row[0], dict):
+            return dict(row[0])
+        import json as _json
+
+        try:
+            parsed = _json.loads(str(row[0]))
+        except (_json.JSONDecodeError, TypeError):
+            return None
+        return parsed if isinstance(parsed, dict) else None
+
+    def update_name_search_scope(
+        self,
+        *,
+        name_id: str,
+        search_scope: dict[str, object],
+        updated_time: object,
+    ) -> None:
+        """原子更新 term_name 的 search_scope 和 updated_time。"""
+        import json as _json
+
+        self._session.execute(
+            text(
+                "UPDATE term_name "
+                "SET search_scope = CAST(:search_scope AS jsonb), updated_time = :updated_time "
+                "WHERE name_id = :name_id"
+            ),
+            {
+                "name_id": name_id,
+                "search_scope": _json.dumps(search_scope),
+                "updated_time": updated_time,
+            },
+        )
+
     # ═══════════════════════════════════════════════════════════════════════════════
     # 内部辅助方法
     # ═══════════════════════════════════════════════════════════════════════════════

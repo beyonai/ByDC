@@ -505,3 +505,30 @@ class TermWriter(Protocol):
             words: 词汇文本列表。
         """
         ...
+
+    def get_name_search_scope(self, *, name_id: str) -> dict[str, object] | None:
+        """读取 term_name 记录上的 search_scope JSONB 字段。
+
+        Args:
+            name_id: 术语名称记录 ID。
+
+        Returns:
+            search_scope 字典，无记录或字段为 NULL 时返回 None。
+        """
+        ...
+
+    def update_name_search_scope(
+        self,
+        *,
+        name_id: str,
+        search_scope: dict[str, object],
+        updated_time: object,
+    ) -> None:
+        """原子更新 term_name 的 search_scope 和 updated_time。
+
+        Args:
+            name_id: 术语名称记录 ID。
+            search_scope: 新的搜索作用域负载。
+            updated_time: 更新时间（datetime 对象或 ISO 字符串）。
+        """
+        ...

@@ -1,12 +1,7 @@
 """score 闭环更新 — 算法 E。
 
-TODO(adapter): 消除原始 SQL。需要 TermWriter 协议新增方法:
-  - TermWriter.get_term_name_search_scope(name_id) → dict | None
-    (SELECT search_scope FROM term_name WHERE name_id = :name_id)
-  - TermWriter.update_term_name_search_scope(name_id, search_scope, updated_time)
-    (UPDATE term_name SET search_scope = ..., updated_time = ... WHERE name_id = ...)
-  或合并为单个原子方法:
-  - TermWriter.upsert_term_name_scope(name_id, scope_update, now) → bool
+数据库访问通过 ``create_writer()`` 的
+``get_name_search_scope()`` / ``update_name_search_scope()`` 完成。
 """
 
 from __future__ import annotations
@@ -17,8 +12,6 @@ import logging
 from datetime import UTC, datetime
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
-
-from sqlalchemy import text
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -43,27 +36,19 @@ def update_scores(
     For each record, reads current search_scope from DB, applies
     decay + count update + score recalculation, writes back.
 
-    TODO(adapter): 迁移至 TermWriter.get_term_name_search_scope() +
-    TermWriter.update_term_name_search_scope()，消除原始 SQL。
-
     Args:
         records: Alias records to update (name_id + success flag).
-        session: SQLAlchemy Session.
+        session: SQLAlchemy Session (deprecated — writer manages its own).
     """
+    from datacloud_knowledge.adapters import create_writer
+
     now = datetime.now(tz=UTC)
+    writer = create_writer(session=session)
 
     for record in records:
-        row = session.execute(
-            text("SELECT search_scope FROM term_name WHERE name_id = :name_id"),
-            {"name_id": record.name_id},
-        ).fetchone()
-        if row is None:
-            log.debug("Skip score update for missing name_id=%s", record.name_id)
-            continue
-
-        search_scope = _parse_search_scope(row[0])
+        search_scope = writer.get_name_search_scope(name_id=record.name_id)
         if search_scope is None:
-            log.warning("Skip score update for invalid search_scope name_id=%s", record.name_id)
+            log.debug("Skip score update for missing name_id=%s", record.name_id)
             continue
 
         if not search_scope.get("scope_user_id"):
@@ -88,17 +73,10 @@ def update_scores(
             }
         )
 
-        session.execute(
-            text(
-                "UPDATE term_name "
-                "SET search_scope = CAST(:search_scope AS jsonb), updated_time = :now "
-                "WHERE name_id = :name_id"
-            ),
-            {
-                "name_id": record.name_id,
-                "search_scope": json.dumps(search_scope),
-                "now": now,
-            },
+        writer.update_name_search_scope(
+            name_id=record.name_id,
+            search_scope=search_scope,
+            updated_time=now,
         )
 
 
