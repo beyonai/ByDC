@@ -5,12 +5,12 @@
 
 公共 API 速览：
     from datacloud_knowledge.provider import (
-        get_object_props,              # 查询对象的属性列表
-        get_prop_values_with_aliases,  # 查询属性的可选值及别名
-        resolve_field_aliases,         # 字段别名消歧
-        search_terms_by_type,          # 术语检索
-        prepare_query_clarification,   # 查询澄清分析
-        finalize_query_clarification,  # 澄清回填
+        get_object_props_by_code,       # 按对象 code 查询属性列表
+        get_prop_enum_values,           # 按属性 code 查询可选枚举值
+        resolve_field_aliases,          # 字段别名消歧
+        search_terms_by_type,           # 术语检索
+        prepare_query_clarification,    # 查询澄清分析
+        finalize_query_clarification,   # 澄清回填
     )
 """
 
