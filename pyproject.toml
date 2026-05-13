@@ -104,7 +104,6 @@ members = [
     "packages/datacloud-analysis",
     "packages/datacloud-data",
     "packages/datacloud-knowledge",
-    "examples/e_commerce_demo/backend",
 ]
 
 [tool.uv.sources]

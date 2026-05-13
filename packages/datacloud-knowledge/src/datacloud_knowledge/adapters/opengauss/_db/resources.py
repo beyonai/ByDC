@@ -9,7 +9,7 @@ _SQL_PACKAGE = "datacloud_knowledge.adapters.opengauss._db.sql_assets.sql"
 
 
 def _repo_sql_dir(kind: str) -> Path:
-    package_root = Path(__file__).resolve().parents[4]
+    package_root = Path(__file__).resolve().parents[5]
     if kind == "ddl":
         return package_root / "db" / "ddl" / "knowledge"
     if kind == "seed":
