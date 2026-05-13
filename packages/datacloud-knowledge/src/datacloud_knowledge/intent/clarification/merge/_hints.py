@@ -11,6 +11,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from datacloud_knowledge.contracts.rrf import rrf_fuse
 from datacloud_knowledge.intent.clarification._pre_resolve import term_key
 from datacloud_knowledge.intent.clarification.models import (
     ExtractedTerm,
@@ -18,7 +19,6 @@ from datacloud_knowledge.intent.clarification.models import (
     PreResolveResult,
     TermMeta,
 )
-from datacloud_knowledge.contracts.rrf import rrf_fuse
 
 logger = logging.getLogger(__name__)
 

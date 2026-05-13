@@ -10,6 +10,7 @@ from typing import Any
 
 from datacloud_knowledge.adapters.opengauss._db.connection import get_session
 from datacloud_knowledge.adapters.opengauss._db.models import Term, TermRelation
+from datacloud_knowledge.contracts.rrf import rrf_fuse
 from datacloud_knowledge.intent._recall_common import (
     KTYPE_CATEGORY_MAP,
     _load_type_codes_by_category,
@@ -22,7 +23,6 @@ from datacloud_knowledge.intent.recall import (
     _batch_vector,
 )
 from datacloud_knowledge.intent.service import typed_multi_recall_with_session
-from datacloud_knowledge.contracts.rrf import rrf_fuse
 
 from .models import ExtractedTerm, PreResolveResult
 

@@ -8,9 +8,9 @@ from typing import Any
 
 from sqlalchemy import select
 
+from datacloud_knowledge.adapters import create_reader
 from datacloud_knowledge.adapters.opengauss._db.connection import get_session
 from datacloud_knowledge.adapters.opengauss._db.models import Term
-from datacloud_knowledge.adapters import create_reader
 from datacloud_knowledge.intent.service import store_clarification_results
 
 logger = logging.getLogger(__name__)
@@ -27,9 +27,7 @@ def normalize_clarification_params(
 ) -> dict[str, Any]:
     """Normalize confirmed clarification params to canonical English field codes."""
     field_terms, _ = collect_terms_from_params(params)
-    result = create_reader().resolve_field_aliases(
-        terms=field_terms, scope_code=ontology_code
-    )
+    result = create_reader().resolve_field_aliases(terms=field_terms, scope_code=ontology_code)
     patched = apply_resolved_to_params(params, result.resolved)
     scope_maps = _load_scope_term_maps(ontology_code)
     return _normalize_filter_values(patched, scope_maps)
@@ -100,9 +98,7 @@ def _load_scope_term_maps(scope_code: str) -> dict[str, Any]:
             prop_codes.setdefault(prop.term_code, prop.term_id)
 
     value_terms_by_prop: dict[str, dict[str, str]] = {}
-    for values in reader.get_prop_values_with_aliases(
-        source_term_ids=source_term_ids
-    ).values():
+    for values in reader.get_prop_values_with_aliases(source_term_ids=source_term_ids).values():
         for value in values:
             prop_values = value_terms_by_prop.setdefault(value.parent_term_id, {})
             prop_values.setdefault(value.term_name, value.term_id)

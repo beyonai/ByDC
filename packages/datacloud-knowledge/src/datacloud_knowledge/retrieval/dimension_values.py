@@ -9,6 +9,12 @@ dimension_value_hints，供 LLM confirm 作为辅助上下文。
 - 不侵入召回管道（typed_recall / batch_recall）
 - 结果作为 side-channel，不混入 recall candidates
 - cat=2 有界（当前 18 条，预期 ≤ 几百条/域），全量内存安全
+
+TODO: 迁移到 TermReader 协议。
+当前 _load_cat2_items() 直接使用 _db.connection.get_session + raw SQL。
+迁移路径：
+  1. cat=2 全量加载 → reader.get_object_props_by_code(dimension_code) 或 reader.get_prop_enum_values()
+  2. 如协议方法不满足维度值加载需求 → 在 TermReader 实现中新增 get_dimension_values() 方法
 """
 
 from __future__ import annotations
