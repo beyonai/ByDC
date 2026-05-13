@@ -1,8 +1,6 @@
 """用户级 LRU+TTL 缓存 — 算法 B 二级缓存。
 
-TODO(adapter): 消除原始 SQL。需要 TermReader 协议新增方法:
-  - TermReader.get_user_scoped_aliases(user_id) → dict[str, list[NameItem]]
-    (按 scope_user_id 过滤 term_name.search_scope JSONB 字段，join term 表)
+数据库访问通过 ``create_reader().get_user_scoped_names()`` 完成。
 """
 
 from __future__ import annotations
@@ -10,12 +8,8 @@ from __future__ import annotations
 import logging
 import time
 from contextlib import suppress
-from typing import TYPE_CHECKING
 
-from sqlalchemy import text
-
-if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+from datacloud_knowledge.adapters import create_reader
 
 log = logging.getLogger(__name__)
 
@@ -65,32 +59,23 @@ class UserNameCache:
         self._store[user_id] = (name_index, time.monotonic())
         self._access_order.append(user_id)
 
-    def load(self, user_id: str, session: Session) -> NameIndex:
+    def load(self, user_id: str) -> NameIndex:
         """Load user's scoped aliases from DB and cache them.
-
-        TODO(adapter): 迁移至 TermReader.get_user_scoped_aliases(user_id)，
-        消除直接使用 sqlalchemy.text 的原始 SQL。
 
         Args:
             user_id: The user ID to load aliases for.
-            session: SQLAlchemy Session instance.
 
         Returns:
             name_index for this user: {name_text: [(term_id, term_type_code, match_type, score), ...]}
         """
-        sql = text(
-            "SELECT tn.name_text, t.term_id, t.term_type_code, tn.search_scope "
-            "FROM term_name tn "
-            "JOIN term t ON tn.term_id = t.term_id "
-            "WHERE tn.search_scope->>'scope_user_id' = :user_id"
-        )
-        rows = session.execute(sql, {"user_id": user_id}).fetchall()
+        reader = create_reader()
+        rows = reader.get_user_scoped_names(user_id=user_id)
 
         name_index: NameIndex = {}
-        for name_text, term_id, term_type_code, search_scope in rows:
-            score = float(search_scope.get("score", 0.0)) if isinstance(search_scope, dict) else 0.0
-            entry_list = name_index.setdefault(name_text, [])
-            entry_list.append((term_id, term_type_code, "alias", score))
+        for item in rows:
+            score = float(item.search_scope.get("score", 0.0))
+            entry_list = name_index.setdefault(item.name_text, [])
+            entry_list.append((item.term_id, item.term_type_code, "alias", score))
 
         self.put(user_id, name_index)
         log.debug(

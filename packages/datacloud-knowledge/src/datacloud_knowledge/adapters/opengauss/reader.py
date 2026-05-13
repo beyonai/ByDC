@@ -32,6 +32,7 @@ from datacloud_knowledge.adapters.opengauss._db.models import Term, TermName, Te
 from datacloud_knowledge.adapters.opengauss.bm25 import bm25_search_with_or
 from datacloud_knowledge.contracts.types import (
     AmbiguousCandidate,
+    DimensionValueItem,
     FieldResolutionResult,
     FieldResolutionResultWithNames,
     NameItem,
@@ -41,6 +42,7 @@ from datacloud_knowledge.contracts.types import (
     ShortestPathNode,
     TagFilter,
     TermItem,
+    UserScopedNameItem,
     ValueResolutionResult,
     ValueWithAliases,
 )
@@ -1221,6 +1223,54 @@ class PostgresTermReader:
                 path_relations=[str(v) for v in row.path_relations],
             )
             for row in rows
+        )
+
+    def get_dimension_values(self) -> Sequence[DimensionValueItem]:
+        """查询所有 cat=2 维度枚举值（全量加载到内存）。"""
+        try:
+            with self._session_factory() as session:
+                rows = session.execute(
+                    text(
+                        "SELECT t.term_name, tt.type_name "
+                        "FROM term t "
+                        "JOIN term_type tt ON t.term_type_code = tt.type_code "
+                        "WHERE tt.type_category = 2 "
+                        "ORDER BY t.term_name"
+                    )
+                ).fetchall()
+        except Exception:
+            logger.exception("get_dimension_values failed")
+            raise
+
+        return tuple(
+            DimensionValueItem(term_name=str(r.term_name), type_name=str(r.type_name)) for r in rows
+        )
+
+    def get_user_scoped_names(self, *, user_id: str) -> Sequence[UserScopedNameItem]:
+        """查询指定用户作用域下的术语别名记录。"""
+        try:
+            with self._session_factory() as session:
+                rows = session.execute(
+                    text(
+                        "SELECT tn.name_text, t.term_id, t.term_type_code, tn.search_scope "
+                        "FROM term_name tn "
+                        "JOIN term t ON tn.term_id = t.term_id "
+                        "WHERE tn.search_scope->>'scope_user_id' = :user_id"
+                    ),
+                    {"user_id": user_id},
+                ).fetchall()
+        except Exception:
+            logger.exception("get_user_scoped_names failed: user_id=%s", user_id)
+            raise
+
+        return tuple(
+            UserScopedNameItem(
+                name_text=str(r.name_text),
+                term_id=str(r.term_id),
+                term_type_code=str(r.term_type_code),
+                search_scope=dict(r.search_scope) if r.search_scope is not None else {},
+            )
+            for r in rows
         )
 
     # ═══════════════════════════════════════════════════════════════════════════

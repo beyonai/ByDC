@@ -56,7 +56,7 @@ def match_mentions(
     if user_id is not None and user_cache is not None:
         user_name_index = user_cache.get(user_id)
         if user_name_index is None:
-            user_name_index = user_cache.load(user_id, session)
+            user_name_index = user_cache.load(user_id)
         log.debug("Loaded user name index for user_id=%s", user_id)
     merged_name_index = _merge_name_indexes(global_name_index, user_name_index)
     log.debug(
@@ -144,7 +144,7 @@ def match_mentions_with_search(
             if user_id is not None and user_cache is not None:
                 user_name_index = user_cache.get(user_id)
                 if user_name_index is None:
-                    user_name_index = user_cache.load(user_id, session)
+                    user_name_index = user_cache.load(user_id)
                 log.debug("Loaded user name index for user_id=%s", user_id)
             merged_name_index = _merge_name_indexes(global_name_index, user_name_index)
             postings = merged_name_index.get(mention.text)

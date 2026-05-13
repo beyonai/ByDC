@@ -10,11 +10,7 @@ dimension_value_hints，供 LLM confirm 作为辅助上下文。
 - 结果作为 side-channel，不混入 recall candidates
 - cat=2 有界（当前 18 条，预期 ≤ 几百条/域），全量内存安全
 
-TODO: 迁移到 TermReader 协议。
-当前 _load_cat2_items() 直接使用 _db.connection.get_session + raw SQL。
-迁移路径：
-  1. cat=2 全量加载 → reader.get_object_props_by_code(dimension_code) 或 reader.get_prop_enum_values()
-  2. 如协议方法不满足维度值加载需求 → 在 TermReader 实现中新增 get_dimension_values() 方法
+数据库访问通过 ``create_reader().get_dimension_values()`` 完成。
 """
 
 from __future__ import annotations
@@ -23,6 +19,8 @@ import logging
 import re
 import threading
 from dataclasses import dataclass
+
+from datacloud_knowledge.adapters import create_reader
 
 logger = logging.getLogger(__name__)
 
@@ -91,30 +89,14 @@ class DimensionValueResolver:
         self._loaded = False
 
     def _load(self) -> None:
-        """从 DB 加载 cat=2 全量。"""
+        """从 DB 加载 cat=2 全量，通过 create_reader() 委托适配器。"""
         if self._loaded:
             return
         try:
-            from sqlalchemy import text
-
-            from datacloud_knowledge.adapters.opengauss._db.connection import (
-                get_session,
-            )
-
-            with get_session() as session:
-                rows = session.execute(
-                    text(
-                        "SELECT t.term_name, tt.type_name "
-                        "FROM term t "
-                        "JOIN term_type tt "
-                        "  ON t.term_type_code = tt.type_code "
-                        "WHERE tt.type_category = 2"
-                    )
-                ).fetchall()
-
-            for term_name, type_name in rows:
-                val = str(term_name).strip()
-                dim = str(type_name).strip()
+            reader = create_reader()
+            for item in reader.get_dimension_values():
+                val = item.term_name.strip()
+                dim = item.type_name.strip()
                 if not val or not dim:
                     continue
                 normalized = _normalize(val)

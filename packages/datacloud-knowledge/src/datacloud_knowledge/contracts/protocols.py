@@ -14,6 +14,7 @@ from typing import Protocol
 from .text import Tokenizer
 from .types import (
     BM25Result,
+    DimensionValueItem,
     FieldResolutionResult,
     NameItem,
     PropItem,
@@ -22,6 +23,7 @@ from .types import (
     SubstringResult,
     TagFilter,
     TermNameCreate,
+    UserScopedNameItem,
     ValueResolutionResult,
     ValueWithAliases,
     VectorResult,
@@ -262,6 +264,32 @@ class TermReader(Protocol):
         Returns:
             ShortestPathNode 列表，每个节点代表一条从根到目标的完整路径。
             无满足条件的根节点时返回空序列。
+        """
+        ...
+
+    def get_dimension_values(self) -> Sequence[DimensionValueItem]:
+        """查询所有 cat=2 维度枚举值（全量加载到内存）。
+
+        执行 ``term JOIN term_type WHERE type_category = 2`` 查询，
+        返回 (term_name, type_name) 对列表。维度值数量有界（≤ 几百条），
+        全量加载是安全的。
+
+        Returns:
+            DimensionValueItem 列表，按 term_name 排序。
+        """
+        ...
+
+    def get_user_scoped_names(self, *, user_id: str) -> Sequence[UserScopedNameItem]:
+        """查询指定用户作用域下的术语别名记录。
+
+        在 ``term_name JOIN term`` 表上按 ``search_scope->>'scope_user_id'``
+        过滤，返回用户的专属术语别名索引。
+
+        Args:
+            user_id: 用户 ID。
+
+        Returns:
+            UserScopedNameItem 列表。
         """
         ...
 

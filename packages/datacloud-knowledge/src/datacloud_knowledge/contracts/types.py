@@ -381,3 +381,38 @@ class ShortestPathNode:
     path_term_desc_summaries: list[str]
     path_descriptions: list[str]
     path_relations: list[str]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 维度值与用户别名类型
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True, slots=True)
+class DimensionValueItem:
+    """cat=2 维度枚举值项。
+
+    Attributes:
+        term_name: 术语标准名（维度枚举值文本）。
+        type_name: 术语类型名称（维度字段名）。
+    """
+
+    term_name: str
+    type_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class UserScopedNameItem:
+    """用户作用域下的术语别名记录。
+
+    Attributes:
+        name_text: 别名文本。
+        term_id: 归属术语 ID。
+        term_type_code: 术语类型编码。
+        search_scope: JSONB 搜索作用域（含 score 等字段）。
+    """
+
+    name_text: str
+    term_id: str
+    term_type_code: str
+    search_scope: dict[str, object]
