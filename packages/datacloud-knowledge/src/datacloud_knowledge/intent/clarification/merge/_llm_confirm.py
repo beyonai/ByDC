@@ -89,9 +89,7 @@ def merge_confirmed_common(
             if meta.ktype == "whereValue" and tc.confirmed:
                 idx = value_path_counters.get(meta.path, 0)
                 value_path_counters[meta.path] = idx + 1
-                value_confirmations.setdefault(meta.path, []).append(
-                    (idx, tc.confirmed)
-                )
+                value_confirmations.setdefault(meta.path, []).append((idx, tc.confirmed))
             elif tc.confirmed:
                 set_by_path(result, meta.path, tc.confirmed)
             elif tc.candidates:
@@ -150,13 +148,9 @@ def merge_confirmed_common(
     elif term_registry:
         # LLM 失败但有未确认术语 → fail-closed，强制澄清
         llm_failed = True
-        logger.warning(
-            "[merge] main LLM 确认失败，%d 个术语强制标记为需澄清", len(term_registry)
-        )
+        logger.warning("[merge] main LLM 确认失败，%d 个术语强制标记为需澄清", len(term_registry))
         for meta in term_registry.values():
-            fallback_candidates = _recall_fallback_candidates(
-                recall_map, meta.ktype, meta.raw_text
-            )
+            fallback_candidates = _recall_fallback_candidates(recall_map, meta.ktype, meta.raw_text)
             clarify_items.append(
                 ClarifyItem(
                     keyword=meta.raw_text,
@@ -202,9 +196,7 @@ def merge_confirmed_common(
             term_mappings: list[ConditionTermMapping] = []
             mapping_reasons: dict[tuple[int, int, str], str] = {}
             for tid, meta in items:
-                tc = next(
-                    (c for c in cc_result.confirmations if c.term_id == tid), None
-                )
+                tc = next((c for c in cc_result.confirmations if c.term_id == tid), None)
                 if tc is None:
                     llm_failed = True
                     logger.warning("[merge] cc LLM 遗漏术语 '%s'", meta.raw_text)

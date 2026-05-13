@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from datacloud_knowledge.knowledge_search.types import ResolvedField
+    from datacloud_knowledge.search.types import ResolvedField
 
 # ── 术语提取 ──────────────────────────────────────────────────────────
 

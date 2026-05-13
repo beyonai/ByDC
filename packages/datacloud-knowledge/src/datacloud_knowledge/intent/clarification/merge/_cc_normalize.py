@@ -55,18 +55,14 @@ def normalize_cc_result_with_hints(
             normalized.append(confirmation)
             continue
 
-        fallback_candidates = _recall_fallback_candidates(
-            recall_map, meta.ktype, meta.raw_text
-        )
+        fallback_candidates = _recall_fallback_candidates(recall_map, meta.ktype, meta.raw_text)
         current_candidates = _dedupe_candidate_names(
             ([confirmation.confirmed] if confirmation.confirmed else [])
             + (confirmation.candidates or fallback_candidates)
         )
         hint_candidates = _candidate_names_from_hint(hint)
 
-        if hint.confirmed and (
-            hint.force_confirm or hint.confirmed in current_candidates
-        ):
+        if hint.confirmed and (hint.force_confirm or hint.confirmed in current_candidates):
             normalized.append(
                 CCTermConfirmation(
                     term_id=confirmation.term_id,
@@ -77,9 +73,7 @@ def normalize_cc_result_with_hints(
             )
             continue
 
-        fused_candidates = _fuse_candidate_names_rrf(
-            [current_candidates, hint_candidates]
-        )
+        fused_candidates = _fuse_candidate_names_rrf([current_candidates, hint_candidates])
         keep_confirmed = bool(
             confirmation.confirmed
             and (hint.confirmed is None or confirmation.confirmed in fused_candidates)
@@ -95,9 +89,7 @@ def normalize_cc_result_with_hints(
 
     return CCConfirmResult(
         confirmations=normalized,
-        needs_clarification=any(
-            c.confirmed is None and c.candidates for c in normalized
-        ),
+        needs_clarification=any(c.confirmed is None and c.candidates for c in normalized),
     )
 
 
@@ -144,13 +136,9 @@ def _dedupe_condition_term_mappings(
     for key in order:
         group = grouped[key]
         first = group[0]
-        confirmed = next(
-            (item.confirmed for item in group if item.confirmed is not None), None
-        )
+        confirmed = next((item.confirmed for item in group if item.confirmed is not None), None)
         candidate_lists = [item.candidates for item in group if item.candidates]
-        candidates = (
-            [] if confirmed is not None else _fuse_candidate_names_rrf(candidate_lists)
-        )
+        candidates = [] if confirmed is not None else _fuse_candidate_names_rrf(candidate_lists)
         deduped.append(
             ConditionTermMapping(
                 original_term=first.original_term,

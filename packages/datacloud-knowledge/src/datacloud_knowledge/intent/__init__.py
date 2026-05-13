@@ -14,6 +14,8 @@ if os.getenv("DATACLOUD_INTENT_DEBUG", "0").strip().lower() in {"1", "true", "ye
         _intent_logger.addHandler(_h)
         _intent_logger.propagate = False  # 避免 root handler 重复输出
 
+from datacloud_knowledge.store.term_writer import PostgresTermWriter
+
 from .cache import UserNameCache
 from .clarification._expand_query import expand_query
 from .clarification.api import analyze_query_clarification
@@ -28,7 +30,6 @@ from .service import (
     store_clarification_results,
     typed_multi_recall_with_session,
 )
-from .term_writer import PostgresTermWriter
 from .types import (
     ClarificationResult,
     DisambiguationResult,

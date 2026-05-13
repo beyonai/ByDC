@@ -42,7 +42,7 @@ from datacloud_knowledge.intent.clarification.postprocess import (
 from datacloud_knowledge.intent.clarification.postprocess import (
     persist_confirmed_synonyms as _persist_confirmed_synonyms,
 )
-from datacloud_knowledge.knowledge_search.term_reader import PostgresTermReader
+from datacloud_knowledge.search.term_reader import PostgresTermReader
 
 logger = logging.getLogger(__name__)
 

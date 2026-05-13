@@ -6,8 +6,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from datacloud_knowledge.query.search.bm25 import _has_name_keywords_column
-from datacloud_knowledge.query.search.rrf import rrf_fuse
+from datacloud_knowledge.search.bm25 import _has_name_keywords_column
+from datacloud_knowledge.search.rrf import rrf_fuse
 
 from ._models import (
     _CJK_CHAR_RE,

@@ -11,7 +11,7 @@ from sqlalchemy import select
 from datacloud_knowledge.db.connection import get_session
 from datacloud_knowledge.db.models import Term
 from datacloud_knowledge.intent.service import store_clarification_results
-from datacloud_knowledge.knowledge_search import (
+from datacloud_knowledge.search import (
     get_object_props,
     get_prop_values_with_aliases,
     resolve_field_aliases,

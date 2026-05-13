@@ -90,9 +90,7 @@ def _fix_term_positions(
                     break
         # occurrences 为空 → best_pos 保持 None（术语不在句子中）
 
-        if best_pos is not None and (
-            best_pos != tm.start or best_pos + term_len != tm.end
-        ):
+        if best_pos is not None and (best_pos != tm.start or best_pos + term_len != tm.end):
             logger.debug(
                 "[cartesian] 位置校正: '%s' (%d,%d) → (%d,%d)",
                 term,
@@ -140,9 +138,7 @@ def truncate_candidates(
             break
 
         # 找候选最多的术语，裁剪末尾
-        max_idx = max(
-            range(len(candidate_lists)), key=lambda i: len(candidate_lists[i])
-        )
+        max_idx = max(range(len(candidate_lists)), key=lambda i: len(candidate_lists[i]))
         if len(candidate_lists[max_idx]) <= 1:
             break  # 无法再裁剪
         candidate_lists[max_idx].pop()
@@ -193,9 +189,7 @@ def expand_condition_cartesian(
         truncated = []
 
     # 构建笛卡尔积
-    combos = (
-        list(itertools.product(*truncated)) if truncated else [()]
-    )  # 全部确定，单个组合
+    combos = list(itertools.product(*truncated)) if truncated else [()]  # 全部确定，单个组合
 
     results: list[str] = []
     for combo in combos:

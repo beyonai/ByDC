@@ -8,7 +8,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
-from datacloud_knowledge.query.search.bm25 import (
+from datacloud_knowledge.search.bm25 import (
     _has_jieba_column,
     _has_name_keywords_column,
     _jieba_tokenize,
@@ -114,6 +114,7 @@ def _batch_jieba_bm25(
 
     started_at = time.monotonic()
     from datacloud_knowledge.db.connection import get_session
+
     with get_session() as session:
         if not _has_jieba_column(session):
             log.info(
@@ -150,6 +151,7 @@ def _batch_substring(
 
     started_at = time.monotonic()
     from datacloud_knowledge.db.connection import get_session
+
     with get_session() as session:
         results: dict[str, list[tuple[str, str, str, str, str]]] = {}
         for type_filter, requests in _group_requests_by_filter(batch.normal_requests).items():
@@ -185,6 +187,7 @@ def _run_single_vector_query(
 ) -> dict[str, list[tuple[str, str, str, str, str]]]:
     """单 keyword 向量查询，使用 HNSW 索引 (ORDER BY <=> :constant LIMIT k)。"""
     from datacloud_knowledge.db.connection import get_session
+
     with get_session() as session:
         params: dict[str, Any] = {
             "vector": vector_str,

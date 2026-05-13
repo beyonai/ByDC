@@ -9,7 +9,7 @@ from datacloud_knowledge.intent.clarification.models import (
     ConditionTermMapping,
     ExtractedTerm,
 )
-from datacloud_knowledge.knowledge_search.types import (
+from datacloud_knowledge.search.types import (
     FieldResolutionResultWithNames,
     ResolvedField,
 )

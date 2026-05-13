@@ -28,10 +28,7 @@ logger = logging.getLogger(__name__)
 # ── 数据采集（DATACLOUD_COLLECT_CONFIRM_CASES=1 时启用）───────────────
 
 _TEST_CASE_FILE = (
-    Path(__file__).resolve().parents[5]
-    / "scripts"
-    / "manual"
-    / "llm_confirm_test_cases.json"
+    Path(__file__).resolve().parents[5] / "scripts" / "manual" / "llm_confirm_test_cases.json"
 )
 
 
@@ -57,9 +54,7 @@ def _save_test_case(
             json.dumps(cases, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
-        logger.info(
-            "[confirm] 测试用例已保存: %s (共 %d 条)", _TEST_CASE_FILE.name, len(cases)
-        )
+        logger.info("[confirm] 测试用例已保存: %s (共 %d 条)", _TEST_CASE_FILE.name, len(cases))
     except Exception:
         logger.debug("[confirm] 测试用例保存失败，忽略", exc_info=True)
 
@@ -163,9 +158,7 @@ def llm_confirm_structured(
             return result
 
         # 兜底：从 content 文本中提取 JSON
-        raw_content = (
-            response.content if hasattr(response, "content") else str(response)
-        )
+        raw_content = response.content if hasattr(response, "content") else str(response)
         content = (
             "\n".join(str(part) for part in raw_content)
             if isinstance(raw_content, list)
@@ -242,9 +235,7 @@ def llm_confirm_main(
             )
             return result
 
-        raw_content = (
-            response.content if hasattr(response, "content") else str(response)
-        )
+        raw_content = response.content if hasattr(response, "content") else str(response)
         content = (
             "\n".join(str(part) for part in raw_content)
             if isinstance(raw_content, list)

@@ -8,11 +8,11 @@ from __future__ import annotations
 import logging
 import re
 
-from datacloud_knowledge.knowledge_search.term_search import (
+from datacloud_knowledge.search.term_search import (
     get_prop_enum_values,
     resolve_field_aliases_with_names,
 )
-from datacloud_knowledge.knowledge_search.types import ResolvedField
+from datacloud_knowledge.search.types import ResolvedField
 
 from .models import ExtractedTerm, PreResolveResult
 

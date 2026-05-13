@@ -25,15 +25,15 @@ from datacloud_knowledge.intent._recall_common import (
     _load_type_codes_by_category,  # noqa: F401 — re-export
     _shape_candidates,
 )
-from datacloud_knowledge.query.search.bm25 import (
+from datacloud_knowledge.search.bm25 import (
     bm25_search,
     bm25_search_jieba,
     bm25_search_jieba_partitioned,
     bm25_search_partitioned,
 )
-from datacloud_knowledge.query.search.jieba_recall import jieba_recall
-from datacloud_knowledge.query.search.rrf import rrf_fuse
-from datacloud_knowledge.query.search.substring_recall import (
+from datacloud_knowledge.search.jieba_recall import jieba_recall
+from datacloud_knowledge.search.rrf import rrf_fuse
+from datacloud_knowledge.search.substring_recall import (
     substring_recall,
     substring_recall_partitioned,
 )
@@ -253,7 +253,7 @@ def _recall_single_keyword(
         try:
             _t0 = time.monotonic()
             from datacloud_knowledge.embedding import get_embedding_service
-            from datacloud_knowledge.query.search.vector import vector_search
+            from datacloud_knowledge.search.vector import vector_search
 
             embedding_svc = get_embedding_service()
             vector_results = vector_search(

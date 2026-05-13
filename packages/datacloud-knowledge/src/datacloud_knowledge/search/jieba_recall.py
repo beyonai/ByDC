@@ -11,8 +11,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from datacloud_knowledge.query.search.bm25 import BM25Result, bm25_search_with_or
-from datacloud_knowledge.query.search.rrf import rrf_fuse
+from datacloud_knowledge.search.bm25 import BM25Result, bm25_search_with_or
+from datacloud_knowledge.search.rrf import rrf_fuse
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -20,14 +20,13 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 _jieba_module: Any | None = None
-_jieba_module: Any | None = None
 
 
 def _get_jieba() -> Any:
     """延迟导入 jieba 以避免启动时间开销。"""
     global _jieba_module
     if _jieba_module is None:
-        import jieba  # type: ignore[import-untyped]
+        import jieba
 
         _jieba_module = jieba
     return _jieba_module

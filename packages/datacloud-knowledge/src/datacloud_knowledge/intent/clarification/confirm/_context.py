@@ -282,9 +282,7 @@ def format_main_confirm_context(
             # whereValue 枚举约束（按 path 查找）
             enum_values = pre_resolve.value_enum_map.get(term_key(term))
             if enum_values is not None and term.ktype == "whereValue":
-                where_key_name = _find_where_key_for_value(
-                    term, main_terms, pre_resolve
-                )
+                where_key_name = _find_where_key_for_value(term, main_terms, pre_resolve)
                 lines.append(
                     f"  #{term_id} {term.raw_text} ({section}，{labels['enum_values']}={where_key_name})"
                 )
@@ -391,9 +389,7 @@ def format_cc_confirm_context(
             if names:
                 lines.append(f"      {labels['candidates']}: {names}")
             else:
-                lines.append(
-                    f"      {labels['candidates']}: {labels['no_recall_result']}"
-                )
+                lines.append(f"      {labels['candidates']}: {labels['no_recall_result']}")
             lines.append("")
 
     lines.append(labels["section_submit"])

@@ -18,7 +18,7 @@ from datacloud_knowledge.intent.clarification.models import (
     PreResolveResult,
     TermMeta,
 )
-from datacloud_knowledge.query.search.rrf import rrf_fuse
+from datacloud_knowledge.search.rrf import rrf_fuse
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +168,4 @@ def _recall_fallback_candidates(
         return []
     key = f"{ktype}:{raw_text}"
     candidates = recall_map.get(key, [])
-    return [
-        str(c.get("term_name", "")) for c in candidates[:limit] if c.get("term_name")
-    ]
+    return [str(c.get("term_name", "")) for c in candidates[:limit] if c.get("term_name")]

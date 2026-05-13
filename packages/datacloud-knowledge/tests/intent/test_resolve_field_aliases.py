@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from datacloud_knowledge.knowledge_search.types import (
+from datacloud_knowledge.search.types import (
     FieldResolutionResult,
 )
 
@@ -33,7 +33,7 @@ def _mock_session():  # type: ignore[no-untyped-def]
     mock_cm.__exit__ = MagicMock(return_value=False)
 
     with patch(
-        "datacloud_knowledge.knowledge_search.term_search.get_session",
+        "datacloud_knowledge.search.term_search.get_session",
         return_value=mock_cm,
     ):
         yield mock_session
@@ -44,20 +44,20 @@ class TestResolveFieldAliases:
     """resolve_field_aliases: resolved / ambiguous / unresolved classification."""
 
     def test_empty_terms_returns_empty(self) -> None:
-        from datacloud_knowledge.knowledge_search import resolve_field_aliases
+        from datacloud_knowledge.search import resolve_field_aliases
 
         result = resolve_field_aliases(terms=[], scope_code="scene_enterprise_analysis")
         assert result == FieldResolutionResult(unresolved=[])
 
     def test_empty_scope_returns_all_unresolved(self) -> None:
-        from datacloud_knowledge.knowledge_search import resolve_field_aliases
+        from datacloud_knowledge.search import resolve_field_aliases
 
         result = resolve_field_aliases(terms=["总营收"], scope_code="")
         assert result.unresolved == ["总营收"]
         assert result.resolved == {}
 
     def test_single_resolved(self, _mock_session: MagicMock) -> None:
-        from datacloud_knowledge.knowledge_search import resolve_field_aliases
+        from datacloud_knowledge.search import resolve_field_aliases
 
         _mock_session.execute.return_value = MagicMock(
             all=MagicMock(
@@ -75,7 +75,7 @@ class TestResolveFieldAliases:
         assert result.unresolved == []
 
     def test_ambiguous_multiple_codes(self, _mock_session: MagicMock) -> None:
-        from datacloud_knowledge.knowledge_search import resolve_field_aliases
+        from datacloud_knowledge.search import resolve_field_aliases
 
         _mock_session.execute.return_value = MagicMock(
             all=MagicMock(
@@ -96,7 +96,7 @@ class TestResolveFieldAliases:
         assert codes == {"total_revenue", "net_revenue"}
 
     def test_unresolved_no_match(self, _mock_session: MagicMock) -> None:
-        from datacloud_knowledge.knowledge_search import resolve_field_aliases
+        from datacloud_knowledge.search import resolve_field_aliases
 
         _mock_session.execute.return_value = MagicMock(all=MagicMock(return_value=[]))
         result = resolve_field_aliases(
@@ -107,7 +107,7 @@ class TestResolveFieldAliases:
         assert result.unresolved == ["不存在的字段"]
 
     def test_mixed_resolved_and_unresolved(self, _mock_session: MagicMock) -> None:
-        from datacloud_knowledge.knowledge_search import resolve_field_aliases
+        from datacloud_knowledge.search import resolve_field_aliases
 
         _mock_session.execute.return_value = MagicMock(
             all=MagicMock(
@@ -124,7 +124,7 @@ class TestResolveFieldAliases:
         assert result.unresolved == ["不存在"]
 
     def test_deduplicates_input_terms(self, _mock_session: MagicMock) -> None:
-        from datacloud_knowledge.knowledge_search import resolve_field_aliases
+        from datacloud_knowledge.search import resolve_field_aliases
 
         _mock_session.execute.return_value = MagicMock(
             all=MagicMock(
@@ -141,7 +141,7 @@ class TestResolveFieldAliases:
         assert result.unresolved == []
 
     def test_db_exception_propagates(self, _mock_session: MagicMock) -> None:
-        from datacloud_knowledge.knowledge_search import resolve_field_aliases
+        from datacloud_knowledge.search import resolve_field_aliases
 
         _mock_session.execute.side_effect = RuntimeError("connection refused")
         with pytest.raises(RuntimeError, match="connection refused"):

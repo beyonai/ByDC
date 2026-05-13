@@ -91,9 +91,7 @@ def build_paradigm_list(
     # 数据源：ConfirmedStructuredQuery.select / ConfirmedStructuredCompute.dimensions
     select_result: list[dict[str, Any]] = []
     if isinstance(confirmed, ConfirmedStructuredQuery):
-        original_select = [
-            t.raw_text for t in terms if t.ktype == "select" and t.source == "main"
-        ]
+        original_select = [t.raw_text for t in terms if t.ktype == "select" and t.source == "main"]
         confirmed_select = confirmed.select
         for kid, (orig, conf) in enumerate(
             zip(original_select, confirmed_select, strict=False), start=1
@@ -120,9 +118,7 @@ def build_paradigm_list(
             select_result.append(item)
     elif isinstance(confirmed, ConfirmedStructuredCompute):
         # compute 模式：metrics 中的字段也作为查询值展示
-        original_metrics = [
-            t.raw_text for t in terms if t.ktype == "select" and t.source == "main"
-        ]
+        original_metrics = [t.raw_text for t in terms if t.ktype == "select" and t.source == "main"]
         confirmed_metrics_raw = confirmed.metrics
         confirmed_metric_fields = [
             str(m.get("field", "")) if isinstance(m, dict) else str(m)
@@ -147,24 +143,17 @@ def build_paradigm_list(
                     "ktype": "select",
                     "choiceKeyword": conf,
                 }
-            path_mapping[str(kid)] = _find_path(
-                orig, "select", f"metrics.{kid - 1}.field"
-            )
+            path_mapping[str(kid)] = _find_path(orig, "select", f"metrics.{kid - 1}.field")
             select_result.append(item)
 
     # ── paradigmId=2: 分组条件 ──
     group_result: list[dict[str, Any]] = []
     if isinstance(confirmed, ConfirmedStructuredCompute):
-        original_dims = [
-            t.raw_text for t in terms if t.ktype == "groupBy" and t.source == "main"
-        ]
+        original_dims = [t.raw_text for t in terms if t.ktype == "groupBy" and t.source == "main"]
         confirmed_dims = [
-            str(d.get("field", "")) if isinstance(d, dict) else str(d)
-            for d in confirmed.dimensions
+            str(d.get("field", "")) if isinstance(d, dict) else str(d) for d in confirmed.dimensions
         ]
-        for i, (orig, conf) in enumerate(
-            zip(original_dims, confirmed_dims, strict=False)
-        ):
+        for i, (orig, conf) in enumerate(zip(original_dims, confirmed_dims, strict=False)):
             ci = _pop_clarify(orig)
             if ci is not None:
                 item = {
@@ -203,9 +192,7 @@ def build_paradigm_list(
     if complex_conditions and confirmed.confirmed_conditions:
         for idx, cc in enumerate(confirmed.confirmed_conditions):
             original = (
-                complex_conditions[idx]
-                if idx < len(complex_conditions)
-                else cc.original_sentence
+                complex_conditions[idx] if idx < len(complex_conditions) else cc.original_sentence
             )
             expanded = expand_condition_cartesian(cc, language=language)
             filter_result.append(
@@ -219,16 +206,11 @@ def build_paradigm_list(
 
     # ── paradigmId=4: 排序目标 ──
     order_result: list[dict[str, Any]] = []
-    original_order = [
-        t.raw_text for t in terms if t.ktype == "orderBy" and t.source == "main"
-    ]
+    original_order = [t.raw_text for t in terms if t.ktype == "orderBy" and t.source == "main"]
     confirmed_order = [
-        str(o.get("field", "")) if isinstance(o, dict) else str(o)
-        for o in confirmed.order_by
+        str(o.get("field", "")) if isinstance(o, dict) else str(o) for o in confirmed.order_by
     ]
-    for i, (orig, conf) in enumerate(
-        zip(original_order, confirmed_order, strict=False)
-    ):
+    for i, (orig, conf) in enumerate(zip(original_order, confirmed_order, strict=False)):
         ci = _pop_clarify(orig)
         if ci is not None:
             item = {
@@ -368,9 +350,7 @@ def _build_filter_paradigm_from_confirmed(
                     del clarify_map[value_term.raw_text]
                 item["valueRecall"] = ci.candidates
             else:
-                val_list = (
-                    conf_values if isinstance(conf_values, list) else [conf_values]
-                )
+                val_list = conf_values if isinstance(conf_values, list) else [conf_values]
                 item["valueRecall"] = [str(v) for v in val_list if v]
                 if len(item["valueRecall"]) == 1:
                     item["choiceValue"] = item["valueRecall"][0]

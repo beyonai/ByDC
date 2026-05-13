@@ -1,6 +1,6 @@
 """共享类型定义 — 术语检索、别名消歧、搜索召回、写入操作。
 
-此模块迁移并精炼自 knowledge_search/types.py，新增搜索召回结果类型和写入操作类型。
+此模块迁移并精炼自 search/types.py，新增搜索召回结果类型和写入操作类型。
 所有类型均使用 frozen dataclass 或 Pydantic BaseModel，无外部副作用依赖。
 """
 

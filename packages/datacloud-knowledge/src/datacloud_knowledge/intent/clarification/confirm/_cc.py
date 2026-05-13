@@ -67,9 +67,7 @@ def llm_confirm_cc(
             )
             return result
 
-        raw_content = (
-            response.content if hasattr(response, "content") else str(response)
-        )
+        raw_content = response.content if hasattr(response, "content") else str(response)
         content = (
             "\n".join(str(part) for part in raw_content)
             if isinstance(raw_content, list)

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import text
 
-from datacloud_knowledge.query.search.vector_validation import (
+from datacloud_knowledge.search.vector_validation import (
     TermVectorValidationError,
     validate_term_vector_readiness,
 )

@@ -111,9 +111,7 @@ def analyze_query_clarification(
     with emit.step("术语提取", "extract_terms", {"mode": mode}):
         main_terms = extract_terms(structured_input)
         cc_terms = (
-            extract_terms_complex_conditions(complex_conditions)
-            if complex_conditions
-            else []
+            extract_terms_complex_conditions(complex_conditions) if complex_conditions else []
         )
         all_terms = main_terms + cc_terms
         emit.result({"main": len(main_terms), "complex_conditions": len(cc_terms)})
@@ -150,9 +148,7 @@ def analyze_query_clarification(
     scope_layers = inferred_scope_layers if len(inferred_scope_layers) > 1 else None
     with emit.step("知识召回", "knowledge_recall"):
         recall_map = (
-            _unified_recall(
-                recall_terms, scope_code=ontology_code, scope_layers=scope_layers
-            )
+            _unified_recall(recall_terms, scope_code=ontology_code, scope_layers=scope_layers)
             if recall_terms
             else {}
         )
@@ -174,9 +170,7 @@ def analyze_query_clarification(
             mode=mode,
             language=language,
         )
-        main_result = llm_confirm_main(
-            context=main_context, language=language, on_event=on_event
-        )
+        main_result = llm_confirm_main(context=main_context, language=language, on_event=on_event)
         emit.result({"has_result": main_result is not None})
 
     resolution_hints = _build_main_resolution_hints(main_result, term_registry)
@@ -202,9 +196,7 @@ def analyze_query_clarification(
                     idx,
                     language=language,
                 )
-                cc_result = llm_confirm_cc(
-                    context=cc_context, language=language, on_event=on_event
-                )
+                cc_result = llm_confirm_cc(context=cc_context, language=language, on_event=on_event)
                 cc_result = _normalize_cc_result_with_hints(
                     cc_result,
                     cc_registry,

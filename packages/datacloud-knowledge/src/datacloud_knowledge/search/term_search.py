@@ -11,7 +11,7 @@ from sqlalchemy.orm import aliased
 
 from datacloud_knowledge.db.connection import get_session
 from datacloud_knowledge.db.models import Term, TermName, TermRelation
-from datacloud_knowledge.query.search import bm25_search_with_or
+from datacloud_knowledge.search import bm25_search_with_or
 
 from .types import (
     AmbiguousCandidate,

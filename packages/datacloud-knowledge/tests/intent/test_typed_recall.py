@@ -16,12 +16,12 @@ class TestRRFFuse:
     """rrf_fuse 纯函数测试。"""
 
     def test_empty_input_returns_empty(self) -> None:
-        from datacloud_knowledge.query.search.rrf import rrf_fuse
+        from datacloud_knowledge.search.rrf import rrf_fuse
 
         assert rrf_fuse([]) == []
 
     def test_single_list_preserves_order(self) -> None:
-        from datacloud_knowledge.query.search.rrf import rrf_fuse
+        from datacloud_knowledge.search.rrf import rrf_fuse
 
         ranked = [
             ("T1", "企业综合分析表", "N1", "object"),
@@ -35,7 +35,7 @@ class TestRRFFuse:
         assert result[0].rrf_score > result[1].rrf_score
 
     def test_two_lists_boost_shared_candidate(self) -> None:
-        from datacloud_knowledge.query.search.rrf import rrf_fuse
+        from datacloud_knowledge.search.rrf import rrf_fuse
 
         list_a = [
             ("T1", "高风险", "N1", "risk_level_name"),
@@ -50,7 +50,7 @@ class TestRRFFuse:
         assert result[0].term_id == "T2"
 
     def test_top_n_truncation(self) -> None:
-        from datacloud_knowledge.query.search.rrf import rrf_fuse
+        from datacloud_knowledge.search.rrf import rrf_fuse
 
         ranked = [
             ("T1", "A", "N1", "x"),
