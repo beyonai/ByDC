@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
@@ -29,6 +30,16 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 
+@contextmanager
+def _maybe_session(session: Any = None) -> Any:
+    """Return *session* if provided, otherwise yield from ``get_session()``."""
+    if session is not None:
+        yield session
+    else:
+        with get_session() as sess:
+            yield sess
+
+
 @dataclass(frozen=True, slots=True)
 class _TermSearchRow:
     term_id: str
@@ -52,6 +63,7 @@ def search_terms_by_type(
     limit: int = 20,
     offset: int = 0,
     order_by: str = "relevance",
+    db_session: Any = None,
 ) -> SearchTermsResult:
     if not (1 <= limit <= 200):
         raise ValueError("limit 必须在 1..200")
@@ -62,7 +74,7 @@ def search_terms_by_type(
     normalized_keyword = (keyword or "").strip()
 
     try:
-        with get_session() as session:
+        with _maybe_session(db_session) as session:
             base_filters = _build_filters(
                 canonical_type=canonical_type,
                 term_codes=term_codes,
@@ -303,13 +315,14 @@ def _apply_order_by(stmt: Any, *, order_by: str) -> Any:
 def get_term_ids(
     *,
     keys: list[tuple[str, str, str]],
+    db_session: Any = None,
 ) -> dict[tuple[str, str, str], str]:
     """批量根据 (library_id, term_type_code, term_code) 三元组查询 term_id。"""
     if not keys:
         return {}
 
     try:
-        with get_session() as session:
+        with _maybe_session(db_session) as session:
             conditions = [
                 and_(
                     Term.library_id == library_id,
@@ -333,13 +346,14 @@ def get_term_ids(
 def get_object_props(
     *,
     source_term_ids: list[str],
+    db_session: Any = None,
 ) -> dict[str, list[PropItem]]:
     """批量查询对象/视图下的属性（通过 term_relation HAS_FIELD）。"""
     if not source_term_ids:
         return {}
 
     try:
-        with get_session() as session:
+        with _maybe_session(db_session) as session:
             rows = session.execute(
                 select(
                     TermRelation.source_term_id,
@@ -369,13 +383,14 @@ def get_term_names(
     *,
     term_ids: list[str],
     scope_filter: dict[str, str] | None = None,
+    db_session: Any = None,
 ) -> dict[str, list[NameItem]]:
     """批量查询术语的所有名称（标准名 + 别名），通用函数。"""
     if not term_ids:
         return {}
 
     try:
-        with get_session() as session:
+        with _maybe_session(db_session) as session:
             filters: list[Any] = [TermName.term_id.in_(term_ids)]
             if scope_filter is not None:
                 filters.append(
@@ -411,6 +426,7 @@ def get_term_names(
 def get_prop_values_with_aliases(
     *,
     source_term_ids: list[str],
+    db_session: Any = None,
 ) -> dict[str, list[ValueWithAliases]]:
     """批量查询对象下属性的值术语及其别名。
 
@@ -423,7 +439,7 @@ def get_prop_values_with_aliases(
     child = aliased(Term, name="child")
 
     try:
-        with get_session() as session:
+        with _maybe_session(db_session) as session:
             child_rows = session.execute(
                 select(
                     TermRelation.source_term_id,
@@ -484,6 +500,7 @@ def resolve_field_aliases(
     user_id: str | None = None,
     resolve_values: bool = False,
     value_terms: list[str] | None = None,
+    db_session: Any = None,
 ) -> FieldResolutionResult:
     """轻量级字段 + 值别名精确消歧（单次 SQL）。
 
@@ -523,7 +540,7 @@ def resolve_field_aliases(
     user_scope = {"scope_user_id": user_id} if user_id else None
 
     try:
-        with get_session() as session:
+        with _maybe_session(db_session) as session:
             # ── 构建 UNION 查询 ───────────────────────────────────────────────
             queries = []
 
@@ -705,6 +722,7 @@ def resolve_value_aliases(
     terms: list[str],
     scope_code: str,
     user_id: str | None = None,
+    db_session: Any = None,
 ) -> ValueResolutionResult:
     """轻量级属性值精确消歧。
 
@@ -736,7 +754,7 @@ def resolve_value_aliases(
     child = aliased(Term, name="child")
 
     try:
-        with get_session() as session:
+        with _maybe_session(db_session) as session:
             # Step 1: 通过 child.term_name 直接匹配
             direct_rows = session.execute(
                 select(child.term_name)
@@ -814,6 +832,7 @@ def resolve_field_aliases_with_names(
     user_id: str | None = None,
     resolve_values: bool = False,
     value_terms: list[str] | None = None,
+    db_session: Any = None,
 ) -> FieldResolutionResultWithNames:
     """扩展版字段别名消歧：resolved 同时返回 term_name。
 
@@ -847,7 +866,7 @@ def resolve_field_aliases_with_names(
     user_scope = {"scope_user_id": user_id} if user_id else None
 
     try:
-        with get_session() as session:
+        with _maybe_session(db_session) as session:
             queries = []
 
             if unique_field_terms:
@@ -1041,6 +1060,7 @@ def get_prop_enum_values(
     *,
     scope_code: str,
     field_codes: list[str],
+    db_session: Any = None,
 ) -> dict[str, list[str]]:
     """查询指定 prop 的枚举值（child term_name + 别名）。
 
@@ -1064,7 +1084,7 @@ def get_prop_enum_values(
     child = aliased(Term, name="child")
 
     try:
-        with get_session() as session:
+        with _maybe_session(db_session) as session:
             # 查询 child term_name（直接值）
             direct_rows = session.execute(
                 select(
