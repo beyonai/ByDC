@@ -225,28 +225,24 @@ def _batch_single_char_fallback(
     前者已经支持批量 VALUES 查询、scope 过滤、type_filter、whereValue per-type 分桶；
     后者是单 keyword 底层搜索函数，直接使用会绕过这些业务约束。
     """
-    from datacloud_knowledge.adapters.opengauss._db.connection import get_session
-
     started_at = time.monotonic()
-    with get_session() as session:
-        engine = PostgresSearchEngine(session)
-        if not engine._check_column_exists("name_keywords"):
-            log.info(
-                "[recall_perf] single_char_fallback: %.3fs keywords=%d hits=0",
-                time.monotonic() - started_at,
-                len(batch.requests),
-            )
-            return {}
-
-        results = _run_tsquery_batches(
-            session,
-            normal_requests=batch.normal_requests,
-            per_type_requests=batch.per_type_requests,
-            top_k=top_k,
-            column_name="name_keywords",
-            tokenizer=_single_char_fallback_tsquery,
+    engine = PostgresSearchEngine()
+    if not engine._check_column_exists("name_keywords"):
+        log.info(
+            "[recall_perf] single_char_fallback: %.3fs keywords=%d hits=0",
+            time.monotonic() - started_at,
+            len(batch.requests),
         )
-        results = _dedupe_ranked_rows_by_term_name(results)
+        return {}
+
+    results = _run_tsquery_batches(
+        normal_requests=batch.normal_requests,
+        per_type_requests=batch.per_type_requests,
+        top_k=top_k,
+        column_name="name_keywords",
+        tokenizer=_single_char_fallback_tsquery,
+    )
+    results = _dedupe_ranked_rows_by_term_name(results)
 
     log.info(
         "[recall_perf] single_char_fallback: %.3fs keywords=%d hits=%d",

@@ -2,7 +2,6 @@
 
 拆分自 batch_recall.py，按职责分为：
 - _models: 数据模型与常量
-- _sql: SQL 构建与查询执行
 - _paths: 四路召回路径（BM25 / jieba / 子串 / 向量）
 - _fusion: RRF 融合与候选整形
 - _scope: 分层 scope 召回管理
@@ -65,8 +64,6 @@ from ._sql import (  # noqa: F401
     _build_vector_sql,
     _collect_ranked_rows,
     _group_requests_by_filter,
-    _run_substring_query,
-    _run_tsquery_query,
 )
 
 __all__ = [

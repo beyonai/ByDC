@@ -1,4 +1,4 @@
-"""Tests for resolve_field_aliases with mocked DB session."""
+"""Tests for resolve_field_aliases with mocked reader adapter."""
 
 from __future__ import annotations
 
@@ -6,37 +6,32 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from datacloud_knowledge.contracts.types import (
+    AmbiguousCandidate,
     FieldResolutionResult,
 )
 
 
-class _FakeRow:
-    """Simulates a SQLAlchemy Row with positional access."""
-
-    def __init__(self, name_text: str, term_code: str, term_name: str, scope: dict[str, str]):
-        self._data = ("field", name_text, term_code, term_name, scope)
-
-    def __iter__(self):  # type: ignore[no-untyped-def]
-        return iter(self._data)
-
-
-def _make_rows(*tuples: tuple[str, str, str, dict[str, str]]) -> list[_FakeRow]:
-    return [_FakeRow(*t) for t in tuples]
+def _make_resolved_result(
+    resolved: dict[str, str] | None = None,
+    ambiguous: dict[str, list[AmbiguousCandidate]] | None = None,
+    unresolved: list[str] | None = None,
+) -> FieldResolutionResult:
+    return FieldResolutionResult(
+        resolved=resolved or {},
+        ambiguous=ambiguous or {},
+        unresolved=unresolved or [],
+    )
 
 
 @pytest.fixture()
-def _mock_session():  # type: ignore[no-untyped-def]
-    """Patch get_session to return a controllable mock."""
-    mock_session = MagicMock()
-    mock_cm = MagicMock()
-    mock_cm.__enter__ = MagicMock(return_value=mock_session)
-    mock_cm.__exit__ = MagicMock(return_value=False)
-
+def _mock_reader() -> MagicMock:
+    """Patch create_reader to return a controllable mock reader."""
+    mock_reader = MagicMock()
     with patch(
-        "datacloud_knowledge.retrieval.term_search.get_session",
-        return_value=mock_cm,
+        "datacloud_knowledge.retrieval.term_search.create_reader",
+        return_value=mock_reader,
     ):
-        yield mock_session
+        yield mock_reader
 
 
 @pytest.mark.intent
@@ -56,15 +51,11 @@ class TestResolveFieldAliases:
         assert result.unresolved == ["总营收"]
         assert result.resolved == {}
 
-    def test_single_resolved(self, _mock_session: MagicMock) -> None:
+    def test_single_resolved(self, _mock_reader: MagicMock) -> None:
         from datacloud_knowledge.retrieval import resolve_field_aliases
 
-        _mock_session.execute.return_value = MagicMock(
-            all=MagicMock(
-                return_value=_make_rows(
-                    ("总营收（万元）", "total_revenue", "总营收", {"scope": "global"}),
-                )
-            )
+        _mock_reader.resolve_field_aliases.return_value = _make_resolved_result(
+            resolved={"总营收（万元）": "total_revenue"},
         )
         result = resolve_field_aliases(
             terms=["总营收（万元）"],
@@ -74,16 +65,24 @@ class TestResolveFieldAliases:
         assert result.ambiguous == {}
         assert result.unresolved == []
 
-    def test_ambiguous_multiple_codes(self, _mock_session: MagicMock) -> None:
+    def test_ambiguous_multiple_codes(self, _mock_reader: MagicMock) -> None:
         from datacloud_knowledge.retrieval import resolve_field_aliases
 
-        _mock_session.execute.return_value = MagicMock(
-            all=MagicMock(
-                return_value=_make_rows(
-                    ("营收", "total_revenue", "总营收", {"scope": "global"}),
-                    ("营收", "net_revenue", "净营收", {"scope": "global"}),
-                )
-            )
+        _mock_reader.resolve_field_aliases.return_value = _make_resolved_result(
+            ambiguous={
+                "营收": [
+                    AmbiguousCandidate(
+                        term_code="total_revenue",
+                        term_name="总营收",
+                        matched_alias="营收",
+                    ),
+                    AmbiguousCandidate(
+                        term_code="net_revenue",
+                        term_name="净营收",
+                        matched_alias="营收",
+                    ),
+                ]
+            },
         )
         result = resolve_field_aliases(
             terms=["营收"],
@@ -95,10 +94,12 @@ class TestResolveFieldAliases:
         codes = {c.term_code for c in result.ambiguous["营收"]}
         assert codes == {"total_revenue", "net_revenue"}
 
-    def test_unresolved_no_match(self, _mock_session: MagicMock) -> None:
+    def test_unresolved_no_match(self, _mock_reader: MagicMock) -> None:
         from datacloud_knowledge.retrieval import resolve_field_aliases
 
-        _mock_session.execute.return_value = MagicMock(all=MagicMock(return_value=[]))
+        _mock_reader.resolve_field_aliases.return_value = _make_resolved_result(
+            unresolved=["不存在的字段"],
+        )
         result = resolve_field_aliases(
             terms=["不存在的字段"],
             scope_code="scene_enterprise_analysis",
@@ -106,15 +107,12 @@ class TestResolveFieldAliases:
         assert result.resolved == {}
         assert result.unresolved == ["不存在的字段"]
 
-    def test_mixed_resolved_and_unresolved(self, _mock_session: MagicMock) -> None:
+    def test_mixed_resolved_and_unresolved(self, _mock_reader: MagicMock) -> None:
         from datacloud_knowledge.retrieval import resolve_field_aliases
 
-        _mock_session.execute.return_value = MagicMock(
-            all=MagicMock(
-                return_value=_make_rows(
-                    ("总营收（万元）", "total_revenue", "总营收", {"scope": "global"}),
-                )
-            )
+        _mock_reader.resolve_field_aliases.return_value = _make_resolved_result(
+            resolved={"总营收（万元）": "total_revenue"},
+            unresolved=["不存在"],
         )
         result = resolve_field_aliases(
             terms=["总营收（万元）", "不存在"],
@@ -123,15 +121,11 @@ class TestResolveFieldAliases:
         assert result.resolved == {"总营收（万元）": "total_revenue"}
         assert result.unresolved == ["不存在"]
 
-    def test_deduplicates_input_terms(self, _mock_session: MagicMock) -> None:
+    def test_deduplicates_input_terms(self, _mock_reader: MagicMock) -> None:
         from datacloud_knowledge.retrieval import resolve_field_aliases
 
-        _mock_session.execute.return_value = MagicMock(
-            all=MagicMock(
-                return_value=_make_rows(
-                    ("总营收", "total_revenue", "总营收", {"scope": "global"}),
-                )
-            )
+        _mock_reader.resolve_field_aliases.return_value = _make_resolved_result(
+            resolved={"总营收": "total_revenue"},
         )
         result = resolve_field_aliases(
             terms=["总营收", "总营收", "总营收"],
@@ -140,10 +134,10 @@ class TestResolveFieldAliases:
         assert result.resolved == {"总营收": "total_revenue"}
         assert result.unresolved == []
 
-    def test_db_exception_propagates(self, _mock_session: MagicMock) -> None:
+    def test_db_exception_propagates(self, _mock_reader: MagicMock) -> None:
         from datacloud_knowledge.retrieval import resolve_field_aliases
 
-        _mock_session.execute.side_effect = RuntimeError("connection refused")
+        _mock_reader.resolve_field_aliases.side_effect = RuntimeError("connection refused")
         with pytest.raises(RuntimeError, match="connection refused"):
             resolve_field_aliases(
                 terms=["总营收"],
