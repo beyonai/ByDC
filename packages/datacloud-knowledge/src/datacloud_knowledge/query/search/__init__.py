@@ -14,7 +14,7 @@
     results = bm25_search(session, "企业分析", top_k=10)
 
     # 向量搜索
-    from datacloud_knowledge.query.embedding import get_embedding_service
+    from datacloud_knowledge.embedding import get_embedding_service
     results = vector_search(session, "企业分析", get_embedding_service(), top_k=10)
 """
 

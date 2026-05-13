@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .dimension_values import DimensionValueResolver
 from .owl_relation_resolver import resolve_related_owl_terms
 from .term_reader import PostgresTermReader
 from .term_search import (
@@ -23,6 +24,7 @@ from .types import (
 
 __all__ = [
     "AmbiguousCandidate",
+    "DimensionValueResolver",
     "FieldResolutionResult",
     "FieldResolutionResultWithNames",
     "PostgresTermReader",

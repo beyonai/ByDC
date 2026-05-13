@@ -18,7 +18,7 @@ from .types import MatchCandidate, MatchResult
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-    from datacloud_knowledge.query.embedding import EmbeddingService
+    from datacloud_knowledge.embedding import EmbeddingService
 
     from .cache import UserNameCache
     from .types import Mention

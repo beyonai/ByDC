@@ -6,13 +6,13 @@
 - 数据库写入
 
 使用方式：
-    from datacloud_knowledge.query.embedding import get_embedding_service
+    from datacloud_knowledge.embedding import get_embedding_service
 
     service = get_embedding_service()
     vectors = service.get_text_embedding_batch(["企业", "分析"])
 """
 
-from datacloud_knowledge.query.embedding.service import (
+from datacloud_knowledge.embedding.service import (
     EmbeddingService,
     get_embedding_service,
 )

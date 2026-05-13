@@ -164,7 +164,7 @@ def generate_embeddings(batch_size: int = 50) -> dict:
         统计信息 {"total": N, "updated": M}
     """
     try:
-        from datacloud_knowledge.query.embedding import get_embedding_service
+        from datacloud_knowledge.embedding import get_embedding_service
     except ImportError:
         logger.error("Embedding service not available. Install llama-index-embeddings-openai.")
         return {"total": 0, "updated": 0, "error": "ImportError"}

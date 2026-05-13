@@ -20,7 +20,7 @@ from datacloud_knowledge.query.search.vector_validation import (
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-    from datacloud_knowledge.query.embedding import EmbeddingService
+    from datacloud_knowledge.embedding import EmbeddingService
 
 log = logging.getLogger(__name__)
 
