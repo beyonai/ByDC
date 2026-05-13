@@ -5,9 +5,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import bindparam, text
-
 from datacloud_knowledge.adapters import create_reader
+from datacloud_knowledge.contracts.types import ShortestPathNode
 
 from .types import (
     DisambiguationResult,
@@ -189,10 +188,13 @@ def build_shortest_path_tree(
     *,
     target_term_id: str,
     source_term_type_codes: Sequence[str],
-    session: Any,
     max_depth: int = 6,
 ) -> ShortestPathTreeResult:
-    """构建从限定类型根节点到目标术语的最短路径子图与树文本。"""
+    """构建从限定类型根节点到目标术语的最短路径子图与树文本。
+
+    数据库访问通过 ``create_reader().get_shortest_path_tree()`` 完成，
+    不再需要外部传入 session。
+    """
     normalized_type_codes = tuple(code.strip() for code in source_term_type_codes if code.strip())
     if not target_term_id.strip():
         msg = "target_term_id must not be blank"
@@ -203,10 +205,9 @@ def build_shortest_path_tree(
     if max_depth <= 0:
         msg = "max_depth must be positive"
         raise ValueError(msg)
-    rows = _query_shortest_path_rows(
+    rows = create_reader().get_shortest_path_tree(
         target_term_id=target_term_id,
         source_term_type_codes=normalized_type_codes,
-        session=session,
         max_depth=max_depth,
     )
     if not rows:
@@ -222,134 +223,11 @@ def build_shortest_path_tree(
     )
 
 
-def _query_shortest_path_rows(
-    *,
-    target_term_id: str,
-    source_term_type_codes: tuple[str, ...],
-    session: Any,
-    max_depth: int,
-) -> list[Any]:
-    """查询满足根类型约束的最短路径行。"""
-
-    sql = text(
-        """
-        WITH RECURSIVE upward AS (
-            SELECT
-                t.term_id,
-                t.term_name,
-                t.term_type_code,
-                t.desc_summary AS term_desc_summary,
-                (
-                    SELECT COALESCE(NULLIF(k.desc_summary, ''), NULLIF(k."desc", ''))
-                    FROM term_knowledge k
-                    WHERE k.term_id = t.term_id
-                    ORDER BY k.knowledge_id
-                    LIMIT 1
-                ) AS description,
-                0 AS depth,
-                ARRAY[t.term_id]::text[] AS path_term_ids,
-                ARRAY[t.term_name]::text[] AS path_term_names,
-                ARRAY[t.term_type_code]::text[] AS path_term_type_codes,
-                ARRAY[COALESCE(t.desc_summary, '')]::text[] AS path_term_desc_summaries,
-                ARRAY[
-                    COALESCE(
-                        (
-                            SELECT COALESCE(NULLIF(k.desc_summary, ''), NULLIF(k."desc", ''))
-                            FROM term_knowledge k
-                            WHERE k.term_id = t.term_id
-                            ORDER BY k.knowledge_id
-                            LIMIT 1
-                        ),
-                        ''
-                    )
-                ]::text[] AS path_descriptions,
-                ARRAY[]::text[] AS path_relations,
-                ARRAY[t.term_id]::text[] AS visited_ids
-            FROM term t
-            WHERE t.term_id = :target_term_id
-
-            UNION ALL
-
-            SELECT
-                parent.term_id,
-                parent.term_name,
-                parent.term_type_code,
-                parent.desc_summary AS term_desc_summary,
-                (
-                    SELECT COALESCE(NULLIF(k.desc_summary, ''), NULLIF(k."desc", ''))
-                    FROM term_knowledge k
-                    WHERE k.term_id = parent.term_id
-                    ORDER BY k.knowledge_id
-                    LIMIT 1
-                ) AS description,
-                upward.depth + 1 AS depth,
-                ARRAY[parent.term_id]::text[] || upward.path_term_ids,
-                ARRAY[parent.term_name]::text[] || upward.path_term_names,
-                ARRAY[parent.term_type_code]::text[] || upward.path_term_type_codes,
-                ARRAY[COALESCE(parent.desc_summary, '')]::text[] || upward.path_term_desc_summaries,
-                ARRAY[
-                    COALESCE(
-                        (
-                            SELECT COALESCE(NULLIF(k.desc_summary, ''), NULLIF(k."desc", ''))
-                            FROM term_knowledge k
-                            WHERE k.term_id = parent.term_id
-                            ORDER BY k.knowledge_id
-                            LIMIT 1
-                        ),
-                        ''
-                    )
-                ]::text[] || upward.path_descriptions,
-                ARRAY[tr.relation_name]::text[] || upward.path_relations,
-                upward.visited_ids || ARRAY[parent.term_id]::text[]
-            FROM upward
-            JOIN term_relation tr ON tr.target_term_id = upward.term_id
-            JOIN term parent ON parent.term_id = tr.source_term_id
-            WHERE upward.depth < :max_depth
-              AND NOT parent.term_id = ANY(upward.visited_ids)
-        ),
-        candidate_roots AS (
-            SELECT *
-            FROM upward
-            WHERE term_type_code IN :source_term_type_codes
-        ),
-        min_depth AS (
-            SELECT MIN(depth) AS depth FROM candidate_roots
-        )
-        SELECT
-            term_id,
-            term_name,
-            term_type_code,
-            description,
-            depth,
-            path_term_ids,
-            path_term_names,
-            path_term_type_codes,
-            path_term_desc_summaries,
-            path_descriptions,
-            path_relations
-        FROM candidate_roots
-        WHERE depth = (SELECT depth FROM min_depth)
-        ORDER BY term_name, term_id, path_term_ids
-        """
-    ).bindparams(bindparam("source_term_type_codes", expanding=True))
-
-    return list(
-        session.execute(
-            sql,
-            {
-                "target_term_id": target_term_id,
-                "source_term_type_codes": list(source_term_type_codes),
-                "max_depth": max_depth,
-            },
-        ).fetchall()
-    )
-
-
 def _build_shortest_path_tree_result(
     *,
     target_term_id: str,
     source_term_type_codes: tuple[str, ...],
-    rows: Sequence[Any],
+    rows: Sequence[ShortestPathNode],
 ) -> ShortestPathTreeResult:
     """将最短路径查询结果转换为结构化结果。"""
     node_map: dict[str, ShortestPathGraphNode] = {}

@@ -23,7 +23,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import and_, cast, func, literal, or_, select, text
+from sqlalchemy import and_, bindparam, cast, func, literal, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB, NUMERIC, TIMESTAMP
 from sqlalchemy.orm import Session, aliased
 
@@ -38,6 +38,7 @@ from datacloud_knowledge.contracts.types import (
     PropItem,
     ResolvedField,
     SearchTermsResult,
+    ShortestPathNode,
     TagFilter,
     TermItem,
     ValueResolutionResult,
@@ -1052,6 +1053,175 @@ class PostgresTermReader:
             raise
 
         return int(row[0]) if row is not None else None
+
+    def get_shortest_path_tree(
+        self,
+        *,
+        target_term_id: str,
+        source_term_type_codes: Sequence[str],
+        max_depth: int = 6,
+    ) -> Sequence[ShortestPathNode]:
+        """查询从限定类型根节点到目标术语的最短路径树。
+
+        通过递归 CTE 从 *target_term_id* 向上遍历 ``term_relation`` 表，
+        找到 ``term_type_code IN source_term_type_codes`` 中深度最小的
+        候选根节点，返回完整路径信息。
+
+        Args:
+            target_term_id: 目标术语 ID（消歧候选项）。
+            source_term_type_codes: 限定根节点的术语类型编码列表。
+            max_depth: 最大搜索深度。
+
+        Returns:
+            ShortestPathNode 列表，每个节点代表一条从根到目标的完整路径。
+            无满足条件的根节点时返回空列表。
+        """
+        if not target_term_id.strip():
+            raise ValueError("target_term_id must not be blank")
+        if not source_term_type_codes:
+            raise ValueError("source_term_type_codes must not be empty")
+        if max_depth <= 0:
+            raise ValueError("max_depth must be positive")
+
+        sql = text(
+            """
+            WITH RECURSIVE upward AS (
+                SELECT
+                    t.term_id,
+                    t.term_name,
+                    t.term_type_code,
+                    t.desc_summary AS term_desc_summary,
+                    (
+                        SELECT COALESCE(NULLIF(k.desc_summary, ''), NULLIF(k."desc", ''))
+                        FROM term_knowledge k
+                        WHERE k.term_id = t.term_id
+                        ORDER BY k.knowledge_id
+                        LIMIT 1
+                    ) AS description,
+                    0 AS depth,
+                    ARRAY[t.term_id]::text[] AS path_term_ids,
+                    ARRAY[t.term_name]::text[] AS path_term_names,
+                    ARRAY[t.term_type_code]::text[] AS path_term_type_codes,
+                    ARRAY[COALESCE(t.desc_summary, '')]::text[] AS path_term_desc_summaries,
+                    ARRAY[
+                        COALESCE(
+                            (
+                                SELECT COALESCE(NULLIF(k.desc_summary, ''), NULLIF(k."desc", ''))
+                                FROM term_knowledge k
+                                WHERE k.term_id = t.term_id
+                                ORDER BY k.knowledge_id
+                                LIMIT 1
+                            ),
+                            ''
+                        )
+                    ]::text[] AS path_descriptions,
+                    ARRAY[]::text[] AS path_relations,
+                    ARRAY[t.term_id]::text[] AS visited_ids
+                FROM term t
+                WHERE t.term_id = :target_term_id
+
+                UNION ALL
+
+                SELECT
+                    parent.term_id,
+                    parent.term_name,
+                    parent.term_type_code,
+                    parent.desc_summary AS term_desc_summary,
+                    (
+                        SELECT COALESCE(NULLIF(k.desc_summary, ''), NULLIF(k."desc", ''))
+                        FROM term_knowledge k
+                        WHERE k.term_id = parent.term_id
+                        ORDER BY k.knowledge_id
+                        LIMIT 1
+                    ) AS description,
+                    upward.depth + 1 AS depth,
+                    ARRAY[parent.term_id]::text[] || upward.path_term_ids,
+                    ARRAY[parent.term_name]::text[] || upward.path_term_names,
+                    ARRAY[parent.term_type_code]::text[] || upward.path_term_type_codes,
+                    ARRAY[COALESCE(parent.desc_summary, '')]::text[] || upward.path_term_desc_summaries,
+                    ARRAY[
+                        COALESCE(
+                            (
+                                SELECT COALESCE(NULLIF(k.desc_summary, ''), NULLIF(k."desc", ''))
+                                FROM term_knowledge k
+                                WHERE k.term_id = parent.term_id
+                                ORDER BY k.knowledge_id
+                                LIMIT 1
+                            ),
+                            ''
+                        )
+                    ]::text[] || upward.path_descriptions,
+                    ARRAY[tr.relation_name]::text[] || upward.path_relations,
+                    upward.visited_ids || ARRAY[parent.term_id]::text[]
+                FROM upward
+                JOIN term_relation tr ON tr.target_term_id = upward.term_id
+                JOIN term parent ON parent.term_id = tr.source_term_id
+                WHERE upward.depth < :max_depth
+                  AND NOT parent.term_id = ANY(upward.visited_ids)
+            ),
+            candidate_roots AS (
+                SELECT *
+                FROM upward
+                WHERE term_type_code IN :source_term_type_codes
+            ),
+            min_depth AS (
+                SELECT MIN(depth) AS depth FROM candidate_roots
+            )
+            SELECT
+                term_id,
+                term_name,
+                term_type_code,
+                description,
+                depth,
+                path_term_ids,
+                path_term_names,
+                path_term_type_codes,
+                path_term_desc_summaries,
+                path_descriptions,
+                path_relations
+            FROM candidate_roots
+            WHERE depth = (SELECT depth FROM min_depth)
+            ORDER BY term_name, term_id, path_term_ids
+            """
+        ).bindparams(bindparam("source_term_type_codes", expanding=True))
+
+        try:
+            with self._session_factory() as session:
+                rows = session.execute(
+                    sql,
+                    {
+                        "target_term_id": target_term_id,
+                        "source_term_type_codes": list(source_term_type_codes),
+                        "max_depth": max_depth,
+                    },
+                ).fetchall()
+        except Exception:
+            logger.exception(
+                "get_shortest_path_tree failed: target=%s types=%s max_depth=%s",
+                target_term_id,
+                source_term_type_codes,
+                max_depth,
+            )
+            raise
+
+        return tuple(
+            ShortestPathNode(
+                term_id=str(row.term_id),
+                term_name=str(row.term_name),
+                term_type_code=str(row.term_type_code),
+                description=str(row.description) if row.description is not None else None,
+                depth=int(row.depth),
+                path_term_ids=[str(v) for v in row.path_term_ids],
+                path_term_names=[str(v) for v in row.path_term_names],
+                path_term_type_codes=[str(v) for v in row.path_term_type_codes],
+                path_term_desc_summaries=[
+                    str(v) if v is not None else "" for v in row.path_term_desc_summaries
+                ],
+                path_descriptions=[str(v) if v is not None else "" for v in row.path_descriptions],
+                path_relations=[str(v) for v in row.path_relations],
+            )
+            for row in rows
+        )
 
     # ═══════════════════════════════════════════════════════════════════════════
     # 内部辅助方法

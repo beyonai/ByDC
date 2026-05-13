@@ -18,6 +18,7 @@ from .types import (
     NameItem,
     PropItem,
     SearchTermsResult,
+    ShortestPathNode,
     SubstringResult,
     TagFilter,
     TermNameCreate,
@@ -237,6 +238,30 @@ class TermReader(Protocol):
 
         Returns:
             最短距离（非负整数），不可达时返回 None。
+        """
+        ...
+
+    def get_shortest_path_tree(
+        self,
+        *,
+        target_term_id: str,
+        source_term_type_codes: Sequence[str],
+        max_depth: int = 6,
+    ) -> Sequence[ShortestPathNode]:
+        """查询从限定类型根节点到目标术语的最短路径树。
+
+        通过递归 CTE 从 *target_term_id* 向上遍历 ``term_relation`` 表，
+        找到 ``term_type_code IN source_term_type_codes`` 中深度最小的
+        候选根节点，返回完整路径信息。
+
+        Args:
+            target_term_id: 目标术语 ID（消歧候选项）。
+            source_term_type_codes: 限定根节点的术语类型编码列表。
+            max_depth: 最大搜索深度。
+
+        Returns:
+            ShortestPathNode 列表，每个节点代表一条从根到目标的完整路径。
+            无满足条件的根节点时返回空序列。
         """
         ...
 

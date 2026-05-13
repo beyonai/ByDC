@@ -345,3 +345,39 @@ class TermNameCreate:
     term_id: str
     user_id: str | None = None
     search_scope: dict[str, object] = field(default_factory=dict)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 最短路径树类型
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True, slots=True)
+class ShortestPathNode:
+    """最短路径树查询的单行结果，封装递归 CTE 返回的路径节点信息。
+
+    Attributes:
+        term_id: 满足根类型约束的候选根术语 ID。
+        term_name: 术语标准名。
+        term_type_code: 术语类型编码。
+        description: 术语描述（取自 desc_summary 或 term_knowledge 首条）。
+        depth: 从目标术语到根节点的图距离（跳数）。
+        path_term_ids: 路径上所有术语 ID 列表（根→目标，目标在尾部）。
+        path_term_names: 路径上所有术语名称列表。
+        path_term_type_codes: 路径上所有术语类型编码列表。
+        path_term_desc_summaries: 路径上所有术语描述摘要列表。
+        path_descriptions: 路径上所有术语的 knowledge 描述列表。
+        path_relations: 路径上所有关系名称列表（目标→根方向）。
+    """
+
+    term_id: str
+    term_name: str
+    term_type_code: str
+    description: str | None
+    depth: int
+    path_term_ids: list[str]
+    path_term_names: list[str]
+    path_term_type_codes: list[str]
+    path_term_desc_summaries: list[str]
+    path_descriptions: list[str]
+    path_relations: list[str]

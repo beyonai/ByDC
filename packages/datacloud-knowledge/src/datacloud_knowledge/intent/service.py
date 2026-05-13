@@ -259,14 +259,12 @@ def build_shortest_path_tree_with_session(
     source_term_type_codes: list[str] | tuple[str, ...],
     max_depth: int = 6,
 ) -> ShortestPathTreeResult:
-    """Build shortest-path tree with a managed DB session."""
-    with get_session() as session:
-        return build_shortest_path_tree(
-            target_term_id=target_term_id,
-            source_term_type_codes=source_term_type_codes,
-            session=session,
-            max_depth=max_depth,
-        )
+    """Build shortest-path tree; delegate to adapter (session managed internally)."""
+    return build_shortest_path_tree(
+        target_term_id=target_term_id,
+        source_term_type_codes=source_term_type_codes,
+        max_depth=max_depth,
+    )
 
 
 def store_clarification_results(
