@@ -7,3 +7,13 @@
 
 私有基础设施在 _db/ 子包中，外部不应直接导入。
 """
+
+from .engine import PostgresSearchEngine
+from .reader import PostgresTermReader
+from .writer import PostgresTermWriter
+
+__all__ = [
+    "PostgresSearchEngine",
+    "PostgresTermReader",
+    "PostgresTermWriter",
+]
