@@ -101,7 +101,9 @@ def _load_scope_term_maps(scope_code: str) -> dict[str, Any]:
             prop_codes.setdefault(prop.term_code, prop.term_id)
 
     value_terms_by_prop: dict[str, dict[str, str]] = {}
-    for values in get_prop_values_with_aliases(source_term_ids=source_term_ids, db_session=session).values():
+    for values in get_prop_values_with_aliases(
+        source_term_ids=source_term_ids, db_session=session
+    ).values():
         for value in values:
             prop_values = value_terms_by_prop.setdefault(value.parent_term_id, {})
             prop_values.setdefault(value.term_name, value.term_id)
