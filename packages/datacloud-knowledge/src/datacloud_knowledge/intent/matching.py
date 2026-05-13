@@ -16,7 +16,7 @@ from rapidfuzz import fuzz, process
 from .types import MatchCandidate, MatchResult
 
 if TYPE_CHECKING:
-    from datacloud_knowledge.embedding import EmbeddingService
+    from datacloud_knowledge.retrieval.embedding import EmbeddingService
 
     from .cache import UserNameCache
     from .types import Mention

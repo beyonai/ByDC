@@ -10,7 +10,6 @@ import concurrent.futures
 import json
 import logging
 from datetime import UTC, datetime
-from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -151,9 +150,11 @@ def update_score(name_id: str, success: bool, session) -> None:
         success: Whether the alias was confirmed (True) or rejected (False).
         session: SQLAlchemy Session.
     """
-    types_module: Any = import_module(f"{__package__}.types")
-    score_update_record = types_module.ScoreUpdateRecord
-    update_scores(records=(score_update_record(name_id=name_id, success=success),), session=session)
+    from .types import ScoreUpdateRecord as ScoreUpdateRecordCls
+
+    update_scores(
+        records=(ScoreUpdateRecordCls(name_id=name_id, success=success),), session=session
+    )
 
 
 def update_score_async(name_id: str, success: bool, session) -> None:

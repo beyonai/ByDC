@@ -42,7 +42,7 @@ def backfill_name_embeddings(
     Returns:
         {"schema": str, "updated": int} 处理结果。
     """
-    from datacloud_knowledge.embedding import get_embedding_service
+    from datacloud_knowledge.retrieval.embedding import get_embedding_service
 
     resolved_schema = resolve_knowledge_schema_for_connection(schema=schema, db_url=db_url)
     embedding_service = get_embedding_service()

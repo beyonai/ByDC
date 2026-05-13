@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import json
 import logging
-from importlib import import_module
 from pathlib import Path
 from typing import Any
 
@@ -106,10 +105,6 @@ def _convert_owl_entities(
     """将 OWL 解析结果转换为各批处理器可消费的数据结构。"""
     del step_type
 
-    converter = owl_converter
-    if converter is None:
-        converter = import_module("datacloud_knowledge.ingestion.owl_import.importer.owl_converter")
-
     converted: dict[str, list[dict[str, Any]]] = {
         "meta_domain": [],
         "meta_library": [],
@@ -148,12 +143,12 @@ def _convert_owl_entities(
             continue
 
         if entity_type == "domain":
-            converted["meta_domain"].append(converter.convert_domain(entity))
+            converted["meta_domain"].append(owl_converter.convert_domain(entity))
             continue
 
         if entity_type == "library":
-            library_code = converter._pick_str(entity, "library_code")
-            library_name = converter._pick_str(entity, "library_name")
+            library_code = owl_converter._pick_str(entity, "library_code")
+            library_name = owl_converter._pick_str(entity, "library_name")
             if library_code:
                 converted["meta_library"].append(
                     {
@@ -164,7 +159,7 @@ def _convert_owl_entities(
             continue
 
         if entity_type == "term_type":
-            term_type_obj = converter.convert_term_type(entity)
+            term_type_obj = owl_converter.convert_term_type(entity)
             raw_category = term_type_obj.get("type_category")
             if isinstance(raw_category, str):
                 term_type_obj["type_category"] = type_category_map.get(
@@ -177,7 +172,7 @@ def _convert_owl_entities(
             continue
 
         if entity_type == "term":
-            term_obj = converter.convert_term(entity)
+            term_obj = owl_converter.convert_term(entity)
             if scope_type in {"object", "view"} and scope_code:
                 library_code = str(term_obj.get("library_code") or "").strip()
                 term_type_code = str(term_obj.get("term_type_code") or "").strip()
@@ -199,16 +194,16 @@ def _convert_owl_entities(
                     term_obj["term_id"] = "#".join([parent_prop_term_id, term_type_code, term_code])
             converted["term"].append(term_obj)
             # terms_knowledge 需要拆成独立 knowledge 记录，沿用原有 term_code 外键解析。
-            for knowledge_obj in converter.extract_knowledge_records(entity, ""):
+            for knowledge_obj in owl_converter.extract_knowledge_records(entity, ""):
                 knowledge_obj["term_id"] = term_obj.get("term_id")
                 knowledge_obj["term_code"] = term_obj.get("term_code")
                 converted["knowledge"].append(knowledge_obj)
             continue
 
         if entity_type == "relation":
-            relation_obj = converter.convert_relation(entity)
+            relation_obj = owl_converter.convert_relation(entity)
             relation_obj["relation_code"] = (
-                converter._pick_str(entity, "relation_code")
+                owl_converter._pick_str(entity, "relation_code")
                 or f"{relation_obj.get('source_term_code', '')}/{relation_obj.get('target_term_code', '')}/{relation_obj.get('relation_name', '')}"
             )
             converted["relation"].append(relation_obj)

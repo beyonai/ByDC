@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 from datacloud_knowledge.adapters import create_reader, create_writer
@@ -13,6 +12,7 @@ from datacloud_knowledge.adapters.opengauss.vector_validation import (
     TermVectorValidationError,
     validate_term_vector_readiness,
 )
+from datacloud_knowledge.retrieval.embedding import get_embedding_service
 
 from .cache import UserNameCache
 from .disambiguation import build_shortest_path_tree, disambiguate
@@ -86,8 +86,7 @@ def _get_validated_embedding_service(session: Any) -> Any:
         return None
 
     try:
-        embedding_module = import_module("datacloud_knowledge.embedding")
-        embedding_svc = embedding_module.get_embedding_service()
+        embedding_svc = get_embedding_service()
         validate_term_vector_readiness(session, embedding_svc)
     except TermVectorValidationError as exc:
         logger.error("知识库向量校验失败，向量召回将跳过: %s", exc)

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from importlib import import_module
 from types import SimpleNamespace
 from typing import Any
 
@@ -9,7 +8,9 @@ from datacloud_knowledge.adapters.opengauss.vector_validation import TermVectorV
 
 
 def _get_service_module() -> Any:
-    return import_module("datacloud_knowledge.intent.service")
+    from datacloud_knowledge.intent import service
+
+    return service
 
 
 class _DummySessionCtx:
@@ -27,6 +28,7 @@ def test_search_candidates_runs_vector_by_default(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(service, "get_session", _DummySessionCtx)
     monkeypatch.setattr(service, "_build_global_name_index", dict)
     monkeypatch.setattr(service, "validate_term_vector_readiness", lambda *_args: None)
+    monkeypatch.setattr(service, "get_embedding_service", lambda: object())
 
     vector_candidate = SimpleNamespace(
         term_id="TERM_001",
@@ -67,17 +69,8 @@ def test_search_candidates_runs_vector_by_default(monkeypatch: pytest.MonkeyPatc
             return {m.text: (vector_candidate,) for m in mentions}
         return {m.text: () for m in mentions}
 
-    class _EmbeddingModule:
-        @staticmethod
-        def get_embedding_service() -> object:
-            return object()
-
-    def _import_embedding(_name: str) -> type[_EmbeddingModule]:
-        return _EmbeddingModule
-
     monkeypatch.setattr(service, "match_mentions_with_search", _fake_match)
     monkeypatch.setattr(service, "_convert_hits", _fake_convert_hits)
-    monkeypatch.setattr(service, "import_module", _import_embedding)
 
     out = service.search_all_candidates_with_name_id(["企业综合分析表"])
 
@@ -103,20 +96,20 @@ def test_search_candidates_skips_vector_when_disabled(monkeypatch: pytest.Monkey
         search_modes.append(mode)
         return {m.text: () for m in mentions}
 
-    import_called = {"value": False}
+    get_svc_called = {"value": False}
 
-    def _track_import(_module_name: str) -> Any:
-        import_called["value"] = True
-        raise AssertionError("embedding module should not be imported when vector is disabled")
+    def _track_get_svc() -> Any:
+        get_svc_called["value"] = True
+        raise AssertionError("embedding service should not be requested when vector is disabled")
 
     monkeypatch.setattr(service, "match_mentions_with_search", _fake_match)
-    monkeypatch.setattr(service, "import_module", _track_import)
+    monkeypatch.setattr(service, "get_embedding_service", _track_get_svc)
 
     out = service.search_all_candidates_with_name_id(["企业综合分析表"])
 
     assert out == {"企业综合分析表": []}
     assert search_modes == ["strict", "bm25"]
-    assert import_called["value"] is False
+    assert get_svc_called["value"] is False
 
 
 @pytest.mark.intent
@@ -139,14 +132,9 @@ def test_search_candidates_logs_error_when_vector_validation_fails(
         del kwargs
         return {m.text: () for m in mentions}
 
-    class _EmbeddingModule:
-        @staticmethod
-        def get_embedding_service() -> object:
-            return object()
-
     monkeypatch.setattr(service, "validate_term_vector_readiness", _raise_validation_error)
     monkeypatch.setattr(service, "match_mentions_with_search", _fake_match)
-    monkeypatch.setattr(service, "import_module", lambda _name: _EmbeddingModule)
+    monkeypatch.setattr(service, "get_embedding_service", lambda: object())
 
     with caplog.at_level("ERROR"):
         out = service.search_all_candidates_with_name_id(["企业综合分析表"])

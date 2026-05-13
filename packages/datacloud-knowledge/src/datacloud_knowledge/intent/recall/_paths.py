@@ -193,7 +193,7 @@ def _batch_vector(
     if not batch.requests:
         return {}
 
-    from datacloud_knowledge.embedding import get_embedding_service
+    from datacloud_knowledge.retrieval.embedding import get_embedding_service
 
     svc = get_embedding_service()
     vectors = svc.get_text_embedding_batch([req.keyword for req in batch.requests])
