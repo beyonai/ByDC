@@ -14,8 +14,6 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
-
     from .types import ScoreUpdateRecord
 
 log = logging.getLogger(__name__)
@@ -29,7 +27,7 @@ _MODERATE_DAYS = 90
 
 def update_scores(
     records: tuple[ScoreUpdateRecord, ...],
-    session: Session,
+    session,
 ) -> None:
     """Batch update scores for alias records used in this dialog.
 
@@ -143,7 +141,7 @@ def _coerce_last_used_at(value: Any) -> str | None:
     return None
 
 
-def update_score(name_id: str, success: bool, session: Session) -> None:
+def update_score(name_id: str, success: bool, session) -> None:
     """Update score for a single alias record.
 
     Convenience wrapper around update_scores() for single-record use.
@@ -158,7 +156,7 @@ def update_score(name_id: str, success: bool, session: Session) -> None:
     update_scores(records=(score_update_record(name_id=name_id, success=success),), session=session)
 
 
-def update_score_async(name_id: str, success: bool, session: Session) -> None:
+def update_score_async(name_id: str, success: bool, session) -> None:
     """Asynchronously update score using ThreadPoolExecutor.
 
     Fire-and-forget: failures are logged, not raised.
@@ -179,7 +177,7 @@ def update_score_async(name_id: str, success: bool, session: Session) -> None:
     executor.submit(_task)
 
 
-def batch_update_scores(records: tuple[ScoreUpdateRecord, ...], session: Session) -> None:
+def batch_update_scores(records: tuple[ScoreUpdateRecord, ...], session) -> None:
     """Batch update scores for multiple alias records.
 
     Alias for update_scores() with explicit naming for public API.

@@ -18,8 +18,6 @@ from ._paths import _batch_bm25_and, _batch_jieba_bm25, _batch_substring, _batch
 from ._scope import _normalize_scope_layers, _typed_multi_recall_layered
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
-
     from datacloud_knowledge.intent._recall_common import CandidateDict
 
 log = logging.getLogger(__name__)
@@ -27,7 +25,7 @@ log = logging.getLogger(__name__)
 
 def _prepare_batch(
     items: Sequence[TypedKeywordState],
-    session: Session,
+    session,
     *,
     wv_per_type: int,
     scope_code: str | None = None,
@@ -114,7 +112,7 @@ def _run_paths_concurrent(
 def typed_multi_recall_batch(
     items: Sequence[TypedKeywordState],
     *,
-    session: Session,
+    session,
     top_k: int,
     rrf_k: int,
     enable_vector: bool,

@@ -17,8 +17,6 @@ from ._models import (
 )
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
-
     from datacloud_knowledge.intent._recall_common import CandidateDict
 
 log = logging.getLogger(__name__)
@@ -204,7 +202,7 @@ def _add_layered_single_char_fallback_results(
 def _typed_multi_recall_layered(
     items: Sequence[TypedKeywordState],
     *,
-    session: Session,
+    session,
     top_k: int,
     rrf_k: int,
     enable_vector: bool,

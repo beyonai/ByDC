@@ -1395,6 +1395,89 @@ class PostgresTermReader:
             for r in rows
         )
 
+    def get_global_name_index(
+        self,
+    ) -> dict[str, list[tuple[str, str, str]]]:
+        """构建全局术语名称索引（公共 term_name，不含用户专属记录）。
+
+        Returns:
+            {name_text → [(term_id, term_type_code, match_type), ...]} 索引。
+        """
+        try:
+            with self._session_factory() as session:
+                rows = session.execute(
+                    text(
+                        "SELECT t.term_id, t.term_type_code, tn.name_text, "
+                        "CASE WHEN tn.name_text = t.term_name "
+                        "THEN 'standard_name' ELSE 'alias' END AS match_type "
+                        "FROM term_name tn "
+                        "JOIN term t ON tn.term_id = t.term_id "
+                        "WHERE tn.search_scope = '{}'::jsonb "
+                        "OR COALESCE((tn.search_scope->>'scope_user_id'), '') = ''"
+                    )
+                ).fetchall()
+        except Exception:
+            logger.exception("get_global_name_index failed")
+            raise
+        index: dict[str, list[tuple[str, str, str]]] = {}
+        for term_id, term_type_code, name_text, match_type in rows:
+            index.setdefault(str(name_text), []).append(
+                (str(term_id), str(term_type_code), str(match_type))
+            )
+        return index
+
+    def get_name_ids_by_word(
+        self,
+        *,
+        word: str,
+        term_ids: Sequence[str],
+        user_id: str | None = None,
+    ) -> dict[str, str]:
+        """按单词+术语ID查询 name_id，用户专属记录优先。
+
+        Returns:
+            {term_id → name_id} 映射。
+        """
+        if not term_ids:
+            return {}
+        if user_id:
+            sql_str = (
+                "SELECT tn.term_id, tn.name_id FROM term_name tn "
+                "WHERE tn.name_text = :name_text "
+                "AND tn.term_id IN :term_ids "
+                "AND (tn.search_scope = '{}'::jsonb "
+                "OR COALESCE((tn.search_scope->>'scope_user_id'), '') = '' "
+                "OR COALESCE((tn.search_scope->>'scope_user_id'), '') = :user_id) "
+                "ORDER BY CASE WHEN COALESCE((tn.search_scope->>'scope_user_id'), '') = :user_id "
+                "THEN 0 ELSE 1 END, tn.updated_time DESC"
+            )
+            params = {"name_text": word, "term_ids": tuple(term_ids), "user_id": user_id}
+        else:
+            sql_str = (
+                "SELECT tn.term_id, tn.name_id FROM term_name tn "
+                "WHERE tn.name_text = :name_text "
+                "AND tn.term_id IN :term_ids "
+                "AND (tn.search_scope = '{}'::jsonb "
+                "OR COALESCE((tn.search_scope->>'scope_user_id'), '') = '') "
+                "ORDER BY tn.updated_time DESC"
+            )
+            params = {"name_text": word, "term_ids": tuple(term_ids)}
+        try:
+            with self._session_factory() as session:
+                rows = session.execute(
+                    text(sql_str).bindparams(bindparam("term_ids", expanding=True)),
+                    params,
+                ).fetchall()
+        except Exception:
+            logger.exception("get_name_ids_by_word failed: word=%s", word)
+            raise
+        mapping: dict[str, str] = {}
+        for term_id, name_id in rows:
+            tid = str(term_id)
+            if tid not in mapping:
+                mapping[tid] = str(name_id)
+        return mapping
+
     # ═══════════════════════════════════════════════════════════════════════════
     # 内部辅助方法
     # ═══════════════════════════════════════════════════════════════════════════

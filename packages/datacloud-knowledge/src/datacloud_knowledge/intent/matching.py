@@ -16,8 +16,6 @@ from rapidfuzz import fuzz, process
 from .types import MatchCandidate, MatchResult
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
-
     from datacloud_knowledge.embedding import EmbeddingService
 
     from .cache import UserNameCache
@@ -100,7 +98,7 @@ def match_mentions(
 
 def match_mentions_with_search(
     mentions: tuple[Mention, ...],
-    session: Session,
+    session,
     user_id: str | None = None,
     global_name_index: dict[str, list[tuple[str, str, str]]] | None = None,
     user_cache: UserNameCache | None = None,
@@ -243,7 +241,7 @@ def _fuzzy_match(
 
 
 def _bm25_match(
-    session: Session,
+    session,
     query: str,
     top_k: int = 5,
     min_score: float = 0.01,
@@ -273,7 +271,7 @@ def _bm25_match(
 
 
 def _vector_match(
-    session: Session,
+    session,
     query: str,
     embedding_service: EmbeddingService,
     top_k: int = 5,

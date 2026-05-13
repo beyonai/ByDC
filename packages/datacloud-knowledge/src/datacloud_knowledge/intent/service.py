@@ -7,9 +7,7 @@ import os
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import bindparam, text
-
-from datacloud_knowledge.adapters import create_writer
+from datacloud_knowledge.adapters import create_reader, create_writer
 from datacloud_knowledge.adapters.opengauss._db.connection import get_session
 from datacloud_knowledge.adapters.opengauss.vector_validation import (
     TermVectorValidationError,
@@ -45,28 +43,8 @@ def _vector_search_enabled() -> bool:
 
 
 def _build_global_name_index() -> dict[str, list[tuple[str, str, str]]]:
-    """Build global name index from public term_name rows."""
-    sql = text(
-        """
-        SELECT
-            t.term_id,
-            t.term_type_code,
-            tn.name_text,
-            CASE WHEN tn.name_text = t.term_name THEN 'standard_name' ELSE 'alias' END AS match_type
-        FROM term_name tn
-        JOIN term t ON tn.term_id = t.term_id
-        WHERE tn.search_scope = '{}'::jsonb
-           OR COALESCE((tn.search_scope->>'scope_user_id'), '') = ''
-        """
-    )
-    with get_session() as session:
-        rows = session.execute(sql).fetchall()
-    index: dict[str, list[tuple[str, str, str]]] = {}
-    for term_id, term_type_code, name_text, match_type in rows:
-        index.setdefault(str(name_text), []).append(
-            (str(term_id), str(term_type_code), str(match_type))
-        )
-    return index
+    """Build global name index from public term_name rows, via reader adapter."""
+    return create_reader().get_global_name_index()
 
 
 def _query_name_ids_by_word(
@@ -75,58 +53,8 @@ def _query_name_ids_by_word(
     term_ids: list[str],
     user_id: str | None,
 ) -> dict[str, str]:
-    """Resolve term_id -> name_id for a mention word."""
-    if not term_ids:
-        return {}
-
-    if user_id:
-        sql = text(
-            """
-            SELECT
-                tn.term_id,
-                tn.name_id
-            FROM term_name tn
-            WHERE tn.name_text = :name_text
-              AND tn.term_id IN :term_ids
-              AND (
-                    tn.search_scope = '{}'::jsonb
-                 OR COALESCE((tn.search_scope->>'scope_user_id'), '') = ''
-                 OR COALESCE((tn.search_scope->>'scope_user_id'), '') = :user_id
-              )
-            ORDER BY
-              CASE WHEN COALESCE((tn.search_scope->>'scope_user_id'), '') = :user_id
-                   THEN 0 ELSE 1 END,
-              tn.updated_time DESC
-            """
-        ).bindparams(bindparam("term_ids", expanding=True))
-        params = {"name_text": word, "term_ids": term_ids, "user_id": user_id}
-    else:
-        sql = text(
-            """
-            SELECT
-                tn.term_id,
-                tn.name_id
-            FROM term_name tn
-            WHERE tn.name_text = :name_text
-              AND tn.term_id IN :term_ids
-              AND (
-                    tn.search_scope = '{}'::jsonb
-                 OR COALESCE((tn.search_scope->>'scope_user_id'), '') = ''
-              )
-            ORDER BY tn.updated_time DESC
-            """
-        ).bindparams(bindparam("term_ids", expanding=True))
-        params = {"name_text": word, "term_ids": term_ids}
-
-    with get_session() as session:
-        rows = session.execute(sql, params).fetchall()
-
-    mapping: dict[str, str] = {}
-    for term_id, name_id in rows:
-        term_id_text = str(term_id)
-        if term_id_text not in mapping:
-            mapping[term_id_text] = str(name_id)
-    return mapping
+    """Resolve term_id -> name_id for a mention word, via reader adapter."""
+    return create_reader().get_name_ids_by_word(word=word, term_ids=term_ids, user_id=user_id)
 
 
 def _candidate_to_dict(candidate: Any, *, name_id: str | None) -> CandidateDict:
@@ -184,73 +112,71 @@ def search_all_candidates_with_name_id(
     global_name_index = _build_global_name_index()
     result: dict[str, list[CandidateDict]] = {}
 
-    with get_session() as session:
-        mentions = tuple(Mention(text=w) for w in concept_terms)
-        strict_hits = match_mentions_with_search(
-            mentions,
-            session,
-            user_id=user_id,
-            global_name_index=global_name_index,
-            user_cache=user_cache,
-            search_mode="strict",
-            top_k=top_k,
-        )
+    mentions = tuple(Mention(text=w) for w in concept_terms)
+    strict_hits = match_mentions_with_search(
+        mentions,
+        None,
+        user_id=user_id,
+        global_name_index=global_name_index,
+        user_cache=user_cache,
+        search_mode="strict",
+        top_k=top_k,
+    )
 
-        remaining: list[str] = []
-        for word in concept_terms:
-            hits = strict_hits.get(word)
-            if hits:
-                result[word] = _convert_hits(word=word, hits=hits, user_id=user_id)
-            else:
-                remaining.append(word)
+    remaining: list[str] = []
+    for word in concept_terms:
+        hits = strict_hits.get(word)
+        if hits:
+            result[word] = _convert_hits(word=word, hits=hits, user_id=user_id)
+        else:
+            remaining.append(word)
 
-        if not remaining:
-            return result
+    if not remaining:
+        return result
 
-        bm25_mentions = tuple(Mention(text=w) for w in remaining)
-        bm25_hits = match_mentions_with_search(
-            bm25_mentions,
-            session,
-            search_mode="bm25",
-            top_k=top_k,
-        )
+    bm25_mentions = tuple(Mention(text=w) for w in remaining)
+    bm25_hits = match_mentions_with_search(
+        bm25_mentions,
+        None,
+        search_mode="bm25",
+        top_k=top_k,
+    )
 
-        still_remaining: list[str] = []
-        for word in remaining:
-            hits = bm25_hits.get(word)
-            if hits:
-                result[word] = _convert_hits(word=word, hits=hits, user_id=user_id)
-            else:
-                still_remaining.append(word)
+    still_remaining: list[str] = []
+    for word in remaining:
+        hits = bm25_hits.get(word)
+        if hits:
+            result[word] = _convert_hits(word=word, hits=hits, user_id=user_id)
+        else:
+            still_remaining.append(word)
 
-        if not still_remaining:
-            return result
+    if not still_remaining:
+        return result
 
-        embedding_svc = _get_validated_embedding_service(session)
-        if embedding_svc is None:
-            for word in still_remaining:
-                result[word] = []
-            return result
-
-        vector_mentions = tuple(Mention(text=w) for w in still_remaining)
-        vector_hits = match_mentions_with_search(
-            vector_mentions,
-            session,
-            search_mode="vector",
-            embedding_service=embedding_svc,
-            top_k=top_k,
-        )
+    embedding_svc = _get_validated_embedding_service(None)
+    if embedding_svc is None:
         for word in still_remaining:
-            hits = vector_hits.get(word)
-            result[word] = _convert_hits(word=word, hits=hits, user_id=user_id) if hits else []
+            result[word] = []
+        return result
+
+    vector_mentions = tuple(Mention(text=w) for w in still_remaining)
+    vector_hits = match_mentions_with_search(
+        vector_mentions,
+        None,
+        search_mode="vector",
+        embedding_service=embedding_svc,
+        top_k=top_k,
+    )
+    for word in still_remaining:
+        hits = vector_hits.get(word)
+        result[word] = _convert_hits(word=word, hits=hits, user_id=user_id) if hits else []
 
     return result
 
 
 def disambiguate_with_session(match_result: MatchResult) -> DisambiguationResult:
-    """Execute disambiguation with a managed DB session."""
-    with get_session() as session:
-        return disambiguate(match_result, session)
+    """Execute disambiguation (session managed internally by adapter)."""
+    return disambiguate(match_result, None)
 
 
 def build_shortest_path_tree_with_session(
