@@ -1,15 +1,15 @@
-"""向后兼容重导出模块。所有实现已迁移至 intent.recall 子包。
+"""批量并发术语召回子包。
 
-拆分后的文件按职责存放：
-- recall/_models.py    — 数据模型与常量
-- recall/_sql.py       — SQL 构建与查询执行
-- recall/_paths.py     — 四路召回路径
-- recall/_fusion.py    — RRF 融合与候选整形
-- recall/_scope.py     — 分层 scope 召回管理
-- recall/_orchestrator.py — 编排与主入口
+拆分自 batch_recall.py，按职责分为：
+- _models: 数据模型与常量
+- _sql: SQL 构建与查询执行
+- _paths: 四路召回路径（BM25 / jieba / 子串 / 向量）
+- _fusion: RRF 融合与候选整形
+- _scope: 分层 scope 召回管理
+- _orchestrator: 编排与主入口
 """
 
-from .recall._fusion import (  # noqa: F401
+from ._fusion import (  # noqa: F401
     _add_single_char_fallback_results,
     _all_existing_paths_empty,
     _batch_single_char_fallback,
@@ -21,7 +21,7 @@ from .recall._fusion import (  # noqa: F401
     _shape_diversified_candidates,
     _single_char_fallback_tsquery,
 )
-from .recall._models import (  # noqa: F401
+from ._models import (  # noqa: F401
     _BM25_MIN_SCORE,
     _CJK_CHAR_RE,
     _FIELD_ONLY_KTYPES,
@@ -33,12 +33,12 @@ from .recall._models import (  # noqa: F401
     ScopeRecallLayer,
     TypedKeywordState,
 )
-from .recall._orchestrator import (  # noqa: F401
+from ._orchestrator import (  # noqa: F401
     _prepare_batch,
     _run_paths_concurrent,
     typed_multi_recall_batch,
 )
-from .recall._paths import (  # noqa: F401
+from ._paths import (  # noqa: F401
     _batch_bm25_and,
     _batch_jieba_bm25,
     _batch_substring,
@@ -46,7 +46,7 @@ from .recall._paths import (  # noqa: F401
     _run_single_vector_query,
     _run_tsquery_batches,
 )
-from .recall._scope import (  # noqa: F401
+from ._scope import (  # noqa: F401
     _add_layered_single_char_fallback_results,
     _all_layer_keyword_paths_empty,
     _candidate_top_names,
@@ -56,7 +56,7 @@ from .recall._scope import (  # noqa: F401
     _typed_multi_recall_layered,
     _weighted_fuse_candidate_layers,
 )
-from .recall._sql import (  # noqa: F401
+from ._sql import (  # noqa: F401
     _build_effective_scope_clause,
     _build_scope_params,
     _build_substring_sql,
@@ -68,3 +68,11 @@ from .recall._sql import (  # noqa: F401
     _run_substring_query,
     _run_tsquery_query,
 )
+
+__all__ = [
+    "PreparedBatch",
+    "RecallRequest",
+    "ScopeRecallLayer",
+    "TypedKeywordState",
+    "typed_multi_recall_batch",
+]
