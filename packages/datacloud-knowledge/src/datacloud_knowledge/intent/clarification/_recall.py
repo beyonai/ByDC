@@ -22,7 +22,7 @@ from datacloud_knowledge.intent.recall import (
     _batch_vector,
 )
 from datacloud_knowledge.intent.service import typed_multi_recall_with_session
-from datacloud_knowledge.retrieval.rrf import rrf_fuse
+from datacloud_knowledge.contracts.rrf import rrf_fuse
 
 from .models import ExtractedTerm, PreResolveResult
 

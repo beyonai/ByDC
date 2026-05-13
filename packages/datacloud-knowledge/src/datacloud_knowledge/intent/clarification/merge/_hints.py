@@ -18,7 +18,7 @@ from datacloud_knowledge.intent.clarification.models import (
     PreResolveResult,
     TermMeta,
 )
-from datacloud_knowledge.retrieval.rrf import rrf_fuse
+from datacloud_knowledge.contracts.rrf import rrf_fuse
 
 logger = logging.getLogger(__name__)
 

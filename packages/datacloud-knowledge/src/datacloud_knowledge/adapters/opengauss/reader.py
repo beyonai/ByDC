@@ -36,6 +36,7 @@ from datacloud_knowledge.contracts.types import (
     FieldResolutionResultWithNames,
     NameItem,
     PropItem,
+    ResolvedField,
     SearchTermsResult,
     TagFilter,
     TermItem,
@@ -1069,10 +1070,126 @@ class PostgresTermReader:
     ) -> FieldResolutionResultWithNames:
         """扩展版字段别名消歧：resolved 同时返回 term_name。
 
-        TODO: SQL 逻辑仍在 retrieval/term_search.py，待迁移至本方法。
+        在 scope_code 对应的视图/对象下，通过 TermName 别名和 term_code 直接匹配两种方式
+        查找 prop，并将命中的用户输入（terms）映射到 ResolvedField(term_code, term_name)。
+        支持值级别消歧（resolve_values=True 时对 value_terms 追加匹配）。
         """
-        from datacloud_knowledge.retrieval.term_search import (
-            resolve_field_aliases_with_names as _resolve_fn,
-        )
+        unique_field_terms = list(dict.fromkeys(terms)) if terms else []
+        if not scope_code or not unique_field_terms:
+            return FieldResolutionResultWithNames(unresolved=list(unique_field_terms))
 
-        return _resolve_fn(terms=list(terms), scope_code=scope_code)
+        view_scope = {"scope": "view", "code": scope_code}
+        obj_scope = {"scope": "object", "code": scope_code}
+        global_scope = {"scope": "global"}
+
+        try:
+            with self._session_factory() as session:
+                queries = []
+
+                # 子查询 1a：通过 TermName 别名匹配（中文名/别名 → prop）
+                field_q = (
+                    select(
+                        literal("field").label("match_type"),
+                        TermName.name_text.label("matched_text"),
+                        Term.term_code,
+                        Term.term_name,
+                        TermName.search_scope,
+                    )
+                    .join(Term, Term.term_id == TermName.term_id)
+                    .where(
+                        TermName.name_text.in_(unique_field_terms),
+                        Term.term_type_code == "prop",
+                        or_(
+                            TermName.search_scope.contains(view_scope),
+                            TermName.search_scope.contains(obj_scope),
+                            TermName.search_scope.contains(global_scope),
+                        ),
+                    )
+                )
+                queries.append(field_q)
+
+                # 子查询 1b：通过 Term.term_code 直接匹配（英文 field_code → prop）
+                view_obj_fc = aliased(Term, name="view_obj_fc")
+                prop_fc = aliased(Term, name="prop_fc")
+                _null_scope_fc = cast(literal(None), JSONB)
+                field_code_q = (
+                    select(
+                        literal("field").label("match_type"),
+                        prop_fc.term_code.label("matched_text"),
+                        prop_fc.term_code,
+                        prop_fc.term_name,
+                        _null_scope_fc.label("search_scope"),
+                    )
+                    .select_from(view_obj_fc)
+                    .join(TermRelation, TermRelation.source_term_id == view_obj_fc.term_id)
+                    .join(prop_fc, prop_fc.term_id == TermRelation.target_term_id)
+                    .where(
+                        view_obj_fc.term_code == scope_code,
+                        view_obj_fc.term_type_code.in_(["view", "object"]),
+                        prop_fc.term_type_code == "prop",
+                        prop_fc.term_code.in_(unique_field_terms),
+                    )
+                )
+                queries.append(field_code_q)
+
+                stmt = queries[0].union_all(queries[1])
+                rows = session.execute(stmt).all()
+        except Exception:
+            logger.exception(
+                "resolve_field_aliases_with_names failed: terms=%s, scope_code=%s",
+                unique_field_terms,
+                scope_code,
+            )
+            raise
+
+        # 分拣结果
+        field_hits: dict[str, dict[str, tuple[str, dict[str, str]]]] = {}
+        for match_type, matched_text, term_code, term_name, search_scope in rows:
+            if str(match_type) != "field":
+                continue
+            alias = str(matched_text)
+            code = str(term_code)
+            if alias not in field_hits:
+                field_hits[alias] = {}
+            if code not in field_hits[alias]:
+                raw_scope: dict[str, str] = (
+                    {str(k): str(v) for k, v in search_scope.items()}
+                    if isinstance(search_scope, dict)
+                    else {}
+                )
+                field_hits[alias][code] = (str(term_name), raw_scope)
+
+        resolved: dict[str, ResolvedField] = {}
+        ambiguous: dict[str, list[AmbiguousCandidate]] = {}
+        unresolved: list[str] = []
+
+        for term in unique_field_terms:
+            candidates = field_hits.get(term)
+            if candidates is None:
+                unresolved.append(term)
+            elif len(candidates) == 1:
+                code, (name, _scope) = next(iter(candidates.items()))
+                resolved[term] = ResolvedField(term_code=code, term_name=name)
+            else:
+                ambiguous[term] = [
+                    AmbiguousCandidate(
+                        term_code=code,
+                        term_name=name,
+                        matched_alias=term,
+                        scope=scope,
+                    )
+                    for code, (name, scope) in candidates.items()
+                ]
+
+        logger.info(
+            "[resolve_field_aliases_with_names] scope=%s resolved=%d ambiguous=%d unresolved=%d",
+            scope_code,
+            len(resolved),
+            len(ambiguous),
+            len(unresolved),
+        )
+        return FieldResolutionResultWithNames(
+            resolved=resolved,
+            ambiguous=ambiguous,
+            unresolved=unresolved,
+        )

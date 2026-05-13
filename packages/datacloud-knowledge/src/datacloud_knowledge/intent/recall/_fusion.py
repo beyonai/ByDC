@@ -7,7 +7,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from datacloud_knowledge.adapters.opengauss.bm25 import _has_name_keywords_column
-from datacloud_knowledge.retrieval.rrf import rrf_fuse
+from datacloud_knowledge.contracts.rrf import rrf_fuse
 
 from ._models import (
     _CJK_CHAR_RE,
