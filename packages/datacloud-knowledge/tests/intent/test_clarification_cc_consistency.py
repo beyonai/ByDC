@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from datacloud_knowledge.intent.clarification import api
+from datacloud_knowledge.intent.clarification import _merge, _pre_resolve
 from datacloud_knowledge.intent.clarification.models import (
     CCConfirmResult,
     CCTermConfirmation,
@@ -9,7 +9,6 @@ from datacloud_knowledge.intent.clarification.models import (
     ConditionTermMapping,
     ExtractedTerm,
 )
-from datacloud_knowledge.knowledge_search import term_search
 from datacloud_knowledge.knowledge_search.types import (
     FieldResolutionResultWithNames,
     ResolvedField,
@@ -31,11 +30,11 @@ def test_pre_resolve_supports_complex_condition_terms(
         )
 
     monkeypatch.setattr(
-        term_search,
+        _pre_resolve,
         "resolve_field_aliases_with_names",
         _fake_resolve_field_aliases_with_names,
     )
-    monkeypatch.setattr(term_search, "get_prop_enum_values", lambda **_: {})
+    monkeypatch.setattr(_pre_resolve, "get_prop_enum_values", lambda **_: {})
 
     term = ExtractedTerm(
         raw_text="亩产效益",
@@ -45,16 +44,16 @@ def test_pre_resolve_supports_complex_condition_terms(
         condition_index=0,
     )
 
-    result = api._pre_resolve_terms([term], scope_code="scene_enterprise_analysis")
+    result = _pre_resolve.pre_resolve_terms([term], scope_code="scene_enterprise_analysis")
 
-    assert result.confirmed[api._term_key(term)].term_name == "亩产效益"
+    assert result.confirmed[_pre_resolve.term_key(term)].term_name == "亩产效益"
     assert result.unresolved_terms == []
 
 
 @pytest.mark.intent
 def test_cc_reuses_main_confirmation_when_confirmed_value_is_candidate() -> None:
     hints = {
-        ("whereKey", "亩产效益"): api._TermResolutionHint(
+        ("whereKey", "亩产效益"): _merge._TermResolutionHint(
             confirmed="亩产效益",
             candidates=("亩产效益", "亩均税收"),
         )
@@ -78,7 +77,7 @@ def test_cc_reuses_main_confirmation_when_confirmed_value_is_candidate() -> None
         ]
     )
 
-    normalized = api._normalize_cc_result_with_hints(result, registry, hints, recall_map={})
+    normalized = _merge.normalize_cc_result_with_hints(result, registry, hints, recall_map={})
 
     assert normalized is not None
     assert normalized.confirmations[0].confirmed == "亩产效益"
@@ -88,7 +87,7 @@ def test_cc_reuses_main_confirmation_when_confirmed_value_is_candidate() -> None
 @pytest.mark.intent
 def test_cc_merges_candidates_with_rrf_when_prior_confirmed_value_is_absent() -> None:
     hints = {
-        ("whereKey", "亩产效益"): api._TermResolutionHint(
+        ("whereKey", "亩产效益"): _merge._TermResolutionHint(
             confirmed="亩产效益",
             candidates=("亩产效益", "亩均税收"),
         )
@@ -112,7 +111,7 @@ def test_cc_merges_candidates_with_rrf_when_prior_confirmed_value_is_absent() ->
         ]
     )
 
-    normalized = api._normalize_cc_result_with_hints(result, registry, hints, recall_map={})
+    normalized = _merge.normalize_cc_result_with_hints(result, registry, hints, recall_map={})
 
     assert normalized is not None
     confirmation = normalized.confirmations[0]
@@ -125,7 +124,7 @@ def test_cc_merges_candidates_with_rrf_when_prior_confirmed_value_is_absent() ->
 
 @pytest.mark.intent
 def test_cc_terms_reuse_previous_cc_confirmation_in_order() -> None:
-    hints: dict[tuple[str, str], api._TermResolutionHint] = {}
+    hints: dict[tuple[str, str], _merge._TermResolutionHint] = {}
     registry = {
         1: CCTermMeta(
             raw_text="亩产效益",
@@ -139,7 +138,7 @@ def test_cc_terms_reuse_previous_cc_confirmation_in_order() -> None:
         confirmations=[CCTermConfirmation(term_id=1, confirmed="亩产效益", candidates=[])]
     )
 
-    api._merge_cc_resolution_hints(hints, first_result, registry)
+    _merge.merge_cc_resolution_hints(hints, first_result, registry)
 
     second_result = CCConfirmResult(
         confirmations=[
@@ -150,7 +149,7 @@ def test_cc_terms_reuse_previous_cc_confirmation_in_order() -> None:
             )
         ]
     )
-    normalized = api._normalize_cc_result_with_hints(second_result, registry, hints, recall_map={})
+    normalized = _merge.normalize_cc_result_with_hints(second_result, registry, hints, recall_map={})
 
     assert normalized is not None
     assert normalized.confirmations[0].confirmed == "亩产效益"
@@ -175,7 +174,7 @@ def test_complex_condition_duplicate_span_mappings_are_deduped_with_rrf() -> Non
         ),
     ]
 
-    deduped = api._dedupe_condition_term_mappings(mappings)
+    deduped = _merge._dedupe_condition_term_mappings(mappings)
 
     assert len(deduped) == 1
     assert deduped[0].original_term == "贡献率"

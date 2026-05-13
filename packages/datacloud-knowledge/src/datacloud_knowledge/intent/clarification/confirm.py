@@ -16,6 +16,7 @@ from typing import Any, Literal
 
 from datacloud_knowledge.i18n import get_confirm_labels, get_confirm_prompt
 
+from ._pre_resolve import extract_filter_prefix, term_key
 from .models import (
     CCConfirmResult,
     CCTermMeta,
@@ -435,11 +436,6 @@ def _check_needs_clarification(
 # ── 分治确认上下文格式化 ─────────────────────────────────────────────
 
 
-def _term_key(t: ExtractedTerm) -> str:
-    """生成术语的复合键：path:raw_text。"""
-    return f"{t.path}:{t.raw_text}"
-
-
 def format_main_confirm_context(
     structured_input: dict[str, Any],
     main_terms: list[ExtractedTerm],
@@ -477,14 +473,14 @@ def format_main_confirm_context(
         # 收集已确认术语的 raw_text → term_name 映射（用于显示）
         shown: set[str] = set()
         for t in main_terms:
-            if t.source != "main" or _term_key(t) not in pre_resolve.confirmed:
+            if t.source != "main" or term_key(t) not in pre_resolve.confirmed:
                 continue
-            rf = pre_resolve.confirmed[_term_key(t)]
+            rf = pre_resolve.confirmed[term_key(t)]
             display_key = f"{rf.term_name}←{t.raw_text}"
             if display_key in shown:
                 continue
             shown.add(display_key)
-            source_tag = pre_resolve.provenance.get(_term_key(t), "")
+            source_tag = pre_resolve.provenance.get(term_key(t), "")
             tag_label = labels.get(f"source_tag_{source_tag}", source_tag)
             lines.append(f"  {rf.term_name} ← {t.raw_text}（{tag_label}）")
         lines.append("")
@@ -501,7 +497,7 @@ def format_main_confirm_context(
         for t in main_terms
         if t.source == "main"
         and t.search_enabled
-        and _term_key(t) not in pre_resolve.confirmed
+        and term_key(t) not in pre_resolve.confirmed
         and t.parent_raw_text is None  # 跳过别名扩展词
     ]
 
@@ -522,7 +518,7 @@ def format_main_confirm_context(
             names = [str(c.get("term_name", "")) for c in candidates]
 
             # whereValue 枚举约束（按 path 查找）
-            enum_values = pre_resolve.value_enum_map.get(_term_key(term))
+            enum_values = pre_resolve.value_enum_map.get(term_key(term))
             if enum_values is not None and term.ktype == "whereValue":
                 where_key_name = _find_where_key_for_value(term, main_terms, pre_resolve)
                 lines.append(
@@ -576,32 +572,16 @@ def _find_where_key_for_value(
 ) -> str:
     """查找 whereValue 对应的 whereKey 中文名。"""
     # 从 path 推断：filters.N.value.M → filters.N 是 filter 前缀
-    filter_prefix = _extract_filter_prefix(value_term.path)
+    filter_prefix = extract_filter_prefix(value_term.path)
     if not filter_prefix:
         return "未知"
     for t in all_terms:
-        if t.ktype == "whereKey" and _extract_filter_prefix(t.path) == filter_prefix:
-            rf = pre_resolve.confirmed.get(_term_key(t))
+        if t.ktype == "whereKey" and extract_filter_prefix(t.path) == filter_prefix:
+            rf = pre_resolve.confirmed.get(term_key(t))
             if rf:
                 return rf.term_name
             return t.raw_text
     return "未知"
-
-
-def _extract_filter_prefix(path: str) -> str:
-    """从 path 提取 filter 前缀：'filters.1.field' → 'filters.1'。"""
-    parts = path.split(".")
-    if len(parts) >= 2 and parts[0] == "filters":
-        return f"{parts[0]}.{parts[1]}"
-    # metrics.N.filters.M.field → metrics.N.filters.M
-    for i, p in enumerate(parts):
-        if p == "filters" and i + 1 < len(parts):
-            try:
-                int(parts[i + 1])
-                return ".".join(parts[: i + 2])
-            except ValueError:
-                pass
-    return ""
 
 
 def format_cc_confirm_context(
