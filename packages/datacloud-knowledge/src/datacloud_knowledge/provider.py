@@ -3,8 +3,8 @@
 本模块提供六类核心能力的函数式接口：
 1. resolve_field_aliases         字段别名解析
 2. search_terms_by_type          术语检索
-3. get_object_props              对象属性查询
-4. get_prop_values_with_aliases  属性可选值及别名查询
+3. get_object_props_by_code      按对象 code 查询属性列表
+4. get_prop_enum_values          按属性 code 查询可选枚举值
 5. prepare_query_clarification   查询澄清分析
 6. finalize_query_clarification  澄清回填
 
@@ -29,7 +29,6 @@ from datacloud_knowledge.contracts.types import (
     PropItem,
     SearchTermsResult,
     TagFilter,
-    ValueWithAliases,
 )
 from datacloud_knowledge.intent.clarification.api import (
     analyze_query_clarification as _analyze_query_clarification,
@@ -282,53 +281,59 @@ def finalize_query_clarification(
     )
 
 
-def get_object_props(
+def get_object_props_by_code(
     *,
-    source_term_ids: Sequence[str],
-) -> dict[str, list[PropItem]]:
-    """查询对象/视图下的所有属性。
+    scope_code: str,
+) -> list[PropItem]:
+    """根据对象/视图编码查询其下所有属性。
 
-    通过知识图谱中的 HAS_FIELD 关系，返回指定对象（数据表/视图）下的属性术语列表。
-    典型用途：前端根据对象 code 动态展示该对象拥有的字段，供用户选择查询维度。
+    接收业务编码（如 ``"sales_crm"``），通过知识图谱 HAS_FIELD 关系返回该对象下的
+    所有属性术语。典型用途：前端选择数据对象后，动态展示可查询的字段列表。
 
     Args:
-        source_term_ids: 源术语 ID 列表（通常为 view 或 object 的 term_id）。
+        scope_code: 对象/视图编码。
 
     Returns:
-        {source_term_id → [PropItem(term_id, term_code, term_name)]} 映射。
+        PropItem 列表（term_code=属性编码, term_name=属性名称），按编码排序。
 
     Example:
-        >>> props = get_object_props(source_term_ids=["term_view_sales"])
-        >>> for prop in props["term_view_sales"]:
-        ...     print(prop.term_code, prop.term_name)
+        >>> props = get_object_props_by_code(scope_code="sales_crm")
+        >>> for p in props:
+        ...     print(f"{p.term_code}: {p.term_name}")
     """
     reader = PostgresTermReader()
-    return reader.get_object_props(source_term_ids=list(source_term_ids))
+    return reader.get_object_props_by_code(scope_code=scope_code)
 
 
-def get_prop_values_with_aliases(
+def get_prop_enum_values(
     *,
-    source_term_ids: Sequence[str],
-) -> dict[str, list[ValueWithAliases]]:
-    """查询对象下属性的可选值及其别名。
+    scope_code: str,
+    field_codes: Sequence[str],
+) -> dict[str, list[str]]:
+    """查询指定属性的可选枚举值。
 
-    通过知识图谱关系链 source → HAS_FIELD → prop → parent_term_id → child，
-    获取属性的枚举值术语和所有别名。
-    典型用途：前端下拉框展示字段的可选过滤值（如"华东"→"region_east"）。
+    接收对象编码和属性编码列表，返回每个属性的可选值（含别名去重）。
+    典型用途：前端下拉框展示字段的过滤候选项。
 
     Args:
-        source_term_ids: 源术语 ID 列表。
+        scope_code: 对象/视图编码。
+        field_codes: 属性编码列表。
 
     Returns:
-        {source_term_id → [ValueWithAliases(parent_term_id, term_id, term_code, term_name, aliases)]}。
+        {field_code → [可选值列表]}，去重保序。
 
     Example:
-        >>> values = get_prop_values_with_aliases(source_term_ids=["term_view_sales"])
-        >>> for v in values["term_view_sales"]:
-        ...     print(v.term_name, "又名:", v.aliases)
+        >>> values = get_prop_enum_values(
+        ...     scope_code="sales_crm",
+        ...     field_codes=["region", "level"],
+        ... )
+        >>> values["region"]   # → ["华东", "华南", "华北", ...]
+        >>> values["level"]    # → ["高", "中", "低"]
     """
     reader = PostgresTermReader()
-    return reader.get_prop_values_with_aliases(source_term_ids=list(source_term_ids))
+    return reader.get_prop_enum_values(
+        scope_code=scope_code, field_codes=list(field_codes)
+    )
 
 
 # ── 内部辅助函数 ───────────────────────────────────────────────────
@@ -403,8 +408,8 @@ __all__ = [
     "FinalizedClarification",
     "PersistedSynonyms",
     "finalize_query_clarification",
-    "get_object_props",
-    "get_prop_values_with_aliases",
+    "get_object_props_by_code",
+    "get_prop_enum_values",
     "prepare_query_clarification",
     "resolve_field_aliases",
     "search_terms_by_type",

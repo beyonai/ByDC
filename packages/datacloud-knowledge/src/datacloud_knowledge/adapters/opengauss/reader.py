@@ -653,6 +653,57 @@ class PostgresTermReader:
             )
         return result
 
+    def get_object_props_by_code(self, *, scope_code: str) -> list[PropItem]:
+        """根据对象 code 查询其所有属性。
+
+        先通过 scope_code 查找 view/object 的 term_id，再查询 HAS_FIELD 关系获取属性列表。
+        """
+        if not scope_code:
+            return []
+
+        source_row = self._session.execute(
+            select(Term.term_id).where(
+                Term.term_code == scope_code,
+                Term.term_type_code.in_(["view", "object"]),
+            )
+        ).scalar_one_or_none()
+
+        if source_row is None:
+            logger.warning("[get_object_props_by_code] scope_code 未找到: %s", scope_code)
+            return []
+
+        source_term_id = str(source_row)
+
+        try:
+            rows = self._session.execute(
+                select(
+                    TermRelation.source_term_id,
+                    Term.term_id,
+                    Term.term_code,
+                    Term.term_name,
+                )
+                .join(Term, Term.term_id == TermRelation.target_term_id)
+                .where(
+                    TermRelation.source_term_id == source_term_id,
+                    Term.term_type_code == "prop",
+                )
+                .order_by(Term.term_code)
+            ).all()
+        except Exception:
+            logger.exception(
+                "get_object_props_by_code failed: scope_code=%s", scope_code
+            )
+            raise
+
+        return [
+            PropItem(
+                term_id=str(r.term_id),
+                term_code=str(r.term_code),
+                term_name=str(r.term_name),
+            )
+            for r in rows
+        ]
+
     def get_prop_values_with_aliases(
         self, *, source_term_ids: Sequence[str]
     ) -> dict[str, list[ValueWithAliases]]:

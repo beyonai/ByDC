@@ -141,6 +141,20 @@ class TermReader(Protocol):
         """
         ...
 
+    def get_object_props_by_code(self, *, scope_code: str) -> list[PropItem]:
+        """根据对象 code 查询其所有属性。
+
+        接收对象编码（如 ``"sales_crm"``），通过 HAS_FIELD 关系返回该对象下的所有属性术语。
+        相较于 ``get_object_props``（需要内部 term_id），本方法面向外部消费者，入参为业务编码。
+
+        Args:
+            scope_code: 对象/视图编码。
+
+        Returns:
+            PropItem 列表，按属性编码排序。
+        """
+        ...
+
     def get_prop_values_with_aliases(
         self, *, source_term_ids: Sequence[str]
     ) -> dict[str, list[ValueWithAliases]]:

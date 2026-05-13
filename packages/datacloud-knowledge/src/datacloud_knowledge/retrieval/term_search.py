@@ -378,6 +378,75 @@ def get_object_props(
     return result
 
 
+def get_object_props_by_code(
+    *,
+    scope_code: str,
+    db_session: Any = None,
+) -> list[PropItem]:
+    """根据对象 code 查询其所有属性。
+
+    通过知识图谱中的 HAS_FIELD 关系，接收对象编码（而非内部 term_id），
+    返回该对象下的所有属性术语。相较于 ``get_object_props``（需要 term_id），
+    本函数面向外部消费者，入参为业务编码。
+
+    Args:
+        scope_code: 对象/视图编码（如 ``"sales_crm"``）。
+        db_session: 可选的外部数据库会话。
+
+    Returns:
+        PropItem 列表，按属性编码排序。
+
+    Example:
+        >>> props = get_object_props_by_code(scope_code="sales_crm")
+        >>> for p in props:
+        ...     print(p.term_code, p.term_name)
+    """
+    if not scope_code:
+        return []
+
+    try:
+        with _maybe_session(db_session) as session:
+            # Step 1: 通过 scope_code 找到 view/object 的 term_id
+            source_row = session.execute(
+                select(Term.term_id).where(
+                    Term.term_code == scope_code,
+                    Term.term_type_code.in_(["view", "object"]),
+                )
+            ).scalar_one_or_none()
+
+            if source_row is None:
+                logger.warning(
+                    "[get_object_props_by_code] scope_code 未找到: %s", scope_code
+                )
+                return []
+
+            source_term_id = str(source_row)
+
+            # Step 2: 查询该对象下的所有 prop
+            rows = session.execute(
+                select(
+                    TermRelation.source_term_id,
+                    Term.term_id,
+                    Term.term_code,
+                    Term.term_name,
+                )
+                .join(Term, Term.term_id == TermRelation.target_term_id)
+                .where(
+                    TermRelation.source_term_id == source_term_id,
+                    Term.term_type_code == "prop",
+                )
+                .order_by(Term.term_code)
+            ).all()
+    except Exception:
+        logger.exception("get_object_props_by_code failed: scope_code=%s", scope_code)
+        raise
+
+    return [
+        PropItem(term_id=str(r.term_id), term_code=str(r.term_code), term_name=str(r.term_name))
+        for r in rows
+    ]
+
+
 def get_term_names(
     *,
     term_ids: list[str],
