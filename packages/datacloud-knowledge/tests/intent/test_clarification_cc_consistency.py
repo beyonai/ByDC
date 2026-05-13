@@ -149,7 +149,9 @@ def test_cc_terms_reuse_previous_cc_confirmation_in_order() -> None:
             )
         ]
     )
-    normalized = _merge.normalize_cc_result_with_hints(second_result, registry, hints, recall_map={})
+    normalized = _merge.normalize_cc_result_with_hints(
+        second_result, registry, hints, recall_map={}
+    )
 
     assert normalized is not None
     assert normalized.confirmations[0].confirmed == "亩产效益"
