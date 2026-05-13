@@ -28,7 +28,7 @@ from .service import (
     store_clarification_results,
     typed_multi_recall_with_session,
 )
-from .storage import create_term_knowledge, create_term_with_knowledge, create_user_term_name
+from .term_writer import PostgresTermWriter
 from .types import (
     ClarificationResult,
     DisambiguationResult,
@@ -53,6 +53,7 @@ __all__ = [
     "MatchCandidate",
     "MatchResult",
     "Mention",
+    "PostgresTermWriter",
     "ScoreUpdateRecord",
     "ShortestPathGraphEdge",
     "ShortestPathGraphNode",
@@ -69,9 +70,6 @@ __all__ = [
     "batch_update_scores_with_session",
     "build_shortest_path_tree",
     "build_shortest_path_tree_with_session",
-    "create_term_knowledge",
-    "create_term_with_knowledge",
-    "create_user_term_name",
     "disambiguate",
     "disambiguate_with_session",
     "expand_query",

@@ -151,7 +151,7 @@ class PostgresTermWriter:
         *,
         term_name: str,
         term_type_code: str,
-        library_id: str,
+        library_id: str | None = None,
         domain_id: str,
         knowledge_desc: str | None = None,
         parent_term_id: str | None = None,
@@ -166,7 +166,7 @@ class PostgresTermWriter:
         Args:
             term_name: 术语标准名称。
             term_type_code: 术语类型编码。
-            library_id: 术语库 ID。
+            library_id: 术语库 ID（可选，默认为 NULL）。
             domain_id: 所属领域 ID。
             knowledge_desc: 关联知识描述文本（可选，不提供则跳过 knowledge 插入）。
             parent_term_id: 父术语 ID（可选，用于实例-概念关系）。
@@ -252,6 +252,45 @@ class PostgresTermWriter:
             user_id,
         )
         return term_id
+
+    def create_term_knowledge_record(
+        self,
+        *,
+        term_id: str,
+        desc_summary: str,
+        desc: str,
+    ) -> str:
+        """为已有术语创建关联知识记录。
+
+        与 create_term_with_knowledge 不同，本方法假设术语已存在，仅创建
+        TermKnowledge 记录。
+
+        Args:
+            term_id: 归属术语 ID。
+            desc_summary: 知识摘要。
+            desc: 知识原文。
+
+        Returns:
+            生成的 knowledge_id。
+        """
+        knowledge_id = str(uuid.uuid4())
+        now = datetime.now(tz=UTC)
+        self._session.execute(
+            text(
+                "INSERT INTO term_knowledge "
+                '(knowledge_id, term_id, desc_summary, "desc", created_time, updated_time) '
+                "VALUES (:knowledge_id, :term_id, :desc_summary, :desc, :now, :now)"
+            ),
+            {
+                "knowledge_id": knowledge_id,
+                "term_id": term_id,
+                "desc_summary": desc_summary,
+                "desc": desc,
+                "now": now,
+            },
+        )
+        log.info("创建术语关联知识: %s -> %s", knowledge_id, term_id)
+        return knowledge_id
 
     def batch_create_vocabulary(self, *, words: Sequence[str]) -> None:
         """批量写入分词词典（幂等去重）。

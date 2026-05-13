@@ -19,7 +19,7 @@ from .cache import UserNameCache
 from .disambiguation import build_shortest_path_tree, disambiguate
 from .matching import match_mentions_with_search
 from .score_update import batch_update_scores
-from .storage import create_term_with_knowledge, create_user_term_name
+from .term_writer import PostgresTermWriter
 from .types import (
     DisambiguationResult,
     MatchResult,
@@ -158,7 +158,7 @@ def _get_validated_embedding_service(session: Any) -> Any:
         return None
 
     try:
-        embedding_module = import_module("datacloud_knowledge.query.embedding")
+        embedding_module = import_module("datacloud_knowledge.embedding")
         embedding_svc = embedding_module.get_embedding_service()
         validate_term_vector_readiness(session, embedding_svc)
     except TermVectorValidationError as exc:
@@ -276,24 +276,33 @@ def store_clarification_results(
     """Persist clarification results and return created name_id list."""
     created_ids: list[str] = []
     with get_session() as session:
+        writer = PostgresTermWriter(session)
         for mention_text, result in clarification_results.items():
             if isinstance(result, dict) and "term_id" in result:
-                name_id = create_user_term_name(
-                    name_text=mention_text,
+                name_id = writer.create_term_name(
                     term_id=str(result["term_id"]),
+                    name_text=mention_text,
                     user_id=user_id,
-                    session=session,
+                    search_scope={},
                 )
                 created_ids.append(name_id)
             elif isinstance(result, str) and result.strip():
-                _, _, name_id = create_term_with_knowledge(
-                    term_code=f"user_defined_{mention_text}",
+                # 通过 create_term_with_knowledge 创建术语及其关联知识和别名，
+                # 再单独获取 name_id
+                _term_id = writer.create_term_with_knowledge(
                     term_name=mention_text,
                     term_type_code="USER_DEFINED",
                     domain_id="DOMAIN_002",
-                    knowledge_text=result,
+                    knowledge_desc=result,
                     user_id=user_id,
-                    session=session,
+                )
+                # 用户别名已在 create_term_with_knowledge 内部创建，
+                # 这里通过 create_term_name 的幂等语义获取已有的 name_id
+                name_id = writer.create_term_name(
+                    term_id=_term_id,
+                    name_text=mention_text,
+                    user_id=user_id,
+                    search_scope={},
                 )
                 created_ids.append(name_id)
     return created_ids
