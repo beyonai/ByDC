@@ -1,13 +1,14 @@
 """知识服务 Provider — 对外公开 API。
 
-本模块提供四类核心能力的函数式接口：
-1. resolve_field_aliases     字段别名解析
-2. search_terms_by_type      术语检索
-3. prepare_query_clarification   查询澄清分析
-4. finalize_query_clarification  澄清回填
+本模块提供六类核心能力的函数式接口：
+1. resolve_field_aliases         字段别名解析
+2. search_terms_by_type          术语检索
+3. get_object_props              对象属性查询
+4. get_prop_values_with_aliases  属性可选值及别名查询
+5. prepare_query_clarification   查询澄清分析
+6. finalize_query_clarification  澄清回填
 
-所有函数依赖注入 PostgresTermReader/TermWriter，通过 get_session() 管理数据库会话。
-无单例、无抽象协议层——直接使用具体的 PostgreSQL 实现。
+所有函数通过 PostgresTermReader 封装数据库会话，消费者无需管理 db_session。
 """
 
 from __future__ import annotations
@@ -25,8 +26,10 @@ from datacloud_knowledge.contracts.types import (
 from datacloud_knowledge.contracts.types import (
     FieldResolutionResult,
     OpaquePayload,
+    PropItem,
     SearchTermsResult,
     TagFilter,
+    ValueWithAliases,
 )
 from datacloud_knowledge.intent.clarification.api import (
     analyze_query_clarification as _analyze_query_clarification,
@@ -279,6 +282,55 @@ def finalize_query_clarification(
     )
 
 
+def get_object_props(
+    *,
+    source_term_ids: Sequence[str],
+) -> dict[str, list[PropItem]]:
+    """查询对象/视图下的所有属性。
+
+    通过知识图谱中的 HAS_FIELD 关系，返回指定对象（数据表/视图）下的属性术语列表。
+    典型用途：前端根据对象 code 动态展示该对象拥有的字段，供用户选择查询维度。
+
+    Args:
+        source_term_ids: 源术语 ID 列表（通常为 view 或 object 的 term_id）。
+
+    Returns:
+        {source_term_id → [PropItem(term_id, term_code, term_name)]} 映射。
+
+    Example:
+        >>> props = get_object_props(source_term_ids=["term_view_sales"])
+        >>> for prop in props["term_view_sales"]:
+        ...     print(prop.term_code, prop.term_name)
+    """
+    reader = PostgresTermReader()
+    return reader.get_object_props(source_term_ids=list(source_term_ids))
+
+
+def get_prop_values_with_aliases(
+    *,
+    source_term_ids: Sequence[str],
+) -> dict[str, list[ValueWithAliases]]:
+    """查询对象下属性的可选值及其别名。
+
+    通过知识图谱关系链 source → HAS_FIELD → prop → parent_term_id → child，
+    获取属性的枚举值术语和所有别名。
+    典型用途：前端下拉框展示字段的可选过滤值（如"华东"→"region_east"）。
+
+    Args:
+        source_term_ids: 源术语 ID 列表。
+
+    Returns:
+        {source_term_id → [ValueWithAliases(parent_term_id, term_id, term_code, term_name, aliases)]}。
+
+    Example:
+        >>> values = get_prop_values_with_aliases(source_term_ids=["term_view_sales"])
+        >>> for v in values["term_view_sales"]:
+        ...     print(v.term_name, "又名:", v.aliases)
+    """
+    reader = PostgresTermReader()
+    return reader.get_prop_values_with_aliases(source_term_ids=list(source_term_ids))
+
+
 # ── 内部辅助函数 ───────────────────────────────────────────────────
 
 
@@ -351,6 +403,8 @@ __all__ = [
     "FinalizedClarification",
     "PersistedSynonyms",
     "finalize_query_clarification",
+    "get_object_props",
+    "get_prop_values_with_aliases",
     "prepare_query_clarification",
     "resolve_field_aliases",
     "search_terms_by_type",
