@@ -45,6 +45,7 @@ from datacloud_knowledge.intent.clarification.postprocess import (
 from datacloud_knowledge.intent.clarification.postprocess import (
     persist_confirmed_synonyms as _persist_confirmed_synonyms,
 )
+from datacloud_knowledge.retrieval.orchestration import search_terms_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +141,7 @@ def search_terms_by_type(
 
     Args:
         term_type_code: 术语类型编码。
-        term_codes: 可选，限定术语编码列表。
+        term_codes: 可选，限定术语编码列表（当前未使用，预留）。
         keyword: 可选，关键词搜索。
         tags: 可选，标签过滤条件。
         limit: 返回条数（1..200）。
@@ -150,14 +151,16 @@ def search_terms_by_type(
     Returns:
         分页搜索结果。
     """
+    del term_codes  # 预留参数，当前编排层未暴露 term_codes 过滤
     reader = create_reader()
-    return reader.search_terms(
+    return search_terms_with_fallback(
         term_type_code=term_type_code,
         keyword=keyword,
         tags=list(tags) if tags is not None else None,
         limit=limit,
         offset=offset,
         order_by=order_by,
+        reader=reader,
     )
 
 
@@ -331,9 +334,7 @@ def get_prop_enum_values(
         >>> values["level"]    # → ["高", "中", "低"]
     """
     reader = create_reader()
-    return reader.get_prop_enum_values(
-        scope_code=scope_code, field_codes=list(field_codes)
-    )
+    return reader.get_prop_enum_values(scope_code=scope_code, field_codes=list(field_codes))
 
 
 # ── 内部辅助函数 ───────────────────────────────────────────────────
