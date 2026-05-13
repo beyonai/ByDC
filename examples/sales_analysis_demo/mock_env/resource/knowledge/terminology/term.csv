@@ -1,7 +1,0 @@
-term_id,term_name,desc_summary,domain_id,term_type_code,library_id,desc_doc_id,term_tags
-TERM_EMP,员工,企业员工概念术语,DOMAIN_001,OBJ,LIB_001,,"{}"
-TERM_XIAOMING,王小明,销售员工王小明，归属华东大区,DOMAIN_002,EMPLOYEE,LIB_001,,"{""TERM_LEVEL"": {""type"": ""TEXT"", ""value"": ""M1""}, ""TERM_LOCATION"": {""type"": ""TEXT"", ""value"": ""杭州""}}"
-TERM_ORG,组织,企业组织架构概念,DOMAIN_001,OBJ,LIB_001,,"{}"
-TERM_CONTRACT,合同,销售合同概念术语,DOMAIN_003,OBJ,LIB_001,,"{}"
-TERM_BO,B市数智运营项目合同,具体合同实例,DOMAIN_003,DOC,LIB_001,,"{""TERM_AMOUNT"": {""type"": ""NUMBER"", ""value"": 5500000}, ""TERM_CUSTOMER"": {""type"": ""TERM_REF"", ""value"": ""TERM_MOBILE""}, ""TERM_SIGN_DATE"": {""type"": ""DATE"", ""value"": ""2025-03-10""}}"
-TERM_SALES_VIEW,员工视图,以员工为中心的数据视图,DOMAIN_001,VIEW,LIB_001,doc_001,"{""view_scope"": {""type"": ""TEXT"", ""value"": ""个人级""}}"

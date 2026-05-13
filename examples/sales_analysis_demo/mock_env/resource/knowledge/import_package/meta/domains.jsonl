@@ -1,2 +1,0 @@
-{"op": "add", "domain_code": "DOMAIN_001", "domain_name": "组织管理", "domain_desc": "企业组织架构相关术语"}
-{"op": "add", "domain_code": "DOMAIN_002", "domain_name": "员工管理", "parent_code": "DOMAIN_001", "domain_desc": "员工信息、入职离职等"}
