@@ -181,4 +181,3 @@ class TestSingleCharFallback:
         deduped = batch_recall._dedupe_candidates_by_term_name(candidates)
 
         assert [candidate["term_id"] for candidate in deduped] == ["t1", "t2"]
-

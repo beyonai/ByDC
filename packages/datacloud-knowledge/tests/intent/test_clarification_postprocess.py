@@ -9,8 +9,7 @@ from datacloud_knowledge.intent.clarification.postprocess import (
 
 def test_normalize_clarification_params_translates_fields_to_codes(monkeypatch) -> None:
     def _fake_resolve_field_aliases(
-        self,
-        *, terms, scope_code, library_id=None, resolve_values=False, value_terms=None
+        self, *, terms, scope_code, library_id=None, resolve_values=False, value_terms=None
     ):
         assert terms == ["企业总营收（万元）", "企业总营收（万元）"]
         assert scope_code == "ads_enterprise"
