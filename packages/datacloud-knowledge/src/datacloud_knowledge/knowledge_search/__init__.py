@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .owl_relation_resolver import resolve_related_owl_terms
+from .term_reader import PostgresTermReader
 from .term_search import (
     get_object_props,
     get_prop_enum_values,
@@ -24,6 +25,7 @@ __all__ = [
     "AmbiguousCandidate",
     "FieldResolutionResult",
     "FieldResolutionResultWithNames",
+    "PostgresTermReader",
     "ResolvedField",
     "ValueResolutionResult",
     "get_object_props",

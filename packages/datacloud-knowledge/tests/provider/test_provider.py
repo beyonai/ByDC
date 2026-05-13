@@ -1,52 +1,28 @@
+"""Provider 集成测试。"""
+
 from __future__ import annotations
 
-from collections.abc import Iterator
 from unittest.mock import patch
 
 import pytest
+from datacloud_knowledge.api.types import FieldResolutionResult, SearchTermsResult
 from datacloud_knowledge.intent.types import ClarificationResult
-from datacloud_knowledge.knowledge_search.types import FieldResolutionResult, SearchTermsResult
 from datacloud_knowledge.provider import (
     ClarificationAnalysis,
     FinalizedClarification,
-    FunctionKnowledgeProvider,
     PersistedSynonyms,
     finalize_query_clarification,
-    get_provider,
     prepare_query_clarification,
-    reset_provider,
     resolve_field_aliases,
     search_terms_by_type,
 )
 
 
-@pytest.fixture(autouse=True)
-def _reset_provider() -> Iterator[None]:
-    reset_provider(None)
-    yield
-    reset_provider(None)
-
-
-def test_get_provider_uses_lazy_singleton() -> None:
-    first = get_provider()
-    second = get_provider()
-
-    assert isinstance(first, FunctionKnowledgeProvider)
-    assert first is second
-
-
-def test_reset_provider_accepts_custom_instance() -> None:
-    custom = FunctionKnowledgeProvider()
-
-    reset_provider(custom)
-
-    assert get_provider() is custom
-
-
-def test_resolve_field_aliases_facade_delegates() -> None:
+def test_resolve_field_aliases_delegates_to_reader() -> None:
+    """字段别名解析委托给 PostgresTermReader。"""
     expected = FieldResolutionResult(resolved={"销售额": "sales_amount"})
     with patch(
-        "datacloud_knowledge.provider._resolve_field_aliases",
+        "datacloud_knowledge.provider.PostgresTermReader.resolve_field_aliases",
         return_value=expected,
     ) as mock_resolve:
         result = resolve_field_aliases(
@@ -60,16 +36,16 @@ def test_resolve_field_aliases_facade_delegates() -> None:
         terms=["销售额"],
         scope_code="sales",
         library_id=None,
-        user_id=None,
         resolve_values=False,
         value_terms=["华东"],
     )
 
 
-def test_search_terms_by_type_facade_delegates() -> None:
+def test_search_terms_by_type_delegates_to_reader() -> None:
+    """术语检索委托给 PostgresTermReader。"""
     expected = SearchTermsResult(total=0, items=[])
     with patch(
-        "datacloud_knowledge.provider._search_terms_by_type",
+        "datacloud_knowledge.provider.PostgresTermReader.search_terms",
         return_value=expected,
     ) as mock_search:
         result = search_terms_by_type(term_type_code="metric", keyword="销售额")
@@ -77,7 +53,6 @@ def test_search_terms_by_type_facade_delegates() -> None:
     assert result == expected
     mock_search.assert_called_once_with(
         term_type_code="metric",
-        term_codes=None,
         keyword="销售额",
         tags=None,
         limit=20,
@@ -87,6 +62,7 @@ def test_search_terms_by_type_facade_delegates() -> None:
 
 
 def test_prepare_query_clarification_facade_delegates() -> None:
+    """查询澄清分析委托给 intent 模块。"""
     legacy_result = ClarificationResult(
         query="q",
         needs_clarification=True,
@@ -120,6 +96,7 @@ def test_prepare_query_clarification_facade_delegates() -> None:
 
 
 def test_finalize_query_clarification_without_clarification_normalizes() -> None:
+    """不需要澄清时仍执行标准化。"""
     normalized = {"select": ["sales_amount"]}
     with (
         patch(
@@ -152,6 +129,7 @@ def test_finalize_query_clarification_without_clarification_normalizes() -> None
 
 
 def test_finalize_query_clarification_applies_form_and_persists() -> None:
+    """需要澄清时应用表单并持久化同义词。"""
     formatted = {"select": ["销售额"]}
     normalized = {"select": ["sales_amount"]}
     with (
@@ -203,6 +181,7 @@ def test_finalize_query_clarification_applies_form_and_persists() -> None:
 
 
 def test_finalize_query_clarification_requires_payloads_when_needed() -> None:
+    """需要澄清时缺少表单或元数据则抛异常。"""
     with pytest.raises(ValueError, match="form and metadata are required"):
         finalize_query_clarification(
             query="q",

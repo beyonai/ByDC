@@ -10,15 +10,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import psycopg
-from psycopg import sql
-
+from datacloud_knowledge.db.embeddings import backfill_name_embeddings
 from datacloud_knowledge.db.schema import ensure_schema, verify_schema
 from datacloud_knowledge.db.tsvector import backfill_tsvector_with_url
-from datacloud_knowledge.db.url import (
-    build_postgres_connection_uri,
-    resolve_knowledge_schema_for_connection,
-)
 
 _logger = logging.getLogger(__name__)
 
@@ -165,80 +159,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _backfill_name_embeddings(
-    *,
-    schema: str | None = None,
-    db_url: str | None = None,
-    batch_size: int = 50,
-    force: bool = False,
-    limit: int | None = None,
-) -> dict[str, int | str]:
-    """Generate embeddings for term_name.name_embedding.
-
-    Moved from db/embeddings.py to break the db → query.embedding design cycle.
-    """
-    from datacloud_knowledge.query.embedding import get_embedding_service
-
-    resolved_schema = resolve_knowledge_schema_for_connection(schema=schema, db_url=db_url)
-    embedding_service = get_embedding_service()
-    predicate: sql.Composable = sql.SQL("name_text IS NOT NULL")
-    if not force:
-        predicate += sql.SQL(" AND name_embedding IS NULL")
-
-    with psycopg.connect(
-        build_postgres_connection_uri(schema=resolved_schema, db_url=db_url)
-    ) as conn:
-        updated = 0
-        try:
-            while True:
-                remaining = None if limit is None else max(limit - updated, 0)
-                if remaining == 0:
-                    break
-                current_batch_size = batch_size if remaining is None else min(batch_size, remaining)
-                with conn.cursor() as cur:
-                    cur.execute(
-                        sql.SQL(
-                            """
-                            SELECT name_id, name_text
-                            FROM {}.term_name
-                            WHERE {}
-                            ORDER BY name_id
-                            LIMIT %s
-                            """
-                        ).format(sql.Identifier(resolved_schema), predicate),
-                        (current_batch_size,),
-                    )
-                    rows = cur.fetchall()
-                if not rows:
-                    break
-
-                name_ids = [row[0] for row in rows]
-                texts = [row[1] for row in rows]
-                vectors = embedding_service.get_text_embedding_batch(texts)
-                update_params = [
-                    (f"[{','.join(map(str, vector))}]", name_id)
-                    for name_id, vector in zip(name_ids, vectors, strict=True)
-                ]
-                with conn.cursor() as cur:
-                    cur.executemany(
-                        sql.SQL(
-                            """
-                            UPDATE {}.term_name
-                            SET name_embedding = %s::vector
-                            WHERE name_id = %s
-                            """
-                        ).format(sql.Identifier(resolved_schema)),
-                        update_params,
-                    )
-                conn.commit()
-                updated += len(rows)
-                _logger.info("Updated %s term-name embeddings", updated)
-        except Exception:
-            conn.rollback()
-            raise
-    return {"schema": resolved_schema, "updated": updated}
-
-
 def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -273,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911
             return 0
         if args.command == "backfill-embeddings":
             _print_result(
-                _backfill_name_embeddings(
+                backfill_name_embeddings(
                     schema=args.schema,
                     db_url=args.db_url,
                     batch_size=args.batch_size,
@@ -305,7 +225,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911
                 db_url=args.db_url,
             )
             if args.with_embeddings:
-                results["backfill_embeddings"] = _backfill_name_embeddings(
+                results["backfill_embeddings"] = backfill_name_embeddings(
                     schema=args.schema,
                     db_url=args.db_url,
                     batch_size=args.embed_batch_size,
