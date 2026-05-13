@@ -2,11 +2,13 @@
 
 Uses the same locale encoding as sibling package ``datacloud-analysis``:
 ``zh_CN`` / ``en_US`` (underscore, no hyphen).
+
+This module is pure data — no environment or filesystem access.
+For env-var-based locale resolution, see ``datacloud_knowledge.i18n.resolve_locale``.
 """
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 _FALLBACK_LOCALE = "zh_CN"
@@ -413,10 +415,10 @@ _ANNOTATION_FORMATS: dict[str, str] = {
 
 
 def _resolve_locale(locale: str | None) -> str:
-    resolved = locale or os.getenv("DATACLOUD_AGENT_LOCALE", _FALLBACK_LOCALE)
-    if resolved not in _SYSTEM_PROMPTS:
-        return _FALLBACK_LOCALE
-    return resolved
+    """Validate and fall back locale without environment access."""
+    if locale and locale in _SYSTEM_PROMPTS:
+        return locale
+    return _FALLBACK_LOCALE
 
 
 def get_confirm_prompt(locale: str | None = None, prompt_type: str = "main") -> str:
