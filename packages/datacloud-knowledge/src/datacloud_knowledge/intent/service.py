@@ -339,7 +339,9 @@ def typed_multi_recall_with_session(
                 items,
                 session=session,
                 top_k=top_k,
+                rrf_k=60,
                 enable_vector=False,
+                wv_per_type=top_k,
                 scope_code=scope_code,
                 scope_layers=scope_layers,
             )
@@ -348,7 +350,9 @@ def typed_multi_recall_with_session(
             items,
             session=session,
             top_k=top_k,
+            rrf_k=60,
             enable_vector=True,
+            wv_per_type=top_k,
             scope_code=scope_code,
             scope_layers=scope_layers,
         )
