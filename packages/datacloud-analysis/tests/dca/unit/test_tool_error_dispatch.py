@@ -480,7 +480,7 @@ async def test_tc59_error_log_level_on_tool_failure(
 def test_tc60_term_vector_validation_error() -> None:
     """TC-60: TermVectorValidationError → retryable=False，hint 含"向量索引"。"""
     pytest.importorskip("datacloud_knowledge")
-    from datacloud_knowledge.query.search.vector_validation import TermVectorValidationError
+    from datacloud_knowledge.search.vector_validation import TermVectorValidationError
 
     exc = TermVectorValidationError("术语知识库向量校验失败: name_embedding 全部为空")
     result = _build_tool_error(exc)
@@ -531,7 +531,7 @@ def test_tc63_knowledge_import_error_fallback(monkeypatch: pytest.MonkeyPatch) -
     saved: dict[str, object] = {}
     keys_to_patch = [
         "datacloud_knowledge.file_store.errors",
-        "datacloud_knowledge.query.search.vector_validation",
+        "datacloud_knowledge.search.vector_validation",
     ]
     for k in keys_to_patch:
         if k in sys.modules:

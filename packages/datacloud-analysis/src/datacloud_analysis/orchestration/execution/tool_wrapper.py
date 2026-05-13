@@ -187,7 +187,7 @@ def _build_tool_error(exc: Exception) -> ToolErrorDict:  # noqa: C901, PLR0912
                 FileNotFoundInStoreError,
                 FileStoreError,
             )
-            from datacloud_knowledge.query.search.vector_validation import (  # noqa: PLC0415
+            from datacloud_knowledge.search.vector_validation import (  # noqa: PLC0415
                 TermVectorValidationError,
             )
         except ImportError:

@@ -23,7 +23,7 @@ from datacloud_knowledge.intent.clarification.models import (
     PreResolveResult,
 )
 from datacloud_knowledge.intent.types import StreamEvent, StreamEventKind
-from datacloud_knowledge.knowledge_search.types import ResolvedField
+from datacloud_knowledge.search.types import ResolvedField
 
 logging.basicConfig(level=logging.INFO, format="%(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
