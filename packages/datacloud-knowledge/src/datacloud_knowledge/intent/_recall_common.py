@@ -10,7 +10,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    pass
 
 # ── 类型别名 ──────────────────────────────────────────────────
 
@@ -59,18 +59,12 @@ def _diversify_by_type(
 
 
 def _load_type_codes_by_category(
-    session: Session,
     categories: set[int],
 ) -> set[str]:
     """从 term_type 表按 type_category 加载 type_code 集合。"""
-    from datacloud_knowledge.adapters.opengauss._db.models import TermType
+    from datacloud_knowledge.adapters import create_reader
 
-    rows = (
-        session.query(TermType.type_code)
-        .filter(TermType.type_category.in_(sorted(categories)))
-        .all()
-    )
-    return {row.type_code for row in rows}
+    return create_reader().get_type_codes_by_category(categories=categories)
 
 
 def _shape_candidates(

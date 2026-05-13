@@ -8,8 +8,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from datacloud_knowledge.adapters.opengauss._db.connection import get_session
-from datacloud_knowledge.adapters.opengauss._db.models import Term, TermRelation
+from datacloud_knowledge.adapters import create_reader
 from datacloud_knowledge.contracts.rrf import rrf_fuse
 from datacloud_knowledge.intent._recall_common import (
     KTYPE_CATEGORY_MAP,
@@ -103,9 +102,6 @@ def build_scope_recall_layers(
     cc_pre: PreResolveResult,
 ) -> list[ScopeRecallLayer]:
     """Build a small weighted scope stack from confirmed fields for recall validation."""
-    from sqlalchemy import func, select
-    from sqlalchemy.orm import aliased
-
     layers: list[ScopeRecallLayer] = []
     field_codes = _collect_confirmed_field_codes(pre, cc_pre)
     if ontology_code:
@@ -114,30 +110,11 @@ def build_scope_recall_layers(
         return layers
 
     try:
-        view_term = aliased(Term, name="view_term")
-        object_term = aliased(Term, name="object_term")
-        prop_term = aliased(Term, name="prop_term")
-        view_object_rel = aliased(TermRelation, name="view_object_rel")
-        object_prop_rel = aliased(TermRelation, name="object_prop_rel")
-        with get_session() as session:
-            rows = session.execute(
-                select(object_term.term_code, func.count(prop_term.term_id).label("matched_count"))
-                .select_from(view_term)
-                .join(view_object_rel, view_object_rel.source_term_id == view_term.term_id)
-                .join(object_term, object_term.term_id == view_object_rel.target_term_id)
-                .join(object_prop_rel, object_prop_rel.source_term_id == object_term.term_id)
-                .join(prop_term, prop_term.term_id == object_prop_rel.target_term_id)
-                .where(
-                    view_term.term_code == ontology_code,
-                    view_term.term_type_code.in_(["view", "object"]),
-                    object_term.term_type_code == "object",
-                    prop_term.term_type_code == "prop",
-                    prop_term.term_code.in_(field_codes),
-                )
-                .group_by(object_term.term_code)
-                .order_by(func.count(prop_term.term_id).desc())
-                .limit(2)
-            ).all()
+        reader = create_reader()
+        rows = reader.get_matching_objects(
+            ontology_code=ontology_code,
+            field_codes=field_codes,
+        )
     except Exception:
         logger.warning("[clarification] build scope recall layers failed", exc_info=True)
         return layers
@@ -174,35 +151,34 @@ def _vector_only_recall(
     但向量语义检索可以将 "stat_date" 匹配到 "统计日期"。
     """
     # 构建 RecallRequest（需要 type_filter）
-    with get_session() as session:
-        category_cache: dict[frozenset[int], set[str]] = {}
-        requests: list[RecallRequest] = []
-        for item in items:
-            allowed_categories = KTYPE_CATEGORY_MAP.get(item.ktype)
-            if allowed_categories is None:
-                type_filter: set[str] | None = None
-            else:
-                cat_key = frozenset(allowed_categories)
-                if cat_key not in category_cache:
-                    category_cache[cat_key] = _load_type_codes_by_category(
-                        session, allowed_categories
-                    )
-                type_filter = category_cache[cat_key]
-                if not type_filter:
-                    continue
-
-            frozen_filter = frozenset(type_filter) if type_filter is not None else None
-            requests.append(
-                RecallRequest(
-                    map_key=f"{item.ktype}:{item.keyword}",
-                    keyword=item.keyword,
-                    ktype=item.ktype,
-                    type_filter=frozen_filter,
-                    is_per_type=False,
-                    per_type_limit=0,
-                    scope_code=scope_code,
+    category_cache: dict[frozenset[int], set[str]] = {}
+    requests: list[RecallRequest] = []
+    for item in items:
+        allowed_categories = KTYPE_CATEGORY_MAP.get(item.ktype)
+        if allowed_categories is None:
+            type_filter: set[str] | None = None
+        else:
+            cat_key = frozenset(allowed_categories)
+            if cat_key not in category_cache:
+                category_cache[cat_key] = _load_type_codes_by_category(
+                    allowed_categories  # type: ignore[arg-type]
                 )
+            type_filter = category_cache[cat_key]
+            if not type_filter:
+                continue
+
+        frozen_filter = frozenset(type_filter) if type_filter is not None else None
+        requests.append(
+            RecallRequest(
+                map_key=f"{item.ktype}:{item.keyword}",
+                keyword=item.keyword,
+                ktype=item.ktype,
+                type_filter=frozen_filter,
+                is_per_type=False,
+                per_type_limit=0,
+                scope_code=scope_code,
             )
+        )
 
     if not requests:
         return {}

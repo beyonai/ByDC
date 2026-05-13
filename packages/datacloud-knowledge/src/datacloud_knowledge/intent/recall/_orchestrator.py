@@ -56,7 +56,7 @@ def _prepare_batch(
             cat_key = frozenset(allowed_categories)
             if cat_key not in category_cache:
                 category_cache[cat_key] = serial_recall._load_type_codes_by_category(
-                    session, allowed_categories
+                    allowed_categories  # type: ignore[arg-type]
                 )
             type_filter = category_cache[cat_key]
             if not type_filter:

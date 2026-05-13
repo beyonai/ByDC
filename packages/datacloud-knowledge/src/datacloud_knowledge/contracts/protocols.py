@@ -293,6 +293,41 @@ class TermReader(Protocol):
         """
         ...
 
+    def get_type_codes_by_category(self, *, categories: set[int]) -> set[str]:
+        """按 term_type 的 type_category 加载 type_code 集合。
+
+        在 ``term_type`` 表上按 ``type_category IN (categories)`` 过滤。
+
+        Args:
+            categories: type_category 整数值集合（1=列表, 2=字典, 3=本体, 4=文档）。
+
+        Returns:
+            type_code 字符串集合。
+        """
+        ...
+
+    def get_matching_objects(
+        self,
+        *,
+        ontology_code: str,
+        field_codes: Sequence[str],
+        limit: int = 2,
+    ) -> Sequence[tuple[str, int]]:
+        """查询与指定字段集最佳匹配的对象 term_code。
+
+        在视图/对象→对象→属性的关系链上联表查询，统计每个对象
+        匹配到的属性数，按匹配数降序返回。
+
+        Args:
+            ontology_code: 视图或对象编码。
+            field_codes: 已确认的字段编码列表。
+            limit: 返回对象数量上限。
+
+        Returns:
+            (object_term_code, matched_count) 元组列表。
+        """
+        ...
+
 
 class TermSearchEngine(Protocol):
     """文本召回引擎。每种策略独立暴露，由调用方控制策略组合和 RRF 融合。

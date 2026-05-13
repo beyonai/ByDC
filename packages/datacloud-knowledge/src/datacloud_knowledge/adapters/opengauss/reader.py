@@ -1290,6 +1290,111 @@ class PostgresTermReader:
             raise
         return tuple(str(r.term_id) for r in rows)
 
+    def get_type_codes_by_category(self, *, categories: set[int]) -> set[str]:
+        """按 term_type 的 type_category 加载 type_code 集合。"""
+        if not categories:
+            return set()
+        try:
+            with self._session_factory() as session:
+                rows = session.execute(
+                    text(
+                        "SELECT type_code FROM term_type WHERE type_category IN :categories"
+                    ).bindparams(bindparam("categories", expanding=True)),
+                    {"categories": tuple(sorted(categories))},
+                ).fetchall()
+        except Exception:
+            logger.exception("get_type_codes_by_category failed: categories=%s", categories)
+            raise
+        return {str(r.type_code) for r in rows}
+
+    def get_matching_objects(
+        self,
+        *,
+        ontology_code: str,
+        field_codes: Sequence[str],
+        limit: int = 2,
+    ) -> Sequence[tuple[str, int]]:
+        """查询与指定字段集最佳匹配的对象 term_code。"""
+        if not field_codes:
+            return ()
+        try:
+            with self._session_factory() as session:
+                rows = session.execute(
+                    text(
+                        "SELECT obj.term_code, COUNT(prop.term_id) AS matched_count "
+                        "FROM term AS view "
+                        "JOIN term_relation AS vor ON vor.source_term_id = view.term_id "
+                        "JOIN term AS obj ON obj.term_id = vor.target_term_id "
+                        "JOIN term_relation AS opr ON opr.source_term_id = obj.term_id "
+                        "JOIN term AS prop ON prop.term_id = opr.target_term_id "
+                        "WHERE view.term_code = :ontology_code "
+                        "AND view.term_type_code IN ('view', 'object') "
+                        "AND obj.term_type_code = 'object' "
+                        "AND prop.term_type_code = 'prop' "
+                        "AND prop.term_code IN :field_codes "
+                        "GROUP BY obj.term_code "
+                        "ORDER BY matched_count DESC "
+                        "LIMIT :limit"
+                    ).bindparams(bindparam("field_codes", expanding=True)),
+                    {
+                        "ontology_code": ontology_code,
+                        "field_codes": tuple(field_codes),
+                        "limit": limit,
+                    },
+                ).fetchall()
+        except Exception:
+            logger.exception(
+                "get_matching_objects failed: ontology=%s fields=%s",
+                ontology_code,
+                field_codes,
+            )
+            raise
+        return tuple((str(r.term_code), int(r.matched_count)) for r in rows)
+
+    def get_relation_target_ids(self, *, source_term_ids: Sequence[str]) -> Sequence[str]:
+        """查询给定源术语的所有目标术语 ID（distinct）。"""
+        if not source_term_ids:
+            return ()
+        try:
+            with self._session_factory() as session:
+                rows = session.execute(
+                    text(
+                        "SELECT DISTINCT target_term_id FROM term_relation "
+                        "WHERE source_term_id IN :ids"
+                    ).bindparams(bindparam("ids", expanding=True)),
+                    {"ids": tuple(source_term_ids)},
+                ).fetchall()
+        except Exception:
+            logger.exception("get_relation_target_ids failed: source_ids=%s", source_term_ids)
+            raise
+        return tuple(str(r.target_term_id) for r in rows)
+
+    def get_terms_batch_raw(self, *, term_ids: Sequence[str]) -> Sequence[dict[str, str | None]]:
+        """批量查询术语的基本字段（term_id, term_name, term_type_code, owl_doc_id）。"""
+        if not term_ids:
+            return ()
+        try:
+            with self._session_factory() as session:
+                rows = session.execute(
+                    text(
+                        "SELECT term_id, term_name, term_type_code, owl_doc_id "
+                        "FROM term WHERE term_id IN :ids"
+                    ).bindparams(bindparam("ids", expanding=True)),
+                    {"ids": tuple(term_ids)},
+                ).fetchall()
+        except Exception:
+            logger.exception("get_terms_batch_raw failed: ids=%s", term_ids)
+            raise
+        return tuple(
+            {
+                "term_id": str(r.term_id),
+                "term_name": str(r.term_name),
+                "term_type_code": str(r.term_type_code),
+                "owl_doc_id": None if r.owl_doc_id is None else str(r.owl_doc_id),
+            }
+            for r in rows
+        )
+
     # ═══════════════════════════════════════════════════════════════════════════
     # 内部辅助方法
     # ═══════════════════════════════════════════════════════════════════════════
