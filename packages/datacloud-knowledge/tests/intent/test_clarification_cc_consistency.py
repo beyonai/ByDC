@@ -20,6 +20,8 @@ def test_pre_resolve_supports_complex_condition_terms(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def _fake_resolve_field_aliases_with_names(
+        self,
+        *,
         terms: list[str],
         scope_code: str,
     ) -> FieldResolutionResultWithNames:
@@ -30,11 +32,13 @@ def test_pre_resolve_supports_complex_condition_terms(
         )
 
     monkeypatch.setattr(
-        _pre_resolve,
-        "resolve_field_aliases_with_names",
+        "datacloud_knowledge.adapters.opengauss.reader.PostgresTermReader.resolve_field_aliases_with_names",
         _fake_resolve_field_aliases_with_names,
     )
-    monkeypatch.setattr(_pre_resolve, "get_prop_enum_values", lambda **_: {})
+    monkeypatch.setattr(
+        "datacloud_knowledge.adapters.opengauss.reader.PostgresTermReader.get_prop_enum_values",
+        lambda self, **_: {},
+    )
 
     term = ExtractedTerm(
         raw_text="亩产效益",

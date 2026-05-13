@@ -14,9 +14,11 @@ def create_tokenizer(language: str) -> Tokenizer:
     """根据语言标识创建分词器。"""
     if language == "zh_CN":
         from datacloud_knowledge.retrieval.tokenizers.chinese import ChineseTokenizer
+
         return ChineseTokenizer()
     if language == "en_US":
         from datacloud_knowledge.retrieval.tokenizers.english import EnglishTokenizer
+
         return EnglishTokenizer()
     raise ValueError(f"不支持的语言: {language!r}，支持: {sorted(_SUPPORTED_LANGUAGES)}")
 
@@ -25,8 +27,10 @@ def create_stopword_provider(language: str) -> StopwordProvider:
     """根据语言标识创建停用词提供者。"""
     if language == "zh_CN":
         from datacloud_knowledge.retrieval.tokenizers.chinese import ChineseStopwords
+
         return ChineseStopwords()
     if language == "en_US":
         from datacloud_knowledge.retrieval.tokenizers.english import EnglishStopwords
+
         return EnglishStopwords()
     raise ValueError(f"不支持的语言: {language!r}，支持: {sorted(_SUPPORTED_LANGUAGES)}")

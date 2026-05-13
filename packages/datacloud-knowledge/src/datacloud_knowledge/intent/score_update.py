@@ -1,4 +1,13 @@
-"""score 闭环更新 — 算法 E。"""
+"""score 闭环更新 — 算法 E。
+
+TODO(adapter): 消除原始 SQL。需要 TermWriter 协议新增方法:
+  - TermWriter.get_term_name_search_scope(name_id) → dict | None
+    (SELECT search_scope FROM term_name WHERE name_id = :name_id)
+  - TermWriter.update_term_name_search_scope(name_id, search_scope, updated_time)
+    (UPDATE term_name SET search_scope = ..., updated_time = ... WHERE name_id = ...)
+  或合并为单个原子方法:
+  - TermWriter.upsert_term_name_scope(name_id, scope_update, now) → bool
+"""
 
 from __future__ import annotations
 
@@ -12,6 +21,8 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import text
 
 if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
     from .types import ScoreUpdateRecord
 
 log = logging.getLogger(__name__)
@@ -25,12 +36,15 @@ _MODERATE_DAYS = 90
 
 def update_scores(
     records: tuple[ScoreUpdateRecord, ...],
-    session: Any,
+    session: Session,
 ) -> None:
     """Batch update scores for alias records used in this dialog.
 
     For each record, reads current search_scope from DB, applies
     decay + count update + score recalculation, writes back.
+
+    TODO(adapter): 迁移至 TermWriter.get_term_name_search_scope() +
+    TermWriter.update_term_name_search_scope()，消除原始 SQL。
 
     Args:
         records: Alias records to update (name_id + success flag).
@@ -151,7 +165,7 @@ def _coerce_last_used_at(value: Any) -> str | None:
     return None
 
 
-def update_score(name_id: str, success: bool, session: Any) -> None:
+def update_score(name_id: str, success: bool, session: Session) -> None:
     """Update score for a single alias record.
 
     Convenience wrapper around update_scores() for single-record use.
@@ -166,7 +180,7 @@ def update_score(name_id: str, success: bool, session: Any) -> None:
     update_scores(records=(score_update_record(name_id=name_id, success=success),), session=session)
 
 
-def update_score_async(name_id: str, success: bool, session: Any) -> None:
+def update_score_async(name_id: str, success: bool, session: Session) -> None:
     """Asynchronously update score using ThreadPoolExecutor.
 
     Fire-and-forget: failures are logged, not raised.
@@ -187,7 +201,7 @@ def update_score_async(name_id: str, success: bool, session: Any) -> None:
     executor.submit(_task)
 
 
-def batch_update_scores(records: tuple[ScoreUpdateRecord, ...], session: Any) -> None:
+def batch_update_scores(records: tuple[ScoreUpdateRecord, ...], session: Session) -> None:
     """Batch update scores for multiple alias records.
 
     Alias for update_scores() with explicit naming for public API.

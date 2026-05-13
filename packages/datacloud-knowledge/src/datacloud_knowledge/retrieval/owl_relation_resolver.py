@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+# TODO: 迁移到 TermReader 协议。
+# 当前直接使用 _db.connection.get_session / _db.models。
+# 迁移路径：
+#   1. OWL 关系遍历 → reader.get_object_props() / reader.get_object_props_by_code()
+#   2. 术语批量查名 → reader.get_term_names(term_ids)
+#   3. 内部 collect 遍历逻辑 → 暂保留 SQL，通过 create_reader() 内部 session 执行
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select

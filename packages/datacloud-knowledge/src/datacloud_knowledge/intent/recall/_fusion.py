@@ -6,8 +6,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from datacloud_knowledge.adapters.opengauss.bm25 import _has_name_keywords_column
-from datacloud_knowledge.retrieval.rrf import rrf_fuse
+from datacloud_knowledge.adapters.opengauss.engine import PostgresSearchEngine
+from datacloud_knowledge.contracts.rrf import rrf_fuse
 
 from ._models import (
     _CJK_CHAR_RE,
@@ -229,7 +229,8 @@ def _batch_single_char_fallback(
 
     started_at = time.monotonic()
     with get_session() as session:
-        if not _has_name_keywords_column(session):
+        engine = PostgresSearchEngine(session)
+        if not engine._check_column_exists("name_keywords"):
             log.info(
                 "[recall_perf] single_char_fallback: %.3fs keywords=%d hits=0",
                 time.monotonic() - started_at,

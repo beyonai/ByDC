@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import bindparam, text
 
+from datacloud_knowledge.adapters import create_reader
+
 from .types import (
     DisambiguationResult,
     MatchCandidate,
@@ -99,64 +101,16 @@ def _bfs_distance(
     session: Any,
     max_depth: int = 4,
 ) -> int | None:
-    """计算 source 到 target 的最短 BFS 距离，不可达返回 None。"""
-    if source_term_id == target_term_id:
-        return 0
+    """计算 source 到 target 的最短 BFS 距离，不可达返回 None。
 
-    if max_depth <= 0:
-        return None
-
-    sql = text(
-        """
-        WITH RECURSIVE bfs AS (
-            SELECT
-                CAST(:source_id AS varchar) AS current_id,
-                0 AS depth,
-                ARRAY[CAST(:source_id AS varchar)]::varchar[] AS path
-
-            UNION ALL
-
-            SELECT
-                CASE
-                    WHEN tr.source_term_id = b.current_id THEN tr.target_term_id
-                    ELSE tr.source_term_id
-                END,
-                b.depth + 1,
-                b.path || CASE
-                    WHEN tr.source_term_id = b.current_id THEN tr.target_term_id
-                    ELSE tr.source_term_id
-                END
-            FROM bfs b
-            JOIN term_relation tr
-                ON tr.source_term_id = b.current_id OR tr.target_term_id = b.current_id
-            WHERE b.depth < :max_depth
-              AND NOT (
-                    CASE
-                        WHEN tr.source_term_id = b.current_id THEN tr.target_term_id
-                        ELSE tr.source_term_id
-                    END
-                ) = ANY(b.path)
-        )
-        SELECT depth
-        FROM bfs
-        WHERE current_id = :target_id
-        ORDER BY depth
-        LIMIT 1
-        """
+    委托 ``TermReader.get_bfs_distance``，原子 DB 操作在 adapter 内完成。
+    ``session`` 参数保留兼容，当前未使用。
+    """
+    return create_reader().get_bfs_distance(
+        source_term_id=source_term_id,
+        target_term_id=target_term_id,
+        max_depth=max_depth,
     )
-
-    row = session.execute(
-        sql,
-        {
-            "source_id": source_term_id,
-            "target_id": target_term_id,
-            "max_depth": max_depth,
-        },
-    ).fetchone()
-    if row is None:
-        return None
-
-    return int(row[0])
 
 
 def _topology_check(

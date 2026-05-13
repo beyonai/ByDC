@@ -9,11 +9,10 @@ from datacloud_knowledge.intent.clarification.postprocess import (
 
 def test_normalize_clarification_params_translates_fields_to_codes(monkeypatch) -> None:
     def _fake_resolve_field_aliases(
-        *, terms, scope_code, library_id=None, user_id=None, resolve_values=False, value_terms=None
+        self, *, terms, scope_code, library_id=None, resolve_values=False, value_terms=None
     ):
         assert terms == ["企业总营收（万元）", "企业总营收（万元）"]
         assert scope_code == "ads_enterprise"
-        assert user_id == "user-1"
         _ = library_id, resolve_values, value_terms
         return FieldResolutionResult(
             resolved={"企业总营收（万元）": "total_revenue"},
@@ -22,7 +21,7 @@ def test_normalize_clarification_params_translates_fields_to_codes(monkeypatch) 
         )
 
     monkeypatch.setattr(
-        "datacloud_knowledge.intent.clarification.postprocess.resolve_field_aliases",
+        "datacloud_knowledge.adapters.opengauss.reader.PostgresTermReader.resolve_field_aliases",
         _fake_resolve_field_aliases,
     )
     monkeypatch.setattr(
@@ -59,8 +58,8 @@ def test_normalize_clarification_params_translates_fields_to_codes(monkeypatch) 
 
 def test_normalize_clarification_params_translates_filter_values_to_codes(monkeypatch) -> None:
     monkeypatch.setattr(
-        "datacloud_knowledge.intent.clarification.postprocess.resolve_field_aliases",
-        lambda **kwargs: FieldResolutionResult(
+        "datacloud_knowledge.adapters.opengauss.reader.PostgresTermReader.resolve_field_aliases",
+        lambda self, **kwargs: FieldResolutionResult(
             resolved={"区域": "region_code"},
             ambiguous={},
             unresolved=[],

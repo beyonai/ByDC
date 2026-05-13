@@ -12,6 +12,7 @@ import json
 import logging
 from typing import Any
 
+from datacloud_knowledge.api.types import ResolvedField
 from datacloud_knowledge.intent.clarification.confirm import (
     format_cc_confirm_context,
     format_main_confirm_context,
@@ -23,7 +24,6 @@ from datacloud_knowledge.intent.clarification.models import (
     PreResolveResult,
 )
 from datacloud_knowledge.intent.types import StreamEvent, StreamEventKind
-from datacloud_knowledge.api.types import ResolvedField
 
 logging.basicConfig(level=logging.INFO, format="%(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)

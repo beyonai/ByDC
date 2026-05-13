@@ -9,12 +9,14 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from contextlib import AbstractContextManager
 from datetime import UTC, datetime
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from datacloud_knowledge.adapters.opengauss._db.connection import get_session
 from datacloud_knowledge.contracts.types import TermNameCreate
 
 log = logging.getLogger(__name__)
@@ -33,19 +35,153 @@ class PostgresTermWriter:
     所有写入操作通过构造函数注入的 SQLAlchemy Session 执行，
     不自行管理事务边界。幂等性保证：create_term_name 重复调用
     返回已有 ID 而非重复插入。
+
+    支持两种初始化模式：
+    - 直接注入 session（调用方管理事务）
+    - 注入 session_factory（writer 自行管理 session 生命周期）
     """
 
-    def __init__(self, session: Session) -> None:
+    def __init__(
+        self,
+        session: Session | None = None,
+        session_factory: Callable[[], AbstractContextManager[Session]] | None = None,
+    ) -> None:
         """初始化写入器。
 
         Args:
             session: SQLAlchemy ORM Session，由调用方管理生命周期。
+            session_factory: 返回 session 上下文管理器的可调用对象。
+                传入 None 且 session 也为 None 时默认使用 ``get_session``。
         """
-        self._session = session
+        if session is not None:
+            self._session: Session = session
+            self._session_factory: Callable[[], AbstractContextManager[Session]] | None = None
+        else:
+            self._session_factory = session_factory if session_factory is not None else get_session
+            self._session = None  # type: ignore[assignment]
+
+    @property
+    def session(self) -> Session:
+        """获取当前 Session（context manager 内使用）。"""
+        if self._session is not None:
+            return self._session
+        raise RuntimeError(
+            "PostgresTermWriter 未绑定 session，请在 context manager 内使用 "
+            "或构造时传入 session 参数"
+        )
+
+    def _get_session_ctx(self) -> AbstractContextManager[Session]:
+        """获取 session 上下文管理器。"""
+        if self._session is not None:
+            from contextlib import nullcontext
+
+            return nullcontext(self._session)
+        if self._session_factory is not None:
+            return self._session_factory()
+        raise RuntimeError("PostgresTermWriter 未配置 session 或 session_factory")
 
     # ═══════════════════════════════════════════════════════════════════════════════
-    # TermWriter 协议方法
+    # TermWriter 协议方法 — 原子写入
     # ═══════════════════════════════════════════════════════════════════════════════
+
+    # --- create_term_name, batch_create_term_names (see below) ---
+
+    def insert_term(
+        self,
+        *,
+        term_name: str,
+        term_type_code: str,
+        library_id: str | None = None,
+        domain_id: str,
+        parent_term_id: str | None = None,
+        term_tags: dict[str, object] | None = None,
+        user_id: str | None = None,
+    ) -> str:
+        """原子插入术语记录（不含知识和别名）。
+
+        Args:
+            term_name: 术语标准名称。
+            term_type_code: 术语类型编码。
+            library_id: 术语库 ID（可选，默认为 NULL）。
+            domain_id: 所属领域 ID。
+            parent_term_id: 父术语 ID（可选）。
+            term_tags: 术语标签属性（JSONB，可选）。
+            user_id: 创建用户 ID（可选，当前仅用于日志）。
+
+        Returns:
+            生成的 term_id（UUID v4）。
+        """
+        now = datetime.now(tz=UTC)
+        term_id = str(uuid.uuid4())
+        term_code = self._generate_term_code()
+
+        self._session.execute(
+            text(
+                "INSERT INTO term "
+                "(term_id, term_code, term_name, term_type_code, library_id, "
+                "domain_id, parent_term_id, term_tags, created_time, updated_time) "
+                "VALUES ("
+                ":term_id, :term_code, :term_name, :term_type_code, :library_id, "
+                ":domain_id, :parent_term_id, CAST(:term_tags AS jsonb), :now, :now"
+                ")"
+            ),
+            {
+                "term_id": term_id,
+                "term_code": term_code,
+                "term_name": term_name,
+                "term_type_code": term_type_code,
+                "library_id": library_id,
+                "domain_id": domain_id,
+                "parent_term_id": parent_term_id,
+                "term_tags": json.dumps(term_tags) if term_tags else None,
+                "now": now,
+            },
+        )
+
+        log.info(
+            "创建术语: term_id=%s term_code=%s term_name=%s user_id=%s",
+            term_id,
+            term_code,
+            term_name,
+            user_id,
+        )
+        return term_id
+
+    def insert_term_knowledge(
+        self,
+        *,
+        term_id: str,
+        desc_summary: str,
+        desc: str,
+    ) -> str:
+        """原子插入术语知识记录。
+
+        Args:
+            term_id: 归属术语 ID。
+            desc_summary: 知识摘要。
+            desc: 知识原文。
+
+        Returns:
+            生成的 knowledge_id（UUID v4）。
+        """
+        knowledge_id = str(uuid.uuid4())
+        now = datetime.now(tz=UTC)
+        self._session.execute(
+            text(
+                "INSERT INTO term_knowledge "
+                '(knowledge_id, term_id, desc_summary, "desc", created_time, updated_time) '
+                "VALUES (:knowledge_id, :term_id, :desc_summary, :desc, :now, :now)"
+            ),
+            {
+                "knowledge_id": knowledge_id,
+                "term_id": term_id,
+                "desc_summary": desc_summary,
+                "desc": desc,
+                "now": now,
+            },
+        )
+        log.info("创建术语关联知识: knowledge_id=%s -> term_id=%s", knowledge_id, term_id)
+        return knowledge_id
 
     def create_term_name(
         self,
@@ -71,7 +207,6 @@ class PostgresTermWriter:
         """
         scope_user_id = self._resolve_scope_user_id(search_scope, user_id)
 
-        # 检查重复：同 term_id + name_text + scope_user_id
         existing_row = self._session.execute(
             text(
                 "SELECT name_id FROM term_name "
@@ -97,7 +232,6 @@ class PostgresTermWriter:
             )
             return existing_name_id
 
-        # 构建插入用的 search_scope（补齐默认字段）
         merged_scope = self._build_insert_scope(search_scope, scope_user_id)
 
         name_id = str(uuid.uuid4())
@@ -146,6 +280,8 @@ class PostgresTermWriter:
             for item in items
         ]
 
+    # --- create_term_with_knowledge (deprecated, delegates to atomic methods) ---
+
     def create_term_with_knowledge(
         self,
         *,
@@ -158,76 +294,34 @@ class PostgresTermWriter:
         term_tags: dict[str, object] | None = None,
         user_id: str | None = None,
     ) -> str:
-        """创建新术语及其关联知识。
+        """创建新术语及其关联知识（级联写入，委托原子方法）。
 
-        执行流程：INSERT term → INSERT term_knowledge → create_term_name。
+        .. deprecated::
+            新代码应直接使用 :meth:`insert_term` + :meth:`insert_term_knowledge`
+            + :meth:`create_term_name` 编排。
+
+        执行流程：insert_term → insert_term_knowledge → create_term_name。
         三步在同一 Session 内完成，由调用方控制事务提交。
-
-        Args:
-            term_name: 术语标准名称。
-            term_type_code: 术语类型编码。
-            library_id: 术语库 ID（可选，默认为 NULL）。
-            domain_id: 所属领域 ID。
-            knowledge_desc: 关联知识描述文本（可选，不提供则跳过 knowledge 插入）。
-            parent_term_id: 父术语 ID（可选，用于实例-概念关系）。
-            term_tags: 术语标签属性（JSONB，可选）。
-            user_id: 创建用户 ID（可选）。
-
-        Returns:
-            创建的 term_id。
         """
-        now = datetime.now(tz=UTC)
-        term_id = str(uuid.uuid4())
-        term_code = self._generate_term_code()
-
-        # 1. INSERT term
-        self._session.execute(
-            text(
-                "INSERT INTO term "
-                "(term_id, term_code, term_name, term_type_code, library_id, "
-                "domain_id, parent_term_id, term_tags, created_time, updated_time) "
-                "VALUES ("
-                ":term_id, :term_code, :term_name, :term_type_code, :library_id, "
-                ":domain_id, :parent_term_id, CAST(:term_tags AS jsonb), :now, :now"
-                ")"
-            ),
-            {
-                "term_id": term_id,
-                "term_code": term_code,
-                "term_name": term_name,
-                "term_type_code": term_type_code,
-                "library_id": library_id,
-                "domain_id": domain_id,
-                "parent_term_id": parent_term_id,
-                "term_tags": json.dumps(term_tags) if term_tags else None,
-                "now": now,
-            },
+        # 使用原子方法，避免重复 INSERT 逻辑
+        term_id = self.insert_term(
+            term_name=term_name,
+            term_type_code=term_type_code,
+            library_id=library_id,
+            domain_id=domain_id,
+            parent_term_id=parent_term_id,
+            term_tags=term_tags,
+            user_id=user_id,
         )
 
-        # 2. INSERT term_knowledge（仅当有知识描述时）
         if knowledge_desc:
-            knowledge_id = str(uuid.uuid4())
-            self._session.execute(
-                text(
-                    "INSERT INTO term_knowledge "
-                    '(knowledge_id, term_id, desc_summary, "desc", created_time, updated_time) '
-                    "VALUES (:knowledge_id, :term_id, :desc_summary, :desc, :now, :now)"
-                ),
-                {
-                    "knowledge_id": knowledge_id,
-                    "term_id": term_id,
-                    "desc_summary": knowledge_desc[:200],
-                    "desc": knowledge_desc,
-                    "now": now,
-                },
-            )
-            log.info(
-                "创建术语关联知识: knowledge_id=%s -> term_id=%s",
-                knowledge_id,
-                term_id,
+            self.insert_term_knowledge(
+                term_id=term_id,
+                desc_summary=knowledge_desc[:200],
+                desc=knowledge_desc,
             )
 
-        # 3. 创建默认用户别名（标准名本身作为别名首条）
+        now = datetime.now(tz=UTC)
         name_search_scope: dict[str, object] = {}
         if user_id:
             name_search_scope = {
@@ -245,9 +339,8 @@ class PostgresTermWriter:
         )
 
         log.info(
-            "创建术语及知识: term_id=%s term_code=%s term_name=%s user_id=%s",
+            "创建术语及知识: term_id=%s term_name=%s user_id=%s",
             term_id,
-            term_code,
             term_name,
             user_id,
         )

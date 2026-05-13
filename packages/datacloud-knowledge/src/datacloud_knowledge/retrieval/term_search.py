@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+# TODO: 迁移到 TermReader / TermSearchEngine 协议。
+# 当前直接使用 _db.connection.get_session / _db.models / bm25 模块函数。
+# 迁移路径：
+#   1. 精确查询 → reader.search_terms_exact()
+#   2. BM25 查询 → engine.search_bm25()
+#   3. 多路召回融合 → 编排层调用 create_reader() + create_engine()
+#   4. 复杂联表/UNION 查询 → 暂保留 SQL，通过 create_reader() 内部 session 执行
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -11,6 +18,8 @@ from sqlalchemy.orm import aliased
 
 from datacloud_knowledge.adapters.opengauss._db.connection import get_session
 from datacloud_knowledge.adapters.opengauss._db.models import Term, TermName, TermRelation
+
+# TODO: 迁移到 create_engine().search_bm25() — 需要统一 session 管理模式
 from datacloud_knowledge.adapters.opengauss.bm25 import bm25_search_with_or
 from datacloud_knowledge.contracts.types import (
     AmbiguousCandidate,
@@ -415,9 +424,7 @@ def get_object_props_by_code(
             ).scalar_one_or_none()
 
             if source_row is None:
-                logger.warning(
-                    "[get_object_props_by_code] scope_code 未找到: %s", scope_code
-                )
+                logger.warning("[get_object_props_by_code] scope_code 未找到: %s", scope_code)
                 return []
 
             source_term_id = str(source_row)

@@ -11,12 +11,13 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
-from contextlib import suppress
+from collections.abc import Callable, Sequence
+from contextlib import AbstractContextManager, suppress
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import bindparam, text
 
+from datacloud_knowledge.adapters.opengauss._db.connection import get_session
 from datacloud_knowledge.adapters.opengauss._db.url import resolve_knowledge_schema
 from datacloud_knowledge.contracts.protocols import TermSearchEngine
 from datacloud_knowledge.contracts.text import Tokenizer
@@ -43,17 +44,51 @@ class PostgresSearchEngine(TermSearchEngine):
     整合 BM25（字级/词级/分区）、子串匹配、向量搜索三路召回。
     通过 Tokenizer 协议解耦分词策略，支持中英文等多种语言。
 
+    支持两种初始化模式：
+    - 直接注入 session（调用方管理事务）
+    - 注入 session_factory（engine 自行管理 session 生命周期）
+
     Attributes:
         _session: SQLAlchemy 数据库会话。
     """
 
-    def __init__(self, session: Session) -> None:
+    def __init__(
+        self,
+        session: Session | None = None,
+        session_factory: Callable[[], AbstractContextManager[Session]] | None = None,
+    ) -> None:
         """初始化搜索引擎。
 
         Args:
-            session: SQLAlchemy 数据库会话。
+            session: SQLAlchemy 数据库会话（调用方负责生命周期）。
+            session_factory: 返回 session 上下文管理器的可调用对象。
+                传入 None 且 session 也为 None 时默认使用 ``get_session``。
         """
-        self._session = session
+        if session is not None:
+            self._session: Session = session
+            self._session_factory: Callable[[], AbstractContextManager[Session]] | None = None
+        else:
+            self._session_factory = session_factory if session_factory is not None else get_session
+            self._session = None  # type: ignore[assignment]
+
+    @property
+    def session(self) -> Session:
+        """获取当前绑定的 Session。仅在直接注入 session 时可用。"""
+        if self._session is not None:
+            return self._session
+        raise RuntimeError(
+            "PostgresSearchEngine 未绑定 session，请使用 _with_session() 上下文管理器"
+        )
+
+    def _with_session(self) -> AbstractContextManager[Session]:
+        """获取 session 上下文管理器（兼容两种初始化模式）。"""
+        from contextlib import nullcontext
+
+        if self._session is not None:
+            return nullcontext(self._session)
+        if self._session_factory is not None:
+            return self._session_factory()
+        raise RuntimeError("PostgresSearchEngine 未配置 session 或 session_factory")
 
     # ═══════════════════════════════════════════════════════════════
     # 私有工具方法

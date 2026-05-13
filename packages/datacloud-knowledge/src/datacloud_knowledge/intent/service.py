@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import bindparam, text
 
+from datacloud_knowledge.adapters import create_writer
 from datacloud_knowledge.adapters.opengauss._db.connection import get_session
 from datacloud_knowledge.adapters.opengauss.vector_validation import (
     TermVectorValidationError,
     validate_term_vector_readiness,
 )
-from datacloud_knowledge.adapters.opengauss.writer import PostgresTermWriter
 
 from .cache import UserNameCache
 from .disambiguation import build_shortest_path_tree, disambiguate
@@ -276,7 +276,7 @@ def store_clarification_results(
     """Persist clarification results and return created name_id list."""
     created_ids: list[str] = []
     with get_session() as session:
-        writer = PostgresTermWriter(session)
+        writer = create_writer(session=session)
         for mention_text, result in clarification_results.items():
             if isinstance(result, dict) and "term_id" in result:
                 name_id = writer.create_term_name(

@@ -8,11 +8,8 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
-from datacloud_knowledge.adapters.opengauss.bm25 import (
-    _has_jieba_column,
-    _has_name_keywords_column,
-    _jieba_tokenize,
-)
+from datacloud_knowledge.adapters.opengauss.engine import PostgresSearchEngine
+from datacloud_knowledge.retrieval.tokenizers import create_tokenizer
 
 from ._models import _VECTOR_MIN_SIMILARITY, PreparedBatch, RecallRequest
 from ._sql import (
@@ -28,6 +25,18 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
+
+
+def _jieba_tsquery(text: str) -> str:
+    """Jieba 分词后用 `` & `` 拼接为 tsquery 字符串。
+
+    替代原 bm25 模块中的 ``_jieba_tokenize``，使用统一的 Tokenizer 协议。
+    """
+    tok = create_tokenizer("zh_CN")
+    tokens = tok.tokenize(text)
+    if not tokens:
+        return " & ".join(list(text.strip()))
+    return tok.build_tsquery(tokens)
 
 
 def _run_tsquery_batches(
@@ -79,7 +88,8 @@ def _batch_bm25_and(
 
     started_at = time.monotonic()
     with get_session() as session:
-        if not _has_name_keywords_column(session):
+        engine = PostgresSearchEngine(session)
+        if not engine._check_column_exists("name_keywords"):
             log.info(
                 "[recall_perf] bm25_and: %.3fs keywords=%d hits=0",
                 time.monotonic() - started_at,
@@ -116,7 +126,8 @@ def _batch_jieba_bm25(
     from datacloud_knowledge.adapters.opengauss._db.connection import get_session
 
     with get_session() as session:
-        if not _has_jieba_column(session):
+        engine = PostgresSearchEngine(session)
+        if not engine._check_column_exists("name_keywords_jieba"):
             log.info(
                 "[recall_perf] jieba: %.3fs keywords=%d hits=0",
                 time.monotonic() - started_at,
@@ -130,7 +141,7 @@ def _batch_jieba_bm25(
             per_type_requests=batch.per_type_requests,
             top_k=top_k,
             column_name="name_keywords_jieba",
-            tokenizer=_jieba_tokenize,
+            tokenizer=_jieba_tsquery,
         )
 
     log.info(

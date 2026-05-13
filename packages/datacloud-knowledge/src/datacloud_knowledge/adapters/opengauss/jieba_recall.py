@@ -12,7 +12,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from datacloud_knowledge.adapters.opengauss.bm25 import BM25Result, bm25_search_with_or
-from datacloud_knowledge.retrieval.rrf import rrf_fuse
+from datacloud_knowledge.contracts.rrf import rrf_fuse
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session

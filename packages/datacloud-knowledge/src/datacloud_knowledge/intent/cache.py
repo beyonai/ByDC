@@ -1,13 +1,21 @@
-"""用户级 LRU+TTL 缓存 — 算法 B 二级缓存。"""
+"""用户级 LRU+TTL 缓存 — 算法 B 二级缓存。
+
+TODO(adapter): 消除原始 SQL。需要 TermReader 协议新增方法:
+  - TermReader.get_user_scoped_aliases(user_id) → dict[str, list[NameItem]]
+    (按 scope_user_id 过滤 term_name.search_scope JSONB 字段，join term 表)
+"""
 
 from __future__ import annotations
 
 import logging
 import time
 from contextlib import suppress
-from typing import Any
+from typing import TYPE_CHECKING
 
 from sqlalchemy import text
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
 
@@ -57,8 +65,11 @@ class UserNameCache:
         self._store[user_id] = (name_index, time.monotonic())
         self._access_order.append(user_id)
 
-    def load(self, user_id: str, session: Any) -> NameIndex:
+    def load(self, user_id: str, session: Session) -> NameIndex:
         """Load user's scoped aliases from DB and cache them.
+
+        TODO(adapter): 迁移至 TermReader.get_user_scoped_aliases(user_id)，
+        消除直接使用 sqlalchemy.text 的原始 SQL。
 
         Args:
             user_id: The user ID to load aliases for.
