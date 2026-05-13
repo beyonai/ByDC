@@ -10,21 +10,13 @@ from datacloud_data_sdk.ontology.term_loader import TermLoader
 from datacloud_data_sdk.plan.query_plan_generator import LangGraphPlanGenerator
 from dotenv import load_dotenv
 
-load_dotenv(
-    Path(
-        "./packages/datacloud-data/.env"
-    )
-)
+load_dotenv(Path("./packages/datacloud-data/.env"))
 
 
 async def main1() -> None:
     loader = OntologyLoader()
-    loader.load_from_path(
-        "xxx"
-    )
-    loader.load_scene_from_path(
-        "xxx"
-    )
+    loader.load_from_path("xxx")
+    loader.load_scene_from_path("xxx")
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
@@ -50,12 +42,8 @@ async def main1() -> None:
 async def main2() -> None:
     loader = OntologyLoader()
 
-    loader.load_from_path(
-        "xxx"
-    )
-    loader.load_scene_from_path(
-        "xxx"
-    )
+    loader.load_from_path("xxx")
+    loader.load_scene_from_path("xxx")
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
@@ -80,12 +68,8 @@ async def main2() -> None:
 
 async def main3() -> None:
     loader = OntologyLoader()
-    loader.load_scene_from_path(
-        "xxx"
-    )
-    loader.load_from_path(
-        "xxx"
-    )
+    loader.load_scene_from_path("xxx")
+    loader.load_from_path("xxx")
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
@@ -117,12 +101,8 @@ async def main3() -> None:
 
 async def main4() -> None:
     loader = OntologyLoader()
-    loader.load_scene_from_path(
-        "xxx"
-    )
-    loader.load_from_path(
-        "xxx"
-    )
+    loader.load_scene_from_path("xxx")
+    loader.load_from_path("xxx")
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
@@ -151,9 +131,7 @@ async def main4() -> None:
 
 async def main5() -> None:
     loader = OntologyLoader()
-    loader.load_from_owl_directory(
-        "xxx"
-    )
+    loader.load_from_owl_directory("xxx")
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
@@ -178,9 +156,7 @@ async def main5() -> None:
 
 async def main6() -> None:
     loader = OntologyLoader()
-    loader.load_from_owl_directory(
-        "xxx"
-    )
+    loader.load_from_owl_directory("xxx")
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
@@ -218,9 +194,7 @@ async def main6() -> None:
 
 async def main7() -> None:
     loader = OntologyLoader()
-    loader.load_from_owl_directory(
-        "xxx"
-    )
+    loader.load_from_owl_directory("xxx")
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",

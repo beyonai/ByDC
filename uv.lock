@@ -16,7 +16,6 @@ members = [
     "datacloud-analysis",
     "datacloud-data",
     "datacloud-knowledge",
-    "datacloud-service",
 ]
 
 [[package]]
@@ -440,21 +439,6 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=0.23" },
     { name = "pytest-cov", specifier = ">=5.0" },
     { name = "ruff", specifier = ">=0.6" },
-]
-
-[[package]]
-name = "by-framework"
-version = "0.1.13"
-source = { registry = "https://pypi.org/simple/" }
-dependencies = [
-    { name = "dill" },
-    { name = "httpx" },
-    { name = "redis" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/df/6c/30391ea97832756b1409d340a3e53b004c2ea5f6a5cadf4d3c6a4a0d9fba/by_framework-0.1.13.tar.gz", hash = "sha256:9ae061021188d7db26c9ba1be803ae79ff54c4d5db618a230077d8d4fd3d1dcc", size = 853897, upload-time = "2026-04-27T13:08:14.698Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/23/5c/4e0fe1c4843102c1bd76a2fd6147216005a88ffaeb829229ccf94ef54a6b/by_framework-0.1.13-py3-none-any.whl", hash = "sha256:a02065813dda6d658dcf29f86b4d5e351f085b15ad2d8c701d43febb64ecd8a1", size = 127277, upload-time = "2026-04-27T13:08:13.007Z" },
 ]
 
 [[package]]
@@ -1135,25 +1119,6 @@ dev = [
 ]
 
 [[package]]
-name = "datacloud-service"
-version = "0.1.0"
-source = { editable = "examples/e_commerce_demo/backend" }
-dependencies = [
-    { name = "by-framework" },
-    { name = "datacloud-analysis" },
-    { name = "langchain-openai" },
-    { name = "python-dotenv" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "by-framework", index = "https://pypi.org/simple/" },
-    { name = "datacloud-analysis", editable = "packages/datacloud-analysis" },
-    { name = "langchain-openai", specifier = ">=1.1.11" },
-    { name = "python-dotenv", specifier = ">=1.0.0" },
-]
-
-[[package]]
 name = "deepagents"
 version = "0.4.7"
 source = { registry = "https://pypi.org/simple/" }
@@ -1179,15 +1144,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/49/85/12f0a49a7c4ffb70572b6c2ef13c90c88fd190debda93b23f026b25f9634/deprecated-1.3.1.tar.gz", hash = "sha256:b1b50e0ff0c1fddaa5708a2c6b0a6588bb09b892825ab2b214ac9ea9d92a5223", size = 2932523, upload-time = "2025-10-30T08:19:02.757Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/84/d0/205d54408c08b13550c733c4b85429e7ead111c7f0014309637425520a9a/deprecated-1.3.1-py2.py3-none-any.whl", hash = "sha256:597bfef186b6f60181535a29fbe44865ce137a5079f295b479886c82729d5f3f", size = 11298, upload-time = "2025-10-30T08:19:00.758Z" },
-]
-
-[[package]]
-name = "dill"
-version = "0.4.1"
-source = { registry = "https://pypi.org/simple/" }
-sdist = { url = "https://files.pythonhosted.org/packages/81/e1/56027a71e31b02ddc53c7d65b01e68edf64dea2932122fe7746a516f75d5/dill-0.4.1.tar.gz", hash = "sha256:423092df4182177d4d8ba8290c8a5b640c66ab35ec7da59ccfa00f6fa3eea5fa", size = 187315, upload-time = "2026-01-19T02:36:56.85Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/1e/77/dc8c558f7593132cf8fefec57c4f60c83b16941c574ac5f619abb3ae7933/dill-0.4.1-py3-none-any.whl", hash = "sha256:1e1ce33e978ae97fcfcff5638477032b801c46c7c65cf717f95fbc2248f79a9d", size = 120019, upload-time = "2026-01-19T02:36:55.663Z" },
 ]
 
 [[package]]
@@ -3795,15 +3751,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/98/f5/18bb77b7af9526add0c727a3b2048959847dc5fb030913e2918bf384fec3/rdflib-7.6.0.tar.gz", hash = "sha256:6c831288d5e4a5a7ece85d0ccde9877d512a3d0f02d7c06455d00d6d0ea379df", size = 4943826, upload-time = "2026-02-13T07:15:55.938Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/10/c2/6604a71269e0c1bd75656d5a001432d16f2cc5b8c057140ec797155c295e/rdflib-7.6.0-py3-none-any.whl", hash = "sha256:30c0a3ebf4c0e09215f066be7246794b6492e054e782d7ac2a34c9f70a15e0dd", size = 615416, upload-time = "2026-02-13T07:15:46.487Z" },
-]
-
-[[package]]
-name = "redis"
-version = "7.3.0"
-source = { registry = "https://pypi.org/simple/" }
-sdist = { url = "https://files.pythonhosted.org/packages/da/82/4d1a5279f6c1251d3d2a603a798a1137c657de9b12cfc1fba4858232c4d2/redis-7.3.0.tar.gz", hash = "sha256:4d1b768aafcf41b01022410b3cc4f15a07d9b3d6fe0c66fc967da2c88e551034", size = 4928081, upload-time = "2026-03-06T18:18:16.287Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f0/28/84e57fce7819e81ec5aa1bd31c42b89607241f4fb1a3ea5b0d2dbeaea26c/redis-7.3.0-py3-none-any.whl", hash = "sha256:9d4fcb002a12a5e3c3fbe005d59c48a2cc231f87fbb2f6b70c2d89bb64fec364", size = 404379, upload-time = "2026-03-06T18:18:14.583Z" },
 ]
 
 [[package]]
