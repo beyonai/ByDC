@@ -203,10 +203,16 @@ def make_llm_call_node(
             "dynamic_preview=%r",
             len(messages_window),
             str(getattr(messages_window[0], "content", "") if messages_window else "")[:120],
-            str(next(
-                (getattr(m, "content", "") for m in messages_window if type(m).__name__ == "HumanMessage"),
-                ""
-            ))[:120],
+            str(
+                next(
+                    (
+                        getattr(m, "content", "")
+                        for m in messages_window
+                        if type(m).__name__ == "HumanMessage"
+                    ),
+                    "",
+                )
+            )[:120],
             (_dynamic or "")[:120],
         )
         ai_msg, _did_stream = await _invoke_llm_with_fallback(

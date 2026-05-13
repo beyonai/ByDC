@@ -357,7 +357,9 @@ async def test_tc_i18n_06_runtime_session_info_english_when_en_us() -> None:
     prompt = captured_prompts[0]
     assert "Current session" in prompt, f"Expected English header in prompt, got:\n{prompt}"
     assert "Current time" in prompt, f"Expected 'Current time' in prompt, got:\n{prompt}"
-    assert "当前会话信息" not in prompt, f"Chinese header should not appear for en_US, got:\n{prompt}"
+    assert "当前会话信息" not in prompt, (
+        f"Chinese header should not appear for en_US, got:\n{prompt}"
+    )
 
 
 @pytest.mark.asyncio
@@ -394,7 +396,9 @@ async def test_tc_i18n_07_runtime_session_info_chinese_when_zh_cn() -> None:
     prompt = captured_prompts[0]
     assert "当前会话信息" in prompt, f"Expected Chinese header in prompt, got:\n{prompt}"
     assert "当前时间" in prompt, f"Expected '当前时间' in prompt, got:\n{prompt}"
-    assert "Current session" not in prompt, f"English header should not appear for zh_CN, got:\n{prompt}"
+    assert "Current session" not in prompt, (
+        f"English header should not appear for zh_CN, got:\n{prompt}"
+    )
 
 
 # ── TC-I18N-08: tool_wrapper InvocationContext language 传递 ─────────────────

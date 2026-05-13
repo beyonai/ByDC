@@ -36,7 +36,9 @@ async def test_rn1_react_final_set_passthrough() -> None:
     }
     captured: list[dict[str, Any]] = []
 
-    async def _fake_format(rf: dict[str, Any], gw_ctx: Any, workspace_dir: Any, config: Any = None) -> None:
+    async def _fake_format(
+        rf: dict[str, Any], gw_ctx: Any, workspace_dir: Any, config: Any = None
+    ) -> None:
         captured.append(dict(rf))
 
     with patch(
@@ -68,7 +70,9 @@ async def test_rn2_l2_fallback_extracts_ai_message_text() -> None:
     }
     captured: list[dict[str, Any]] = []
 
-    async def _fake_format(rf: dict[str, Any], gw_ctx: Any, workspace_dir: Any, config: Any = None) -> None:
+    async def _fake_format(
+        rf: dict[str, Any], gw_ctx: Any, workspace_dir: Any, config: Any = None
+    ) -> None:
         captured.append(dict(rf))
 
     with patch(
@@ -101,7 +105,9 @@ async def test_rn3_l3_fallback_no_ai_message_empty_answer() -> None:
     }
     captured: list[dict[str, Any]] = []
 
-    async def _fake_format(rf: dict[str, Any], gw_ctx: Any, workspace_dir: Any, config: Any = None) -> None:
+    async def _fake_format(
+        rf: dict[str, Any], gw_ctx: Any, workspace_dir: Any, config: Any = None
+    ) -> None:
         captured.append(dict(rf))
 
     with patch(
@@ -134,7 +140,9 @@ async def test_rn4_l2_fallback_preserves_answer_streamed() -> None:
     }
     captured: list[dict[str, Any]] = []
 
-    async def _fake_format(rf: dict[str, Any], gw_ctx: Any, workspace_dir: Any, config: Any = None) -> None:
+    async def _fake_format(
+        rf: dict[str, Any], gw_ctx: Any, workspace_dir: Any, config: Any = None
+    ) -> None:
         captured.append(dict(rf))
 
     with patch(

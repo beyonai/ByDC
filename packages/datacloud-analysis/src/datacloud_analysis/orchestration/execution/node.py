@@ -257,8 +257,7 @@ async def execution_node(
     """Execute ReAct loop with tool dispatch and hook support."""
     _overwrite_for_locale = state.get("prompts_overwrite") or {}
     locale = str(
-        _overwrite_for_locale.get("locale")
-        or os.getenv("DATACLOUD_AGENT_LOCALE", "zh_CN")
+        _overwrite_for_locale.get("locale") or os.getenv("DATACLOUD_AGENT_LOCALE", "zh_CN")
     )
     logger.debug(
         "[i18n-diag] execution_node: state.prompts_overwrite=%r → locale=%r",
@@ -302,7 +301,11 @@ async def execution_node(
         _header_meta = {}
     _user_code = str(_header_meta.get("user_code") or "").strip()
     _user_name = str(_header_meta.get("user_name") or "").strip()
-    _now_str = datetime.now().strftime("%Y-%m-%d %H:%M") if locale == "en_US" else datetime.now().strftime("%Y年%m月%d日 %H:%M")
+    _now_str = (
+        datetime.now().strftime("%Y-%m-%d %H:%M")
+        if locale == "en_US"
+        else datetime.now().strftime("%Y年%m月%d日 %H:%M")
+    )
 
     if locale == "en_US":
         _runtime_lines = ["\n\n## Current session", f"- Current time: {_now_str}"]

@@ -227,13 +227,17 @@ class HookAwareToolNode(ToolNode):
                 try:
                     async with _gw_ctx.sub_step(msg.name or "tool"):
                         if params:
-                            await _emit_tool_detail(_gw_ctx, _get_ui_text("tool_input", _locale), params)
+                            await _emit_tool_detail(
+                                _gw_ctx, _get_ui_text("tool_input", _locale), params
+                            )
                         # 将 msg.content（可能是 Python repr 字符串）解析回 dict，
                         # 保证 coerce_stream_chunk_text 走 dump_json 而非原样透传。
                         _raw = str(msg.content or "")
                         _parsed = _try_parse_to_dict(_raw) if _raw else None
                         _tool_out: Any = _parsed if _parsed is not None else _raw
-                        await _emit_tool_detail(_gw_ctx, _get_ui_text("tool_output", _locale), _tool_out)
+                        await _emit_tool_detail(
+                            _gw_ctx, _get_ui_text("tool_output", _locale), _tool_out
+                        )
                 except Exception as detail_exc:  # noqa: BLE001
                     logger.debug(
                         "[HookAwareToolNode] emit tool detail failed tool=%s: %s",

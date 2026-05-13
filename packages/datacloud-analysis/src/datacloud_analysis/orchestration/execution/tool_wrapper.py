@@ -684,7 +684,10 @@ async def dispatch_tool(
                         _result_file_storage = getattr(loader, "result_file_storage", None)
                         _extras = getattr(gateway_context, "extras", None)
                         _locale = str(
-                            (getattr(state, "get", lambda k, d=None: d)("prompts_overwrite") or {}).get("locale")
+                            (
+                                getattr(state, "get", lambda k, d=None: d)("prompts_overwrite")
+                                or {}
+                            ).get("locale")
                             or "zh_CN"
                         )
                         _inv_ctx_redirect: Any = InvocationContext(
@@ -756,7 +759,9 @@ async def dispatch_tool(
                 _result_file_storage = getattr(loader, "result_file_storage", None)
                 _extras = getattr(gateway_context, "extras", None)
                 _locale = str(
-                    (getattr(state, "get", lambda k, d=None: d)("prompts_overwrite") or {}).get("locale")
+                    (getattr(state, "get", lambda k, d=None: d)("prompts_overwrite") or {}).get(
+                        "locale"
+                    )
                     or "zh_CN"
                 )
                 _inv_ctx: Any = InvocationContext(

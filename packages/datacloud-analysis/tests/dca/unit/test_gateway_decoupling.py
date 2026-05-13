@@ -95,9 +95,7 @@ async def test_tc_gd2_thinking_token_payload_structure() -> None:
     assert payload.get("event_type") == "reasoningLogDelta", (
         f"event_type 应为 reasoningLogDelta，实际：{payload}"
     )
-    assert payload.get("content_type") == "1002", (
-        f"content_type 应为 1002，实际：{payload}"
-    )
+    assert payload.get("content_type") == "1002", f"content_type 应为 1002，实际：{payload}"
     assert payload.get("message_id") == msg_id, f"message_id 应为 {msg_id!r}，实际：{payload}"
     assert payload.get("content"), "content 不应为空"
 
