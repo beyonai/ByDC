@@ -30,8 +30,37 @@ from .types import (
 class TermReader(Protocol):
     """术语读取接口。所有查询操作，无副作用。
 
-    仅依赖 DB 查询，不修改任何数据。实现方负责 DB session 管理和 SQL 组装。
+    每个方法回答一个问题，一次 DB 往返。实现方负责 DB session 管理和 SQL 组装。
+    编排逻辑（降级、多路召回融合）由调用方负责，不在此协议内。
     """
+
+    def search_terms_exact(
+        self,
+        *,
+        term_type_code: str,
+        keyword: str | None = None,
+        tags: Sequence[TagFilter] | None = None,
+        limit: int = 20,
+        offset: int = 0,
+        order_by: str = "relevance",
+    ) -> SearchTermsResult:
+        """按术语类型精确检索术语列表（原子查询，无 BM25 兜底）。
+
+        仅执行精确匹配（term_name == keyword 或 term_code == keyword）。
+        无匹配时返回空结果，由调用方决定是否降级到 BM25。
+
+        Args:
+            term_type_code: 术语类型编码（支持驼峰简写映射，如 ONTOLOGY_VIEW→view）。
+            keyword: 可选关键词搜索（精确匹配 term_name/term_code）。
+            tags: 可选标签过滤条件列表。
+            limit: 返回条数（1..200）。
+            offset: 分页偏移（>=0）。
+            order_by: 排序方式（relevance/updated_time/created_time/term_name）。
+
+        Returns:
+            分页搜索结果，包含 total 和 items。无匹配时 total=0。
+        """
+        ...
 
     def search_terms(
         self,
@@ -43,7 +72,11 @@ class TermReader(Protocol):
         offset: int = 0,
         order_by: str = "relevance",
     ) -> SearchTermsResult:
-        """按术语类型检索术语列表。
+        """按术语类型检索术语列表（含 BM25 兜底）。
+
+        .. deprecated::
+            此方法包含编排逻辑（精确匹配无结果时 BM25 兜底）。
+            新代码应使用 :meth:`search_terms_exact`，编排逻辑由调用方负责。
 
         Args:
             term_type_code: 术语类型编码（支持驼峰简写映射，如 ONTOLOGY_VIEW→view）。
@@ -186,6 +219,27 @@ class TermReader(Protocol):
         """
         ...
 
+    def get_bfs_distance(
+        self,
+        *,
+        source_term_id: str,
+        target_term_id: str,
+        max_depth: int = 4,
+    ) -> int | None:
+        """计算两个术语在图谱中的 BFS 最短距离。
+
+        通过 ``term_relation`` 表递归搜索，相同节点返回 0，不可达返回 None。
+
+        Args:
+            source_term_id: 源术语 ID。
+            target_term_id: 目标术语 ID。
+            max_depth: 最大搜索深度（0 表示不搜索，返回 None）。
+
+        Returns:
+            最短距离（非负整数），不可达时返回 None。
+        """
+        ...
+
 
 class TermSearchEngine(Protocol):
     """文本召回引擎。每种策略独立暴露，由调用方控制策略组合和 RRF 融合。
@@ -273,8 +327,55 @@ class TermSearchEngine(Protocol):
 class TermWriter(Protocol):
     """术语写入接口。所有持久化操作。
 
+    每个方法一次原子写入。多实体级联写入由调用方编排。
     实现方负责 DB session 管理、事务控制和幂等性保证。
     """
+
+    def insert_term(
+        self,
+        *,
+        term_name: str,
+        term_type_code: str,
+        library_id: str | None = None,
+        domain_id: str,
+        parent_term_id: str | None = None,
+        term_tags: dict[str, object] | None = None,
+        user_id: str | None = None,
+    ) -> str:
+        """原子插入术语记录（不含知识和别名）。
+
+        Args:
+            term_name: 术语标准名称。
+            term_type_code: 术语类型编码。
+            library_id: 术语库 ID（可选）。
+            domain_id: 所属领域 ID。
+            parent_term_id: 父术语 ID（可选）。
+            term_tags: 术语标签属性（JSONB，可选）。
+            user_id: 创建用户 ID（可选）。
+
+        Returns:
+            生成的 term_id。
+        """
+        ...
+
+    def insert_term_knowledge(
+        self,
+        *,
+        term_id: str,
+        desc_summary: str,
+        desc: str,
+    ) -> str:
+        """原子插入术语知识记录。
+
+        Args:
+            term_id: 归属术语 ID。
+            desc_summary: 知识摘要。
+            desc: 知识原文。
+
+        Returns:
+            生成的 knowledge_id。
+        """
+        ...
 
     def create_term_name(
         self,
@@ -320,7 +421,12 @@ class TermWriter(Protocol):
         term_tags: dict[str, object] | None = None,
         user_id: str | None = None,
     ) -> str:
-        """创建新术语及其关联知识。
+        """创建新术语及其关联知识（级联写入）。
+
+        .. deprecated::
+            此方法包含多实体级联逻辑（INSERT term → knowledge → name）。
+            新代码应使用 :meth:`insert_term` + :meth:`insert_term_knowledge`
+            + :meth:`create_term_name`，编排逻辑由调用方负责。
 
         Args:
             term_name: 术语标准名称。
