@@ -6,11 +6,7 @@ import logging
 import re
 from typing import Any
 
-from sqlalchemy import select
-
 from datacloud_knowledge.adapters import create_reader
-from datacloud_knowledge.adapters.opengauss._db.connection import get_session
-from datacloud_knowledge.adapters.opengauss._db.models import Term
 from datacloud_knowledge.intent.service import store_clarification_results
 
 logger = logging.getLogger(__name__)
@@ -71,18 +67,12 @@ def persist_confirmed_synonyms(
 
 
 def _load_scope_term_maps(scope_code: str) -> dict[str, Any]:
+    """Load field/prop/value maps for a scope_code using reader adapter."""
     if not scope_code:
         return {"field_terms": {}, "prop_codes": {}, "value_terms_by_prop": {}}
 
-    with get_session() as session:
-        source_rows = session.execute(
-            select(Term.term_id).where(
-                Term.term_code == scope_code,
-                Term.term_type_code.in_(["view", "object"]),
-            )
-        ).all()
-
-    source_term_ids = [str(row[0]) for row in source_rows]
+    reader = create_reader()
+    source_term_ids = list(reader.get_scope_term_ids(scope_code=scope_code))
     if not source_term_ids:
         return {"field_terms": {}, "prop_codes": {}, "value_terms_by_prop": {}}
 

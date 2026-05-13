@@ -1273,6 +1273,23 @@ class PostgresTermReader:
             for r in rows
         )
 
+    def get_scope_term_ids(self, *, scope_code: str) -> Sequence[str]:
+        """根据 scope_code 查询 view/object term_id。"""
+        try:
+            with self._session_factory() as session:
+                rows = session.execute(
+                    text(
+                        "SELECT term_id FROM term "
+                        "WHERE term_code = :scope_code "
+                        "AND term_type_code IN ('view', 'object')"
+                    ),
+                    {"scope_code": scope_code},
+                ).fetchall()
+        except Exception:
+            logger.exception("get_scope_term_ids failed: scope_code=%s", scope_code)
+            raise
+        return tuple(str(r.term_id) for r in rows)
+
     # ═══════════════════════════════════════════════════════════════════════════
     # 内部辅助方法
     # ═══════════════════════════════════════════════════════════════════════════
