@@ -15,15 +15,6 @@ from psycopg import Connection, sql
 from datacloud_knowledge.adapters.opengauss._db.context import DatabaseContext
 from datacloud_knowledge.adapters.opengauss._db.url import build_postgres_connection_uri
 
-from ..ingestion.owl_import.importer._helpers import (
-    _execute_values,
-    _import_batch_size,
-    _iter_jsonl_obj_batches,
-    _normalize_term_code,
-    _str_id_if_set,
-    _term_id_from_obj_or_code_direct,
-)
-
 logger = logging.getLogger(__name__)
 
 

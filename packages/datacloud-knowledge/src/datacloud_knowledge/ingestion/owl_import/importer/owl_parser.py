@@ -240,7 +240,7 @@ class _OwlSaxHandler(sax_handler.ContentHandler):
         self._current_tag: str = ""
         self._current_text: list[str] = []
 
-    def startElementNS(
+    def startElementNS(  # noqa: N802
         self,
         name: tuple[str | None, str],
         _qname: str | None,
@@ -272,7 +272,7 @@ class _OwlSaxHandler(sax_handler.ContentHandler):
         if self._current_tag:
             self._current_text.append(content)
 
-    def endElementNS(
+    def endElementNS(  # noqa: N802
         self,
         name: tuple[str | None, str],
         _qname: str | None,
@@ -302,7 +302,7 @@ def _parse_owl_sax(file_path: Path) -> list[dict[str, Any]]:
         return []
 
     content = _prepare_rdfxml_content(content)
-    sax_parser = make_parser()
+    sax_parser = make_parser()  # noqa: S317
     sax_parser.setFeature(sax_handler.feature_namespaces, True)
     owl_handler = _OwlSaxHandler()
     sax_parser.setContentHandler(owl_handler)
