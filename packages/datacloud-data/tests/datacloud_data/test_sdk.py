@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 load_dotenv(
     Path(
-        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/packages/datacloud-data/.env"
+        "./packages/datacloud-data/.env"
     )
 )
 
@@ -20,16 +20,16 @@ load_dotenv(
 async def main1() -> None:
     loader = OntologyLoader()
     loader.load_from_path(
-        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json"
+        "xxx"
     )
     loader.load_scene_from_path(
-        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json"
+        "xxx"
     )
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
-            base_url="https://lab.iwhalecloud.com/gpt-proxy/v1",
-            api_key="sk-emt6bXBfJl9ncHQtcHJveHkuaXdoYWxlY2xvdWQuY29tXyZf",
+            base_url="xx",
+            api_key="xxx",
             temperature=0.0,
             max_retries=2,
         ),
@@ -51,16 +51,16 @@ async def main2() -> None:
     loader = OntologyLoader()
 
     loader.load_from_path(
-        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json"
+        "xxx"
     )
     loader.load_scene_from_path(
-        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json"
+        "xxx"
     )
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
-            base_url="https://lab.iwhalecloud.com/gpt-proxy/v1",
-            api_key="sk-emt6bXBfJl9ncHQtcHJveHkuaXdoYWxlY2xvdWQuY29tXyZf",
+            base_url="xxx",
+            api_key="xxx",
             temperature=0.0,
             max_retries=2,
         ),
@@ -81,16 +81,16 @@ async def main2() -> None:
 async def main3() -> None:
     loader = OntologyLoader()
     loader.load_scene_from_path(
-        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json"
+        "xxx"
     )
     loader.load_from_path(
-        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json"
+        "xxx"
     )
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
-            base_url="https://lab.iwhalecloud.com/gpt-proxy/v1",
-            api_key="sk-emt6bXBfJl9ncHQtcHJveHkuaXdoYWxlY2xvdWQuY29tXyZf",
+            base_url="xxx",
+            api_key="xxx",
             temperature=0.0,
             max_retries=2,
         ),
@@ -118,16 +118,16 @@ async def main3() -> None:
 async def main4() -> None:
     loader = OntologyLoader()
     loader.load_scene_from_path(
-        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json"
+        "xxx"
     )
     loader.load_from_path(
-        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package/ontology/e_commerce_scene_01_data_analysis_full.json"
+        "xxx"
     )
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
-            base_url="https://lab.iwhalecloud.com/gpt-proxy/v1",
-            api_key="sk-emt6bXBfJl9ncHQtcHJveHkuaXdoYWxlY2xvdWQuY29tXyZf",
+            base_url="xxx",
+            api_key="xxx",
             temperature=0.0,
             max_retries=2,
         ),
@@ -152,13 +152,13 @@ async def main4() -> None:
 async def main5() -> None:
     loader = OntologyLoader()
     loader.load_from_owl_directory(
-        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai/whale_datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package_owl/"
+        "xxx"
     )
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
-            base_url="https://lab.iwhalecloud.com/gpt-proxy/v1",
-            api_key="sk-emt6bXBfJl9ncHQtcHJveHkuaXdoYWxlY2xvdWQuY29tXyZf",
+            base_url="xxx",
+            api_key="xxx",
             temperature=0.0,
             max_retries=2,
         ),
@@ -179,13 +179,13 @@ async def main5() -> None:
 async def main6() -> None:
     loader = OntologyLoader()
     loader.load_from_owl_directory(
-        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai_v2/by-datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package_owl_onto/"
+        "xxx"
     )
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
-            base_url="https://lab.iwhalecloud.com/gpt-proxy/v1",
-            api_key="ailab_AoZF2HGutyJd7y5o4AH8doqNvFjEp4toeBp58v8EQo93lRI8lCkG/tye3YfS+5gwwtZey/kD+tQlKJ7YqX2Oviwi3yZ5xe1Srb6WzwEq/ZBBQ73UUlSpW6g=",
+            base_url="xxx",
+            api_key="xxx",
             temperature=0.0,
             max_retries=2,
         ),
@@ -219,13 +219,13 @@ async def main6() -> None:
 async def main7() -> None:
     loader = OntologyLoader()
     loader.load_from_owl_directory(
-        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai_v2/by-datacloud/examples/e_commerce_demo/mock_env/resource/knowledge/import_package_owl_onto/"
+        "xxx"
     )
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="Qwen/Qwen3-Coder-30B-Instruct",
-            base_url="https://lab.iwhalecloud.com/gpt-proxy/v1",
-            api_key="ailab_AoZF2HGutyJd7y5o4AH8doqNvFjEp4toeBp58v8EQo93lRI8lCkG/tye3YfS+5gwwtZey/kD+tQlKJ7YqX2Oviwi3yZ5xe1Srb6WzwEq/ZBBQ73UUlSpW6g=",
+            base_url="xxx",
+            api_key="xxx",
             temperature=0.0,
             max_retries=2,
         ),

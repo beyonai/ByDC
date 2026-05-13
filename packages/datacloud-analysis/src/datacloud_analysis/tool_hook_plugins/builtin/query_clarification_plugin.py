@@ -684,7 +684,9 @@ async def _handle_resume(
         if resume_value is not None
         else "None",
     )
-    return _execute_resume(ctx, tool_name, query, cached, graph_state, resume_value, language=language)
+    return _execute_resume(
+        ctx, tool_name, query, cached, graph_state, resume_value, language=language
+    )
 
 
 # ── 主 hook 入口 ──────────────────────────────────────────────────────────────
@@ -886,7 +888,9 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
 
     # 轻量级别名消歧（字段 + 值，单次 DB 往返）
     resolved, unresolved = (
-        _resolve_via_aliases(field_terms, value_terms, scope_code, user_id=user_id, language=language)
+        _resolve_via_aliases(
+            field_terms, value_terms, scope_code, user_id=user_id, language=language
+        )
         if terms
         else ({}, [])
     )
