@@ -15,7 +15,7 @@ packages/datacloud-knowledge/
 ├── src/datacloud_knowledge/
 │   ├── db/                    # DB URL parsing, schema lifecycle, SQLAlchemy sessions
 │   ├── intent/                # recall, disambiguation, clarification, scoring
-│   ├── query/                 # NL semantic tree, search, fuzzy, embeddings
+│   ├── query/                 # search recall, fuzzy matching, embeddings
 │   ├── knowledge_build/       # OWL import API and DB writer pipeline
 │   ├── knowledge_search/      # typed term/alias/object-property lookup facade
 │   ├── owl_gen/               # business DB schema -> OWL import package generator
@@ -33,7 +33,6 @@ packages/datacloud-knowledge/
 | CLI entry | `src/datacloud_knowledge/cli.py` | Console script: `datacloud-knowledge` |
 | DB URL/schema resolution | `src/datacloud_knowledge/db/url.py` | Parses split env vars and PostgreSQL/OpenGauss/JDBC URLs |
 | Schema lifecycle | `src/datacloud_knowledge/db/schema.py` | Uses packaged/fallback SQL resources |
-| NL -> query tree | `src/datacloud_knowledge/query/sql_engine.py` | Largest core file; singleton service surface |
 | Search recall | `src/datacloud_knowledge/query/search/` | BM25, vector, substring, jieba, RRF |
 | Intent service API | `src/datacloud_knowledge/intent/service.py` | `*_with_session` functions for external consumers |
 | Multi-turn clarification | `src/datacloud_knowledge/intent/clarification/api.py` | Uses postprocess/confirm/cartesian helpers |
@@ -48,7 +47,6 @@ packages/datacloud-knowledge/
 
 | Symbol | Type | Location | Role |
 |--------|------|----------|------|
-| `SQLKnowledgeGraphQuery` | class | `query/sql_engine.py` | Main NL knowledge-query service |
 | `DatabaseContext` | class | `db/context.py` | Transaction-local `search_path` management |
 | `ParsedDatabaseUrl` | dataclass | `db/url.py` | Normalized DB target from env/JDBC/libpq URL |
 | `KnowledgeProvider` | protocol | `provider.py` | Public provider facade contract |
@@ -62,7 +60,7 @@ packages/datacloud-knowledge/
 ## CONVENTIONS
 
 - Package metadata currently has `pyproject.toml` version `0.1.0`; runtime `__version__` is `0.2.0`. Check both before release/version work.
-- Root package exports only 10 lightweight lazy names. Do not expand top-level imports if it pulls in SQLAlchemy/boto3/matplotlib during CLI startup.
+- Root package `__init__.py` uses lazy exports for heavyweight imports. 现已无活跃 lazy export（废弃的 sql_engine 已移除）。
 - `intent/__init__.py` exports 56 legacy/public symbols. Preserve names unless coordinating downstream `datacloud-analysis` and byclaw-data changes.
 - DB code must use schema resolution and `search_path`; SQL should use bare table names except information_schema/schema-management code.
 - SQL resources live in source checkout under `db/ddl/knowledge`, `db/seed/knowledge`, `db/migrations`, and are packaged under `datacloud_knowledge.resources.sql.*`.
@@ -125,5 +123,5 @@ python db/scripts/migrate_term_name_embeddings.py --help
 ## NOTES
 
 - `src/datacloud_knowledge/file_store/` currently has no implementation files; old local guidance was removed as stale.
-- LSP/Pyright currently reports pre-existing diagnostics in `query/sql_engine.py`, `query/search/bm25.py`, and the compatibility wildcard shim. Treat them as baseline unless your change touches those paths.
+- LSP/Pyright currently reports pre-existing diagnostics in `query/search/bm25.py` and the compatibility wildcard shim. Treat them as baseline unless your change touches those paths.
 - `TODO(ontology)` remains in clarification docs/AGENTS: ontology_code filtering is not complete.
