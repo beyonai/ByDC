@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+from datacloud_knowledge.contracts.types import FieldResolutionResult
 from datacloud_knowledge.intent.clarification.postprocess import (
     normalize_clarification_params,
     persist_confirmed_synonyms,
 )
-from datacloud_knowledge.contracts.types import FieldResolutionResult
 
 
 def test_normalize_clarification_params_translates_fields_to_codes(monkeypatch) -> None:

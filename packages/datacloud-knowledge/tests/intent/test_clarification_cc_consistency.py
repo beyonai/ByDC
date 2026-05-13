@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import pytest
+from datacloud_knowledge.contracts.types import (
+    FieldResolutionResultWithNames,
+    ResolvedField,
+)
 from datacloud_knowledge.intent.clarification import _merge, _pre_resolve
 from datacloud_knowledge.intent.clarification.models import (
     CCConfirmResult,
@@ -8,10 +12,6 @@ from datacloud_knowledge.intent.clarification.models import (
     CCTermMeta,
     ConditionTermMapping,
     ExtractedTerm,
-)
-from datacloud_knowledge.contracts.types import (
-    FieldResolutionResultWithNames,
-    ResolvedField,
 )
 
 

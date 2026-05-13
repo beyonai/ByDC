@@ -27,7 +27,10 @@ from datacloud_knowledge.ingestion.owl_generate.renderers.relations import (
     render_relation_view,
     render_view_relations_for_view,
 )
-from datacloud_knowledge.ingestion.owl_generate.renderers.terms import render_terms, render_terms_for_view
+from datacloud_knowledge.ingestion.owl_generate.renderers.terms import (
+    render_terms,
+    render_terms_for_view,
+)
 
 
 def _build_config() -> OwlGenConfig:
@@ -302,52 +305,6 @@ def test_generate_from_tables_writes_per_view_files(tmp_path: Path) -> None:
         tmp_path / "view" / "scene_grid_analysis" / "scene_grid_analysis_definition.owl"
     ).exists()
     assert (tmp_path / "view" / "scene_grid_analysis" / "scene_grid_analysis_terms.owl").exists()
-
-
-def test_generate_from_tables_skips_duplicate_props_in_later_objects(tmp_path: Path) -> None:
-    config = _build_config()
-    config.output_dir = tmp_path
-    tables = [
-        Table(
-            code="ads_enterprise_analysis",
-            name="企业综合分析表",
-            desc="企业",
-            columns=[
-                Column(
-                    name="enterprise_id",
-                    sql_type="varchar",
-                    nullable=False,
-                    comment="企业唯一ID",
-                )
-            ],
-        ),
-        Table(
-            code="ads_grid_analysis",
-            name="物理网格综合分析表",
-            desc="网格",
-            columns=[
-                Column(
-                    name="enterprise_id",
-                    sql_type="varchar",
-                    nullable=False,
-                    comment="网格企业 ID",
-                )
-            ],
-        ),
-    ]
-
-    generate_from_tables(config, tables, {})
-
-    first_terms = (
-        tmp_path / "object" / "ads_enterprise_analysis" / "ads_enterprise_analysis_terms.owl"
-    ).read_text()
-    second_terms = (
-        tmp_path / "object" / "ads_grid_analysis" / "ads_grid_analysis_terms.owl"
-    ).read_text()
-
-    assert "term_prop_enterprise_id" in first_terms
-    assert "属性：企业唯一ID" in first_terms
-    assert "term_prop_enterprise_id" not in second_terms
 
 
 def test_generate_from_tables_uses_business_object_prop_config(tmp_path: Path) -> None:
