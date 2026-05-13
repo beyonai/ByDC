@@ -19,7 +19,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from datacloud_knowledge.adapters.opengauss.reader import PostgresTermReader
+from datacloud_knowledge.adapters import create_reader
 from datacloud_knowledge.contracts.types import (
     ClarificationMode as _ClarificationMode,
 )
@@ -114,7 +114,7 @@ def resolve_field_aliases(
     Returns:
         FieldResolutionResult，含 resolved/ambiguous/unresolved 三类结果。
     """
-    reader = PostgresTermReader()
+    reader = create_reader()
     return reader.resolve_field_aliases(
         terms=list(terms),
         scope_code=scope_code,
@@ -150,7 +150,7 @@ def search_terms_by_type(
     Returns:
         分页搜索结果。
     """
-    reader = PostgresTermReader()
+    reader = create_reader()
     return reader.search_terms(
         term_type_code=term_type_code,
         keyword=keyword,
@@ -301,7 +301,7 @@ def get_object_props_by_code(
         >>> for p in props:
         ...     print(f"{p.term_code}: {p.term_name}")
     """
-    reader = PostgresTermReader()
+    reader = create_reader()
     return reader.get_object_props_by_code(scope_code=scope_code)
 
 
@@ -330,7 +330,7 @@ def get_prop_enum_values(
         >>> values["region"]   # → ["华东", "华南", "华北", ...]
         >>> values["level"]    # → ["高", "中", "低"]
     """
-    reader = PostgresTermReader()
+    reader = create_reader()
     return reader.get_prop_enum_values(
         scope_code=scope_code, field_codes=list(field_codes)
     )

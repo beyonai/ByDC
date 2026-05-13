@@ -79,33 +79,16 @@ class PostgresTermReader:
     def __init__(
         self,
         session_factory: Callable[[], AbstractContextManager[Session]] | None = None,
-        *,
-        session: Session | None = None,
     ) -> None:
         """初始化读取器。
 
-        支持两种使用模式：
-        - 外部消费者：不传参数，Reader 自行管理 session 生命周期。
-        - 内部调用方：传入已有 session，Reader 复用该会话。
-
         Args:
             session_factory: 返回 session 上下文管理器的可调用对象。
-                传入 None 且未提供 session 时，默认使用 ``get_session``。
-            session: 已存在的 SQLAlchemy Session。传入后 Reader 不自行管理事务。
+                传入 None 则默认使用 ``get_session``。
         """
-        self._session: Session | None = session
-        self._session_factory: Callable[[], AbstractContextManager[Session]] | None = (
-            session_factory if session_factory is not None
-            else (None if session is not None else get_session)
+        self._session_factory: Callable[[], AbstractContextManager[Session]] = (
+            session_factory if session_factory is not None else get_session
         )
-
-    def _get_session(self) -> AbstractContextManager[Session]:
-        """获取 session：显式 session 优先，否则使用工厂创建。"""
-        if self._session is not None:
-            from contextlib import nullcontext
-            return nullcontext(self._session)
-        assert self._session_factory is not None, "session_factory 未设置"
-        return self._session_factory()
 
     # ═══════════════════════════════════════════════════════════════════════════
     # 公开方法 — 8 个协议方法
@@ -150,7 +133,7 @@ class PostgresTermReader:
         tags_list = list(tags) if tags is not None else None
 
         try:
-            with self._get_session() as session:
+            with self._session_factory() as session:
                 base_filters = self._build_filters(
                     canonical_type=canonical_type,
                     keyword=keyword,
@@ -251,7 +234,7 @@ class PostgresTermReader:
             return {}
 
         try:
-            with self._get_session() as session:
+            with self._session_factory() as session:
                 conditions = [
                     and_(
                         Term.library_id == library_id,
@@ -294,7 +277,7 @@ class PostgresTermReader:
             return {}
 
         try:
-            with self._get_session() as session:
+            with self._session_factory() as session:
                 filters: list[Any] = [TermName.term_id.in_(term_ids_list)]
                 if scope_filter is not None:
                     filters.append(
@@ -367,7 +350,7 @@ class PostgresTermReader:
         global_scope: dict[str, str] = {"scope": "global"}
 
         try:
-            with self._get_session() as session:
+            with self._session_factory() as session:
                 queries: list[Any] = []
 
                 # 子查询 1：字段别名（TermName → prop，按 search_scope 过滤）
@@ -564,7 +547,7 @@ class PostgresTermReader:
         child = aliased(Term, name="child")
 
         try:
-            with self._get_session() as session:
+            with self._session_factory() as session:
                 # Step 1: 通过 child.term_name 直接匹配
                 direct_rows = session.execute(
                     select(child.term_name)
@@ -644,7 +627,7 @@ class PostgresTermReader:
             return {}
 
         try:
-            with self._get_session() as session:
+            with self._session_factory() as session:
                 rows = session.execute(
                     select(
                         TermRelation.source_term_id,
@@ -743,7 +726,7 @@ class PostgresTermReader:
         child = aliased(Term, name="child")
 
         try:
-            with self._get_session() as session:
+            with self._session_factory() as session:
                 child_rows = session.execute(
                     select(
                         TermRelation.source_term_id,
@@ -823,7 +806,7 @@ class PostgresTermReader:
         child = aliased(Term, name="child")
 
         try:
-            with self._get_session() as session:
+            with self._session_factory() as session:
                 # 查询 child term_name（直接值）
                 direct_rows = session.execute(
                     select(

@@ -22,7 +22,7 @@ def test_resolve_field_aliases_delegates_to_reader() -> None:
     """字段别名解析委托给 PostgresTermReader。"""
     expected = FieldResolutionResult(resolved={"销售额": "sales_amount"})
     with patch(
-        "datacloud_knowledge.provider.PostgresTermReader.resolve_field_aliases",
+        "datacloud_knowledge.adapters.opengauss.reader.PostgresTermReader.resolve_field_aliases",
         return_value=expected,
     ) as mock_resolve:
         result = resolve_field_aliases(
@@ -45,7 +45,7 @@ def test_search_terms_by_type_delegates_to_reader() -> None:
     """术语检索委托给 PostgresTermReader。"""
     expected = SearchTermsResult(total=0, items=[])
     with patch(
-        "datacloud_knowledge.provider.PostgresTermReader.search_terms",
+        "datacloud_knowledge.adapters.opengauss.reader.PostgresTermReader.search_terms",
         return_value=expected,
     ) as mock_search:
         result = search_terms_by_type(term_type_code="metric", keyword="销售额")

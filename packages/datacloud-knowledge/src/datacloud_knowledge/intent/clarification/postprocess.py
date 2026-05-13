@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from datacloud_knowledge.adapters.opengauss._db.connection import get_session
 from datacloud_knowledge.adapters.opengauss._db.models import Term
-from datacloud_knowledge.adapters.opengauss.reader import PostgresTermReader
+from datacloud_knowledge.adapters import create_reader
 from datacloud_knowledge.intent.service import store_clarification_results
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ def normalize_clarification_params(
 ) -> dict[str, Any]:
     """Normalize confirmed clarification params to canonical English field codes."""
     field_terms, _ = collect_terms_from_params(params)
-    result = PostgresTermReader().resolve_field_aliases(
+    result = create_reader().resolve_field_aliases(
         terms=field_terms, scope_code=ontology_code
     )
     patched = apply_resolved_to_params(params, result.resolved)
@@ -91,7 +91,7 @@ def _load_scope_term_maps(scope_code: str) -> dict[str, Any]:
     field_terms: dict[str, str] = {}
     prop_codes: dict[str, str] = {}
     prop_value_codes: dict[str, dict[str, str]] = {}
-    reader = PostgresTermReader(session=session)
+    reader = create_reader()
     for props in reader.get_object_props(source_term_ids=source_term_ids).values():
         for prop in props:
             field_terms.setdefault(prop.term_name, prop.term_id)
