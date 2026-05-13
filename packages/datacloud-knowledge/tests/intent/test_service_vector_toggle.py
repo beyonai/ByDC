@@ -28,7 +28,7 @@ def test_search_candidates_runs_vector_by_default(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(service, "get_session", _DummySessionCtx)
     monkeypatch.setattr(service, "_build_global_name_index", dict)
     monkeypatch.setattr(service, "validate_term_vector_readiness", lambda *_args: None)
-    monkeypatch.setattr(service, "get_embedding_service", lambda: object())
+    monkeypatch.setattr(service, "get_embedding_service", object)
 
     vector_candidate = SimpleNamespace(
         term_id="TERM_001",
@@ -134,7 +134,7 @@ def test_search_candidates_logs_error_when_vector_validation_fails(
 
     monkeypatch.setattr(service, "validate_term_vector_readiness", _raise_validation_error)
     monkeypatch.setattr(service, "match_mentions_with_search", _fake_match)
-    monkeypatch.setattr(service, "get_embedding_service", lambda: object())
+    monkeypatch.setattr(service, "get_embedding_service", object)
 
     with caplog.at_level("ERROR"):
         out = service.search_all_candidates_with_name_id(["企业综合分析表"])
