@@ -19,6 +19,14 @@
 
 from __future__ import annotations
 
+from datacloud_knowledge.api.types import (
+    AmbiguousCandidate,
+    FieldResolutionResult,
+    FieldResolutionResultWithNames,
+    ResolvedField,
+    ValueResolutionResult,
+)
+
 from .bm25 import (
     BM25Result,
     bm25_search,
@@ -41,13 +49,6 @@ from .term_search import (
     resolve_field_aliases_with_names,
     resolve_value_aliases,
     search_terms_by_type,
-)
-from .types import (
-    AmbiguousCandidate,
-    FieldResolutionResult,
-    FieldResolutionResultWithNames,
-    ResolvedField,
-    ValueResolutionResult,
 )
 from .vector import (
     VectorResult,

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from datacloud_knowledge.db.connection import get_session
 from datacloud_knowledge.db.models import Term, TermRelation
 
-from .types import TermBrief
+from datacloud_knowledge.api.types import TermBrief
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

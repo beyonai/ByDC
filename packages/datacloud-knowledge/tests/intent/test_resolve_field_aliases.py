@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from datacloud_knowledge.search.types import (
+from datacloud_knowledge.api.types import (
     FieldResolutionResult,
 )
 

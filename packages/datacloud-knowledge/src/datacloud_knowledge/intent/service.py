@@ -330,12 +330,12 @@ def typed_multi_recall_with_session(
     dict[keyword, list[CandidateDict]] compatible with the existing
     paradigm resolution interface.
     """
-    from .typed_recall import typed_multi_recall
+    from .recall import typed_multi_recall_batch as _typed_multi_recall_batch
 
     with get_session() as session:
         embedding_svc = _get_validated_embedding_service(session)
         if embedding_svc is None:
-            return typed_multi_recall(
+            return _typed_multi_recall_batch(
                 items,
                 session=session,
                 top_k=top_k,
@@ -344,7 +344,7 @@ def typed_multi_recall_with_session(
                 scope_layers=scope_layers,
             )
 
-        return typed_multi_recall(
+        return _typed_multi_recall_batch(
             items,
             session=session,
             top_k=top_k,

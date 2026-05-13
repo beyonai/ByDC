@@ -15,7 +15,7 @@ from datacloud_knowledge.intent._recall_common import (
     _load_type_codes_by_category,
     _shape_candidates,
 )
-from datacloud_knowledge.intent.batch_recall import (
+from datacloud_knowledge.intent.recall import (
     PreparedBatch,
     RecallRequest,
     ScopeRecallLayer,
