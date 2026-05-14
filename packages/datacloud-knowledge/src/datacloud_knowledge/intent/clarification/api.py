@@ -44,10 +44,10 @@ from ._patch import (
 from ._pre_resolve import (
     pre_resolve_terms as _pre_resolve_terms,
 )
-from ._recall import (
+from datacloud_knowledge.retrieval._recall import (
     build_scope_recall_layers as _build_scope_recall_layers,
 )
-from ._recall import (
+from datacloud_knowledge.retrieval._recall import (
     unified_recall as _unified_recall,
 )
 from .cartesian import (

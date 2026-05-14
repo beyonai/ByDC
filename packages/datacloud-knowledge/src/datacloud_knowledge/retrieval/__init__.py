@@ -14,6 +14,7 @@
 from datacloud_knowledge.adapters.opengauss.bm25 import bm25_search
 from datacloud_knowledge.adapters.opengauss.vector import vector_search
 
+from ._recall import build_scope_recall_layers, unified_recall
 from .dimension_values import DimensionValueResolver
 from .mention_matching import match_mentions, match_mentions_with_search
 from .name_cache import UserNameCache
@@ -40,6 +41,7 @@ __all__ = [
     "ScopeRecallLayer",
     "UserNameCache",
     "bm25_search",
+    "build_scope_recall_layers",
     "get_object_props",
     "get_prop_enum_values",
     "get_prop_values_with_aliases",
@@ -54,5 +56,6 @@ __all__ = [
     "rrf_fuse",
     "search_terms_by_type",
     "typed_multi_recall_batch",
+    "unified_recall",
     "vector_search",
 ]

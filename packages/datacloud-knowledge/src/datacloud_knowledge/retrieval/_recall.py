@@ -1,6 +1,6 @@
 """Recall orchestration — unified and vector-only recall for clarification.
 
-Moved from api.py to eliminate local imports and enable independent testing.
+Moved from intent/clarification/_recall.py to retrieval/ as part of recall consolidation.
 """
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ import logging
 from typing import Any
 
 from datacloud_knowledge.adapters import create_reader
+from datacloud_knowledge.contracts.intent_types import ExtractedTerm, PreResolveResult
 from datacloud_knowledge.contracts.rrf import rrf_fuse
 from datacloud_knowledge.retrieval._recall_common import (
     KTYPE_CATEGORY_MAP,
@@ -22,8 +23,6 @@ from datacloud_knowledge.retrieval.recall import (
     _batch_vector,
 )
 from datacloud_knowledge.retrieval.typed_recall import typed_multi_recall_with_session
-
-from .models import ExtractedTerm, PreResolveResult
 
 logger = logging.getLogger(__name__)
 
