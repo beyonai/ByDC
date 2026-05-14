@@ -120,6 +120,13 @@ python db/scripts/migrate_term_name_embeddings.py --help
 - Do not add production `print()` calls; only `scripts/manual/*.py` has a package ruff override.
 - Do not bypass importer precheck or split importer writes across independent transactions; failure must roll back the whole import.
 
+### 分层导入约束
+
+- ❌ 非 `adapters/` 代码直接 `import sqlalchemy` / `import psycopg` — 必须通过 adapter 协议（`create_reader`/`create_writer`/`create_engine`）访问数据库。
+- ❌ 非 `adapters/` 代码 `from ..._db.connection import get_session` — session 生命周期由 adapter 工厂管理。
+- ❌ 非 `adapters/` 代码 `from ..._db.models import Term/TermName/...` — ORM 模型不跨层暴露。
+- ❌ 模块路径拼写错误 — 如 `datacloud_knowledge.embedding` 实际路径是 `datacloud_knowledge.retrieval.embedding`。`import_module` 路径 ruff 无法静态检查。
+
 ## NOTES
 
 - `src/datacloud_knowledge/file_store/` currently has no implementation files; old local guidance was removed as stale.
