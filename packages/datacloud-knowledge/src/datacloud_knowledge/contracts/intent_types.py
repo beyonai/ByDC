@@ -7,7 +7,7 @@ inversion that would occur when retrieval/ modules need to reference intent doma
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from datacloud_knowledge.contracts.types import ResolvedField

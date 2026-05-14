@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 from typing import Any
@@ -202,10 +203,8 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
                     _keep_idx = set()
                     for _pv in _filtered_pm.values():
                         if _pv.startswith("select."):
-                            try:
+                            with contextlib.suppress(IndexError, ValueError):
                                 _keep_idx.add(int(_pv.split(".")[1]))
-                            except (IndexError, ValueError):
-                                pass
                     logger.info(
                         "[user_clarify] path_mapping pruned: before=%s after=%s"
                         " remaining_keywords=%s select_indices_to_keep=%s",
