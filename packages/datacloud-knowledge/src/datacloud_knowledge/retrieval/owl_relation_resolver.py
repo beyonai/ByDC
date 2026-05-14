@@ -125,5 +125,5 @@ def _normalize_type_code(raw: str) -> str:
     """统一 type_code 格式。"""
     code = raw.strip()
     if code.startswith("ONTOLOGY_"):
-        code = code[len("ONTOLOGY_"):]
+        code = code[len("ONTOLOGY_") :]
     return code.upper()
