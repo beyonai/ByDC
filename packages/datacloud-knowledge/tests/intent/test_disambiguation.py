@@ -14,6 +14,10 @@ def _get_types_module() -> Any:
     return import_module("datacloud_knowledge.intent.types")
 
 
+def _get_contracts_types_module() -> Any:
+    return import_module("datacloud_knowledge.contracts.types")
+
+
 def _candidate(
     term_id: str,
     term_name: str,
@@ -36,9 +40,9 @@ def _candidate(
 @pytest.mark.intent
 def test_disambiguate_single_high_confidence_candidate_is_confirmed() -> None:
     disambiguation_module = _get_disambiguation_module()
-    types_module = _get_types_module()
+    contracts_types = _get_contracts_types_module()
     disambiguate = disambiguation_module.disambiguate
-    match_result_type = types_module.MatchResult
+    match_result_type = contracts_types.MatchResult
 
     candidate = _candidate("TERM_001", "企业", 0.98, 0.2)
     match_result = match_result_type(exact={"企业": (candidate,)}, fuzzy={})
@@ -52,9 +56,9 @@ def test_disambiguate_single_high_confidence_candidate_is_confirmed() -> None:
 @pytest.mark.intent
 def test_disambiguate_multiple_candidates_prefers_top_score_gap() -> None:
     disambiguation_module = _get_disambiguation_module()
-    types_module = _get_types_module()
+    contracts_types = _get_contracts_types_module()
     disambiguate = disambiguation_module.disambiguate
-    match_result_type = types_module.MatchResult
+    match_result_type = contracts_types.MatchResult
 
     top_candidate = _candidate("TERM_001", "企业", 0.92, 0.5)
     runner_up = _candidate("TERM_002", "企业", 0.88, 0.0)
@@ -69,9 +73,9 @@ def test_disambiguate_multiple_candidates_prefers_top_score_gap() -> None:
 @pytest.mark.intent
 def test_disambiguate_empty_match_result_returns_empty_result() -> None:
     disambiguation_module = _get_disambiguation_module()
-    types_module = _get_types_module()
+    contracts_types = _get_contracts_types_module()
     disambiguate = disambiguation_module.disambiguate
-    match_result_type = types_module.MatchResult
+    match_result_type = contracts_types.MatchResult
 
     result = disambiguate(match_result=match_result_type(exact={}, fuzzy={}), session=None)
 

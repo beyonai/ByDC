@@ -12,6 +12,7 @@ from datacloud_knowledge.adapters.opengauss.vector_validation import (
     TermVectorValidationError,
     validate_term_vector_readiness,
 )
+from datacloud_knowledge.contracts.types import MatchResult, Mention
 from datacloud_knowledge.retrieval.embedding import get_embedding_service
 from datacloud_knowledge.retrieval.mention_matching import match_mentions_with_search
 from datacloud_knowledge.retrieval.name_cache import UserNameCache
@@ -20,8 +21,6 @@ from .disambiguation import build_shortest_path_tree, disambiguate
 from .score_update import batch_update_scores
 from .types import (
     DisambiguationResult,
-    MatchResult,
-    Mention,
     ScoreUpdateRecord,
     ShortestPathTreeResult,
 )

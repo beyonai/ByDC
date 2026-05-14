@@ -8,10 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-# 匹配相关类型已下沉到 contracts，此处重导出以保持向后兼容
 from datacloud_knowledge.contracts.types import (
     MatchCandidate,
-    MatchResult,  # noqa: F401
     Mention,
 )
 

@@ -14,16 +14,9 @@ if os.getenv("DATACLOUD_INTENT_DEBUG", "0").strip().lower() in {"1", "true", "ye
         _intent_logger.addHandler(_h)
         _intent_logger.propagate = False  # 避免 root handler 重复输出
 
-# matching 已下沉到 retrieval，此处重导出以保持向后兼容
-from datacloud_knowledge.retrieval.mention_matching import (
-    match_mentions,
-    match_mentions_with_search,
-)
+from datacloud_knowledge.contracts.types import MatchCandidate, MatchResult, Mention
+from datacloud_knowledge.retrieval.name_cache import UserNameCache
 
-# recall 已下沉到 retrieval，此处重导出以保持向后兼容
-from datacloud_knowledge.retrieval.recall import typed_multi_recall_batch
-
-from .cache import UserNameCache  # 重导出，实际实现在 retrieval.name_cache
 from .clarification._expand_query import expand_query
 from .clarification.api import analyze_query_clarification
 from .disambiguation import build_shortest_path_tree, disambiguate
@@ -39,9 +32,6 @@ from .service import (
 from .types import (
     ClarificationResult,
     DisambiguationResult,
-    MatchCandidate,
-    MatchResult,
-    Mention,
     ScoreUpdateRecord,
     ShortestPathGraphEdge,
     ShortestPathGraphNode,
@@ -79,11 +69,8 @@ __all__ = [
     "disambiguate",
     "disambiguate_with_session",
     "expand_query",
-    "match_mentions",
-    "match_mentions_with_search",
     "search_all_candidates_with_name_id",
     "store_clarification_results",
-    "typed_multi_recall_batch",
     "typed_multi_recall_with_session",
     "update_score",
     "update_score_async",

@@ -6,12 +6,10 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from datacloud_knowledge.adapters import create_reader
-from datacloud_knowledge.contracts.types import ShortestPathNode
+from datacloud_knowledge.contracts.types import MatchCandidate, MatchResult, ShortestPathNode
 
 from .types import (
     DisambiguationResult,
-    MatchCandidate,
-    MatchResult,
     ShortestPathGraphEdge,
     ShortestPathGraphNode,
     ShortestPathTreeNode,
