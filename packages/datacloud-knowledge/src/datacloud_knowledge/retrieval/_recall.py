@@ -100,7 +100,14 @@ def build_scope_recall_layers(
     pre: PreResolveResult,
     cc_pre: PreResolveResult,
 ) -> list[ScopeRecallLayer]:
-    """Build a small weighted scope stack from confirmed fields for recall validation."""
+    """基于已确认字段构建加权 scope 栈，用于召回范围校验。
+
+    两种 scope 扩展来源：
+    1. ``get_matching_objects`` — 共享同名已确认字段的其他 object。
+    2. 跨对象 BUSINESS 关系 — 当某个已确认字段的值存储在另一个 ontology 对象中
+       （如 ``handler_user_id`` → ``po_users``），将目标对象作为额外 scope layer
+       加入，使 whereValue 召回能搜到当前 ontology scope 之外的维度值。
+    """
     layers: list[ScopeRecallLayer] = []
     field_codes = _collect_confirmed_field_codes(pre, cc_pre)
     if ontology_code:
@@ -124,7 +131,58 @@ def build_scope_recall_layers(
             continue
         weight = 1.5 + min(float(matched_count), 3.0) * 0.25
         layers.append(ScopeRecallLayer(scope_code=code, weight=weight, label="confirmed_object"))
+
+    # ── 通过跨对象 BUSINESS 关系扩展 scope ──
+    # 当某个字段的值存储在另一个对象中（如 handler_user_id → po_users），
+    # whereValue 召回必须搜目标对象的 scope 才能找到维度值。
+    seen_scopes: set[str] = {layer.scope_code for layer in layers if layer.scope_code}
+    related_codes: list[str] = _collect_related_object_codes(ontology_code, field_codes)
+    for code in related_codes:
+        if code not in seen_scopes:
+            layers.append(ScopeRecallLayer(scope_code=code, weight=0.7, label="related_object"))
+            seen_scopes.add(code)
     return layers
+
+
+def _collect_related_object_codes(
+    ontology_code: str,
+    field_codes: list[str],
+) -> list[str]:
+    """查找与当前 ontology 存在 BUSINESS 关系的对象。
+
+    跨对象关系（如 by_rd_task → po_users，joinkeys: handler_user_id↔user_id）
+    表明已确认字段的维度值存储在目标对象的 scope 中。此函数提取这些目标对象的
+    term_code，供 scope recall layer 使用。
+    """
+    try:
+        from sqlalchemy import text
+
+        from datacloud_knowledge.adapters.opengauss._db.connection import get_session
+
+        with get_session() as session:
+            rows = session.execute(
+                text(
+                    "SELECT DISTINCT target.term_code "
+                    "FROM term AS source "
+                    "JOIN term_relation AS rel "
+                    "  ON rel.source_term_id = source.term_id "
+                    " AND rel.relation_category = 'BUSINESS' "
+                    "JOIN term AS target "
+                    "  ON target.term_id = rel.target_term_id "
+                    " AND target.term_type_code = 'object' "
+                    "WHERE source.term_code = :ontology_code "
+                    "  AND source.term_type_code IN ('view', 'object')"
+                ),
+                {"ontology_code": ontology_code},
+            ).fetchall()
+    except Exception:
+        logger.warning(
+            "[clarification] collect related object codes failed for ontology=%s",
+            ontology_code,
+            exc_info=True,
+        )
+        return []
+    return [str(r.term_code) for r in rows]
 
 
 def _collect_confirmed_field_codes(pre: PreResolveResult, cc_pre: PreResolveResult) -> list[str]:
