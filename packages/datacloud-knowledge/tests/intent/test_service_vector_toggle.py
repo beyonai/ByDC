@@ -8,24 +8,15 @@ from datacloud_knowledge.adapters.opengauss.vector_validation import TermVectorV
 
 
 def _get_service_module() -> Any:
-    from datacloud_knowledge.intent import service
+    from datacloud_knowledge.retrieval import candidate_search as service
 
     return service
-
-
-class _DummySessionCtx:
-    def __enter__(self) -> object:
-        return object()
-
-    def __exit__(self, _exc_type: object, _exc: object, _tb: object) -> None:
-        return None
 
 
 @pytest.mark.intent
 def test_search_candidates_runs_vector_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _get_service_module()
     monkeypatch.delenv("DATACLOUD_INTENT_ENABLE_VECTOR", raising=False)
-    monkeypatch.setattr(service, "get_session", _DummySessionCtx)
     monkeypatch.setattr(service, "_build_global_name_index", dict)
     monkeypatch.setattr(service, "validate_term_vector_readiness", lambda *_args: None)
     monkeypatch.setattr(service, "get_embedding_service", object)
@@ -82,7 +73,6 @@ def test_search_candidates_runs_vector_by_default(monkeypatch: pytest.MonkeyPatc
 def test_search_candidates_skips_vector_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _get_service_module()
     monkeypatch.setenv("DATACLOUD_INTENT_ENABLE_VECTOR", "0")
-    monkeypatch.setattr(service, "get_session", _DummySessionCtx)
     monkeypatch.setattr(service, "_build_global_name_index", dict)
 
     search_modes: list[str] = []
@@ -118,7 +108,6 @@ def test_search_candidates_logs_error_when_vector_validation_fails(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     service = _get_service_module()
-    monkeypatch.setattr(service, "get_session", _DummySessionCtx)
     monkeypatch.setattr(service, "_build_global_name_index", dict)
 
     def _raise_validation_error(*_args: Any) -> None:

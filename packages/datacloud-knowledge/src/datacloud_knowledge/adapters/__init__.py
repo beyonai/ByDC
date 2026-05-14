@@ -124,6 +124,53 @@ def create_writer(
     return cls(session=session) if session is not None else cls()  # type: ignore[call-arg]
 
 
+def store_clarification_results(
+    clarification_results: dict[str, Any],
+    user_id: str,
+) -> list[str]:
+    """持久化澄清结果，自管理 session 和事务。
+
+    遍历 clarification_results，根据 value 类型分发：
+    - dict with "term_id" → create_term_name（别名已存在的术语）
+    - str → create_term_with_knowledge + create_term_name（新建用户定义术语）
+
+    Args:
+        clarification_results: {mention_text: {"term_id": ...} | description_string}
+        user_id: 操作用户 ID。
+
+    Returns:
+        创建的 name_id 列表。
+    """
+    created_ids: list[str] = []
+    with create_writer() as writer:
+        for mention_text, result in clarification_results.items():
+            if isinstance(result, dict) and "term_id" in result:
+                name_id = writer.create_term_name(
+                    term_id=str(result["term_id"]),
+                    name_text=mention_text,
+                    user_id=user_id,
+                    search_scope={},
+                )
+                created_ids.append(name_id)
+            elif isinstance(result, str) and result.strip():
+                _term_id = writer.create_term_with_knowledge(
+                    term_name=mention_text,
+                    term_type_code="USER_DEFINED",
+                    library_id=None,  # type: ignore[arg-type]
+                    domain_id="DOMAIN_002",
+                    knowledge_desc=result,
+                    user_id=user_id,
+                )
+                name_id = writer.create_term_name(
+                    term_id=_term_id,
+                    name_text=mention_text,
+                    user_id=user_id,
+                    search_scope={},
+                )
+                created_ids.append(name_id)
+    return created_ids
+
+
 # ── Schema 管理 & Backfill（CLI 入口）───────────────────────────────────
 
 

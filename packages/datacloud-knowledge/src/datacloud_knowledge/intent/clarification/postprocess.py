@@ -6,8 +6,7 @@ import logging
 import re
 from typing import Any
 
-from datacloud_knowledge.adapters import create_reader
-from datacloud_knowledge.intent.service import store_clarification_results
+from datacloud_knowledge.adapters import create_reader, store_clarification_results
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Protocol
+from typing import Protocol, Self
 
 from .text import Tokenizer
 from .types import (
@@ -328,6 +328,30 @@ class TermReader(Protocol):
         """
         ...
 
+    def get_global_name_index(
+        self,
+    ) -> dict[str, list[tuple[str, str, str]]]:
+        """构建全局术语名称索引（公共 term_name，不含用户专属记录）。
+
+        Returns:
+            {name_text → [(term_id, term_type_code, match_type), ...]} 索引。
+        """
+        ...
+
+    def get_name_ids_by_word(
+        self,
+        *,
+        word: str,
+        term_ids: Sequence[str],
+        user_id: str | None = None,
+    ) -> dict[str, str]:
+        """按单词+术语ID查询 name_id，用户专属记录优先。
+
+        Returns:
+            {term_id → name_id} 映射。
+        """
+        ...
+
 
 class TermSearchEngine(Protocol):
     """文本召回引擎。每种策略独立暴露，由调用方控制策略组合和 RRF 融合。
@@ -417,7 +441,13 @@ class TermWriter(Protocol):
 
     每个方法一次原子写入。多实体级联写入由调用方编排。
     实现方负责 DB session 管理、事务控制和幂等性保证。
+
+    支持上下文管理器协议：``with create_writer() as writer:``。
     """
+
+    def __enter__(self) -> Self: ...
+
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None: ...
 
     def insert_term(
         self,

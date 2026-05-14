@@ -1,6 +1,6 @@
 """score 闭环更新 — 算法 E。
 
-数据库访问通过 ``create_writer()`` 的
+数据库访问通过 ``writer`` 的
 ``get_name_search_scope()`` / ``update_name_search_scope()`` 完成。
 """
 
@@ -26,7 +26,7 @@ _MODERATE_DAYS = 90
 
 def update_scores(
     records: tuple[ScoreUpdateRecord, ...],
-    session,
+    writer,
 ) -> None:
     """Batch update scores for alias records used in this dialog.
 
@@ -35,12 +35,9 @@ def update_scores(
 
     Args:
         records: Alias records to update (name_id + success flag).
-        session: SQLAlchemy Session (deprecated — writer manages its own).
+        writer: A TermWriter instance for DB access.
     """
-    from datacloud_knowledge.adapters import create_writer
-
     now = datetime.now(tz=UTC)
-    writer = create_writer(session=session)
 
     for record in records:
         search_scope = writer.get_name_search_scope(name_id=record.name_id)
@@ -140,7 +137,7 @@ def _coerce_last_used_at(value: Any) -> str | None:
     return None
 
 
-def update_score(name_id: str, success: bool, session) -> None:
+def update_score(name_id: str, success: bool, writer) -> None:
     """Update score for a single alias record.
 
     Convenience wrapper around update_scores() for single-record use.
@@ -148,16 +145,14 @@ def update_score(name_id: str, success: bool, session) -> None:
     Args:
         name_id: The alias record ID.
         success: Whether the alias was confirmed (True) or rejected (False).
-        session: SQLAlchemy Session.
+        writer: A TermWriter instance for DB access.
     """
     from .types import ScoreUpdateRecord as ScoreUpdateRecordCls
 
-    update_scores(
-        records=(ScoreUpdateRecordCls(name_id=name_id, success=success),), session=session
-    )
+    update_scores(records=(ScoreUpdateRecordCls(name_id=name_id, success=success),), writer=writer)
 
 
-def update_score_async(name_id: str, success: bool, session) -> None:
+def update_score_async(name_id: str, success: bool, writer) -> None:
     """Asynchronously update score using ThreadPoolExecutor.
 
     Fire-and-forget: failures are logged, not raised.
@@ -165,26 +160,26 @@ def update_score_async(name_id: str, success: bool, session) -> None:
     Args:
         name_id: The alias record ID.
         success: Whether the alias was confirmed or rejected.
-        session: SQLAlchemy Session.
+        writer: A TermWriter instance for DB access.
     """
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
     def _task() -> None:
         try:
-            update_score(name_id, success, session)
+            update_score(name_id, success, writer)
         except Exception:
             log.exception("Async score update failed for name_id=%s", name_id)
 
     executor.submit(_task)
 
 
-def batch_update_scores(records: tuple[ScoreUpdateRecord, ...], session) -> None:
+def batch_update_scores(records: tuple[ScoreUpdateRecord, ...], writer) -> None:
     """Batch update scores for multiple alias records.
 
     Alias for update_scores() with explicit naming for public API.
 
     Args:
         records: Alias records to update.
-        session: SQLAlchemy Session.
+        writer: A TermWriter instance for DB access.
     """
-    update_scores(records=records, session=session)
+    update_scores(records=records, writer=writer)

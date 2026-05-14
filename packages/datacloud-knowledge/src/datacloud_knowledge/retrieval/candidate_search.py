@@ -1,4 +1,4 @@
-"""Intent service facade with managed DB/session boundaries."""
+"""Candidate search — multi-strategy recall pipeline (strict → bm25 → vector)."""
 
 from __future__ import annotations
 
@@ -6,30 +6,22 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any
 
-from datacloud_knowledge.adapters import create_reader, create_writer
-from datacloud_knowledge.adapters.opengauss._db.connection import get_session
+from datacloud_knowledge.adapters import create_reader
 from datacloud_knowledge.adapters.opengauss.vector_validation import (
     TermVectorValidationError,
     validate_term_vector_readiness,
 )
-from datacloud_knowledge.contracts.types import MatchResult, Mention
+from datacloud_knowledge.contracts.types import Mention
 from datacloud_knowledge.retrieval.embedding import get_embedding_service
 from datacloud_knowledge.retrieval.mention_matching import match_mentions_with_search
 from datacloud_knowledge.retrieval.name_cache import UserNameCache
 
-from .disambiguation import build_shortest_path_tree, disambiguate
-from .score_update import batch_update_scores
-from .types import (
-    DisambiguationResult,
-    ScoreUpdateRecord,
-    ShortestPathTreeResult,
-)
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
 CandidateDict = dict[str, Any]
-if TYPE_CHECKING:
-    from datacloud_knowledge.retrieval.recall import ScopeRecallLayer
 
 _VECTOR_ENABLE_ENV = "DATACLOUD_INTENT_ENABLE_VECTOR"
 _FALSE_VALUES = frozenset({"0", "false", "no", "off"})
@@ -170,113 +162,3 @@ def search_all_candidates_with_name_id(
         result[word] = _convert_hits(word=word, hits=hits, user_id=user_id) if hits else []
 
     return result
-
-
-def disambiguate_with_session(match_result: MatchResult) -> DisambiguationResult:
-    """Execute disambiguation (session managed internally by adapter)."""
-    return disambiguate(match_result, None)
-
-
-def build_shortest_path_tree_with_session(
-    *,
-    target_term_id: str,
-    source_term_type_codes: list[str] | tuple[str, ...],
-    max_depth: int = 6,
-) -> ShortestPathTreeResult:
-    """Build shortest-path tree; delegate to adapter (session managed internally)."""
-    return build_shortest_path_tree(
-        target_term_id=target_term_id,
-        source_term_type_codes=source_term_type_codes,
-        max_depth=max_depth,
-    )
-
-
-def store_clarification_results(
-    clarification_results: dict[str, Any],
-    user_id: str,
-) -> list[str]:
-    """Persist clarification results and return created name_id list."""
-    created_ids: list[str] = []
-    with get_session() as session:
-        writer = create_writer(session=session)
-        for mention_text, result in clarification_results.items():
-            if isinstance(result, dict) and "term_id" in result:
-                name_id = writer.create_term_name(
-                    term_id=str(result["term_id"]),
-                    name_text=mention_text,
-                    user_id=user_id,
-                    search_scope={},
-                )
-                created_ids.append(name_id)
-            elif isinstance(result, str) and result.strip():
-                # 通过 create_term_with_knowledge 创建术语及其关联知识和别名，
-                # 再单独获取 name_id
-                _term_id = writer.create_term_with_knowledge(
-                    term_name=mention_text,
-                    term_type_code="USER_DEFINED",
-                    domain_id="DOMAIN_002",
-                    knowledge_desc=result,
-                    user_id=user_id,
-                )
-                # 用户别名已在 create_term_with_knowledge 内部创建，
-                # 这里通过 create_term_name 的幂等语义获取已有的 name_id
-                name_id = writer.create_term_name(
-                    term_id=_term_id,
-                    name_text=mention_text,
-                    user_id=user_id,
-                    search_scope={},
-                )
-                created_ids.append(name_id)
-    return created_ids
-
-
-def batch_update_scores_with_session(records: tuple[ScoreUpdateRecord, ...]) -> None:
-    """Update term-name score tags under a managed DB session."""
-    if not records:
-        return
-    with get_session() as session:
-        batch_update_scores(records, session)
-
-
-def typed_multi_recall_with_session(
-    items: list[Any],
-    *,
-    user_id: str | None = None,
-    top_k: int = 5,
-    scope_code: str | None = None,
-    scope_layers: list[ScopeRecallLayer] | None = None,
-) -> dict[str, list[CandidateDict]]:
-    """Run typed multi-path recall with a managed DB session.
-
-    Accepts TypedKeywordState items from paradigm_builder and returns
-    dict[keyword, list[CandidateDict]] compatible with the existing
-    paradigm resolution interface.
-    """
-    from datacloud_knowledge.retrieval.recall import (
-        typed_multi_recall_batch as _typed_multi_recall_batch,
-    )
-
-    with get_session() as session:
-        embedding_svc = _get_validated_embedding_service(session)
-        if embedding_svc is None:
-            return _typed_multi_recall_batch(
-                items,
-                session=session,
-                top_k=top_k,
-                rrf_k=60,
-                enable_vector=False,
-                wv_per_type=top_k,
-                scope_code=scope_code,
-                scope_layers=scope_layers,
-            )
-
-        return _typed_multi_recall_batch(
-            items,
-            session=session,
-            top_k=top_k,
-            rrf_k=60,
-            enable_vector=True,
-            wv_per_type=top_k,
-            scope_code=scope_code,
-            scope_layers=scope_layers,
-        )

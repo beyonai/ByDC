@@ -12,7 +12,7 @@ def test_update_terms_name_command_updates_scores(monkeypatch: Any) -> None:
         captured["records"] = records
 
     monkeypatch.setattr(
-        "datacloud_analysis.command_plugins.update_terms_name_command.batch_update_scores_with_session",
+        "datacloud_analysis.command_plugins.update_terms_name_command.updater_impl",
         _fake_batch,
     )
 
@@ -33,7 +33,7 @@ def test_update_terms_name_command_updates_scores(monkeypatch: Any) -> None:
 
 def test_update_terms_name_command_silent_mode_returns_no_payload(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "datacloud_analysis.command_plugins.update_terms_name_command.batch_update_scores_with_session",
+        "datacloud_analysis.command_plugins.update_terms_name_command.updater_impl",
         lambda _records: None,
     )
 

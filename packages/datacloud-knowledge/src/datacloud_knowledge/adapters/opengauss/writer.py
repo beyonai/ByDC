@@ -12,6 +12,7 @@ import uuid
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from datetime import UTC, datetime
+from typing import Self
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -32,13 +33,13 @@ _TERM_CODE_PREFIX = "UD"
 class PostgresTermWriter:
     """PostgreSQL 术语写入器，实现 TermWriter 协议。
 
-    所有写入操作通过构造函数注入的 SQLAlchemy Session 执行，
-    不自行管理事务边界。幂等性保证：create_term_name 重复调用
-    返回已有 ID 而非重复插入。
+    所有写入操作通过 SQLAlchemy Session 执行。
+    幂等性保证：create_term_name 重复调用返回已有 ID 而非重复插入。
 
-    支持两种初始化模式：
+    支持三种使用模式：
     - 直接注入 session（调用方管理事务）
     - 注入 session_factory（writer 自行管理 session 生命周期）
+    - 上下文管理器（``with create_writer() as writer:`` 自动管理事务）
     """
 
     def __init__(
@@ -59,6 +60,8 @@ class PostgresTermWriter:
         else:
             self._session_factory = session_factory if session_factory is not None else get_session
             self._session = None  # type: ignore[assignment]
+        self._owns_ctx: bool = False
+        self._ctx: AbstractContextManager[Session] | None = None
 
     @property
     def session(self) -> Session:
@@ -79,6 +82,34 @@ class PostgresTermWriter:
         if self._session_factory is not None:
             return self._session_factory()
         raise RuntimeError("PostgresTermWriter 未配置 session 或 session_factory")
+
+    def __enter__(self) -> Self:
+        """进入上下文管理器，确保 writer 绑定可用 Session。
+
+        若调用方已注入 session（构造时传入），则标记 _owns_ctx=False，
+        不管理事务边界。否则通过 _session_factory 开启新 session，
+        标记 _owns_ctx=True，在 __exit__ 时自动提交或回滚。
+        """
+        if self._session is not None:
+            self._owns_ctx = False
+            return self
+        ctx = self._get_session_ctx()
+        self._session = ctx.__enter__()
+        self._ctx = ctx
+        self._owns_ctx = True
+        return self
+
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        """退出上下文管理器。
+
+        仅当 writer 自行管理 session 时（_owns_ctx=True）才执行
+        commit/rollback 并关闭 session；调用方注入的 session 不受影响。
+        """
+        if self._owns_ctx:
+            if self._ctx is None:
+                raise RuntimeError("_ctx must be set when _owns_ctx is True")
+            self._ctx.__exit__(exc_type, exc_val, exc_tb)  # type: ignore[arg-type]
+            self._session = None  # type: ignore[assignment]
 
     # ═══════════════════════════════════════════════════════════════════════════════
     # TermWriter 协议方法 — 原子写入
