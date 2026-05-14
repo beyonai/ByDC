@@ -277,6 +277,110 @@ These old paths no longer exist — use the new ones:
 | `run()` | `owl_import/importer/executor.py` | OWL import executor |
 | `generate()` | `owl_generate/generator.py` | OWL package generator |
 
+## RETRIEVAL LOGIC
+
+### Clarification Pipeline (6 steps)
+
+`analyze_query_clarification()` in `intent/clarification/api.py` orchestrates:
+
+```
+Step 1  术语提取       extract.py          → ExtractedTerm[] (按ktype分类: select/whereKey/whereValue/...)
+Step 2  字段预解析     _pre_resolve.py      → resolve_field_aliases_with_names() 确认已知字段
+                                            → get_prop_enum_values() 查枚举值, 尝试精确匹配 whereValue
+Step 3  知识召回       _recall.py           → unified_recall() 对未解析术语执行多路召回
+Step 4a 主结构LLM确认  confirm/_main.py     → format_main_confirm_context() + llm_confirm_main()
+Step 4b 条件LLM确认    confirm/_main.py     → 逐条 complex_condition 的 LLM 确认
+Step 5  结果合并       merge/_llm_confirm.py → 合并 pre-resolve + main + cc 结果
+Step 6  构建paradigm   cartesian/_paradigm.py → 生成前端 paradigmList + KnowledgeMeta
+```
+
+### Recall Architecture
+
+**4 路并发召回** (`recall/_paths.py`), 结果经 RRF 融合 (`recall/_fusion.py`):
+
+| 路径 | 文件 | 机制 | 适用场景 |
+|------|------|------|----------|
+| BM25 AND | `_paths.py:_batch_bm25_and` | 单字 AND tsquery (`黄 & 总`) | 精确匹配 |
+| Jieba BM25 | `_paths.py:_batch_jieba_bm25` | jieba 分词后 AND tsquery | 中文分词匹配 |
+| Substring | `_paths.py:_batch_substring` | 双向子串包含 (keyword↔term_name) | 模糊匹配 |
+| Vector | `_paths.py:_batch_vector` | pgvector HNSW cosine 相似度 | 语义匹配 (英文标识符→中文名称) |
+
+**单字兜底** (`recall/_fusion.py:_add_single_char_fallback_results`):
+当 bm25_and / jieba / substring 三条文本路径全部为空时，退化到 CJK 单字 OR (`黄 | 总`)，捕捉人名、地名等短文本的弱候选。
+
+### Type Filtering (KTYPE_CATEGORY_MAP)
+
+`retrieval/_recall_common.py:29` 按术语类型约束召回候选的 `type_category`:
+
+| ktype | 允许的 type_category | 说明 |
+|-------|---------------------|------|
+| `select`, `groupBy`, `whereKey`, `orderBy` | `{3}` | 只搜本体术语 (prop/object/view) |
+| `whereValue` | `{1, 2}` | 只搜列表术语(1)和字典术语(2) — 维度值 |
+
+whereValue 不搜 category 3 (本体术语)，因为维度值是企业名、用户名、状态等具体数据，不是结构定义。
+
+### Scope Recall Layers
+
+`retrieval/_recall.py:build_scope_recall_layers()` 构建加权 scope 栈，召回时每个 layer 独立检索后 RRF 融合:
+
+**Layer 来源**:
+
+| # | 来源 | 权重 | 标签 | 说明 |
+|---|------|------|------|------|
+| 1 | `ontology_code` | 1.0 | `ontology` | 当前查询的本体 (如 `by_rd_task`) |
+| 2 | `get_matching_objects()` | 1.5~2.25 | `confirmed_object` | 共享同名 field 的其他 object |
+| 3 | `_collect_related_object_codes()` | 0.7 | `related_object` | 通过 BUSINESS 关系关联的对象 (如 `by_rd_task → po_users`) |
+
+**跨对象 scope 扩展**:
+当 confirmed field (如 `handler_user_id`) 的值存储在另一个 ontology object (如 `po_users`) 时，仅靠 `get_matching_objects` 无法找到该对象（因为 `po_users` 没有 `handler_user_id` prop）。`_collect_related_object_codes()` 查询 `term_relation` 表中 `relation_category='BUSINESS'` 的跨对象关系，将目标对象纳入 scope layer。
+
+```
+by_rd_task ──(BUSINESS, 研发任务处理人, handler_user_id→user_id)──→ po_users
+                                                                       │
+                                                        po_users.user_name → 黄药师、王重阳...
+```
+
+**分层召回流程** (`recall/_scope.py:_typed_multi_recall_layered`):
+1. 每个 scope layer 独立执行 4 路并发召回 → 各自 RRF 融合 → 逐层候选列表
+2. 逐层候选按 scope weight 做加权 RRF 融合 → 最终候选
+3. 若某 keyword 在所有 layer 的文本路径都为空，追加单字兜底
+
+### Scope Filtering SQL
+
+`adapters/opengauss/engine.py:_build_effective_scope_clause()` 生成 scope 过滤 SQL:
+
+- `strict=True` (本体术语 " whereKey 等): 只匹配 `search_scope` 明确指定当前 scope 的 term
+- `strict=False` (维度值 whereValue): 额外允许 `search_scope='{}'` 的 term, 只要其所属对象在当前 ontology 的 root subtree 下
+
+### Data Flow: Query → Clarification Result
+
+```
+用户查询 "黄总作为处理人"
+        │
+  structured_query: {filters: [{field: "handler_user_id", value: "黄总"}]}
+        │
+  extract → whereKey="handler_user_id" (vector_only=True)
+            whereValue="黄总" (search_enabled=True)
+        │
+  pre_resolve → resolve_field_aliases("handler_user_id", "by_rd_task")
+                → 确认: handler_user_id → 处理人用户编码(ref: po_users.user_code)
+                → get_prop_enum_values("handler_user_id") → [] (枚举值为空)
+                → "黄总" 精确匹配失败 → unresolved
+        │
+  build_scope_layers → [by_rd_task (1.0)] + get_matching_objects(...)
+                      → _collect_related_object_codes() → [po_users (0.7)]
+                      → layers = [by_rd_task, po_users]
+        │
+  unified_recall → whereValue:黄总, categories={1,2}, layers=[by_rd_task, po_users]
+                  → 4路召回 → RRF融合 → ["黄药师", "黄蓉", ...]
+        │
+  LLM confirm → sees candidates ["黄药师", "黄蓉"]
+               → returns ClarifyItem(keyword="黄总", candidates=["黄药师", "黄蓉"])
+        │
+  paradigm → fieldRecall=["处理人用户编码(...)"], valueRecall=["黄药师", "黄蓉"]
+            → needs_clarification=true ✅
+```
+
 ## CONVENTIONS
 
 ### Layer import constraints (hard rule)
