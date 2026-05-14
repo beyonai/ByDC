@@ -45,6 +45,7 @@ def _ontology_agent_exports() -> dict[str, Any]:
         ParadigmOption,
         StepEvent,
         ThinkingEvent,
+        ToolEvent,
     )
 
     return {
@@ -53,6 +54,7 @@ def _ontology_agent_exports() -> dict[str, Any]:
         "OntologyAgentEvent": OntologyAgentEvent,
         "ThinkingEvent": ThinkingEvent,
         "StepEvent": StepEvent,
+        "ToolEvent": ToolEvent,
         "InterruptEvent": InterruptEvent,
         "AnswerEvent": AnswerEvent,
         "ErrorEvent": ErrorEvent,
@@ -71,6 +73,7 @@ __all__ = [
     "OntologyAgentEvent",
     "ThinkingEvent",
     "StepEvent",
+    "ToolEvent",
     "InterruptEvent",
     "AnswerEvent",
     "ErrorEvent",

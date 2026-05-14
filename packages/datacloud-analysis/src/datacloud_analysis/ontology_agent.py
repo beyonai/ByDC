@@ -11,7 +11,7 @@ from collections import OrderedDict
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
@@ -43,6 +43,16 @@ class StepEvent(OntologyAgentEvent):
 
     title: str
     detail: str | None = None
+
+
+@dataclass
+class ToolEvent(OntologyAgentEvent):
+    """工具调用开始/结束（astream_events v2：on_tool_start / on_tool_end）。"""
+
+    phase: Literal["start", "end"]
+    tool_name: str
+    tool_input: Any = None
+    tool_output: Any = None
 
 
 @dataclass
@@ -474,6 +484,27 @@ class OntologyAgent:
                     text = str(data.get("content") or "").strip()
                     if text:
                         yield StepEvent(title=text)
+
+                elif event_type == "on_tool_start":
+                    tool_name = str(event.get("name") or "")
+                    if tool_name:
+                        data = event.get("data") or {}
+                        yield ToolEvent(
+                            phase="start",
+                            tool_name=tool_name,
+                            tool_input=data.get("input"),
+                        )
+
+                elif event_type == "on_tool_end":
+                    tool_name = str(event.get("name") or "")
+                    if tool_name:
+                        data = event.get("data") or {}
+                        yield ToolEvent(
+                            phase="end",
+                            tool_name=tool_name,
+                            tool_input=data.get("input"),
+                            tool_output=data.get("output"),
+                        )
 
         except Exception as exc:
             logger.exception("ontology_agent: stream error thread_id=%s", thread_id)
