@@ -8,18 +8,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-
-@dataclass(frozen=True, slots=True)
-class Mention:
-    """术语提及。
-
-    Attributes:
-        text: 提及文本
-        role: 语义角色 (ENTITY|METRIC|DIMENSION_VALUE|QUALIFIER|COMPOUND)
-    """
-
-    text: str
-    role: str = "UNKNOWN"
+# 匹配相关类型已下沉到 contracts，此处重导出以保持向后兼容
+from datacloud_knowledge.contracts.types import (
+    MatchCandidate,
+    MatchResult,  # noqa: F401
+    Mention,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,40 +59,6 @@ class SlotResult:
     sort_semantics: tuple[SortSemantic, ...] = ()
     time_exprs: tuple[TimeExpr, ...] = ()
     display_intents: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class MatchCandidate:
-    """术语匹配候选。
-
-    Attributes:
-        term_id: 术语ID
-        term_name: 术语名称
-        term_type_code: 术语类型编码
-        match_type: 匹配类型 (exact|fuzzy|pinyin)
-        confidence: 置信度 (0.0-1.0)
-        score: 综合得分
-    """
-
-    term_id: str
-    term_name: str
-    term_type_code: str
-    match_type: str
-    confidence: float
-    score: float
-
-
-@dataclass(frozen=True, slots=True)
-class MatchResult:
-    """术语匹配结果。
-
-    Attributes:
-        exact: 精确匹配结果，key 为 mention 文本
-        fuzzy: 模糊匹配结果，key 为 mention 文本
-    """
-
-    exact: dict[str, tuple[MatchCandidate, ...]]
-    fuzzy: dict[str, tuple[MatchCandidate, ...]]
 
 
 @dataclass(frozen=True, slots=True)
