@@ -28,7 +28,7 @@ from datacloud_knowledge.contracts.types import BM25Result, SubstringResult, Vec
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-    from datacloud_knowledge.intent.recall._models import RecallRequest
+    from datacloud_knowledge.retrieval.recall._models import RecallRequest
 
 log = logging.getLogger(__name__)
 
@@ -1205,7 +1205,7 @@ class PostgresSearchEngine(TermSearchEngine):
         per_type_limit: int = 0,
     ) -> dict[str, list[tuple[str, str, str, str, str]]]:
         """执行一条向量召回查询（scope / type_filter / per_type 支持）。"""
-        from datacloud_knowledge.intent.recall._models import _VECTOR_MIN_SIMILARITY
+        from datacloud_knowledge.retrieval.recall._models import _VECTOR_MIN_SIMILARITY
 
         params: dict[str, Any] = {
             "min_similarity": _VECTOR_MIN_SIMILARITY,

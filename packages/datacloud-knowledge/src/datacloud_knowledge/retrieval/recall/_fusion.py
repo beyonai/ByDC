@@ -99,7 +99,10 @@ def _fuse_and_shape(
     rrf_k: int,
 ) -> dict[str, list[CandidateDict]]:
     """对每条请求的各路召回结果进行 RRF 融合并整形为 CandidateDict。"""
-    from datacloud_knowledge.intent import _recall_common as serial_recall
+    from datacloud_knowledge.retrieval._recall_common import (
+        _diversify_by_type,
+        _shape_candidates,
+    )
 
     result: dict[str, list[CandidateDict]] = {}
     for req in batch.requests:
@@ -122,7 +125,7 @@ def _fuse_and_shape(
                     )
                     for candidate in fused
                 ]
-                diversified = serial_recall._diversify_by_type(
+                diversified = _diversify_by_type(
                     diversified,
                     per_type=req.per_type_limit,
                 )
@@ -133,7 +136,7 @@ def _fuse_and_shape(
                     top_k=top_k,
                 )
             else:
-                candidates = serial_recall._shape_candidates(fused, req.type_filter, top_k=top_k)
+                candidates = _shape_candidates(fused, req.type_filter, top_k=top_k)
         else:
             candidates = []
         result[req.map_key] = _dedupe_candidates_by_term_name(candidates)
