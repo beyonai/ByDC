@@ -505,6 +505,11 @@ async def _invoke_llm_with_fallback(
             config=config,
         )
     except Exception as primary_exc:
+        _log_messages_window_on_llm_error(
+            label="PRIMARY_FAILED",
+            round_idx=round_idx,
+            messages_window=messages_window,
+        )
         logger.warning("[LLM] 主模型全部重试失败 round=%d: %s", round_idx + 1, primary_exc)
         last_exc = primary_exc
 
@@ -523,6 +528,11 @@ async def _invoke_llm_with_fallback(
                 config=config,
             )
         except Exception as fallback_exc:
+            _log_messages_window_on_llm_error(
+                label="FALLBACK_FAILED",
+                round_idx=round_idx,
+                messages_window=messages_window,
+            )
             logger.error("[LLM] 备用模型也失败 round=%d: %s", round_idx + 1, fallback_exc)
             last_exc = fallback_exc
 
@@ -539,6 +549,7 @@ async def _invoke_llm_with_fallback(
 _DEFAULT_MAX_ROUNDS = 10
 _TOOL_MSG_MAX_LEN = 2000  # ToolMessage 内容最大字符数
 _TRIM_KEEP_ROUNDS = 6  # 滑动窗口：保留最近 N 轮 AI+Tool 消息对
+_MESSAGES_WINDOW_LOG_CHUNK_SIZE = 8000
 
 
 class _LlmUnavailableError(RuntimeError):
@@ -589,6 +600,35 @@ def _serialize_messages(messages: list) -> list[dict[str, Any]]:
                 }
             )
     return result
+
+
+def _log_messages_window_on_llm_error(
+    *,
+    label: str,
+    round_idx: int,
+    messages_window: list,
+) -> None:
+    """LLM 调用失败时输出本轮发送给模型的消息窗口。"""
+    try:
+        messages_json = json.dumps(
+            _serialize_messages(messages_window),
+            ensure_ascii=False,
+            default=str,
+        )
+    except (TypeError, ValueError) as exc:
+        logger.error("[LLM][%s][MESSAGES_WINDOW] 序列化失败: %s", label, exc)
+        messages_json = repr(messages_window)
+
+    total_chunks = (len(messages_json) - 1) // _MESSAGES_WINDOW_LOG_CHUNK_SIZE + 1
+    for idx in range(0, len(messages_json), _MESSAGES_WINDOW_LOG_CHUNK_SIZE):
+        logger.error(
+            "[LLM][%s][MESSAGES_WINDOW %d/%d] round=%d %s",
+            label,
+            idx // _MESSAGES_WINDOW_LOG_CHUNK_SIZE + 1,
+            total_chunks,
+            round_idx + 1,
+            messages_json[idx : idx + _MESSAGES_WINDOW_LOG_CHUNK_SIZE],
+        )
 
 
 def _deserialize_messages(data: list[dict[str, Any]]) -> list:
