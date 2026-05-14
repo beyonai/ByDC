@@ -158,22 +158,82 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
     # resume_value 结构：{"paradigmList": [{"paradigmList": [...items...], ...}]}
     # 这里展开为 provider.finalize_query_clarification 需要的顶层 paradigmList
     paradigm_list_from_resume: list[dict[str, Any]] = []
+    meta_paradigm_list: list[dict[str, Any]] = []
     if isinstance(resume_value, dict):
         outer = list(resume_value.get("paradigmList") or [])
         if outer and isinstance(outer[0], dict):
             paradigm_list_from_resume = list(outer[0].get("paradigmList") or [])
+        _meta = resume_value.get("metadata") or {}
+        meta_paradigm_list = list(_meta.get("paradigmList") or [])
+    # meta_paradigm_list 优先从 resume_value.metadata 取；动态路径不含 clarify_knowledge，
+    # 从 state 的 analyze_result 兜底补充
+    if not meta_paradigm_list:
+        meta_paradigm_list = list(analyze_result.get("paradigm_list") or [])
     form_str = json.dumps({"paradigmList": paradigm_list_from_resume}, ensure_ascii=False)
+
+    # 以恢复表单为准：根据前端保留的 keyword 重建 path_mapping，并裁剪 structured_input.select。
+    # SDK 的 _apply_selections 先 deep_copy(structured_input) 再按 path_mapping 覆写，
+    # 未被覆写的位置会原样保留，因此两者必须同步裁剪，否则已删除字段会残留在查询结果中。
+    _effective_knowledge = clarify_knowledge
+    _effective_structured_input = dict(structured_input)
+    if _effective_knowledge and paradigm_list_from_resume:
+        try:
+            _kd = json.loads(_effective_knowledge)
+            _pm = _kd.get("path_mapping") or {}
+            if _pm:
+                # 收集前端保留的 keyword 集合（前端提交条目无 kid，用 keyword 匹配）
+                _remaining_kw = {
+                    str(item.get("keyword"))
+                    for paradigm in paradigm_list_from_resume
+                    for item in (paradigm.get("paradigmResult") or [])
+                    if item.get("keyword")
+                }
+                # 从 metadata.paradigmList（含 kid）反查对应的 kid
+                _remaining_kids = {
+                    str(item.get("kid"))
+                    for paradigm in meta_paradigm_list
+                    for item in (paradigm.get("paradigmResult") or [])
+                    if item.get("kid") is not None
+                    and str(item.get("keyword")) in _remaining_kw
+                }
+                _filtered_pm = {k: v for k, v in _pm.items() if k in _remaining_kids}
+                if _filtered_pm != _pm:
+                    # 收集仍被引用的 select 索引，裁剪 structured_input.select
+                    _keep_idx = set()
+                    for _pv in _filtered_pm.values():
+                        if _pv.startswith("select."):
+                            try:
+                                _keep_idx.add(int(_pv.split(".")[1]))
+                            except (IndexError, ValueError):
+                                pass
+                    logger.info(
+                        "[user_clarify] path_mapping pruned: before=%s after=%s"
+                        " remaining_keywords=%s select_indices_to_keep=%s",
+                        _pm,
+                        _filtered_pm,
+                        _remaining_kw,
+                        _keep_idx,
+                    )
+                    _kd["path_mapping"] = _filtered_pm
+                    _effective_knowledge = json.dumps(_kd, ensure_ascii=False)
+                    if _keep_idx:
+                        _orig_sel = list(_effective_structured_input.get("select") or [])
+                        _effective_structured_input["select"] = [
+                            v for i, v in enumerate(_orig_sel) if i in _keep_idx
+                        ]
+        except (ValueError, TypeError):
+            pass
 
     scope_code = _scope_code_from_tool(tool_name)
     user_id = _get_gateway_user_id(config)
     finalized = finalize_query_clarification(
         query=query,
         ontology_code=scope_code,
-        structured_input=structured_input,
+        structured_input=_effective_structured_input,
         mode="compute" if is_compute else "query",
         needs_clarification=True,
         form=form_str,
-        metadata=clarify_knowledge,
+        metadata=_effective_knowledge,
         user_id=user_id,
         persist_confirmed_synonyms=True,
         language=language,

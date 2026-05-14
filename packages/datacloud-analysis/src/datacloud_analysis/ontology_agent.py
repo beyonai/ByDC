@@ -189,11 +189,20 @@ def _build_input_payload(question: str) -> dict[str, Any]:
     }
 
 
-def _paradigm_answer_to_resume_value(answer: ParadigmAnswer) -> dict[str, Any]:
+def _paradigm_answer_to_resume_value(
+    answer: ParadigmAnswer,
+    raw: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """将 ParadigmAnswer 转换为 user_clarify_node 期望的 resume_value 格式。
 
-    期望格式：{"paradigmList": [{"paradigmList": [{"choiceKeyword": ..., "recall": ...}]}]}
+    raw 为前端原始 humanInput dict，携带完整的 paradigmList（含 keyword/kid/paradigmId）
+    和 metadata（含 clarify_knowledge），优先直接使用，供 user_clarify_node 做 path_mapping 裁剪。
     """
+    # raw 存在时直接透传，保留前端提交的完整结构（paradigmId/paradigmResult/keyword/kid）
+    if raw and isinstance(raw.get("paradigmList"), list):
+        return raw
+
+    # raw 不存在时降级：从 ParadigmAnswer 重建（仅含 choiceKeyword/recall，无 keyword/kid）
     items: list[dict[str, str]] = []
     for sel in answer.selections:
         for opt in sel.chosen_options:
@@ -450,7 +459,10 @@ class OntologyAgent:
         elif isinstance(resume_input, str):
             graph_input = Command(resume=resume_input)
         else:
-            resume_value = _paradigm_answer_to_resume_value(resume_input)
+            resume_value = _paradigm_answer_to_resume_value(
+                resume_input,
+                raw=getattr(resume_input, "_raw_dict", None),
+            )
             graph_input = Command(resume=resume_value)
 
         try:
