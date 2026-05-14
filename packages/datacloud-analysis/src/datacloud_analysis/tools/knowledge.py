@@ -117,7 +117,7 @@ async def search_all_candidates(
     top_k: int = 5,
 ) -> dict[str, list[CandidateDict]]:
     """对所有概念术语执行 strict→bm25→vector 漏斗搜索。"""
-    from datacloud_knowledge.intent import search_all_candidates_with_name_id
+    from datacloud_knowledge.retrieval.candidate_search import search_all_candidates_with_name_id
 
     if not concept_terms:
         return {}
@@ -152,7 +152,7 @@ async def disambiguate_candidates(
     from datacloud_knowledge.intent import (
         MatchCandidate,
         MatchResult,
-        disambiguate_with_session,
+        disambiguate,
     )
 
     if not candidates_map:
@@ -177,9 +177,7 @@ async def disambiguate_candidates(
         else:
             fuzzy[word] = converted
 
-    dis_result = await asyncio.to_thread(
-        disambiguate_with_session, MatchResult(exact=exact, fuzzy=fuzzy)
-    )
+    dis_result = await asyncio.to_thread(disambiguate, MatchResult(exact=exact, fuzzy=fuzzy), None)
     confirmed_raw = dis_result.confirmed
     ambiguous_raw = dis_result.ambiguous
 
@@ -323,7 +321,7 @@ async def save_clarification_results(
     user_id: str,
 ) -> list[str]:
     """持久化澄清结果，返回创建的 name_id 列表。"""
-    from datacloud_knowledge.intent import store_clarification_results
+    from datacloud_knowledge.adapters import store_clarification_results
 
     return await asyncio.to_thread(store_clarification_results, clarification_results, user_id)
 
@@ -367,9 +365,15 @@ async def update_term_scores(
                 "update_term_scores: async call_agent failed, fallback to local update: %s", exc
             )
 
-    from datacloud_knowledge.intent import ScoreUpdateRecord, batch_update_scores_with_session
+    from datacloud_knowledge.adapters import create_writer
+    from datacloud_knowledge.intent import ScoreUpdateRecord, batch_update_scores
 
     records = tuple(
         ScoreUpdateRecord(name_id=item["name_id"], success=item["success"]) for item in normalized
     )
-    await asyncio.to_thread(batch_update_scores_with_session, records)
+
+    def _do_update(recs: tuple[ScoreUpdateRecord, ...]) -> None:
+        with create_writer() as writer:
+            batch_update_scores(recs, writer)
+
+    await asyncio.to_thread(_do_update, records)

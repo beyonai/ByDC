@@ -63,7 +63,7 @@ class TestResolveViaAliases:
         from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
             _resolve_via_aliases,
         )
-        from datacloud_knowledge.knowledge_search.types import FieldResolutionResult
+        from datacloud_knowledge.api.types import FieldResolutionResult
 
         mock_result = FieldResolutionResult(
             resolved={"营收": "total_revenue"},
@@ -81,7 +81,7 @@ class TestResolveViaAliases:
         from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
             _resolve_via_aliases,
         )
-        from datacloud_knowledge.knowledge_search.types import (
+        from datacloud_knowledge.api.types import (
             AmbiguousCandidate,
             FieldResolutionResult,
         )

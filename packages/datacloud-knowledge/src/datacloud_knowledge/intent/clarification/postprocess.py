@@ -6,16 +6,7 @@ import logging
 import re
 from typing import Any
 
-from sqlalchemy import select
-
-from datacloud_knowledge.db.connection import get_session
-from datacloud_knowledge.db.models import Term
-from datacloud_knowledge.intent.service import store_clarification_results
-from datacloud_knowledge.knowledge_search import (
-    get_object_props,
-    get_prop_values_with_aliases,
-    resolve_field_aliases,
-)
+from datacloud_knowledge.adapters import create_reader, store_clarification_results
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +22,7 @@ def normalize_clarification_params(
 ) -> dict[str, Any]:
     """Normalize confirmed clarification params to canonical English field codes."""
     field_terms, _ = collect_terms_from_params(params)
-    result = resolve_field_aliases(terms=field_terms, scope_code=ontology_code, user_id=user_id)
+    result = create_reader().resolve_field_aliases(terms=field_terms, scope_code=ontology_code)
     patched = apply_resolved_to_params(params, result.resolved)
     scope_maps = _load_scope_term_maps(ontology_code)
     return _normalize_filter_values(patched, scope_maps)
@@ -75,25 +66,20 @@ def persist_confirmed_synonyms(
 
 
 def _load_scope_term_maps(scope_code: str) -> dict[str, Any]:
+    """Load field/prop/value maps for a scope_code using reader adapter."""
     if not scope_code:
         return {"field_terms": {}, "prop_codes": {}, "value_terms_by_prop": {}}
 
-    with get_session() as session:
-        source_rows = session.execute(
-            select(Term.term_id).where(
-                Term.term_code == scope_code,
-                Term.term_type_code.in_(["view", "object"]),
-            )
-        ).all()
-
-    source_term_ids = [str(row[0]) for row in source_rows]
+    reader = create_reader()
+    source_term_ids = list(reader.get_scope_term_ids(scope_code=scope_code))
     if not source_term_ids:
         return {"field_terms": {}, "prop_codes": {}, "value_terms_by_prop": {}}
 
     field_terms: dict[str, str] = {}
     prop_codes: dict[str, str] = {}
     prop_value_codes: dict[str, dict[str, str]] = {}
-    for props in get_object_props(source_term_ids=source_term_ids, db_session=session).values():
+    reader = create_reader()
+    for props in reader.get_object_props(source_term_ids=source_term_ids).values():
         for prop in props:
             field_terms.setdefault(prop.term_name, prop.term_id)
             field_terms.setdefault(prop.term_code, prop.term_id)
@@ -101,9 +87,7 @@ def _load_scope_term_maps(scope_code: str) -> dict[str, Any]:
             prop_codes.setdefault(prop.term_code, prop.term_id)
 
     value_terms_by_prop: dict[str, dict[str, str]] = {}
-    for values in get_prop_values_with_aliases(
-        source_term_ids=source_term_ids, db_session=session
-    ).values():
+    for values in reader.get_prop_values_with_aliases(source_term_ids=source_term_ids).values():
         for value in values:
             prop_values = value_terms_by_prop.setdefault(value.parent_term_id, {})
             prop_values.setdefault(value.term_name, value.term_id)

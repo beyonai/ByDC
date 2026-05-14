@@ -44,13 +44,17 @@ from ._patch import (
 from ._pre_resolve import (
     pre_resolve_terms as _pre_resolve_terms,
 )
-from ._recall import (
+from datacloud_knowledge.retrieval._recall import (
     build_scope_recall_layers as _build_scope_recall_layers,
 )
-from ._recall import (
+from datacloud_knowledge.retrieval._recall import (
     unified_recall as _unified_recall,
 )
-from .cartesian import build_paradigm_list, serialize_knowledge_meta, serialize_paradigm_payload
+from .cartesian import (
+    build_paradigm_list,
+    serialize_knowledge_meta,
+    serialize_paradigm_payload,
+)
 from .confirm import (
     format_cc_confirm_context,
     format_main_confirm_context,
@@ -149,7 +153,10 @@ def analyze_query_clarification(
             else {}
         )
         emit.result(
-            {"terms": len(recall_terms), "recalled": sum(1 for v in recall_map.values() if v)}
+            {
+                "terms": len(recall_terms),
+                "recalled": sum(1 for v in recall_map.values() if v),
+            }
         )
 
     # ── Step 4a: 主结构 LLM 确认 ──

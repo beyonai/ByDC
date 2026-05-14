@@ -10,12 +10,17 @@ from typing import Any
 BatchUpdater = Callable[[tuple[Any, ...]], None]
 
 try:
+    from datacloud_knowledge.adapters import create_writer as imported_create_writer
     from datacloud_knowledge.intent import ScoreUpdateRecord as ImportedScoreUpdateRecord
     from datacloud_knowledge.intent import (
-        batch_update_scores_with_session as imported_batch_update_scores_with_session,
+        batch_update_scores as imported_batch_update_scores,
     )
 
-    updater_impl: BatchUpdater | None = imported_batch_update_scores_with_session
+    def _do_batch_update(records: tuple[Any, ...]) -> None:
+        with imported_create_writer() as writer:
+            imported_batch_update_scores(records, writer)
+
+    updater_impl: BatchUpdater | None = _do_batch_update
 except ModuleNotFoundError:
 
     @dataclass(frozen=True)
@@ -29,7 +34,6 @@ except ModuleNotFoundError:
     updater_impl = None
 
 ScoreUpdateRecord = ImportedScoreUpdateRecord
-batch_update_scores_with_session = updater_impl
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +65,7 @@ def handle_update_terms_name_command(  # noqa: PLR0911
         if isinstance(record, dict) and str(record.get("name_id", "")).strip()
     )
 
-    updater = batch_update_scores_with_session
+    updater = updater_impl
     if updater is None:
         message = "datacloud_knowledge is unavailable"
         logger.warning("updateTermsName ignored: %s", message)

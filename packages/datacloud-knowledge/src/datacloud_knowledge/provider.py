@@ -1,13 +1,14 @@
 """知识服务 Provider — 对外公开 API。
 
-本模块提供四类核心能力的函数式接口：
-1. resolve_field_aliases     字段别名解析
-2. search_terms_by_type      术语检索
-3. prepare_query_clarification   查询澄清分析
-4. finalize_query_clarification  澄清回填
+本模块提供六类核心能力的函数式接口：
+1. resolve_field_aliases         字段别名解析
+2. search_terms_by_type          术语检索
+3. get_object_props_by_code      按对象 code 查询属性列表
+4. get_prop_enum_values          按属性 code 查询可选枚举值
+5. prepare_query_clarification   查询澄清分析
+6. finalize_query_clarification  澄清回填
 
-所有函数依赖注入 PostgresTermReader/TermWriter，通过 get_session() 管理数据库会话。
-无单例、无抽象协议层——直接使用具体的 PostgreSQL 实现。
+所有函数通过 PostgresTermReader 封装数据库会话，消费者无需管理 db_session。
 """
 
 from __future__ import annotations
@@ -18,12 +19,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from datacloud_knowledge.api.types import (
+from datacloud_knowledge.adapters import create_reader
+from datacloud_knowledge.contracts.types import (
     ClarificationMode as _ClarificationMode,
 )
-from datacloud_knowledge.api.types import (
+from datacloud_knowledge.contracts.types import (
     FieldResolutionResult,
     OpaquePayload,
+    PropItem,
     SearchTermsResult,
     TagFilter,
 )
@@ -42,7 +45,7 @@ from datacloud_knowledge.intent.clarification.postprocess import (
 from datacloud_knowledge.intent.clarification.postprocess import (
     persist_confirmed_synonyms as _persist_confirmed_synonyms,
 )
-from datacloud_knowledge.knowledge_search.term_reader import PostgresTermReader
+from datacloud_knowledge.retrieval.orchestration import search_terms_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +115,7 @@ def resolve_field_aliases(
     Returns:
         FieldResolutionResult，含 resolved/ambiguous/unresolved 三类结果。
     """
-    reader = PostgresTermReader()
+    reader = create_reader()
     return reader.resolve_field_aliases(
         terms=list(terms),
         scope_code=scope_code,
@@ -138,7 +141,7 @@ def search_terms_by_type(
 
     Args:
         term_type_code: 术语类型编码。
-        term_codes: 可选，限定术语编码列表。
+        term_codes: 可选，限定术语编码列表（当前未使用，预留）。
         keyword: 可选，关键词搜索。
         tags: 可选，标签过滤条件。
         limit: 返回条数（1..200）。
@@ -148,14 +151,16 @@ def search_terms_by_type(
     Returns:
         分页搜索结果。
     """
-    reader = PostgresTermReader()
-    return reader.search_terms(
+    del term_codes  # 预留参数，当前编排层未暴露 term_codes 过滤
+    reader = create_reader()
+    return search_terms_with_fallback(
         term_type_code=term_type_code,
         keyword=keyword,
         tags=list(tags) if tags is not None else None,
         limit=limit,
         offset=offset,
         order_by=order_by,
+        reader=reader,
     )
 
 
@@ -279,6 +284,59 @@ def finalize_query_clarification(
     )
 
 
+def get_object_props_by_code(
+    *,
+    scope_code: str,
+) -> list[PropItem]:
+    """根据对象/视图编码查询其下所有属性。
+
+    接收业务编码（如 ``"sales_crm"``），通过知识图谱 HAS_FIELD 关系返回该对象下的
+    所有属性术语。典型用途：前端选择数据对象后，动态展示可查询的字段列表。
+
+    Args:
+        scope_code: 对象/视图编码。
+
+    Returns:
+        PropItem 列表（term_code=属性编码, term_name=属性名称），按编码排序。
+
+    Example:
+        >>> props = get_object_props_by_code(scope_code="sales_crm")
+        >>> for p in props:
+        ...     print(f"{p.term_code}: {p.term_name}")
+    """
+    reader = create_reader()
+    return reader.get_object_props_by_code(scope_code=scope_code)
+
+
+def get_prop_enum_values(
+    *,
+    scope_code: str,
+    field_codes: Sequence[str],
+) -> dict[str, list[str]]:
+    """查询指定属性的可选枚举值。
+
+    接收对象编码和属性编码列表，返回每个属性的可选值（含别名去重）。
+    典型用途：前端下拉框展示字段的过滤候选项。
+
+    Args:
+        scope_code: 对象/视图编码。
+        field_codes: 属性编码列表。
+
+    Returns:
+        {field_code → [可选值列表]}，去重保序。
+
+    Example:
+        >>> values = get_prop_enum_values(
+        ...     scope_code="sales_crm",
+        ...     field_codes=["region", "level"],
+        ... )
+        >>> values["region"]   # → ["华东", "华南", "华北", ...]
+        >>> values["level"]    # → ["高", "中", "低"]
+    """
+    reader = create_reader()
+    return reader.get_prop_enum_values(scope_code=scope_code, field_codes=list(field_codes))
+
+
 # ── 内部辅助函数 ───────────────────────────────────────────────────
 
 
@@ -351,6 +409,8 @@ __all__ = [
     "FinalizedClarification",
     "PersistedSynonyms",
     "finalize_query_clarification",
+    "get_object_props_by_code",
+    "get_prop_enum_values",
     "prepare_query_clarification",
     "resolve_field_aliases",
     "search_terms_by_type",

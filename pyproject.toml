@@ -1,6 +1,6 @@
 [project]
 name = "by-datacloud"
-version = "0.1.35"
+version = "0.1.36"
 description = "Whale DataCloud - A multi-service data platform"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -104,7 +104,6 @@ members = [
     "packages/datacloud-analysis",
     "packages/datacloud-data",
     "packages/datacloud-knowledge",
-    "examples/e_commerce_demo/backend",
 ]
 
 [tool.uv.sources]

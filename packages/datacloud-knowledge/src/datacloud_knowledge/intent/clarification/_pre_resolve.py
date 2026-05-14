@@ -8,11 +8,8 @@ from __future__ import annotations
 import logging
 import re
 
-from datacloud_knowledge.knowledge_search.term_search import (
-    get_prop_enum_values,
-    resolve_field_aliases_with_names,
-)
-from datacloud_knowledge.knowledge_search.types import ResolvedField
+from datacloud_knowledge.adapters import create_reader
+from datacloud_knowledge.contracts.types import ResolvedField
 
 from .models import ExtractedTerm, PreResolveResult
 
@@ -66,7 +63,7 @@ def pre_resolve_terms(
     resolved_by_text: dict[str, ResolvedField] = {}
     if field_terms_raw and scope_code:
         try:
-            result = resolve_field_aliases_with_names(
+            result = create_reader().resolve_field_aliases_with_names(
                 terms=field_terms_raw,
                 scope_code=scope_code,
             )
@@ -102,7 +99,7 @@ def pre_resolve_terms(
 
     if confirmed_key_codes and scope_code:
         try:
-            enum_map = get_prop_enum_values(
+            enum_map = create_reader().get_prop_enum_values(
                 scope_code=scope_code,
                 field_codes=confirmed_key_codes,
             )

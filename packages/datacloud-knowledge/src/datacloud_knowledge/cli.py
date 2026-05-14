@@ -10,9 +10,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from datacloud_knowledge.db.embeddings import backfill_name_embeddings
-from datacloud_knowledge.db.schema import ensure_schema, verify_schema
-from datacloud_knowledge.db.tsvector import backfill_tsvector_with_url
+from datacloud_knowledge.adapters import (
+    backfill_embeddings,
+    backfill_tsvector,
+    ensure_schema,
+    verify_schema,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -181,19 +184,21 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911
             _print_result(verify_schema(schema=args.schema, db_url=args.db_url))
             return 0
         if args.command == "import-terms":
-            from datacloud_knowledge.knowledge_build.importer.executor import run as import_package
+            from datacloud_knowledge.ingestion.owl_import.importer.executor import (
+                run as import_package,
+            )
 
             result = import_package(str(args.package), schema=args.schema, db_url=args.db_url)
             _print_result(result)
             return 0 if result.get("status") != "failed" else 1
         if args.command == "backfill-tsvector":
             _print_result(
-                backfill_tsvector_with_url(schema=args.schema, db_url=args.db_url, force=args.force)
+                backfill_tsvector(schema=args.schema, db_url=args.db_url, force=args.force)
             )
             return 0
         if args.command == "backfill-embeddings":
             _print_result(
-                backfill_name_embeddings(
+                backfill_embeddings(
                     schema=args.schema,
                     db_url=args.db_url,
                     batch_size=args.batch_size,
@@ -203,7 +208,9 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911
             )
             return 0
         if args.command == "bootstrap":
-            from datacloud_knowledge.knowledge_build.importer.executor import run as import_package
+            from datacloud_knowledge.ingestion.owl_import.importer.executor import (
+                run as import_package,
+            )
 
             results: dict[str, Any] = {}
             results["ensure_schema"] = ensure_schema(
@@ -220,12 +227,12 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911
             if import_result.get("status") == "failed":
                 _print_result(results)
                 return 1
-            results["backfill_tsvector"] = backfill_tsvector_with_url(
+            results["backfill_tsvector"] = backfill_tsvector(
                 schema=args.schema,
                 db_url=args.db_url,
             )
             if args.with_embeddings:
-                results["backfill_embeddings"] = backfill_name_embeddings(
+                results["backfill_embeddings"] = backfill_embeddings(
                     schema=args.schema,
                     db_url=args.db_url,
                     batch_size=args.embed_batch_size,

@@ -14,27 +14,19 @@ if os.getenv("DATACLOUD_INTENT_DEBUG", "0").strip().lower() in {"1", "true", "ye
         _intent_logger.addHandler(_h)
         _intent_logger.propagate = False  # 避免 root handler 重复输出
 
-from .cache import UserNameCache
+from datacloud_knowledge.adapters import store_clarification_results
+from datacloud_knowledge.contracts.types import MatchCandidate, MatchResult, Mention
+from datacloud_knowledge.retrieval.candidate_search import search_all_candidates_with_name_id
+from datacloud_knowledge.retrieval.name_cache import UserNameCache
+from datacloud_knowledge.retrieval.typed_recall import typed_multi_recall_with_session
+
 from .clarification._expand_query import expand_query
 from .clarification.api import analyze_query_clarification
 from .disambiguation import build_shortest_path_tree, disambiguate
-from .matching import match_mentions, match_mentions_with_search
 from .score_update import batch_update_scores, update_score, update_score_async
-from .service import (
-    batch_update_scores_with_session,
-    build_shortest_path_tree_with_session,
-    disambiguate_with_session,
-    search_all_candidates_with_name_id,
-    store_clarification_results,
-    typed_multi_recall_with_session,
-)
-from .storage import create_term_knowledge, create_term_with_knowledge, create_user_term_name
 from .types import (
     ClarificationResult,
     DisambiguationResult,
-    MatchCandidate,
-    MatchResult,
-    Mention,
     ScoreUpdateRecord,
     ShortestPathGraphEdge,
     ShortestPathGraphNode,
@@ -66,17 +58,9 @@ __all__ = [
     "UserNameCache",
     "analyze_query_clarification",
     "batch_update_scores",
-    "batch_update_scores_with_session",
     "build_shortest_path_tree",
-    "build_shortest_path_tree_with_session",
-    "create_term_knowledge",
-    "create_term_with_knowledge",
-    "create_user_term_name",
     "disambiguate",
-    "disambiguate_with_session",
     "expand_query",
-    "match_mentions",
-    "match_mentions_with_search",
     "search_all_candidates_with_name_id",
     "store_clarification_results",
     "typed_multi_recall_with_session",

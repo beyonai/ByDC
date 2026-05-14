@@ -68,6 +68,13 @@ types: feat / fix / docs / style / refactor / test / chore
 - ❌ 裸 `except:` — 必须指定异常类型
 - ❌ `print()` 生产代码 — 用 `logging`
 
+### 导入规范
+
+- ❌ `from importlib import import_module` — 禁用动态 import。用正常 `import` / `from import`，循环导入问题通过调整模块结构解决，不通过延迟 import 规避。
+- ❌ 函数体内 `import` / `from import` — 除非是真正的外部可选依赖（如 `pymysql`），不允许用延迟 import 规避循环导入或隐藏模块缺失。ruff 检查不到函数体内的 import 错误。
+- ❌ `import_module(f"{__package__}.types")` — 禁止字符串拼接模块路径。直接 `from .types import ...`。
+- ❌ `if converter is None: import_module(...)` — 禁止死代码回退。模块导入不会返回 None，这种分支永不执行。
+
 ## Commands
 
 ```bash

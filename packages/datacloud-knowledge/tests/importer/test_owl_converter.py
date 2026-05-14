@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import pytest
-from datacloud_knowledge.knowledge_build.importer.owl_converter import (
+from datacloud_knowledge.ingestion.owl_import.importer.owl_converter import (
     RELATION_TYPE_TO_CARDINALITY,
     convert_domain,
     convert_relation,
@@ -452,7 +452,7 @@ class TestExtractKnowledgeRecords:
         """测试知识记录提取与字段映射。"""
         generated_ids = iter(["kid-1", "kid-2"])
         monkeypatch.setattr(
-            "datacloud_knowledge.knowledge_build.importer.owl_converter._next_snowflake_id",
+            "datacloud_knowledge.ingestion.owl_import.importer.owl_converter._next_snowflake_id",
             lambda: next(generated_ids),
         )
 
@@ -482,7 +482,7 @@ class TestExtractKnowledgeRecords:
     ) -> None:
         """测试已解析列表输入。"""
         monkeypatch.setattr(
-            "datacloud_knowledge.knowledge_build.importer.owl_converter._next_snowflake_id",
+            "datacloud_knowledge.ingestion.owl_import.importer.owl_converter._next_snowflake_id",
             lambda: "kid-1",
         )
 
@@ -522,7 +522,7 @@ class TestExtractKnowledgeRecords:
     ) -> None:
         """测试跳过非对象知识项。"""
         monkeypatch.setattr(
-            "datacloud_knowledge.knowledge_build.importer.owl_converter._next_snowflake_id",
+            "datacloud_knowledge.ingestion.owl_import.importer.owl_converter._next_snowflake_id",
             lambda: "kid-1",
         )
         owl_term = {"terms_knowledge": '["员工手册", {"name":"绩效规则","content":"绩效规则详情"}]'}

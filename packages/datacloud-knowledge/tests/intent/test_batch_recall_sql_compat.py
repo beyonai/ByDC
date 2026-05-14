@@ -6,7 +6,7 @@ import pytest
 
 
 def _get_batch_module():  # type: ignore[no-untyped-def]
-    return import_module("datacloud_knowledge.intent.batch_recall")
+    return import_module("datacloud_knowledge.retrieval.recall._sql")
 
 
 @pytest.mark.intent
