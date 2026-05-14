@@ -10,18 +10,18 @@ from typing import Any
 
 from datacloud_knowledge.adapters import create_reader
 from datacloud_knowledge.contracts.rrf import rrf_fuse
-from datacloud_knowledge.intent._recall_common import (
+from datacloud_knowledge.intent.service import typed_multi_recall_with_session
+from datacloud_knowledge.retrieval._recall_common import (
     KTYPE_CATEGORY_MAP,
     _load_type_codes_by_category,
     _shape_candidates,
 )
-from datacloud_knowledge.intent.recall import (
+from datacloud_knowledge.retrieval.recall import (
     PreparedBatch,
     RecallRequest,
     ScopeRecallLayer,
     _batch_vector,
 )
-from datacloud_knowledge.intent.service import typed_multi_recall_with_session
 
 from .models import ExtractedTerm, PreResolveResult
 

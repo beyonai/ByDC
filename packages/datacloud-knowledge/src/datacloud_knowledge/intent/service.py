@@ -13,10 +13,10 @@ from datacloud_knowledge.adapters.opengauss.vector_validation import (
     validate_term_vector_readiness,
 )
 from datacloud_knowledge.retrieval.embedding import get_embedding_service
+from datacloud_knowledge.retrieval.mention_matching import match_mentions_with_search
+from datacloud_knowledge.retrieval.name_cache import UserNameCache
 
-from .cache import UserNameCache
 from .disambiguation import build_shortest_path_tree, disambiguate
-from .matching import match_mentions_with_search
 from .score_update import batch_update_scores
 from .types import (
     DisambiguationResult,
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 CandidateDict = dict[str, Any]
 if TYPE_CHECKING:
-    from .batch_recall import ScopeRecallLayer
+    from datacloud_knowledge.retrieval.recall import ScopeRecallLayer
 
 _VECTOR_ENABLE_ENV = "DATACLOUD_INTENT_ENABLE_VECTOR"
 _FALSE_VALUES = frozenset({"0", "false", "no", "off"})
@@ -253,7 +253,9 @@ def typed_multi_recall_with_session(
     dict[keyword, list[CandidateDict]] compatible with the existing
     paradigm resolution interface.
     """
-    from .recall import typed_multi_recall_batch as _typed_multi_recall_batch
+    from datacloud_knowledge.retrieval.recall import (
+        typed_multi_recall_batch as _typed_multi_recall_batch,
+    )
 
     with get_session() as session:
         embedding_svc = _get_validated_embedding_service(session)
