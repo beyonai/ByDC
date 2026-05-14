@@ -7,15 +7,15 @@ import pytest
 
 
 def _get_matching_module() -> Any:
-    return import_module("datacloud_knowledge.intent.matching")
+    return import_module("datacloud_knowledge.retrieval.mention_matching")
 
 
 def _get_types_module() -> Any:
-    return import_module("datacloud_knowledge.intent.types")
+    return import_module("datacloud_knowledge.contracts.types")
 
 
 def _get_cache_module() -> Any:
-    return import_module("datacloud_knowledge.intent.cache")
+    return import_module("datacloud_knowledge.retrieval.name_cache")
 
 
 @pytest.mark.intent

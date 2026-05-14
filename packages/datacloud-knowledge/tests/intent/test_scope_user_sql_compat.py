@@ -9,7 +9,7 @@ from datacloud_knowledge.contracts.types import UserScopedNameItem
 @pytest.mark.intent
 def test_user_name_cache_query_uses_scope_user_id_filter() -> None:
     """Verify cache.load() delegates to create_reader().get_user_scoped_names()."""
-    from datacloud_knowledge.intent.cache import UserNameCache
+    from datacloud_knowledge.retrieval.name_cache import UserNameCache
 
     mock_item = UserScopedNameItem(
         name_text="alias1",
@@ -21,7 +21,7 @@ def test_user_name_cache_query_uses_scope_user_id_filter() -> None:
     mock_reader.get_user_scoped_names.return_value = [mock_item]
 
     with patch(
-        "datacloud_knowledge.intent.cache.create_reader",
+        "datacloud_knowledge.retrieval.name_cache.create_reader",
         return_value=mock_reader,
     ):
         cache = UserNameCache()

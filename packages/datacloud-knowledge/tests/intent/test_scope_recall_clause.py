@@ -8,7 +8,7 @@ import pytest
 
 
 def _get_batch_module():  # type: ignore[no-untyped-def]
-    from datacloud_knowledge.intent import recall as batch_recall
+    from datacloud_knowledge.retrieval import recall as batch_recall
 
     return batch_recall
 
