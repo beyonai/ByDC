@@ -14,6 +14,7 @@ from datacloud_knowledge.intent.clarification._patch import apply_value_list, se
 from datacloud_knowledge.intent.clarification.models import (
     CCConfirmResult,
     CCTermMeta,
+    ClarificationConfirmedNotInRecallError,
     ClarifyItem,
     ConditionTermMapping,
     ConfirmedCondition,
@@ -87,10 +88,12 @@ def merge_confirmed_common(
                 continue
             covered_ids.add(tc.term_id)
             if meta.ktype == "whereValue" and tc.confirmed:
+                _validate_confirmed_in_recall(tc.confirmed, recall_map, meta.ktype, meta.raw_text)
                 idx = value_path_counters.get(meta.path, 0)
                 value_path_counters[meta.path] = idx + 1
                 value_confirmations.setdefault(meta.path, []).append((idx, tc.confirmed))
             elif tc.confirmed:
+                _validate_confirmed_in_recall(tc.confirmed, recall_map, meta.ktype, meta.raw_text)
                 set_by_path(result, meta.path, tc.confirmed)
             elif tc.candidates:
                 clarify_items.append(
@@ -342,3 +345,27 @@ def merge_to_confirmed_compute(
         clarify_items=clarify_items,
         needs_clarification=needs,
     )
+
+
+def _validate_confirmed_in_recall(
+    confirmed: str,
+    recall_map: dict[str, list[dict[str, Any]]] | None,
+    ktype: str,
+    raw_text: str,
+) -> None:
+    """Validate that the LLM-confirmed value exists in the recall candidates.
+
+    Raises ClarificationConfirmedNotInRecallError when:
+    - The term was searched (key in recall_map) but had zero results → any confirmed value is hallucination
+    - The term had results but the confirmed value is not among them
+    If the term was never searched (key not in recall_map, e.g. search_enabled=False),
+    skip validation — the LLM may have independently resolved the term.
+    """
+    if not recall_map:
+        return
+    key = f"{ktype}:{raw_text}"
+    if key not in recall_map:
+        return  # term was not searched (e.g. search_enabled=False), skip validation
+    candidates = _recall_fallback_candidates(recall_map, ktype, raw_text)
+    if not candidates or confirmed not in candidates:
+        raise ClarificationConfirmedNotInRecallError(raw_text, confirmed, candidates)
