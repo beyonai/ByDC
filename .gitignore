@@ -192,4 +192,6 @@ packages/datacloud-analysis/src/datacloud_analysis/demo.py
 package.json
 package-lock.json
 examples/chatbi_demo/.demo_env
+examples/chatbi_demo/demo_interrupt.py
 examples/chatbi_demo/resource/
+!examples/chatbi_demo/resource/**/*.owl.template

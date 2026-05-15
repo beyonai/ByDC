@@ -1,0 +1,27 @@
+# 术语数据库配置
+DATACLOUD_DB_TYPE=opengauss
+DATACLOUD_DB_HOST=10.10.168.203
+DATACLOUD_DB_PORT=5432
+DATACLOUD_DB_DATABASE=postgres
+DATACLOUD_DB_SCHEMA=demo_test
+DATACLOUD_DB_USER=gaussdb
+DATACLOUD_DB_PASSWORD=Admin@123
+
+# 术语嵌入模型配置
+DATACLOUD_EMBEDDING_MODEL=text-embedding-v4
+DATACLOUD_EMBEDDING_API_BASE=https://dashscope.aliyuncs.com/compatible-mode/v1
+DATACLOUD_EMBEDDING_API_KEY=sk-6aebeb076dfc47159c00358c9ebccf1e
+
+# 模型配置
+DEMO_API_KEY=sk-DRwRYfqi5HpHFbpTjVWRrBRck1nLrwkaGvf4ywv49lFAgWRH
+DEMO_MODEL=kimi-k2.6
+DEMO_BASE_URL=https://api.moonshot.cn/v1
+DEMO_TEMPERATURE=0.6
+
+# 资源路径
+DEMO_RESOURCE_PATH=./resource
+
+# sql执行器地址（仅API代理时需要）
+# DEMO_SQL_EXECUTE_URL=http://172.21.72.156:8570/knowledgeService/callDomainModel/executeSql
+
+

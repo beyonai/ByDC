@@ -28,7 +28,7 @@ async def main() -> None:
         temperature=float(os.environ["DEMO_TEMPERATURE"]),
         locale=os.environ.get("DEMO_LOCALE", "zh_CN"),
         model_kwargs={"extra_body": {"thinking": {"type": "disabled"}}},
-        sql_execute_url=os.environ["DEMO_SQL_EXECUTE_URL"],
+        sql_execute_url=os.environ.get("DEMO_SQL_EXECUTE_URL"),
     )
     agent = OntologyAgent(config)
 

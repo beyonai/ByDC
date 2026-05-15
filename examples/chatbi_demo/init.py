@@ -23,15 +23,15 @@ _ENV_FILE = _DEMO_ROOT / ".demo_env"
 _SQL_DIR = _DEMO_ROOT / "data/sql"
 _RESOURCE_DIR = _DEMO_ROOT / "resource"
 
-_OWL_FILES = [
-    _RESOURCE_DIR / "object/by_customer/by_customer_dbsource.owl",
-    _RESOURCE_DIR / "object/by_opp_task/by_opp_task_dbsource.owl",
-    _RESOURCE_DIR / "object/by_opportunity/by_opportunity_dbsource.owl",
-    _RESOURCE_DIR / "object/by_project/by_project_dbsource.owl",
-    _RESOURCE_DIR / "object/by_project_task/by_project_task_dbsource.owl",
-    _RESOURCE_DIR / "object/by_rd_task/by_rd_task_dbsource.owl",
-    _RESOURCE_DIR / "object/po_organization/po_organization_dbsource.owl",
-    _RESOURCE_DIR / "object/po_users/po_users_dbsource.owl",
+_OWL_TEMPLATES = [
+    _RESOURCE_DIR / "object/by_customer/by_customer_dbsource.owl.template",
+    _RESOURCE_DIR / "object/by_opp_task/by_opp_task_dbsource.owl.template",
+    _RESOURCE_DIR / "object/by_opportunity/by_opportunity_dbsource.owl.template",
+    _RESOURCE_DIR / "object/by_project/by_project_dbsource.owl.template",
+    _RESOURCE_DIR / "object/by_project_task/by_project_task_dbsource.owl.template",
+    _RESOURCE_DIR / "object/by_rd_task/by_rd_task_dbsource.owl.template",
+    _RESOURCE_DIR / "object/po_organization/po_organization_dbsource.owl.template",
+    _RESOURCE_DIR / "object/po_users/po_users_dbsource.owl.template",
 ]
 
 _SQL_FILES = [
@@ -62,9 +62,14 @@ def _render(template: str, env: dict[str, str]) -> str:
     return re.sub(r"\{\{(\w+)\}\}", _replace, template)
 
 
-def _render_file(path: Path, env: dict[str, str]) -> str:
-    # utf-8-sig 自动去除 UTF-8 BOM（Windows 工具生成的 SQL 文件常带 BOM）
-    return _render(path.read_text(encoding="utf-8-sig"), env)
+def _render_file(path: Path, env: dict[str, str], encoding: str = "utf-8") -> str:
+    content = path.read_text(encoding=encoding)
+    # 修正 DBeaver 导出的双点语法：
+    #   "schema".."table"  → "schema"."table"  （标识符）
+    #   "schema"..seq_name → "schema".seq_name  （nextval 字符串内）
+    content = content.replace('".."', '"."')
+    content = re.sub(r'("[\w]+")\.\.([\w]+)', r'\1.\2', content)
+    return _render(content, env)
 
 
 def _execute_sql(sql_content: str, env: dict[str, str]) -> None:
@@ -85,14 +90,70 @@ def _execute_sql(sql_content: str, env: dict[str, str]) -> None:
         f"host={host} port={port} dbname={database} "
         f"user={user} password={password}"
     )
-    with psycopg.connect(conninfo, autocommit=False) as conn:
-        with conn.cursor() as cur:
-            cur.execute(f"SET search_path TO {schema}")  # noqa: S608
-            for stmt in sql_content.split(";"):
-                stmt = stmt.strip()
-                if stmt:
-                    cur.execute(stmt)
-        conn.commit()
+    ddl_stmts, dml_stmts = _split_sql_ddl_dml(sql_content)
+    logger.info("    DDL 语句数=%d  DML 语句数=%d", len(ddl_stmts), len(dml_stmts))
+
+    # 从 DDL 中提取所有被 nextval 引用的序列名，提前创建（导出时可能漏掉 CREATE SEQUENCE）
+    # nextval('"schema".seq_name'::regclass) 格式
+    seq_names = sorted({
+        m.group(1)
+        for stmt in ddl_stmts
+        for m in re.finditer(r"nextval\('[^']*?\.?([\w]+)'", stmt)
+    })
+
+    with psycopg.connect(conninfo, autocommit=True, client_encoding="utf-8") as conn:
+        conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')  # noqa: S608
+        conn.execute(f'SET search_path TO "{schema}"')  # noqa: S608
+        # 先确保序列存在（幂等）
+        for seq in seq_names:
+            logger.info("    CREATE SEQUENCE IF NOT EXISTS %s", seq)
+            conn.execute(f'CREATE SEQUENCE IF NOT EXISTS "{seq}"')  # noqa: S608
+        # 再执行 DDL（建表），跳过依赖缺失函数的 TRIGGER，最后执行 DML（插入数据）
+        for stmt in ddl_stmts:
+            upper = stmt.lstrip().upper()
+            if upper.startswith("CREATE TRIGGER"):
+                logger.info("    跳过 TRIGGER: %s", stmt[:60].replace("\n", " "))
+                continue
+            # 跳过依赖 pgvector 扩展的向量索引
+            if "vector_cosine_ops" in stmt or "vector_l2_ops" in stmt or "vector_ip_ops" in stmt:
+                logger.info("    跳过向量索引(需要pgvector): %s", stmt[:60].replace("\n", " "))
+                continue
+            try:
+                conn.execute(stmt)
+            except Exception as exc:
+                logger.error("DDL 执行失败: %s\n语句: %s", exc, stmt[:200])
+                raise
+        for stmt in dml_stmts:
+            conn.execute(stmt)
+
+
+def _split_sql_ddl_dml(sql: str) -> tuple[list[str], list[str]]:
+    """按分号拆分 SQL，分别返回 DDL 和 DML 语句列表。"""
+    ddl: list[str] = []
+    dml: list[str] = []
+    buf: list[str] = []
+    for line in sql.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("--"):
+            continue
+        buf.append(line)
+        if stripped.endswith(";"):
+            stmt = "\n".join(buf).strip().rstrip(";").strip()
+            if stmt:
+                upper = stmt.lstrip().upper()
+                if upper.startswith("INSERT"):
+                    dml.append(stmt)
+                else:
+                    ddl.append(stmt)
+            buf = []
+    remainder = "\n".join(buf).strip().rstrip(";").strip()
+    if remainder:
+        upper = remainder.lstrip().upper()
+        if upper.startswith("INSERT"):
+            dml.append(remainder)
+        else:
+            ddl.append(remainder)
+    return ddl, dml
 
 
 def main() -> None:
@@ -110,10 +171,11 @@ def main() -> None:
         env.get("DATACLOUD_DB_USER"),
     )
 
-    # 渲染并写回 OWL 文件（用实际值替换占位符后写入磁盘）
+    # 渲染 OWL 模板，写到同名 .owl 文件（模板保持占位符不变）
     logger.info("── 渲染 OWL 数据源文件 ──")
-    for owl_path in _OWL_FILES:
-        rendered = _render_file(owl_path, env)
+    for tmpl_path in _OWL_TEMPLATES:
+        rendered = _render_file(tmpl_path, env)
+        owl_path = tmpl_path.with_suffix("")  # 去掉 .template 后缀
         owl_path.write_text(rendered, encoding="utf-8")
         logger.info("  OK %s", owl_path.name)
 
