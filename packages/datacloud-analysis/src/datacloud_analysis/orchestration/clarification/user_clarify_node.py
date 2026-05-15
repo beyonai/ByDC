@@ -194,8 +194,7 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
                     str(item.get("kid"))
                     for paradigm in meta_paradigm_list
                     for item in (paradigm.get("paradigmResult") or [])
-                    if item.get("kid") is not None
-                    and str(item.get("keyword")) in _remaining_kw
+                    if item.get("kid") is not None and str(item.get("keyword")) in _remaining_kw
                 }
                 _filtered_pm = {k: v for k, v in _pm.items() if k in _remaining_kids}
                 if _filtered_pm != _pm:

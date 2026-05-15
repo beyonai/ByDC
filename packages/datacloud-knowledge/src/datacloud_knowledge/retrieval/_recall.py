@@ -19,8 +19,8 @@ from datacloud_knowledge.retrieval.recall import (
     PreparedBatch,
     RecallRequest,
     ScopeRecallLayer,
-    _batch_vector,
 )
+from datacloud_knowledge.retrieval.recall._paths import _batch_vector
 from datacloud_knowledge.retrieval.typed_recall import typed_multi_recall_with_session
 
 logger = logging.getLogger(__name__)
@@ -239,9 +239,7 @@ def _vector_only_recall(
         else:
             cat_key = frozenset(allowed_categories)
             if cat_key not in category_cache:
-                category_cache[cat_key] = _load_type_codes_by_category(
-                    allowed_categories  # type: ignore[arg-type]
-                )
+                category_cache[cat_key] = _load_type_codes_by_category(allowed_categories)
             type_filter = category_cache[cat_key]
             if not type_filter:
                 continue

@@ -6,13 +6,21 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from datacloud_knowledge.adapters import create_reader
 from datacloud_knowledge.contracts.types import TermBrief
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
+
+
+class _OwlRelationReader(Protocol):
+    def get_relation_target_ids(self, *, source_term_ids: Sequence[str]) -> Sequence[str]: ...
+
+    def get_terms_batch_raw(
+        self, *, term_ids: Sequence[str]
+    ) -> Sequence[dict[str, str | None]]: ...
 
 
 def resolve_related_owl_terms(
@@ -20,7 +28,7 @@ def resolve_related_owl_terms(
     roots: list[dict[str, Any]],
 ) -> list[TermBrief]:
     collected: set[str] = set()
-    reader = create_reader()
+    reader = cast(_OwlRelationReader, create_reader())
 
     for root in roots or []:
         root_type = _normalize_type_code(str(root.get("term_type_code", "")).strip())
@@ -70,7 +78,7 @@ def resolve_related_owl_terms(
     return out
 
 
-def _collect_from_view_root(reader: Any, view_id: str, collected: set[str]) -> None:
+def _collect_from_view_root(reader: _OwlRelationReader, view_id: str, collected: set[str]) -> None:
     # hop1: VIEW(out) -> OBJ
     hop1_targets = _fetch_targets(reader, [view_id])
     obj_terms = _filter_by_type(_fetch_terms(reader, hop1_targets), "ONTOLOGY_OBJ")
@@ -90,7 +98,7 @@ def _collect_from_view_root(reader: Any, view_id: str, collected: set[str]) -> N
     collected.update(func_ids)
 
 
-def _collect_from_obj_root(reader: Any, obj_id: str, collected: set[str]) -> None:
+def _collect_from_obj_root(reader: _OwlRelationReader, obj_id: str, collected: set[str]) -> None:
     # hop1: OBJ(out) -> ACTION
     hop1_targets = _fetch_targets(reader, [obj_id])
     action_terms = _filter_by_type(_fetch_terms(reader, hop1_targets), "ONTOLOGY_ACTION")
@@ -104,13 +112,13 @@ def _collect_from_obj_root(reader: Any, obj_id: str, collected: set[str]) -> Non
     collected.update(func_ids)
 
 
-def _fetch_targets(reader: Any, source_ids: list[str]) -> list[str]:
+def _fetch_targets(reader: _OwlRelationReader, source_ids: list[str]) -> list[str]:
     if not source_ids:
         return []
     return list(reader.get_relation_target_ids(source_term_ids=source_ids))
 
 
-def _fetch_terms(reader: Any, term_ids: list[str]) -> list[dict[str, Any]]:
+def _fetch_terms(reader: _OwlRelationReader, term_ids: list[str]) -> list[dict[str, Any]]:
     if not term_ids:
         return []
     return list(reader.get_terms_batch_raw(term_ids=term_ids))

@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 def _prepare_batch(
     items: Sequence[TypedKeywordState],
-    session,
+    session: Any,
     *,
     wv_per_type: int,
     scope_code: str | None = None,
@@ -54,7 +54,7 @@ def _prepare_batch(
             cat_key = frozenset(allowed_categories)
             if cat_key not in category_cache:
                 category_cache[cat_key] = serial_recall._load_type_codes_by_category(
-                    allowed_categories  # type: ignore[arg-type]
+                    allowed_categories
                 )
             type_filter = category_cache[cat_key]
             if not type_filter:
@@ -112,7 +112,7 @@ def _run_paths_concurrent(
 def typed_multi_recall_batch(
     items: Sequence[TypedKeywordState],
     *,
-    session,
+    session: Any,
     top_k: int,
     rrf_k: int,
     enable_vector: bool,

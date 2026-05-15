@@ -45,7 +45,7 @@ def notify(
             req = urllib.request.Request(url, data=body, headers=all_headers, method="POST")  # noqa: S310
 
         with urllib.request.urlopen(req, timeout=_TIMEOUT_SECONDS) as resp:  # noqa: S310
-            status_code = resp.status
+            status_code = int(resp.status)
             logger.info("callback notified: url=%s status=%d", url, status_code)
             return 200 <= status_code < 300
 

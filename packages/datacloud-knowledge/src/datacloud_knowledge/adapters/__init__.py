@@ -19,7 +19,8 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -51,7 +52,8 @@ def _register_opengauss() -> None:
 
 def _resolve_backend(backend: str | None = None) -> str:
     """解析后端标识：显式传入 > 环境变量 > 默认值。"""
-    return backend or os.getenv(_ENV_BACKEND, _DEFAULT_BACKEND)
+    resolved = backend or os.getenv(_ENV_BACKEND)
+    return resolved or _DEFAULT_BACKEND
 
 
 # ── 工厂函数 — 内部模块调用入口 ────────────────────────────────────────
@@ -97,7 +99,8 @@ def create_engine(
     if cls is None:
         available = sorted(_engine_registry)
         raise ValueError(f"不支持的后端: {resolved!r}，可用: {available}")
-    return cls(session=session) if session is not None else cls()  # type: ignore[call-arg]
+    factory = cast(Callable[..., TermSearchEngine], cls)
+    return factory(session=session) if session is not None else factory()
 
 
 def create_writer(
@@ -121,7 +124,8 @@ def create_writer(
     if cls is None:
         available = sorted(_writer_registry)
         raise ValueError(f"不支持的后端: {resolved!r}，可用: {available}")
-    return cls(session=session) if session is not None else cls()  # type: ignore[call-arg]
+    factory = cast(Callable[..., TermWriter], cls)
+    return factory(session=session) if session is not None else factory()
 
 
 def store_clarification_results(
