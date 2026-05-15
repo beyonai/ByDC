@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -18,10 +18,6 @@ from datacloud_knowledge.contracts.intent_types import (  # noqa: F401
     ExtractedTerm,
     PreResolveResult,
 )
-
-if TYPE_CHECKING:
-    from datacloud_knowledge.contracts.types import ResolvedField
-
 
 # ── LLM 确认输出 ─────────────────────────────────────────────────────
 

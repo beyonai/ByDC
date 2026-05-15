@@ -243,19 +243,14 @@ def finalize_query_clarification(
     warnings: list[str] = []
     persisted_synonyms: PersistedSynonyms | None = None
 
-    if needs_clarification:
-        # 类型收窄：my py 需要显式检查才能推断非 None
-        if form is None or metadata is None:
-            raise ValueError("form and metadata are required when needs_clarification is True")
-        form_text = _serialize_payload(form)
-        metadata_text = _serialize_payload(metadata)
-        formatter = (
-            _format_clarification_query if mode == "query" else _format_clarification_compute
-        )
-        formatted = formatter(query, original_input, form_text, metadata_text)
-    else:
-        formatted = original_input
-
+    if form is None or metadata is None:
+        raise ValueError("form and metadata are required")
+    form_text = _serialize_payload(form)
+    metadata_text = _serialize_payload(metadata)
+    formatter = _format_clarification_query if mode == "query" else _format_clarification_compute
+    # 回填表单（必须）
+    formatted = formatter(query, original_input, form_text, metadata_text)
+    # 标准化（必须）
     normalized = _normalize_clarification_params(
         formatted,
         ontology_code=ontology_code,

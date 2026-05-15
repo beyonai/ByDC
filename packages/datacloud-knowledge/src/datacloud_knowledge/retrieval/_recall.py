@@ -8,7 +8,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from datacloud_knowledge.adapters import create_reader
 from datacloud_knowledge.contracts.intent_types import ExtractedTerm, PreResolveResult
 from datacloud_knowledge.contracts.rrf import rrf_fuse
 from datacloud_knowledge.retrieval._recall_common import (
@@ -44,6 +43,8 @@ def unified_recall(
     top_k: int = 10,
     scope_code: str | None = None,
     scope_layers: list[ScopeRecallLayer] | None = None,
+    field_layers: list[ScopeRecallLayer] | None = None,
+    value_layers: list[ScopeRecallLayer] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """对所有术语执行统一召回。
 
@@ -51,12 +52,18 @@ def unified_recall(
     调用 typed_multi_recall_with_session 执行召回。
     vector_only 术语（英文标识符如 stat_date）只走向量召回路径。
 
+    When ``field_layers`` / ``value_layers`` are provided, whereValue terms use
+    ``value_layers`` (for cross-ontology dimension values via joinkeys), while
+    all other terms use ``field_layers`` (base ontology + confirmed_object only).
+    ``scope_layers`` is a legacy synonym for when the caller doesn't split by type.
+
     Returns:
         dict["ktype:raw_text", list[CandidateDict]]。
     """
     # 去重：相同 ktype + raw_text 只召回一次
     seen: set[str] = set()
     normal_items: list[_RecallItem] = []
+    value_items: list[_RecallItem] = []
     vector_only_items: list[_RecallItem] = []
     for term in terms:
         if not term.search_enabled:
@@ -72,19 +79,34 @@ def unified_recall(
         )
         if term.vector_only:
             vector_only_items.append(item)
+        elif term.ktype == "whereValue":
+            value_items.append(item)
         else:
             normal_items.append(item)
 
     result: dict[str, list[dict[str, Any]]] = {}
 
-    # 常规术语：走全部 4 路召回（BM25 + Jieba + Substring + Vector）
+    # 字段类术语（select/whereKey/groupBy/orderBy）
     if normal_items:
+        layers = field_layers if field_layers is not None else scope_layers
         result.update(
             typed_multi_recall_with_session(
                 normal_items,
                 top_k=top_k,
                 scope_code=scope_code,
-                scope_layers=scope_layers,
+                scope_layers=layers,
+            )
+        )
+
+    # whereValue 术语（维度值）— 独立 scope，可跨本体
+    if value_items:
+        layers = value_layers if value_layers is not None else scope_layers
+        result.update(
+            typed_multi_recall_with_session(
+                value_items,
+                top_k=top_k,
+                scope_code=scope_code,
+                scope_layers=layers,
             )
         )
 
@@ -99,61 +121,51 @@ def build_scope_recall_layers(
     ontology_code: str,
     pre: PreResolveResult,
     cc_pre: PreResolveResult,
-) -> list[ScopeRecallLayer]:
-    """基于已确认字段构建加权 scope 栈，用于召回范围校验。
+) -> tuple[list[ScopeRecallLayer], list[ScopeRecallLayer]]:
+    """Build per-type scope stacks for recall validation.
 
-    两种 scope 扩展来源：
-    1. ``get_matching_objects`` — 共享同名已确认字段的其他 object。
-    2. 跨对象 BUSINESS 关系 — 当某个已确认字段的值存储在另一个 ontology 对象中
-       （如 ``handler_user_id`` → ``po_users``），将目标对象作为额外 scope layer
-       加入，使 whereValue 召回能搜到当前 ontology scope 之外的维度值。
+    Returns ``(field_layers, value_layers)``:
+    - **field_layers**: base ontology only. Field names (select/whereKey/groupBy/orderBy)
+      are inherently scoped — they must belong to the current ontology.
+    - **value_layers**: base ontology + joinkey_object (joinkeys.sourceField match).
+      whereValue dimension values may live in cross-referenced ontologies
+      (e.g., ``handler_user_id`` values in ``po_users``).
     """
-    layers: list[ScopeRecallLayer] = []
     field_codes = _collect_confirmed_field_codes(pre, cc_pre)
-    if ontology_code:
-        layers.append(ScopeRecallLayer(scope_code=ontology_code, weight=1.0, label="ontology"))
+    base = [ScopeRecallLayer(scope_code=ontology_code, weight=1.0, label="ontology")]
     if not ontology_code or not field_codes:
-        return layers
+        return base, base
 
-    try:
-        reader = create_reader()
-        rows = reader.get_matching_objects(
-            ontology_code=ontology_code,
-            field_codes=field_codes,
-        )
-    except Exception:
-        logger.warning("[clarification] build scope recall layers failed", exc_info=True)
-        return layers
+    # ── field layers: base ontology only ──
+    field_layers: list[ScopeRecallLayer] = list(base)
 
-    for object_code, matched_count in rows:
-        code = str(object_code)
-        if code == ontology_code:
-            continue
-        weight = 1.5 + min(float(matched_count), 3.0) * 0.25
-        layers.append(ScopeRecallLayer(scope_code=code, weight=weight, label="confirmed_object"))
-
-    # ── 通过跨对象 BUSINESS 关系扩展 scope ──
-    # 当某个字段的值存储在另一个对象中（如 handler_user_id → po_users），
-    # whereValue 召回必须搜目标对象的 scope 才能找到维度值。
-    seen_scopes: set[str] = {layer.scope_code for layer in layers if layer.scope_code}
-    related_codes: list[str] = _collect_related_object_codes(ontology_code, field_codes)
+    # ── value layers: base + joinkey_object ──
+    value_layers: list[ScopeRecallLayer] = list(base)
+    seen_scopes: set[str] = {ontology_code}
+    related_codes: list[str] = _collect_joinkey_related_objects(ontology_code, field_codes)
     for code in related_codes:
         if code not in seen_scopes:
-            layers.append(ScopeRecallLayer(scope_code=code, weight=0.7, label="related_object"))
+            value_layers.append(
+                ScopeRecallLayer(scope_code=code, weight=0.7, label="joinkey_object")
+            )
             seen_scopes.add(code)
-    return layers
+
+    return field_layers, value_layers
 
 
-def _collect_related_object_codes(
+def _collect_joinkey_related_objects(
     ontology_code: str,
     field_codes: list[str],
 ) -> list[str]:
-    """查找与当前 ontology 存在 BUSINESS 关系的对象。
+    """Extract target object codes where joinkeys.sourceField matches a confirmed field.
 
-    跨对象关系（如 by_rd_task → po_users，joinkeys: handler_user_id↔user_id）
-    表明已确认字段的维度值存储在目标对象的 scope 中。此函数提取这些目标对象的
-    term_code，供 scope recall layer 使用。
+    Cross-object BUSINESS relations carry joinkeys (e.g., ``handler_user_id → user_id``)
+    stored in ``term_relation.ext_attrs``. This function only adds a target object to
+    the scope when a confirmed field code is listed as a ``sourceField`` in at least
+    one joinkey — avoiding the noise of adding ALL BUSINESS-related objects.
     """
+    if not field_codes:
+        return []
     try:
         from sqlalchemy import text
 
@@ -162,7 +174,7 @@ def _collect_related_object_codes(
         with get_session() as session:
             rows = session.execute(
                 text(
-                    "SELECT DISTINCT target.term_code "
+                    "SELECT DISTINCT target.term_code, rel.ext_attrs "
                     "FROM term AS source "
                     "JOIN term_relation AS rel "
                     "  ON rel.source_term_id = source.term_id "
@@ -177,12 +189,22 @@ def _collect_related_object_codes(
             ).fetchall()
     except Exception:
         logger.warning(
-            "[clarification] collect related object codes failed for ontology=%s",
+            "[clarification] collect joinkey related objects failed for ontology=%s",
             ontology_code,
             exc_info=True,
         )
         return []
-    return [str(r.term_code) for r in rows]
+
+    result: list[str] = []
+    field_set = frozenset(field_codes)
+    for obj_code, ext_attrs in rows:
+        if not isinstance(ext_attrs, dict):
+            continue
+        for jk in ext_attrs.get("joinkeys") or []:
+            if isinstance(jk, dict) and jk.get("sourceField") in field_set:
+                result.append(str(obj_code))
+                break  # one match per object is enough
+    return result
 
 
 def _collect_confirmed_field_codes(pre: PreResolveResult, cc_pre: PreResolveResult) -> list[str]:

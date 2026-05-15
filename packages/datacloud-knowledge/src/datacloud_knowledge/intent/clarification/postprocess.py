@@ -20,9 +20,35 @@ def normalize_clarification_params(
     ontology_code: str,
     user_id: str | None = None,
 ) -> dict[str, Any]:
-    """Normalize confirmed clarification params to canonical English field codes."""
+    """Normalize confirmed clarification params to canonical English field codes.
+
+    Two-stage resolution:
+    1. Field-alias resolution (``resolve_field_aliases``) — fast, for registered aliases.
+    2. Term-name fallback — for display names (e.g., "回款金额") that are valid
+       term_names but not registered as field aliases, look up their ``term_code``
+       directly from the term table.
+    """
+    reader = create_reader()
     field_terms, _ = collect_terms_from_params(params)
-    result = create_reader().resolve_field_aliases(terms=field_terms, scope_code=ontology_code)
+    result = reader.resolve_field_aliases(terms=field_terms, scope_code=ontology_code)
+
+    # ── Term-name fallback for unresolved Chinese names ──
+    unresolved = _collect_unresolved_terms(field_terms, result.resolved)
+    if unresolved:
+        try:
+            term_code_map = reader.get_term_codes_by_names(
+                terms=unresolved, scope_code=ontology_code
+            )
+            for term, code in term_code_map.items():
+                result.resolved.setdefault(term, code)
+        except Exception:
+            logger.warning(
+                "[postprocess] term-name fallback failed for %d terms: %s",
+                len(unresolved),
+                unresolved[:5],
+                exc_info=True,
+            )
+
     patched = apply_resolved_to_params(params, result.resolved)
     scope_maps = _load_scope_term_maps(ontology_code)
     return _normalize_filter_values(patched, scope_maps)
@@ -155,6 +181,25 @@ def _build_predicate_synonym_payload(
 
 def _is_field_code(term: str) -> bool:
     return bool(_FIELD_CODE_RE.match(term))
+
+
+def _collect_unresolved_terms(
+    field_terms: list[str],
+    resolved: dict[str, str],
+) -> list[str]:
+    """Collect Chinese terms that were not resolved by field-alias resolution.
+
+    Only non-English terms (i.e., terms that don't look like field codes) that
+    are missing from the resolved dict are returned, in first-seen order.
+    """
+    unresolved: list[str] = []
+    seen: set[str] = set()
+    for term in field_terms:
+        if term in resolved or _is_field_code(term) or term in seen:
+            continue
+        seen.add(term)
+        unresolved.append(term)
+    return unresolved
 
 
 def collect_terms_from_params(tool_params: dict[str, Any]) -> tuple[list[str], list[str]]:

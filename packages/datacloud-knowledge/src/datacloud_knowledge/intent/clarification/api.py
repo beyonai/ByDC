@@ -14,6 +14,12 @@ from typing import Any, Literal
 
 from datacloud_knowledge.intent.llm_utils import EventEmitter
 from datacloud_knowledge.intent.types import ClarificationResult
+from datacloud_knowledge.retrieval._recall import (
+    build_scope_recall_layers as _build_scope_recall_layers,
+)
+from datacloud_knowledge.retrieval._recall import (
+    unified_recall as _unified_recall,
+)
 
 from ._merge import (  # noqa: F401 — re-exported for backward compatibility
     _dedupe_condition_term_mappings,
@@ -43,12 +49,6 @@ from ._patch import (
 )
 from ._pre_resolve import (
     pre_resolve_terms as _pre_resolve_terms,
-)
-from datacloud_knowledge.retrieval._recall import (
-    build_scope_recall_layers as _build_scope_recall_layers,
-)
-from datacloud_knowledge.retrieval._recall import (
-    unified_recall as _unified_recall,
 )
 from .cartesian import (
     build_paradigm_list,
@@ -144,11 +144,18 @@ def analyze_query_clarification(
 
     # ── Step 3: 定向召回 ──
     recall_terms = list(pre.unresolved_terms) + list(cc_pre.unresolved_terms)
-    inferred_scope_layers = _build_scope_recall_layers(ontology_code, pre, cc_pre)
-    scope_layers = inferred_scope_layers if len(inferred_scope_layers) > 1 else None
+    field_layers, value_layers = _build_scope_recall_layers(ontology_code, pre, cc_pre)
+    # 只在 >1 层时才启用分层召回，否则走 scope_code 单层
+    use_field_layers = field_layers if len(field_layers) > 1 else None
+    use_value_layers = value_layers if len(value_layers) > 1 else None
     with emit.step("知识召回", "knowledge_recall"):
         recall_map = (
-            _unified_recall(recall_terms, scope_code=ontology_code, scope_layers=scope_layers)
+            _unified_recall(
+                recall_terms,
+                scope_code=ontology_code,
+                field_layers=use_field_layers,
+                value_layers=use_value_layers,
+            )
             if recall_terms
             else {}
         )

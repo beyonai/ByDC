@@ -1307,6 +1307,41 @@ class PostgresTermReader:
             raise
         return {str(r.type_code) for r in rows}
 
+    def get_term_codes_by_names(
+        self, *, terms: Sequence[str], scope_code: str | None = None
+    ) -> dict[str, str]:
+        """Look up ``term_code`` by ``term_name`` for a batch of terms.
+
+        Used as a fallback when field-alias resolution cannot resolve a Chinese
+        display name (e.g., "回款金额") — queries the term table directly by
+        ``term_name`` and returns ``{term_name: term_code}`` mappings.
+
+        ``scope_code`` is accepted for call-site compatibility but NOT used as
+        a filter: ``term_code`` is globally unique per term, and restricting by
+        scope would miss valid mappings (e.g., "回款金额" is a standalone prop
+        not linked to any specific object). The caller is responsible for
+        validating the returned codes against the ontology if needed.
+        """
+        if not terms:
+            return {}
+        unique_terms = list(dict.fromkeys(terms))
+        mapping: dict[str, str] = {}
+        try:
+            with self._session_factory() as session:
+                rows = session.execute(
+                    text(
+                        "SELECT term_name, term_code FROM term "
+                        "WHERE term_name IN :terms AND term_type_code = 'prop'"
+                    ).bindparams(bindparam("terms", expanding=True)),
+                    {"terms": tuple(unique_terms)},
+                ).fetchall()
+        except Exception:
+            logger.exception("get_term_codes_by_names failed: terms=%s", terms)
+            raise
+        for term_name, term_code in rows:
+            mapping[str(term_name)] = str(term_code)
+        return mapping
+
     def get_matching_objects(
         self,
         *,
