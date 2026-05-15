@@ -31,7 +31,9 @@ from datacloud_analysis.ontology_agent import (
     ParadigmGroupSelection,
     ParadigmOption,
     ThinkingEvent,
+    _interrupt_value_to_paradigm_list,
     _make_cache_key,
+    _paradigm_answer_to_resume_value,
 )
 
 # ── 辅助常量 ──────────────────────────────────────────────────────────────────
@@ -519,3 +521,335 @@ def test_resume_does_not_accept_gateway_context_kwarg() -> None:
     sig = inspect.signature(OntologyAgent.resume)
     assert "gateway_context" not in sig.parameters
     assert "session_id" in sig.parameters
+
+
+# ── _interrupt_value_to_paradigm_list 单元测试 ────────────────────────────────
+
+
+class TestInterruptValueToParadigmList:
+    """T-BUGFIX: 验证 _interrupt_value_to_paradigm_list 正确解析各类型 paradigm。"""
+
+    def test_query_value_paradigm_parsed_correctly(self) -> None:
+        """查询值（paradigmId='1'）: choiceKeyword/keyword/kid/ktype/recall 不应丢失。"""
+        payload: dict[str, Any] = {
+            "paradigmList": [
+                {
+                    "paradigmId": "1",
+                    "paradigmName": "查询值",
+                    "paradigmResult": [
+                        {
+                            "keyword": "opp_name",
+                            "recall": ["商机名称"],
+                            "kid": 1,
+                            "ktype": "select",
+                            "choiceKeyword": "商机名称",
+                        },
+                        {
+                            "keyword": "contract_amount",
+                            "recall": ["签约金额"],
+                            "kid": 2,
+                            "ktype": "select",
+                            "choiceKeyword": "签约金额",
+                        },
+                    ],
+                }
+            ],
+        }
+        result = _interrupt_value_to_paradigm_list(payload)
+        assert result is not None
+        assert len(result) == 1
+        group = result[0]
+        assert group.paradigm_id == "1"
+        assert group.paradigm_name == "查询值"
+        assert len(group.options) == 2
+
+        opt0 = group.options[0]
+        assert opt0.choice_keyword == "商机名称"
+        assert opt0.recall == ["商机名称"]
+        assert opt0.keyword == "opp_name"
+        assert opt0.kid == 1
+        assert opt0.ktype == "select"
+        # 过滤字段应为默认值
+        assert opt0.filter_field == ""
+        assert opt0.comparison == ""
+        assert opt0.value == ""
+        assert opt0.choice_field == ""
+        assert opt0.choice_comparison == ""
+        assert opt0.field_recall == []
+        assert opt0.comparison_recall == []
+        assert opt0.value_recall == []
+
+    def test_filter_paradigm_parsed_correctly(self) -> None:
+        """过滤条件（paradigmId='3'）: field/comparison/value/choiceField 等不应丢失。"""
+        payload: dict[str, Any] = {
+            "paradigmList": [
+                {
+                    "paradigmId": "3",
+                    "paradigmName": "过滤条件",
+                    "paradigmResult": [
+                        {
+                            "field": "sales_user_id",
+                            "comparison": "eq",
+                            "comparisonRecall": ["eq", "gt", "lt", "gte", "lte", "in", "between"],
+                            "choiceComparison": "eq",
+                            "fieldRecall": ["所属销售用户编码(ref: po_users.user_code)"],
+                            "choiceField": "所属销售用户编码(ref: po_users.user_code)",
+                            "value": "韦小二",
+                            "valueRecall": ["韦小宝", "韦一笑"],
+                        }
+                    ],
+                }
+            ],
+        }
+        result = _interrupt_value_to_paradigm_list(payload)
+        assert result is not None
+        assert len(result) == 1
+        group = result[0]
+        assert group.paradigm_id == "3"
+        assert group.paradigm_name == "过滤条件"
+        assert len(group.options) == 1
+
+        opt = group.options[0]
+        # 过滤专用字段应正确填充
+        assert opt.filter_field == "sales_user_id"
+        assert opt.comparison == "eq"
+        assert opt.value == "韦小二"
+        assert opt.choice_field == "所属销售用户编码(ref: po_users.user_code)"
+        assert opt.choice_comparison == "eq"
+        assert opt.field_recall == ["所属销售用户编码(ref: po_users.user_code)"]
+        assert opt.comparison_recall == ["eq", "gt", "lt", "gte", "lte", "in", "between"]
+        assert opt.value_recall == ["韦小宝", "韦一笑"]
+        # 查询值字段应为默认值
+        assert opt.choice_keyword == ""
+        assert opt.recall == []
+        assert opt.keyword == ""
+        assert opt.kid == 0
+        assert opt.ktype == ""
+
+    def test_mixed_query_and_filter_paradigms(self) -> None:
+        """混合列表：查询值和过滤条件应各自正确解析，互不干扰。"""
+        payload: dict[str, Any] = {
+            "paradigmList": [
+                {
+                    "paradigmId": "1",
+                    "paradigmName": "查询值",
+                    "paradigmResult": [
+                        {
+                            "keyword": "opp_name",
+                            "recall": ["商机名称"],
+                            "kid": 1,
+                            "ktype": "select",
+                            "choiceKeyword": "商机名称",
+                        }
+                    ],
+                },
+                {
+                    "paradigmId": "3",
+                    "paradigmName": "过滤条件",
+                    "paradigmResult": [
+                        {
+                            "field": "sales_user_id",
+                            "comparison": "eq",
+                            "value": "韦小二",
+                            "choiceField": "所属销售用户编码",
+                            "choiceComparison": "eq",
+                            "fieldRecall": ["所属销售用户编码"],
+                            "comparisonRecall": ["eq"],
+                            "valueRecall": ["韦小二"],
+                        }
+                    ],
+                },
+            ],
+        }
+        result = _interrupt_value_to_paradigm_list(payload)
+        assert result is not None
+        assert len(result) == 2
+
+        # 查询值
+        qv = result[0]
+        assert qv.paradigm_id == "1"
+        assert qv.paradigm_name == "查询值"
+        assert qv.options[0].choice_keyword == "商机名称"
+        assert qv.options[0].keyword == "opp_name"
+
+        # 过滤条件
+        fc = result[1]
+        assert fc.paradigm_id == "3"
+        assert fc.paradigm_name == "过滤条件"
+        assert fc.options[0].filter_field == "sales_user_id"
+        assert fc.options[0].comparison == "eq"
+        assert fc.options[0].value == "韦小二"
+
+    def test_empty_paradigm_list_returns_none(self) -> None:
+        """空 paradigmList 返回 None。"""
+        assert _interrupt_value_to_paradigm_list({}) is None
+        assert _interrupt_value_to_paradigm_list({"paradigmList": []}) is None
+
+    def test_paradigm_with_empty_result_list(self) -> None:
+        """paradigmResult 为空列表时 options 为空但不抛异常。"""
+        payload: dict[str, Any] = {
+            "paradigmList": [
+                {
+                    "paradigmId": "2",
+                    "paradigmName": "分组条件",
+                    "paradigmResult": [],
+                }
+            ],
+        }
+        result = _interrupt_value_to_paradigm_list(payload)
+        assert result is not None
+        assert len(result) == 1
+        assert result[0].paradigm_name == "分组条件"
+        assert result[0].options == []
+
+    def test_paradigm_with_missing_result_key(self) -> None:
+        """没有 paradigmResult key 时正常解析为空 options。"""
+        payload: dict[str, Any] = {
+            "paradigmList": [
+                {
+                    "paradigmId": "4",
+                    "paradigmName": "排序目标",
+                }
+            ],
+        }
+        result = _interrupt_value_to_paradigm_list(payload)
+        assert result is not None
+        assert len(result) == 1
+        assert result[0].paradigm_name == "排序目标"
+        assert result[0].options == []
+
+    def test_uses_paradigm_code_as_fallback_id(self) -> None:
+        """当 paradigmId 不存在时，使用 paradigmCode 作为 fallback。"""
+        payload: dict[str, Any] = {
+            "paradigmList": [
+                {
+                    "paradigmCode": "FILTER",
+                    "paradigmName": "过滤",
+                    "paradigmResult": [
+                        {
+                            "field": "code",
+                            "comparison": "eq",
+                            "value": "test",
+                            "choiceField": "编码",
+                            "choiceComparison": "eq",
+                            "fieldRecall": ["编码"],
+                            "comparisonRecall": ["eq"],
+                            "valueRecall": ["test"],
+                        }
+                    ],
+                }
+            ],
+        }
+        result = _interrupt_value_to_paradigm_list(payload)
+        assert result is not None
+        assert result[0].paradigm_id == "FILTER"
+
+
+# ── _paradigm_answer_to_resume_value 单元测试 ─────────────────────────────────
+
+
+class TestParadigmAnswerToResumeValue:
+    """T-BUGFIX: 验证 resume_value 重建时过滤字段不丢失。"""
+
+    def test_raw_takes_priority(self) -> None:
+        """raw 存在时直接透传，不做任何转换。"""
+        raw: dict[str, Any] = {
+            "paradigmList": [{"original": "keep-me", "query": "Q"}],
+            "metadata": {"clarify_knowledge": "k"},
+        }
+        answer = ParadigmAnswer()
+        result = _paradigm_answer_to_resume_value(answer, raw=raw)
+        assert result is raw
+
+    def test_fallback_preserves_filter_fields(self) -> None:
+        """raw=None 时，ParadigmAnswer 的 filter 字段应写入 resume_value。"""
+        answer = ParadigmAnswer(
+            selections=[
+                ParadigmGroupSelection(
+                    paradigm_id="3",
+                    paradigm_name="过滤条件",
+                    chosen_options=[
+                        ParadigmOption(
+                            choice_keyword="",
+                            recall=[],
+                            filter_field="sales_user_id",
+                            comparison="eq",
+                            value="韦小二",
+                            choice_field="所属销售用户编码",
+                            choice_comparison="eq",
+                        )
+                    ],
+                )
+            ]
+        )
+        result = _paradigm_answer_to_resume_value(answer)
+        assert "paradigmList" in result
+        items = result["paradigmList"][0]["paradigmList"]
+        assert len(items) == 1
+        item = items[0]
+        assert item["choiceKeyword"] == ""
+        assert item["field"] == "sales_user_id"
+        assert item["choiceField"] == "所属销售用户编码"
+        assert item["comparison"] == "eq"
+        assert item["choiceComparison"] == "eq"
+        assert item["value"] == "韦小二"
+
+    def test_fallback_query_value_only(self) -> None:
+        """raw=None 时，查询值选项只输出 choiceKeyword/recall（无 filter 字段）。"""
+        answer = ParadigmAnswer(
+            selections=[
+                ParadigmGroupSelection(
+                    paradigm_id="1",
+                    paradigm_name="查询值",
+                    chosen_options=[ParadigmOption(choice_keyword="商机名称", recall=["商机名称"])],
+                )
+            ]
+        )
+        result = _paradigm_answer_to_resume_value(answer)
+        items = result["paradigmList"][0]["paradigmList"]
+        item = items[0]
+        assert item["choiceKeyword"] == "商机名称"
+        assert item["recall"] == ["商机名称"]
+        # 查询值不输出 filter 字段
+        assert "field" not in item
+        assert "comparison" not in item
+        assert "value" not in item
+
+    def test_fallback_mixed_options(self) -> None:
+        """raw=None 时，混合选项各自保留应有字段。"""
+        answer = ParadigmAnswer(
+            selections=[
+                ParadigmGroupSelection(
+                    paradigm_id="1",
+                    paradigm_name="查询值",
+                    chosen_options=[
+                        ParadigmOption(choice_keyword="商机名称", recall=["商机名称"]),
+                    ],
+                ),
+                ParadigmGroupSelection(
+                    paradigm_id="3",
+                    paradigm_name="过滤条件",
+                    chosen_options=[
+                        ParadigmOption(
+                            choice_keyword="",
+                            recall=[],
+                            filter_field="code",
+                            comparison="gt",
+                            value="100",
+                            choice_field="编码",
+                            choice_comparison="gt",
+                        ),
+                    ],
+                ),
+            ]
+        )
+        result = _paradigm_answer_to_resume_value(answer)
+        items = result["paradigmList"][0]["paradigmList"]
+        assert len(items) == 2
+        # 查询值选项
+        assert items[0]["choiceKeyword"] == "商机名称"
+        assert "field" not in items[0]
+        # 过滤选项
+        assert items[1]["field"] == "code"
+        assert items[1]["comparison"] == "gt"
+        assert items[1]["value"] == "100"
