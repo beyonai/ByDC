@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import bindparam, text
+from sqlalchemy.sql.elements import TextClause
 
 from datacloud_knowledge.adapters.opengauss._db.url import resolve_knowledge_schema
 
@@ -80,7 +81,7 @@ def _has_name_keywords_column(session: Session) -> bool:
     return bool(_COLUMN_CAPS_CACHE[cache_key])
 
 
-def _build_search_sql(*, with_type_filter: bool = False) -> object:
+def _build_search_sql(*, with_type_filter: bool = False) -> TextClause:
     type_clause = "\n            AND t.term_type_code IN :type_codes" if with_type_filter else ""
     sql_text = f"""
         SELECT
@@ -207,7 +208,7 @@ def bm25_search_with_or(
     )
 
 
-def _build_partitioned_search_sql(*, with_type_filter: bool = True) -> object:
+def _build_partitioned_search_sql(*, with_type_filter: bool = True) -> TextClause:
     """BM25 查询 + ``ROW_NUMBER() OVER (PARTITION BY term_type_code)`` 分区取 top-N。"""
     sql_text = """
         SELECT term_id, term_name, name_id, term_type_code, score, term_code
@@ -364,7 +365,7 @@ def _has_jieba_column(session: Session) -> bool:
 def _jieba_tokenize(text_input: str) -> str:
     """jieba 分词后用 `` & `` 拼接为 tsquery 字符串。"""
     try:
-        import jieba  # type: ignore[import-untyped]
+        import jieba
     except ImportError:
         return " & ".join(list(text_input.strip()))
     tokens = [t for t in jieba.lcut(text_input) if t.strip()]
@@ -373,7 +374,7 @@ def _jieba_tokenize(text_input: str) -> str:
     return " & ".join(tokens)
 
 
-def _build_jieba_search_sql(*, with_type_filter: bool = False) -> object:
+def _build_jieba_search_sql(*, with_type_filter: bool = False) -> TextClause:
     """BM25 查询 name_keywords_jieba 列。"""
     type_clause = "\n            AND t.term_type_code IN :type_codes" if with_type_filter else ""
     sql_text = f"""
@@ -463,7 +464,7 @@ def bm25_search_jieba(
         raise
 
 
-def _build_jieba_partitioned_sql() -> object:
+def _build_jieba_partitioned_sql() -> TextClause:
     """jieba 分词 BM25 + PARTITION BY term_type_code 分区取 top-N。"""
     sql_text = """
         SELECT term_id, term_name, name_id, term_type_code, score, term_code

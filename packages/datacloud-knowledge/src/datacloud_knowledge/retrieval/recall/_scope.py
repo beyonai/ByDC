@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ._fusion import _batch_single_char_fallback, _fuse_and_shape, _single_char_fallback_tsquery
 from ._models import (
@@ -202,7 +202,7 @@ def _add_layered_single_char_fallback_results(
 def _typed_multi_recall_layered(
     items: Sequence[TypedKeywordState],
     *,
-    session,
+    session: Any,
     top_k: int,
     rrf_k: int,
     enable_vector: bool,
