@@ -1,0 +1,306 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/entity/mapping#">
+
+    <owl:Class rdf:about="#EntityMapping"><rdfs:label>实体映射</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#Mapping"><rdfs:label>映射关系</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#po_users_mapping">
+        <rdf:type rdf:resource="#EntityMapping"/>
+        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</entity_code>
+        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户信息表</entity_name>
+        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">平台用户维度对象，承载销售、发起人、处理人等人员信息。</entity_desc>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+        <mapping rdf:resource="#user_id_mapping"/>
+        <mapping rdf:resource="#user_name_mapping"/>
+        <mapping rdf:resource="#email_mapping"/>
+        <mapping rdf:resource="#phone_mapping"/>
+        <mapping rdf:resource="#user_code_mapping"/>
+        <mapping rdf:resource="#pwd_mapping"/>
+        <mapping rdf:resource="#address_mapping"/>
+        <mapping rdf:resource="#remark_mapping"/>
+        <mapping rdf:resource="#user_eff_date_mapping"/>
+        <mapping rdf:resource="#user_exp_date_mapping"/>
+        <mapping rdf:resource="#create_date_mapping"/>
+        <mapping rdf:resource="#update_date_mapping"/>
+        <mapping rdf:resource="#state_mapping"/>
+        <mapping rdf:resource="#state_time_mapping"/>
+        <mapping rdf:resource="#is_locked_mapping"/>
+        <mapping rdf:resource="#last_login_date_mapping"/>
+        <mapping rdf:resource="#security_question_id_mapping"/>
+        <mapping rdf:resource="#security_answer_mapping"/>
+        <mapping rdf:resource="#thumbnail_uri_mapping"/>
+        <mapping rdf:resource="#ext_attr_mapping"/>
+        <mapping rdf:resource="#assistant_id_mapping"/>
+        <mapping rdf:resource="#user_number_mapping"/>
+        <mapping rdf:resource="#station_id_mapping"/>
+        <mapping rdf:resource="#register_type_mapping"/>
+        <mapping rdf:resource="#apple_user_id_mapping"/>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#user_id_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户唯一标识</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_id</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "id"}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#user_name_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#email_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">email</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户邮箱</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">email</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#phone_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phone</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户电话</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phone</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#user_code_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_code</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户登录标识</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_code</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "id"}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#pwd_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pwd</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户密码(md5加密)</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pwd</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#address_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">address</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户地址</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">address</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#remark_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">remark</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户备注</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">remark</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#user_eff_date_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_eff_date</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">预留</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_eff_date</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#user_exp_date_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_exp_date</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户过期日期</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_exp_date</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#create_date_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_date</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">记录创建日期</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_date</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "datetime"}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#update_date_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_date</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">记录更新日期</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_date</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "datetime"}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#state_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">state</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户状态：A-正常;X-禁用</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">state</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#state_time_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">state_time</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">state_time</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">state_time</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#is_locked_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">is_locked</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">是否锁定，'Y'-锁定，'N'-没有锁定，null表示'N'</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">is_locked</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#last_login_date_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">last_login_date</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户最后一次登录时间</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">last_login_date</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "datetime"}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#security_question_id_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">security_question_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户忘记密码找回密码问题</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">security_question_id</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#security_answer_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">security_answer</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户忘记密码安全提示问题</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">security_answer</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#thumbnail_uri_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">thumbnail_uri</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户头像URL地址</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">thumbnail_uri</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#ext_attr_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ext_attr</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户扩展信息</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ext_attr</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#assistant_id_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">assistant_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">一个员工对应一个超级助手</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">assistant_id</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#user_number_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_number</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">工号</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_number</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "id"}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#station_id_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">station_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属驻地</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">station_id</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"property_role_rule": {"property_role": "DIMENSION", "rule_type": "id"}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#register_type_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">register_type</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">注册类型 1-手机号注册</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">register_type</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#apple_user_id_mapping">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">apple_user_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">苹果用户ID，用于苹果登录关联</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">apple_user_id</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_property>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#entity_code"/>
+    <owl:DatatypeProperty rdf:about="#entity_name"/>
+    <owl:DatatypeProperty rdf:about="#entity_desc"/>
+    <owl:DatatypeProperty rdf:about="#version"/>
+    <owl:DatatypeProperty rdf:about="#mapping"/>
+    <owl:DatatypeProperty rdf:about="#property_code"/>
+    <owl:DatatypeProperty rdf:about="#property_name"/>
+    <owl:DatatypeProperty rdf:about="#source_table_code"/>
+    <owl:DatatypeProperty rdf:about="#source_column_code"/>
+    <owl:DatatypeProperty rdf:about="#source_datasource_code"/>
+    <owl:DatatypeProperty rdf:about="#ext_property"/>
+</rdf:RDF>

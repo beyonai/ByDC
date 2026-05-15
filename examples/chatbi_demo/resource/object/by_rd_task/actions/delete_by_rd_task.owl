@@ -1,0 +1,101 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/action/ontology#">
+
+    <owl:Class rdf:about="#ActionDefinition"><rdfs:label>动作定义</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#RequestParameter"><rdfs:label>请求参数</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#ResponseParameter"><rdfs:label>响应参数</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#HeaderParameter"><rdfs:label>请求头参数</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#action_delete_by_rd_task">
+        <rdf:type rdf:resource="#ActionDefinition"/>
+        <action_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">delete_by_rd_task</action_code>
+        <action_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">删除研发任务</action_name>
+        <action_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据 ids 数组批量删除研发任务记录，返回 AjaxResult。</action_desc>
+        <action_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OPERATION</action_type>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+        <function_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</function_refs>
+        <belong_entity rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["by_rd_task"]</belong_entity>
+        <request_url rdf:datatype="http://www.w3.org/2001/XMLSchema#string">http://10.10.168.203:8999/api/by/rd-task/remove</request_url>
+        <request_method rdf:datatype="http://www.w3.org/2001/XMLSchema#string">POST</request_method>
+        <script rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></script>
+        <request_header rdf:resource="#http_header"/>
+        <request_params rdf:resource="#param_delete_by_rd_task_ids_0"/>
+        <response_params rdf:resource="#resp_delete_by_rd_task_code_0"/>
+        <response_params rdf:resource="#resp_delete_by_rd_task_msg_1"/>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#param_delete_by_rd_task_ids_0">
+        <rdf:type rdf:resource="#RequestParameter"/>
+        <paramCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ids</paramCode>
+        <type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">array</type>
+        <description rdf:datatype="http://www.w3.org/2001/XMLSchema#string">主键ID数组，例如 [1,2,3]</description>
+        <isRequired rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</isRequired>
+        <mapping_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">$.requestBody.ids</mapping_path>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#resp_delete_by_rd_task_code_0">
+        <rdf:type rdf:resource="#ResponseParameter"/>
+        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">code</fieldCode>
+        <fieldType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">integer</fieldType>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">code</object_property>
+        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">$.code</json_path>
+        <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#resp_delete_by_rd_task_msg_1">
+        <rdf:type rdf:resource="#ResponseParameter"/>
+        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">msg</fieldCode>
+        <fieldType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</fieldType>
+        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_type_code_path>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></library_code>
+        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">msg</object_property>
+        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">$.msg</json_path>
+        <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></rel_term_codeorname>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></term_data_type>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#http_header">
+        <rdf:type rdf:resource="#HeaderParameter"/>
+        <name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Content-Type</name>
+        <value rdf:datatype="http://www.w3.org/2001/XMLSchema#string">application/json</value>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#action_code"/>
+    <owl:DatatypeProperty rdf:about="#action_name"/>
+    <owl:DatatypeProperty rdf:about="#action_desc"/>
+    <owl:DatatypeProperty rdf:about="#action_type"/>
+    <owl:DatatypeProperty rdf:about="#version"/>
+    <owl:DatatypeProperty rdf:about="#function_refs"/>
+    <owl:DatatypeProperty rdf:about="#belong_entity"/>
+    <owl:DatatypeProperty rdf:about="#request_url"/>
+    <owl:DatatypeProperty rdf:about="#request_method"/>
+    <owl:DatatypeProperty rdf:about="#script"/>
+    <owl:DatatypeProperty rdf:about="#request_header"/>
+    <owl:DatatypeProperty rdf:about="#request_params"/>
+    <owl:DatatypeProperty rdf:about="#response_params"/>
+    <owl:DatatypeProperty rdf:about="#paramCode"/>
+    <owl:DatatypeProperty rdf:about="#type"/>
+    <owl:DatatypeProperty rdf:about="#description"/>
+    <owl:DatatypeProperty rdf:about="#isRequired"/>
+    <owl:DatatypeProperty rdf:about="#mapping_path"/>
+    <owl:DatatypeProperty rdf:about="#term_type_code_path"/>
+    <owl:DatatypeProperty rdf:about="#library_code"/>
+    <owl:DatatypeProperty rdf:about="#rel_term_codeorname"/>
+    <owl:DatatypeProperty rdf:about="#term_data_type"/>
+    <owl:DatatypeProperty rdf:about="#fieldCode"/>
+    <owl:DatatypeProperty rdf:about="#fieldType"/>
+    <owl:DatatypeProperty rdf:about="#object_property"/>
+    <owl:DatatypeProperty rdf:about="#json_path"/>
+    <owl:DatatypeProperty rdf:about="#name"/>
+    <owl:DatatypeProperty rdf:about="#value"/>
+</rdf:RDF>

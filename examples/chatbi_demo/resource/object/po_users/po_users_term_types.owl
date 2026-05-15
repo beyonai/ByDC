@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/termtype/ontology#">
+
+    <owl:Class rdf:about="#TermTypeDefinition"><rdfs:label>术语类型定义</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#termtype_object">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#object</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">对象</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">对象本体术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#termtype_prop">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#prop</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性/字段本体术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ONTOLOGY_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#termtype_user_name">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIST_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#termtype_user_state">
+        <rdf:type rdf:resource="#TermTypeDefinition"/>
+        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_state</trem_type_code_path>
+        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_state</trem_type_code>
+        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户状态</trem_type_name>
+        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户状态术语类型</trem_type_desc>
+        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DICT_TERM</term_data_type>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#trem_type_code_path"/>
+    <owl:DatatypeProperty rdf:about="#trem_type_code"/>
+    <owl:DatatypeProperty rdf:about="#trem_type_name"/>
+    <owl:DatatypeProperty rdf:about="#trem_type_desc"/>
+    <owl:DatatypeProperty rdf:about="#term_data_type"/>
+    <owl:DatatypeProperty rdf:about="#library_code"/>
+    <owl:DatatypeProperty rdf:about="#version"/>
+</rdf:RDF>

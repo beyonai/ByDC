@@ -1,0 +1,359 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/relation/ontology#">
+
+    <owl:Class rdf:about="#TermRelation"><rdfs:label>术语关系</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_202">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">202</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含鲸智科技</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_210">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">210</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含销售中心</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_211">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">211</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华北大区</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_212">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">212</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华东大区</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_213">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">213</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华南大区</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_214">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">214</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华西大区</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_215">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">215</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华中大区</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_220">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">220</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含研发与交付中心</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_221">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">221</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含数据产品部</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_222">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">222</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含BI产品部</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_223">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">223</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含CRM产品部</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_224">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">224</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含交付部</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_231">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">231</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华北-金融组</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_232">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">232</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华北-政府组</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_233">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">233</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华东-金融组</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_234">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">234</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华东-政府组</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_235">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">235</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华东-制造组</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_236">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">236</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华南-金融组</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_237">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">237</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华南-政府组</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_238">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">238</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华西-政府组</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_239">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">239</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华西-制造组</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_240">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">240</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华中-金融组</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_241">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">241</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华中-政府组</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_term_po_organization_org_name_242">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">242</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name包含华中-医疗组</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_TERM</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#source_libeary"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#source_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#source_code"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_libeary"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_code"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#relation_name"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#relation_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#joinkeys"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#ext_field"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#version"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+</rdf:RDF>

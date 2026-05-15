@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/dbsource/ontology#">
+
+    <owl:Class rdf:about="#DatabaseDefinition"><rdfs:label>数据源定义</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#dbsource_byai_platform">
+        <rdf:type rdf:resource="#DatabaseDefinition"/>
+        <dbCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">byai_platform</dbCode>
+        <dbType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OPENGAUSS</dbType>
+        <dbParams rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"jdbc_url": "jdbc:opengauss://{{DATACLOUD_DB_HOST}}:{{DATACLOUD_DB_PORT}}/{{DATACLOUD_DB_DATABASE}}?currentSchema={{DATACLOUD_DB_SCHEMA}}", "user": "{{DATACLOUD_DB_USER}}", "password": "{{DATACLOUD_DB_PASSWORD}}", "pool_min": 5, "pool_max": 20}</dbParams>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#dbCode"/>
+    <owl:DatatypeProperty rdf:about="#dbType"/>
+    <owl:DatatypeProperty rdf:about="#dbParams"/>
+</rdf:RDF>
