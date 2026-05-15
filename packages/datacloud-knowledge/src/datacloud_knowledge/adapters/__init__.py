@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-    from datacloud_knowledge.contracts.protocols import TermReader, TermSearchEngine, TermWriter
+from datacloud_knowledge.contracts.protocols import TermReader, TermSearchEngine, TermWriter
 
 logger = logging.getLogger(__name__)
 
