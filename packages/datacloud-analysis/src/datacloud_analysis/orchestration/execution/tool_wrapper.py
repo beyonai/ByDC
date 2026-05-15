@@ -206,6 +206,14 @@ def _build_tool_error(exc: Exception) -> ToolErrorDict:  # noqa: C901, PLR0912
             elif isinstance(exc, FileStoreError):
                 hint = "文件存储操作失败，请联系管理员检查存储后端状态。"
 
+        # ClarificationNoCandidatesError / ClarificationConfirmedNotInRecallError
+        # 来自 datacloud_knowledge.intent.clarification.models，消息已是用户友好中文
+        error_type_name = type(exc).__name__
+        if error_type_name == "ClarificationNoCandidatesError":
+            hint = f"检索无结果，{message}。请换个关键词重试。"
+        elif error_type_name == "ClarificationConfirmedNotInRecallError":
+            hint = f"LLM确认的值不在召回候选内，{message}。请从候选列表中选择或换个关键词重试。"
+
     return ToolErrorDict(
         error_type=error_type,
         message=message,
@@ -652,6 +660,12 @@ async def dispatch_tool(
                 ctx["tool_error"] = None
                 return
             if action == "fail":
+                result_payload = before_decision.get("result") or {}
+                tool_error = result_payload.get("tool_error")
+                if tool_error:
+                    ctx["tool_error"] = tool_error
+                    ctx["tool_output"] = result_payload.get("tool_output")
+                    return
                 raise ToolHookError(before_decision)
             if action == "redirect":
                 redirect_tool_name = str(before_decision.get("tool") or "")
@@ -809,6 +823,12 @@ async def dispatch_tool(
                 result_payload = after_decision.get("result") or {}
                 ctx["tool_output"] = result_payload.get("tool_output", ctx.get("tool_output"))
             if action == "fail":
+                result_payload = after_decision.get("result") or {}
+                tool_error = result_payload.get("tool_error")
+                if tool_error:
+                    ctx["tool_error"] = tool_error
+                    ctx["tool_output"] = result_payload.get("tool_output")
+                    return
                 raise ToolHookError(after_decision)
 
     if gateway_context is not None:
