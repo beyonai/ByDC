@@ -1,11 +1,22 @@
-"""术语类型 OWL 渲染。"""
+"""术语类型 OWL 渲染 — 基于 GraphBuilder API。
+
+迁移模式（meta.py 后第二个迁移的 renderer）：
+1. 保留纯数据函数（build_term_type_defs, enrich_term_type_names）不变；
+2. 渲染函数内部构建 KPS TermTypeDef → 调用 GraphBuilder.add_term_types() → 序列化；
+3. 函数签名保持向后兼容（返回 XML 字符串），generator.py 无需修改。
+"""
 
 from __future__ import annotations
 
 from collections import OrderedDict
 
-from datacloud_knowledge.ingestion.owl_generate._xml import xml_escape
+from datacloud_knowledge.contracts.kps import TermTypeDef
+from datacloud_knowledge.ingestion.owl_generate.graph_builder import GraphBuilder
 from datacloud_knowledge.ingestion.owl_generate.models import OwlGenConfig, Table
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 术语类型定义构建（纯数据函数，无 XML 渲染，不变）
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def build_term_type_defs(
@@ -68,68 +79,80 @@ def enrich_term_type_names(
                 defs[code] = (comment, f"{comment}术语类型", data_type)
 
 
-def _term_type_item(
-    config: OwlGenConfig,
-    type_code: str,
-    name: str,
-    desc: str,
-    term_data_type: str,
-) -> str:
-    return f"""\
-    <owl:NamedIndividual rdf:about="#termtype_{type_code}">
-        <rdf:type rdf:resource="#TermTypeDefinition"/>
-        <trem_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{config.library_code}#{type_code}</trem_type_code_path>
-        <trem_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{type_code}</trem_type_code>
-        <trem_type_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(name)}</trem_type_name>
-        <trem_type_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(desc)}</trem_type_desc>
-        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{term_data_type}</term_data_type>
-        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{config.library_code}</library_code>
-        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-    </owl:NamedIndividual>"""
+# ═══════════════════════════════════════════════════════════════════════════════
+# 内部辅助：旧格式 → KPS TermTypeDef 转换
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
-def _wrap_term_types(items: list[str]) -> str:
-    body = "\n\n".join(items)
-    return f"""\
-<?xml version="1.0"?>
-<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
-         xmlns:owl="http://www.w3.org/2002/07/owl#"
-         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
-         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
-         xml:base="http://example.org/termtype/ontology#">
+def _term_data_type_to_category(term_data_type: str) -> int:
+    """将旧 term_data_type 字符串映射为 KPS type_category 整数。
 
-    <owl:Class rdf:about="#TermTypeDefinition">\
-<rdfs:label>术语类型定义</rdfs:label></owl:Class>
+    KPS TermTypeDef.type_category 语义：
+    1 = LIST_TERM（列表术语），2 = DICT_TERM（字典术语），
+    3 = ONTOLOGY_TERM（本体术语），4 = DOC_NAME_TERM（文档名称术语）。
+    """
+    _mapping: dict[str, int] = {
+        "ONTOLOGY_TERM": 3,
+        "LIST_TERM": 1,
+        "DICT_TERM": 2,
+        "DOC_NAME_TERM": 4,
+    }
+    return _mapping.get(term_data_type, 3)
 
-{body}
 
-    <owl:DatatypeProperty rdf:about="#trem_type_code_path"/>
-    <owl:DatatypeProperty rdf:about="#trem_type_code"/>
-    <owl:DatatypeProperty rdf:about="#trem_type_name"/>
-    <owl:DatatypeProperty rdf:about="#trem_type_desc"/>
-    <owl:DatatypeProperty rdf:about="#term_data_type"/>
-    <owl:DatatypeProperty rdf:about="#library_code"/>
-    <owl:DatatypeProperty rdf:about="#version"/>
-</rdf:RDF>
-"""
+def _term_type_defs_to_kps(
+    term_type_defs: OrderedDict[str, tuple[str, str, str]],
+    type_codes: set[str] | None = None,
+) -> list[TermTypeDef]:
+    """将 build_term_type_defs() 的旧格式输出转为 KPS TermTypeDef 列表。
+
+    Args:
+        term_type_defs: code → (name, desc, term_data_type) 映射。
+        type_codes: 要包含的 type_code 集合，None 表示全部。
+    """
+    result: list[TermTypeDef] = []
+    for type_code, (name, desc, term_data_type) in term_type_defs.items():
+        if type_codes is not None and type_code not in type_codes:
+            continue
+        result.append(
+            TermTypeDef(
+                type_code=type_code,
+                type_name=name,
+                type_category=_term_data_type_to_category(term_data_type),
+                type_desc=desc,
+            )
+        )
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# OWL 渲染（GraphBuilder API）
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _serialize_xml(builder: GraphBuilder) -> str:
+    """将 GraphBuilder 的图序列化为 XML 字符串。"""
+    result = builder.build().serialize(format="xml")
+    return result if isinstance(result, str) else result.decode("utf-8")
 
 
 def render_term_types(
     config: OwlGenConfig,
     defs: OrderedDict[str, tuple[str, str, str]],
 ) -> str:
-    """术语类型定义 OWL。"""
-    items: list[str] = []
-    for type_code, (name, desc, term_data_type) in defs.items():
-        items.append(_term_type_item(config, type_code, name, desc, term_data_type))
-    return _wrap_term_types(items)
+    """术语类型定义 OWL — 使用 GraphBuilder 构建并序列化。
+
+    将所有术语类型（本体 + 值术语）注册到一个 GraphBuilder 图中，
+    通过 rdflib serialize 产出标准 RDF/XML 字符串。
+
+    Args:
+        config: 生成配置（未使用，保留签名兼容）。
+        defs: build_term_type_defs() 的返回结果。
+    """
+    term_types = _term_type_defs_to_kps(defs)
+    builder = GraphBuilder()
+    builder.add_term_types(term_types)
+    return _serialize_xml(builder)
 
 
 def render_term_types_for_object(
@@ -137,16 +160,28 @@ def render_term_types_for_object(
     table: Table,
     term_type_defs: OrderedDict[str, tuple[str, str, str]],
 ) -> str:
-    """渲染单个对象涉及的术语类型定义。"""
+    """渲染单个对象涉及的术语类型定义 — 使用 GraphBuilder 构建并序列化。
+
+    业务逻辑：从 term_type_defs 中筛选当前表绑定的术语类型
+    （object + prop + 表专属的值术语类型），构造 TermTypeDef 列表，
+    通过 GraphBuilder 注册到 rdflib.Graph 后序列化输出。
+    产物写入 {object_code}_term_types.owl 文件。
+
+    Args:
+        config: 生成配置（用于查询当前表的 term_bindings）。
+        table: 当前对象表。
+        term_type_defs: build_term_type_defs() 的返回结果。
+    """
+    # 收集当前对象涉及的术语类型编码
     type_codes: set[str] = {"object", "prop"}
     for binding in config.term_bindings:
         if binding.table_code == table.code:
             type_codes.add(binding.term_type_code)
 
-    items: list[str] = []
-    for type_code in term_type_defs:
-        if type_code not in type_codes:
-            continue
-        name, desc, term_data_type = term_type_defs[type_code]
-        items.append(_term_type_item(config, type_code, name, desc, term_data_type))
-    return _wrap_term_types(items)
+    # 构建 KPS TermTypeDef 列表
+    term_types = _term_type_defs_to_kps(term_type_defs, type_codes)
+
+    # 使用 GraphBuilder 构建图并序列化
+    builder = GraphBuilder()
+    builder.add_term_types(term_types)
+    return _serialize_xml(builder)
