@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from datacloud_knowledge.adapters.opengauss.vector_validation import is_vector_recall_available
 from datacloud_knowledge.contracts.intent_types import ExtractedTerm, PreResolveResult
 from datacloud_knowledge.contracts.rrf import rrf_fuse
 from datacloud_knowledge.retrieval._recall_common import (
@@ -112,7 +113,12 @@ def unified_recall(
 
     # 英文标识符：只走向量召回（BM25/子串匹配对英文→中文无意义）
     if vector_only_items:
-        result.update(_vector_only_recall(vector_only_items, top_k=top_k, scope_code=scope_code))
+        enable_vector = is_vector_recall_available()
+        result.update(
+            _vector_only_recall(
+                vector_only_items, top_k=top_k, scope_code=scope_code, enable_vector=enable_vector
+            )
+        )
 
     return result
 
@@ -135,7 +141,7 @@ def build_scope_recall_layers(
     ``_build_effective_scope_clause`` needs ``HAS_FIELD`` relations from the root
     term to its props.  A view may lack the specific prop whose children contain
     the searched value terms (e.g. ``sales_person`` under ``by_customer``).  We
-    resolve the objects that the view "包含" (BUSINESS relations to objects) and
+    resolve the objects that the view "包含" (HAS_OBJECT/MANY_TO_ONE relations to objects) and
     add them to ``value_layers``, so value terms from included objects can be
     found through their scopes.
     """
@@ -151,7 +157,7 @@ def build_scope_recall_layers(
     value_layers: list[ScopeRecallLayer] = list(base)
     seen_scopes: set[str] = {ontology_code}
 
-    # ── When ontology_code is a view, include BUSINESS-related objects
+    # ── When ontology_code is a view, include HAS_OBJECT/MANY_TO_ONE-related objects
     #     (e.g. "研发管理视图_包含_用户信息表" → po_users).  These objects
     #     may have the HAS_FIELD → prop → child chain for value terms. ──
     included_codes: list[str] = _collect_view_included_objects(ontology_code)
@@ -174,9 +180,9 @@ def build_scope_recall_layers(
 
 
 def _collect_view_included_objects(ontology_code: str) -> list[str]:
-    """Return object codes that a view "包含" (includes) via BUSINESS relations.
+    """Return object codes that a view "包含" (includes) via HAS_OBJECT/MANY_TO_ONE relations.
 
-    Views define their data sources through BUSINESS relations to object-type
+    Views define their data sources through HAS_OBJECT/MANY_TO_ONE relations to object-type
     terms (e.g., ``"研发管理视图_包含_用户信息表" → po_users``).  Unlike
     ``_collect_joinkey_related_objects``, this does NOT require joinkey
     matching — all included objects are relevant for whereValue recall.
@@ -193,7 +199,7 @@ def _collect_view_included_objects(ontology_code: str) -> list[str]:
                     "FROM term AS source "
                     "JOIN term_relation AS rel "
                     "  ON rel.source_term_id = source.term_id "
-                    " AND rel.relation_category = 'BUSINESS' "
+                    " AND rel.relation_category IN ('HAS_OBJECT', 'MANY_TO_ONE') "
                     "JOIN term AS target "
                     "  ON target.term_id = rel.target_term_id "
                     " AND target.term_type_code = 'object' "
@@ -219,10 +225,11 @@ def _collect_joinkey_related_objects(
 ) -> list[str]:
     """Extract target object codes where joinkeys.sourceField matches a confirmed field.
 
-    Cross-object BUSINESS relations carry joinkeys (e.g., ``handler_user_id → user_id``)
-    stored in ``term_relation.ext_attrs``. This function only adds a target object to
-    the scope when a confirmed field code is listed as a ``sourceField`` in at least
-    one joinkey — avoiding the noise of adding ALL BUSINESS-related objects.
+    Cross-object HAS_OBJECT/MANY_TO_ONE relations carry joinkeys (e.g.,
+    ``handler_user_id → user_id``) stored in ``term_relation.ext_attrs``.
+    This function only adds a target object to the scope when a confirmed
+    field code is listed as a ``sourceField`` in at least one joinkey —
+    avoiding the noise of adding ALL related objects.
     """
     if not field_codes:
         return []
@@ -238,7 +245,7 @@ def _collect_joinkey_related_objects(
                     "FROM term AS source "
                     "JOIN term_relation AS rel "
                     "  ON rel.source_term_id = source.term_id "
-                    " AND rel.relation_category = 'BUSINESS' "
+                    " AND rel.relation_category IN ('HAS_OBJECT', 'MANY_TO_ONE') "
                     "JOIN term AS target "
                     "  ON target.term_id = rel.target_term_id "
                     " AND target.term_type_code = 'object' "
@@ -283,12 +290,19 @@ def _vector_only_recall(
     *,
     top_k: int,
     scope_code: str | None = None,
+    enable_vector: bool = True,
 ) -> dict[str, list[dict[str, Any]]]:
     """对英文标识符术语只执行向量召回。
 
     英文编码（如 stat_date）无法通过 BM25/子串匹配命中中文术语名，
     但向量语义检索可以将 "stat_date" 匹配到 "统计日期"。
+
+    当 enable_vector=False（向量服务不可用时），直接返回空结果，
+    让上层走降级/澄清路径。
     """
+    if not enable_vector:
+        return {}
+
     # 构建 RecallRequest（需要 type_filter）
     category_cache: dict[frozenset[int], set[str]] = {}
     requests: list[RecallRequest] = []

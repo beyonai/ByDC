@@ -157,6 +157,30 @@ def reset_term_vector_validation_cache() -> None:
     _validation_results.clear()
 
 
+def is_vector_recall_available() -> bool:
+    """Check whether vector recall should be attempted.
+
+    Returns False when:
+    - ``DATACLOUD_INTENT_ENABLE_VECTOR`` env var is explicitly ``0``/``false``/``no``/``off``
+    - OR validation cache contains at least one persistent failure for this process
+
+    Returns True when validation has passed (at least one success in cache)
+    or has not been run at all (default: assume available, let runtime handle).
+    """
+    import os
+
+    raw = os.getenv("DATACLOUD_INTENT_ENABLE_VECTOR", "1").strip().lower()
+    if raw in {"0", "false", "no", "off"}:
+        return False
+
+    # If any validation succeeded, vectors are available
+    if any(_validation_results.values()):
+        return True
+
+    # If any validation failed, vectors are unavailable; otherwise assume available
+    return not any(not v for v in _validation_results.values())
+
+
 def _qualified_term_name(schema_name: str) -> str:
     schema = validate_schema_name(schema_name)
     return f'"{schema}"."{_TERM_NAME_TABLE}"'
