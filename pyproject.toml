@@ -254,7 +254,7 @@ ignore = [
     "TRY400",
 ]
 "packages/datacloud-knowledge/db/scripts/*.py" = ["PLC0415"]
-"packages/datacloud-knowledge/scripts/manual/*.py" = ["E402", "PLC0415", "PLW0603", "T201"]
+"packages/datacloud-knowledge/scripts/manual/*.py" = ["E402", "PLC0415", "PLW0603", "S101", "S105", "S106", "S108", "S603", "PLW1510", "T201"]
 "packages/datacloud-knowledge/src/datacloud_knowledge/knowledge_build/importer/notifier.py" = ["S310"]
 "packages/datacloud-knowledge/src/datacloud_knowledge/knowledge_build/importer/owl_parser.py" = [
     "N802",
