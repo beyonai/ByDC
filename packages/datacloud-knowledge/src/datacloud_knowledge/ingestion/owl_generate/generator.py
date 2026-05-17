@@ -1,39 +1,50 @@
 """OWL 导入包生成器 — 主编排模块。
 
-职责：读 schema → 调用各渲染器 → 写文件。
-不包含任何 OWL XML 模板，只做编排。
+数据流（Phase 1.5）：
+  OwlGenConfig → adapters schema reader → KnowledgePackage（KPS 中间模型）
+      → GraphBuilder.add_package() → export_*_graph() → serialize → 写文件
+
+定义级文件（EntityDefinition/Mapping/DBSource/SceneDefinition）非 KPS，
+通过 GraphBuilder 定义级方法直接生成。
 """
 
 from __future__ import annotations
 
 import logging
+from pathlib import Path
+from typing import Any
 
+from datacloud_knowledge.contracts.kps import (
+    KnowledgePackage,
+    RelationDef,
+    TermDef,
+    TermTypeDef,
+)
 from datacloud_knowledge.ingestion.owl_generate._xml import write_text
-from datacloud_knowledge.ingestion.owl_generate.models import OwlGenConfig, Table
+from datacloud_knowledge.ingestion.owl_generate.graph_builder import GraphBuilder
+from datacloud_knowledge.ingestion.owl_generate.models import OwlGenConfig, Table, ViewConfig
+from datacloud_knowledge.ingestion.owl_generate.renderers.actions import (
+    write_action_files,
+)
 from datacloud_knowledge.ingestion.owl_generate.renderers.ontology import (
     render_dbsource,
     render_mapping,
     render_object,
     render_single_view,
 )
-from datacloud_knowledge.ingestion.owl_generate.renderers.relations import (
-    render_attribute_relations_for_object,
-    render_object_relations_for_object,
-    render_term_relations_for_object,
-    render_view_relations_for_view,
-)
 from datacloud_knowledge.ingestion.owl_generate.renderers.term_types import (
+    _term_data_type_to_category,
     build_term_type_defs,
     enrich_term_type_names,
-    render_term_types_for_object,
-)
-from datacloud_knowledge.ingestion.owl_generate.renderers.terms import (
-    render_terms_for_object,
-    render_terms_for_view,
 )
 from datacloud_knowledge.ingestion.owl_generate.schema_reader import load_term_values, read_tables
 
 logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 公开入口
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def generate(config: OwlGenConfig) -> None:
@@ -41,7 +52,7 @@ def generate(config: OwlGenConfig) -> None:
     out = config.output_dir
     logger.info("开始生成 OWL 导入包 → %s", out)
 
-    logger.info("读取 MySQL 表结构...")
+    logger.info("读取表结构...")
     tables = read_tables(config)
     logger.info("读取到 %d 张表，共 %d 个字段", len(tables), _total_cols(tables))
 
@@ -59,8 +70,13 @@ def generate_from_tables(
     tables: list[Table],
     term_values: dict[str, list[dict[str, str]]],
 ) -> None:
-    """从已有的表结构和术语值生成（不连 MySQL）。"""
+    """从已有的表结构和术语值生成（不连数据库）。"""
     _write_package(config, tables, term_values)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 主编排：构建 KnowledgePackage → GraphBuilder 序列化 → 写文件
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def _write_package(
@@ -68,72 +84,427 @@ def _write_package(
     tables: list[Table],
     term_values: dict[str, list[dict[str, str]]],
 ) -> None:
-    """渲染所有 OWL 文件并写入 output_dir。"""
-    out = config.output_dir
+    """渲染所有 OWL 文件并写入 output_dir。
 
-    # 术语类型定义
+    核心流程：对每个对象/视图构建 KnowledgePackage，通过 GraphBuilder.add_package()
+    注册到 rdflib.Graph，再通过 export_*_graph() 拆分为独立 OWL 文件输出。
+    """
+    out = config.output_dir
     term_type_defs = build_term_type_defs(config)
     enrich_term_type_names(term_type_defs, tables, config)
+
+    # 跨对象 prop 去重
+    seen_prop_codes: set[str] = set()
     total_term_count = 0
     relation_file_count = 0
 
     for table in tables:
         obj_dir = out / "object" / table.code
+
+        # ── 定义文件（非 KPS：EntityDefinition/Mapping/DBSource）────────────
         write_text(obj_dir / f"{table.code}_definition.owl", render_object(config, table))
         write_text(obj_dir / f"{table.code}_mapping.owl", render_mapping(config, table))
         write_text(obj_dir / f"{table.code}_dbsource.owl", render_dbsource(config))
 
-        object_relations = render_object_relations_for_object(config, table.code)
-        if object_relations:
-            write_text(obj_dir / f"{table.code}_object_relations.owl", object_relations)
-            relation_file_count += 1
-
-        attribute_relations = render_attribute_relations_for_object(config, table)
-        if attribute_relations:
-            write_text(obj_dir / f"{table.code}_attribute_relations.owl", attribute_relations)
-            relation_file_count += 1
-
-        term_relations = render_term_relations_for_object(config, table, term_values)
-        if term_relations:
-            write_text(obj_dir / f"{table.code}_term_relations.owl", term_relations)
-            relation_file_count += 1
-
-        write_text(
-            obj_dir / f"{table.code}_term_types.owl",
-            render_term_types_for_object(config, table, term_type_defs),
-        )
-        terms_content, term_count = render_terms_for_object(
-            config,
-            table,
-            term_values,
-            term_type_defs,
-        )
-        write_text(obj_dir / f"{table.code}_terms.owl", terms_content)
-        total_term_count += term_count
+        # ── KPS 文件（KnowledgePackage → GraphBuilder）─────────────────────
+        pkg = _build_object_package(config, table, term_values, term_type_defs, seen_prop_codes)
+        relation_file_count += _write_kps_files(builder=None, obj_dir=obj_dir, pkg=pkg)
+        total_term_count += len(pkg.terms)
 
     for view in config.resolved_views():
         view_dir = out / "view" / view.view_code
         write_text(view_dir / f"{view.view_code}_definition.owl", render_single_view(config, view))
-        view_relations = render_view_relations_for_view(config, view)
-        if view_relations:
-            write_text(view_dir / f"{view.view_code}_relations.owl", view_relations)
-            relation_file_count += 1
-        terms_content, term_count = render_terms_for_view(
-            config,
-            view,
-            term_values=term_values,
-            term_type_defs=term_type_defs,
-        )
-        write_text(view_dir / f"{view.view_code}_terms.owl", terms_content)
-        total_term_count += term_count
+
+        pkg = _build_view_package(config, view, term_values, term_type_defs)
+        relation_file_count += _write_kps_view_files(view_dir, pkg)
+        total_term_count += len(pkg.terms)
+
+    # ── Action 生成：写入 actions/ 子目录（独立通道，不作为术语）─────────────
+    action_file_count = 0
+    if config.actions:
+        action_file_count = write_action_files(config, "", "")
+    else:
+        for table in tables:
+            action_file_count += write_action_files(config, table.code, table.name)
 
     logger.info(
-        "✓ package (objects=%d, views=%d, terms=%d, relation_files=%d)",
+        "✓ package (objects=%d, views=%d, terms=%d, relation_files=%d, action_files=%d)",
         len(tables),
         len(config.resolved_views()),
         total_term_count,
         relation_file_count,
+        action_file_count,
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# KPS 构建：对象
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _build_term_def(
+    config: OwlGenConfig,
+    term_code: str,
+    term_name: str,
+    term_type_code: str,
+    term_desc: str = "",
+    parent_term_code: str = "",
+    synonyms: list[str] | None = None,
+) -> TermDef:
+    """构建 KPS TermDef 对象。"""
+    return TermDef(
+        term_code=term_code,
+        term_name=term_name,
+        term_type_code=term_type_code,
+        library_code=config.library_code,
+        domain_code=config.domain_code,
+        parent_term_code=parent_term_code if parent_term_code else None,
+        synonyms=tuple(synonyms or []),
+        term_desc=term_desc,
+    )
+
+
+def _build_object_package(
+    config: OwlGenConfig,
+    table: Table,
+    term_values: dict[str, list[dict[str, str]]],
+    term_type_defs: dict[str, tuple[str, str, str]],
+    seen_prop_codes: set[str],
+) -> KnowledgePackage:
+    """为单个对象构建 KnowledgePackage。
+
+    包含：对象本体术语 + 属性术语（跨对象去重） + 值术语 + 字段关系 + JOIN 关系 + 术语类型。
+    """
+    terms: list[TermDef] = []
+    relations: list[RelationDef] = []
+    term_types: list[TermTypeDef] = []
+
+    # ── 术语类型 ──
+    type_codes: set[str] = {"object", "prop"}
+    for binding in config.term_bindings:
+        if binding.table_code == table.code:
+            type_codes.add(binding.term_type_code)
+
+    for type_code, (name, desc, term_data_type) in term_type_defs.items():
+        if type_code in type_codes:
+            term_types.append(
+                TermTypeDef(
+                    type_code=type_code,
+                    type_name=name,
+                    type_category=_term_data_type_to_category(term_data_type),
+                    type_desc=desc,
+                )
+            )
+
+    # ── 对象本体术语 ──
+    terms.append(
+        _build_term_def(
+            config,
+            term_code=table.code,
+            term_name=table.name,
+            term_type_code="object",
+            term_desc=table.desc,
+        )
+    )
+
+    # ── 属性术语（prop）：跨对象去重 ──
+    binding_lookup = {b.column_name: b for b in config.term_bindings if b.table_code == table.code}
+    for col in table.columns:
+        resolved_prop = config.resolve_object_prop(table.code, col.name, col.comment or col.name)
+        if resolved_prop.property_code not in seen_prop_codes:
+            seen_prop_codes.add(resolved_prop.property_code)
+            terms.append(
+                _build_term_def(
+                    config,
+                    term_code=resolved_prop.property_code,
+                    term_name=resolved_prop.property_name,
+                    term_type_code="prop",
+                    term_desc=resolved_prop.property_desc,
+                    parent_term_code=table.code,
+                    synonyms=resolved_prop.synonyms,
+                )
+            )
+
+        # 字段关系：HAS_FIELD（每个字段一个关系）
+        alias = resolved_prop.property_name
+        syns = resolved_prop.synonyms or config.object_field_synonyms.get(
+            (table.code, col.name), []
+        )
+        source_term = f"{config.library_code}#object#{table.code}"
+        target_term = f"{config.library_code}#prop#{resolved_prop.property_code}"
+        ext_field_data: dict[str, object] = {"field_alias": alias}
+        if syns:
+            ext_field_data["synonyms"] = syns
+        relations.append(
+            RelationDef(
+                source_term_code=source_term,
+                target_term_code=target_term,
+                relation_name=f"{table.name}_拥有字段_{alias}",
+                relation_category="HAS_FIELD",
+                cardinality="1:N",
+                ext_field=ext_field_data,
+            )
+        )
+
+    # ── 值术语（LIST_TERM / DICT_TERM）─────────────────────────────────────
+    for binding in binding_lookup.values():
+        type_code = binding.term_type_code
+        type_name = term_type_defs.get(type_code, (type_code, "", ""))[0]
+        for entry in term_values.get(type_code, []):
+            terms.append(
+                _build_term_def(
+                    config,
+                    term_code=entry["code"],
+                    term_name=entry["name"],
+                    term_type_code=type_code,
+                    term_desc=f"{type_name}术语：{entry['name']}",
+                    parent_term_code=entry.get("parent_prop_code", ""),
+                )
+            )
+            # 值术语关系：HAS_TERM
+            source_term_v = f"{config.library_code}#{type_code}#{type_code}"
+            target_term_v = f"{config.library_code}#{type_code}#{entry['code']}"
+            relations.append(
+                RelationDef(
+                    source_term_code=source_term_v,
+                    target_term_code=target_term_v,
+                    relation_name=f"{type_code}包含{entry['name']}",
+                    relation_category="HAS_TERM",
+                    cardinality="1:N",
+                )
+            )
+
+    # ── JOIN 关系（MANY_TO_ONE）────────────────────────────────────────────
+    for rel in config.object_relations:
+        if rel.source_code != table.code:
+            continue
+        source_term_o = f"{config.library_code}#object#{rel.source_code}"
+        target_term_o = f"{config.library_code}#object#{rel.target_code}"
+        relations.append(
+            RelationDef(
+                source_term_code=source_term_o,
+                target_term_code=target_term_o,
+                relation_name=rel.relation_name,
+                relation_category="MANY_TO_ONE",
+                cardinality="N:1",
+                joinkeys=tuple(rel.join_keys),
+            )
+        )
+
+    return KnowledgePackage(
+        terms=tuple(terms),
+        relations=tuple(relations),
+        term_types=tuple(term_types),
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# KPS 构建：视图
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _build_view_package(
+    config: OwlGenConfig,
+    view: ViewConfig,
+    term_values: dict[str, list[dict[str, str]]] | None = None,
+    term_type_defs: dict[str, tuple[str, str, str]] | None = None,
+) -> KnowledgePackage:
+    """为单个视图构建 KnowledgePackage。
+
+    包含：视图本体术语 + 视图专属 prop 术语 + 值术语（可选）+ 视图关系（HAS_OBJECT/HAS_FIELD/MANY_TO_ONE）。
+    """
+    terms: list[TermDef] = [
+        _build_term_def(
+            config,
+            term_code=view.view_code,
+            term_name=view.view_name,
+            term_type_code="view",
+            term_desc=view.view_desc,
+        )
+    ]
+    relations: list[RelationDef] = []
+
+    # ── HAS_OBJECT：视图包含哪些对象 ──
+    for obj_code in view.object_codes:
+        source_term = f"{config.library_code}#view#{view.view_code}"
+        target_term = f"{config.library_code}#object#{obj_code}"
+        relations.append(
+            RelationDef(
+                source_term_code=source_term,
+                target_term_code=target_term,
+                relation_name=f"{view.view_name}_包含_{config.table_names.get(obj_code, obj_code)}",
+                relation_category="HAS_OBJECT",
+                cardinality="1:N",
+            )
+        )
+
+    # ── HAS_FIELD：视图拥有的字段 ──
+    for mapping in view.field_mappings:
+        alias = mapping.property_name or mapping.source_object_column_code
+        object_prop_code = config.resolve_object_prop_code(
+            mapping.source_object_code,
+            mapping.source_object_column_code,
+        )
+        target_code = object_prop_code
+        if mapping.property_code not in {mapping.source_object_column_code, object_prop_code}:
+            target_code = mapping.property_code
+
+        source_term_vf = f"{config.library_code}#view#{view.view_code}"
+        target_term_vf = f"{config.library_code}#prop#{target_code}"
+        ext_field_v: dict[str, object] = {"field_alias": alias}
+        if mapping.synonyms:
+            ext_field_v["synonyms"] = mapping.synonyms
+        relations.append(
+            RelationDef(
+                source_term_code=source_term_vf,
+                target_term_code=target_term_vf,
+                relation_name=f"{view.view_name}_拥有字段_{alias}",
+                relation_category="HAS_FIELD",
+                cardinality="1:N",
+                ext_field=ext_field_v,
+            )
+        )
+
+        # 视图专属 prop 术语
+        if not config.force_view_prop_terms and mapping.property_code in {
+            mapping.source_object_column_code,
+            object_prop_code,
+        }:
+            continue
+        terms.append(
+            _build_term_def(
+                config,
+                term_code=mapping.property_code,
+                term_name=mapping.property_name,
+                term_type_code="prop",
+                term_desc=f"视图属性：{mapping.property_name}",
+                parent_term_code=view.view_code,
+                synonyms=mapping.synonyms,
+            )
+        )
+
+    # ── MANY_TO_ONE：视图内对象间的 JOIN 关系 ──
+    obj_set = set(view.object_codes)
+    for rel in config.object_relations:
+        if rel.source_code in obj_set and rel.target_code in obj_set:
+            source_term_o = f"{config.library_code}#object#{rel.source_code}"
+            target_term_o = f"{config.library_code}#object#{rel.target_code}"
+            relations.append(
+                RelationDef(
+                    source_term_code=source_term_o,
+                    target_term_code=target_term_o,
+                    relation_name=rel.relation_name,
+                    relation_category="MANY_TO_ONE",
+                    cardinality="N:1",
+                    joinkeys=tuple(rel.join_keys),
+                )
+            )
+
+    # ── 视图值术语（force_view_value_terms 模式）─────────────────────────
+    if config.force_view_value_terms and term_values and term_type_defs:
+        binding_lookup = {
+            (binding.table_code, binding.column_name): binding for binding in config.term_bindings
+        }
+        emitted_props: set[str] = set()
+        for mapping in view.field_mappings:
+            binding = binding_lookup.get(
+                (mapping.source_object_code, mapping.source_object_column_code)
+            )
+            if binding is None or mapping.property_code in emitted_props:
+                continue
+            emitted_props.add(mapping.property_code)
+            type_name = term_type_defs.get(
+                binding.term_type_code, (binding.term_type_code, "", "")
+            )[0]
+            for entry in term_values.get(binding.term_type_code, []):
+                terms.append(
+                    _build_term_def(
+                        config,
+                        term_code=entry["code"],
+                        term_name=entry["name"],
+                        term_type_code=binding.term_type_code,
+                        term_desc=f"{type_name}术语：{entry['name']}",
+                        parent_term_code=mapping.property_code,
+                    )
+                )
+
+    return KnowledgePackage(
+        terms=tuple(terms),
+        relations=tuple(relations),
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# KPS 文件写入
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _serialize_graph(graph: Any) -> str:
+    """将 rdflib.Graph 序列化为 XML 字符串。"""
+    result = graph.serialize(format="xml")
+    return result if isinstance(result, str) else result.decode("utf-8")
+
+
+def _write_kps_files(
+    builder: Any,
+    obj_dir: Path,
+    pkg: KnowledgePackage,
+) -> int:
+    """将 KnowledgePackage 拆分为独立 OWL 文件并写入对象目录。
+
+    Returns:
+        写入的关系文件数。
+    """
+    code = pkg.terms[0].term_code
+    gb = GraphBuilder()
+    gb.add_package(pkg)
+
+    # 术语类型
+    tt_graph = gb.export_term_types_graph()
+    write_text(obj_dir / f"{code}_term_types.owl", _serialize_graph(tt_graph))
+
+    # 术语
+    terms_graph = gb.export_terms_graph()
+    write_text(obj_dir / f"{code}_terms.owl", _serialize_graph(terms_graph))
+
+    # 关系：按类别拆分为 3 个文件
+    count = 0
+    filename_map: dict[str, str] = {
+        "MANY_TO_ONE": f"{code}_object_relations.owl",
+        "HAS_FIELD": f"{code}_attribute_relations.owl",
+        "HAS_TERM": f"{code}_term_relations.owl",
+    }
+    for rel_cat, filename in filename_map.items():
+        rel_graph = gb.export_relations_graph(rel_cat)
+        if len(list(rel_graph.subjects())) == 0:
+            continue
+        write_text(obj_dir / filename, _serialize_graph(rel_graph))
+        count += 1
+    return count
+
+
+def _write_kps_view_files(
+    view_dir: Path,
+    pkg: KnowledgePackage,
+) -> int:
+    """将视图 KnowledgePackage 拆分为独立 OWL 文件并写入视图目录。"""
+    code = pkg.terms[0].term_code
+    gb = GraphBuilder()
+    gb.add_package(pkg)
+
+    # 术语
+    terms_graph = gb.export_terms_graph()
+    write_text(view_dir / f"{code}_terms.owl", _serialize_graph(terms_graph))
+
+    # 关系
+    rel_graph = gb.export_relations_graph()
+    write_text(view_dir / f"{code}_relations.owl", _serialize_graph(rel_graph))
+    return 1 if len(list(rel_graph.subjects())) > 0 else 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 工具
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def _total_cols(tables: list[Table]) -> int:
