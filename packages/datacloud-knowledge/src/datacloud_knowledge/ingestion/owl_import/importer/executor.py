@@ -2,7 +2,7 @@
 
 环境变量 DATACLOUD_KNOWLEDGE_IMPORT_BATCH_SIZE（默认 500，上限 10000）控制每个文件按批解析并入库的行数，减少与数据库的往返次数。
 
-前提：调用方已通过 precheck.run() 校验，此处不再做格式校验。
+前提：调用方已通过 ingestion/validate.check_package() 校验，此处不再做格式校验。
 字段映射（JSONL → DB）：
   domain_code   → domain.domain_id
   library_code  → term_library.library_id 与 term_library.library_code（同值）
@@ -29,7 +29,7 @@ from typing import Any
 
 from datacloud_knowledge.adapters import create_bulk_importer
 
-from . import owl_converter, owl_parser
+from . import inference, owl_converter, owl_parser
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,11 @@ def _step_entity_type(step_type: str, filename: str) -> str:
 def _convert_owl_entities(
     step_type: str, rel_file: str, owl_entities: list[dict[str, Any]]
 ) -> dict[str, list[dict[str, Any]]]:
-    """将 OWL 解析结果转换为各批处理器可消费的数据结构。"""
+    """将 OWL 解析结果转换为各批处理器可消费的数据结构。
+
+    Task 1.8 改造：使用 KPS 版本转换器（convert_*_to_kps）产出 typed dataclass，
+    再通过 kps_to_dict 序列化函数转为 writer 层兼容的 dict。
+    """
     del step_type
 
     converted: dict[str, list[dict[str, Any]]] = {
@@ -113,19 +117,16 @@ def _convert_owl_entities(
         "relation": [],
         "knowledge": [],
     }
-    term_type_map: dict[str, dict[str, Any]] = {}
-    type_category_map = {
-        "LIST_TERM": "列表术语",
-        "DICT_TERM": "字典术语",
-        "ONTOLOGY_TERM": "本体术语",
-        "DOC_NAME_TERM": "文档名称术语",
-    }
+    # term_type_map 按 type_code 索引已转换的术语类型（KPS TermTypeDef 对象）
+    term_type_map: dict[str, Any] = {}
 
+    # 从文件路径提取 scope 信息（object/ 或 view/ 目录下的子目录名）
     path_parts = Path(rel_file).parts
     scope_type = path_parts[0] if len(path_parts) >= 2 else ""
     scope_code = path_parts[1] if len(path_parts) >= 2 else ""
     scope_root_term_id: str | None = None
 
+    # 第一遍扫描：找到当前文件的 root term（scope 对象/视图的根术语）
     for entity in owl_entities:
         if str(entity.get("entity_type", "")).strip() != "term":
             continue
@@ -133,8 +134,10 @@ def _convert_owl_entities(
             continue
         if str(entity.get("term_code") or "").strip() != scope_code:
             continue
-        scope_root_term_id = str(entity.get("term_id") or "").strip() or None
-        if scope_root_term_id:
+        # parser 输出无 term_id 字段，从 library_code + type_code + code 拼接
+        lib = str(entity.get("library_code") or "").strip()
+        if lib:
+            scope_root_term_id = f"{lib}#{scope_type}#{scope_code}"
             break
 
     for entity in owl_entities:
@@ -142,71 +145,106 @@ def _convert_owl_entities(
         if not entity_type:
             continue
 
+        # ── Domain：KPS 转换 → dict ──────────────────────────────────
         if entity_type == "domain":
-            converted["meta_domain"].append(owl_converter.convert_domain(entity))
+            domain_def = owl_converter.convert_domain_to_kps(entity)
+            converted["meta_domain"].append(owl_converter.domain_kps_to_dict(domain_def))
             continue
 
+        # ── Library：KPS 转换 → dict（原为 executor 内联构造）────────
         if entity_type == "library":
-            library_code = owl_converter._pick_str(entity, "library_code")
-            library_name = owl_converter._pick_str(entity, "library_name")
-            if library_code:
-                converted["meta_library"].append(
-                    {
-                        "library_code": library_code,
-                        "library_name": library_name,
-                    }
-                )
+            library_def = owl_converter.convert_library_to_kps(entity)
+            if library_def.library_code:
+                converted["meta_library"].append(owl_converter.library_kps_to_dict(library_def))
             continue
 
+        # ── TermType：KPS 转换 → dict（消除 string↔int 来回映射）────
         if entity_type == "term_type":
-            term_type_obj = owl_converter.convert_term_type(entity)
-            raw_category = term_type_obj.get("type_category")
-            if isinstance(raw_category, str):
-                term_type_obj["type_category"] = type_category_map.get(
-                    raw_category.strip().upper(), raw_category
-                )
-            type_code = term_type_obj.get("type_code")
-            if isinstance(type_code, str) and type_code.strip():
-                term_type_map[type_code] = term_type_obj
-            converted["term_type"].append(term_type_obj)
+            term_type_def = owl_converter.convert_term_type_to_kps(entity)
+            if term_type_def.type_code.strip():
+                term_type_map[term_type_def.type_code] = term_type_def
+            converted["term_type"].append(owl_converter.term_type_kps_to_dict(term_type_def))
             continue
 
+        # ── Term：KPS 转换 + scope 处理 → dict ───────────────────────
         if entity_type == "term":
-            term_obj = owl_converter.convert_term(entity)
+            term_def, extras = owl_converter.convert_term_to_kps(entity)
+
+            # scope 处理：根据文件所在目录层级计算正确的 term_id / parent_term_id
+            # 逻辑与旧版完全一致，仅输入从 dict 改为 KPS frozen dataclass
             if scope_type in {"object", "view"} and scope_code:
-                library_code = str(term_obj.get("library_code") or "").strip()
-                term_type_code = str(term_obj.get("term_type_code") or "").strip()
-                term_code = str(term_obj.get("term_code") or "").strip()
-                parent_term_code = str(term_obj.get("parent_term_code") or "").strip()
+                library_code = term_def.library_code
+                term_type_code = term_def.term_type_code
+                term_code = term_def.term_code
+                parent_term_code = term_def.parent_term_code or ""
+
                 if library_code and term_type_code == "prop":
-                    scope_root_term_id = (
-                        scope_root_term_id or f"{library_code}#{scope_type}#{scope_code}"
-                    )
-                    term_obj["parent_term_code"] = scope_code
-                    term_obj["parent_term_id"] = scope_root_term_id
-                    term_obj["term_id"] = "#".join([scope_root_term_id, term_type_code, term_code])
+                    # prop 术语：parent 指向 scope 对象/视图
+                    scope_root = scope_root_term_id or f"{library_code}#{scope_type}#{scope_code}"
+                    # 覆盖 parent_term_code 为 scope_code（与旧版行为一致）
+                    term_id = f"{scope_root}#{term_type_code}#{term_code}"
+                    parent_term_id: str | None = scope_root
+                    # 修改 parent_term_code 为 scope_code（scope 处理需要）
+                    overridden_parent = scope_code
                 elif library_code and parent_term_code:
-                    scope_root_term_id = (
-                        scope_root_term_id or f"{library_code}#{scope_type}#{scope_code}"
-                    )
-                    parent_prop_term_id = f"{scope_root_term_id}#prop#{parent_term_code}"
-                    term_obj["parent_term_id"] = parent_prop_term_id
-                    term_obj["term_id"] = "#".join([parent_prop_term_id, term_type_code, term_code])
-            converted["term"].append(term_obj)
-            # terms_knowledge 需要拆成独立 knowledge 记录，沿用原有 term_code 外键解析。
+                    # 值术语（如 LIST_TERM）：parent 指向上层 prop
+                    scope_root = scope_root_term_id or f"{library_code}#{scope_type}#{scope_code}"
+                    parent_prop_term_id = f"{scope_root}#prop#{parent_term_code}"
+                    term_id = f"{parent_prop_term_id}#{term_type_code}#{term_code}"
+                    parent_term_id = parent_prop_term_id
+                    overridden_parent = None  # 保持 OWL 中的 parent_term_code
+                else:
+                    # 根术语或非 scope 术语：使用 compute_term_id
+                    term_id = term_def.compute_term_id()
+                    parent_term_id = None
+                    overridden_parent = None
+            else:
+                term_id = term_def.compute_term_id()
+                parent_term_id = None
+                overridden_parent = None
+
+            # 序列化为 writer dict
+            writer_dict = owl_converter.term_kps_to_dict(
+                term_def, extras, term_id=term_id, parent_term_id=parent_term_id
+            )
+            # 若 scope 处理覆盖了 parent_term_code，反映到 dict 中
+            if overridden_parent is not None:
+                writer_dict["parent_term_code"] = overridden_parent
+            converted["term"].append(writer_dict)
+
+            # terms_knowledge 拆分：从术语实体的 terms_knowledge 字段提取 knowledge 记录
             for knowledge_obj in owl_converter.extract_knowledge_records(entity, ""):
-                knowledge_obj["term_id"] = term_obj.get("term_id")
-                knowledge_obj["term_code"] = term_obj.get("term_code")
+                knowledge_obj["term_id"] = term_id
+                knowledge_obj["term_code"] = term_def.term_code
                 converted["knowledge"].append(knowledge_obj)
             continue
 
+        # ── Relation：KPS 转换 → dict（修正 relation_category/cardinality）────────
         if entity_type == "relation":
-            relation_obj = owl_converter.convert_relation(entity)
-            relation_obj["relation_code"] = (
+            rel_def = owl_converter.convert_relation_to_kps(entity)
+            relation_code = (
                 owl_converter._pick_str(entity, "relation_code")
-                or f"{relation_obj.get('source_term_code', '')}/{relation_obj.get('target_term_code', '')}/{relation_obj.get('relation_name', '')}"
+                or f"{rel_def.source_term_code}/{rel_def.target_term_code}/{rel_def.relation_name}"
             )
-            converted["relation"].append(relation_obj)
+            writer_dict = owl_converter.relation_kps_to_dict(rel_def, relation_code=relation_code)
+
+            # 根据 scope 上下文解析层级 term_id（与 prop 术语处理一致）
+            # source 始终是根术语，term_id 即 source_term_code
+            writer_dict["source_term_id"] = rel_def.source_term_code
+            # target：若为 prop 且在 object/view scope 下，计算层级 term_id
+            target_parts = rel_def.target_term_code.rsplit("#", 2)
+            if (
+                len(target_parts) == 3
+                and target_parts[1] == "prop"
+                and scope_type in {"object", "view"}
+            ):
+                # 从 source_term_code 提取 library_code 以构建 scope root
+                lib = rel_def.source_term_code.split("#", 1)[0]
+                if lib:
+                    scope_root = f"{lib}#{scope_type}#{scope_code}"
+                    writer_dict["target_term_id"] = f"{scope_root}#prop#{target_parts[2]}"
+
+            converted["relation"].append(writer_dict)
 
     return converted
 
@@ -364,6 +402,7 @@ def run(
             logger.info("importing %s (%s)", rel_file, entity_type)
             if rel_file.endswith(".owl"):
                 owl_entities = owl_parser.parse_owl_file(file_path)
+                owl_entities = inference.normalize_entities(owl_entities)
                 converted = _convert_owl_entities(step_type, rel_file, owl_entities)
                 for entity_type_key, objs in converted.items():
                     if not objs:
