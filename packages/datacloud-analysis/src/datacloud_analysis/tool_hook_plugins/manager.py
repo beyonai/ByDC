@@ -126,9 +126,14 @@ class ToolHookPluginManager:
             raise
         except Exception as exc:  # noqa: BLE001
             logger.error("Tool hook callback failed: plugin_id=%s error=%s", plugin_id, exc)
+            from datacloud_analysis.orchestration.execution.tool_wrapper import (  # noqa: PLC0415
+                _build_tool_error,
+            )
+
+            tool_error = _build_tool_error(exc)
             return {
                 "action": "fail",
-                "result": {"tool_error": {"error_type": type(exc).__name__, "message": str(exc)}},
+                "result": {"tool_error": dict(tool_error)},
                 "audit": {"plugin_id": plugin_id, "message": "callback exception"},
             }
 

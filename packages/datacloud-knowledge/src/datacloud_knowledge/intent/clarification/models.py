@@ -240,3 +240,36 @@ class CCTermMeta:
 
     condition_index: int
     """所属 complex_condition 索引。"""
+
+
+# ── Clarification exceptions ────────────────────────────────────────────────
+
+
+class ClarificationNoCandidatesError(ValueError):
+    """知识库检索无匹配候选，无法进行澄清。
+
+    Raised when ALL unresolved terms have zero recall candidates,
+    making LLM confirmation pointless and dangerous (hallucination risk).
+    """
+
+    def __init__(self, terms: list[str]) -> None:
+        quoted = "、".join(terms[:5])
+        suffix = f"等{len(terms)}个" if len(terms) > 5 else ""
+        super().__init__(f"无可推荐字段/值：{quoted}{suffix}，请换检索词")
+        self.terms = terms
+
+
+class ClarificationConfirmedNotInRecallError(ValueError):
+    """LLM 确认的值不在检索召回范围内，拒绝应用。
+
+    Raised when the LLM returns a confirmed value that does not appear
+    in the recall candidates for that term, preventing hallucinated values
+    from being written into the structured query.
+    """
+
+    def __init__(self, term: str, confirmed: str, candidates: list[str]) -> None:
+        quoted = "、".join(candidates[:5])
+        super().__init__(f"无法确认「{term}」对应「{confirmed}」，推荐值有：{quoted}")
+        self.term = term
+        self.confirmed = confirmed
+        self.candidates = candidates

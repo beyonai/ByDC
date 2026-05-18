@@ -1,0 +1,247 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/relation/ontology#">
+
+    <owl:Class rdf:about="#TermRelation"><rdfs:label>术语关系</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#rel_by_customer_id">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">id</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户信息表_拥有字段_主键</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;主键&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_customer_customer_code">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_code</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户信息表_拥有字段_客户编码</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;客户编码&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_customer_customer_name">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_name</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户信息表_拥有字段_客户名称</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;客户名称&quot;,&quot;synonyms&quot;:[&quot;客户&quot;,&quot;客户全称&quot;]}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_customer_industry">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户信息表_拥有字段_所属行业</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;所属行业&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_customer_province">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">province</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户信息表_拥有字段_所属省份(dict_type: province)</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;所属省份(dict_type: province)&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_customer_city">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">city</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户信息表_拥有字段_所属城市</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;所属城市&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_customer_domain">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">domain</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户信息表_拥有字段_所属领域(dict_type: domain)</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;所属领域(dict_type: domain)&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_customer_sales_user_id">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sales_user_id</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户信息表_拥有字段_所属销售用户编码(ref: po_users.user_code)</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;所属销售用户编码(ref: po_users.user_code)&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_customer_sales_person">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sales_person</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户信息表_拥有字段_所属销售姓名</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;所属销售姓名&quot;,&quot;synonyms&quot;:[&quot;销售&quot;,&quot;客户经理&quot;]}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_customer_dept_id">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">dept_id</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户信息表_拥有字段_所属组织编码(ref: po_organization.org_code)</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;所属组织编码(ref: po_organization.org_code)&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_customer_dept_name">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">dept_name</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户信息表_拥有字段_所属组织名称</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;所属组织名称&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_customer_create_by">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_by</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户信息表_拥有字段_创建者</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;创建者&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_customer_create_time">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_time</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户信息表_拥有字段_创建时间</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;创建时间&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_customer_update_by">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_by</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户信息表_拥有字段_更新者</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;更新者&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_customer_update_time">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_time</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户信息表_拥有字段_更新时间</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;更新时间&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_customer_remark">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">remark</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户信息表_拥有字段_备注</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;备注&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#source_libeary"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#source_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#source_code"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_libeary"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_code"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#relation_name"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#relation_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#joinkeys"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#ext_field"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#version"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+</rdf:RDF>

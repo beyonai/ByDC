@@ -127,9 +127,17 @@ def build_scope_recall_layers(
     Returns ``(field_layers, value_layers)``:
     - **field_layers**: base ontology only. Field names (select/whereKey/groupBy/orderBy)
       are inherently scoped — they must belong to the current ontology.
-    - **value_layers**: base ontology + joinkey_object (joinkeys.sourceField match).
-      whereValue dimension values may live in cross-referenced ontologies
-      (e.g., ``handler_user_id`` values in ``po_users``).
+    - **value_layers**: base ontology + included objects (if view) + joinkey_object
+      (joinkeys.sourceField match).  whereValue dimension values may live in
+      cross-referenced ontologies (e.g., ``handler_user_id`` values in ``po_users``).
+
+    When ``ontology_code`` is a **view**, the empty-scope fallback sub-query in
+    ``_build_effective_scope_clause`` needs ``HAS_FIELD`` relations from the root
+    term to its props.  A view may lack the specific prop whose children contain
+    the searched value terms (e.g. ``sales_person`` under ``by_customer``).  We
+    resolve the objects that the view "包含" (BUSINESS relations to objects) and
+    add them to ``value_layers``, so value terms from included objects can be
+    found through their scopes.
     """
     field_codes = _collect_confirmed_field_codes(pre, cc_pre)
     base = [ScopeRecallLayer(scope_code=ontology_code, weight=1.0, label="ontology")]
@@ -139,9 +147,21 @@ def build_scope_recall_layers(
     # ── field layers: base ontology only ──
     field_layers: list[ScopeRecallLayer] = list(base)
 
-    # ── value layers: base + joinkey_object ──
+    # ── value layers: base + included_objects (if view) + joinkey_object ──
     value_layers: list[ScopeRecallLayer] = list(base)
     seen_scopes: set[str] = {ontology_code}
+
+    # ── When ontology_code is a view, include BUSINESS-related objects
+    #     (e.g. "研发管理视图_包含_用户信息表" → po_users).  These objects
+    #     may have the HAS_FIELD → prop → child chain for value terms. ──
+    included_codes: list[str] = _collect_view_included_objects(ontology_code)
+    for code in included_codes:
+        if code not in seen_scopes:
+            value_layers.append(
+                ScopeRecallLayer(scope_code=code, weight=0.8, label="included_object")
+            )
+            seen_scopes.add(code)
+
     related_codes: list[str] = _collect_joinkey_related_objects(ontology_code, field_codes)
     for code in related_codes:
         if code not in seen_scopes:
@@ -151,6 +171,46 @@ def build_scope_recall_layers(
             seen_scopes.add(code)
 
     return field_layers, value_layers
+
+
+def _collect_view_included_objects(ontology_code: str) -> list[str]:
+    """Return object codes that a view "包含" (includes) via BUSINESS relations.
+
+    Views define their data sources through BUSINESS relations to object-type
+    terms (e.g., ``"研发管理视图_包含_用户信息表" → po_users``).  Unlike
+    ``_collect_joinkey_related_objects``, this does NOT require joinkey
+    matching — all included objects are relevant for whereValue recall.
+    """
+    try:
+        from sqlalchemy import text
+
+        from datacloud_knowledge.adapters.opengauss._db.connection import get_session
+
+        with get_session() as session:
+            rows = session.execute(
+                text(
+                    "SELECT DISTINCT target.term_code "
+                    "FROM term AS source "
+                    "JOIN term_relation AS rel "
+                    "  ON rel.source_term_id = source.term_id "
+                    " AND rel.relation_category = 'BUSINESS' "
+                    "JOIN term AS target "
+                    "  ON target.term_id = rel.target_term_id "
+                    " AND target.term_type_code = 'object' "
+                    "WHERE source.term_code = :ontology_code "
+                    "  AND source.term_type_code = 'view'"
+                ),
+                {"ontology_code": ontology_code},
+            ).fetchall()
+    except Exception:
+        logger.warning(
+            "[clarification] collect view included objects failed: ontology=%s",
+            ontology_code,
+            exc_info=True,
+        )
+        return []
+
+    return [str(r[0]) for r in rows]
 
 
 def _collect_joinkey_related_objects(

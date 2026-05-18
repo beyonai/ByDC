@@ -145,7 +145,6 @@ def analyze_query_clarification(
     # ── Step 3: 定向召回 ──
     recall_terms = list(pre.unresolved_terms) + list(cc_pre.unresolved_terms)
     field_layers, value_layers = _build_scope_recall_layers(ontology_code, pre, cc_pre)
-    # 只在 >1 层时才启用分层召回，否则走 scope_code 单层
     use_field_layers = field_layers if len(field_layers) > 1 else None
     use_value_layers = value_layers if len(value_layers) > 1 else None
     with emit.step("知识召回", "knowledge_recall"):
@@ -165,6 +164,9 @@ def analyze_query_clarification(
                 "recalled": sum(1 for v in recall_map.values() if v),
             }
         )
+
+    # ── 召回为空时跳过 LLM 确认，直接报友好错误 ──
+    _check_recall_not_empty(recall_terms, recall_map)
 
     # ── Step 4a: 主结构 LLM 确认 ──
     pre_resolved_input = _build_pre_resolved_input(structured_input, pre, main_terms)
@@ -257,6 +259,27 @@ def analyze_query_clarification(
         form=form_payload,
         knowledge=knowledge_payload,
     )
+
+
+def _check_recall_not_empty(
+    recall_terms: list[Any],
+    recall_map: dict[str, list[dict[str, Any]]],
+) -> None:
+    """当所有未解析术语检索均为空时，跳过 LLM 确认并报友好错误。"""
+    from .models import ClarificationNoCandidatesError
+
+    empty_terms: list[str] = []
+    for t in recall_terms:
+        key = f"{t.ktype}:{t.raw_text}"
+        if not t.search_enabled:
+            continue
+        if not recall_map.get(key):
+            empty_terms.append(t.raw_text)
+
+    if empty_terms and all(
+        not recall_map.get(f"{t.ktype}:{t.raw_text}") for t in recall_terms if t.search_enabled
+    ):
+        raise ClarificationNoCandidatesError(empty_terms)
 
 
 # ── 格式化入口 ───────────────────────────────────────────────────────

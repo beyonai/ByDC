@@ -154,6 +154,33 @@ class HookAwareToolNode(ToolNode):
                     goto="analyze_clarify",
                 )
 
+            # 处理 before hook 返回的 fail 决策：将 tool_error 转为 ToolMessage 直接返回
+            if _before_decision and str(_before_decision.get("action") or "") == "fail":
+                result_payload = _before_decision.get("result") or {}
+                tool_error = result_payload.get("tool_error")
+                if tool_error:
+                    from datacloud_analysis.orchestration.execution.tool_wrapper import (  # noqa: PLC0415
+                        _format_agent_error_message,
+                    )
+
+                    error_type = tool_error.get("error_type", "ToolHookError")
+                    error_msg = _format_agent_error_message(tool_error)
+                    logger.warning(
+                        "[HookAwareToolNode] before hook returned fail action,"
+                        " short-circuiting tool=%s error=%s",
+                        tool_name,
+                        error_type,
+                    )
+                    return {
+                        "messages": [
+                            ToolMessage(
+                                content=error_msg,
+                                name=tool_name,
+                                tool_call_id=str(tc.get("id") or ""),
+                            )
+                        ]
+                    }
+
             # query_* 工具剥离 compute-only 字段，防止插件内部重新注入空列表
             tp = dict(ctx.get("tool_params") or {})
             if tool_name.startswith("query_"):

@@ -9,7 +9,8 @@ import logging
 import uuid
 from collections import OrderedDict
 from collections.abc import AsyncGenerator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field as dc_field
 from pathlib import Path
 from typing import Any
 
@@ -81,27 +82,36 @@ class ParadigmOption:
     keyword: str = ""
     kid: int = 0
     ktype: str = ""
+    # 过滤条件（paradigmType='filter'）专用字段
+    filter_field: str = ""
+    comparison: str = ""
+    value: str = ""
+    choice_field: str = ""
+    choice_comparison: str = ""
+    field_recall: list[str] = dc_field(default_factory=list)
+    comparison_recall: list[str] = dc_field(default_factory=list)
+    value_recall: list[str] = dc_field(default_factory=list)
 
 
 @dataclass
 class ParadigmGroup:
     paradigm_id: str
     paradigm_name: str
-    options: list[ParadigmOption] = field(default_factory=list)
+    options: list[ParadigmOption] = dc_field(default_factory=list)
 
 
 @dataclass
 class ParadigmGroupSelection:
     paradigm_id: str
     paradigm_name: str
-    chosen_options: list[ParadigmOption] = field(default_factory=list)
+    chosen_options: list[ParadigmOption] = dc_field(default_factory=list)
 
 
 @dataclass
 class ParadigmAnswer:
     """用户选择的维度答案，传给 resume()。"""
 
-    selections: list[ParadigmGroupSelection] = field(default_factory=list)
+    selections: list[ParadigmGroupSelection] = dc_field(default_factory=list)
 
 
 # ── 配置模型 ──────────────────────────────────────────────────────────────────
@@ -203,10 +213,23 @@ def _paradigm_answer_to_resume_value(
         return raw
 
     # raw 不存在时降级：从 ParadigmAnswer 重建（仅含 choiceKeyword/recall，无 keyword/kid）
-    items: list[dict[str, str]] = []
+    items: list[dict[str, Any]] = []
     for sel in answer.selections:
         for opt in sel.chosen_options:
-            items.append({"choiceKeyword": opt.choice_keyword, "recall": opt.recall})
+            item: dict[str, Any] = {
+                "choiceKeyword": opt.choice_keyword,
+                "recall": opt.recall,
+            }
+            # 过滤条件选项携带 filter 专用字段
+            if opt.filter_field:
+                item["field"] = opt.filter_field
+                item["choiceField"] = opt.choice_field
+            if opt.comparison:
+                item["comparison"] = opt.comparison
+                item["choiceComparison"] = opt.choice_comparison
+            if opt.value:
+                item["value"] = opt.value
+            items.append(item)
     return {"paradigmList": [{"paradigmList": items}]}
 
 
@@ -223,6 +246,12 @@ def _interrupt_value_to_paradigm_list(
         paradigm_id = str(item.get("paradigmId") or item.get("paradigmCode") or "")
         paradigm_name = str(item.get("paradigmName") or "")
         raw_results = list(item.get("paradigmResult") or [])
+        # 过滤条件的结果结构不同于查询值（查询值使用 choiceKeyword/keyword/kid/ktype，
+        # 过滤条件使用 field/comparison/value/choiceField 等字段）。
+        # 通过检测第一个 result 是否有 "field" 键来判断是否为过滤条件类型。
+        is_filter = bool(
+            raw_results and isinstance(raw_results[0], dict) and "field" in raw_results[0]
+        )
         options: list[ParadigmOption] = [
             ParadigmOption(
                 choice_keyword=str(r.get("choiceKeyword") or ""),
@@ -230,6 +259,26 @@ def _interrupt_value_to_paradigm_list(
                 keyword=str(r.get("keyword") or ""),
                 kid=int(r.get("kid") or 0),
                 ktype=str(r.get("ktype") or ""),
+                filter_field=str(r.get("field") or "") if is_filter else "",
+                comparison=str(r.get("comparison") or "") if is_filter else "",
+                value=str(r.get("value") or "") if is_filter else "",
+                choice_field=str(r.get("choiceField") or "") if is_filter else "",
+                choice_comparison=str(r.get("choiceComparison") or "") if is_filter else "",
+                field_recall=r.get("fieldRecall")
+                if isinstance(r.get("fieldRecall"), list)
+                else []
+                if is_filter
+                else [],
+                comparison_recall=r.get("comparisonRecall")
+                if isinstance(r.get("comparisonRecall"), list)
+                else []
+                if is_filter
+                else [],
+                value_recall=r.get("valueRecall")
+                if isinstance(r.get("valueRecall"), list)
+                else []
+                if is_filter
+                else [],
             )
             for r in raw_results
         ]

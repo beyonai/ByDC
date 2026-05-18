@@ -193,5 +193,7 @@ package.json
 package-lock.json
 examples/chatbi_demo/.demo_env
 examples/chatbi_demo/demo_interrupt.py
-examples/chatbi_demo/resource/
-!examples/chatbi_demo/resource/**/*.owl.template
+examples/chatbi_demo/data/sql_en/
+examples/chatbi_demo/resource_en/
+examples/chatbi_demo/data/translate_sql.py
+examples/chatbi_demo/data/.translate_cache.json
