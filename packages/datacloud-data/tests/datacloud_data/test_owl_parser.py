@@ -89,6 +89,58 @@ def test_loader_can_use_parser_generated_action_and_function() -> None:
     }
 
 
+def test_owl_parser_preserves_object_ext_property(tmp_path: Path) -> None:
+    pytest.importorskip("rdflib")
+
+    object_root = tmp_path / "object"
+    kb_dir = object_root / "sales_meeting_note"
+    kb_dir.mkdir(parents=True)
+
+    kb_definition = kb_dir / "sales_meeting_note_definition.owl"
+    kb_definition.write_text(
+        """<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#">
+    <owl:Class rdf:about="#EntityDefinition"/>
+    <owl:NamedIndividual rdf:about="#sales_meeting_note_v1">
+        <rdf:type rdf:resource="#EntityDefinition"/>
+        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sales_meeting_note</entity_code>
+        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">会议纪要</entity_name>
+        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">KNOWLEDGE_BASE</entity_source>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;kb_id&quot;:&quot;kb-sales&quot;,&quot;kb_directory&quot;:&quot;/sales/meeting&quot;}</ext_property>
+    </owl:NamedIndividual>
+</rdf:RDF>
+""",
+        encoding="utf-8",
+    )
+
+    parser = OwlParser()
+    content = parser.parse_resource_directory(tmp_path)
+
+    kb_object = next(
+        obj for obj in content["objects"] if obj["object_code"] == "sales_meeting_note"
+    )
+    assert kb_object["source_type"] == "KNOWLEDGE_BASE"
+    assert kb_object["ext_property"] == {
+        "kb_id": "kb-sales",
+        "kb_directory": "/sales/meeting",
+    }
+    assert "kb_id" not in kb_object
+    assert "kb_directory" not in kb_object
+    assert kb_object["source_config"] is None
+
+    loader = OntologyLoader()
+    loader._load_from_owl_content(content)
+    cls = loader.get_ontology_class("sales_meeting_note")
+    assert cls.ext_property == {
+        "kb_id": "kb-sales",
+        "kb_directory": "/sales/meeting",
+    }
+
+
 def test_owl_parser_builds_request_and_response_schema_from_action_params() -> None:
     parser = OwlParser()
     parser._objects["po_organization"] = ParsedObject(
