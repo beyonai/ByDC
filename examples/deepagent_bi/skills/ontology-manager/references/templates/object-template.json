@@ -1,0 +1,32 @@
+{
+  "entity_code": "",
+  "entity_name": "",
+  "entity_desc": "",
+  "entity_source": "DB",
+  "datasource": {
+    "db_code": "personal_sqlite",
+    "db_type": "PERSONAL_SQLITE",
+    "db_params": {
+      "endpoint_url": "{{SQLITE_API_URL}}",
+      "user_code": "{{USER_CODE}}"
+    }
+  },
+  "fields": [
+    {
+      "property_code": "id",
+      "property_name": "主键",
+      "data_type": "BIGINT",
+      "is_required": true,
+      "source_column": "id",
+      "property_group": "STORAGE",
+      "ext_property": {
+        "property_role_rule": {
+          "property_role": "MEASURE",
+          "rule_type": "primary_key"
+        }
+      }
+    }
+  ],
+  "actions": [],
+  "relations": []
+}

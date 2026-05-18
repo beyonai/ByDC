@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/term/ontology#">
+
+    <owl:Class rdf:about="#TermDefinition"><rdfs:label>术语定义</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#term_view_scene_new_sales_analysis">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">VIEW#scene_new_sales_analysis</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">以复合肥销量宽表为主对象，关联订单明细，用于按月份、省份、销售人员和产品配方分析销量。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_NEW_SALES</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view/scene_new_sales_analysis/scene_new_sales_analysis_definition.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#term_code_path"/>
+    <owl:DatatypeProperty rdf:about="#term_code"/>
+    <owl:DatatypeProperty rdf:about="#term_name"/>
+    <owl:DatatypeProperty rdf:about="#library_code"/>
+    <owl:DatatypeProperty rdf:about="#term_type_code"/>
+    <owl:DatatypeProperty rdf:about="#term_desc"/>
+    <owl:DatatypeProperty rdf:about="#synonyms"/>
+    <owl:DatatypeProperty rdf:about="#terms_knowledge"/>
+    <owl:DatatypeProperty rdf:about="#domain_code"/>
+    <owl:DatatypeProperty rdf:about="#owl_doc_file"/>
+    <owl:DatatypeProperty rdf:about="#ext_field"/>
+    <owl:DatatypeProperty rdf:about="#parent_term_code"/>
+    <owl:DatatypeProperty rdf:about="#version"/>
+</rdf:RDF>

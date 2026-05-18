@@ -1,0 +1,3 @@
+httpx>=0.27
+by-datacloud
+pypinyin>=0.50

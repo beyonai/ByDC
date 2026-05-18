@@ -1,0 +1,89 @@
+{
+    "entity_name": "产品",
+    "entity_desc": "管理企业销售产品的基本信息，用于商机报价和订单关联",
+    "fields": [
+        {
+            "property_code": "product_code",
+            "property_name": "产品编码",
+            "data_type": "VARCHAR",
+            "is_required": true,
+            "ext_property": {"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}
+        },
+        {
+            "property_code": "product_name",
+            "property_name": "产品名称",
+            "data_type": "VARCHAR",
+            "is_required": true,
+            "ext_property": {"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}
+        },
+        {
+            "property_code": "category",
+            "property_name": "产品分类",
+            "data_type": "VARCHAR",
+            "is_required": false,
+            "ext_property": {"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}},
+            "term_type": "DICT_TERM",
+            "term_values": [
+                {"code": "软件", "name": "软件"},
+                {"code": "硬件", "name": "硬件"},
+                {"code": "服务", "name": "服务"}
+            ]
+        },
+        {
+            "property_code": "spec",
+            "property_name": "产品规格/型号",
+            "data_type": "VARCHAR",
+            "is_required": false,
+            "ext_property": {"property_role_rule": {"property_role": "DIMENSION", "rule_type": "description"}}
+        },
+        {
+            "property_code": "unit_price",
+            "property_name": "单价（元）",
+            "data_type": "DECIMAL",
+            "is_required": false,
+            "ext_property": {"property_role_rule": {"property_role": "MEASURE", "rule_type": "raw_number"}}
+        },
+        {
+            "property_code": "unit",
+            "property_name": "计量单位",
+            "data_type": "VARCHAR",
+            "is_required": false,
+            "ext_property": {"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}},
+            "term_type": "DICT_TERM",
+            "term_values": [
+                {"code": "个", "name": "个"},
+                {"code": "套", "name": "套"},
+                {"code": "年", "name": "年"},
+                {"code": "月", "name": "月"},
+                {"code": "天", "name": "天"}
+            ]
+        },
+        {
+            "property_code": "description",
+            "property_name": "产品描述",
+            "data_type": "VARCHAR",
+            "is_required": false,
+            "ext_property": {"property_role_rule": {"property_role": "DIMENSION", "rule_type": "description"}}
+        },
+        {
+            "property_code": "status",
+            "property_name": "状态",
+            "data_type": "VARCHAR",
+            "is_required": false,
+            "ext_property": {"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}},
+            "term_type": "DICT_TERM",
+            "term_values": [
+                {"code": "启用", "name": "启用"},
+                {"code": "禁用", "name": "禁用"}
+            ]
+        },
+        {
+            "property_code": "created_at",
+            "property_name": "创建时间",
+            "data_type": "DATETIME",
+            "is_required": false,
+            "data_format": "yyyy-MM-dd HH:mm:ss",
+            "ext_property": {"property_role_rule": {"property_role": "DIMENSION", "rule_type": "datetime"}}
+        }
+    ]
+}

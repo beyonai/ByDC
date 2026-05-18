@@ -583,9 +583,7 @@ class GraphBuilder:
 
         g = Graph()
         g.bind("", self._ns)
-        for s, _p, _o in self._graph.triples(
-            (None, self._RDF.type, self._ns.TermTypeDefinition)
-        ):
+        for s, _p, _o in self._graph.triples((None, self._RDF.type, self._ns.TermTypeDefinition)):
             for sp, po in self._graph.predicate_objects(s):
                 g.add((s, sp, po))
         return g

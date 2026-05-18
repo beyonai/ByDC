@@ -509,3 +509,149 @@ def _write_kps_view_files(
 
 def _total_cols(tables: list[Table]) -> int:
     return sum(len(t.columns) for t in tables)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 对话式本体管理入口
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SQL_TYPE_MAP: dict[str, str] = {
+    "STRING": "VARCHAR(255)",
+    "INTEGER": "INT",
+    "FLOAT": "DOUBLE",
+    "BOOLEAN": "TINYINT",
+    "DATE": "DATE",
+}
+
+
+def generate_from_definition(workspace_state: dict[str, Any], output_dir: Path) -> None:
+    """从对话式收集的 workspace_state 生成 OWL 导入包。
+
+    workspace_state 可以是对象 state（含 entity_code）或视图 state（含 view_code）。
+    """
+    if "entity_code" in workspace_state:
+        _generate_object(workspace_state, output_dir)
+    elif "view_code" in workspace_state:
+        _generate_view(workspace_state, output_dir)
+    else:
+        raise ValueError("workspace_state 必须包含 entity_code 或 view_code")
+
+
+def _generate_object(state: dict[str, Any], output_dir: Path) -> None:
+    """从对象 workspace_state 生成 OWL 导入包。"""
+    from datacloud_knowledge.ingestion.owl_generate.models import Column, FieldRole, TermBinding
+
+    entity_code: str = state["entity_code"]
+    fields: list[dict[str, Any]] = state.get("fields", [])
+
+    columns: list[Column] = [
+        Column(
+            name=f["property_code"],
+            sql_type=_SQL_TYPE_MAP.get(f.get("data_type", "STRING"), "VARCHAR(255)"),
+            nullable=True,
+            comment=f.get("property_name", f["property_code"]),
+        )
+        for f in fields
+    ]
+
+    table = Table(
+        code=entity_code,
+        name=state.get("entity_name", entity_code),
+        desc=state.get("entity_desc", ""),
+        columns=columns,
+    )
+
+    field_roles: dict[tuple[str, str], FieldRole] = {}
+    term_bindings: list[TermBinding] = []
+    for f in fields:
+        ext = f.get("ext_property") or {}
+        role_rule = ext.get("property_role_rule") or {}
+        if role_rule.get("property_role"):
+            field_roles[(entity_code, f["property_code"])] = FieldRole(
+                property_role=role_rule["property_role"],
+                rule_type=role_rule.get("rule_type", "description"),
+                formula=role_rule.get("formula", ""),
+            )
+        if f.get("term_type_code"):
+            term_bindings.append(
+                TermBinding(
+                    table_code=entity_code,
+                    column_name=f["property_code"],
+                    term_type_code=f["term_type_code"],
+                    term_data_type=f.get("term_data_type", "LIST_TERM"),
+                )
+            )
+
+    config = OwlGenConfig(
+        domain_code=state.get("domain_code", "PERSONAL_DOMAIN"),
+        domain_name=state.get("domain_name", "个人领域"),
+        domain_desc=state.get("domain_desc", ""),
+        library_code=state.get("library_code", "PERSONAL_LIB"),
+        library_name=state.get("library_name", "个人本体库"),
+        library_desc=state.get("library_desc", ""),
+        db_code=state.get("db_code", "personal_sqlite"),
+        db_type=state.get("db_type", "PERSONAL_SQLITE"),
+        db_params={},
+        table_codes=[entity_code],
+        table_names={entity_code: state.get("entity_name", entity_code)},
+        table_descs={entity_code: state.get("entity_desc", "")},
+        term_bindings=term_bindings,
+        object_relations=[],
+        output_dir=output_dir,
+        field_roles=field_roles,
+    )
+
+    generate_from_tables(config, [table], {})
+
+
+def _generate_view(state: dict[str, Any], output_dir: Path) -> None:
+    """从视图 workspace_state 生成 OWL 导入包。"""
+    from datacloud_knowledge.ingestion.owl_generate.models import ObjectRelation, ViewConfig
+
+    view_code: str = state["view_code"]
+    object_codes: list[str] = state.get("object_codes", [])
+    raw_relations: list[dict[str, Any]] = state.get("object_relations", [])
+
+    object_relations: list[ObjectRelation] = []
+    for i, rel in enumerate(raw_relations):
+        src = rel.get("source_object_code", "")
+        tgt = rel.get("target_object_code", "")
+        src_field = rel.get("source_object_field_code", "")
+        tgt_field = rel.get("target_object_field_code", "")
+        object_relations.append(
+            ObjectRelation(
+                relation_id=f"rel_{i}",
+                source_code=src,
+                target_code=tgt,
+                relation_name=rel.get("relation_name", f"{src}_to_{tgt}"),
+                join_keys=[{"source": src_field, "target": tgt_field}],
+            )
+        )
+
+    view = ViewConfig(
+        view_code=view_code,
+        view_name=state.get("view_name", view_code),
+        view_desc=state.get("view_desc", ""),
+        object_codes=object_codes,
+    )
+
+    config = OwlGenConfig(
+        domain_code=state.get("domain_code", "PERSONAL_DOMAIN"),
+        domain_name=state.get("domain_name", "个人领域"),
+        domain_desc=state.get("domain_desc", ""),
+        library_code=state.get("library_code", "PERSONAL_LIB"),
+        library_name=state.get("library_name", "个人本体库"),
+        library_desc=state.get("library_desc", ""),
+        db_code=state.get("db_code", "personal_sqlite"),
+        db_type=state.get("db_type", "PERSONAL_SQLITE"),
+        db_params={},
+        table_codes=object_codes,
+        table_names={c: c for c in object_codes},
+        table_descs=dict.fromkeys(object_codes, ""),
+        term_bindings=[],
+        object_relations=object_relations,
+        output_dir=output_dir,
+        views=[view],
+    )
+
+    generate_from_tables(config, [], {})

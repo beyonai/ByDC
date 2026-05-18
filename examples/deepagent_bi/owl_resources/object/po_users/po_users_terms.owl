@@ -1,0 +1,1848 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/term/ontology#">
+
+    <owl:Class rdf:about="#TermDefinition"><rdfs:label>术语定义</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#term_object_po_users">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OBJECT#po_users</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户信息表</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">平台用户维度对象，承载销售、发起人、处理人等人员信息。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/po_users/po_users_definition.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_user_id">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#user_id</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_id</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户唯一标识</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：用户唯一标识</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_user_name">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#user_name</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：用户名称</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_email">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#email</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">email</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户邮箱</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：用户邮箱</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_phone">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#phone</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phone</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户电话</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：用户电话</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_user_code">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#user_code</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_code</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户登录标识</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：用户登录标识</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_pwd">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#pwd</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pwd</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户密码(md5加密)</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：用户密码(md5加密)</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_address">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#address</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">address</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户地址</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：用户地址</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_user_eff_date">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#user_eff_date</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_eff_date</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">预留</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：预留</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_user_exp_date">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#user_exp_date</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_exp_date</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户过期日期</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：用户过期日期</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_create_date">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#create_date</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_date</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">记录创建日期</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：记录创建日期</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_update_date">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#update_date</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_date</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">记录更新日期</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：记录更新日期</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_state">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#state</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">state</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户状态：A-正常;X-禁用</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：用户状态：A-正常;X-禁用</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_state_time">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#state_time</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">state_time</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">state_time</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：state_time</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_is_locked">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#is_locked</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">is_locked</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">是否锁定，'Y'-锁定，'N'-没有锁定，null表示'N'</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：是否锁定，'Y'-锁定，'N'-没有锁定，null表示'N'</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_last_login_date">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#last_login_date</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">last_login_date</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户最后一次登录时间</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：用户最后一次登录时间</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_security_question_id">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#security_question_id</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">security_question_id</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户忘记密码找回密码问题</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：用户忘记密码找回密码问题</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_security_answer">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#security_answer</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">security_answer</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户忘记密码安全提示问题</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：用户忘记密码安全提示问题</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_thumbnail_uri">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#thumbnail_uri</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">thumbnail_uri</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户头像URL地址</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：用户头像URL地址</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_ext_attr">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#ext_attr</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ext_attr</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户扩展信息</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：用户扩展信息</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_assistant_id">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#assistant_id</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">assistant_id</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">一个员工对应一个超级助手</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：一个员工对应一个超级助手</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_user_number">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#user_number</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_number</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">工号</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：工号</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_station_id">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#station_id</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">station_id</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属驻地</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：所属驻地</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_register_type">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#register_type</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">register_type</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">注册类型 1-手机号注册</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：注册类型 1-手机号注册</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_prop_apple_user_id">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">PROP#apple_user_id</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">apple_user_id</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">苹果用户ID，用于苹果登录关联</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">属性：苹果用户ID，用于苹果登录关联</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_0027000620">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#0027000620</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">0027000620</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">无名</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：无名</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_0027002543">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#0027002543</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">0027002543</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">覃小迪</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：覃小迪</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_0027003719">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#0027003719</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">0027003719</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">梁小</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：梁小</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_0027011322">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#0027011322</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">0027011322</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">黎明</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：黎明</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_0027011326">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#0027011326</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">0027011326</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">周伯通</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：周伯通</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_0027012991">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#0027012991</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">0027012991</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">杜甫</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：杜甫</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_0027016840">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#0027016840</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">0027016840</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">萧峰</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：萧峰</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_0027019281">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#0027019281</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">0027019281</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">王重阳</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：王重阳</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_0027021534">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#0027021534</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">0027021534</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">吴彦祖</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：吴彦祖</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_0027023754">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#0027023754</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">0027023754</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">谢逊</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：谢逊</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_0027024630">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#0027024630</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">0027024630</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">黄药师</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：黄药师</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_0027024710">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#0027024710</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">0027024710</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">陈舵主</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：陈舵主</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_0027028723">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#0027028723</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">0027028723</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">罗贯中</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：罗贯中</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_0027030770">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#0027030770</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">0027030770</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">刘皇叔</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：刘皇叔</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_adminvip">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#adminvip</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">adminvip</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">平台管理员adminvip</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：平台管理员adminvip</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_chengkun">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#chengkun</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chengkun</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">成昆</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：成昆</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_chenjialuo">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#chenjialuo</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">chenjialuo</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">陈家洛</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：陈家洛</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_diyun">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#diyun</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">diyun</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">狄云</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：狄云</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_duanyu">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#duanyu</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">duanyu</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">段誉</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：段誉</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_fanyao">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#fanyao</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">fanyao</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">范遥</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：范遥</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_fengqingyang">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#fengqingyang</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">fengqingyang</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">风清扬</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：风清扬</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_guojing">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#guojing</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">guojing</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">郭靖</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：郭靖</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_hongqigong">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#hongqigong</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">hongqigong</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">洪七公</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：洪七公</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_huangrong">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#huangrong</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">huangrong</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">黄蓉</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：黄蓉</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_huangyaoshi">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#huangyaoshi</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">huangyaoshi</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">黄药师</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：黄药师</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_hufei">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#hufei</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">hufei</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">胡斐</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：胡斐</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_huoqingtong">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#huoqingtong</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">huoqingtong</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">霍青桐</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：霍青桐</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_linghuchong">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#linghuchong</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">linghuchong</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">令狐冲</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：令狐冲</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_miaoruolan">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#miaoruolan</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">miaoruolan</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">苗若兰</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：苗若兰</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_murongfu">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#murongfu</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">murongfu</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">慕容复</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：慕容复</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_ouyangfeng">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#ouyangfeng</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ouyangfeng</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">欧阳锋</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：欧阳锋</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_renyingying">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#renyingying</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">renyingying</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">任盈盈</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：任盈盈</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_saodiseng">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#saodiseng</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">saodiseng</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">扫地僧</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：扫地僧</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_songyuanqiao">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#songyuanqiao</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">songyuanqiao</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">宋远桥</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：宋远桥</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_wangyuyan">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#wangyuyan</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">wangyuyan</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">王语嫣</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：王语嫣</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_weixiaobao">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#weixiaobao</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">weixiaobao</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">韦小宝</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：韦小宝</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_weiyixiao">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#weiyixiao</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">weiyixiao</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">韦一笑</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：韦一笑</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_xiaofeng">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#xiaofeng</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">xiaofeng</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">萧峰</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：萧峰</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_xiaolongnv">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#xiaolongnv</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">xiaolongnv</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">小龙女</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：小龙女</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_xiexun">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#xiexun</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">xiexun</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">谢逊</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：谢逊</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_xuzhu">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#xuzhu</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">xuzhu</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">虚竹</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：虚竹</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_yangguo">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#yangguo</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yangguo</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">杨过</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：杨过</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_yangxiao">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#yangxiao</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yangxiao</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">杨逍</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：杨逍</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_yinsusu">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#yinsusu</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yinsusu</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">殷素素</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：殷素素</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_yintianzheng">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#yintianzheng</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yintianzheng</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">殷天正</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：殷天正</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_youtanzhi">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#youtanzhi</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">youtanzhi</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">游坦之</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：游坦之</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_yudaiyan">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#yudaiyan</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yudaiyan</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">俞岱岩</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：俞岱岩</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_yuebuqun">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#yuebuqun</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yuebuqun</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">岳不群</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：岳不群</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_yulianzhou">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#yulianzhou</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">yulianzhou</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">俞莲舟</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：俞莲舟</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_zhangcuishan">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#zhangcuishan</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">zhangcuishan</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">张翠山</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：张翠山</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_zhangsanfeng">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#zhangsanfeng</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">zhangsanfeng</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">张三丰</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：张三丰</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_zhangwuji">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#zhangwuji</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">zhangwuji</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">张无忌</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：张无忌</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_zhaomin">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#zhaomin</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">zhaomin</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">赵敏</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：赵敏</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_user_name_zhoubotong">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM#user_name#zhoubotong</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">zhoubotong</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">周伯通</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">用户名称术语：周伯通</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#term_action_create_by_rd_task">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#create_by_rd_task</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_by_rd_task</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">新增研发任务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">新增一条研发任务记录，入参为研发任务对象字段，ID由系统自动生成，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_rd_task/actions/create_by_rd_task.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_update_by_rd_task">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#update_by_rd_task</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_by_rd_task</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">修改研发任务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据 id 修改一条研发任务记录，只更新入参中提供的字段，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_rd_task/actions/update_by_rd_task.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_get_by_rd_task">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#get_by_rd_task</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">get_by_rd_task</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">获取研发任务详情</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据主键 id 查询单条研发任务记录，返回 AjaxResult.data。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_rd_task/actions/get_by_rd_task.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_list_by_rd_task">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#list_by_rd_task</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">list_by_rd_task</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">查询研发任务列表</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">分页查询研发任务信息，支持按编码、名称、状态等字段过滤，返回 TableDataInfo 分页结果。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_rd_task/actions/list_by_rd_task.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_delete_by_rd_task">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#delete_by_rd_task</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">delete_by_rd_task</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">删除研发任务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据 ids 数组批量删除研发任务记录，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_rd_task/actions/delete_by_rd_task.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_create_by_project_task">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#create_by_project_task</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_by_project_task</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">新增项目任务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">新增一条项目任务记录，入参为项目任务对象字段，ID由系统自动生成，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_project_task/actions/create_by_project_task.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_update_by_project_task">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#update_by_project_task</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_by_project_task</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">修改项目任务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据 id 修改一条项目任务记录，只更新入参中提供的字段，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_project_task/actions/update_by_project_task.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_get_by_project_task">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#get_by_project_task</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">get_by_project_task</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">获取项目任务详情</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据主键 id 查询单条项目任务记录，返回 AjaxResult.data。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_project_task/actions/get_by_project_task.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_list_by_project_task">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#list_by_project_task</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">list_by_project_task</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">查询项目任务列表</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">分页查询项目任务信息，支持按编码、名称、状态等字段过滤，返回 TableDataInfo 分页结果。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_project_task/actions/list_by_project_task.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_delete_by_project_task">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#delete_by_project_task</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">delete_by_project_task</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">删除项目任务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据 ids 数组批量删除项目任务记录，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_project_task/actions/delete_by_project_task.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_create_by_opp_task">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#create_by_opp_task</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_by_opp_task</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">新增商机任务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">新增一条商机任务记录，入参为商机任务对象字段，ID由系统自动生成，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_opp_task/actions/create_by_opp_task.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_update_by_opp_task">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#update_by_opp_task</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_by_opp_task</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">修改商机任务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据 id 修改一条商机任务记录，只更新入参中提供的字段，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_opp_task/actions/update_by_opp_task.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_get_by_opp_task">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#get_by_opp_task</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">get_by_opp_task</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">获取商机任务详情</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据主键 id 查询单条商机任务记录，返回 AjaxResult.data。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_opp_task/actions/get_by_opp_task.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_list_by_opp_task">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#list_by_opp_task</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">list_by_opp_task</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">查询商机任务列表</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">分页查询商机任务信息，支持按编码、名称、状态等字段过滤，返回 TableDataInfo 分页结果。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_opp_task/actions/list_by_opp_task.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_delete_by_opp_task">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#delete_by_opp_task</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">delete_by_opp_task</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">删除商机任务</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据 ids 数组批量删除商机任务记录，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_opp_task/actions/delete_by_opp_task.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_create_by_project">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#create_by_project</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_by_project</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">新增项目</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">新增一条项目记录，入参为项目对象字段，ID和项目编码由系统自动生成，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_project/actions/create_by_project.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_update_by_project">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#update_by_project</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_by_project</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">修改项目</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据 id 修改一条项目记录，只更新入参中提供的字段，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_project/actions/update_by_project.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_get_by_project">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#get_by_project</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">get_by_project</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">获取项目详情</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据主键 id 查询单条项目记录，返回 AjaxResult.data。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_project/actions/get_by_project.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_list_by_project">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#list_by_project</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">list_by_project</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">查询项目列表</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">分页查询项目信息，支持按编码、名称、状态等字段过滤，返回 TableDataInfo 分页结果。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_project/actions/list_by_project.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_delete_by_project">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#delete_by_project</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">delete_by_project</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">删除项目</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据 ids 数组批量删除项目记录，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_project/actions/delete_by_project.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_create_by_opportunity">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#create_by_opportunity</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_by_opportunity</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">新增商机</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">新增一条商机记录，入参为商机对象字段，ID和商机编码由系统自动生成，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_opportunity/actions/create_by_opportunity.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_update_by_opportunity">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#update_by_opportunity</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_by_opportunity</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">修改商机</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据 id 修改一条商机记录，只更新入参中提供的字段，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_opportunity/actions/update_by_opportunity.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_get_by_opportunity">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#get_by_opportunity</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">get_by_opportunity</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">获取商机详情</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据主键 id 查询单条商机记录，返回 AjaxResult.data。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_opportunity/actions/get_by_opportunity.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_list_by_opportunity">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#list_by_opportunity</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">list_by_opportunity</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">查询商机列表</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">分页查询商机信息，支持按编码、名称、状态等字段过滤，返回 TableDataInfo 分页结果。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_opportunity/actions/list_by_opportunity.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_delete_by_opportunity">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#delete_by_opportunity</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">delete_by_opportunity</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">删除商机</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据 ids 数组批量删除商机记录，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_opportunity/actions/delete_by_opportunity.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_create_by_customer">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#create_by_customer</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_by_customer</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">新增客户</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">新增一条客户记录，入参为客户对象字段，ID和客户编码由系统自动生成，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_customer/actions/create_by_customer.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_update_by_customer">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#update_by_customer</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_by_customer</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">修改客户</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据 id 修改一条客户记录，只更新入参中提供的字段，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_customer/actions/update_by_customer.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_get_by_customer">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#get_by_customer</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">get_by_customer</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">获取客户详情</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据主键 id 查询单条客户记录，返回 AjaxResult.data。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_customer/actions/get_by_customer.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_list_by_customer">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#list_by_customer</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">list_by_customer</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">查询客户列表</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">分页查询客户信息，支持按编码、名称、状态等字段过滤，返回 TableDataInfo 分页结果。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_customer/actions/list_by_customer.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#term_action_delete_by_customer">
+        <rdf:type rdf:resource="#TermDefinition"/>
+        <term_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">ACTION#delete_by_customer</term_code_path>
+        <term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">delete_by_customer</term_code>
+        <term_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">删除客户</term_name>
+        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</library_code>
+        <term_type_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">action</term_type_code>
+        <term_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">根据 ids 数组批量删除客户记录，返回 AjaxResult。</term_desc>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</synonyms>
+        <terms_knowledge rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</terms_knowledge>
+        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DOMAIN_WUKONG_CRM</domain_code>
+        <owl_doc_file rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object/by_customer/actions/delete_by_customer.owl</owl_doc_file>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></parent_term_code>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#term_code_path"/>
+    <owl:DatatypeProperty rdf:about="#term_code"/>
+    <owl:DatatypeProperty rdf:about="#term_name"/>
+    <owl:DatatypeProperty rdf:about="#library_code"/>
+    <owl:DatatypeProperty rdf:about="#term_type_code"/>
+    <owl:DatatypeProperty rdf:about="#term_desc"/>
+    <owl:DatatypeProperty rdf:about="#synonyms"/>
+    <owl:DatatypeProperty rdf:about="#terms_knowledge"/>
+    <owl:DatatypeProperty rdf:about="#domain_code"/>
+    <owl:DatatypeProperty rdf:about="#owl_doc_file"/>
+    <owl:DatatypeProperty rdf:about="#ext_field"/>
+    <owl:DatatypeProperty rdf:about="#parent_term_code"/>
+    <owl:DatatypeProperty rdf:about="#version"/>
+</rdf:RDF>

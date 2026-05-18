@@ -1,0 +1,303 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/relation/ontology#">
+
+    <owl:Class rdf:about="#TermRelation"><rdfs:label>术语关系</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_id">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">id</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_主键</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;主键&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_project_code">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_code</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_项目编码(ref: by_project.project_code)</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;项目编码(ref: by_project.project_code)&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_opp_code">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">opp_code</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_商机编码(ref: by_opportunity.opp_code)</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;商机编码(ref: by_opportunity.opp_code)&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_customer_code">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_code</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_客户编码(ref: by_customer.customer_code)</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;客户编码(ref: by_customer.customer_code)&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_product_code">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">product_code</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_产品编码(dict_type: product)</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;产品编码(dict_type: product)&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_task_type">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_task_type</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_任务类型(同项目状态: 1项目启动 2安装部署 3项目交付 4项目上线 5收入确认 6完成回款)</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;任务类型(同项目状态: 1项目启动 2安装部署 3项目交付 4项目上线 5收入确认 6完成回款)&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_initiator_user_id">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">initiator_user_id</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_发起人用户编码(ref: po_users.user_code)</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;发起人用户编码(ref: po_users.user_code)&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_handler_user_id">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handler_user_id</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_处理人用户编码(ref: po_users.user_code)</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;处理人用户编码(ref: po_users.user_code)&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_task_status">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_task_status</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_任务状态(1处理中 2正常结束 3异常结束)</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;任务状态(1处理中 2正常结束 3异常结束)&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_task_name">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">task_name</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_任务名称</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;任务名称&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_task_desc">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">task_desc</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_任务描述</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;任务描述&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_handle_desc">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handle_desc</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_处理描述</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;处理描述&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_initiate_time">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">initiate_time</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_发起时间</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;发起时间&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_plan_finish_time">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">plan_finish_time</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_计划完成时间</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;计划完成时间&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_actual_finish_time">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">actual_finish_time</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_实际完成时间</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;实际完成时间&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_create_by">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_by</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_创建者</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;创建者&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_create_time">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_time</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_创建时间</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;创建时间&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_update_by">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_by</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_更新者</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;更新者&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_update_time">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_time</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_更新时间</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;更新时间&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_by_project_task_remark">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project_task</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_WUKONG_CRM</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">remark</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目任务表_拥有字段_备注</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;备注&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#source_libeary"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#source_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#source_code"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_libeary"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_code"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#relation_name"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#relation_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#joinkeys"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#ext_field"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#version"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+</rdf:RDF>

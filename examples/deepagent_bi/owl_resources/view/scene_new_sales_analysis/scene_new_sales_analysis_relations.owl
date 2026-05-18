@@ -1,0 +1,317 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/relation/ontology#">
+
+    <owl:Class rdf:about="#TermRelation"><rdfs:label>术语关系</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_to_dwd_ai_yx_compound_fertilizer_sales_df_demo">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">dwd_ai_yx_compound_fertilizer_sales_df_demo</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_包含_复合肥销量演示宽表</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_OBJECT</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_to_order_details">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">order_details</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_包含_订单明细表</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_OBJECT</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_day">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">day</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_销售日期</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;销售日期&quot;,&quot;synonyms&quot;:[&quot;日期&quot;]}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_month">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">month</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_销售月份</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;销售月份&quot;,&quot;synonyms&quot;:[&quot;月份&quot;,&quot;月度&quot;]}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_year">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">year</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_销售年份</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;销售年份&quot;,&quot;synonyms&quot;:[&quot;年份&quot;,&quot;年度&quot;]}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_province">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">province</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_省份</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;省份&quot;,&quot;synonyms&quot;:[&quot;省&quot;,&quot;区域&quot;]}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_city">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">city</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_城市</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;城市&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_county">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">county</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_区县</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;区县&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_theater">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">theater</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_战区</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;战区&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_sub_theater">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sub_theater</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_子战区</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;子战区&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_regional_market">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">regional_market</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_区域市场</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;区域市场&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_base">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">base</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_基地</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;基地&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_product_pro_line">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">product_pro_line</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_产品推广线</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;产品推广线&quot;,&quot;synonyms&quot;:[&quot;推广线&quot;,&quot;产品线&quot;]}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_sales_volume">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sales_volume</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_销量</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;销量&quot;,&quot;synonyms&quot;:[&quot;销售量&quot;,&quot;销售总量&quot;,&quot;销量总数&quot;,&quot;总销量&quot;]}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_order_no">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">order_no</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_订单编号</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;订单编号&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_customer_name">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_name</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_客户名称</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;客户名称&quot;,&quot;synonyms&quot;:[&quot;客户&quot;]}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_staff_name">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">staff_name</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_销售人员</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;销售人员&quot;,&quot;synonyms&quot;:[&quot;销售员&quot;,&quot;业务员&quot;,&quot;员工&quot;]}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_formula">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">formula</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_产品配方</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;产品配方&quot;,&quot;synonyms&quot;:[&quot;配方&quot;,&quot;肥料配方&quot;,&quot;复合肥配方&quot;]}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_order_sales_volume">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">order_sales_volume</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_订单销量</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;订单销量&quot;,&quot;synonyms&quot;:[&quot;明细销量&quot;,&quot;销售人员销量&quot;]}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_scene_new_sales_analysis_create_time">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">view</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_new_sales_analysis</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">prop</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_time</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销售分析视图_拥有字段_订单创建时间</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">HAS_FIELD</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;field_alias&quot;:&quot;订单创建时间&quot;}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#rel_sales_wide_to_order_details_by_province_day">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">dwd_ai_yx_compound_fertilizer_sales_df_demo</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">LIB_NEW_SALES</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">object</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">order_details</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">复合肥销量按省份日期关联订单明细</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">MANY_TO_ONE</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[{"sourceField":"province","targetField":"province","joinType":"LEFT"},{"sourceField":"day","targetField":"day","joinType":"LEFT"}]</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#source_libeary"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#source_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#source_code"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_libeary"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_code"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#relation_name"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#relation_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#joinkeys"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#ext_field"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#version"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+</rdf:RDF>

@@ -1,0 +1,3 @@
+[agent]
+name = "datacloud-bi"
+model = "anthropic:claude-sonnet-4-6"
