@@ -121,7 +121,7 @@ def _submit_object_async(
                     response = await http.post(
                         "/byaiService/tool/importObjectZip",
                         headers={"Beyond-Token": token},
-                        files={"file": (zip_path.name, zip_file, "application/zip")},
+                        files={"file": (zip_path.name, f, "application/zip")},
                         data={"catalogId": "0", "ownerType": "personal"},
                     )
         finally:
