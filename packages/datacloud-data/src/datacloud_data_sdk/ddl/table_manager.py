@@ -56,7 +56,9 @@ def _execute_sql(sql: str, user_code: str) -> dict[str, Any]:
 
     async def _call() -> dict[str, Any]:
         from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
-        from by_framework.util.discovery_http_client import DiscoveryHttpClient  # type: ignore[import-untyped]
+        from by_framework.util.discovery_http_client import (
+            DiscoveryHttpClient,  # type: ignore[import-untyped]
+        )
         from by_framework.util.http_client import RetryConfig  # type: ignore[import-untyped]
 
         _init_discovery_redis()
@@ -71,7 +73,9 @@ def _execute_sql(sql: str, user_code: str) -> dict[str, Any]:
             metadata = instance.metadata or {}
             token = metadata.get("token", "")
 
-            async with DiscoveryHttpClient(discovery_client, retry_config=retry_config, health_threshold_ms=-1) as client:
+            async with DiscoveryHttpClient(
+                discovery_client, retry_config=retry_config, health_threshold_ms=-1
+            ) as client:
                 response = await client.post(
                     service_name,
                     "/plugins/byclaw-sqlite/sqlExecute",
