@@ -19,8 +19,8 @@ _SCRIPTS_DIR = Path(os.environ.get(
 )) / "scripts"
 
 
-def _run_script(script_name: str, *args: str) -> str:
-    """用 subprocess 执行 skill 脚本，捕获 stdout/stderr。"""
+def _run_script(script_name: str, stdin_data: str = "") -> str:
+    """用 subprocess 执行 skill 脚本，通过 stdin 传参，捕获 stdout/stderr。"""
     import subprocess  # noqa: PLC0415
 
     script_path = _SCRIPTS_DIR / script_name
@@ -29,7 +29,8 @@ def _run_script(script_name: str, *args: str) -> str:
 
     python = os.environ.get("PYTHON_EXEC", sys.executable)
     result = subprocess.run(
-        [python, str(script_path), *args],
+        [python, str(script_path)],
+        input=stdin_data,
         capture_output=True,
         text=True,
         env=os.environ.copy(),
@@ -51,13 +52,10 @@ def build_ontology_manager_tools() -> list[Any]:
         """创建本体对象。
 
         Args:
-            object_json: JSON 字符串，包含 entity_name、entity_desc、fields 等字段。
-                         支持 --dry-run 前缀预览（如 "--dry-run {...}"）。
+            object_json: JSON 字符串，包含 action("collect"/"submit")、entity_code、
+                         entity_name、entity_desc、fields 等字段。
         """
-        dry_run = object_json.startswith("--dry-run")
-        json_str = object_json.replace("--dry-run", "").strip()
-        args = ["--dry-run", json_str] if dry_run else [json_str]
-        return _run_script("create_object.py", *args)
+        return _run_script("create_object.py", object_json)
 
     @tool
     def modify_ontology_object(object_json: str) -> str:
@@ -69,21 +67,21 @@ def build_ontology_manager_tools() -> list[Any]:
         return _run_script("modify_object.py", object_json)
 
     @tool
-    def delete_ontology_object(resource_id: str, entity_code: str) -> str:
+    def delete_ontology_object(params_json: str) -> str:
         """删除本体对象。
 
         Args:
-            resource_id: 资源 ID（数字字符串）。
-            entity_code: 对象编码（如 by_customer）。
+            params_json: JSON 字符串，包含 resource_id 和 entity_code。
         """
-        return _run_script("delete_object.py", resource_id, entity_code)
+        return _run_script("delete_object.py", params_json)
 
     @tool
     def create_ontology_view(view_json: str) -> str:
         """创建本体视图。
 
         Args:
-            view_json: JSON 字符串，包含 view_name、view_desc、objects 等字段。
+            view_json: JSON 字符串，包含 action("collect"/"submit")、view_name、
+                       view_desc、objects 等字段。
         """
         return _run_script("create_view.py", view_json)
 
@@ -97,32 +95,31 @@ def build_ontology_manager_tools() -> list[Any]:
         return _run_script("modify_view.py", view_json)
 
     @tool
-    def delete_ontology_view(resource_id: str, view_code: str) -> str:
+    def delete_ontology_view(params_json: str) -> str:
         """删除本体视图。
 
         Args:
-            resource_id: 资源 ID（数字字符串）。
-            view_code: 视图编码。
+            params_json: JSON 字符串，包含 resource_id 和 view_code。
         """
-        return _run_script("delete_view.py", resource_id, view_code)
+        return _run_script("delete_view.py", params_json)
 
     @tool
-    def list_ontology_resources(resource_type: str = "OBJECT") -> str:
+    def list_ontology_resources(params_json: str = "{}") -> str:
         """查询已有本体列表。
 
         Args:
-            resource_type: 资源类型，"OBJECT" 或 "VIEW"，默认 "OBJECT"。
+            params_json: JSON 字符串，可包含 resource_biz_type("OBJECT"/"VIEW") 和 keyword。
         """
-        return _run_script("list_resources.py", "--type", resource_type.upper())
+        return _run_script("list_resources.py", params_json)
 
     @tool
-    def get_ontology_detail(resource_id: str) -> str:
-        """从 API 获取本体对象或视图的完整详情（实时数据，非本地缓存）。
+    def get_ontology_detail(params_json: str) -> str:
+        """从 API 获取本体对象或视图的完整详情。
 
         Args:
-            resource_id: 资源 ID，从 list_ontology_resources 结果中获取。
+            params_json: JSON 字符串，包含 resource_id。
         """
-        return _run_script("get_detail.py", resource_id)
+        return _run_script("get_detail.py", params_json)
 
     return [
         create_ontology_object,

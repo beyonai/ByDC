@@ -42,14 +42,14 @@ allowed-tools: Bash, Read
 
 | 用户表达 | 意图 | 调用脚本 |
 |----------|------|----------|
-| 查看/列出 + 对象 | 查询列表 | `list_resources.py` |
-| 查看知识库 | 查询知识库 | `list_knowledge_bases.py` |
-| 查看目录 | 查询目录 | `list_kb_directories.py` |
-| 创建/新建 + 对象 | 收集对象信息 | `create_object.py collect` |
-| 确认提交 | 提交对象 | `create_object.py submit` |
-| 删除 + 对象 | 删除对象 | `delete_object.py` |
-| 查看术语类型 | 查枚举 | `list_term_types.py` |
-| 查看术语值 | 查枚举值 | `get_term_type_values.py` |
+| 查看/列出 + 对象 | 查询列表 | `scripts/list_resources.py` |
+| 查看知识库 | 查询知识库 | `scripts/list_knowledge_bases.py` |
+| 查看目录 | 查询目录 | `scripts/list_kb_directories.py` |
+| 创建/新建 + 对象 | 收集对象信息 | `scripts/create_object.py collect` |
+| 确认提交 | 提交对象 | `scripts/create_object.py submit` |
+| 删除 + 对象 | 删除对象 | `scripts/delete_object.py` |
+| 查看术语类型 | 查枚举 | `scripts/list_term_types.py` |
+| 查看术语值 | 查枚举值 | `scripts/get_term_type_values.py` |
 
 ## 认证与环境变量
 

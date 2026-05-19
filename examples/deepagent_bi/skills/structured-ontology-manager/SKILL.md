@@ -34,15 +34,15 @@ allowed-tools: Bash, Read
 
 | 用户表达 | 意图 | 调用脚本 |
 |----------|------|----------|
-| 查看/列出 + 对象/视图 | 查询列表 | `list_resources.py` |
-| 创建/新建 + 对象 | 收集对象信息 | `create_object.py collect` |
-| 确认提交（对象） | 提交对象 | `create_object.py submit` |
-| 创建/新建 + 视图 | 收集视图信息 | `create_view.py collect` |
-| 确认提交（视图） | 提交视图 | `create_view.py submit` |
-| 删除 + 对象 | 删除对象 | `delete_object.py` |
-| 删除 + 视图 | 删除视图 | `delete_view.py` |
-| 查看术语类型 | 查枚举 | `list_term_types.py` |
-| 查看术语值 | 查枚举值 | `get_term_type_values.py` |
+| 查看/列出 + 对象/视图 | 查询列表 | `scripts/list_resources.py` |
+| 创建/新建 + 对象 | 收集对象信息 | `scripts/create_object.py collect` |
+| 确认提交（对象） | 提交对象 | `scripts/create_object.py submit` |
+| 创建/新建 + 视图 | 收集视图信息 | `scripts/create_view.py collect` |
+| 确认提交（视图） | 提交视图 | `scripts/create_view.py submit` |
+| 删除 + 对象 | 删除对象 | `scripts/delete_object.py` |
+| 删除 + 视图 | 删除视图 | `scripts/delete_view.py` |
+| 查看术语类型 | 查枚举 | `scripts/list_term_types.py` |
+| 查看术语值 | 查枚举值 | `scripts/get_term_type_values.py` |
 
 ## 认证与环境变量
 
