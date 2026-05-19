@@ -32,7 +32,7 @@ _TYPE_MAP: dict[str, str] = {
 
 def _init_discovery_redis() -> None:
     """全局初始化服务发现 Redis（幂等）。"""
-    from by_framework.common.redis_client import init_redis  # type: ignore[import-untyped]
+    from by_framework.common.redis_client import init_redis
 
     init_redis(
         host=os.getenv("REDIS_HOST", "localhost"),
@@ -55,11 +55,11 @@ def _execute_sql(sql: str, user_code: str) -> dict[str, Any]:
     service_name = f"BYCLAW_EXE_{user_code}"
 
     async def _call() -> dict[str, Any]:
-        from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
+        from by_framework.core.discovery import DiscoveryClient
         from by_framework.util.discovery_http_client import (
-            DiscoveryHttpClient,  # type: ignore[import-untyped]
+            DiscoveryHttpClient,
         )
-        from by_framework.util.http_client import RetryConfig  # type: ignore[import-untyped]
+        from by_framework.util.http_client import RetryConfig
 
         _init_discovery_redis()
         discovery_client = DiscoveryClient(cache_interval=5)
@@ -92,9 +92,11 @@ def _execute_sql(sql: str, user_code: str) -> dict[str, Any]:
         if not body.get("ok"):
             err = body.get("error", {})
             raise RuntimeError(f"SQLite API error: {err.get('message', body)}")
-        return body.get("data", {})
+        data = body.get("data")
+        return data if isinstance(data, dict) else {}
 
-    return _run_async_in_thread(_call())
+    result = _run_async_in_thread(_call())
+    return result if isinstance(result, dict) else {}
 
 
 def _run_async_in_thread(coro: Any) -> Any:

@@ -49,7 +49,7 @@ class RedisWorkspaceStore(WorkspaceStore):
     _KEY_PREFIX = "ontology_workspace:"
 
     def __init__(self) -> None:
-        import redis  # type: ignore[import-untyped]
+        import redis
 
         self._client: redis.Redis[str] = redis.Redis(
             host=os.getenv("REDIS_HOST", "localhost"),

@@ -11,7 +11,7 @@ import tempfile
 import uuid
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, cast
 
 from datacloud_knowledge.adapters import create_reader
 from datacloud_knowledge.ingestion.workspace_store import get_workspace_store
@@ -23,6 +23,10 @@ _VALID_DATA_TYPES = {"STRING", "INTEGER", "FLOAT", "BOOLEAN", "DATE"}
 _VALID_PROPERTY_ROLES = {"DIMENSION", "MEASURE"}
 
 
+class _ScopeDeletingReader(Protocol):
+    def delete_scope(self, scope: str) -> dict[str, Any]: ...
+
+
 # ── 内部 HTTP 辅助（可被测试 mock）────────────────────────────────────────────
 
 
@@ -31,7 +35,7 @@ def _init_discovery_redis() -> None:
 
     使用运行环境的标准 REDIS_* 环境变量，与 by-framework-docs 示例保持一致。
     """
-    from by_framework.common.redis_client import init_redis  # type: ignore[import-untyped]
+    from by_framework.common.redis_client import init_redis
 
     init_redis(
         host=os.getenv("REDIS_HOST", "localhost"),
@@ -50,7 +54,7 @@ def _import_object_zip(zip_path: Path, token: str) -> dict[str, Any]:
 
     async def _upload() -> dict[str, Any]:
         import httpx
-        from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
+        from by_framework.core.discovery import DiscoveryClient
 
         _init_discovery_redis()
         discovery_client = DiscoveryClient(cache_interval=5)
@@ -78,7 +82,8 @@ def _import_object_zip(zip_path: Path, token: str) -> dict[str, Any]:
             return {"ok": False, "error": body.get("msg", "上传失败")}
         return {"ok": True, **body.get("data", {})}
 
-    return _run_async_in_thread(_upload())
+    result = _run_async_in_thread(_upload())
+    return result if isinstance(result, dict) else {}
 
 
 def _import_view_zip(zip_path: Path, token: str) -> dict[str, Any]:
@@ -89,7 +94,7 @@ def _import_view_zip(zip_path: Path, token: str) -> dict[str, Any]:
 
     async def _upload() -> dict[str, Any]:
         import httpx
-        from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
+        from by_framework.core.discovery import DiscoveryClient
 
         _init_discovery_redis()
         discovery_client = DiscoveryClient(cache_interval=5)
@@ -117,12 +122,13 @@ def _import_view_zip(zip_path: Path, token: str) -> dict[str, Any]:
             return {"ok": False, "error": body.get("msg", "上传失败")}
         return {"ok": True, **body.get("data", {})}
 
-    return _run_async_in_thread(_upload())
+    result = _run_async_in_thread(_upload())
+    return result if isinstance(result, dict) else {}
 
 
 def _create_sqlite_table(entity_code: str, fields: list[dict[str, Any]], user_code: str) -> None:
     """通过 datacloud-data SDK 调用 SQLite HTTP API 建表。"""
-    from datacloud_data_sdk.ddl.table_manager import create_table  # type: ignore[import-untyped]
+    from datacloud_data_sdk.ddl.table_manager import create_table
 
     create_table(entity_code, fields, user_code)
 
@@ -471,9 +477,9 @@ class OntologyBuildSession:
             scope_type: "OBJECT" 或 "VIEW"
             resource_code: 本体对象或视图的编码
         """
-        reader = create_reader()
+        reader = cast(_ScopeDeletingReader, create_reader())
         scope = f"{scope_type.lower()}:{resource_code}"
-        result: dict[str, Any] = reader.delete_scope(scope)
+        result = reader.delete_scope(scope)
         if not result.get("ok"):
             raise RuntimeError(f"术语删除失败: {result.get('error')}")
         return {"ok": True}

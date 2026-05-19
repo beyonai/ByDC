@@ -133,6 +133,21 @@ ONTOLOGY_CONTENT = {
     ]
 }
 
+
+class _ScaleTermLoader:
+    """测试用术语加载器：将规模 code 转换为展示名称。"""
+
+    def resolve_value(
+        self,
+        term_set: str,
+        value: object,
+        **_: object,
+    ) -> object:
+        if term_set != "enterprise_scale.code":
+            return value
+        return {"L": "大型", "M": "中型"}.get(value, value)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures
 # ─────────────────────────────────────────────────────────────────────────────
@@ -219,6 +234,35 @@ async def test_basic_group_stats(executor_with_data: ComputeExecutor) -> None:
     assert "region_name" in col_names
     assert "total_revenue" in col_names
     assert "ent_count" in col_names
+
+
+async def test_compute_converts_term_bound_dimension_results(
+    executor_with_data: ComputeExecutor,
+) -> None:
+    """compute 返回的维度字段按术语配置从 code 转为名称。"""
+    executor = executor_with_data
+    cls = executor._loader.get_ontology_class("enterprise_base")
+    scale_field = next(field for field in cls.fields if field.field_code == "scale")
+    scale_field.term_set = "enterprise_scale.code"
+    scale_field.term_field = "code"
+    executor._loader._config.term_loader = _ScaleTermLoader()
+
+    result = await executor.execute(
+        "enterprise_base",
+        {
+            "dimensions": [{"field": "scale", "group_op": "self"}],
+            "metrics": [{"agg": "count_all", "as": "ent_count"}],
+            "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
+            "order_by": [{"field": "ent_count", "direction": "desc"}],
+            "limit": 10,
+        },
+    )
+
+    records = result["records"]
+    assert records[0]["scale"] == "大型"
+    assert records[0]["ent_count"] == 2
+    assert records[1]["scale"] == "中型"
+    assert records[1]["ent_count"] == 1
 
 
 # ─────────────────────────────────────────────────────────────────────────────

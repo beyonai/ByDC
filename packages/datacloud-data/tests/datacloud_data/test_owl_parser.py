@@ -404,6 +404,77 @@ def test_owl_parser_reads_custom_type_instead_of_rdf_type(tmp_path: Path) -> Non
     assert request_param.field_type == "ARRAY"
 
 
+def test_owl_parser_preserves_connector_type_from_db_params(tmp_path: Path) -> None:
+    pytest.importorskip("rdflib")
+
+    owl_path = tmp_path / "datasource.owl"
+    owl_path.write_text(
+        """<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#">
+    <owl:Class rdf:about="#DatabaseDefinition"/>
+    <owl:NamedIndividual rdf:about="#dynamic_table_ds">
+        <rdf:type rdf:resource="#DatabaseDefinition"/>
+        <dbCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">dynamic_table</dbCode>
+        <dbType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sqlite</dbType>
+        <dbParams rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;connector_type&quot;:&quot;BYCLAW_SQL_EXECUTE&quot;,&quot;service_name&quot;:&quot;BYCLAW_EXE_0027024630&quot;,&quot;endpoint_url&quot;:&quot;http://example.test/sql&quot;}</dbParams>
+    </owl:NamedIndividual>
+</rdf:RDF>
+""",
+        encoding="utf-8",
+    )
+
+    parser = OwlParser()
+    content = parser.parse_directory(tmp_path)
+
+    datasource = content["datasource_configs"]["dynamic_table"]
+    assert datasource["db_type"] == "SQLITE"
+    assert datasource["connector_type"] == "BYCLAW_SQL_EXECUTE"
+    assert datasource["service_name"] == "BYCLAW_EXE_0027024630"
+    assert datasource["endpoint_url"] == "http://example.test/sql"
+
+    loader = OntologyLoader()
+    loader._load_from_owl_content(content)
+    config = loader._config.datasource_configs["dynamic_table"]
+    assert config.db_type == "SQLITE"
+    assert config.connector_type == "BYCLAW_SQL_EXECUTE"
+    assert config.service_name == "BYCLAW_EXE_0027024630"
+    assert config.endpoint_url == "http://example.test/sql"
+
+
+def test_owl_parser_preserves_dynamic_table_source_type(tmp_path: Path) -> None:
+    pytest.importorskip("rdflib")
+
+    object_root = tmp_path / "object"
+    obj_dir = object_root / "sales_note"
+    obj_dir.mkdir(parents=True)
+    (obj_dir / "sales_note_definition.owl").write_text(
+        """<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#">
+    <owl:Class rdf:about="#EntityDefinition"/>
+    <owl:NamedIndividual rdf:about="#sales_note_v1">
+        <rdf:type rdf:resource="#EntityDefinition"/>
+        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sales_note</entity_code>
+        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">销售记录</entity_name>
+        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DYNAMIC_TABLE</entity_source>
+    </owl:NamedIndividual>
+</rdf:RDF>
+""",
+        encoding="utf-8",
+    )
+
+    parser = OwlParser()
+    content = parser.parse_resource_directory(tmp_path)
+
+    dynamic_object = next(obj for obj in content["objects"] if obj["object_code"] == "sales_note")
+    assert dynamic_object["source_type"] == "DYNAMIC_TABLE"
+
+
 def test_owl_parser_parse_resource_directory_returns_legacy_content_shape() -> None:
     pytest.importorskip("rdflib")
 

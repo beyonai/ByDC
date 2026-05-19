@@ -2,9 +2,10 @@
 
 改造要点：
 - 按字段元数据规则自动推导并生成多个虚拟动作
-- DB 对象 → query_*（明细检索）；若存在度量字段 → 同时生成 compute_*（分组统计）
+    - DB 对象 → query_*（明细检索）；若存在度量字段 → 同时生成 compute_*（分组统计）
+    - DYNAMIC_TABLE 对象 → query_* + compute_* + insert_* + update_* + delete_*
 - DB 视图 → query_* + compute_*
-- KB 对象 → search_*
+    - KB 对象 → search_* + write_*
 - 注入幂等：同名动作不重复追加
 - 同时注册到全局 VirtualActionRegistry，供 MCP 路由使用
 - 动作字段统一使用字段编码（field_code / property_code），不再使用中文名
@@ -39,7 +40,7 @@ def inject_virtual_actions(loader: object) -> None:
 
     # ── 1. 对象级虚拟动作 ─────────────────────────────────────────────────────
     for cls in loader._classes.values():
-        if cls.source_type not in ("DB", "KNOWLEDGE_BASE"):
+        if cls.source_type not in ("DB", "DYNAMIC_TABLE", "KNOWLEDGE_BASE"):
             continue
 
         # 已存在的动作编码（幂等保护）
@@ -50,6 +51,8 @@ def inject_virtual_actions(loader: object) -> None:
 
         if cls.source_type == "DB":
             _inject_db_object_actions(cls, existing_codes, registry)
+        elif cls.source_type == "DYNAMIC_TABLE":
+            _inject_dynamic_table_object_actions(cls, existing_codes, registry)
         elif cls.source_type == "KNOWLEDGE_BASE":
             _inject_kb_object_actions(cls, existing_codes, registry)
 
@@ -126,6 +129,7 @@ def _make_action(
     input_schema: dict,
     exposure_policy: str = "direct",
     legacy_aliases: list[str] | None = None,
+    action_type: str = "query",
 ) -> Any:
     from datacloud_data_sdk.ontology.models import OntologyAction
 
@@ -136,7 +140,7 @@ def _make_action(
         belong_class=belong_class,
         params=[],
         function_refs=[],
-        action_type="query",
+        action_type=action_type,
         is_virtual=True,
         input_schema=input_schema,
         output_schema={
@@ -227,9 +231,104 @@ def _inject_db_object_actions(cls, existing_codes: set, registry) -> None:
             logger.debug("注入 %s", compute_code)
 
 
-def _inject_kb_object_actions(cls, existing_codes: set, registry) -> None:
-    """为 KB 对象注入 search_* 动作。"""
+def _inject_dynamic_table_object_actions(cls, existing_codes: set, registry) -> None:
+    """为 DYNAMIC_TABLE 对象注入 query/compute/insert/update/delete 动作。"""
     from datacloud_data_sdk.virtual_action.generator import (
+        build_compute_description,
+        build_compute_schema,
+        build_delete_schema,
+        build_insert_schema,
+        build_query_description,
+        build_query_schema,
+        build_update_schema,
+    )
+    from datacloud_data_sdk.virtual_action.registry import ActionRoute
+
+    settings = get_settings()
+    obj_code = cls.object_code
+    obj_name = cls.object_name or obj_code
+    obj_desc = cls.description or ""
+    fields = cls.fields
+    req_groups = _required_filter_groups(fields)
+
+    query_code = f"{settings.virtual_action_query_prefix}{obj_code}"
+    if query_code not in existing_codes:
+        action = _make_action(
+            action_code=query_code,
+            action_name=f"查询{obj_name}明细",
+            description=build_query_description(obj_name, obj_desc, fields, req_groups, "object"),
+            belong_class=obj_code,
+            action_family="query",
+            virtual_backend="dynamic_table_connector",
+            scope_type="object",
+            scope_code=obj_code,
+            input_schema=build_query_schema(
+                obj_name,
+                fields,
+                req_groups,
+                scope_type="object",
+                scope_code=obj_code,
+            ),
+        )
+        cls.actions.append(action)
+        registry.register(query_code, ActionRoute("object", obj_code, "query"))
+        logger.debug("注入 %s", query_code)
+
+    if _has_measure(fields):
+        compute_code = f"{settings.virtual_action_compute_prefix}{obj_code}"
+        if compute_code not in existing_codes:
+            action = _make_action(
+                action_code=compute_code,
+                action_name=f"统计{obj_name}",
+                description=build_compute_description(
+                    obj_name, obj_desc, fields, req_groups, "object"
+                ),
+                belong_class=obj_code,
+                action_family="compute",
+                virtual_backend="dynamic_table_connector",
+                scope_type="object",
+                scope_code=obj_code,
+                input_schema=build_compute_schema(
+                    obj_name,
+                    fields,
+                    req_groups,
+                    scope_type="object",
+                    scope_code=obj_code,
+                ),
+            )
+            cls.actions.append(action)
+            registry.register(compute_code, ActionRoute("object", obj_code, "compute"))
+            logger.debug("注入 %s", compute_code)
+
+    operation_specs = [
+        ("insert", f"insert_{obj_code}", f"新增{obj_name}", build_insert_schema(obj_name, fields)),
+        ("update", f"update_{obj_code}", f"修改{obj_name}", build_update_schema(obj_name, fields)),
+        ("delete", f"delete_{obj_code}", f"删除{obj_name}", build_delete_schema(obj_name, fields)),
+    ]
+    for action_family, action_code, action_name, input_schema in operation_specs:
+        if action_code in existing_codes:
+            continue
+        action = _make_action(
+            action_code=action_code,
+            action_name=action_name,
+            description=input_schema.get("description", action_name),
+            belong_class=obj_code,
+            action_family=action_family,
+            virtual_backend="dynamic_table_connector",
+            scope_type="object",
+            scope_code=obj_code,
+            input_schema=input_schema,
+            action_type="operation",
+        )
+        cls.actions.append(action)
+        registry.register(action_code, ActionRoute("object", obj_code, action_family))
+        logger.debug("注入 %s", action_code)
+
+
+def _inject_kb_object_actions(cls, existing_codes: set, registry) -> None:
+    """为 KB 对象注入 search_* 和 write_* 动作。"""
+    from datacloud_data_sdk.virtual_action.generator import (
+        build_kb_write_schema,
         build_search_description,
         build_search_schema,
     )
@@ -256,6 +355,25 @@ def _inject_kb_object_actions(cls, existing_codes: set, registry) -> None:
         cls.actions.append(action)
         registry.register(search_code, ActionRoute("object", obj_code, "search"))
         logger.debug("注入 %s", search_code)
+
+    write_code = f"write_{obj_code}"
+    if write_code not in existing_codes:
+        schema = build_kb_write_schema(obj_name, cls.fields)
+        action = _make_action(
+            action_code=write_code,
+            action_name=f"写入{obj_name}",
+            description=schema.get("description", f"写入{obj_name}"),
+            belong_class=obj_code,
+            action_family="write",
+            virtual_backend="kb_search",
+            scope_type="object",
+            scope_code=obj_code,
+            input_schema=schema,
+            action_type="operation",
+        )
+        cls.actions.append(action)
+        registry.register(write_code, ActionRoute("object", obj_code, "write"))
+        logger.debug("注入 %s", write_code)
 
     legacy_code = f"query_{obj_code}"
     if not registry.get(legacy_code):

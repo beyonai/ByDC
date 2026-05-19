@@ -337,6 +337,8 @@ class OwlParser:
         source_upper = entity_source.upper()
         if "KNOWLEDGE_BASE" in source_upper:
             source_type = "KNOWLEDGE_BASE"
+        elif "DYNAMIC_TABLE" in source_upper:
+            source_type = "DYNAMIC_TABLE"
         elif "DB" in source_upper:
             source_type = "DB"
         else:

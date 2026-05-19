@@ -67,6 +67,9 @@ class LoaderConfig:
     result_file_storage: Any = None
     sql_execution_mode: str = "internal"
     term_loader: Any = None
+    kb_search_backend: Any = None
+    kb_backends: dict[str, Any] = field(default_factory=dict)
+    default_kb_backend: str | None = None
     query_result_csv_threshold: int = 10  # 0 = 不启用溢出截断
     sql_execute_url: str | None = None  # HTTP_SQL 后端服务地址（chatbi 等调用方注入）
 
@@ -368,7 +371,7 @@ class OntologyLoader:
         return self._config.sql_execute_url
 
     def _extract_datasource_configs_from_objects(self) -> dict[str, Any]:
-        """从 source_type=DB 且含 source_config 的对象提取 DataSourceConfig，按 alias 去重。"""
+        """从 DB/DYNAMIC_TABLE 对象 source_config 提取 DataSourceConfig，按 alias 去重。"""
         from datacloud_data_sdk.sql_executor.config_loader import (
             _dict_to_config,
             _substitute_dict,
@@ -376,7 +379,7 @@ class OntologyLoader:
 
         configs: dict[str, Any] = {}
         for cls in self._classes.values():
-            if cls.source_type != "DB" or not cls.source_config:
+            if cls.source_type not in {"DB", "DYNAMIC_TABLE"} or not cls.source_config:
                 continue
             sc = cls.source_config
             alias = sc.get("alias") if isinstance(sc, dict) else None
