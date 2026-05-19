@@ -1,10 +1,10 @@
 ---
-name: unstructured-ontology-manager
+name: 个人非结构化本体管理
 description: "对话式非结构化个人本体管理：通过自然语言创建、删除个人非结构化本体对象，数据来源绑定知识库目录"
 allowed-tools: Bash, Read
 ---
 
-# unstructured-ontology-manager
+# 个人非结构化本体管理
 
 通过自然语言对话，管理非结构化本体对象。支持创建、删除操作，对象绑定知识库目录（不建 SQLite 表）。
 
