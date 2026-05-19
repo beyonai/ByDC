@@ -8,6 +8,7 @@ from datacloud_data_sdk.ontology.owl_parser import (
     ParsedField,
     ParsedObject,
 )
+from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
 
 
 def test_owl_parser_synthesizes_function_from_request_url() -> None:
@@ -87,6 +88,130 @@ def test_loader_can_use_parser_generated_action_and_function() -> None:
             }
         },
     }
+
+
+def test_owl_parser_preserves_object_ext_property(tmp_path: Path) -> None:
+    pytest.importorskip("rdflib")
+
+    object_root = tmp_path / "object"
+    kb_dir = object_root / "sales_meeting_note"
+    kb_dir.mkdir(parents=True)
+
+    kb_definition = kb_dir / "sales_meeting_note_definition.owl"
+    kb_definition.write_text(
+        """<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#">
+    <owl:Class rdf:about="#EntityDefinition"/>
+    <owl:NamedIndividual rdf:about="#sales_meeting_note_v1">
+        <rdf:type rdf:resource="#EntityDefinition"/>
+        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sales_meeting_note</entity_code>
+        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">会议纪要</entity_name>
+        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">KNOWLEDGE_BASE</entity_source>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;kb_id&quot;:&quot;kb-sales&quot;,&quot;kb_directory&quot;:&quot;/sales/meeting&quot;}</ext_property>
+    </owl:NamedIndividual>
+</rdf:RDF>
+""",
+        encoding="utf-8",
+    )
+
+    parser = OwlParser()
+    content = parser.parse_resource_directory(tmp_path)
+
+    kb_object = next(
+        obj for obj in content["objects"] if obj["object_code"] == "sales_meeting_note"
+    )
+    assert kb_object["source_type"] == "KNOWLEDGE_BASE"
+    assert kb_object["ext_property"] == {
+        "kb_id": "kb-sales",
+        "kb_directory": "/sales/meeting",
+    }
+    assert "kb_id" not in kb_object
+    assert "kb_directory" not in kb_object
+    assert kb_object["source_config"] is None
+
+    loader = OntologyLoader()
+    loader._load_from_owl_content(content)
+    cls = loader.get_ontology_class("sales_meeting_note")
+    assert cls.ext_property == {
+        "kb_id": "kb-sales",
+        "kb_directory": "/sales/meeting",
+    }
+
+
+def test_owl_parser_marks_primary_key_from_field_ext_property(tmp_path: Path) -> None:
+    pytest.importorskip("rdflib")
+
+    object_root = tmp_path / "object"
+    obj_dir = object_root / "customer"
+    obj_dir.mkdir(parents=True)
+    (obj_dir / "customer_definition.owl").write_text(
+        """<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#">
+    <owl:Class rdf:about="#EntityDefinition"/>
+    <owl:Class rdf:about="#EntityField"/>
+    <owl:NamedIndividual rdf:about="#customer_v1">
+        <rdf:type rdf:resource="#EntityDefinition"/>
+        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer</entity_code>
+        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户</entity_name>
+        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DYNAMIC_TABLE</entity_source>
+        <fields rdf:resource="#id_field"/>
+        <fields rdf:resource="#name_field"/>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#id_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">主键</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">BIGINT</data_type>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">id</source_column>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;:{&quot;property_role&quot;:&quot;MEASURE&quot;,&quot;rule_type&quot;:&quot;primary_key&quot;}}</ext_property>
+    </owl:NamedIndividual>
+    <owl:NamedIndividual rdf:about="#name_field">
+        <rdf:type rdf:resource="#EntityField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_name</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户名称</property_name>
+        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">STRING</data_type>
+        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_name</source_column>
+        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</is_required>
+    </owl:NamedIndividual>
+</rdf:RDF>
+""",
+        encoding="utf-8",
+    )
+
+    parser = OwlParser()
+    content = parser.parse_resource_directory(tmp_path)
+
+    customer = next(obj for obj in content["objects"] if obj["object_code"] == "customer")
+    id_field = next(field for field in customer["fields"] if field["field_code"] == "id")
+    assert id_field["is_primary_key"] is True
+
+    loader = OntologyLoader()
+    loader._load_from_owl_content(content)
+    cls = loader.get_ontology_class("customer")
+    runtime_id_field = next(field for field in cls.fields if field.field_code == "id")
+    assert runtime_id_field.is_primary_key is True
+
+    inject_virtual_actions(loader)
+    cls = loader.get_ontology_class("customer")
+    insert_action = next(
+        action for action in cls.actions if action.action_code == "insert_customer"
+    )
+    update_action = next(
+        action for action in cls.actions if action.action_code == "update_customer"
+    )
+    insert_properties = insert_action.input_schema["properties"]["records"]["items"]["properties"]
+    update_properties = update_action.input_schema["properties"]["values"]["properties"]
+    assert "id" not in insert_properties
+    assert "id" not in update_properties
+    assert "customer_name" in insert_properties
+    assert "customer_name" in update_properties
 
 
 def test_owl_parser_builds_request_and_response_schema_from_action_params() -> None:
@@ -350,6 +475,77 @@ def test_owl_parser_reads_custom_type_instead_of_rdf_type(tmp_path: Path) -> Non
         "http://example.org/action/ontology#param_create_todo_handlerIds_0"
     ]
     assert request_param.field_type == "ARRAY"
+
+
+def test_owl_parser_preserves_connector_type_from_db_params(tmp_path: Path) -> None:
+    pytest.importorskip("rdflib")
+
+    owl_path = tmp_path / "datasource.owl"
+    owl_path.write_text(
+        """<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#">
+    <owl:Class rdf:about="#DatabaseDefinition"/>
+    <owl:NamedIndividual rdf:about="#dynamic_table_ds">
+        <rdf:type rdf:resource="#DatabaseDefinition"/>
+        <dbCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">dynamic_table</dbCode>
+        <dbType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sqlite</dbType>
+        <dbParams rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;connector_type&quot;:&quot;BYCLAW_SQL_EXECUTE&quot;,&quot;service_name&quot;:&quot;BYCLAW_EXE_0027024630&quot;,&quot;endpoint_url&quot;:&quot;http://example.test/sql&quot;}</dbParams>
+    </owl:NamedIndividual>
+</rdf:RDF>
+""",
+        encoding="utf-8",
+    )
+
+    parser = OwlParser()
+    content = parser.parse_directory(tmp_path)
+
+    datasource = content["datasource_configs"]["dynamic_table"]
+    assert datasource["db_type"] == "SQLITE"
+    assert datasource["connector_type"] == "BYCLAW_SQL_EXECUTE"
+    assert datasource["service_name"] == "BYCLAW_EXE_0027024630"
+    assert datasource["endpoint_url"] == "http://example.test/sql"
+
+    loader = OntologyLoader()
+    loader._load_from_owl_content(content)
+    config = loader._config.datasource_configs["dynamic_table"]
+    assert config.db_type == "SQLITE"
+    assert config.connector_type == "BYCLAW_SQL_EXECUTE"
+    assert config.service_name == "BYCLAW_EXE_0027024630"
+    assert config.endpoint_url == "http://example.test/sql"
+
+
+def test_owl_parser_preserves_dynamic_table_source_type(tmp_path: Path) -> None:
+    pytest.importorskip("rdflib")
+
+    object_root = tmp_path / "object"
+    obj_dir = object_root / "sales_note"
+    obj_dir.mkdir(parents=True)
+    (obj_dir / "sales_note_definition.owl").write_text(
+        """<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#">
+    <owl:Class rdf:about="#EntityDefinition"/>
+    <owl:NamedIndividual rdf:about="#sales_note_v1">
+        <rdf:type rdf:resource="#EntityDefinition"/>
+        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sales_note</entity_code>
+        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">销售记录</entity_name>
+        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DYNAMIC_TABLE</entity_source>
+    </owl:NamedIndividual>
+</rdf:RDF>
+""",
+        encoding="utf-8",
+    )
+
+    parser = OwlParser()
+    content = parser.parse_resource_directory(tmp_path)
+
+    dynamic_object = next(obj for obj in content["objects"] if obj["object_code"] == "sales_note")
+    assert dynamic_object["source_type"] == "DYNAMIC_TABLE"
 
 
 def test_owl_parser_parse_resource_directory_returns_legacy_content_shape() -> None:

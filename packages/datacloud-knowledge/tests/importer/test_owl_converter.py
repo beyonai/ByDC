@@ -501,6 +501,37 @@ class TestExtractKnowledgeRecords:
             }
         ]
 
+    def test_extract_knowledge_records_preserves_external_kb_fields(self) -> None:
+        """测试外部知识库字段透传到 term_knowledge。"""
+        owl_term = {
+            "terms_knowledge": [
+                {
+                    "knowledge_id": "knowledge-1",
+                    "title": "会议纪要",
+                    "desc": "会议内容",
+                    "system": "RAGFLOW",
+                    "kb_id": "kb-sales",
+                    "kb_directory": "/sales/meeting",
+                    "sort_order": "3",
+                }
+            ],
+        }
+
+        result = extract_knowledge_records(owl_term, term_id="term-123")
+
+        assert result == [
+            {
+                "knowledge_id": "knowledge-1",
+                "term_id": "term-123",
+                "desc_summary": "会议纪要",
+                "desc": "会议内容",
+                "ext_system": "RAGFLOW",
+                "ext_kb_id": "kb-sales",
+                "ext_doc_id": "/sales/meeting",
+                "sort_order": 3,
+            }
+        ]
+
     def test_extract_knowledge_records_malformed_json_returns_empty(self) -> None:
         """测试 malformed JSON 返回空列表。"""
         owl_term = {"terms_knowledge": "not valid json"}

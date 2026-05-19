@@ -11,7 +11,7 @@ import tempfile
 import uuid
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, cast
 
 from datacloud_knowledge.adapters import create_reader
 from datacloud_knowledge.ingestion.workspace_store import get_workspace_store
@@ -23,6 +23,10 @@ _VALID_DATA_TYPES = {"STRING", "INTEGER", "FLOAT", "BOOLEAN", "DATE"}
 _VALID_PROPERTY_ROLES = {"DIMENSION", "MEASURE"}
 
 
+class _ScopeDeletingReader(Protocol):
+    def delete_scope(self, scope: str) -> dict[str, Any]: ...
+
+
 # ── 内部 HTTP 辅助（可被测试 mock）────────────────────────────────────────────
 
 
@@ -31,7 +35,7 @@ def _init_discovery_redis() -> None:
 
     使用运行环境的标准 REDIS_* 环境变量，与 by-framework-docs 示例保持一致。
     """
-    from by_framework.common.redis_client import init_redis  # type: ignore[import-untyped]
+    from by_framework.common.redis_client import init_redis
 
     init_redis(
         host=os.getenv("REDIS_HOST", "localhost"),
@@ -57,9 +61,9 @@ def _submit_object_async(
         raise ValueError("BE_DOMAINNAME 环境变量未配置")
 
     async def _run() -> dict[str, Any]:
-        from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
-        from by_framework.util.discovery_http_client import DiscoveryHttpClient  # type: ignore[import-untyped]
-        from by_framework.util.http_client import RetryConfig  # type: ignore[import-untyped]
+        from by_framework.core.discovery import DiscoveryClient
+        from by_framework.util.discovery_http_client import DiscoveryHttpClient
+        from by_framework.util.http_client import RetryConfig
 
         _init_discovery_redis()
         discovery_client = DiscoveryClient(cache_interval=5)
@@ -68,7 +72,9 @@ def _submit_object_async(
             # 建表（DYNAMIC_TABLE 模式）
             if fields is not None:
                 sqlite_service = f"BYCLAW_EXE_{user_code}"
-                sqlite_instance = await discovery_client.discover(sqlite_service, health_threshold_ms=-1)
+                sqlite_instance = await discovery_client.discover(
+                    sqlite_service, health_threshold_ms=-1
+                )
                 if not sqlite_instance:
                     return {"ok": False, "error": f"未找到 SQLite 服务实例: {sqlite_service}"}
                 metadata = sqlite_instance.metadata or {}
@@ -115,7 +121,7 @@ def _submit_object_async(
                     response = await http.post(
                         "/byaiService/tool/importObjectZip",
                         headers={"Beyond-Token": token},
-                        files={"file": (zip_path.name, f, "application/zip")},
+                        files={"file": (zip_path.name, zip_file, "application/zip")},
                         data={"catalogId": "0", "ownerType": "personal"},
                     )
         finally:
@@ -128,7 +134,7 @@ def _submit_object_async(
             return {"ok": False, "error": resp_body.get("msg", "上传失败")}
         return {"ok": True, **resp_body.get("data", {})}
 
-    return _run_async_in_thread(_run())
+    return cast(dict[str, Any], _run_async_in_thread(_run()))
 
 
 def _import_object_zip(zip_path: Path, token: str) -> dict[str, Any]:
@@ -139,7 +145,7 @@ def _import_object_zip(zip_path: Path, token: str) -> dict[str, Any]:
 
     async def _upload() -> dict[str, Any]:
         import httpx
-        from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
+        from by_framework.core.discovery import DiscoveryClient
 
         _init_discovery_redis()
         discovery_client = DiscoveryClient(cache_interval=5)
@@ -167,7 +173,8 @@ def _import_object_zip(zip_path: Path, token: str) -> dict[str, Any]:
             return {"ok": False, "error": body.get("msg", "上传失败")}
         return {"ok": True, **body.get("data", {})}
 
-    return _run_async_in_thread(_upload())
+    result = _run_async_in_thread(_upload())
+    return result if isinstance(result, dict) else {}
 
 
 def _import_view_zip(zip_path: Path, token: str) -> dict[str, Any]:
@@ -178,7 +185,7 @@ def _import_view_zip(zip_path: Path, token: str) -> dict[str, Any]:
 
     async def _upload() -> dict[str, Any]:
         import httpx
-        from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
+        from by_framework.core.discovery import DiscoveryClient
 
         _init_discovery_redis()
         discovery_client = DiscoveryClient(cache_interval=5)
@@ -206,12 +213,13 @@ def _import_view_zip(zip_path: Path, token: str) -> dict[str, Any]:
             return {"ok": False, "error": body.get("msg", "上传失败")}
         return {"ok": True, **body.get("data", {})}
 
-    return _run_async_in_thread(_upload())
+    result = _run_async_in_thread(_upload())
+    return result if isinstance(result, dict) else {}
 
 
 def _create_sqlite_table(entity_code: str, fields: list[dict[str, Any]], user_code: str) -> None:
     """通过 datacloud-data SDK 调用 SQLite HTTP API 建表。"""
-    from datacloud_data_sdk.ddl.table_manager import create_table  # type: ignore[import-untyped]
+    from datacloud_data_sdk.ddl.table_manager import create_table
 
     create_table(entity_code, fields, user_code)
 
@@ -504,6 +512,7 @@ class OntologyBuildSession:
 
             # 调试：把 zip 复制到 /tmp 方便检查
             import shutil
+
             debug_zip = Path(f"/mnt/d/tmp/debug_{actual_entity_code}.zip")
             debug_zip.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(zip_path, debug_zip)
@@ -512,7 +521,9 @@ class OntologyBuildSession:
 
             upload_result = _submit_object_async(
                 entity_code=actual_entity_code,
-                fields=state.get("fields", []) if state["entity_source"] == "DYNAMIC_TABLE" else None,
+                fields=state.get("fields", [])
+                if state["entity_source"] == "DYNAMIC_TABLE"
+                else None,
                 user_code=user_code,
                 zip_path=zip_path,
                 token=token,
@@ -605,9 +616,9 @@ class OntologyBuildSession:
             scope_type: "OBJECT" 或 "VIEW"
             resource_code: 本体对象或视图的编码
         """
-        reader = create_reader()
+        reader = cast(_ScopeDeletingReader, create_reader())
         scope = f"{scope_type.lower()}:{resource_code}"
-        result: dict[str, Any] = reader.delete_scope(scope)
+        result = reader.delete_scope(scope)
         if not result.get("ok"):
             raise RuntimeError(f"术语删除失败: {result.get('error')}")
         return {"ok": True}
@@ -622,14 +633,14 @@ def _pack_zip(source_dir: Path, zip_path: Path) -> None:
     只打包服务端 importObjectZip/importViewZip 所需的文件，
     去掉 object/ 或 view/ 中间层，直接以 {code}/{code}_xxx.owl 为路径。
     """
-    _INCLUDE_SUFFIXES = {"_definition.owl", "_mapping.owl", "_dbsource.owl"}
+    include_suffixes = {"_definition.owl", "_mapping.owl", "_dbsource.owl"}
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for file in source_dir.rglob("*.owl"):
             if not file.is_file():
                 continue
             name = file.name
-            if not any(name.endswith(s) for s in _INCLUDE_SUFFIXES):
+            if not any(name.endswith(s) for s in include_suffixes):
                 continue
             # 去掉 object/ 或 view/ 前缀，直接用 {code}/{filename}
             rel = file.relative_to(source_dir)

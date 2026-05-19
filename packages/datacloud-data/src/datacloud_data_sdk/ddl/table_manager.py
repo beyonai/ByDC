@@ -32,7 +32,7 @@ _TYPE_MAP: dict[str, str] = {
 
 def _init_discovery_redis() -> None:
     """全局初始化服务发现 Redis（幂等）。"""
-    from by_framework.common.redis_client import init_redis  # type: ignore[import-untyped]
+    from by_framework.common.redis_client import init_redis
 
     init_redis(
         host=os.getenv("REDIS_HOST", "localhost"),
@@ -96,9 +96,11 @@ def _execute_sql(sql: str, user_code: str) -> dict[str, Any]:
         if not body.get("ok"):
             err = body.get("error", {})
             raise RuntimeError(f"SQLite API error: {err.get('message', body)}")
-        return body.get("data", {})
+        data = body.get("data")
+        return data if isinstance(data, dict) else {}
 
-    return _run_async_in_thread(_call())
+    result = _run_async_in_thread(_call())
+    return result if isinstance(result, dict) else {}
 
 
 def _run_async_in_thread(coro: Any) -> Any:

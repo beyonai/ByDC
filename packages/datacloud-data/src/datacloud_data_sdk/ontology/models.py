@@ -235,6 +235,8 @@ class OntologyClass:
         datasource_alias: 数据源别名
         table_name: 表名
         source_config: 数据源配置
+        ext_property: 对象级扩展属性。当前约定:
+            - 知识库对象: {"kb_id": str, "kb_directory": str}
         tags: 标签列表
         fields: 字段列表
         actions: 动作列表
@@ -247,6 +249,7 @@ class OntologyClass:
     datasource_alias: str | None = None
     table_name: str | None = None
     source_config: dict[str, Any] | None = None
+    ext_property: dict[str, Any] = field(default_factory=dict)
     tags: list[str] = field(default_factory=list)
     fields: list[OntologyField] = field(default_factory=list)
     actions: list[OntologyAction] = field(default_factory=list)

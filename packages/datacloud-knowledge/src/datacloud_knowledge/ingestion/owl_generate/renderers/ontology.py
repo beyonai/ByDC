@@ -190,7 +190,8 @@ def _serialize_xml(builder: GraphBuilder) -> str:
 def _camel_to_snake(name: str) -> str:
     """驼峰转下划线，如 propertyCode → property_code。"""
     import re
-    return re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()
+
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
 def _xml_str(value: str) -> str:
@@ -208,13 +209,13 @@ def _render_field_xml(field_id: str, props: dict[str, str]) -> str:
     """生成单个 EntityField 的 owl:NamedIndividual XML 片段。"""
     lines = [
         f'    <owl:NamedIndividual rdf:about="#{field_id}">',
-        f'        <rdf:type rdf:resource="#EntityField"/>',
+        '        <rdf:type rdf:resource="#EntityField"/>',
     ]
     for key, val in props.items():
         tag = _camel_to_snake(key)
         lines.append(
             f'        <{tag} rdf:datatype="http://www.w3.org/2001/XMLSchema#string">'
-            f'{_xml_str(val)}</{tag}>'
+            f"{_xml_str(val)}</{tag}>"
         )
     lines.append("    </owl:NamedIndividual>")
     return "\n".join(lines)

@@ -1,12 +1,12 @@
 """
 知识库执行器模块
 
-本模块提供知识库检索的执行能力，通过 HTTP 调用 RAG 服务执行检索。
+本模块提供知识库检索的执行能力，通过 HTTP 调用知识元数据服务执行检索。
 支持将检索结果写入 CSV 文件供后续步骤使用。
 
 核心功能：
-- 调用 RAG 服务的 /retrieve 接口执行检索
-- 支持标签过滤和 top_k 参数
+- 调用知识元数据服务的 /api/v1/knowledgeItems/searchFile 接口执行检索
+- 支持元数据过滤和 topK 参数
 - 将检索结果转换为 CSV 格式存储
 
 使用示例：
@@ -17,23 +17,22 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-import httpx
-
 from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
-from datacloud_data_sdk.exceptions import DataSourceUnavailableError, KbExecutionError
+from datacloud_data_sdk.executor.kb_search_backend import (
+    HttpKnowledgeSearchBackend,
+    KnowledgeSearchBackend,
+    KnowledgeSearchRequest,
+)
 from datacloud_data_sdk.executor.models import KbExecTask
 from datacloud_data_sdk.executor.step_results import StepResults
 from datacloud_data_sdk.sql_executor.result_converter import ResultConverter
-from datacloud_data_sdk.utils.curl_logger import log_curl
 
 
 class KbExecutor:
     """
-    知识库 RAG 检索执行器
+    知识库文件级检索执行器
 
-    通过 HTTP POST 调用 RAG 服务的 /retrieve 接口执行知识库检索。
+    通过 HTTP POST 调用知识元数据服务的 searchFile 接口执行知识库检索。
 
     Attributes:
         _configs: 知识库配置字典，key 为数据源别名，value 包含 endpoint
@@ -49,6 +48,7 @@ class KbExecutor:
         self,
         kb_configs: dict[str, dict],
         csv_base_dir: str = "/tmp/datacloud_csv",
+        search_backend: KnowledgeSearchBackend | None = None,
     ) -> None:
         """
         初始化知识库执行器
@@ -56,10 +56,11 @@ class KbExecutor:
         Args:
             kb_configs: 知识库配置字典
                 key: 数据源别名
-                value: {"endpoint": str} RAG 服务 base URL
+                value: {"endpoint": str} 知识元数据服务 base URL
             csv_base_dir: CSV 临时文件根目录
+            search_backend: 自定义知识库检索后端；不传时使用默认 HTTP 实现
         """
-        self._configs = kb_configs
+        self._search_backend = search_backend or HttpKnowledgeSearchBackend(kb_configs)
         self._csv = CsvStorageManager(csv_base_dir)
 
     async def execute(
@@ -74,7 +75,7 @@ class KbExecutor:
         执行流程：
         1. 验证数据源配置
         2. 构建 RAG 请求体
-        3. 调用 RAG 服务 /retrieve 接口
+        3. 调用知识元数据服务 searchFile 接口
         4. 将检索结果写入 CSV 文件
 
         Args:
@@ -89,63 +90,16 @@ class KbExecutor:
             DataSourceUnavailableError: 数据源未配置时抛出
             KbExecutionError: RAG 调用失败时抛出
         """
-        if task.datasource_alias not in self._configs:
-            raise DataSourceUnavailableError(task.datasource_alias)
-
-        config = self._configs[task.datasource_alias]
-        endpoint = config.get("endpoint")
-        if not endpoint:
-            raise KbExecutionError(
-                task.datasource_alias,
-                "endpoint not configured in kb_configs",
+        result = await self._search_backend.search(
+            KnowledgeSearchRequest(
+                object_code=task.datasource_alias,
+                datasource_alias=task.datasource_alias,
+                query=task.query,
+                filters=task.tags,
+                limit=10,
             )
-
-        url = endpoint.rstrip("/") + "/retrieve"
-        body: dict[str, Any] = {
-            "query": task.query,
-            "tags": task.tags,
-            "top_k": 10,
-        }
-
-        log_curl("POST", url, body=body)
-
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(url, json=body)
-        except httpx.HTTPError as e:
-            raise KbExecutionError(task.datasource_alias, str(e)) from e
-
-        if resp.status_code >= 400:
-            raise KbExecutionError(
-                task.datasource_alias,
-                f"HTTP {resp.status_code}: {resp.text}",
-            )
-
-        try:
-            data = resp.json()
-        except Exception as e:
-            raise KbExecutionError(
-                task.datasource_alias,
-                f"invalid JSON response: {e}",
-            ) from e
-
-        results = data.get("results")
-        if not isinstance(results, list):
-            return []
-
-        records: list[dict] = []
-        for item in results:
-            if not isinstance(item, dict):
-                continue
-            content = item.get("content", "")
-            record: dict[str, Any] = {"content": content}
-            if "score" in item:
-                record["score"] = item["score"]
-            metadata = item.get("metadata")
-            if metadata and isinstance(metadata, dict):
-                record.update(metadata)
-            records.append(record)
+        )
 
         path = self._csv.get_path(request_id, task.output_ref)
-        ResultConverter.to_csv(records, path)
+        ResultConverter.to_csv(result.records, path)
         return str(path)

@@ -1350,6 +1350,21 @@ class Action:
 
             return await KbSearchExecutor(self._loader).execute(object_code, params)
 
+        if action_family == "write":
+            from datacloud_data_sdk.executor.kb_search_executor import KbSearchExecutor
+
+            return await KbSearchExecutor(self._loader).write(object_code, params)
+
+        if action_family in {"insert", "update", "delete"}:
+            from datacloud_data_sdk.executor.dynamic_table_executor import DynamicTableExecutor
+
+            executor = DynamicTableExecutor(self._loader)
+            if action_family == "insert":
+                return await executor.insert(object_code, params)
+            if action_family == "update":
+                return await executor.update(object_code, params)
+            return await executor.delete(object_code, params)
+
         # 兼容旧协议（query_* 动作 / 无 action_family）
 
         return await DynamicQueryExecutor(self._loader).execute(object_code, params)

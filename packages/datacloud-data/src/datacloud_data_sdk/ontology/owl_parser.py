@@ -12,6 +12,7 @@ OWL 本体解析器模块
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import re
@@ -68,6 +69,33 @@ def _normalize_code_filter(codes: Iterable[str] | None) -> set[str] | None:
     return normalized or None
 
 
+def _parse_json_object(value: str | None) -> dict[str, Any]:
+    """Parse an optional JSON object string, returning an empty dict on invalid input."""
+
+    if value is None:
+        return {}
+    raw = html.unescape(value.strip())
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("Invalid ext_property JSON ignored: %s", raw)
+        return {}
+    if not isinstance(parsed, dict):
+        logger.warning("ext_property is not a JSON object, ignored: %s", raw)
+        return {}
+    return parsed
+
+
+def _is_primary_key_ext_property(value: str | None) -> bool:
+    data = _parse_json_object(value)
+    rule = data.get("property_role_rule")
+    if not isinstance(rule, dict):
+        return False
+    return str(rule.get("rule_type") or "").lower() == "primary_key"
+
+
 @dataclass
 class ParsedObject:
     object_code: str
@@ -78,6 +106,7 @@ class ParsedObject:
     datasource_id: int | None = None
     table_name: str | None = None
     source_config: dict[str, Any] | None = None
+    ext_property: dict[str, Any] = field(default_factory=dict)
     tags: list[str] = field(default_factory=list)
     field_refs: list[str] = field(default_factory=list)  # URIs from <fields rdf:resource="..."/>
     fields: list[dict[str, Any]] = field(default_factory=list)
@@ -312,10 +341,13 @@ class OwlParser:
         entity_name = self._get_predicate_value(g, subject, "entity_name") or entity_code
         entity_desc = self._get_predicate_value(g, subject, "entity_desc") or ""
         entity_source = self._get_predicate_value(g, subject, "entity_source") or "DB"
+        ext_property = _parse_json_object(self._get_predicate_value(g, subject, "ext_property"))
 
         source_upper = entity_source.upper()
         if "KNOWLEDGE_BASE" in source_upper:
             source_type = "KNOWLEDGE_BASE"
+        elif "DYNAMIC_TABLE" in source_upper:
+            source_type = "DYNAMIC_TABLE"
         elif "DB" in source_upper:
             source_type = "DB"
         else:
@@ -336,6 +368,7 @@ class OwlParser:
             object_name=entity_name,
             description=entity_desc,
             source_type=source_type,
+            ext_property=ext_property,
             field_refs=field_refs,
             actions=action_refs,
             relation_refs=relation_refs,
@@ -387,6 +420,7 @@ class OwlParser:
             field_type=data_type,
             data_format=data_format if data_format else None,
             source_column=source_column,
+            is_primary_key=_is_primary_key_ext_property(ext_property),
             required=is_required.lower() == "true" if is_required else False,
             term_type_code_path=term_type_code_path if term_type_code_path else None,
             library_code=library_code if library_code else None,
@@ -926,19 +960,19 @@ class OwlParser:
                     **ds.config,
                 }
 
-            objects.append(
-                {
-                    "object_code": obj.object_code,
-                    "object_name": obj.object_name,
-                    "description": obj.description,
-                    "source_type": obj.source_type,
-                    "datasource_alias": obj.datasource_alias,
-                    "table_name": obj.table_name,
-                    "source_config": source_config,
-                    "fields": fields,
-                    "actions": actions,
-                }
-            )
+            object_dict = {
+                "object_code": obj.object_code,
+                "object_name": obj.object_name,
+                "description": obj.description,
+                "source_type": obj.source_type,
+                "datasource_alias": obj.datasource_alias,
+                "table_name": obj.table_name,
+                "source_config": source_config,
+                "ext_property": dict(obj.ext_property),
+                "fields": fields,
+                "actions": actions,
+            }
+            objects.append(object_dict)
 
         relations = []
         for rel_code, rel in self._relations.items():

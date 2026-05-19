@@ -233,6 +233,8 @@ def apply_analytic_metadata(f: Any, ext_property_json: str | None = None) -> Non
     role, kind = parse_analytic_role(ext_property_json)
     f.analytic_role = role
     f.analytic_kind = kind
+    if kind == "primary_key":
+        f.is_primary_key = True
     f.secondary_role = infer_secondary_role(role, kind)
     term_type = getattr(f, "term_type", None)
     f.filter_ops, f.group_ops, f.aggregate_ops, f.required_filter_group = derive_field_ops(
