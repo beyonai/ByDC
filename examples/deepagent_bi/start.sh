@@ -75,7 +75,8 @@ echo ">>> 前端代理已启动 (pid=$PROXY_PID)"
 # ── 启动 DeepAgent API ────────────────────────────────────────────────────────
 echo ""
 echo ">>> 对话界面：http://localhost:8765/app/"
-echo ">>> DeepAgent API：http://localhost:2024"
+echo ">>> DeepAgent API：http://localhost:2026"
 echo ""
 cd "$SCRIPT_DIR"
-uv run langgraph dev --allow-blocking --no-browser
+source "$SCRIPT_DIR/.venv-wsl/bin/activate"
+exec langgraph dev --allow-blocking --no-browser --no-reload --port 2026

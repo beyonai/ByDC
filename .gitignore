@@ -199,3 +199,4 @@ examples/chatbi_demo/data/translate_sql.py
 examples/chatbi_demo/data/.translate_cache.json
 examples/deepagent_bi/.env_deepagent
 examples/deepagent_bi/.env_deepagent
+examples/deepagent_bi/.env_deepagent

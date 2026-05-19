@@ -1,10 +1,10 @@
 ---
-name: structured-ontology-manager
+name: 个人结构化本体管理
 description: "对话式结构化个人本体管理：通过自然语言创建、删除个人结构化本体对象和视图，数据存储在个人 SQLite 中"
 allowed-tools: Bash, Read
 ---
 
-# structured-ontology-manager
+# 个人结构化本体管理
 
 通过自然语言对话，管理结构化本体对象和视图。支持创建、删除操作，对象数据持久化到 SQLite。
 
