@@ -50,7 +50,7 @@ def main() -> None:
     session.delete_owl_scope("VIEW", view_code)
 
     # 步骤二：下架本体
-    delete_resource_by_code(view_code, resource_biz_type="VIEW")
+    delete_resource_by_code(view_code)
 
     print(json.dumps({"ok": True, "view_code": view_code}, ensure_ascii=False), flush=True)
 

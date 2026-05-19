@@ -25,99 +25,99 @@ _VALID_PROPERTY_ROLES = {"DIMENSION", "MEASURE"}
 # ── 内部 HTTP 辅助（可被测试 mock）────────────────────────────────────────────
 
 
+def _init_discovery_redis() -> None:
+    """全局初始化服务发现所需的 Redis 连接（幂等，重复调用无副作用）。
+
+    使用运行环境的标准 REDIS_* 环境变量，与 by-framework-docs 示例保持一致。
+    """
+    from by_framework.common.redis_client import init_redis  # type: ignore[import-untyped]
+
+    init_redis(
+        host=os.getenv("REDIS_HOST", "localhost"),
+        port=int(os.getenv("REDIS_PORT", "6379")),
+        db=int(os.getenv("REDIS_DATABASE", "0")),
+        password=os.getenv("REDIS_PASSWORD") or None,
+        username=os.getenv("REDIS_USERNAME") or None,
+    )
+
+
 def _import_object_zip(zip_path: Path, token: str) -> dict[str, Any]:
-    """调用门户服务 importObjectZip 上传 OWL zip。"""
-
-
+    """通过服务发现调用门户服务 importObjectZip 上传 OWL zip。"""
     service_name = os.environ.get("BE_DOMAINNAME", "").strip()
     if not service_name:
         raise ValueError("BE_DOMAINNAME 环境变量未配置")
 
     async def _upload() -> dict[str, Any]:
         from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
-        from by_framework.util.discovery_http_client import (
-            DiscoveryHttpClient,  # type: ignore[import-untyped]
-        )
+        from by_framework.util.discovery_http_client import DiscoveryHttpClient  # type: ignore[import-untyped]
+        from by_framework.util.http_client import RetryConfig  # type: ignore[import-untyped]
 
-        redis_client = _create_discovery_redis()
-        discovery_client = DiscoveryClient(redis_client=redis_client, cache_interval=5)
+        _init_discovery_redis()
+        discovery_client = DiscoveryClient(cache_interval=5)
+        retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
         try:
-            async with DiscoveryHttpClient(discovery_client) as client:
+            async with DiscoveryHttpClient(discovery_client, retry_config=retry_config) as client:
                 with zip_path.open("rb") as f:
                     response = await client.post(
                         service_name,
-                        "/byaiService/tool/importObjectZip",
+                        "/tool/importObjectZip",
                         headers={"Beyond-Token": token},
                         files={"file": (zip_path.name, f, "application/zip")},
                         data={"catalogId": "0", "ownerType": "personal"},
                     )
         finally:
             await discovery_client.close()
-            await redis_client.aclose()
-        return (
-            dict(response.data)
-            if response.is_success
-            else {"ok": False, "error": str(response.data)}
-        )
+        if not response.is_success:
+            return {"ok": False, "error": str(response.data)}
+        body: dict[str, Any] = response.data if isinstance(response.data, dict) else {}
+        if body.get("code", 0) != 0:
+            return {"ok": False, "error": body.get("msg", "上传失败")}
+        return {"ok": True, **body.get("data", {})}
 
     return _run_async_in_thread(_upload())
 
 
 def _import_view_zip(zip_path: Path, token: str) -> dict[str, Any]:
-    """调用门户服务 importViewZip 上传 OWL zip。"""
-
+    """通过服务发现调用门户服务 importViewZip 上传 OWL zip。"""
     service_name = os.environ.get("BE_DOMAINNAME", "").strip()
     if not service_name:
         raise ValueError("BE_DOMAINNAME 环境变量未配置")
 
     async def _upload() -> dict[str, Any]:
         from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
-        from by_framework.util.discovery_http_client import (
-            DiscoveryHttpClient,  # type: ignore[import-untyped]
-        )
+        from by_framework.util.discovery_http_client import DiscoveryHttpClient  # type: ignore[import-untyped]
+        from by_framework.util.http_client import RetryConfig  # type: ignore[import-untyped]
 
-        redis_client = _create_discovery_redis()
-        discovery_client = DiscoveryClient(redis_client=redis_client, cache_interval=5)
+        _init_discovery_redis()
+        discovery_client = DiscoveryClient(cache_interval=5)
+        retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
         try:
-            async with DiscoveryHttpClient(discovery_client) as client:
+            async with DiscoveryHttpClient(discovery_client, retry_config=retry_config) as client:
                 with zip_path.open("rb") as f:
                     response = await client.post(
                         service_name,
-                        "/byaiService/tool/importViewZip",
+                        "/tool/importViewZip",
                         headers={"Beyond-Token": token},
                         files={"file": (zip_path.name, f, "application/zip")},
                         data={"catalogId": "0", "ownerType": "personal"},
                     )
         finally:
             await discovery_client.close()
-            await redis_client.aclose()
-        return (
-            dict(response.data)
-            if response.is_success
-            else {"ok": False, "error": str(response.data)}
-        )
+        if not response.is_success:
+            return {"ok": False, "error": str(response.data)}
+        body: dict[str, Any] = response.data if isinstance(response.data, dict) else {}
+        if body.get("code", 0) != 0:
+            return {"ok": False, "error": body.get("msg", "上传失败")}
+        return {"ok": True, **body.get("data", {})}
 
     return _run_async_in_thread(_upload())
 
 
 def _create_sqlite_table(entity_code: str, fields: list[dict[str, Any]], user_code: str) -> None:
-    """调用 datacloud-data 建表。"""
+    """通过 datacloud-data SDK 调用 SQLite HTTP API 建表。"""
     from datacloud_data_sdk.ddl.table_manager import create_table  # type: ignore[import-untyped]
 
     create_table(entity_code, fields, user_code)
-
-
-def _create_discovery_redis() -> Any:
-    from redis.asyncio import Redis  # type: ignore[import-untyped]
-
-    return Redis(
-        host=os.getenv("DATACLOUD_GATEWAY_REDIS_HOST", "localhost"),
-        port=int(os.getenv("DATACLOUD_GATEWAY_REDIS_PORT", "6379")),
-        db=int(os.getenv("DATACLOUD_GATEWAY_REDIS_DB", "0")),
-        password=os.getenv("DATACLOUD_GATEWAY_REDIS_PASSWORD") or None,
-        username=os.getenv("DATACLOUD_GATEWAY_REDIS_USERNAME") or None,
-        decode_responses=True,
-    )
 
 
 def _run_async_in_thread(coro: Any) -> Any:

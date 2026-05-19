@@ -1,7 +1,7 @@
 """暂存工作区状态的抽象接口及实现。
 
 支持两种后端：
-- RedisWorkspaceStore：生产环境，通过 ONTOLOGY_REDIS_* 环境变量配置。
+- RedisWorkspaceStore：生产环境，使用运行环境的 REDIS_* 环境变量。
 - LocalFileWorkspaceStore：本地开发/测试，通过 ONTOLOGY_WORKSPACE_DIR 配置。
 
 工厂函数 get_workspace_store() 通过 ONTOLOGY_STORE 环境变量（redis/local）选择后端。
@@ -38,12 +38,12 @@ class WorkspaceStore(ABC):
 class RedisWorkspaceStore(WorkspaceStore):
     """生产环境：使用 Redis 存储。
 
-    环境变量：
-        ONTOLOGY_REDIS_HOST      默认 localhost
-        ONTOLOGY_REDIS_PORT      默认 6379
-        ONTOLOGY_REDIS_DB        默认 0
-        ONTOLOGY_REDIS_PASSWORD  默认空
-        ONTOLOGY_REDIS_USERNAME  默认空
+    复用运行环境的标准 Redis 环境变量：
+        REDIS_HOST      默认 localhost
+        REDIS_PORT      默认 6379
+        REDIS_DATABASE  默认 0
+        REDIS_PASSWORD  默认空
+        REDIS_USERNAME  默认空
     """
 
     _KEY_PREFIX = "ontology_workspace:"
@@ -52,11 +52,11 @@ class RedisWorkspaceStore(WorkspaceStore):
         import redis  # type: ignore[import-untyped]
 
         self._client: redis.Redis[str] = redis.Redis(
-            host=os.getenv("ONTOLOGY_REDIS_HOST", "localhost"),
-            port=int(os.getenv("ONTOLOGY_REDIS_PORT", "6379")),
-            db=int(os.getenv("ONTOLOGY_REDIS_DB", "0")),
-            password=os.getenv("ONTOLOGY_REDIS_PASSWORD") or None,
-            username=os.getenv("ONTOLOGY_REDIS_USERNAME") or None,
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", "6379")),
+            db=int(os.getenv("REDIS_DATABASE", "0")),
+            password=os.getenv("REDIS_PASSWORD") or None,
+            username=os.getenv("REDIS_USERNAME") or None,
             decode_responses=True,
         )
 

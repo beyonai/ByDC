@@ -51,7 +51,7 @@ def main() -> None:
     session.delete_owl_scope("OBJECT", entity_code)
 
     # 步骤二：下架本体（不删知识库，不删表）
-    delete_resource_by_code(entity_code, resource_biz_type="OBJECT")
+    delete_resource_by_code(entity_code)
 
     print(json.dumps({"ok": True, "entity_code": entity_code}, ensure_ascii=False), flush=True)
 

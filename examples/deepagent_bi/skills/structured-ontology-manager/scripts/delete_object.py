@@ -53,7 +53,7 @@ def main() -> None:
     session.delete_owl_scope("OBJECT", entity_code)
 
     # 步骤二：下架本体
-    delete_resource_by_code(entity_code, resource_biz_type="OBJECT")
+    delete_resource_by_code(entity_code)
 
     # 步骤三：删除 SQLite 表
     drop_table(entity_code)
