@@ -9,7 +9,6 @@ from deepagents.backends import FilesystemBackend
 from langchain_anthropic import ChatAnthropic
 
 from tools.datacloud_tool import build_datacloud_tool
-from tools.ontology_manager_tools import build_ontology_manager_tools
 from tools.ontology_search_tool import build_ontology_search_tool
 
 
@@ -28,7 +27,6 @@ def create_bi_agent():  # type: ignore[return]
     tools = [
         build_ontology_search_tool(owl_docs_dir),
         build_datacloud_tool(resource_dir),
-        *build_ontology_manager_tools(),  # 本体管理操作 tools
     ]
     return create_deep_agent(
         model=model,
@@ -38,6 +36,11 @@ def create_bi_agent():  # type: ignore[return]
         subagents=[],
         backend=FilesystemBackend(root_dir=base_dir, virtual_mode=True),
     )
+
+
+def make_graph():  # type: ignore[return]
+    """langgraph dev 入口。"""
+    return create_bi_agent()
 
 
 def make_graph():  # type: ignore[return]
