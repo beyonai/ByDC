@@ -64,14 +64,14 @@ def _execute_sql(sql: str, user_code: str) -> dict[str, Any]:
         retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
         try:
             # 先 discover 拿到实例，从 metadata.token 取认证 token
-            instance = await discovery_client.discover(service_name)
+            instance = await discovery_client.discover(service_name, health_threshold_ms=-1)
             if not instance:
                 raise RuntimeError(f"未找到 SQLite 服务实例: {service_name}")
 
             metadata = instance.metadata or {}
             token = metadata.get("token", "")
 
-            async with DiscoveryHttpClient(discovery_client, retry_config=retry_config) as client:
+            async with DiscoveryHttpClient(discovery_client, retry_config=retry_config, health_threshold_ms=-1) as client:
                 response = await client.post(
                     service_name,
                     "/plugins/byclaw-sqlite/sqlExecute",
@@ -130,7 +130,7 @@ def create_table(entity_code: str, fields: list[dict[str, Any]], user_code: str)
     col_defs = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
     for f in fields:
         col_name = f.get("property_code", "")
-        if not col_name:
+        if not col_name or col_name.lower() == "id":  # id 由系统自动生成，跳过
             continue
         sqlite_type = _TYPE_MAP.get(f.get("data_type", "STRING"), "TEXT")
         col_defs.append(f"{col_name} {sqlite_type}")

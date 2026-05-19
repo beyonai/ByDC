@@ -54,7 +54,10 @@ $PYTHON_EXEC /skills/structured-ontology-manager/scripts/<script>.py '<JSON>'
 | 查看术语类型 | 查枚举 | `list_term_types.py` | `{}` |
 | 查看术语值 | 查枚举值 | `get_term_type_values.py` | `{"term_type_code":"xxx"}` |
 
-## 认证与环境变量
+## 字段说明
+
+- `id` 字段由系统自动生成（INTEGER PRIMARY KEY AUTOINCREMENT），**不需要在 fields 中传入**
+- `property_code` 不能为 `id`
 
 | 变量 | 用途 |
 |------|------|

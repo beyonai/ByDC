@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+import uuid
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -48,18 +49,20 @@ def _import_object_zip(zip_path: Path, token: str) -> dict[str, Any]:
         raise ValueError("BE_DOMAINNAME 环境变量未配置")
 
     async def _upload() -> dict[str, Any]:
+        import httpx
         from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
-        from by_framework.util.discovery_http_client import DiscoveryHttpClient  # type: ignore[import-untyped]
-        from by_framework.util.http_client import RetryConfig  # type: ignore[import-untyped]
 
         _init_discovery_redis()
         discovery_client = DiscoveryClient(cache_interval=5)
-        retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
         try:
-            async with DiscoveryHttpClient(discovery_client, retry_config=retry_config) as client:
+            instance = await discovery_client.discover(service_name, health_threshold_ms=-1)
+            if not instance:
+                return {"ok": False, "error": f"未找到服务实例: {service_name}"}
+
+            base_url = f"http://{instance.host}:{instance.port}"
+            async with httpx.AsyncClient(base_url=base_url, timeout=60.0) as client:
                 with zip_path.open("rb") as f:
                     response = await client.post(
-                        service_name,
                         "/tool/importObjectZip",
                         headers={"Beyond-Token": token},
                         files={"file": (zip_path.name, f, "application/zip")},
@@ -67,9 +70,10 @@ def _import_object_zip(zip_path: Path, token: str) -> dict[str, Any]:
                     )
         finally:
             await discovery_client.close()
-        if not response.is_success:
-            return {"ok": False, "error": str(response.data)}
-        body: dict[str, Any] = response.data if isinstance(response.data, dict) else {}
+
+        if response.status_code != 200:
+            return {"ok": False, "error": f"HTTP {response.status_code}"}
+        body: dict[str, Any] = response.json() if response.content else {}
         if body.get("code", 0) != 0:
             return {"ok": False, "error": body.get("msg", "上传失败")}
         return {"ok": True, **body.get("data", {})}
@@ -84,18 +88,20 @@ def _import_view_zip(zip_path: Path, token: str) -> dict[str, Any]:
         raise ValueError("BE_DOMAINNAME 环境变量未配置")
 
     async def _upload() -> dict[str, Any]:
+        import httpx
         from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
-        from by_framework.util.discovery_http_client import DiscoveryHttpClient  # type: ignore[import-untyped]
-        from by_framework.util.http_client import RetryConfig  # type: ignore[import-untyped]
 
         _init_discovery_redis()
         discovery_client = DiscoveryClient(cache_interval=5)
-        retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
         try:
-            async with DiscoveryHttpClient(discovery_client, retry_config=retry_config) as client:
+            instance = await discovery_client.discover(service_name, health_threshold_ms=-1)
+            if not instance:
+                return {"ok": False, "error": f"未找到服务实例: {service_name}"}
+
+            base_url = f"http://{instance.host}:{instance.port}"
+            async with httpx.AsyncClient(base_url=base_url, timeout=60.0) as client:
                 with zip_path.open("rb") as f:
                     response = await client.post(
-                        service_name,
                         "/tool/importViewZip",
                         headers={"Beyond-Token": token},
                         files={"file": (zip_path.name, f, "application/zip")},
@@ -103,9 +109,10 @@ def _import_view_zip(zip_path: Path, token: str) -> dict[str, Any]:
                     )
         finally:
             await discovery_client.close()
-        if not response.is_success:
-            return {"ok": False, "error": str(response.data)}
-        body: dict[str, Any] = response.data if isinstance(response.data, dict) else {}
+
+        if response.status_code != 200:
+            return {"ok": False, "error": f"HTTP {response.status_code}"}
+        body: dict[str, Any] = response.json() if response.content else {}
         if body.get("code", 0) != 0:
             return {"ok": False, "error": body.get("msg", "上传失败")}
         return {"ok": True, **body.get("data", {})}
@@ -198,17 +205,26 @@ class OntologyBuildSession:
         """收集本体对象信息，合并到暂存状态，返回当前完整状态。
 
         多轮对话反复调用，每次只需传入本轮新增/修改的字段，未传入的字段保留上次的值。
+        entity_code 会自动拼上工号和随机后缀，保证全局唯一。
         """
         if fields:
             fmt_errors = _validate_fields_format(fields)
             if fmt_errors:
                 return {"ok": False, "errors": fmt_errors}
 
+        user_code = os.environ.get("USER_CODE", "")
+
         store = get_workspace_store()
-        key = f"{session_id}_{entity_code}" if session_id else entity_code
+        # key 加工号前缀，隔离多用户并发
+        prefix = f"{user_code}:" if user_code else ""
+        key = f"{prefix}{session_id}_{entity_code}" if session_id else f"{prefix}{entity_code}"
         state: dict[str, Any] = store.load(key)
 
-        state["entity_code"] = entity_code
+        # 首次收集时，自动生成带工号+随机后缀的唯一编码
+        if not state.get("entity_code"):
+            short_id = uuid.uuid4().hex[:6]
+            unique_code = f"p_{entity_code}_{user_code}_{short_id}" if user_code else f"p_{entity_code}_{short_id}"
+            state["entity_code"] = unique_code
         if entity_name:
             state["entity_name"] = entity_name
         if entity_desc:
@@ -248,12 +264,22 @@ class OntologyBuildSession:
         object_codes: list[str] | None = None,
         object_relations: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        """收集本体视图信息，合并到暂存状态，返回当前完整状态。"""
+        """收集本体视图信息，合并到暂存状态，返回当前完整状态。
+
+        view_code 会自动拼上工号和随机后缀，保证全局唯一。
+        """
+        user_code = os.environ.get("USER_CODE", "")
+
         store = get_workspace_store()
-        key = f"{session_id}_{view_code}" if session_id else view_code
+        prefix = f"{user_code}:" if user_code else ""
+        key = f"{prefix}{session_id}_{view_code}" if session_id else f"{prefix}{view_code}"
         state: dict[str, Any] = store.load(key)
 
-        state["view_code"] = view_code
+        # 首次收集时，自动生成带工号+随机后缀的唯一编码
+        if not state.get("view_code"):
+            short_id = uuid.uuid4().hex[:6]
+            unique_code = f"pv_{view_code}_{user_code}_{short_id}" if user_code else f"pv_{view_code}_{short_id}"
+            state["view_code"] = unique_code
         if view_name:
             state["view_name"] = view_name
         if view_desc:
@@ -335,8 +361,10 @@ class OntologyBuildSession:
     def submit_object(self, entity_code: str, session_id: str = "") -> dict[str, Any]:
         """提交本体对象：校验 → 生成 OWL → 建表（结构化）→ 上传 → 术语入库。"""
 
+        user_code = os.environ.get("USER_CODE", "")
         store = get_workspace_store()
-        key = f"{session_id}_{entity_code}" if session_id else entity_code
+        prefix = f"{user_code}:" if user_code else ""
+        key = f"{prefix}{session_id}_{entity_code}" if session_id else f"{prefix}{entity_code}"
         state = store.load(key)
 
         if not state:
@@ -357,17 +385,17 @@ class OntologyBuildSession:
         state["entity_source"] = "KNOWLEDGE_BASE" if state.get("kb_id") else "DYNAMIC_TABLE"
 
         token = os.environ.get("BEYOND_TOKEN", "")
-        user_code = os.environ.get("USER_CODE", "")
+        actual_entity_code = state["entity_code"]
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             output_dir = Path(tmp_dir)
             generate_from_definition(state, output_dir)
 
-            zip_path = output_dir / f"{entity_code}.zip"
+            zip_path = output_dir / f"{actual_entity_code}.zip"
             _pack_zip(output_dir, zip_path)
 
             if state["entity_source"] == "DYNAMIC_TABLE":
-                _create_sqlite_table(entity_code, state.get("fields", []), user_code)
+                _create_sqlite_table(actual_entity_code, state.get("fields", []), user_code)
 
             upload_result = _import_object_zip(zip_path, token)
             if not upload_result.get("ok", True):
@@ -380,8 +408,10 @@ class OntologyBuildSession:
     def submit_view(self, view_code: str, session_id: str = "") -> dict[str, Any]:
         """提交本体视图：校验 → 生成 OWL → 上传 → 术语入库。"""
 
+        user_code = os.environ.get("USER_CODE", "")
         store = get_workspace_store()
-        key = f"{session_id}_{view_code}" if session_id else view_code
+        prefix = f"{user_code}:" if user_code else ""
+        key = f"{prefix}{session_id}_{view_code}" if session_id else f"{prefix}{view_code}"
         state = store.load(key)
 
         if not state:
@@ -407,12 +437,13 @@ class OntologyBuildSession:
         state.setdefault("domain_code", "PERSONAL_DOMAIN")
 
         token = os.environ.get("BEYOND_TOKEN", "")
+        actual_view_code = state["view_code"]
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             output_dir = Path(tmp_dir)
             generate_from_definition(state, output_dir)
 
-            zip_path = output_dir / f"{view_code}.zip"
+            zip_path = output_dir / f"{actual_view_code}.zip"
             _pack_zip(output_dir, zip_path)
 
             upload_result = _import_view_zip(zip_path, token)
