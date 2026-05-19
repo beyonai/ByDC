@@ -187,49 +187,118 @@ def _serialize_xml(builder: GraphBuilder) -> str:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def render_object(config: OwlGenConfig, table: Table) -> str:
-    """对象定义 OWL（EntityDefinition + EntityField）— GraphBuilder API。
+def _camel_to_snake(name: str) -> str:
+    """驼峰转下划线，如 propertyCode → property_code。"""
+    import re
+    return re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()
 
-    业务逻辑：为每个数据库表生成 EntityDefinition（含对象标识、字段引用、
-    Action 引用、关系引用）+ 每个字段的 EntityField（含数据类型、角色、术语元信息）。
-    产物写入 {object_code}_definition.owl 文件。
-    """
+
+def _xml_str(value: str) -> str:
+    """转义 XML 特殊字符。"""
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
+
+
+def _render_field_xml(field_id: str, props: dict[str, str]) -> str:
+    """生成单个 EntityField 的 owl:NamedIndividual XML 片段。"""
+    lines = [
+        f'    <owl:NamedIndividual rdf:about="#{field_id}">',
+        f'        <rdf:type rdf:resource="#EntityField"/>',
+    ]
+    for key, val in props.items():
+        tag = _camel_to_snake(key)
+        lines.append(
+            f'        <{tag} rdf:datatype="http://www.w3.org/2001/XMLSchema#string">'
+            f'{_xml_str(val)}</{tag}>'
+        )
+    lines.append("    </owl:NamedIndividual>")
+    return "\n".join(lines)
+
+
+def render_object(config: OwlGenConfig, table: Table) -> str:
+    """对象定义 OWL（EntityDefinition + EntityField）— 直接生成标准格式 XML。"""
     binding_lookup = _build_binding_lookup(config)
     resolved_props = {
         col.name: config.resolve_object_prop(table.code, col.name, col.comment or col.name)
         for col in table.columns
     }
 
-    # 构建字段引用 ID 列表
-    field_ref_ids = [f"{resolved_props[col.name].property_code}_field" for col in table.columns]
-
-    # Action 引用
     action_code = f"query_{table.code}"
     action_refs = json.dumps([action_code], ensure_ascii=False)
-
-    # 关系引用
     relation_ids = [r.relation_id for r in config.object_relations if r.source_code == table.code]
     relation_refs = json.dumps(relation_ids, ensure_ascii=False)
 
-    # 创建 GraphBuilder 并添加实体
-    builder = GraphBuilder()
-    builder.add_entity_definition(
-        object_code=table.code,
-        object_name=table.name,
-        object_desc=table.desc,
-        action_refs=action_refs,
-        relation_refs=relation_refs,
-        field_refs=field_ref_ids,
-    )
-
-    # 添加每个字段的 EntityField
+    # 生成字段 XML 片段
+    field_xml_parts: list[str] = []
+    field_refs_xml: list[str] = []
     for col in table.columns:
         resolved_prop = resolved_props[col.name]
         term_meta = _term_meta_for_object_field(config, table.code, col.name, binding_lookup)
         field_props = _build_entity_field_props(config, table.code, col, resolved_prop, term_meta)
-        builder.add_entity_field(field_props)
+        field_id = f"{resolved_prop.property_code}_field"
+        field_xml_parts.append(_render_field_xml(field_id, field_props))
+        field_refs_xml.append(f'        <fields rdf:resource="#{field_id}"/>')
 
-    return _serialize_xml(builder)
+    fields_block = "\n".join(field_refs_xml)
+    fields_xml = "\n\n".join(field_xml_parts)
+
+    return f"""<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/entity/ontology#">
+
+    <owl:Class rdf:about="#EntityDefinition"><rdfs:label>实体定义</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#EntityField"><rdfs:label>实体字段</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#{table.code}_v1">
+        <rdf:type rdf:resource="#EntityDefinition"/>
+        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.code)}</entity_code>
+        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.name)}</entity_name>
+        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.desc or "")}</entity_desc>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(config.entity_source)}</entity_source>
+{fields_block}
+        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(action_refs)}</action_refs>
+        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(relation_refs)}</relations>
+    </owl:NamedIndividual>
+
+{fields_xml}
+
+    <owl:DatatypeProperty rdf:about="#entity_code"/>
+    <owl:DatatypeProperty rdf:about="#entity_name"/>
+    <owl:DatatypeProperty rdf:about="#entity_desc"/>
+    <owl:DatatypeProperty rdf:about="#version"/>
+    <owl:DatatypeProperty rdf:about="#entity_source"/>
+    <owl:DatatypeProperty rdf:about="#fields"/>
+    <owl:DatatypeProperty rdf:about="#action_refs"/>
+    <owl:DatatypeProperty rdf:about="#relations"/>
+    <owl:DatatypeProperty rdf:about="#property_code"/>
+    <owl:DatatypeProperty rdf:about="#property_name"/>
+    <owl:DatatypeProperty rdf:about="#data_type"/>
+    <owl:DatatypeProperty rdf:about="#is_required"/>
+    <owl:DatatypeProperty rdf:about="#default_value"/>
+    <owl:DatatypeProperty rdf:about="#source_column"/>
+    <owl:DatatypeProperty rdf:about="#synonyms"/>
+    <owl:DatatypeProperty rdf:about="#data_format"/>
+    <owl:DatatypeProperty rdf:about="#measurement_unit"/>
+    <owl:DatatypeProperty rdf:about="#property_category"/>
+    <owl:DatatypeProperty rdf:about="#property_group"/>
+    <owl:DatatypeProperty rdf:about="#ext_property"/>
+    <owl:DatatypeProperty rdf:about="#term_type_code_path"/>
+    <owl:DatatypeProperty rdf:about="#library_code"/>
+    <owl:DatatypeProperty rdf:about="#rel_action"/>
+    <owl:DatatypeProperty rdf:about="#rel_term_codeorname"/>
+    <owl:DatatypeProperty rdf:about="#term_data_type"/>
+</rdf:RDF>
+"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -283,15 +352,33 @@ def render_mapping(config: OwlGenConfig, table: Table) -> str:
 
 
 def render_dbsource(config: OwlGenConfig) -> str:
-    """数据源定义 OWL（DatabaseDefinition）— GraphBuilder API。
+    """数据源定义 OWL（DatabaseDefinition）— 直接生成标准格式 XML。"""
+    db_params = json.dumps(
+        {**config.db_params, "connector_type": "BYCLAW_SQL_EXECUTE"},
+        ensure_ascii=False,
+    )
+    return f"""<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/dbsource/ontology#">
 
-    业务逻辑：将数据源连接参数（db_code/db_type/db_params）序列化为
-    OWL DatabaseDefinition 节点。产物写入 {object_code}_dbsource.owl 文件。
-    """
-    params = json.dumps(config.db_params, ensure_ascii=False)
-    builder = GraphBuilder()
-    builder.add_dbsource(db_code=config.db_code, db_type=config.db_type, db_params_json=params)
-    return _serialize_xml(builder)
+    <owl:Class rdf:about="#DatabaseDefinition"><rdfs:label>数据源定义</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#dbsource_{_xml_str(config.db_code)}">
+        <rdf:type rdf:resource="#DatabaseDefinition"/>
+        <dbCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(config.db_code)}</dbCode>
+        <dbType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SQLITE</dbType>
+        <dbParams rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(db_params)}</dbParams>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#dbCode"/>
+    <owl:DatatypeProperty rdf:about="#dbType"/>
+    <owl:DatatypeProperty rdf:about="#dbParams"/>
+</rdf:RDF>
+"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

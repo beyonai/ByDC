@@ -54,7 +54,7 @@ _RDFS_NS = "http://www.w3.org/2000/01/rdf-schema#"
 _XSD_NS = "http://www.w3.org/2001/XMLSchema#"
 
 # 默认 xml:base（与应用本体命名空间保持一致）
-_DEFAULT_BASE = "http://beyond.ai/ontology#"
+_DEFAULT_BASE = "http://example.org/entity/ontology#"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # OWL 实体类型 → RDF Class 映射
@@ -389,6 +389,12 @@ class GraphBuilder:
     # ── EntityDefinition & EntityField（对象定义）─────────────────────────────
     # 定义级实体（非 KPS），用于 _definition.owl / _mapping.owl / _dbsource.owl 文件
 
+    def add_owl_classes(self, class_names: list[str]) -> None:
+        """声明 owl:Class，使序列化输出包含类声明节点。"""
+        for name in class_names:
+            uri = self._ns[name]
+            self._graph.add((uri, self._RDF.type, self._OWL.Class))
+
     def add_entity_definition(
         self,
         object_code: str,
@@ -409,17 +415,18 @@ class GraphBuilder:
             field_refs: 字段引用 ID 列表（如 ["customer_code_field"]）。
         """
         uri = self._ns[f"{_safe_xml_id(object_code)}_v1"]
+        self._graph.add((uri, self._RDF.type, self._OWL.NamedIndividual))
         self._graph.add((uri, self._RDF.type, self._ns.EntityDefinition))
-        self._add_literal(uri, self._ns.entityCode, object_code)
-        self._add_literal(uri, self._ns.entityName, object_name)
-        self._add_literal(uri, self._ns.entityDesc, object_desc)
+        self._add_literal(uri, self._ns.entity_code, object_code)
+        self._add_literal(uri, self._ns.entity_name, object_name)
+        self._add_literal(uri, self._ns.entity_desc, object_desc)
         self._add_literal(uri, self._ns.version, "1.0")
-        self._add_literal(uri, self._ns.entitySource, "DB")
+        self._add_literal(uri, self._ns.entity_source, "DB")
         if field_refs:
             for ref_id in field_refs:
                 self._graph.add((uri, self._ns.fields, self._ns[ref_id]))
         if action_refs:
-            self._add_literal(uri, self._ns.actionRefs, action_refs)
+            self._add_literal(uri, self._ns.action_refs, action_refs)
         if relation_refs:
             self._add_literal(uri, self._ns.relations, relation_refs)
 
@@ -431,24 +438,25 @@ class GraphBuilder:
                   必含 propertyCode, propertyName, dataType, sourceColumn。
         """
         uri = self._ns[f"{_safe_xml_id(props['propertyCode'])}_field"]
+        self._graph.add((uri, self._RDF.type, self._OWL.NamedIndividual))
         self._graph.add((uri, self._RDF.type, self._ns.EntityField))
-        self._add_literal(uri, self._ns.propertyCode, props["propertyCode"])
-        self._add_literal(uri, self._ns.propertyName, props["propertyName"])
-        self._add_literal(uri, self._ns.dataType, props["dataType"])
-        self._add_literal(uri, self._ns.isRequired, props.get("isRequired", "false"))
-        self._add_literal(uri, self._ns.defaultValue, props.get("defaultValue", ""))
-        self._add_literal(uri, self._ns.sourceColumn, props["sourceColumn"])
+        self._add_literal(uri, self._ns.property_code, props["propertyCode"])
+        self._add_literal(uri, self._ns.property_name, props["propertyName"])
+        self._add_literal(uri, self._ns.data_type, props["dataType"])
+        self._add_literal(uri, self._ns.is_required, props.get("isRequired", "false"))
+        self._add_literal(uri, self._ns.default_value, props.get("defaultValue", ""))
+        self._add_literal(uri, self._ns.source_column, props["sourceColumn"])
         self._add_literal(uri, self._ns.synonyms, props.get("synonyms", ""))
-        self._add_literal(uri, self._ns.dataFormat, props.get("dataFormat", ""))
-        self._add_literal(uri, self._ns.measurementUnit, props.get("measurementUnit", ""))
-        self._add_literal(uri, self._ns.propertyCategory, props.get("propertyCategory", ""))
-        self._add_literal(uri, self._ns.propertyGroup, props.get("propertyGroup", "STORAGE"))
-        self._add_literal(uri, self._ns.extProperty, props.get("extProperty", ""))
-        self._add_literal(uri, self._ns.termTypeCodePath, props.get("termTypeCodePath", ""))
-        self._add_literal(uri, self._ns.libraryCode, props.get("libraryCode", ""))
-        self._add_literal(uri, self._ns.relAction, props.get("relAction", "[]"))
-        self._add_literal(uri, self._ns.relTermCodeorname, props.get("relTermCodeorname", ""))
-        self._add_literal(uri, self._ns.termDataType, props.get("termDataType", ""))
+        self._add_literal(uri, self._ns.data_format, props.get("dataFormat", ""))
+        self._add_literal(uri, self._ns.measurement_unit, props.get("measurementUnit", ""))
+        self._add_literal(uri, self._ns.property_category, props.get("propertyCategory", ""))
+        self._add_literal(uri, self._ns.property_group, props.get("propertyGroup", "STORAGE"))
+        self._add_literal(uri, self._ns.ext_property, props.get("extProperty", ""))
+        self._add_literal(uri, self._ns.term_type_code_path, props.get("termTypeCodePath", ""))
+        self._add_literal(uri, self._ns.library_code, props.get("libraryCode", ""))
+        self._add_literal(uri, self._ns.rel_action, props.get("relAction", "[]"))
+        self._add_literal(uri, self._ns.rel_term_codeorname, props.get("relTermCodeorname", ""))
+        self._add_literal(uri, self._ns.term_data_type, props.get("termDataType", ""))
 
     # ── EntityMapping & Mapping（对象映射）────────────────────────────────────
 
@@ -637,16 +645,10 @@ class GraphBuilder:
     # ── 内部辅助方法 ──────────────────────────────────────────────────────────
 
     def _add_literal(self, subject: Any, predicate: Any, value: str) -> None:
-        """添加字面值三元组 (s, p, "value"^^xsd:string)。
-
-        Args:
-            subject: RDF 主语 URI。
-            predicate: RDF 谓语 URI（Namespace 属性）。
-            value: 字符串值。
-        """
+        """添加字面值三元组 (s, p, "value"^^xsd:string)。"""
         from rdflib import Literal
 
-        self._graph.add((subject, predicate, Literal(value)))
+        self._graph.add((subject, predicate, Literal(value, datatype=self._XSD.string)))
 
 
 __all__ = [

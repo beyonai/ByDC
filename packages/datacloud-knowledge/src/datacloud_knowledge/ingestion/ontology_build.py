@@ -46,6 +46,83 @@ def _init_discovery_redis() -> None:
     )
 
 
+def _submit_object_async(
+    entity_code: str,
+    fields: list[dict[str, Any]] | None,
+    user_code: str,
+    zip_path: Path,
+    token: str,
+) -> dict[str, Any]:
+    """在单个事件循环里完成建表 + 上传，避免跨循环 Redis 连接问题。"""
+    import httpx
+
+    service_name = os.environ.get("BE_DOMAINNAME", "").strip()
+    if not service_name:
+        raise ValueError("BE_DOMAINNAME 环境变量未配置")
+
+    async def _run() -> dict[str, Any]:
+        from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
+        from by_framework.util.discovery_http_client import DiscoveryHttpClient  # type: ignore[import-untyped]
+        from by_framework.util.http_client import RetryConfig  # type: ignore[import-untyped]
+
+        _init_discovery_redis()
+        discovery_client = DiscoveryClient(cache_interval=5)
+        retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
+        try:
+            # 建表（DYNAMIC_TABLE 模式）
+            if fields is not None:
+                sqlite_service = f"BYCLAW_EXE_{user_code}"
+                sqlite_instance = await discovery_client.discover(sqlite_service, health_threshold_ms=-1)
+                if not sqlite_instance:
+                    return {"ok": False, "error": f"未找到 SQLite 服务实例: {sqlite_service}"}
+                metadata = sqlite_instance.metadata or {}
+                sqlite_token = metadata.get("token", "")
+                async with DiscoveryHttpClient(discovery_client, retry_config=retry_config, health_threshold_ms=-1) as client:
+                    col_defs = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
+                    for f in fields:
+                        col_name = f.get("property_code", "")
+                        if not col_name or col_name.lower() == "id":
+                            continue
+                        sqlite_type = {"STRING": "TEXT", "INTEGER": "INTEGER", "FLOAT": "REAL", "BOOLEAN": "INTEGER", "DATE": "TEXT"}.get(f.get("data_type", "STRING"), "TEXT")
+                        col_defs.append(f"{col_name} {sqlite_type}")
+                    ddl = f"CREATE TABLE IF NOT EXISTS {entity_code} ({', '.join(col_defs)})"
+                    resp = await client.post(
+                        sqlite_service,
+                        "/plugins/byclaw-sqlite/sqlExecute",
+                        headers={"Content-Type": "application/json", "Authorization": f"Bearer {sqlite_token}"},
+                        json={"sql": ddl, "user_code": user_code},
+                    )
+                    body = resp.data if isinstance(resp.data, dict) else {}
+                    if not body.get("ok"):
+                        err = body.get("error", {})
+                        return {"ok": False, "error": f"建表失败: {err.get('message', body)}"}
+
+            # 上传 OWL zip
+            byai_instance = await discovery_client.discover(service_name, health_threshold_ms=-1)
+            if not byai_instance:
+                return {"ok": False, "error": f"未找到服务实例: {service_name}"}
+            base_url = f"http://{byai_instance.host}:{byai_instance.port}"
+            async with httpx.AsyncClient(base_url=base_url, timeout=60.0) as http:
+                with zip_path.open("rb") as f:
+                    response = await http.post(
+                        "/byaiService/tool/importObjectZip",
+                        headers={"Beyond-Token": token},
+                        files={"file": (zip_path.name, f, "application/zip")},
+                        data={"catalogId": "0", "ownerType": "personal"},
+                    )
+        finally:
+            await discovery_client.close()
+
+        if response.status_code != 200:
+            return {"ok": False, "error": f"HTTP {response.status_code}"}
+        resp_body: dict[str, Any] = response.json() if response.content else {}
+        if resp_body.get("code", 0) != 0:
+            return {"ok": False, "error": resp_body.get("msg", "上传失败")}
+        return {"ok": True, **resp_body.get("data", {})}
+
+    return _run_async_in_thread(_run())
+
+
 def _import_object_zip(zip_path: Path, token: str) -> dict[str, Any]:
     """通过服务发现调用门户服务 importObjectZip 上传 OWL zip。"""
     service_name = os.environ.get("BE_DOMAINNAME", "").strip()
@@ -67,7 +144,7 @@ def _import_object_zip(zip_path: Path, token: str) -> dict[str, Any]:
             async with httpx.AsyncClient(base_url=base_url, timeout=60.0) as client:
                 with zip_path.open("rb") as f:
                     response = await client.post(
-                        "/tool/importObjectZip",
+                        "/byaiService/tool/importObjectZip",
                         headers={"Beyond-Token": token},
                         files={"file": (zip_path.name, f, "application/zip")},
                         data={"catalogId": "0", "ownerType": "personal"},
@@ -107,7 +184,7 @@ def _import_view_zip(zip_path: Path, token: str) -> dict[str, Any]:
             async with httpx.AsyncClient(base_url=base_url, timeout=60.0) as client:
                 with zip_path.open("rb") as f:
                     response = await client.post(
-                        "/tool/importViewZip",
+                        "/byaiService/tool/importViewZip",
                         headers={"Beyond-Token": token},
                         files={"file": (zip_path.name, f, "application/zip")},
                         data={"catalogId": "0", "ownerType": "personal"},
@@ -146,10 +223,14 @@ def _run_async_in_thread(coro: Any) -> Any:
     error: dict[str, BaseException] = {}
 
     def runner() -> None:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         try:
-            result["value"] = asyncio.run(coro)
+            result["value"] = loop.run_until_complete(coro)
         except BaseException as exc:
             error["exc"] = exc
+        finally:
+            loop.close()
 
     thread = threading.Thread(target=runner, daemon=True)
     thread.start()
@@ -381,6 +462,13 @@ class OntologyBuildSession:
         key = f"{prefix}{session_id}_{entity_code}" if session_id else f"{prefix}{entity_code}"
         state = store.load(key)
 
+        # 兜底：session_id 不一致时，尝试不带 session_id 的 key
+        if not state and session_id:
+            fallback_key = f"{prefix}{entity_code}"
+            state = store.load(fallback_key)
+            if state:
+                key = fallback_key
+
         if not state:
             return {"ok": False, "error": "暂存状态不存在，请先收集对象信息"}
 
@@ -408,16 +496,35 @@ class OntologyBuildSession:
             zip_path = output_dir / f"{actual_entity_code}.zip"
             _pack_zip(output_dir, zip_path)
 
-            if state["entity_source"] == "DYNAMIC_TABLE":
-                _create_sqlite_table(actual_entity_code, state.get("fields", []), user_code)
+            # 调试：把 zip 复制到 /tmp 方便检查
+            import shutil
+            debug_zip = Path(f"/mnt/d/tmp/debug_{actual_entity_code}.zip")
+            debug_zip.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(zip_path, debug_zip)
+            logger.info("DEBUG zip saved to %s", debug_zip)
+            _pack_zip(output_dir, zip_path)
 
-            upload_result = _import_object_zip(zip_path, token)
+            upload_result = _submit_object_async(
+                entity_code=actual_entity_code,
+                fields=state.get("fields", []) if state["entity_source"] == "DYNAMIC_TABLE" else None,
+                user_code=user_code,
+                zip_path=zip_path,
+                token=token,
+            )
             if not upload_result.get("ok", True):
                 return {"ok": False, "error": upload_result.get("error", "上传失败")}
 
         store.delete(key)
         resource_id = upload_result.get("resourceId") or upload_result.get("resource_id", "")
-        return {"ok": True, "resource_id": resource_id}
+        return {
+            "ok": True,
+            "resource_id": resource_id,
+            "entity_code": actual_entity_code,
+            "entity_name": state.get("entity_name", ""),
+            "entity_desc": state.get("entity_desc", ""),
+            "original_code": entity_code,
+            "message": f"本体对象创建成功。您输入的编码 '{entity_code}' 已自动分配为唯一编码 '{actual_entity_code}'",
+        }
 
     def submit_view(self, view_code: str, session_id: str = "") -> dict[str, Any]:
         """提交本体视图：校验 → 生成 OWL → 上传 → 术语入库。"""
@@ -427,6 +534,13 @@ class OntologyBuildSession:
         prefix = f"{user_code}:" if user_code else ""
         key = f"{prefix}{session_id}_{view_code}" if session_id else f"{prefix}{view_code}"
         state = store.load(key)
+
+        # 兜底：session_id 不一致时，尝试不带 session_id 的 key
+        if not state and session_id:
+            fallback_key = f"{prefix}{view_code}"
+            state = store.load(fallback_key)
+            if state:
+                key = fallback_key
 
         if not state:
             return {"ok": False, "error": "暂存状态不存在，请先收集视图信息"}
@@ -466,7 +580,15 @@ class OntologyBuildSession:
 
         store.delete(key)
         resource_id = upload_result.get("resourceId") or upload_result.get("resource_id", "")
-        return {"ok": True, "resource_id": resource_id}
+        return {
+            "ok": True,
+            "resource_id": resource_id,
+            "view_code": actual_view_code,
+            "view_name": state.get("view_name", ""),
+            "view_desc": state.get("view_desc", ""),
+            "original_code": view_code,
+            "message": f"本体视图创建成功。您输入的编码 '{view_code}' 已自动分配为唯一编码 '{actual_view_code}'",
+        }
 
     # ── 删除 ──────────────────────────────────────────────────────────────────
 
@@ -489,12 +611,28 @@ class OntologyBuildSession:
 
 
 def _pack_zip(source_dir: Path, zip_path: Path) -> None:
-    """将 source_dir 下所有文件打包为 zip（不含 zip 文件本身）。"""
+    """将 source_dir 下的核心 OWL 文件打包为 zip。
+
+    只打包服务端 importObjectZip/importViewZip 所需的文件，
+    去掉 object/ 或 view/ 中间层，直接以 {code}/{code}_xxx.owl 为路径。
+    """
+    _INCLUDE_SUFFIXES = {"_definition.owl", "_mapping.owl", "_dbsource.owl"}
+
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for file in source_dir.rglob("*"):
-            if file == zip_path or not file.is_file():
+        for file in source_dir.rglob("*.owl"):
+            if not file.is_file():
                 continue
-            zf.write(file, file.relative_to(source_dir))
+            name = file.name
+            if not any(name.endswith(s) for s in _INCLUDE_SUFFIXES):
+                continue
+            # 去掉 object/ 或 view/ 前缀，直接用 {code}/{filename}
+            rel = file.relative_to(source_dir)
+            parts = rel.parts
+            if len(parts) >= 3 and parts[0] in ("object", "view"):
+                arcname = "/".join(parts[1:])
+            else:
+                arcname = rel.as_posix()
+            zf.write(file, arcname)
 
 
 def _get_generate_from_definition() -> Any:

@@ -55,7 +55,14 @@ async def proxy(request: Request) -> Response:
         headers=headers,
         content=body,
     )
-    rp_resp = await _client.send(rp_req, stream=True)
+    try:
+        rp_resp = await _client.send(rp_req, stream=True)
+    except httpx.ConnectError:
+        return Response(
+            content='{"error":"DeepAgent API 尚未就绪，请稍后重试"}',
+            status_code=503,
+            media_type="application/json",
+        )
 
     return StreamingResponse(
         rp_resp.aiter_raw(),

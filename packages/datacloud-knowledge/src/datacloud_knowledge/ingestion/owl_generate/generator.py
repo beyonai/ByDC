@@ -599,6 +599,7 @@ def _generate_object(state: dict[str, Any], output_dir: Path) -> None:
         object_relations=[],
         output_dir=output_dir,
         field_roles=field_roles,
+        entity_source=state.get("entity_source", "DYNAMIC_TABLE"),
     )
 
     generate_from_tables(config, [table], {})
