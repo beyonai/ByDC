@@ -112,8 +112,5 @@ class LocalFileWorkspaceStore(WorkspaceStore):
 
 
 def get_workspace_store() -> WorkspaceStore:
-    """工厂函数：ONTOLOGY_STORE=redis（默认）或 local。"""
-    store_type = os.getenv("ONTOLOGY_STORE", "redis").lower().strip()
-    if store_type == "local":
-        return LocalFileWorkspaceStore()
+    """工厂函数：始终使用 Redis 存储。"""
     return RedisWorkspaceStore()

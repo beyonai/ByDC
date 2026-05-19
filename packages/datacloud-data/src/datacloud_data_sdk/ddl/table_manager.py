@@ -103,10 +103,14 @@ def _run_async_in_thread(coro: Any) -> Any:
     error: dict[str, BaseException] = {}
 
     def runner() -> None:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         try:
-            result["value"] = asyncio.run(coro)
+            result["value"] = loop.run_until_complete(coro)
         except BaseException as exc:  # noqa: BLE001
             error["exc"] = exc
+        finally:
+            loop.close()
 
     thread = threading.Thread(target=runner, daemon=True)
     thread.start()
