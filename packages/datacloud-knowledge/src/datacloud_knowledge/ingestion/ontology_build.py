@@ -73,32 +73,44 @@ def _submit_object_async(
                     return {"ok": False, "error": f"未找到 SQLite 服务实例: {sqlite_service}"}
                 metadata = sqlite_instance.metadata or {}
                 sqlite_token = metadata.get("token", "")
-                async with DiscoveryHttpClient(discovery_client, retry_config=retry_config, health_threshold_ms=-1) as client:
-                    col_defs = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
-                    for f in fields:
-                        col_name = f.get("property_code", "")
-                        if not col_name or col_name.lower() == "id":
-                            continue
-                        sqlite_type = {"STRING": "TEXT", "INTEGER": "INTEGER", "FLOAT": "REAL", "BOOLEAN": "INTEGER", "DATE": "TEXT"}.get(f.get("data_type", "STRING"), "TEXT")
-                        col_defs.append(f"{col_name} {sqlite_type}")
-                    ddl = f"CREATE TABLE IF NOT EXISTS {entity_code} ({', '.join(col_defs)})"
-                    resp = await client.post(
-                        sqlite_service,
-                        "/plugins/byclaw-sqlite/sqlExecute",
-                        headers={"Content-Type": "application/json", "Authorization": f"Bearer {sqlite_token}"},
+                sqlite_auth_type = metadata.get("authType", "header")
+                sqlite_auth_param = metadata.get("authParam", "token")
+                sqlite_protocol = getattr(sqlite_instance, "protocol", "http")
+                sqlite_path_prefix = getattr(sqlite_instance, "path_prefix", "") or ""
+                sqlite_url = f"{sqlite_protocol}://{sqlite_instance.host}:{sqlite_instance.port}"
+                sqlite_sql_path = f"/{sqlite_path_prefix.strip('/')}/plugins/byclaw-sqlite/sqlExecute".replace("//", "/")
+                sqlite_params = {sqlite_auth_param: sqlite_token} if sqlite_auth_type == "query" else {}
+                sqlite_headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {sqlite_token}",
+                }
+                col_defs = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
+                for f in fields:
+                    col_name = f.get("property_code", "")
+                    if not col_name or col_name.lower() == "id":
+                        continue
+                    sqlite_type = {"STRING": "TEXT", "INTEGER": "INTEGER", "FLOAT": "REAL", "BOOLEAN": "INTEGER", "DATE": "TEXT"}.get(f.get("data_type", "STRING"), "TEXT")
+                    col_defs.append(f"{col_name} {sqlite_type}")
+                ddl = f"CREATE TABLE IF NOT EXISTS {entity_code} ({', '.join(col_defs)})"
+                async with httpx.AsyncClient(base_url=sqlite_url, timeout=30.0, verify=False) as sqlite_client:
+                    resp = await sqlite_client.post(
+                        sqlite_sql_path,
+                        headers=sqlite_headers,
+                        params=sqlite_params,
                         json={"sql": ddl, "user_code": user_code},
                     )
-                    body = resp.data if isinstance(resp.data, dict) else {}
-                    if not body.get("ok"):
-                        err = body.get("error", {})
-                        return {"ok": False, "error": f"建表失败: {err.get('message', body)}"}
+                    resp_body = resp.json() if resp.content else {}
+                    if not resp_body.get("ok"):
+                        err = resp_body.get("error", {})
+                        return {"ok": False, "error": f"建表失败: {err.get('message', resp_body)}"}
 
             # 上传 OWL zip
             byai_instance = await discovery_client.discover(service_name, health_threshold_ms=-1)
             if not byai_instance:
                 return {"ok": False, "error": f"未找到服务实例: {service_name}"}
-            base_url = f"http://{byai_instance.host}:{byai_instance.port}"
-            async with httpx.AsyncClient(base_url=base_url, timeout=60.0) as http:
+            byai_protocol = getattr(byai_instance, "protocol", "http")
+            base_url = f"{byai_protocol}://{byai_instance.host}:{byai_instance.port}"
+            async with httpx.AsyncClient(base_url=base_url, timeout=60.0, verify=False) as http:
                 with zip_path.open("rb") as f:
                     response = await http.post(
                         "/byaiService/tool/importObjectZip",
@@ -137,7 +149,7 @@ def _import_object_zip(zip_path: Path, token: str) -> dict[str, Any]:
                 return {"ok": False, "error": f"未找到服务实例: {service_name}"}
 
             base_url = f"http://{instance.host}:{instance.port}"
-            async with httpx.AsyncClient(base_url=base_url, timeout=60.0) as client:
+            async with httpx.AsyncClient(base_url=base_url, timeout=60.0, verify=False) as client:
                 with zip_path.open("rb") as f:
                     response = await client.post(
                         "/byaiService/tool/importObjectZip",
@@ -176,7 +188,7 @@ def _import_view_zip(zip_path: Path, token: str) -> dict[str, Any]:
                 return {"ok": False, "error": f"未找到服务实例: {service_name}"}
 
             base_url = f"http://{instance.host}:{instance.port}"
-            async with httpx.AsyncClient(base_url=base_url, timeout=60.0) as client:
+            async with httpx.AsyncClient(base_url=base_url, timeout=60.0, verify=False) as client:
                 with zip_path.open("rb") as f:
                     response = await client.post(
                         "/byaiService/tool/importViewZip",

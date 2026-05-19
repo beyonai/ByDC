@@ -55,40 +55,44 @@ def _execute_sql(sql: str, user_code: str) -> dict[str, Any]:
     service_name = f"BYCLAW_EXE_{user_code}"
 
     async def _call() -> dict[str, Any]:
+        import httpx
         from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
-        from by_framework.util.discovery_http_client import (
-            DiscoveryHttpClient,  # type: ignore[import-untyped]
-        )
-        from by_framework.util.http_client import RetryConfig  # type: ignore[import-untyped]
 
         _init_discovery_redis()
         discovery_client = DiscoveryClient(cache_interval=5)
-        retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
         try:
-            # 先 discover 拿到实例，从 metadata.token 取认证 token
             instance = await discovery_client.discover(service_name, health_threshold_ms=-1)
             if not instance:
                 raise RuntimeError(f"未找到 SQLite 服务实例: {service_name}")
 
             metadata = instance.metadata or {}
             token = metadata.get("token", "")
+            auth_type = metadata.get("authType", "header")
+            auth_param = metadata.get("authParam", "token")
+            protocol = getattr(instance, "protocol", "http")
+            path_prefix = getattr(instance, "path_prefix", "") or ""
+            base_url = f"{protocol}://{instance.host}:{instance.port}"
+            sql_path = f"/{path_prefix.strip('/')}/plugins/byclaw-sqlite/sqlExecute".replace("//", "/")
 
-            async with DiscoveryHttpClient(
-                discovery_client, retry_config=retry_config, health_threshold_ms=-1
-            ) as client:
+            params = {auth_param: token} if auth_type == "query" else {}
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}",
+            }
+
+            async with httpx.AsyncClient(base_url=base_url, timeout=30.0, verify=False) as client:
                 response = await client.post(
-                    service_name,
-                    "/plugins/byclaw-sqlite/sqlExecute",
-                    headers={
-                        "Content-Type": "application/json",
-                        "Authorization": f"Bearer {token}",
-                    },
+                    sql_path,
+                    headers=headers,
+                    params=params,
                     json={"sql": sql, "user_code": user_code},
                 )
         finally:
             await discovery_client.close()
 
-        body: dict[str, Any] = response.data if isinstance(response.data, dict) else {}
+        if response.status_code != 200:
+            raise RuntimeError(f"SQLite API HTTP {response.status_code}")
+        body: dict[str, Any] = response.json() if response.content else {}
         if not body.get("ok"):
             err = body.get("error", {})
             raise RuntimeError(f"SQLite API error: {err.get('message', body)}")
