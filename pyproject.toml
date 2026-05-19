@@ -263,6 +263,17 @@ ignore = [
 "packages/datacloud-knowledge/src/datacloud_knowledge/knowledge_search/db/models.py" = ["RUF012"]
 "packages/datacloud-knowledge/src/datacloud_knowledge/query/sql_engine.py" = ["S324"]
 "packages/datacloud-knowledge/src/datacloud_knowledge/query/vocab_cache.py" = ["S301"]
+"examples/deepagent_bi/skills/**/*.py" = [
+    "E402",
+    "PLC0415",
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    "S603",
+    "S607",
+    "T201",
+    "TRY300",
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

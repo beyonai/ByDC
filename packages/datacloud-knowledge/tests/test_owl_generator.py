@@ -607,9 +607,7 @@ class TestBuildViewPackage:
         pkg = _build_view_package(config, view)
 
         # 视图 prop 术语：property_code != source_object_column_code
-        prop_terms = [
-            t for t in pkg.terms if t.term_type_code == "prop"
-        ]
+        prop_terms = [t for t in pkg.terms if t.term_type_code == "prop"]
         assert len(prop_terms) == 1
         assert prop_terms[0].term_code == "view_enterprise_id"
         assert prop_terms[0].term_name == "视图企业ID"
