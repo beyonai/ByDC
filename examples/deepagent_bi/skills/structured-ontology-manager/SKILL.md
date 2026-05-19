@@ -8,7 +8,15 @@ allowed-tools: execute, read_file
 
 通过自然语言对话，管理结构化本体对象和视图。支持创建、删除操作，对象数据持久化到 SQLite。
 
-## 重要：所有操作必须通过注册的 Tool 执行，禁止直接执行脚本文件
+## 执行环境
+
+- **必须用 `$PYTHON_EXEC` 执行脚本**，不能用裸 `python3`（环境依赖在 `$PYTHON_EXEC` 对应的虚拟环境中）
+- JSON 参数作为第一个命令行参数传入
+
+执行格式：
+```
+$PYTHON_EXEC /skills/structured-ontology-manager/scripts/<script>.py '<JSON>'
+```
 
 ## 能力范围
 
@@ -32,27 +40,28 @@ allowed-tools: execute, read_file
 
 用户意图 → 意图识别 → 信息收集（多轮对话）→ 用户确认 → 执行
 
-## 意图路由（调用对应 Tool，传入 JSON 字符串）
+## 意图路由
 
-| 用户表达 | 意图 | 调用 Tool | 入参示例 |
-|----------|------|-----------|----------|
-| 查看/列出 + 对象/视图 | 查询列表 | `list_ontology_resources` | `{"resource_biz_type":"OBJECT"}` |
-| 创建/新建 + 对象（收集阶段） | 收集对象信息 | `create_ontology_object` | `{"action":"collect","entity_code":"xxx","entity_name":"xxx","entity_desc":"xxx","fields":[...]}` |
-| 确认提交（对象） | 提交对象 | `create_ontology_object` | `{"action":"submit","entity_code":"xxx"}` |
-| 创建/新建 + 视图（收集阶段） | 收集视图信息 | `create_ontology_view` | `{"action":"collect","view_code":"xxx","view_name":"xxx"}` |
-| 确认提交（视图） | 提交视图 | `create_ontology_view` | `{"action":"submit","view_code":"xxx"}` |
-| 删除 + 对象 | 删除对象 | `delete_ontology_object` | `{"resource_id":"xxx","entity_code":"xxx"}` |
-| 删除 + 视图 | 删除视图 | `delete_ontology_view` | `{"resource_id":"xxx","view_code":"xxx"}` |
-| 查看术语类型 | 查枚举 | `list_ontology_resources` | `{"resource_biz_type":"TERM_TYPE"}` |
-| 查看术语值 | 查枚举值 | `get_ontology_detail` | `{"resource_id":"xxx"}` |
+| 用户表达 | 意图 | 脚本 | 入参示例 |
+|----------|------|------|----------|
+| 查看/列出 + 对象/视图 | 查询列表 | `list_resources.py` | `{}` 或 `{"resource_biz_type":"VIEW"}` |
+| 创建/新建 + 对象（收集阶段） | 收集对象信息 | `create_object.py` | `{"action":"collect","entity_code":"xxx","entity_name":"xxx","entity_desc":"xxx","fields":[...]}` |
+| 确认提交（对象） | 提交对象 | `create_object.py` | `{"action":"submit","entity_code":"xxx"}` |
+| 创建/新建 + 视图（收集阶段） | 收集视图信息 | `create_view.py` | `{"action":"collect","view_code":"xxx","view_name":"xxx"}` |
+| 确认提交（视图） | 提交视图 | `create_view.py` | `{"action":"submit","view_code":"xxx"}` |
+| 删除 + 对象 | 删除对象 | `delete_object.py` | `{"entity_code":"xxx"}` |
+| 删除 + 视图 | 删除视图 | `delete_view.py` | `{"view_code":"xxx"}` |
+| 查看术语类型 | 查枚举 | `list_term_types.py` | `{}` |
+| 查看术语值 | 查枚举值 | `get_term_type_values.py` | `{"term_type_code":"xxx"}` |
 
 ## 认证与环境变量
 
 | 变量 | 用途 |
 |------|------|
+| `PYTHON_EXEC` | Python 解释器路径 |
+| `DEEPAGENT_BI_DIR` | 项目根目录 |
 | `BE_DOMAINNAME` | 服务发现，门户服务名称 |
 | `BEYOND_TOKEN` | 门户服务 API 认证 |
-| `ONTOLOGY_STORE` | 暂存后端：`redis`（默认）或 `local` |
 | `REDIS_HOST` | Redis 主机 |
 | `REDIS_PORT` | Redis 端口 |
 | `REDIS_PASSWORD` | Redis 密码 |

@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 
 def main() -> None:
-    raw = sys.stdin.read().strip()
+    raw = sys.argv[1] if len(sys.argv) > 1 else sys.stdin.read().strip()
     params: dict = json.loads(raw) if raw else {}
     keyword: str = params.get("keyword", "")
 

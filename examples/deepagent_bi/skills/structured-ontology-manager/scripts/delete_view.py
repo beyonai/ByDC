@@ -30,7 +30,7 @@ from _common import delete_resource_by_code
 
 
 def main() -> None:
-    raw = sys.stdin.read().strip()
+    raw = sys.argv[1] if len(sys.argv) > 1 else sys.stdin.read().strip()
     if not raw:
         print(json.dumps({"ok": False, "error": "缺少入参"}), flush=True)
         sys.exit(1)

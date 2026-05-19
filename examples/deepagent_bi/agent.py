@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 from deepagents import create_deep_agent
-from deepagents.backends import FilesystemBackend
+from deepagents.backends.local_shell import LocalShellBackend
 from langchain_anthropic import ChatAnthropic
 
 from tools.datacloud_tool import build_datacloud_tool
@@ -34,7 +34,7 @@ def create_bi_agent():  # type: ignore[return]
         skills=["/skills"],
         tools=tools,
         subagents=[],
-        backend=FilesystemBackend(root_dir=base_dir, virtual_mode=True),
+        backend=LocalShellBackend(root_dir=base_dir, virtual_mode=True, inherit_env=True),
     )
 
 

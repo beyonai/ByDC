@@ -40,7 +40,7 @@ from _common import post_json
 
 
 def main() -> None:
-    raw = sys.stdin.read().strip()
+    raw = sys.argv[1] if len(sys.argv) > 1 else sys.stdin.read().strip()
     if not raw:
         print(json.dumps({"ok": False, "error": "缺少入参，需要 resource_code"}), flush=True)
         sys.exit(1)

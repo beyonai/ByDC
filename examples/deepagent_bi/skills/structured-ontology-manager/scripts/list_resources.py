@@ -35,7 +35,7 @@ from _common import post_json
 
 
 def main() -> None:
-    raw = sys.stdin.read().strip()
+    raw = sys.argv[1] if len(sys.argv) > 1 else sys.stdin.read().strip()
     params: dict = json.loads(raw) if raw else {}
     resource_biz_type: str = params.get("resource_biz_type", "OBJECT").upper().strip()
     keyword: str = params.get("keyword", "")
