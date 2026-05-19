@@ -264,7 +264,7 @@ def render_object(config: OwlGenConfig, table: Table) -> str:
         <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.name)}</entity_name>
         <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.desc or "")}</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DB</entity_source>
+        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(config.entity_source)}</entity_source>
 {fields_block}
         <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(action_refs)}</action_refs>
         <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(relation_refs)}</relations>

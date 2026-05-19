@@ -192,6 +192,9 @@ class OwlGenConfig:
     # key = (table_code, column_name)
     object_prop_configs: dict[tuple[str, str], ObjectPropConfig] = field(default_factory=dict)
 
+    # ── 实体来源（DYNAMIC_TABLE / KNOWLEDGE_BASE）──
+    entity_source: str = "DYNAMIC_TABLE"
+
     # ── 术语类型业务配置（推荐）──
     # key = term_type_code
     term_type_configs: dict[str, TermTypeConfig] = field(default_factory=dict)
