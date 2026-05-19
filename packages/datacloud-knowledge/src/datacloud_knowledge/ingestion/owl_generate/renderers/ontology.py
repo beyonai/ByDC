@@ -308,43 +308,71 @@ def render_object(config: OwlGenConfig, table: Table) -> str:
 
 
 def render_mapping(config: OwlGenConfig, table: Table) -> str:
-    """对象映射 OWL（EntityMapping + Mapping）— GraphBuilder API。
-
-    业务逻辑：为每个数据库表生成 EntityMapping（表级映射容器）
-    + 每个字段的 Mapping（字段→表列映射）。
-    产物写入 {object_code}_mapping.owl 文件。
-    """
+    """对象映射 OWL（EntityMapping + Mapping）— 直接生成标准格式 XML。"""
     resolved_props = {
         col.name: config.resolve_object_prop(table.code, col.name, col.comment or col.name)
         for col in table.columns
     }
 
-    # 构建映射引用 ID 列表
-    mapping_ref_ids = [f"{resolved_props[col.name].property_code}_mapping" for col in table.columns]
-
-    builder = GraphBuilder()
-    builder.add_entity_mapping(
-        object_code=table.code,
-        object_name=table.name,
-        object_desc=table.desc,
-        mapping_refs=mapping_ref_ids,
+    # mapping 引用行
+    mapping_refs_xml = "\n".join(
+        f'        <mapping rdf:resource="#{resolved_props[col.name].property_code}_mapping"/>'
+        for col in table.columns
     )
 
+    # 每个字段的 Mapping 节点
+    field_mappings_xml_parts: list[str] = []
     for col in table.columns:
         resolved_prop = resolved_props[col.name]
         ext_prop = _field_role_json(config, table.code, col.name, col.is_primary_key)
-        builder.add_field_mapping(
-            {
-                "propertyCode": resolved_prop.property_code,
-                "propertyName": resolved_prop.property_name,
-                "sourceTableCode": table.code,
-                "sourceColumnCode": col.name,
-                "sourceDatasourceCode": config.db_code,
-                "extProperty": ext_prop,
-            }
-        )
+        mid = f"{resolved_prop.property_code}_mapping"
+        field_mappings_xml_parts.append(f"""    <owl:NamedIndividual rdf:about="#{mid}">
+        <rdf:type rdf:resource="#Mapping"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(resolved_prop.property_code)}</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(resolved_prop.property_name)}</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.code)}</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(col.name)}</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(config.db_code)}</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(ext_prop)}</ext_property>
+    </owl:NamedIndividual>""")
 
-    return _serialize_xml(builder)
+    field_mappings_xml = "\n\n".join(field_mappings_xml_parts)
+
+    return f"""<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/entity/mapping#">
+
+    <owl:Class rdf:about="#EntityMapping"><rdfs:label>实体映射</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#Mapping"><rdfs:label>映射关系</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#{table.code}_mapping">
+        <rdf:type rdf:resource="#EntityMapping"/>
+        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.code)}</entity_code>
+        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.name)}</entity_name>
+        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.desc or "")}</entity_desc>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+{mapping_refs_xml}
+    </owl:NamedIndividual>
+
+{field_mappings_xml}
+
+    <owl:DatatypeProperty rdf:about="#entity_code"/>
+    <owl:DatatypeProperty rdf:about="#entity_name"/>
+    <owl:DatatypeProperty rdf:about="#entity_desc"/>
+    <owl:DatatypeProperty rdf:about="#version"/>
+    <owl:DatatypeProperty rdf:about="#mapping"/>
+    <owl:DatatypeProperty rdf:about="#property_code"/>
+    <owl:DatatypeProperty rdf:about="#property_name"/>
+    <owl:DatatypeProperty rdf:about="#source_table_code"/>
+    <owl:DatatypeProperty rdf:about="#source_column_code"/>
+    <owl:DatatypeProperty rdf:about="#source_datasource_code"/>
+    <owl:DatatypeProperty rdf:about="#ext_property"/>
+</rdf:RDF>
+"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

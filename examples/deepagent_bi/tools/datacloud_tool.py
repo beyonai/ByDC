@@ -16,6 +16,9 @@ def _get_loader(resource_dir: Path) -> Any:
     """懒加载 OntologyLoader 单例，首次调用时初始化。"""
     global _loader  # noqa: PLW0603
     if _loader is None:
+        import os  # noqa: PLC0415
+
+        from datacloud_analysis.tools.ontology_tool_loader import configure_loader  # noqa: PLC0415
         from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
         from datacloud_data_service.tools.virtual_action_injector import (  # noqa: PLC0415
             inject_virtual_actions,
@@ -24,6 +27,16 @@ def _get_loader(resource_dir: Path) -> Any:
         loader = OntologyLoader()
         loader.load_from_owl_resource_directory(str(resource_dir))
         inject_virtual_actions(loader)
+
+        configure_loader(
+            loader=loader,
+            model=os.environ.get("DATACLOUD_LLM_MODEL") or os.environ.get("LLM_MODEL", ""),
+            base_url=os.environ.get("DATACLOUD_LLM_URL") or os.environ.get("LLM_URL") or None,
+            api_key=os.environ.get("DATACLOUD_LLM_API_KEY") or os.environ.get("ANTHROPIC_API_KEY", ""),
+            temperature=float(os.environ.get("DEMO_TEMPERATURE", "0")),
+            sql_execution_mode="http_sql",
+            sql_execute_url=os.environ.get("DEMO_SQL_EXECUTE_URL") or None,
+        )
         _loader = loader
     return _loader
 
@@ -52,11 +65,20 @@ def build_datacloud_tool(resource_dir: Path):  # type: ignore[return]
             question: 自然语言查询问题，如"查询前10条客户数据"
         """
         try:
-            if resource_type == "view":
-                entity = loader.get_view(resource_code)
-            else:
-                entity = loader.get_object(resource_code)
-            result = await entity.query(question=question)
+            from datacloud_data_sdk.context import InvocationContext  # noqa: PLC0415
+
+            user_code = os.environ.get("USER_CODE", "")
+            token = os.environ.get("BEYOND_TOKEN", "")
+            with InvocationContext(
+                user_id=user_code,
+                token=token,
+                extras={"user_code": user_code},
+            ):
+                if resource_type == "view":
+                    entity = loader.get_view(resource_code)
+                else:
+                    entity = loader.get_object(resource_code)
+                result = await entity.query(question=question)
             return str(result)
         except Exception as exc:  # noqa: BLE001
             logger.error("datacloud_query 失败 (%s/%s): %s", resource_type, resource_code, exc)

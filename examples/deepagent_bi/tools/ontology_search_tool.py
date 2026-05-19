@@ -39,10 +39,6 @@ def build_ontology_search_tool(owl_docs_dir: Path):  # type: ignore[return]
 
         scores = bm25.get_scores(_tokenize(query))
         top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
-        # BM25Okapi 在小语料库下得分可能全为负数，取相对最高分即可
-        # 只有全部文档得分相同（无区分度）时才返回"未找到"
-        if len(set(round(float(s), 6) for s in scores)) == 1:
-            return "未找到相关本体，请换个关键词重试。"
         results = [docs[i] for i in top_indices]
 
         if not results:
