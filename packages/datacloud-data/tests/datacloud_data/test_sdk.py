@@ -17,11 +17,7 @@ logging.basicConfig(
     force=True,
 )
 
-load_dotenv(
-    Path(
-        "xx"
-    )
-)
+load_dotenv(Path("xx"))
 
 
 async def main1() -> None:
@@ -238,9 +234,7 @@ async def main7() -> None:
 
 async def main8() -> None:
     loader = OntologyLoader()
-    loader.load_from_owl_directory(
-        "xxx"
-    )
+    loader.load_from_owl_directory("xxx")
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
             model="MiniMax-M2.7-highspeed",
@@ -288,9 +282,7 @@ async def main9() -> None:
         csv_base_dir=str(Path("./tmp").resolve()),
         sql_execution_mode="internal",
         kb_backends={
-            "http_knowledge_import": HttpKnowledgeSearchBackend(
-                kb_configs={"endpoint_url": "xxx"}
-            ),
+            "http_knowledge_import": HttpKnowledgeSearchBackend(kb_configs={"endpoint_url": "xxx"}),
         },
         default_kb_backend="http_knowledge_import",
     )
@@ -488,7 +480,6 @@ async def main10() -> None:
         "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai_v2/ByClaw/byclaw-data/byclaw/resource",
         object_codes=["by_customer"],
     )
-    from datacloud_data_sdk.executor.kb_search_backend import HttpKnowledgeSearchBackend
 
     # ByclawSqlExecuteConnector.configure_default_redis(
     #     RedisDiscoveryConfig(host="10.10.168.203", password="admin123", username="default")

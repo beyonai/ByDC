@@ -12,6 +12,7 @@ OWL 本体解析器模块
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import re
@@ -73,7 +74,7 @@ def _parse_json_object(value: str | None) -> dict[str, Any]:
 
     if value is None:
         return {}
-    raw = value.strip()
+    raw = html.unescape(value.strip())
     if not raw:
         return {}
     try:
@@ -85,6 +86,14 @@ def _parse_json_object(value: str | None) -> dict[str, Any]:
         logger.warning("ext_property is not a JSON object, ignored: %s", raw)
         return {}
     return parsed
+
+
+def _is_primary_key_ext_property(value: str | None) -> bool:
+    data = _parse_json_object(value)
+    rule = data.get("property_role_rule")
+    if not isinstance(rule, dict):
+        return False
+    return str(rule.get("rule_type") or "").lower() == "primary_key"
 
 
 @dataclass
@@ -411,6 +420,7 @@ class OwlParser:
             field_type=data_type,
             data_format=data_format if data_format else None,
             source_column=source_column,
+            is_primary_key=_is_primary_key_ext_property(ext_property),
             required=is_required.lower() == "true" if is_required else False,
             term_type_code_path=term_type_code_path if term_type_code_path else None,
             library_code=library_code if library_code else None,

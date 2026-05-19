@@ -61,9 +61,9 @@ def _submit_object_async(
         raise ValueError("BE_DOMAINNAME 环境变量未配置")
 
     async def _run() -> dict[str, Any]:
-        from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
-        from by_framework.util.discovery_http_client import DiscoveryHttpClient  # type: ignore[import-untyped]
-        from by_framework.util.http_client import RetryConfig  # type: ignore[import-untyped]
+        from by_framework.core.discovery import DiscoveryClient
+        from by_framework.util.discovery_http_client import DiscoveryHttpClient
+        from by_framework.util.http_client import RetryConfig
 
         _init_discovery_redis()
         discovery_client = DiscoveryClient(cache_interval=5)
@@ -72,24 +72,37 @@ def _submit_object_async(
             # 建表（DYNAMIC_TABLE 模式）
             if fields is not None:
                 sqlite_service = f"BYCLAW_EXE_{user_code}"
-                sqlite_instance = await discovery_client.discover(sqlite_service, health_threshold_ms=-1)
+                sqlite_instance = await discovery_client.discover(
+                    sqlite_service, health_threshold_ms=-1
+                )
                 if not sqlite_instance:
                     return {"ok": False, "error": f"未找到 SQLite 服务实例: {sqlite_service}"}
                 metadata = sqlite_instance.metadata or {}
                 sqlite_token = metadata.get("token", "")
-                async with DiscoveryHttpClient(discovery_client, retry_config=retry_config, health_threshold_ms=-1) as client:
+                async with DiscoveryHttpClient(
+                    discovery_client, retry_config=retry_config, health_threshold_ms=-1
+                ) as client:
                     col_defs = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
-                    for f in fields:
-                        col_name = f.get("property_code", "")
+                    for field_def in fields:
+                        col_name = field_def.get("property_code", "")
                         if not col_name or col_name.lower() == "id":
                             continue
-                        sqlite_type = {"STRING": "TEXT", "INTEGER": "INTEGER", "FLOAT": "REAL", "BOOLEAN": "INTEGER", "DATE": "TEXT"}.get(f.get("data_type", "STRING"), "TEXT")
+                        sqlite_type = {
+                            "STRING": "TEXT",
+                            "INTEGER": "INTEGER",
+                            "FLOAT": "REAL",
+                            "BOOLEAN": "INTEGER",
+                            "DATE": "TEXT",
+                        }.get(field_def.get("data_type", "STRING"), "TEXT")
                         col_defs.append(f"{col_name} {sqlite_type}")
                     ddl = f"CREATE TABLE IF NOT EXISTS {entity_code} ({', '.join(col_defs)})"
                     resp = await client.post(
                         sqlite_service,
                         "/plugins/byclaw-sqlite/sqlExecute",
-                        headers={"Content-Type": "application/json", "Authorization": f"Bearer {sqlite_token}"},
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {sqlite_token}",
+                        },
                         json={"sql": ddl, "user_code": user_code},
                     )
                     body = resp.data if isinstance(resp.data, dict) else {}
@@ -103,11 +116,11 @@ def _submit_object_async(
                 return {"ok": False, "error": f"未找到服务实例: {service_name}"}
             base_url = f"http://{byai_instance.host}:{byai_instance.port}"
             async with httpx.AsyncClient(base_url=base_url, timeout=60.0) as http:
-                with zip_path.open("rb") as f:
-                    response = await http.post(
+                with zip_path.open("rb") as zip_file:
+                    response: httpx.Response = await http.post(
                         "/byaiService/tool/importObjectZip",
                         headers={"Beyond-Token": token},
-                        files={"file": (zip_path.name, f, "application/zip")},
+                        files={"file": (zip_path.name, zip_file, "application/zip")},
                         data={"catalogId": "0", "ownerType": "personal"},
                     )
         finally:
@@ -120,7 +133,7 @@ def _submit_object_async(
             return {"ok": False, "error": resp_body.get("msg", "上传失败")}
         return {"ok": True, **resp_body.get("data", {})}
 
-    return _run_async_in_thread(_run())
+    return cast(dict[str, Any], _run_async_in_thread(_run()))
 
 
 def _import_object_zip(zip_path: Path, token: str) -> dict[str, Any]:
@@ -498,6 +511,7 @@ class OntologyBuildSession:
 
             # 调试：把 zip 复制到 /tmp 方便检查
             import shutil
+
             debug_zip = Path(f"/mnt/d/tmp/debug_{actual_entity_code}.zip")
             debug_zip.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(zip_path, debug_zip)
@@ -506,7 +520,9 @@ class OntologyBuildSession:
 
             upload_result = _submit_object_async(
                 entity_code=actual_entity_code,
-                fields=state.get("fields", []) if state["entity_source"] == "DYNAMIC_TABLE" else None,
+                fields=state.get("fields", [])
+                if state["entity_source"] == "DYNAMIC_TABLE"
+                else None,
                 user_code=user_code,
                 zip_path=zip_path,
                 token=token,
@@ -616,14 +632,14 @@ def _pack_zip(source_dir: Path, zip_path: Path) -> None:
     只打包服务端 importObjectZip/importViewZip 所需的文件，
     去掉 object/ 或 view/ 中间层，直接以 {code}/{code}_xxx.owl 为路径。
     """
-    _INCLUDE_SUFFIXES = {"_definition.owl", "_mapping.owl", "_dbsource.owl"}
+    include_suffixes = {"_definition.owl", "_mapping.owl", "_dbsource.owl"}
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for file in source_dir.rglob("*.owl"):
             if not file.is_file():
                 continue
             name = file.name
-            if not any(name.endswith(s) for s in _INCLUDE_SUFFIXES):
+            if not any(name.endswith(s) for s in include_suffixes):
                 continue
             # 去掉 object/ 或 view/ 前缀，直接用 {code}/{filename}
             rel = file.relative_to(source_dir)
