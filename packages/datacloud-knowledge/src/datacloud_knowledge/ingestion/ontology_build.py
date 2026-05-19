@@ -304,7 +304,11 @@ class OntologyBuildSession:
         # 首次收集时，自动生成带工号+随机后缀的唯一编码
         if not state.get("entity_code"):
             short_id = uuid.uuid4().hex[:6]
-            unique_code = f"p_{entity_code}_{user_code}_{short_id}" if user_code else f"p_{entity_code}_{short_id}"
+            unique_code = (
+                f"p_{entity_code}_{user_code}_{short_id}"
+                if user_code
+                else f"p_{entity_code}_{short_id}"
+            )
             state["entity_code"] = unique_code
         if entity_name:
             state["entity_name"] = entity_name
@@ -359,7 +363,11 @@ class OntologyBuildSession:
         # 首次收集时，自动生成带工号+随机后缀的唯一编码
         if not state.get("view_code"):
             short_id = uuid.uuid4().hex[:6]
-            unique_code = f"pv_{view_code}_{user_code}_{short_id}" if user_code else f"pv_{view_code}_{short_id}"
+            unique_code = (
+                f"pv_{view_code}_{user_code}_{short_id}"
+                if user_code
+                else f"pv_{view_code}_{short_id}"
+            )
             state["view_code"] = unique_code
         if view_name:
             state["view_name"] = view_name

@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from datacloud_data_sdk.ddl.table_manager import create_table, drop_table
 
 

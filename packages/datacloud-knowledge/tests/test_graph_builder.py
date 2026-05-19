@@ -40,9 +40,7 @@ class TestAddTerms:
         g = gb.export_terms_graph()
 
         # 验证 TermDefinition 类型
-        types = {
-            str(o) for _s, _p, o in g.triples((None, RDF.type, None))
-        }
+        types = {str(o) for _s, _p, o in g.triples((None, RDF.type, None))}
         assert any("TermDefinition" in t for t in types)
 
         # 验证 term_code_path = L1#object#by_customer
@@ -89,9 +87,7 @@ class TestAddTerms:
         g = gb.export_terms_graph()
 
         syn_values = {
-            str(o)
-            for _s, _p, o in g.triples((None, None, None))
-            if str(_p).endswith("synonyms")
+            str(o) for _s, _p, o in g.triples((None, None, None)) if str(_p).endswith("synonyms")
         }
         assert any("顾客" in s for s in syn_values)
         assert any("Client" in s for s in syn_values)
@@ -110,8 +106,7 @@ class TestAddTerms:
         g = gb.export_terms_graph()
 
         has_parent = any(
-            str(_p).endswith("parent_term_code")
-            for _s, _p, o in g.triples((None, None, None))
+            str(_p).endswith("parent_term_code") for _s, _p, o in g.triples((None, None, None))
         )
         assert not has_parent
 
@@ -120,12 +115,18 @@ class TestAddTerms:
         gb = GraphBuilder()
         terms = [
             TermDef(
-                term_code="obj_a", term_name="对象A", term_type_code="object",
-                library_code="L1", domain_code="D1",
+                term_code="obj_a",
+                term_name="对象A",
+                term_type_code="object",
+                library_code="L1",
+                domain_code="D1",
             ),
             TermDef(
-                term_code="prop_x", term_name="属性X", term_type_code="prop",
-                library_code="L1", domain_code="D1",
+                term_code="prop_x",
+                term_name="属性X",
+                term_type_code="prop",
+                library_code="L1",
+                domain_code="D1",
             ),
         ]
         gb.add_terms(terms)
@@ -142,12 +143,17 @@ class TestAddTerms:
     def test_export_terms_graph_returns_rdflib_graph(self) -> None:
         """export_terms_graph() 返回可序列化的 rdflib.Graph。"""
         gb = GraphBuilder()
-        gb.add_terms([
-            TermDef(
-                term_code="test", term_name="测试", term_type_code="object",
-                library_code="L1", domain_code="D1",
-            )
-        ])
+        gb.add_terms(
+            [
+                TermDef(
+                    term_code="test",
+                    term_name="测试",
+                    term_type_code="object",
+                    library_code="L1",
+                    domain_code="D1",
+                )
+            ]
+        )
         g = gb.export_terms_graph()
         xml = g.serialize(format="xml")
         assert isinstance(xml, str)
@@ -205,8 +211,10 @@ class TestAddTermTypes:
         gb = GraphBuilder()
         term_types = [
             TermTypeDef(
-                type_code=f"type_{name}", type_name=name,
-                type_category=cat, type_desc="",
+                type_code=f"type_{name}",
+                type_name=name,
+                type_category=cat,
+                type_desc="",
             )
             for name, cat in categories.items()
         ]
@@ -303,9 +311,7 @@ class TestAddRelations:
         g = gb.export_relations_graph()
 
         joinkeys_values = {
-            str(o)
-            for _s, _p, o in g.triples((None, None, None))
-            if str(_p).endswith("joinkeys")
+            str(o) for _s, _p, o in g.triples((None, None, None)) if str(_p).endswith("joinkeys")
         }
         assert any("b_id" in j for j in joinkeys_values)
         assert any("targetField" in j for j in joinkeys_values)
@@ -341,9 +347,7 @@ class TestAddRelations:
         g = gb.export_relations_graph()
 
         ext_values = {
-            str(o)
-            for _s, _p, o in g.triples((None, None, None))
-            if str(_p).endswith("extField")
+            str(o) for _s, _p, o in g.triples((None, None, None)) if str(_p).endswith("extField")
         }
         assert any("field_alias" in e for e in ext_values)
         assert any("客户名称" in e for e in ext_values)
@@ -351,21 +355,32 @@ class TestAddRelations:
     def test_export_relations_graph_filter_by_category(self) -> None:
         """export_relations_graph(rel_cat) 仅返回指定类别的三元组。"""
         gb = GraphBuilder()
-        gb.add_relations([
-            RelationDef(
-                source_term_code="L1#object#a", target_term_code="L1#object#b",
-                relation_name="ab", relation_category="MANY_TO_ONE", cardinality="",
-            ),
-            RelationDef(
-                source_term_code="L1#object#c", target_term_code="L1#prop#d",
-                relation_name="cd", relation_category="HAS_FIELD", cardinality="",
-                ext_field={"field_alias": "x"},
-            ),
-            RelationDef(
-                source_term_code="L1#opp_status#opp_status", target_term_code="L1#opp_status#X",
-                relation_name="HasX", relation_category="HAS_TERM", cardinality="",
-            ),
-        ])
+        gb.add_relations(
+            [
+                RelationDef(
+                    source_term_code="L1#object#a",
+                    target_term_code="L1#object#b",
+                    relation_name="ab",
+                    relation_category="MANY_TO_ONE",
+                    cardinality="",
+                ),
+                RelationDef(
+                    source_term_code="L1#object#c",
+                    target_term_code="L1#prop#d",
+                    relation_name="cd",
+                    relation_category="HAS_FIELD",
+                    cardinality="",
+                    ext_field={"field_alias": "x"},
+                ),
+                RelationDef(
+                    source_term_code="L1#opp_status#opp_status",
+                    target_term_code="L1#opp_status#X",
+                    relation_name="HasX",
+                    relation_category="HAS_TERM",
+                    cardinality="",
+                ),
+            ]
+        )
 
         # 按 MANY_TO_ONE 过滤
         g_mto = gb.export_relations_graph("MANY_TO_ONE")
@@ -408,12 +423,18 @@ class TestAddPackage:
         pkg = KnowledgePackage(
             terms=(
                 TermDef(
-                    term_code="by_customer", term_name="客户",
-                    term_type_code="object", library_code="L1", domain_code="D1",
+                    term_code="by_customer",
+                    term_name="客户",
+                    term_type_code="object",
+                    library_code="L1",
+                    domain_code="D1",
                 ),
                 TermDef(
-                    term_code="customer_name", term_name="客户名称",
-                    term_type_code="prop", library_code="L1", domain_code="D1",
+                    term_code="customer_name",
+                    term_name="客户名称",
+                    term_type_code="prop",
+                    library_code="L1",
+                    domain_code="D1",
                 ),
             ),
             relations=(
@@ -428,20 +449,20 @@ class TestAddPackage:
             ),
             term_types=(
                 TermTypeDef(
-                    type_code="object", type_name="对象",
-                    type_category=3, type_desc="对象本体术语",
+                    type_code="object",
+                    type_name="对象",
+                    type_category=3,
+                    type_desc="对象本体术语",
                 ),
                 TermTypeDef(
-                    type_code="prop", type_name="属性",
-                    type_category=3, type_desc="属性术语",
+                    type_code="prop",
+                    type_name="属性",
+                    type_category=3,
+                    type_desc="属性术语",
                 ),
             ),
-            domains=(
-                DomainDef(domain_code="D1", domain_name="测试域"),
-            ),
-            libraries=(
-                LibraryDef(library_code="L1", library_name="测试术语库"),
-            ),
+            domains=(DomainDef(domain_code="D1", domain_name="测试域"),),
+            libraries=(LibraryDef(library_code="L1", library_name="测试术语库"),),
         )
 
         gb = GraphBuilder()
@@ -484,17 +505,13 @@ class TestAddPackage:
 
         # Domain 在图中
         domain_names = {
-            str(o)
-            for _s, _p, o in g.triples((None, None, None))
-            if str(_p).endswith("domainName")
+            str(o) for _s, _p, o in g.triples((None, None, None)) if str(_p).endswith("domainName")
         }
         assert "测试域" in domain_names
 
         # Library 在图中
         lib_names = {
-            str(o)
-            for _s, _p, o in g.triples((None, None, None))
-            if str(_p).endswith("libraryName")
+            str(o) for _s, _p, o in g.triples((None, None, None)) if str(_p).endswith("libraryName")
         }
         assert "测试术语库" in lib_names
 
@@ -518,21 +535,24 @@ class TestAddPackage:
         g = gb._graph
 
         action_names = {
-            str(o)
-            for _s, _p, o in g.triples((None, None, None))
-            if str(_p).endswith("actionName")
+            str(o) for _s, _p, o in g.triples((None, None, None)) if str(_p).endswith("actionName")
         }
         assert "获取客户" in action_names
 
     def test_graph_xml_contains_namespace(self) -> None:
         """序列化 XML 包含 RDF 命名空间。"""
         gb = GraphBuilder()
-        gb.add_terms([
-            TermDef(
-                term_code="test", term_name="测试", term_type_code="object",
-                library_code="L1", domain_code="D1",
-            )
-        ])
+        gb.add_terms(
+            [
+                TermDef(
+                    term_code="test",
+                    term_name="测试",
+                    term_type_code="object",
+                    library_code="L1",
+                    domain_code="D1",
+                )
+            ]
+        )
         g = gb.export_terms_graph()
         xml = g.serialize(format="xml")
         assert "http://beyond.ai/ontology" in xml
@@ -550,17 +570,20 @@ class TestEdgeCases:
     def test_empty_synonyms_not_serialized(self) -> None:
         """空 synonyms 不产生三元组。"""
         gb = GraphBuilder()
-        gb.add_terms([
-            TermDef(
-                term_code="test", term_name="测试", term_type_code="object",
-                library_code="L1", domain_code="D1", synonyms=(),
-            )
-        ])
-        g = gb.export_terms_graph()
-        has_syn = any(
-            str(_p).endswith("synonyms")
-            for _s, _p, o in g.triples((None, None, None))
+        gb.add_terms(
+            [
+                TermDef(
+                    term_code="test",
+                    term_name="测试",
+                    term_type_code="object",
+                    library_code="L1",
+                    domain_code="D1",
+                    synonyms=(),
+                )
+            ]
         )
+        g = gb.export_terms_graph()
+        has_syn = any(str(_p).endswith("synonyms") for _s, _p, o in g.triples((None, None, None)))
         assert not has_syn
 
     def test_empty_ext_field_not_serialized(self) -> None:
@@ -576,10 +599,7 @@ class TestEdgeCases:
         )
         gb.add_relations([rel])
         g = gb.export_relations_graph()
-        has_ext = any(
-            str(_p).endswith("extField")
-            for _s, _p, o in g.triples((None, None, None))
-        )
+        has_ext = any(str(_p).endswith("extField") for _s, _p, o in g.triples((None, None, None)))
         assert not has_ext
 
     def test_relation_type_is_term_relation(self) -> None:
@@ -594,26 +614,25 @@ class TestEdgeCases:
         )
         gb.add_relations([rel])
         g = gb.export_relations_graph()
-        types = {
-            str(o)
-            for _s, _p, o in g.triples((None, RDF.type, None))
-        }
+        types = {str(o) for _s, _p, o in g.triples((None, RDF.type, None))}
         assert any("TermRelation" in t for t in types)
 
     def test_term_definition_type_is_term_definition(self) -> None:
         """术语实体的 RDF type 为 TermDefinition。"""
         gb = GraphBuilder()
-        gb.add_terms([
-            TermDef(
-                term_code="test", term_name="测试", term_type_code="object",
-                library_code="L1", domain_code="D1",
-            )
-        ])
+        gb.add_terms(
+            [
+                TermDef(
+                    term_code="test",
+                    term_name="测试",
+                    term_type_code="object",
+                    library_code="L1",
+                    domain_code="D1",
+                )
+            ]
+        )
         g = gb.export_terms_graph()
-        types = {
-            str(o)
-            for _s, _p, o in g.triples((None, RDF.type, None))
-        }
+        types = {str(o) for _s, _p, o in g.triples((None, RDF.type, None))}
         assert any("TermDefinition" in t for t in types)
 
     def test_special_characters_in_code(self) -> None:
