@@ -417,27 +417,20 @@ class HttpKnowledgeSearchBackend:
                 import_path = self._build_import_path(config)
                 file_bytes = file_content.encode("utf-8")
                 log_curl("UPLOAD", import_path, body={**data, "fileContent": f"@{filename}"})
-                parts: list[tuple[str, Any]] = [
-                    ("knCode", data["knCode"]),
-                    ("filePath", data["filePath"]),
-                ]
-                if request.file_description:
-                    parts.append(("fileDescription", request.file_description))
-                parts.append(
-                    (
-                        "fileContent",
-                        (
+                instance_url = self._build_instance_url(instance, import_path)
+                multipart_data = dict(data)
+                resp = await client.http_client._client.request(  # noqa: SLF001
+                    method="POST",
+                    url=instance_url,
+                    headers=upload_headers,
+                    data=multipart_data,
+                    files={
+                        "fileContent": (
                             filename,
                             file_bytes,
                             "text/markdown; charset=utf-8",
-                        ),
-                    )
-                )
-                instance_url = client._build_absolute_url(instance, import_path)
-                resp = await client.http_client._upload(  # noqa: SLF001
-                    instance_url,
-                    parts,
-                    headers=upload_headers,
+                        )
+                    },
                 )
 
                 body = self._parse_discovery_response_body(resp, request.datasource_alias)
@@ -588,6 +581,19 @@ class HttpKnowledgeSearchBackend:
             if isinstance(token, str) and token:
                 headers["Authorization"] = f"Bearer {token}"
         return headers
+
+    @staticmethod
+    def _build_instance_url(instance: Any, path: str) -> str:
+        protocol = str(getattr(instance, "protocol", "") or "http")
+        host = str(getattr(instance, "host", "") or "")
+        port = getattr(instance, "port", None)
+        path_prefix = str(getattr(instance, "path_prefix", "") or "").strip("/")
+
+        suffix_parts = [segment for segment in (path_prefix, path.strip("/")) if segment]
+        suffix = "/".join(suffix_parts)
+        if suffix:
+            return f"{protocol}://{host}:{port}/{suffix}"
+        return f"{protocol}://{host}:{port}"
 
     async def _post_json(
         self,
