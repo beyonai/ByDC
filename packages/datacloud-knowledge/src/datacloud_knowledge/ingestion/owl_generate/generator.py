@@ -551,9 +551,11 @@ def _generate_object(state: dict[str, Any], output_dir: Path) -> None:
             "property_code": "id",
             "property_name": "主键",
             "data_type": "INTEGER",
-            "ext_property": {"property_role_rule": {"property_role": "MEASURE", "rule_type": "primary_key"}},
+            "ext_property": {
+                "property_role_rule": {"property_role": "MEASURE", "rule_type": "primary_key"}
+            },
         }
-        fields = [id_field] + fields
+        fields = [id_field, *fields]
 
     columns: list[Column] = [
         Column(

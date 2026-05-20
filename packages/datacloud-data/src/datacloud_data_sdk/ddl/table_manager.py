@@ -56,7 +56,7 @@ def _execute_sql(sql: str, user_code: str) -> dict[str, Any]:
 
     async def _call() -> dict[str, Any]:
         import httpx
-        from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
+        from by_framework.core.discovery import DiscoveryClient
 
         _init_discovery_redis()
         discovery_client = DiscoveryClient(cache_interval=5)
@@ -72,7 +72,9 @@ def _execute_sql(sql: str, user_code: str) -> dict[str, Any]:
             protocol = getattr(instance, "protocol", "http")
             path_prefix = getattr(instance, "path_prefix", "") or ""
             base_url = f"{protocol}://{instance.host}:{instance.port}"
-            sql_path = f"/{path_prefix.strip('/')}/plugins/byclaw-sqlite/sqlExecute".replace("//", "/")
+            sql_path = f"/{path_prefix.strip('/')}/plugins/byclaw-sqlite/sqlExecute".replace(
+                "//", "/"
+            )
 
             params = {auth_param: token} if auth_type == "query" else {}
             headers = {
