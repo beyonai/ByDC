@@ -11,7 +11,11 @@ import logging
 import threading
 from typing import Any
 
-from datacloud_knowledge.adapters import backfill_embeddings, create_bulk_importer
+from datacloud_knowledge.adapters import (
+    backfill_embeddings,
+    backfill_tsvector,
+    create_bulk_importer,
+)
 from datacloud_knowledge.contracts.kps import RelationDef, TermDef, TermTypeDef
 from datacloud_knowledge.ingestion.owl_generate.renderers.term_types import (
     _term_data_type_to_category,
@@ -236,6 +240,14 @@ def build_terms(
             len(relation_dicts),
             len(term_type_dicts),
         )
+
+        # 回填 name_keywords tsvector（本地 SQL，瞬间完成）
+        try:
+            backfill_tsvector(schema=schema, db_url=db_url)
+        except Exception:
+            logger.warning(
+                "name_keywords 回填失败，请稍后运行: datacloud-knowledge backfill-tsvector"
+            )
 
         # 回填向量嵌入（仅本次创建的术语，30s 超时，失败不阻塞）
         _backfill_embeddings_optional(
