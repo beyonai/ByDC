@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
@@ -16,6 +17,8 @@ from datacloud_data_sdk.utils.redis_discovery import (
     RedisDiscoveryConfig,
     load_redis_discovery_config,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -417,20 +420,27 @@ class HttpKnowledgeSearchBackend:
                 import_path = self._build_import_path(config)
                 file_bytes = file_content.encode("utf-8")
                 log_curl("UPLOAD", import_path, body={**data, "fileContent": f"@{filename}"})
-                instance_url = self._build_instance_url(instance, import_path)
-                multipart_data = dict(data)
-                resp = await client.http_client._client.request(  # noqa: SLF001
-                    method="POST",
-                    url=instance_url,
-                    headers=upload_headers,
-                    data=multipart_data,
-                    files={
-                        "fileContent": (
+                parts: list[tuple[str, Any]] = [
+                    ("knCode", (None, data["knCode"])),
+                    ("filePath", (None, data["filePath"])),
+                ]
+                if request.file_description:
+                    parts.append(("fileDescription", (None, request.file_description)))
+                parts.append(
+                    (
+                        "fileContent",
+                        (
                             filename,
                             file_bytes,
                             "text/markdown; charset=utf-8",
-                        )
-                    },
+                        ),
+                    )
+                )
+                resp = await client._upload_with_discovery(
+                    service_name,
+                    import_path,
+                    parts,
+                    headers=upload_headers,
                 )
 
                 body = self._parse_discovery_response_body(resp, request.datasource_alias)
@@ -478,10 +488,14 @@ class HttpKnowledgeSearchBackend:
     @staticmethod
     def _ensure_success(body: dict[str, Any], datasource_alias: str) -> None:
         if body.get("resultCode") not in (None, "0", 0):
-            raise KbExecutionError(
+            error_message = _format_error_message(body)
+            logger.error(
+                "knowledge backend request failed: datasource_alias=%s, error=%s, body=%s",
                 datasource_alias,
-                str(body.get("resultMsg") or body.get("resultCode")),
+                error_message,
+                body,
             )
+            raise KbExecutionError(datasource_alias, error_message)
 
     def _get_config(self, datasource_alias: str) -> dict[str, Any]:
         if not self._configs:
@@ -581,19 +595,6 @@ class HttpKnowledgeSearchBackend:
             if isinstance(token, str) and token:
                 headers["Authorization"] = f"Bearer {token}"
         return headers
-
-    @staticmethod
-    def _build_instance_url(instance: Any, path: str) -> str:
-        protocol = str(getattr(instance, "protocol", "") or "http")
-        host = str(getattr(instance, "host", "") or "")
-        port = getattr(instance, "port", None)
-        path_prefix = str(getattr(instance, "path_prefix", "") or "").strip("/")
-
-        suffix_parts = [segment for segment in (path_prefix, path.strip("/")) if segment]
-        suffix = "/".join(suffix_parts)
-        if suffix:
-            return f"{protocol}://{host}:{port}/{suffix}"
-        return f"{protocol}://{host}:{port}"
 
     async def _post_json(
         self,
@@ -894,6 +895,31 @@ def _result_summary(body: dict[str, Any]) -> dict[str, Any]:
         "resultCode": body.get("resultCode"),
         "resultMsg": body.get("resultMsg"),
     }
+
+
+def _format_error_message(body: dict[str, Any]) -> str:
+    message = str(body.get("resultMsg") or body.get("resultCode") or "request failed")
+    result_object = body.get("resultObject")
+    if isinstance(result_object, dict):
+        errors = result_object.get("errors")
+        if isinstance(errors, list) and errors:
+            error_lines: list[str] = []
+            for item in errors:
+                if not isinstance(item, dict):
+                    error_lines.append(str(item))
+                    continue
+                location = item.get("loc")
+                location_text = (
+                    ".".join(str(part) for part in location) if isinstance(location, list) else ""
+                )
+                detail = str(item.get("msg") or item.get("type") or "unknown error")
+                if location_text:
+                    error_lines.append(f"{location_text}: {detail}")
+                else:
+                    error_lines.append(detail)
+            if error_lines:
+                message = f"{message}; {', '.join(error_lines)}"
+    return message
 
 
 def _to_markdown_file_path(file_path: str, kb_directory: str | None = None) -> str:

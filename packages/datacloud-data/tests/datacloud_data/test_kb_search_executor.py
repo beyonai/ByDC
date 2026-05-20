@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from types import ModuleType
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -31,10 +31,11 @@ class DummyConfig:
     default_kb_backend: str | None = None
 
 
-class DummyLoader:
+class DummyLoader(OntologyLoader):
     def __init__(self, cls: OntologyClass, config: DummyConfig) -> None:
+        super().__init__()
         self._cls = cls
-        self._config = config
+        self._config = cast(Any, config)
 
     def get_ontology_class(self, object_code: str) -> OntologyClass:
         assert object_code == self._cls.object_code
@@ -519,7 +520,8 @@ async def test_kb_write_uses_default_registered_backend() -> None:
 
     assert backend.write_request is not None
     assert backend.write_request.datasource_alias == "kb_docs"
-    assert result["records"][0]["filePath"] == "/sales/meeting.md"
+    records = cast(list[dict[str, Any]], result["records"])
+    assert records[0]["filePath"] == "/sales/meeting.md"
 
 
 @pytest.mark.asyncio
@@ -589,7 +591,7 @@ async def test_invoke_write_action_uses_default_registered_backend() -> None:
     inject_virtual_actions(loader)
 
     obj = loader.get_object("meeting_doc")
-    result = await obj.invoke_action(
+    result: dict[str, object] = await obj.invoke_action(
         "write_meeting_doc",
         {
             "source_path": "/sales/meeting.md",
@@ -601,7 +603,8 @@ async def test_invoke_write_action_uses_default_registered_backend() -> None:
     assert backend.write_request is not None
     assert backend.write_request.datasource_alias == "kb_docs"
     assert backend.write_request.kb_id == "kb-sales"
-    assert result["records"][0]["filePath"] == "/sales/meeting.md"
+    records = cast(list[dict[str, Any]], cast(dict[str, Any], result)["records"])
+    assert records[0]["filePath"] == "/sales/meeting.md"
 
 
 @pytest.mark.asyncio
@@ -634,7 +637,7 @@ async def test_invoke_write_action_allows_empty_datasource_alias() -> None:
     inject_virtual_actions(loader)
 
     obj = loader.get_object("meeting_doc")
-    result = await obj.invoke_action(
+    result: dict[str, object] = await obj.invoke_action(
         "write_meeting_doc",
         {
             "source_path": "/sales/meeting.md",
@@ -647,15 +650,13 @@ async def test_invoke_write_action_allows_empty_datasource_alias() -> None:
     assert backend.write_request.datasource_alias == "meeting_doc"
     assert backend.write_request.kb_id == "kb-sales"
     assert backend.write_request.kb_directory == "/sales"
-    assert result["records"][0]["filePath"] == "/sales/meeting.md"
+    records = cast(list[dict[str, Any]], result["records"])
+    assert records[0]["filePath"] == "/sales/meeting.md"
 
 
 @contextmanager
 def _patch_knowledge_write_discovery() -> Iterator[MagicMock]:
     class _MockInstance:
-        host = "instance.host"
-        port = 8080
-        protocol = "http"
         metadata = {"token": "instance-token"}
 
     class _MockDiscoveryClient:
@@ -679,38 +680,6 @@ def _patch_knowledge_write_discovery() -> Iterator[MagicMock]:
         def __init__(self, data: dict[str, Any]) -> None:
             self.data = data
 
-    class _MockHttpClient:
-        async def request(
-            self,
-            *,
-            method: str,
-            url: str,
-            headers: dict[str, str],
-            data: dict[str, str] | None = None,
-            files: dict[str, tuple[str, bytes, str]] | None = None,
-        ) -> Any:
-            assert method == "POST"
-            assert url == "http://instance.host:8080/api/v1/knowledgeItems/import"
-            assert headers == {"Authorization": "Bearer instance-token"}
-            assert data == {
-                "knCode": "kb-sales",
-                "filePath": "/sales/meeting.md",
-                "fileDescription": "销售复盘会议纪要",
-            }
-            assert files is not None
-            file_name, file_content, content_type = files["fileContent"]
-            assert file_name == "meeting.md"
-            assert content_type == "text/markdown; charset=utf-8"
-            assert file_content == '---\nstatus: "active"\n---\n\n会议内容'.encode()
-            mock_resp = MagicMock()
-            mock_resp.status_code = 200
-            mock_resp.json.return_value = {
-                "resultCode": "0",
-                "resultMsg": "success",
-                "resultObject": {},
-            }
-            return mock_resp
-
     class _MockDiscoveryHttpClient:
         def __init__(
             self,
@@ -722,7 +691,6 @@ def _patch_knowledge_write_discovery() -> Iterator[MagicMock]:
             self.discovery_client = discovery_client
             self.retry_config = retry_config
             self.health_threshold_ms = health_threshold_ms
-            self.http_client = type("_MockHttpWrapper", (), {"_client": _MockHttpClient()})()
 
         async def __aenter__(self) -> Any:
             return self
@@ -791,6 +759,33 @@ def _patch_knowledge_write_discovery() -> Iterator[MagicMock]:
                     }
                 )
             raise AssertionError(f"unexpected path: {path}")
+
+        async def _upload_with_discovery(
+            self,
+            service_name: str,
+            path: str,
+            parts: list[tuple[str, Any]],
+            *,
+            headers: dict[str, str],
+        ) -> Any:
+            assert service_name == "kb-service"
+            assert path == "/api/v1/knowledgeItems/import"
+            assert headers == {"Authorization": "Bearer instance-token"}
+            assert parts[0] == ("knCode", (None, "kb-sales"))
+            assert parts[1] == ("filePath", (None, "/sales/meeting.md"))
+            assert parts[2][0] == "fileContent"
+            file_field, file_spec = parts[2]
+            assert file_field == "fileContent"
+            assert file_spec[0] == "meeting.md"
+            assert file_spec[2] == "text/markdown; charset=utf-8"
+            assert file_spec[1] == '---\nstatus: "active"\n---\n\n会议内容'.encode()
+            return _MockDiscoveryResponse(
+                {
+                    "resultCode": "0",
+                    "resultMsg": "success",
+                    "resultObject": {},
+                }
+            )
 
     root_module = ModuleType("by_framework")
     common_module = ModuleType("by_framework.common")
