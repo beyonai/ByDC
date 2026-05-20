@@ -1,6 +1,11 @@
 import csv
+import sys
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -192,16 +197,41 @@ async def test_kb_executor_raises_on_missing_datasource() -> None:
 
 
 @pytest.mark.asyncio
-async def test_kb_executor_raises_on_missing_endpoint() -> None:
-    """config 中无 endpoint 时抛出 KbExecutionError。"""
+async def test_kb_executor_uses_service_discovery_when_endpoint_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """config 中无 endpoint 时走 Redis 服务发现。"""
     task = KbExecTask(datasource_alias="kb_docs", query="test", output_ref="out")
+
+    monkeypatch.setenv("REDIS_HOST", "redis.local")
+    monkeypatch.setenv("REDIS_PORT", "6380")
+    monkeypatch.setenv("REDIS_DATABASE", "2")
     executor = KbExecutor(kb_configs={"kb_docs": {}})
 
-    with pytest.raises(KbExecutionError) as exc_info:
-        await executor.execute(task, "req1", StepResults())
+    with _patch_knowledge_discovery(
+        expected_service_name="kb_docs",
+        expected_path="/api/v1/knowledgeItems/searchFile",
+        expected_payload={
+            "query": "test",
+            "topK": 10,
+            "searchMode": "mixedRecall",
+        },
+        response_body={
+            "resultCode": "0",
+            "resultMsg": "success",
+            "resultObject": {"data": [{"content": "发现内容"}]},
+        },
+    ) as init_redis:
+        csv_path = await executor.execute(task, "req1", StepResults())
 
-    assert exc_info.value.datasource_alias == "kb_docs"
-    assert "endpoint" in exc_info.value.cause.lower()
+    init_redis.assert_called_once_with(
+        host="redis.local",
+        port=6380,
+        db=2,
+        password=None,
+        username=None,
+    )
+    assert _read_csv_records(csv_path) == [{"content": "发现内容"}]
 
 
 @pytest.mark.asyncio
@@ -298,3 +328,96 @@ async def test_kb_executor_empty_records_still_writes_csv() -> None:
         assert isinstance(csv_path, str)
         assert Path(csv_path).exists()
         assert Path(csv_path).read_text() == ""
+
+
+@contextmanager
+def _patch_knowledge_discovery(
+    *,
+    expected_service_name: str,
+    expected_path: str,
+    expected_payload: dict[str, Any],
+    response_body: dict[str, Any],
+) -> Iterator[MagicMock]:
+    class _MockInstance:
+        metadata = {"token": "instance-token"}
+
+    class _MockDiscoveryClient:
+        def __init__(self, cache_interval: int) -> None:
+            self.cache_interval = cache_interval
+
+        async def discover(self, service_name: str, health_threshold_ms: int) -> _MockInstance:
+            assert service_name == expected_service_name
+            assert health_threshold_ms == -1
+            return _MockInstance()
+
+        async def close(self) -> None:
+            return None
+
+    class _MockRetryConfig:
+        def __init__(self, max_attempts: int, retry_on_status_codes: set[int]) -> None:
+            self.max_attempts = max_attempts
+            self.retry_on_status_codes = retry_on_status_codes
+
+    class _MockDiscoveryResponse:
+        def __init__(self, data: dict[str, Any]) -> None:
+            self.data = data
+
+    class _MockDiscoveryHttpClient:
+        def __init__(
+            self,
+            discovery_client: _MockDiscoveryClient,
+            *,
+            retry_config: _MockRetryConfig,
+            health_threshold_ms: int,
+        ) -> None:
+            self.discovery_client = discovery_client
+            self.retry_config = retry_config
+            self.health_threshold_ms = health_threshold_ms
+
+        async def __aenter__(self) -> Any:
+            return self
+
+        async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
+            return None
+
+        async def post(
+            self,
+            service_name: str,
+            path: str,
+            *,
+            headers: dict[str, str],
+            json: dict[str, Any],
+        ) -> Any:
+            assert service_name == expected_service_name
+            assert path == expected_path
+            assert json == expected_payload
+            assert headers["Authorization"] == "Bearer instance-token"
+            return _MockDiscoveryResponse(response_body)
+
+    root_module = ModuleType("by_framework")
+    common_module = ModuleType("by_framework.common")
+    redis_module = ModuleType("by_framework.common.redis_client")
+    core_module = ModuleType("by_framework.core")
+    discovery_module = ModuleType("by_framework.core.discovery")
+    util_module = ModuleType("by_framework.util")
+    discovery_http_module = ModuleType("by_framework.util.discovery_http_client")
+    http_client_module = ModuleType("by_framework.util.http_client")
+
+    init_redis = MagicMock()
+    redis_module.init_redis = init_redis  # type: ignore[attr-defined]
+    discovery_module.DiscoveryClient = _MockDiscoveryClient  # type: ignore[attr-defined]
+    discovery_http_module.DiscoveryHttpClient = _MockDiscoveryHttpClient  # type: ignore[attr-defined]
+    http_client_module.RetryConfig = _MockRetryConfig  # type: ignore[attr-defined]
+
+    modules = {
+        "by_framework": root_module,
+        "by_framework.common": common_module,
+        "by_framework.common.redis_client": redis_module,
+        "by_framework.core": core_module,
+        "by_framework.core.discovery": discovery_module,
+        "by_framework.util": util_module,
+        "by_framework.util.discovery_http_client": discovery_http_module,
+        "by_framework.util.http_client": http_client_module,
+    }
+    with patch.dict(sys.modules, modules):
+        yield init_redis

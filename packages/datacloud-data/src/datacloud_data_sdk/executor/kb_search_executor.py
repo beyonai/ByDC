@@ -62,12 +62,6 @@ class KbSearchExecutor:
         kb_configs = getattr(self._loader._config, "kb_source_configs", None)
         configured_backend = getattr(self._loader._config, "kb_search_backend", None)
         datasource_alias = self._get_datasource_alias(cls)
-        if not kb_configs and not self._has_configured_backend() and configured_backend is None:
-            return self._empty_response(
-                object_code,
-                arguments,
-                "kb_source_configs not configured and search_backend not provided",
-            )
 
         backend = self._resolve_backend(cls, kb_configs, configured_backend)
         query = str(arguments.get("query", "") or "")
