@@ -20,6 +20,14 @@ def _use_local_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """全部测试使用 LocalFileWorkspaceStore，隔离 Redis 依赖。"""
     monkeypatch.setenv("ONTOLOGY_STORE", "local")
     monkeypatch.setenv("ONTOLOGY_WORKSPACE_DIR", str(tmp_path))
+    store = LocalFileWorkspaceStore()
+
+    def _mock_store() -> LocalFileWorkspaceStore:
+        return store
+
+    monkeypatch.setattr(
+        "datacloud_knowledge.ingestion.ontology_build.get_workspace_store", _mock_store
+    )
 
 
 @pytest.fixture()
@@ -319,7 +327,9 @@ class TestSubmitObject:
         session.collect_object_info(entity_code="by_test", entity_name="我的任务", fields=fields)
         with (
             patch("datacloud_knowledge.ingestion.ontology_build.generate_from_definition"),
-            patch("datacloud_knowledge.ingestion.ontology_build._import_object_zip") as mock_upload,
+            patch(
+                "datacloud_knowledge.ingestion.ontology_build._submit_object_async"
+            ) as mock_upload,
             patch("datacloud_knowledge.ingestion.ontology_build._create_sqlite_table"),
         ):
             mock_upload.return_value = {"ok": True, "resource_id": "123"}
@@ -355,7 +365,9 @@ class TestSubmitObject:
             patch(
                 "datacloud_knowledge.ingestion.ontology_build.generate_from_definition"
             ) as mock_gen,
-            patch("datacloud_knowledge.ingestion.ontology_build._import_object_zip") as mock_upload,
+            patch(
+                "datacloud_knowledge.ingestion.ontology_build._submit_object_async"
+            ) as mock_upload,
             patch("datacloud_knowledge.ingestion.ontology_build._create_sqlite_table"),
         ):
             mock_upload.return_value = {"ok": True, "resource_id": "456"}
@@ -387,7 +399,9 @@ class TestSubmitObject:
             patch(
                 "datacloud_knowledge.ingestion.ontology_build.generate_from_definition"
             ) as mock_gen,
-            patch("datacloud_knowledge.ingestion.ontology_build._import_object_zip") as mock_upload,
+            patch(
+                "datacloud_knowledge.ingestion.ontology_build._submit_object_async"
+            ) as mock_upload,
         ):
             mock_upload.return_value = {"ok": True, "resource_id": "789"}
             session.submit_object("by_doc")
@@ -487,3 +501,331 @@ class TestDeleteOwlScope:
             mock_create_reader.return_value = mock_reader
             with pytest.raises(RuntimeError, match="术语删除失败"):
                 session.delete_owl_scope("OBJECT", "by_test")
+
+
+# ── build_terms ────────────────────────────────────────────────────────────────
+
+
+class TestBuildTerms:
+    """测试 build_terms() 函数 — KPS 对象构建 + BulkImportAdapter 调用。"""
+
+    def test_term_type_code_binding_creates_prop_and_has_field(self) -> None:
+        """字段带 term_type_code 时，创建 prop 术语 + HAS_FIELD 关系，不创建值术语。"""
+        from datacloud_knowledge.ingestion.ontology_terms import build_terms
+
+        fields: list[dict[str, str]] = [
+            {
+                "property_code": "user_code",
+                "property_name": "用户编码",
+                "term_type_code": "user_name",
+                "term_data_type": "LIST_TERM",
+            }
+        ]
+
+        with patch(
+            "datacloud_knowledge.ingestion.ontology_terms.create_bulk_importer"
+        ) as mock_create:
+            mock_adapter = MagicMock()
+            mock_create.return_value = mock_adapter
+
+            result = build_terms(
+                entity_code="by_task",
+                entity_name="任务",
+                fields=fields,
+            )
+
+        assert result["ok"] is True
+        # 验证 begin_import 调用
+        mock_adapter.begin_import.assert_called_once()
+        scopes_arg = mock_adapter.begin_import.call_args.kwargs["scopes"]
+        assert scopes_arg == [{"scope": "object", "code": "by_task"}]
+
+        # 验证 batch_process_term 调用：实体 + prop = 2 个术语
+        mock_adapter.batch_process_term.assert_called_once()
+        term_items = mock_adapter.batch_process_term.call_args.args[0]
+        assert len(term_items) == 2  # entity + prop
+
+        # 验证术语类型
+        entity_term = next(t for t in term_items if t["term_code"] == "by_task")
+        assert entity_term["term_type_code"] == "object"
+        prop_term = next(t for t in term_items if t["term_code"] == "user_code")
+        assert prop_term["term_type_code"] == "prop"
+
+        # 验证 batch_process_relation 调用：1 条 HAS_FIELD
+        mock_adapter.batch_process_relation.assert_called_once()
+        rel_items = mock_adapter.batch_process_relation.call_args.args[0]
+        assert len(rel_items) == 1
+        assert rel_items[0]["relation_category"] == "HAS_FIELD"
+
+    def test_term_values_inline_creates_value_terms_and_has_term(self) -> None:
+        """字段带 term_values 时，创建 prop + 值术语 + HAS_FIELD + HAS_TERM 关系。"""
+        from datacloud_knowledge.ingestion.ontology_terms import build_terms
+
+        fields: list[dict[str, object]] = [
+            {
+                "property_code": "status",
+                "property_name": "状态",
+                "term_data_type": "LIST_TERM",
+                "term_values": [
+                    {"code": "done", "name": "完成"},
+                    {"code": "todo", "name": "待办"},
+                ],
+            }
+        ]
+
+        with patch(
+            "datacloud_knowledge.ingestion.ontology_terms.create_bulk_importer"
+        ) as mock_create:
+            mock_adapter = MagicMock()
+            mock_create.return_value = mock_adapter
+
+            result = build_terms(
+                entity_code="by_task",
+                entity_name="任务",
+                fields=fields,
+            )
+
+        assert result["ok"] is True
+        # 术语：entity(1) + prop(1) + value(2) = 4
+        mock_adapter.batch_process_term.assert_called_once()
+        term_items = mock_adapter.batch_process_term.call_args.args[0]
+        assert len(term_items) == 4
+
+        # 值术语验证
+        value_terms = [t for t in term_items if t["term_type_code"] == "status"]
+        assert len(value_terms) == 2
+        value_names = {t["term_name"] for t in value_terms}
+        assert value_names == {"完成", "待办"}
+
+        # 关系：HAS_FIELD(1) + HAS_TERM(2) = 3
+        mock_adapter.batch_process_relation.assert_called_once()
+        rel_items = mock_adapter.batch_process_relation.call_args.args[0]
+        assert len(rel_items) == 3
+        has_field_rels = [r for r in rel_items if r["relation_category"] == "HAS_FIELD"]
+        has_term_rels = [r for r in rel_items if r["relation_category"] == "HAS_TERM"]
+        assert len(has_field_rels) == 1
+        assert len(has_term_rels) == 2
+
+    def test_mixed_fields_both_binding_and_inline(self) -> None:
+        """混合字段：同时有 term_type_code 绑定和 term_values 内联。"""
+        from datacloud_knowledge.ingestion.ontology_terms import build_terms
+
+        fields: list[dict[str, object]] = [
+            {
+                "property_code": "user_code",
+                "property_name": "用户编码",
+                "term_type_code": "user_name",
+                "term_data_type": "LIST_TERM",
+            },
+            {
+                "property_code": "status",
+                "property_name": "状态",
+                "term_data_type": "LIST_TERM",
+                "term_values": [{"code": "done", "name": "完成"}],
+            },
+        ]
+
+        with patch(
+            "datacloud_knowledge.ingestion.ontology_terms.create_bulk_importer"
+        ) as mock_create:
+            mock_adapter = MagicMock()
+            mock_create.return_value = mock_adapter
+
+            result = build_terms(
+                entity_code="by_task",
+                entity_name="任务",
+                fields=fields,
+            )
+
+        assert result["ok"] is True
+        # 术语：entity(1) + prop(2) + value(1) = 4
+        term_items = mock_adapter.batch_process_term.call_args.args[0]
+        assert len(term_items) == 4
+
+        # 关系：HAS_FIELD(2) + HAS_TERM(1) = 3
+        rel_items = mock_adapter.batch_process_relation.call_args.args[0]
+        assert len(rel_items) == 3
+
+    def test_no_term_fields_skipped(self) -> None:
+        """无术语绑定的字段被跳过，只保留实体术语。"""
+        from datacloud_knowledge.ingestion.ontology_terms import build_terms
+
+        fields: list[dict[str, str]] = [
+            {
+                "property_code": "title",
+                "property_name": "标题",
+                "data_type": "STRING",
+                "ext_property": {},
+            }
+        ]
+
+        with patch(
+            "datacloud_knowledge.ingestion.ontology_terms.create_bulk_importer"
+        ) as mock_create:
+            mock_adapter = MagicMock()
+            mock_create.return_value = mock_adapter
+
+            result = build_terms(
+                entity_code="by_task",
+                entity_name="任务",
+                fields=fields,
+            )
+
+        # 只有实体术语，无字段术语 — 跳过写入
+        assert result["ok"] is True
+        assert result.get("message") == "无字段术语需要入库"
+        mock_adapter.begin_import.assert_not_called()
+
+    def test_empty_fields_skipped(self) -> None:
+        """空字段列表时跳过。"""
+        from datacloud_knowledge.ingestion.ontology_terms import build_terms
+
+        with patch(
+            "datacloud_knowledge.ingestion.ontology_terms.create_bulk_importer"
+        ) as mock_create:
+            mock_adapter = MagicMock()
+            mock_create.return_value = mock_adapter
+
+            result = build_terms(
+                entity_code="by_task",
+                entity_name="任务",
+                fields=[],
+            )
+
+        assert result["ok"] is True
+        assert result.get("message") == "无字段术语需要入库"
+        mock_adapter.begin_import.assert_not_called()
+
+    def test_view_entity_type(self) -> None:
+        """entity_type="view" 时正确构造视图术语。"""
+        from datacloud_knowledge.ingestion.ontology_terms import build_terms
+
+        fields: list[dict[str, str]] = [
+            {
+                "property_code": "task_count",
+                "property_name": "任务数",
+                "term_type_code": "metric_type",
+            }
+        ]
+
+        with patch(
+            "datacloud_knowledge.ingestion.ontology_terms.create_bulk_importer"
+        ) as mock_create:
+            mock_adapter = MagicMock()
+            mock_create.return_value = mock_adapter
+
+            result = build_terms(
+                entity_code="v_task_summary",
+                entity_name="任务汇总视图",
+                fields=fields,
+                entity_type="view",
+            )
+
+        assert result["ok"] is True
+        term_items = mock_adapter.batch_process_term.call_args.args[0]
+        entity_term = next(t for t in term_items if t["term_code"] == "v_task_summary")
+        assert entity_term["term_type_code"] == "view"
+
+    def test_db_connection_error_returns_error(self) -> None:
+        """DB 连接失败时返回错误，不抛异常。"""
+        from datacloud_knowledge.ingestion.ontology_terms import build_terms
+
+        fields: list[dict[str, str]] = [
+            {"property_code": "status", "property_name": "状态", "term_type_code": "status_type"}
+        ]
+
+        with patch(
+            "datacloud_knowledge.ingestion.ontology_terms.create_bulk_importer"
+        ) as mock_create:
+            mock_create.side_effect = RuntimeError("DB not available")
+
+            result = build_terms(
+                entity_code="by_task",
+                entity_name="任务",
+                fields=fields,
+            )
+
+        assert result["ok"] is False
+        assert "创建数据库连接失败" in result["error"]
+
+    def test_db_write_error_rolls_back(self) -> None:
+        """写入失败时回滚事务。"""
+        from datacloud_knowledge.ingestion.ontology_terms import build_terms
+
+        fields: list[dict[str, str]] = [
+            {"property_code": "status", "property_name": "状态", "term_type_code": "status_type"}
+        ]
+
+        with patch(
+            "datacloud_knowledge.ingestion.ontology_terms.create_bulk_importer"
+        ) as mock_create:
+            mock_adapter = MagicMock()
+            mock_adapter.batch_process_term.side_effect = RuntimeError("write failed")
+            mock_create.return_value = mock_adapter
+
+            result = build_terms(
+                entity_code="by_task",
+                entity_name="任务",
+                fields=fields,
+            )
+
+        assert result["ok"] is False
+        assert "术语写入失败" in result["error"]
+        mock_adapter.rollback.assert_called_once()
+        mock_adapter.close.assert_called_once()
+        mock_adapter.commit.assert_not_called()
+
+
+# ── submit_object / submit_view 调用 build_terms ────────────────────────────────
+
+
+class TestSubmitViewCallsBuildTerms:
+    """验证 submit_view 在 OWL 上传成功后调用 build_terms。"""
+
+    def test_build_terms_called_after_view_upload(self, session: OntologyBuildSession) -> None:
+        rels = [
+            {
+                "source_object_code": "by_task",
+                "source_object_field_code": "user_id",
+                "target_object_code": "by_user",
+                "target_object_field_code": "id",
+                "relation_type": "MANY_TO_ONE",
+            }
+        ]
+        session.collect_view_info(view_code="v_test", view_name="任务视图", object_relations=rels)
+        with (
+            patch("datacloud_knowledge.ingestion.ontology_build.generate_from_definition"),
+            patch("datacloud_knowledge.ingestion.ontology_build._import_view_zip") as mock_upload,
+            patch("datacloud_knowledge.ingestion.ontology_build.build_terms") as mock_build_terms,
+        ):
+            mock_upload.return_value = {"ok": True, "resource_id": "view-001"}
+            mock_build_terms.return_value = {"ok": True}
+
+            session.submit_view("v_test")
+
+        mock_build_terms.assert_called_once()
+        call_kwargs = mock_build_terms.call_args.kwargs
+        assert call_kwargs["entity_type"] == "view"
+
+    def test_build_terms_failure_not_block_view_submit(self, session: OntologyBuildSession) -> None:
+        rels = [
+            {
+                "source_object_code": "by_task",
+                "source_object_field_code": "user_id",
+                "target_object_code": "by_user",
+                "target_object_field_code": "id",
+                "relation_type": "MANY_TO_ONE",
+            }
+        ]
+        session.collect_view_info(view_code="v_test", view_name="任务视图", object_relations=rels)
+        with (
+            patch("datacloud_knowledge.ingestion.ontology_build.generate_from_definition"),
+            patch("datacloud_knowledge.ingestion.ontology_build._import_view_zip") as mock_upload,
+            patch("datacloud_knowledge.ingestion.ontology_build.build_terms") as mock_build_terms,
+        ):
+            mock_upload.return_value = {"ok": True, "resource_id": "view-002"}
+            mock_build_terms.return_value = {"ok": False, "error": "DB down"}
+
+            result = session.submit_view("v_test")
+
+        assert result["ok"] is True
