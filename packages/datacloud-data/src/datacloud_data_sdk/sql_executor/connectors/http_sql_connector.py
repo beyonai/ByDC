@@ -31,7 +31,9 @@ class HttpSqlConnector(BaseSourceConnector):
             )
         if self.config.datasource_id is None:
             raise SqlExecutionError(self.config.alias, sql, "HTTP SQL datasource_id is required")
-
+        from datacloud_data_sdk.sql_executor.data_source_manager import _render_sql
+        if params:
+            sql = _render_sql(sql, params)
         payload: dict[str, Any] = {
             "datasourceId": self.config.datasource_id,
             "sql": sql,
