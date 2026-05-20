@@ -58,6 +58,11 @@ def main() -> None:
         print(json.dumps({"ok": False, "error": "缺少入参"}), flush=True)
         sys.exit(1)
 
+    # 预加载 Embedding 模型配置（从 Redis），使 build_terms 内的向量回填可用
+    from _common import load_embedding_model_from_redis
+
+    load_embedding_model_from_redis()
+
     params: dict = json.loads(raw)
     action: str = params.get("action", "collect").lower().strip()
     session_id: str = params.get("session_id", "")
