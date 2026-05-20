@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Protocol, cast
 
 from datacloud_knowledge.adapters import create_reader
+from datacloud_knowledge.ingestion.ontology_terms import build_terms
 from datacloud_knowledge.ingestion.workspace_store import get_workspace_store
 from datacloud_knowledge.provider import search_terms_by_type
 
@@ -544,6 +545,19 @@ class OntologyBuildSession:
             if not upload_result.get("ok", True):
                 return {"ok": False, "error": upload_result.get("error", "上传失败")}
 
+        # 术语入库（OWL 上传成功后）
+        terms_result = build_terms(
+            entity_code=actual_entity_code,
+            entity_name=state.get("entity_name", ""),
+            fields=state.get("fields", []),
+            library_code=state.get("library_code", "PERSONAL_LIB"),
+            domain_code=state.get("domain_code", "PERSONAL_DOMAIN"),
+            entity_type="object",
+            entity_desc=state.get("entity_desc", ""),
+        )
+        if not terms_result.get("ok", True):
+            logger.warning("术语入库失败（OWL 已上传）: %s", terms_result.get("error"))
+
         store.delete(key)
         resource_id = upload_result.get("resourceId") or upload_result.get("resource_id", "")
         return {
@@ -607,6 +621,19 @@ class OntologyBuildSession:
             upload_result = _import_view_zip(zip_path, token)
             if not upload_result.get("ok", True):
                 return {"ok": False, "error": upload_result.get("error", "上传失败")}
+
+        # 术语入库（OWL 上传成功后）
+        terms_result = build_terms(
+            entity_code=actual_view_code,
+            entity_name=state.get("view_name", ""),
+            fields=state.get("fields", []),
+            library_code=state.get("library_code", "PERSONAL_LIB"),
+            domain_code=state.get("domain_code", "PERSONAL_DOMAIN"),
+            entity_type="view",
+            entity_desc=state.get("view_desc", ""),
+        )
+        if not terms_result.get("ok", True):
+            logger.warning("术语入库失败（OWL 已上传）: %s", terms_result.get("error"))
 
         store.delete(key)
         resource_id = upload_result.get("resourceId") or upload_result.get("resource_id", "")

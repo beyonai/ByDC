@@ -54,7 +54,7 @@ def main() -> None:
     directory_path: str = params.get("directory_path", "/")
 
     data = post_json(
-        path="/open/api/v1/dataset/listDir",
+        path="/byaiService/open/api/v1/dataset/listDir",
         payload={
             "resourceCode": resource_code,
             "directoryPath": directory_path,

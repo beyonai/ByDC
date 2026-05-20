@@ -39,7 +39,7 @@ def main() -> None:
     keyword: str = params.get("keyword", "")
 
     data = post_json(
-        path="/open/api/v1/getUserAuthResource",
+        path="/byaiService/open/api/v1/getUserAuthResource",
         payload={
             "pageNum": 1,
             "pageSize": 100,

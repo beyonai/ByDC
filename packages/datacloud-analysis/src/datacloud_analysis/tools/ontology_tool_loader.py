@@ -586,6 +586,7 @@ class OntologyToolLoader:
                 result[action.action_code] = StructuredTool(
                     name=action.action_code,
                     description=action.description or action.action_name,
+                    metadata={"title": action.action_name or action.action_code},
                     args_schema=_json_schema_to_pydantic(
                         view_schema,
                         f"_{action.action_code}_Schema",
@@ -631,6 +632,7 @@ class OntologyToolLoader:
                     description=str(
                         schema.get("description") or action.description or action.action_name
                     ),
+                    metadata={"title": str(schema.get("title") or action.action_name or name)},
                     args_schema=input_schema,
                     coroutine=_make_object_action_coroutine(
                         obj_code, action.action_code, self._loader
@@ -684,6 +686,7 @@ class OntologyToolLoader:
                     result[name] = StructuredTool(
                         name=name,
                         description=tool_def.get("description", name),
+                        metadata={"title": str(tool_def.get("title") or name)},
                         args_schema=args_schema,
                         coroutine=_make_object_action_coroutine(
                             obj_code, action_code, self._loader
@@ -736,6 +739,7 @@ class OntologyToolLoader:
             return StructuredTool(
                 name=tool_def["name"],
                 description=tool_def.get("description", tool_def["name"]),
+                metadata={"title": str(tool_def.get("title") or tool_def["name"])},
                 args_schema=_json_schema_to_pydantic(
                     tool_def.get("inputSchema", {}),
                     f"_Query{obj_code}Schema",
