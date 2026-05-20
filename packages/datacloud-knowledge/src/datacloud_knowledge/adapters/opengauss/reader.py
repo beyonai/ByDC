@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
@@ -28,7 +29,11 @@ from sqlalchemy.dialects.postgresql import JSONB, NUMERIC, TIMESTAMP
 from sqlalchemy.orm import Session, aliased
 
 from datacloud_knowledge.adapters.opengauss._db.connection import get_session
-from datacloud_knowledge.adapters.opengauss._db.models import Term, TermName, TermRelation
+from datacloud_knowledge.adapters.opengauss._db.models import (
+    Term,
+    TermName,
+    TermRelation,
+)
 from datacloud_knowledge.adapters.opengauss.bm25 import bm25_search_with_or
 from datacloud_knowledge.contracts.types import (
     AmbiguousCandidate,
@@ -1512,6 +1517,94 @@ class PostgresTermReader:
             if tid not in mapping:
                 mapping[tid] = str(name_id)
         return mapping
+
+    def delete_scope(self, scope: str) -> dict[str, Any]:
+        """删除指定 scope 下的所有术语数据（术语 + 名称 + 关系 + 知识）。
+
+        通过递归 CTE 找到根术语及其所有子孙术语，按正确顺序删除
+        关联表数据以避免外键约束冲突。
+
+        Args:
+            scope: scope 字符串，格式 ``"{scope_type}:{resource_code}"``
+                   例如 ``"object:by_test"`` 或 ``"view:v_task_summary"``。
+
+        Returns:
+            ``{"ok": True}`` 或 ``{"ok": False, "error": "..."}``。
+        """
+        parts = scope.split(":", 1)
+        if len(parts) != 2:
+            return {"ok": False, "error": f"非法 scope 格式: {scope}，期望 {{type}}:{{code}}"}
+        scope_type, scope_code = parts
+
+        # 递归 CTE：从根术语出发，收集所有子孙 term_id
+        cte_sql = """
+            WITH RECURSIVE scope_terms AS (
+                SELECT t.term_id FROM term t
+                WHERE t.term_type_code = :scope_type AND t.term_code = :scope_code
+                UNION
+                SELECT t.term_id FROM term t
+                JOIN scope_terms s ON t.parent_term_id = s.term_id
+            )
+        """
+
+        try:
+            with self._session_factory() as session:
+                # 先删除 term_knowledge（FK → term.term_id）
+                session.execute(
+                    text(
+                        cte_sql
+                        + "DELETE FROM term_knowledge "
+                        + "WHERE term_id IN (SELECT term_id FROM scope_terms)"
+                    ),
+                    {"scope_type": scope_type, "scope_code": scope_code},
+                )
+
+                # 再删除 term_relation（FK source/target → term.term_id）
+                session.execute(
+                    text(
+                        cte_sql
+                        + "DELETE FROM term_relation "
+                        + "WHERE source_term_id IN (SELECT term_id FROM scope_terms) "
+                        + "OR target_term_id IN (SELECT term_id FROM scope_terms)"
+                    ),
+                    {"scope_type": scope_type, "scope_code": scope_code},
+                )
+
+                # 删除 scoped term_names（按 search_scope JSONB 匹配）
+                scope_json = json.dumps(
+                    {"scope": scope_type, "code": scope_code}, ensure_ascii=False
+                )
+                session.execute(
+                    text("DELETE FROM term_name WHERE search_scope @> CAST(:scope_json AS jsonb)"),
+                    {"scope_json": scope_json},
+                )
+                # 再按 term_id 删除剩余的 term_name
+                session.execute(
+                    text(
+                        cte_sql
+                        + "DELETE FROM term_name "
+                        + "WHERE term_id IN (SELECT term_id FROM scope_terms)"
+                    ),
+                    {"scope_type": scope_type, "scope_code": scope_code},
+                )
+
+                # 最后删除 term 本身
+                session.execute(
+                    text(
+                        cte_sql
+                        + "DELETE FROM term "
+                        + "WHERE term_id IN (SELECT term_id FROM scope_terms)"
+                    ),
+                    {"scope_type": scope_type, "scope_code": scope_code},
+                )
+
+                session.commit()
+
+            logger.info("delete_scope 完成: scope=%s", scope)
+            return {"ok": True}
+        except Exception as exc:
+            logger.exception("delete_scope 失败: scope=%s", scope)
+            return {"ok": False, "error": str(exc)}
 
     # ═══════════════════════════════════════════════════════════════════════════
     # 内部辅助方法
