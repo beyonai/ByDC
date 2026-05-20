@@ -248,6 +248,17 @@ def render_object(config: OwlGenConfig, table: Table) -> str:
     fields_block = "\n".join(field_refs_xml)
     fields_xml = "\n\n".join(field_xml_parts)
 
+    # 非结构化本体：在 EntityDefinition 上写实体级 ext_property
+    entity_ext_property_xml = ""
+    if config.kb_id:
+        kb_ext = json.dumps(
+            {"kb_id": config.kb_id, "kb_directory": config.kb_directory}, ensure_ascii=False
+        )
+        entity_ext_property_xml = (
+            f'        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">'
+            f"{_xml_str(kb_ext)}</ext_property>\n"
+        )
+
     return f"""<?xml version="1.0"?>
 <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
          xmlns:owl="http://www.w3.org/2002/07/owl#"
@@ -269,7 +280,7 @@ def render_object(config: OwlGenConfig, table: Table) -> str:
 {fields_block}
         <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(action_refs)}</action_refs>
         <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(relation_refs)}</relations>
-    </owl:NamedIndividual>
+{entity_ext_property_xml}    </owl:NamedIndividual>
 
 {fields_xml}
 
@@ -281,6 +292,7 @@ def render_object(config: OwlGenConfig, table: Table) -> str:
     <owl:DatatypeProperty rdf:about="#fields"/>
     <owl:DatatypeProperty rdf:about="#action_refs"/>
     <owl:DatatypeProperty rdf:about="#relations"/>
+    <owl:DatatypeProperty rdf:about="#ext_property"/>
     <owl:DatatypeProperty rdf:about="#property_code"/>
     <owl:DatatypeProperty rdf:about="#property_name"/>
     <owl:DatatypeProperty rdf:about="#data_type"/>
@@ -292,7 +304,6 @@ def render_object(config: OwlGenConfig, table: Table) -> str:
     <owl:DatatypeProperty rdf:about="#measurement_unit"/>
     <owl:DatatypeProperty rdf:about="#property_category"/>
     <owl:DatatypeProperty rdf:about="#property_group"/>
-    <owl:DatatypeProperty rdf:about="#ext_property"/>
     <owl:DatatypeProperty rdf:about="#term_type_code_path"/>
     <owl:DatatypeProperty rdf:about="#library_code"/>
     <owl:DatatypeProperty rdf:about="#rel_action"/>

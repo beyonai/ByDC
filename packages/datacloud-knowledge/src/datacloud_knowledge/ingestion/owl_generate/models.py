@@ -195,6 +195,10 @@ class OwlGenConfig:
     # ── 实体来源（DYNAMIC_TABLE / KNOWLEDGE_BASE）──
     entity_source: str = "DYNAMIC_TABLE"
 
+    # ── 非结构化本体知识库绑定（KNOWLEDGE_BASE 模式专用）──
+    kb_id: str = ""
+    kb_directory: str = ""
+
     # ── 术语类型业务配置（推荐）──
     # key = term_type_code
     term_type_configs: dict[str, TermTypeConfig] = field(default_factory=dict)
