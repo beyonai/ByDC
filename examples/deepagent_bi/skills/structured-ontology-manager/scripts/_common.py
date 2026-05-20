@@ -130,11 +130,11 @@ def load_embedding_model_from_redis() -> bool:
 
     try:
         client = _redis.Redis(
-            host=os.environ.get("DATACLOUD_GATEWAY_REDIS_HOST", ""),
-            port=int(os.environ.get("DATACLOUD_GATEWAY_REDIS_PORT", "6379")),
-            db=int(os.environ.get("DATACLOUD_GATEWAY_REDIS_DB", "0")),
-            username=os.environ.get("DATACLOUD_GATEWAY_REDIS_USERNAME", ""),
-            password=os.environ.get("DATACLOUD_GATEWAY_REDIS_PASSWORD", ""),
+            host=os.environ.get("REDIS_HOST", "localhost"),
+            port=int(os.environ.get("REDIS_PORT", "6379")),
+            db=int(os.environ.get("REDIS_DATABASE", "0")),
+            password=os.environ.get("REDIS_PASSWORD") or None,
+            username=os.environ.get("REDIS_USERNAME") or None,
             decode_responses=True,
         )
 
