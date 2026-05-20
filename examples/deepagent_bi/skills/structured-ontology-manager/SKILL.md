@@ -82,6 +82,7 @@ uv run python skills/structured-ontology-manager/scripts/<script>.py '<JSON>'
 - 创建本体视图（含对象关联关系）
 - 删除本体对象（含删表）
 - 删除本体视图
+- 挂载本体到当前数字员工/个人助理
 - 查询可绑定的术语类型
 - 查询术语类型的值列表
 
@@ -92,6 +93,7 @@ uv run python skills/structured-ontology-manager/scripts/<script>.py '<JSON>'
 - "查看我有哪些本体对象"
 - "删除任务管理对象"
 - "有哪些可用的术语类型？"
+- "把任务管理对象挂载到我的助理"
 
 ## 核心流程
 
@@ -108,6 +110,7 @@ uv run python skills/structured-ontology-manager/scripts/<script>.py '<JSON>'
 | 确认提交（视图） | 提交视图 | `create_view.py` | `{"action":"submit","view_code":"xxx"}` |
 | 删除 + 对象 | 删除对象 | `delete_object.py` | `{"entity_code":"xxx"}` |
 | 删除 + 视图 | 删除视图 | `delete_view.py` | `{"view_code":"xxx"}` |
+| 挂载/添加到助理/数字员工 | 挂载本体 | `mount_resource.py` | `{"agent_id":10004452,"resource_code":"xxx"}` |
 | 查看术语类型 | 查枚举 | `list_term_types.py` | `{}` |
 | 查看术语值 | 查枚举值 | `get_term_type_values.py` | `{"term_type_code":"xxx"}` |
 

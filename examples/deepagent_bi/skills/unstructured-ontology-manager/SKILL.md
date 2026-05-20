@@ -15,6 +15,7 @@ allowed-tools: execute, read_file
 - 查询知识库目录列表
 - 创建非结构化本体对象（含字段、知识库绑定）
 - 删除非结构化本体对象（不删知识库）
+- 挂载本体到当前数字员工/个人助理
 - 查询可绑定的术语类型
 - 查询术语类型的值列表
 
@@ -33,6 +34,7 @@ allowed-tools: execute, read_file
 - "查看我有哪些非结构化本体对象"
 - "删除会议纪要对象"
 - "我的知识库有哪些？"
+- "把会议纪要对象挂载到我的助理"
 
 ## 核心流程
 
@@ -48,6 +50,7 @@ allowed-tools: execute, read_file
 | 创建/新建 + 对象 | 收集对象信息 | `scripts/create_object.py collect` |
 | 确认提交 | 提交对象 | `scripts/create_object.py submit` |
 | 删除 + 对象 | 删除对象 | `scripts/delete_object.py` |
+| 挂载/添加到助理/数字员工 | 挂载本体 | `scripts/mount_resource.py` |
 | 查看术语类型 | 查枚举 | `scripts/list_term_types.py` |
 | 查看术语值 | 查枚举值 | `scripts/get_term_type_values.py` |
 
