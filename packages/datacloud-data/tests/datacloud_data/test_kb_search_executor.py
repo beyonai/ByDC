@@ -756,6 +756,31 @@ def _patch_knowledge_write_discovery() -> Iterator[MagicMock]:
                 )
             raise AssertionError(f"unexpected path: {path}")
 
+        async def _upload(
+            self,
+            url: str,
+            parts: list[tuple[str, Any]],
+            *,
+            headers: dict[str, str],
+        ) -> Any:
+            assert url == "http://instance.host:8080/api/v1/knowledgeItems/import"
+            assert headers == {"Authorization": "Bearer instance-token"}
+            assert parts[0] == ("knCode", "kb-sales")
+            assert parts[1] == ("filePath", "/sales/meeting.md")
+            assert parts[2] == ("fileDescription", "销售复盘会议纪要")
+            file_field, file_spec = parts[3]
+            assert file_field == "fileContent"
+            assert file_spec[0] == "meeting.md"
+            assert file_spec[2] == "text/markdown; charset=utf-8"
+            assert file_spec[1] == '---\nstatus: "active"\n---\n\n会议内容'.encode()
+            return _MockDiscoveryResponse(
+                {
+                    "resultCode": "0",
+                    "resultMsg": "success",
+                    "resultObject": {},
+                }
+            )
+
     root_module = ModuleType("by_framework")
     common_module = ModuleType("by_framework.common")
     redis_module = ModuleType("by_framework.common.redis_client")

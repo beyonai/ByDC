@@ -400,7 +400,7 @@ class HttpKnowledgeSearchBackend:
                     f"knowledge service instance not found: {service_name}",
                 )
             json_headers = self._build_discovery_headers(instance)
-            multipart_headers = self._build_discovery_headers(instance, include_content_type=False)
+            upload_headers = self._build_discovery_upload_headers(instance)
             async with DiscoveryHttpClient(
                 discovery_client,
                 retry_config=retry_config,
@@ -415,20 +415,31 @@ class HttpKnowledgeSearchBackend:
                 )
 
                 import_path = self._build_import_path(config)
-                log_curl("POST", import_path, body={**data, "fileContent": f"@{filename}"})
-                resp = await client.post(
-                    service_name,
-                    import_path,
-                    headers=multipart_headers,
-                    data=data,
-                    files={
-                        "fileContent": (
+                file_bytes = file_content.encode("utf-8")
+                log_curl("UPLOAD", import_path, body={**data, "fileContent": f"@{filename}"})
+                parts: list[tuple[str, Any]] = [
+                    ("knCode", data["knCode"]),
+                    ("filePath", data["filePath"]),
+                ]
+                if request.file_description:
+                    parts.append(("fileDescription", request.file_description))
+                parts.append(
+                    (
+                        "fileContent",
+                        (
                             filename,
-                            file_content.encode("utf-8"),
+                            file_bytes,
                             "text/markdown; charset=utf-8",
-                        )
-                    },
+                        ),
+                    )
                 )
+                instance_url = client._build_absolute_url(instance, import_path)
+                resp = await client.http_client._upload(  # noqa: SLF001
+                    instance_url,
+                    parts,
+                    headers=upload_headers,
+                )
+
                 body = self._parse_discovery_response_body(resp, request.datasource_alias)
                 self._ensure_success(body, request.datasource_alias)
                 return await self._trigger_file_build_by_discovery(
@@ -559,10 +570,18 @@ class HttpKnowledgeSearchBackend:
     @staticmethod
     def _build_discovery_headers(
         instance: Any,
-        *,
-        include_content_type: bool = True,
     ) -> dict[str, str]:
-        headers = {"Content-Type": "application/json"} if include_content_type else {}
+        headers = {"Content-Type": "application/json"}
+        metadata = getattr(instance, "metadata", None)
+        if isinstance(metadata, dict):
+            token = metadata.get("token")
+            if isinstance(token, str) and token:
+                headers["Authorization"] = f"Bearer {token}"
+        return headers
+
+    @staticmethod
+    def _build_discovery_upload_headers(instance: Any) -> dict[str, str]:
+        headers: dict[str, str] = {}
         metadata = getattr(instance, "metadata", None)
         if isinstance(metadata, dict):
             token = metadata.get("token")
