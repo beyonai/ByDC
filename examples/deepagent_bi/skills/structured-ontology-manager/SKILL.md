@@ -10,42 +10,50 @@ allowed-tools: execute, read_file
 
 ## ⚡ 环境准备（首次执行时一次性完成）
 
-> 以下步骤按顺序执行， **全部通过后才能调用脚本** 。后续会话中若 `/tmp/ont_env` 存在且可执行则跳过。
+> 以下步骤按顺序执行，**全部通过后才能调用脚本**。后续会话中若 `/tmp/ont_env` 存在且可执行则跳过。
 
 ### 第 1 步：安装 uv
-bash
-export PATH="HOME/.local/bin:PATH"
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
 which uv >/dev/null 2>&1 || curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
 > ⚠️ 不要用 `source ~/.bashrc`，沙箱可能不是 bash。
 
 ### 第 2 步：创建 Python 3.12 虚拟环境（必须在 /tmp）
-bash
-export PATH="HOME/.local/bin:PATH"
-[ -f /tmp/ont_env/bin/python ] || uv venv --python 3.12 --link-mode copy /tmp/ont_env
 
-> ⚠️  **必须在 /tmp 下创建** ，不要在工作目录（可能挂载在 fuseblk/S3，不支持 symlink）。`--link-mode copy` 是必需的。
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+[ -f /tmp/ont_env/bin/python ] || uv venv --python 3.12 --link-mode copy /tmp/ont_env
+```
+
+> ⚠️ **必须在 /tmp 下创建**，不要在工作目录（可能挂载在 fuseblk/S3，不支持 symlink）。`--link-mode copy` 是必需的。
 
 ### 第 3 步：安装依赖
-bash
-export PATH="HOME/.local/bin:PATH"
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
 uv pip install --python /tmp/ont_env/bin/python \
-/by/.openclaw/workspace-baiying-agent-10002987/skills/structured-ontology-manager/by_datacloud-0.1.37-py3-none-any.whl \
-by-framework \
--i https://mirrors.aliyun.com/pypi/simple/ \
---extra-index-url https://pypi.org/simple/
+  /by/.openclaw/workspace-baiying-agent-10002987/skills/structured-ontology-manager/by_datacloud-0.1.37-py3-none-any.whl \
+  by-framework \
+  -i https://mirrors.aliyun.com/pypi/simple/ \
+  --extra-index-url https://pypi.org/simple/
+```
 
 > ⚠️ `by_datacloud` whl 从本地安装，`by-framework` 从公网 PyPI 安装（阿里云镜像可能没有）。必须加 `--extra-index-url https://pypi.org/simple/`。
 
 ### 第 4 步：验证环境就绪
-bash
+
+```bash
 /tmp/ont_env/bin/python -c "import by_framework; import by_datacloud; print('OK')"
+```
 
 如果输出 `OK` 则环境准备完成，否则根据报错排查。
 
 ## 🌐 必需环境变量
 
-以下变量由运行环境自动注入，脚本会自动读取。 **调用脚本前确认存在** ，缺失则报错提示用户：
+以下变量由运行环境自动注入，脚本会自动读取。**调用脚本前确认存在**，缺失则报错提示用户：
 
 | 变量 | 是否必需 | 默认值 | 说明 |
 |------|----------|--------|------|
@@ -62,18 +70,15 @@ bash
 ## 🚀 调用脚本
 
 环境就绪后，所有脚本统一调用方式：
-bash
-export PATH="HOME/.local/bin:PATH"
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
 export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 cd /by/.openclaw/workspace-baiying-agent-10002987
-/tmp/ont_env/bin/python skills/structured-ontology-manager/scripts/
-
-### 执行格式：
-
-- JSON 参数作为第一个命令行参数传入
+/tmp/ont_env/bin/python skills/structured-ontology-manager/scripts/<script>.py '<JSON>'
 ```
-uv run python skills/structured-ontology-manager/scripts/<script>.py '<JSON>'
-```
+
+> JSON 参数作为第一个命令行参数传入，所有输出为 JSON（stdout）。
 
 ## 能力范围
 
@@ -118,16 +123,6 @@ uv run python skills/structured-ontology-manager/scripts/<script>.py '<JSON>'
 
 - `id` 字段由系统自动生成（INTEGER PRIMARY KEY AUTOINCREMENT），**不需要在 fields 中传入**
 - `property_code` 不能为 `id`
-
-| 变量 | 用途 |
-|------|------|
-| `PYTHON_EXEC` | Python 解释器路径 |
-| `DEEPAGENT_BI_DIR` | 项目根目录 |
-| `BE_DOMAINNAME` | 服务发现，门户服务名称 |
-| `BEYOND_TOKEN` | 门户服务 API 认证 |
-| `REDIS_HOST` | Redis 主机 |
-| `REDIS_PORT` | Redis 端口 |
-| `REDIS_PASSWORD` | Redis 密码 |
 
 ## 参考文档
 
