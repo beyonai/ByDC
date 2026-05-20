@@ -199,3 +199,5 @@ examples/chatbi_demo/data/translate_sql.py
 examples/chatbi_demo/data/.translate_cache.json
 examples/deepagent_bi/.env_deepagent
 examples/deepagent_bi/skills/skills
+examples/deepagent_bi/owl_docs/
+examples/deepagent_bi/owl_resources/

@@ -544,6 +544,17 @@ def _generate_object(state: dict[str, Any], output_dir: Path) -> None:
     entity_code: str = state["entity_code"]
     fields: list[dict[str, Any]] = state.get("fields", [])
 
+    # 自动在最前面插入 id 主键字段（如果用户没有传）
+    has_id = any(f.get("property_code", "").lower() == "id" for f in fields)
+    if not has_id:
+        id_field: dict[str, Any] = {
+            "property_code": "id",
+            "property_name": "主键",
+            "data_type": "INTEGER",
+            "ext_property": {"property_role_rule": {"property_role": "MEASURE", "rule_type": "primary_key"}},
+        }
+        fields = [id_field] + fields
+
     columns: list[Column] = [
         Column(
             name=f["property_code"],
