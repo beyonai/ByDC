@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+from types import ModuleType
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -418,6 +422,33 @@ async def test_http_kb_write_imports_markdown_file_with_front_matter() -> None:
 
 
 @pytest.mark.asyncio
+async def test_http_kb_write_uses_service_discovery_when_url_missing() -> None:
+    backend = HttpKnowledgeSearchBackend({"service_name": "kb-service"})
+    request = KnowledgeWriteRequest(
+        object_code="kb_object",
+        datasource_alias="kb_docs",
+        kb_id="kb-sales",
+        file_path="/sales/meeting.md",
+        labels={"status": "active"},
+        content="会议内容",
+        metadata_properties=[
+            {
+                "propertyName": "status",
+                "valueType": "string",
+                "description": "状态",
+            }
+        ],
+    )
+
+    with _patch_knowledge_write_discovery() as init_redis:
+        result = await backend.write(request)
+
+    init_redis.assert_called_once()
+    assert result.records[0]["filePath"] == "/sales/meeting.md"
+    assert result.meta["build"] == {"resultCode": "0", "resultMsg": "success"}
+
+
+@pytest.mark.asyncio
 async def test_kb_write_request_contains_metadata_properties_from_object_fields() -> None:
     backend = CustomSearchBackend()
     cls = OntologyClass(
@@ -617,3 +648,138 @@ async def test_invoke_write_action_allows_empty_datasource_alias() -> None:
     assert backend.write_request.kb_id == "kb-sales"
     assert backend.write_request.kb_directory == "/sales"
     assert result["records"][0]["filePath"] == "/sales/meeting.md"
+
+
+@contextmanager
+def _patch_knowledge_write_discovery() -> Iterator[MagicMock]:
+    class _MockInstance:
+        metadata = {"token": "instance-token"}
+
+    class _MockDiscoveryClient:
+        def __init__(self, cache_interval: int) -> None:
+            self.cache_interval = cache_interval
+
+        async def discover(self, service_name: str, health_threshold_ms: int) -> _MockInstance:
+            assert service_name == "kb-service"
+            assert health_threshold_ms == -1
+            return _MockInstance()
+
+        async def close(self) -> None:
+            return None
+
+    class _MockRetryConfig:
+        def __init__(self, max_attempts: int, retry_on_status_codes: set[int]) -> None:
+            self.max_attempts = max_attempts
+            self.retry_on_status_codes = retry_on_status_codes
+
+    class _MockDiscoveryResponse:
+        def __init__(self, data: dict[str, Any]) -> None:
+            self.data = data
+
+    class _MockDiscoveryHttpClient:
+        def __init__(
+            self,
+            discovery_client: _MockDiscoveryClient,
+            *,
+            retry_config: _MockRetryConfig,
+            health_threshold_ms: int,
+        ) -> None:
+            self.discovery_client = discovery_client
+            self.retry_config = retry_config
+            self.health_threshold_ms = health_threshold_ms
+
+        async def __aenter__(self) -> Any:
+            return self
+
+        async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
+            return None
+
+        async def post(
+            self,
+            service_name: str,
+            path: str,
+            *,
+            headers: dict[str, str],
+            data: dict[str, str] | None = None,
+            files: dict[str, tuple[str, bytes, str]] | None = None,
+            json: dict[str, Any] | None = None,
+        ) -> Any:
+            assert service_name == "kb-service"
+            if path == "/api/v1/metadataProperties/list":
+                assert headers["Authorization"] == "Bearer instance-token"
+                assert json == {"propertyNameList": ["status"]}
+                return _MockDiscoveryResponse(
+                    {
+                        "resultCode": "0",
+                        "resultMsg": "success",
+                        "resultObject": {"data": []},
+                    }
+                )
+            if path == "/api/v1/metadataProperties/batchCreate":
+                assert headers["Authorization"] == "Bearer instance-token"
+                assert json == {
+                    "propertyList": [
+                        {
+                            "propertyName": "status",
+                            "valueType": "string",
+                            "description": "状态",
+                        }
+                    ]
+                }
+                return _MockDiscoveryResponse(
+                    {
+                        "resultCode": "0",
+                        "resultMsg": "success",
+                        "resultObject": {"data": []},
+                    }
+                )
+            if path == "/api/v1/knowledgeItems/import":
+                assert headers["Authorization"] == "Bearer instance-token"
+                assert data == {"knCode": "kb-sales", "filePath": "/sales/meeting.md"}
+                assert files is not None and files["fileContent"][0] == "meeting.md"
+                return _MockDiscoveryResponse(
+                    {
+                        "resultCode": "0",
+                        "resultMsg": "success",
+                        "resultObject": {},
+                    }
+                )
+            if path == "/api/v1/fileToMarkdownIndex":
+                assert headers["Authorization"] == "Bearer instance-token"
+                assert json == {"knCode": "kb-sales", "filePath": "/sales/meeting.md"}
+                return _MockDiscoveryResponse(
+                    {
+                        "resultCode": "0",
+                        "resultMsg": "success",
+                        "resultObject": {},
+                    }
+                )
+            raise AssertionError(f"unexpected path: {path}")
+
+    root_module = ModuleType("by_framework")
+    common_module = ModuleType("by_framework.common")
+    redis_module = ModuleType("by_framework.common.redis_client")
+    core_module = ModuleType("by_framework.core")
+    discovery_module = ModuleType("by_framework.core.discovery")
+    util_module = ModuleType("by_framework.util")
+    discovery_http_module = ModuleType("by_framework.util.discovery_http_client")
+    http_client_module = ModuleType("by_framework.util.http_client")
+
+    init_redis = MagicMock()
+    redis_module.init_redis = init_redis  # type: ignore[attr-defined]
+    discovery_module.DiscoveryClient = _MockDiscoveryClient  # type: ignore[attr-defined]
+    discovery_http_module.DiscoveryHttpClient = _MockDiscoveryHttpClient  # type: ignore[attr-defined]
+    http_client_module.RetryConfig = _MockRetryConfig  # type: ignore[attr-defined]
+
+    modules = {
+        "by_framework": root_module,
+        "by_framework.common": common_module,
+        "by_framework.common.redis_client": redis_module,
+        "by_framework.core": core_module,
+        "by_framework.core.discovery": discovery_module,
+        "by_framework.util": util_module,
+        "by_framework.util.discovery_http_client": discovery_http_module,
+        "by_framework.util.http_client": http_client_module,
+    }
+    with patch.dict(sys.modules, modules):
+        yield init_redis

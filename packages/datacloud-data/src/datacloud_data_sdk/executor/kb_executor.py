@@ -46,7 +46,7 @@ class KbExecutor:
 
     def __init__(
         self,
-        kb_configs: dict[str, dict],
+        kb_configs: dict[str, dict] | None = None,
         csv_base_dir: str = "/tmp/datacloud_csv",
         search_backend: KnowledgeSearchBackend | None = None,
     ) -> None:

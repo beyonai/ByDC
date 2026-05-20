@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any, Protocol
@@ -11,6 +12,10 @@ import httpx
 
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError, KbExecutionError
 from datacloud_data_sdk.utils.curl_logger import log_curl
+from datacloud_data_sdk.utils.redis_discovery import (
+    RedisDiscoveryConfig,
+    load_redis_discovery_config,
+)
 
 
 @dataclass(frozen=True)
@@ -88,20 +93,26 @@ class KnowledgeWriteBackend(Protocol):
 class HttpKnowledgeSearchBackend:
     """Default metadata service backend using knowledgeItems search/import APIs."""
 
-    def __init__(self, kb_configs: dict[str, Any]) -> None:
-        self._configs = kb_configs
+    _default_redis_config: RedisDiscoveryConfig | None = None
+
+    def __init__(
+        self,
+        kb_configs: dict[str, Any] | None = None,
+        redis_config: RedisDiscoveryConfig | None = None,
+    ) -> None:
+        self._configs = kb_configs or {}
+        self._redis_config = (
+            redis_config or self.__class__._default_redis_config or load_redis_discovery_config()
+        )
+
+    @classmethod
+    def configure_default_redis(cls, redis_config: RedisDiscoveryConfig | None) -> None:
+        """Configure default Redis discovery settings for registry-created instances."""
+        cls._default_redis_config = redis_config
 
     async def search(self, request: KnowledgeSearchRequest) -> KnowledgeSearchResult:
         """Search the configured metadata endpoint and normalize returned records."""
         config = self._get_config(request.datasource_alias)
-        endpoint = config.get("endpoint") or config.get("endpoint_url")
-        if not endpoint:
-            raise KbExecutionError(
-                request.datasource_alias,
-                "endpoint not configured in kb_configs",
-            )
-
-        url = self._build_search_file_url(str(endpoint), config)
         body: dict[str, Any] = {
             "query": request.query,
             "topK": request.limit,
@@ -128,27 +139,18 @@ class HttpKnowledgeSearchBackend:
         if metadata_field_list:
             body["metadataFieldList"] = metadata_field_list
 
-        log_curl("POST", url, body=body)
-
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(url, json=body)
-        except httpx.HTTPError as exc:
-            raise KbExecutionError(request.datasource_alias, str(exc)) from exc
-
-        if resp.status_code >= 400:
-            raise KbExecutionError(
-                request.datasource_alias,
-                f"HTTP {resp.status_code}: {resp.text}",
+        endpoint = self._resolve_endpoint(config)
+        if endpoint:
+            url = self._build_search_file_url(endpoint, config)
+            data = await self._post_json(url, body, request.datasource_alias)
+        else:
+            service_name = self._resolve_service_name(config, request.datasource_alias)
+            data = await self._post_json_by_discovery(
+                service_name=service_name,
+                path=self._build_search_file_path(config),
+                body=body,
+                datasource_alias=request.datasource_alias,
             )
-
-        try:
-            data = resp.json()
-        except ValueError as exc:
-            raise KbExecutionError(
-                request.datasource_alias,
-                f"invalid JSON response: {exc}",
-            ) from exc
 
         result_object = data.get("resultObject")
         if isinstance(result_object, dict):
@@ -181,15 +183,6 @@ class HttpKnowledgeSearchBackend:
     async def write(self, request: KnowledgeWriteRequest) -> KnowledgeWriteResult:
         """Upload a generated Markdown document to the configured metadata endpoint."""
         config = self._get_config(request.datasource_alias)
-        endpoint = config.get("endpoint") or config.get("endpoint_url")
-        if not endpoint:
-            raise KbExecutionError(
-                request.datasource_alias,
-                "endpoint not configured in kb_configs",
-            )
-
-        endpoint_url = str(endpoint)
-        import_url = self._build_import_url(endpoint_url, config)
         markdown_file_path = _to_markdown_file_path(request.file_path, request.kb_directory)
         file_content = _render_markdown_with_front_matter(request.labels, request.content)
         filename = PurePosixPath(markdown_file_path).name or "document.md"
@@ -200,33 +193,50 @@ class HttpKnowledgeSearchBackend:
         if request.file_description:
             data["fileDescription"] = request.file_description
 
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                await self._ensure_metadata_properties(client, endpoint_url, config, request)
+        endpoint = self._resolve_endpoint(config)
+        if endpoint:
+            import_url = self._build_import_url(endpoint, config)
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    await self._ensure_metadata_properties_http(client, endpoint, config, request)
 
-                log_curl("POST", import_url, body={**data, "fileContent": f"@{filename}"})
-                resp = await client.post(
-                    import_url,
+                    log_curl("POST", import_url, body={**data, "fileContent": f"@{filename}"})
+                    resp = await client.post(
+                        import_url,
+                        data=data,
+                        files={
+                            "fileContent": (
+                                filename,
+                                file_content.encode("utf-8"),
+                                "text/markdown; charset=utf-8",
+                            )
+                        },
+                    )
+                    body = self._parse_response_body(resp, request.datasource_alias)
+                    self._ensure_success(body, request.datasource_alias)
+                    build_body = await self._trigger_file_build_http(
+                        client,
+                        endpoint,
+                        config,
+                        request,
+                        markdown_file_path,
+                    )
+            except httpx.HTTPError as exc:
+                raise KbExecutionError(request.datasource_alias, str(exc)) from exc
+        else:
+            service_name = self._resolve_service_name(config, request.datasource_alias)
+            try:
+                build_body = await self._write_by_discovery(
+                    service_name=service_name,
+                    config=config,
+                    request=request,
                     data=data,
-                    files={
-                        "fileContent": (
-                            filename,
-                            file_content.encode("utf-8"),
-                            "text/markdown; charset=utf-8",
-                        )
-                    },
+                    filename=filename,
+                    file_content=file_content,
+                    markdown_file_path=markdown_file_path,
                 )
-                body = self._parse_response_body(resp, request.datasource_alias)
-                self._ensure_success(body, request.datasource_alias)
-                build_body = await self._trigger_file_build(
-                    client,
-                    endpoint_url,
-                    config,
-                    request,
-                    markdown_file_path,
-                )
-        except httpx.HTTPError as exc:
-            raise KbExecutionError(request.datasource_alias, str(exc)) from exc
+            except httpx.HTTPError as exc:
+                raise KbExecutionError(request.datasource_alias, str(exc)) from exc
 
         record = {
             **request.labels,
@@ -246,7 +256,43 @@ class HttpKnowledgeSearchBackend:
             },
         )
 
-    async def _ensure_metadata_properties(
+    async def _ensure_metadata_properties_by_discovery(
+        self,
+        client: Any,
+        service_name: str,
+        config: dict[str, Any],
+        request: KnowledgeWriteRequest,
+        headers: dict[str, str],
+    ) -> None:
+        properties = _normalize_metadata_properties(request.labels, request.metadata_properties)
+        if not properties:
+            return
+
+        names = [str(item["propertyName"]) for item in properties]
+        list_body = {"propertyNameList": names}
+        list_path = self._build_metadata_properties_list_path(config)
+        log_curl("POST", list_path, body=list_body)
+        resp = await client.post(service_name, list_path, headers=headers, json=list_body)
+        body = self._parse_discovery_response_body(resp, request.datasource_alias)
+        self._ensure_success(body, request.datasource_alias)
+
+        existing_names = _metadata_property_names(body)
+        missing_properties = [
+            property_def
+            for property_def in properties
+            if str(property_def["propertyName"]) not in existing_names
+        ]
+        if not missing_properties:
+            return
+
+        create_path = self._build_metadata_properties_batch_create_path(config)
+        create_body = {"propertyList": missing_properties}
+        log_curl("POST", create_path, body=create_body)
+        resp = await client.post(service_name, create_path, headers=headers, json=create_body)
+        body = self._parse_discovery_response_body(resp, request.datasource_alias)
+        self._ensure_success(body, request.datasource_alias)
+
+    async def _ensure_metadata_properties_http(
         self,
         client: httpx.AsyncClient,
         endpoint: str,
@@ -281,7 +327,24 @@ class HttpKnowledgeSearchBackend:
         body = self._parse_response_body(resp, request.datasource_alias)
         self._ensure_success(body, request.datasource_alias)
 
-    async def _trigger_file_build(
+    async def _trigger_file_build_by_discovery(
+        self,
+        client: Any,
+        service_name: str,
+        config: dict[str, Any],
+        request: KnowledgeWriteRequest,
+        file_path: str,
+        headers: dict[str, str],
+    ) -> dict[str, Any]:
+        build_url = self._build_file_to_markdown_index_path(config)
+        build_body = {"knCode": request.kb_id, "filePath": file_path}
+        log_curl("POST", build_url, body=build_body)
+        resp = await client.post(service_name, build_url, headers=headers, json=build_body)
+        body = self._parse_discovery_response_body(resp, request.datasource_alias)
+        self._ensure_success(body, request.datasource_alias)
+        return body
+
+    async def _trigger_file_build_http(
         self,
         client: httpx.AsyncClient,
         endpoint: str,
@@ -296,6 +359,88 @@ class HttpKnowledgeSearchBackend:
         body = self._parse_response_body(resp, request.datasource_alias)
         self._ensure_success(body, request.datasource_alias)
         return body
+
+    async def _write_by_discovery(
+        self,
+        *,
+        service_name: str,
+        config: dict[str, Any],
+        request: KnowledgeWriteRequest,
+        data: dict[str, str],
+        filename: str,
+        file_content: str,
+        markdown_file_path: str,
+    ) -> dict[str, Any]:
+        try:
+            from by_framework.common.redis_client import init_redis
+            from by_framework.core.discovery import DiscoveryClient
+            from by_framework.util.discovery_http_client import DiscoveryHttpClient
+            from by_framework.util.http_client import RetryConfig
+        except ImportError as exc:
+            raise KbExecutionError(
+                request.datasource_alias,
+                "redis service discovery requires by_framework dependency",
+            ) from exc
+
+        redis_config = self._redis_config
+        init_redis(
+            host=redis_config.host,
+            port=redis_config.port,
+            db=redis_config.database,
+            password=redis_config.password,
+            username=redis_config.username,
+        )
+        discovery_client = DiscoveryClient(cache_interval=5)
+        retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
+        try:
+            instance = await discovery_client.discover(service_name, health_threshold_ms=-1)
+            if not instance:
+                raise KbExecutionError(
+                    request.datasource_alias,
+                    f"knowledge service instance not found: {service_name}",
+                )
+            json_headers = self._build_discovery_headers(instance)
+            multipart_headers = self._build_discovery_headers(instance, include_content_type=False)
+            async with DiscoveryHttpClient(
+                discovery_client,
+                retry_config=retry_config,
+                health_threshold_ms=-1,
+            ) as client:
+                await self._ensure_metadata_properties_by_discovery(
+                    client,
+                    service_name,
+                    config,
+                    request,
+                    json_headers,
+                )
+
+                import_path = self._build_import_path(config)
+                log_curl("POST", import_path, body={**data, "fileContent": f"@{filename}"})
+                resp = await client.post(
+                    service_name,
+                    import_path,
+                    headers=multipart_headers,
+                    data=data,
+                    files={
+                        "fileContent": (
+                            filename,
+                            file_content.encode("utf-8"),
+                            "text/markdown; charset=utf-8",
+                        )
+                    },
+                )
+                body = self._parse_discovery_response_body(resp, request.datasource_alias)
+                self._ensure_success(body, request.datasource_alias)
+                return await self._trigger_file_build_by_discovery(
+                    client,
+                    service_name,
+                    config,
+                    request,
+                    markdown_file_path,
+                    json_headers,
+                )
+        finally:
+            await discovery_client.close()
 
     @staticmethod
     def _parse_response_body(resp: httpx.Response, datasource_alias: str) -> dict[str, Any]:
@@ -317,6 +462,16 @@ class HttpKnowledgeSearchBackend:
         return body
 
     @staticmethod
+    def _parse_discovery_response_body(resp: Any, datasource_alias: str) -> dict[str, Any]:
+        body = getattr(resp, "data", None)
+        if not isinstance(body, dict):
+            raise KbExecutionError(
+                datasource_alias,
+                "invalid discovery response: root is not object",
+            )
+        return body
+
+    @staticmethod
     def _ensure_success(body: dict[str, Any], datasource_alias: str) -> None:
         if body.get("resultCode") not in (None, "0", 0):
             raise KbExecutionError(
@@ -325,6 +480,8 @@ class HttpKnowledgeSearchBackend:
             )
 
     def _get_config(self, datasource_alias: str) -> dict[str, Any]:
+        if not self._configs:
+            return {}
         if datasource_alias not in self._configs:
             if _looks_like_single_backend_config(self._configs):
                 return self._configs
@@ -333,6 +490,153 @@ class HttpKnowledgeSearchBackend:
         if not isinstance(config, dict):
             raise DataSourceUnavailableError(datasource_alias)
         return config
+
+    @staticmethod
+    def _resolve_endpoint(config: dict[str, Any]) -> str | None:
+        endpoint = _first_non_empty_str(
+            config.get("url"),
+            config.get("endpoint"),
+            config.get("endpoint_url"),
+        )
+        return endpoint
+
+    @staticmethod
+    def _resolve_service_name(config: dict[str, Any], datasource_alias: str) -> str:
+        service_name = _first_non_empty_str(config.get("service_name"), config.get("serviceName"))
+        if service_name:
+            return service_name
+        env_service_name = _first_non_empty_str(
+            os.getenv("QA_DOMAINNAME"),
+        )
+        if env_service_name:
+            return env_service_name
+        return datasource_alias
+
+    @staticmethod
+    def _build_search_file_path(config: dict[str, Any]) -> str:
+        return _normalize_discovery_path(
+            _first_non_empty_str(config.get("search_file_path"), config.get("searchFilePath")),
+            "/api/v1/knowledgeItems/searchFile",
+        )
+
+    @staticmethod
+    def _build_import_path(config: dict[str, Any]) -> str:
+        return _normalize_discovery_path(
+            _first_non_empty_str(config.get("import_path"), config.get("importPath")),
+            "/api/v1/knowledgeItems/import",
+        )
+
+    @staticmethod
+    def _build_metadata_properties_list_path(config: dict[str, Any]) -> str:
+        return _normalize_discovery_path(
+            _first_non_empty_str(
+                config.get("metadata_properties_list_path"),
+                config.get("metadataPropertiesListPath"),
+            ),
+            "/api/v1/metadataProperties/list",
+        )
+
+    @staticmethod
+    def _build_metadata_properties_batch_create_path(config: dict[str, Any]) -> str:
+        return _normalize_discovery_path(
+            _first_non_empty_str(
+                config.get("metadata_properties_batch_create_path"),
+                config.get("metadataPropertiesBatchCreatePath"),
+            ),
+            "/api/v1/metadataProperties/batchCreate",
+        )
+
+    @staticmethod
+    def _build_file_to_markdown_index_path(config: dict[str, Any]) -> str:
+        return _normalize_discovery_path(
+            _first_non_empty_str(
+                config.get("file_to_markdown_index_path"),
+                config.get("fileToMarkdownIndexPath"),
+            ),
+            "/api/v1/fileToMarkdownIndex",
+        )
+
+    @staticmethod
+    def _build_discovery_headers(
+        instance: Any,
+        *,
+        include_content_type: bool = True,
+    ) -> dict[str, str]:
+        headers = {"Content-Type": "application/json"} if include_content_type else {}
+        metadata = getattr(instance, "metadata", None)
+        if isinstance(metadata, dict):
+            token = metadata.get("token")
+            if isinstance(token, str) and token:
+                headers["Authorization"] = f"Bearer {token}"
+        return headers
+
+    async def _post_json(
+        self,
+        url: str,
+        body: dict[str, Any],
+        datasource_alias: str,
+    ) -> dict[str, Any]:
+        log_curl("POST", url, body=body)
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, json=body)
+        except httpx.HTTPError as exc:
+            raise KbExecutionError(datasource_alias, str(exc)) from exc
+        return self._parse_response_body(response, datasource_alias)
+
+    async def _post_json_by_discovery(
+        self,
+        *,
+        service_name: str,
+        path: str,
+        body: dict[str, Any],
+        datasource_alias: str,
+    ) -> dict[str, Any]:
+        try:
+            from by_framework.common.redis_client import init_redis
+            from by_framework.core.discovery import DiscoveryClient
+            from by_framework.util.discovery_http_client import DiscoveryHttpClient
+            from by_framework.util.http_client import RetryConfig
+        except ImportError as exc:
+            raise KbExecutionError(
+                datasource_alias,
+                "redis service discovery requires by_framework dependency",
+            ) from exc
+
+        redis_config = self._redis_config
+        init_redis(
+            host=redis_config.host,
+            port=redis_config.port,
+            db=redis_config.database,
+            password=redis_config.password,
+            username=redis_config.username,
+        )
+        discovery_client = DiscoveryClient(cache_interval=5)
+        retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
+        try:
+            instance = await discovery_client.discover(service_name, health_threshold_ms=-1)
+            if not instance:
+                raise KbExecutionError(
+                    datasource_alias,
+                    f"knowledge service instance not found: {service_name}",
+                )
+            headers = self._build_discovery_headers(instance)
+            async with DiscoveryHttpClient(
+                discovery_client,
+                retry_config=retry_config,
+                health_threshold_ms=-1,
+            ) as client:
+                log_curl("POST", path, body=body)
+                response = await client.post(
+                    service_name,
+                    path,
+                    headers=headers,
+                    json=body,
+                )
+        finally:
+            await discovery_client.close()
+
+        return self._parse_discovery_response_body(response, datasource_alias)
 
     @staticmethod
     def _build_search_file_url(endpoint: str, config: dict[str, Any]) -> str:
@@ -466,8 +770,11 @@ def _looks_like_single_backend_config(config: dict[str, Any]) -> bool:
     return any(
         key in config
         for key in (
+            "url",
             "endpoint",
             "endpoint_url",
+            "service_name",
+            "serviceName",
             "search_file_url",
             "searchFileUrl",
             "import_url",
@@ -516,6 +823,20 @@ def _normalize_metadata_properties(
             property_def["extParams"] = ext_params
         properties.append(property_def)
     return properties
+
+
+def _first_non_empty_str(*values: Any) -> str:
+    for value in values:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _normalize_discovery_path(path: str, default_path: str) -> str:
+    resolved = path or default_path
+    if not resolved.startswith("/"):
+        resolved = f"/{resolved}"
+    return resolved
 
 
 def _infer_metadata_value_type(value: Any) -> str:

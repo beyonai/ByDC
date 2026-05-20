@@ -228,6 +228,7 @@ def _patch_by_framework(
             assert json == expected_payload
             return type("_MockDiscoveryResponse", (), {"data": response_body})()
 
+    root_module = ModuleType("by_framework")
     common_module = ModuleType("by_framework.common")
     redis_module = ModuleType("by_framework.common.redis_client")
     core_module = ModuleType("by_framework.core")
@@ -243,6 +244,7 @@ def _patch_by_framework(
     http_client_module.RetryConfig = _MockRetryConfig  # type: ignore[attr-defined]
 
     modules = {
+        "by_framework": root_module,
         "by_framework.common": common_module,
         "by_framework.common.redis_client": redis_module,
         "by_framework.core": core_module,
