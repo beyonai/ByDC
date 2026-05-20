@@ -15,6 +15,7 @@ from datacloud_knowledge.ingestion.owl_import.importer._helpers import (
 from datacloud_knowledge.ingestion.owl_import.importer.snowflake import _next_snowflake_ids
 
 from ._base import _is_prop_term_id, _term_name_search_scope_payload
+from ._term import _backfill_jieba_tsvector_batch
 from ._vocabulary import _batch_insert_vocabulary_words
 
 logger = logging.getLogger(__name__)
@@ -146,6 +147,9 @@ def _batch_insert_relation_term_names(cur: Cursor, relation_ids: list[str]) -> i
     )
     inserted_count = cur.rowcount
     cur.execute("DROP TABLE _tmp_rel_term_name")
+
+    # 回填 name_keywords_jieba（prop 术语走 relation term_name 路径，不走 _batch_sync_term_names）
+    _backfill_jieba_tsvector_batch(cur, scope_rows)
 
     words = list({row[2] for row in scope_rows})
     _batch_insert_vocabulary_words(cur, words)
