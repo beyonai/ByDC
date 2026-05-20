@@ -262,6 +262,10 @@ def backfill_embeddings(
     batch_size: int = 50,
     force: bool = False,
     limit: int | None = None,
+    term_ids: list[str] | None = None,
+    embedding_api_base: str = "",
+    embedding_api_key: str = "",
+    embedding_model: str = "",
 ) -> dict[str, Any]:
     """回填 term_name 表的向量嵌入字段。
 
@@ -271,6 +275,10 @@ def backfill_embeddings(
         batch_size: 每次 API 批次处理的 term name 数量。
         force: 是否重新生成所有嵌入（默认仅处理 NULL 嵌入）。
         limit: 最大处理数量（None 表示不限制）。
+        term_ids: 限定只回填指定 term_id 的向量（None 表示全部）。
+        embedding_api_base: Embedding API URL（覆盖环境变量）。
+        embedding_api_key: Embedding API 密钥（覆盖环境变量）。
+        embedding_model: Embedding 模型名称（覆盖环境变量）。
 
     Returns:
         dict，字段：status / processed / skipped。
@@ -285,6 +293,10 @@ def backfill_embeddings(
         batch_size=batch_size,
         force=force,
         limit=limit,
+        term_ids=term_ids,
+        embedding_api_base=embedding_api_base,
+        embedding_api_key=embedding_api_key,
+        embedding_model=embedding_model,
     )
 
 

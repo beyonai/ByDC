@@ -26,6 +26,10 @@ def backfill_name_embeddings(
     batch_size: int = 50,
     force: bool = False,
     limit: int | None = None,
+    term_ids: list[str] | None = None,
+    embedding_api_base: str = "",
+    embedding_api_key: str = "",
+    embedding_model: str = "",
 ) -> dict[str, int | str]:
     """为 term_name.name_embedding 生成嵌入向量。
 
@@ -38,18 +42,33 @@ def backfill_name_embeddings(
         batch_size: 每批处理的记录数。
         force: 是否强制重新生成所有向量（忽略已有的 name_embedding）。
         limit: 最大处理记录数（用于测试）。
+        term_ids: 限定只回填指定 term_id 的向量（None 表示全部）。
+        embedding_api_base: Embedding API 基础 URL（覆盖环境变量）。
+        embedding_api_key: Embedding API 密钥（覆盖环境变量）。
+        embedding_model: Embedding 模型名称（覆盖环境变量）。
 
     Returns:
         {"schema": str, "updated": int} 处理结果。
     """
-    from datacloud_knowledge.retrieval.embedding import get_embedding_service
+    from datacloud_knowledge.retrieval.embedding.service import EmbeddingConfig, EmbeddingService
 
     resolved_schema = resolve_knowledge_schema_for_connection(schema=schema, db_url=db_url)
-    embedding_service = get_embedding_service()
+
+    if embedding_api_base or embedding_api_key or embedding_model:
+        config = EmbeddingConfig.from_params(
+            api_base=embedding_api_base, api_key=embedding_api_key, model=embedding_model
+        )
+        embedding_service = EmbeddingService(config)
+    else:
+        from datacloud_knowledge.retrieval.embedding import get_embedding_service
+
+        embedding_service = get_embedding_service()
 
     predicate: sql.Composable = sql.SQL("name_text IS NOT NULL")
     if not force:
         predicate += sql.SQL(" AND name_embedding IS NULL")
+    if term_ids:
+        predicate += sql.SQL(" AND term_id = ANY(%s)")
 
     with psycopg.connect(
         build_postgres_connection_uri(schema=resolved_schema, db_url=db_url)
@@ -62,18 +81,32 @@ def backfill_name_embeddings(
                     break
                 current_batch_size = batch_size if remaining is None else min(batch_size, remaining)
                 with conn.cursor() as cur:
-                    cur.execute(
-                        sql.SQL(
-                            """
-                            SELECT name_id, name_text
-                            FROM {}.term_name
-                            WHERE {}
-                            ORDER BY name_id
-                            LIMIT %s
-                            """
-                        ).format(sql.Identifier(resolved_schema), predicate),
-                        (current_batch_size,),
-                    )
+                    if term_ids:
+                        cur.execute(
+                            sql.SQL(
+                                """
+                                SELECT name_id, name_text
+                                FROM {}.term_name
+                                WHERE {}
+                                ORDER BY name_id
+                                LIMIT %s
+                                """
+                            ).format(sql.Identifier(resolved_schema), predicate),
+                            (term_ids, current_batch_size),
+                        )
+                    else:
+                        cur.execute(
+                            sql.SQL(
+                                """
+                                SELECT name_id, name_text
+                                FROM {}.term_name
+                                WHERE {}
+                                ORDER BY name_id
+                                LIMIT %s
+                                """
+                            ).format(sql.Identifier(resolved_schema), predicate),
+                            (current_batch_size,),
+                        )
                     rows = cur.fetchall()
                 if not rows:
                     break
