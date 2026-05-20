@@ -653,6 +653,9 @@ async def test_invoke_write_action_allows_empty_datasource_alias() -> None:
 @contextmanager
 def _patch_knowledge_write_discovery() -> Iterator[MagicMock]:
     class _MockInstance:
+        host = "instance.host"
+        port = 8080
+        protocol = "http"
         metadata = {"token": "instance-token"}
 
     class _MockDiscoveryClient:
@@ -676,6 +679,38 @@ def _patch_knowledge_write_discovery() -> Iterator[MagicMock]:
         def __init__(self, data: dict[str, Any]) -> None:
             self.data = data
 
+    class _MockHttpClient:
+        async def request(
+            self,
+            *,
+            method: str,
+            url: str,
+            headers: dict[str, str],
+            data: dict[str, str] | None = None,
+            files: dict[str, tuple[str, bytes, str]] | None = None,
+        ) -> Any:
+            assert method == "POST"
+            assert url == "http://instance.host:8080/api/v1/knowledgeItems/import"
+            assert headers == {"Authorization": "Bearer instance-token"}
+            assert data == {
+                "knCode": "kb-sales",
+                "filePath": "/sales/meeting.md",
+                "fileDescription": "销售复盘会议纪要",
+            }
+            assert files is not None
+            file_name, file_content, content_type = files["fileContent"]
+            assert file_name == "meeting.md"
+            assert content_type == "text/markdown; charset=utf-8"
+            assert file_content == '---\nstatus: "active"\n---\n\n会议内容'.encode()
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {
+                "resultCode": "0",
+                "resultMsg": "success",
+                "resultObject": {},
+            }
+            return mock_resp
+
     class _MockDiscoveryHttpClient:
         def __init__(
             self,
@@ -687,6 +722,7 @@ def _patch_knowledge_write_discovery() -> Iterator[MagicMock]:
             self.discovery_client = discovery_client
             self.retry_config = retry_config
             self.health_threshold_ms = health_threshold_ms
+            self.http_client = type("_MockHttpWrapper", (), {"_client": _MockHttpClient()})()
 
         async def __aenter__(self) -> Any:
             return self

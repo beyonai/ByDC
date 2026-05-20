@@ -400,7 +400,7 @@ class HttpKnowledgeSearchBackend:
                     f"knowledge service instance not found: {service_name}",
                 )
             json_headers = self._build_discovery_headers(instance)
-            multipart_headers = self._build_discovery_headers(instance, include_content_type=False)
+            upload_headers = self._build_discovery_upload_headers(instance)
             async with DiscoveryHttpClient(
                 discovery_client,
                 retry_config=retry_config,
@@ -415,20 +415,24 @@ class HttpKnowledgeSearchBackend:
                 )
 
                 import_path = self._build_import_path(config)
-                log_curl("POST", import_path, body={**data, "fileContent": f"@{filename}"})
-                resp = await client.post(
-                    service_name,
-                    import_path,
-                    headers=multipart_headers,
-                    data=data,
+                file_bytes = file_content.encode("utf-8")
+                log_curl("UPLOAD", import_path, body={**data, "fileContent": f"@{filename}"})
+                instance_url = self._build_instance_url(instance, import_path)
+                multipart_data = dict(data)
+                resp = await client.http_client._client.request(  # noqa: SLF001
+                    method="POST",
+                    url=instance_url,
+                    headers=upload_headers,
+                    data=multipart_data,
                     files={
                         "fileContent": (
                             filename,
-                            file_content.encode("utf-8"),
+                            file_bytes,
                             "text/markdown; charset=utf-8",
                         )
                     },
                 )
+
                 body = self._parse_discovery_response_body(resp, request.datasource_alias)
                 self._ensure_success(body, request.datasource_alias)
                 return await self._trigger_file_build_by_discovery(
@@ -559,16 +563,37 @@ class HttpKnowledgeSearchBackend:
     @staticmethod
     def _build_discovery_headers(
         instance: Any,
-        *,
-        include_content_type: bool = True,
     ) -> dict[str, str]:
-        headers = {"Content-Type": "application/json"} if include_content_type else {}
+        headers = {"Content-Type": "application/json"}
         metadata = getattr(instance, "metadata", None)
         if isinstance(metadata, dict):
             token = metadata.get("token")
             if isinstance(token, str) and token:
                 headers["Authorization"] = f"Bearer {token}"
         return headers
+
+    @staticmethod
+    def _build_discovery_upload_headers(instance: Any) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        metadata = getattr(instance, "metadata", None)
+        if isinstance(metadata, dict):
+            token = metadata.get("token")
+            if isinstance(token, str) and token:
+                headers["Authorization"] = f"Bearer {token}"
+        return headers
+
+    @staticmethod
+    def _build_instance_url(instance: Any, path: str) -> str:
+        protocol = str(getattr(instance, "protocol", "") or "http")
+        host = str(getattr(instance, "host", "") or "")
+        port = getattr(instance, "port", None)
+        path_prefix = str(getattr(instance, "path_prefix", "") or "").strip("/")
+
+        suffix_parts = [segment for segment in (path_prefix, path.strip("/")) if segment]
+        suffix = "/".join(suffix_parts)
+        if suffix:
+            return f"{protocol}://{host}:{port}/{suffix}"
+        return f"{protocol}://{host}:{port}"
 
     async def _post_json(
         self,
