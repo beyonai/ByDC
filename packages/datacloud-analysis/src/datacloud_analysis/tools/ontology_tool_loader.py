@@ -683,10 +683,15 @@ class OntologyToolLoader:
                     )
 
                 try:
+                    _raw_title = str(tool_def.get("title") or name)
+                    if is_virtual and action_family in {"query", "compute"}:
+                        _display_title = f"[内置]{_raw_title}"
+                    else:
+                        _display_title = _raw_title
                     result[name] = StructuredTool(
                         name=name,
                         description=tool_def.get("description", name),
-                        metadata={"title": str(tool_def.get("title") or name)},
+                        metadata={"title": _display_title},
                         args_schema=args_schema,
                         coroutine=_make_object_action_coroutine(
                             obj_code, action_code, self._loader
