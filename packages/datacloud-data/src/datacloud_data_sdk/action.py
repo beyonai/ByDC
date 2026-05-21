@@ -1350,6 +1350,11 @@ class Action:
 
             return await KbSearchExecutor(self._loader).execute(object_code, params)
 
+        if action_family == "search_by_file_name":
+            from datacloud_data_sdk.executor.kb_search_executor import KbSearchExecutor
+
+            return await KbSearchExecutor(self._loader).search_by_file_name(object_code, params)
+
         if action_family == "write":
             from datacloud_data_sdk.executor.kb_search_executor import KbSearchExecutor
 

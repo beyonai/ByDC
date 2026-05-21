@@ -328,6 +328,8 @@ def _inject_dynamic_table_object_actions(cls, existing_codes: set, registry) -> 
 def _inject_kb_object_actions(cls, existing_codes: set, registry) -> None:
     """为 KB 对象注入 search_* 和 write_* 动作。"""
     from datacloud_data_sdk.virtual_action.generator import (
+        build_file_name_chunk_search_description,
+        build_file_name_chunk_search_schema,
         build_kb_write_schema,
         build_search_description,
         build_search_schema,
@@ -355,6 +357,27 @@ def _inject_kb_object_actions(cls, existing_codes: set, registry) -> None:
         cls.actions.append(action)
         registry.register(search_code, ActionRoute("object", obj_code, "search"))
         logger.debug("注入 %s", search_code)
+
+    file_name_search_code = f"search_by_file_name_{obj_code}"
+    if file_name_search_code not in existing_codes:
+        schema = build_file_name_chunk_search_schema(obj_name)
+        action = _make_action(
+            action_code=file_name_search_code,
+            action_name=f"按文件名称检索{obj_name}内容",
+            description=build_file_name_chunk_search_description(obj_name, obj_desc),
+            belong_class=obj_code,
+            action_family="search_by_file_name",
+            virtual_backend="kb_search",
+            scope_type="object",
+            scope_code=obj_code,
+            input_schema=schema,
+        )
+        cls.actions.append(action)
+        registry.register(
+            file_name_search_code,
+            ActionRoute("object", obj_code, "search_by_file_name"),
+        )
+        logger.debug("注入 %s", file_name_search_code)
 
     write_code = f"write_{obj_code}"
     if write_code not in existing_codes:

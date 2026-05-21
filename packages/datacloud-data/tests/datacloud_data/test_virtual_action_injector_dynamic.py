@@ -63,7 +63,16 @@ def test_inject_virtual_actions_adds_kb_write_action() -> None:
 
     cls = loader.get_ontology_class("meeting_doc")
     action_codes = {action.action_code for action in cls.actions}
-    assert {"search_meeting_doc", "write_meeting_doc"}.issubset(action_codes)
+    assert {
+        "search_meeting_doc",
+        "search_by_file_name_meeting_doc",
+        "write_meeting_doc",
+    }.issubset(action_codes)
+    file_name_search_action = next(
+        action for action in cls.actions if action.action_code == "search_by_file_name_meeting_doc"
+    )
+    assert set(file_name_search_action.input_schema["properties"]) == {"query", "fileName"}
+    assert file_name_search_action.input_schema["required"] == ["query", "fileName"]
     write_action = next(
         action for action in cls.actions if action.action_code == "write_meeting_doc"
     )

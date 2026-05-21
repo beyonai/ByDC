@@ -15,11 +15,13 @@
 from __future__ import annotations
 
 import logging
+import traceback
 from typing import Any, cast
 
 from datacloud_data_sdk.exceptions import KbExecutionError
 from datacloud_data_sdk.executor.kb_search_backend import (
     HttpKnowledgeSearchBackend,
+    KnowledgeFileNameSearchRequest,
     KnowledgeSearchBackend,
     KnowledgeSearchRequest,
     KnowledgeWriteBackend,
@@ -96,6 +98,56 @@ class KbSearchExecutor:
         ).convert_by_fields(response.get("records", []), list(getattr(cls, "fields", [])))
         return response
 
+    async def search_by_file_name(
+        self,
+        object_code: str,
+        arguments: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Execute chunk-level semantic search constrained by directory and file name."""
+        cls = self._loader.get_ontology_class(object_code)
+        kb_configs = getattr(self._loader._config, "kb_source_configs", None)
+        configured_backend = getattr(self._loader._config, "kb_search_backend", None)
+        datasource_alias = self._get_datasource_alias(cls)
+
+        backend = self._resolve_backend(cls, kb_configs, configured_backend)
+        query = str(arguments.get("query", "") or "")
+        file_name = str(arguments.get("fileName") or "")
+        if not file_name:
+            return self._empty_response(object_code, arguments, "fileName is required", error=True)
+        search_by_file_name = getattr(backend, "search_by_file_name", None)
+        if not callable(search_by_file_name):
+            return self._empty_response(
+                object_code,
+                arguments,
+                "knowledge backend does not support search_by_file_name",
+                error=True,
+            )
+
+        try:
+            result = await search_by_file_name(
+                KnowledgeFileNameSearchRequest(
+                    object_code=cls.object_code,
+                    datasource_alias=datasource_alias,
+                    query=query,
+                    file_name=file_name,
+                    kb_id=self._get_kb_id(cls),
+                    kb_directory=self._get_kb_directory(cls),
+                    metadata_field_list=[
+                        str(getattr(field, "field_code", "")) for field in cls.fields
+                    ],
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("knowledge base file-name search failed: object_code=%s", object_code)
+            error_traceback = "".join(traceback.format_exception(exc))
+            return self._empty_response(object_code, arguments, error_traceback, error=True)
+
+        response = result.to_response()
+        response["records"] = ResultTermConverter(
+            getattr(self._loader._config, "term_loader", None)
+        ).convert_by_fields(response.get("records", []), list(getattr(cls, "fields", [])))
+        return response
+
     async def write(
         self,
         object_code: str,
@@ -120,8 +172,8 @@ class KbSearchExecutor:
                 error=True,
             )
 
-        # labels = self._resolve_label_terms(arguments.get("labels") or {}, cls)
-        labels = arguments.get("labels") or {}
+        labels = self._resolve_label_terms(arguments.get("labels") or {}, cls)
+        # labels = arguments.get("labels") or {}
         file_path = str(arguments.get("source_path") or arguments.get("file_path") or "")
         content = str(arguments.get("content") or arguments.get("source_text") or "")
         if not file_path.startswith("/"):

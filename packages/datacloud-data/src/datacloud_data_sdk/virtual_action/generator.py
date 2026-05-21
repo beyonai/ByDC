@@ -310,6 +310,42 @@ def build_search_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
     }
 
 
+def build_file_name_chunk_search_description(
+    scope_name: str,
+    scope_description: str,
+) -> str:
+    """生成按文件名称和 query 做 chunk 级语义检索的动作描述。"""
+    lines: list[str] = []
+    if scope_description:
+        lines.append(scope_description)
+        lines.append("")
+    lines.append(
+        f"在{scope_name}中按文件名称和 query 做 chunk 级语义检索。只需要提供 query 和 fileName。"
+    )
+    return "\n".join(lines)
+
+
+def build_file_name_chunk_search_schema(scope_name: str) -> dict[str, Any]:
+    """生成 search_by_file_name_* 知识库 chunk 级语义检索动作 inputSchema。"""
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "description": (
+            f"在 {scope_name} 中按文件名称和 query 做 chunk 级语义检索。query 与 fileName 必填。"
+        ),
+        "x-dc-action-family": "search_by_file_name",
+        "x-dc-scope-type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "检索文本，向量相似度匹配。"},
+            "fileName": {
+                "type": "string",
+                "description": "文件名称，精确匹配系统字段 fileName，包含扩展名。",
+            },
+        },
+        "required": ["query", "fileName"],
+    }
+
+
 def _json_type_for_field(field: Any) -> str:
     field_type = str(getattr(field, "field_type", "") or "").upper()
     if field_type in {"NUMBER", "DECIMAL", "DOUBLE", "FLOAT", "REAL"}:
