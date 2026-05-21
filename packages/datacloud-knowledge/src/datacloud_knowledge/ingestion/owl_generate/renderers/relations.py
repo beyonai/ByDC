@@ -143,7 +143,7 @@ def _rel_node(
         <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_escape(target_code)}</target_code>
         <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_escape(relation_name)}</relation_name>
         <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_escape(relation_type)}</relation_type>
-        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_escape(joinkeys)}</joinkeys>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{joinkeys}</joinkeys>
         <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_escape(ext_field)}</ext_field>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
     </owl:NamedIndividual>"""
