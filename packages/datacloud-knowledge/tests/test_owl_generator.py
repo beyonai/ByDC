@@ -311,7 +311,7 @@ class TestBuildObjectPackage:
         assert rel.ext_field.get("synonyms") == ["别名1", "别名2"]
 
     def test_value_terms_and_has_term_relations(self) -> None:
-        """值术语（LIST_TERM/DICT_TERM）正确生成并附带 HAS_TERM 关系。"""
+        """术语绑定：HAS_TERM 关系（prop → type），值术语由单独导入提供。"""
         config = _minimal_config(
             table_names={"test_obj": "测试对象"},
             table_descs={"test_obj": "测试对象"},
@@ -335,20 +335,17 @@ class TestBuildObjectPackage:
 
         pkg = _build_object_package(config, table, term_values, term_type_defs, set())
 
-        # 值术语
+        # 值术语不再生成（由业务系统单独导入）
         value_terms = [t for t in pkg.terms if t.term_type_code == "opp_status"]
-        assert len(value_terms) == 2
-        assert {t.term_code for t in value_terms} == {"SIGNED", "LOST"}
-        assert {t.term_name for t in value_terms} == {"签约成功", "丢单"}
-        # parent_term_code 传递正确
-        assert all(t.parent_term_code == "status" for t in value_terms)
+        assert len(value_terms) == 0
 
-        # HAS_TERM 关系
+        # HAS_TERM: prop → type，一个 binding 一条
         has_term_rels = [r for r in pkg.relations if r.relation_category == "HAS_TERM"]
-        assert len(has_term_rels) == 2
-        for rel in has_term_rels:
-            assert rel.source_term_code == "L1#opp_status#opp_status"
-            assert "#opp_status#" in rel.target_term_code
+        assert len(has_term_rels) == 1
+        rel = has_term_rels[0]
+        assert rel.source_term_code == "L1#prop#status"
+        assert rel.target_term_code == "L1#opp_status#opp_status"
+        assert rel.cardinality == "1:1"
 
     def test_many_to_one_relations(self) -> None:
         """MANY_TO_ONE 关系：只有 source_code 匹配当前 table 时才生成。"""
@@ -423,7 +420,7 @@ class TestBuildObjectPackage:
                 assert tt.type_category == 1  # LIST_TERM
 
     def test_total_relation_count(self) -> None:
-        """完整场景的关系计数：HAS_FIELD × 列数 + HAS_TERM × 值数 + MANY_TO_ONE。"""
+        """完整场景的关系计数：HAS_FIELD × 列数 + HAS_TERM × binding + MANY_TO_ONE。"""
         config = _minimal_config(
             table_names={"test_obj": "测试对象"},
             table_descs={"test_obj": "测试对象"},
@@ -454,7 +451,7 @@ class TestBuildObjectPackage:
 
         pkg = _build_object_package(config, table, term_values, term_type_defs, set())
 
-        # HAS_FIELD: 2 列 → 2, HAS_TERM: 1 值 → 1, MANY_TO_ONE: 1
+        # HAS_FIELD: 2 列 → 2, HAS_TERM: 1 binding → 1, MANY_TO_ONE: 1
         assert sum(1 for r in pkg.relations if r.relation_category == "HAS_FIELD") == 2
         assert sum(1 for r in pkg.relations if r.relation_category == "HAS_TERM") == 1
         assert sum(1 for r in pkg.relations if r.relation_category == "MANY_TO_ONE") == 1
@@ -711,12 +708,9 @@ class TestBuildViewPackage:
 
         pkg = _build_view_package(config, view, term_values, term_type_defs)
 
-        # 值术语
+        # 值术语不再生成（force_view_value_terms 已移除，值由单独导入提供）
         value_terms = [t for t in pkg.terms if t.term_type_code == "opp_status"]
-        assert len(value_terms) == 1
-        assert value_terms[0].term_code == "SIGNED"
-        # parent_term_code 使用 mapping.property_code
-        assert value_terms[0].parent_term_code == "status"
+        assert len(value_terms) == 0
 
     def test_view_with_field_synonyms_in_ext_field(self) -> None:
         """视图字段映射的同义词写入 HAS_FIELD 关系的 ext_field。"""

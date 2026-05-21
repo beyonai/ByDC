@@ -398,25 +398,32 @@ def render_relation_term(
     config: OwlGenConfig,
     term_values: dict[str, list[dict[str, str]]],
 ) -> dict[str, str]:
-    """术语值关系（HAS_TERM），按 term_type_code 拆文件。
+    """术语绑定关系（HAS_TERM: prop → type），按 term_type_code 拆文件。
+
+    已废弃：不再迭代 term_values 生成逐条的 type→value HAS_TERM。
+    改为 term_bindings 驱动的 prop→type 模式，由 generator._build_object_package() 负责。
 
     返回 ``{relative_path: content}``。
     """
+    _ = term_values
     result: dict[str, str] = {}
-    for type_code, values in term_values.items():
-        relations: list[RelationDef] = []
-        for entry in values:
-            relations.append(
-                _build_relation_def(
-                    config,
-                    source_type=type_code,
-                    source_code=type_code,
-                    target_type=type_code,
-                    target_code=entry["code"],
-                    relation_name=f"{type_code}包含{entry['name']}",
-                    relation_category="HAS_TERM",
-                )
+    for binding in config.term_bindings:
+        type_code = binding.term_type_code
+        resolved_prop = config.resolve_object_prop(
+            binding.table_code, binding.column_name, binding.column_name
+        )
+        prop_code = resolved_prop.property_code
+        relations = [
+            _build_relation_def(
+                config,
+                source_type="prop",
+                source_code=prop_code,
+                target_type=type_code,
+                target_code=type_code,
+                relation_name=f"{prop_code}绑定{type_code}",
+                relation_category="HAS_TERM",
             )
+        ]
         if relations:
             builder = GraphBuilder()
             builder.add_relations(relations)
@@ -429,26 +436,32 @@ def render_term_relations_for_object(
     table: Table,
     term_values: dict[str, list[dict[str, str]]],
 ) -> str:
-    """渲染单个对象绑定字段的值术语关系（HAS_TERM）。
+    """渲染单个对象的术语绑定关系（HAS_TERM: prop → type）。
 
     产物写入 {object_code}_term_relations.owl 文件。
+    term_values 参数保留用于兼容，但不再用于生成逐条 value 关系。
     """
+    _ = term_values
     relations: list[RelationDef] = []
-    binding_lookup = {b.column_name: b for b in config.term_bindings if b.table_code == table.code}
-    for binding in binding_lookup.values():
+    for binding in config.term_bindings:
+        if binding.table_code != table.code:
+            continue
         type_code = binding.term_type_code
-        for entry in term_values.get(type_code, []):
-            relations.append(
-                _build_relation_def(
-                    config,
-                    source_type=type_code,
-                    source_code=type_code,
-                    target_type=type_code,
-                    target_code=entry["code"],
-                    relation_name=f"{type_code}包含{entry['name']}",
-                    relation_category="HAS_TERM",
-                )
+        resolved_prop = config.resolve_object_prop(
+            binding.table_code, binding.column_name, binding.column_name
+        )
+        prop_code = resolved_prop.property_code
+        relations.append(
+            _build_relation_def(
+                config,
+                source_type="prop",
+                source_code=prop_code,
+                target_type=type_code,
+                target_code=type_code,
+                relation_name=f"{prop_code}绑定{type_code}",
+                relation_category="HAS_TERM",
             )
+        )
     if not relations:
         return ""
     builder = GraphBuilder()

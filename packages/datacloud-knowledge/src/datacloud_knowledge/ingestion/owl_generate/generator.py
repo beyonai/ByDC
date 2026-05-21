@@ -256,30 +256,23 @@ def _build_object_package(
     # ── 值术语（LIST_TERM / DICT_TERM）─────────────────────────────────────
     for binding in binding_lookup.values():
         type_code = binding.term_type_code
-        type_name = term_type_defs.get(type_code, (type_code, "", ""))[0]
-        for entry in term_values.get(type_code, []):
-            terms.append(
-                _build_term_def(
-                    config,
-                    term_code=entry["code"],
-                    term_name=entry["name"],
-                    term_type_code=type_code,
-                    term_desc=f"{type_name}术语：{entry['name']}",
-                    parent_term_code=entry.get("parent_prop_code", ""),
-                )
+        resolved_prop = config.resolve_object_prop(
+            table.code, binding.column_name, binding.column_name
+        )
+        prop_code = resolved_prop.property_code
+
+        # HAS_TERM（prop → type）：一个 binding 对应一条关系，term 值由业务系统单独导入
+        source_term_v = f"{config.library_code}#prop#{prop_code}"
+        target_term_v = f"{config.library_code}#{type_code}#{type_code}"
+        relations.append(
+            RelationDef(
+                source_term_code=source_term_v,
+                target_term_code=target_term_v,
+                relation_name=f"{prop_code}绑定{type_code}",
+                relation_category="HAS_TERM",
+                cardinality="1:1",
             )
-            # 值术语关系：HAS_TERM
-            source_term_v = f"{config.library_code}#{type_code}#{type_code}"
-            target_term_v = f"{config.library_code}#{type_code}#{entry['code']}"
-            relations.append(
-                RelationDef(
-                    source_term_code=source_term_v,
-                    target_term_code=target_term_v,
-                    relation_name=f"{type_code}包含{entry['name']}",
-                    relation_category="HAS_TERM",
-                    cardinality="1:N",
-                )
-            )
+        )
 
     # ── JOIN 关系（MANY_TO_ONE）────────────────────────────────────────────
     for rel in config.object_relations:
@@ -407,33 +400,9 @@ def _build_view_package(
                 )
             )
 
-    # ── 视图值术语（force_view_value_terms 模式）─────────────────────────
-    if config.force_view_value_terms and term_values and term_type_defs:
-        binding_lookup = {
-            (binding.table_code, binding.column_name): binding for binding in config.term_bindings
-        }
-        emitted_props: set[str] = set()
-        for mapping in view.field_mappings:
-            binding = binding_lookup.get(
-                (mapping.source_object_code, mapping.source_object_column_code)
-            )
-            if binding is None or mapping.property_code in emitted_props:
-                continue
-            emitted_props.add(mapping.property_code)
-            type_name = term_type_defs.get(
-                binding.term_type_code, (binding.term_type_code, "", "")
-            )[0]
-            for entry in term_values.get(binding.term_type_code, []):
-                terms.append(
-                    _build_term_def(
-                        config,
-                        term_code=entry["code"],
-                        term_name=entry["name"],
-                        term_type_code=binding.term_type_code,
-                        term_desc=f"{type_name}术语：{entry['name']}",
-                        parent_term_code=mapping.property_code,
-                    )
-                )
+    # ── 视图值术语：已移除，term 值由业务系统单独导入。                  ──
+    # 原 force_view_value_terms 逻辑在此迭代 term_values 生成 value term。
+    # 现在 HAS_TERM 改为 prop→type，值只由单独导入提供。
 
     return KnowledgePackage(
         terms=tuple(terms),

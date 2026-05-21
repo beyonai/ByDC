@@ -102,11 +102,15 @@ def _build_effective_scope_clause(scope_code: str | None, *, strict: bool = Fals
                                  FROM term root
                                  JOIN term_relation tr ON tr.source_term_id = root.term_id
                                  JOIN term prop ON prop.term_id = tr.target_term_id
-                                 JOIN term child ON child.parent_term_id = prop.term_id
+                                 JOIN term_relation has_term
+                                   ON has_term.source_term_id = prop.term_id
+                                  AND has_term.relation_category = 'HAS_TERM'
+                                 JOIN term type_term
+                                   ON type_term.term_id = has_term.target_term_id
                                  WHERE root.term_code = :scope_code
                                    AND root.term_type_code IN ('view', 'object')
                                    AND root.library_id = t.library_id
-                                   AND child.term_id = t.term_id
+                                   AND t.term_type_code = type_term.term_code
                              )
                         )
                   )"""

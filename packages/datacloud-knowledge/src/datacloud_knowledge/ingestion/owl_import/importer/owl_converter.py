@@ -62,7 +62,7 @@ RELATION_TYPE_TO_CARDINALITY: Final[dict[str, str]] = {
     "HAS_OBJECT": "1:N",
     "HAS_FIELD": "1:N",
     "HAS_ACTION": "1:N",
-    "HAS_TERM": "1:N",
+    "HAS_TERM": "1:1",
 }
 
 

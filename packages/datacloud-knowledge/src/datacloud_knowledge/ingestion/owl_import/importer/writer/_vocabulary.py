@@ -15,14 +15,16 @@ def _batch_insert_vocabulary_words(cur: Cursor, words: list[str]) -> None:
         return
 
     # 修复 vocab_id 序列不同步：setval 将 last_value 设为当前最大 ID，
-    # 确保 nextval 不会返回已占用的值。
-    cur.execute(
-        "SELECT setval("
-        "'term_vocabulary_vocab_id_seq', "
-        "COALESCE((SELECT MAX(vocab_id) FROM term_vocabulary), 0), "
-        "true"
-        ")"
-    )
+    # 确保 nextval 不会返回已占用的值。空表时退化为 setval(1, false) 使 nextval 从 1 开始。
+    max_id: int | None = None
+    cur.execute("SELECT MAX(vocab_id) FROM term_vocabulary")
+    row = cur.fetchone()
+    if row is not None:
+        max_id = row[0]
+    if max_id is not None and max_id > 0:
+        cur.execute("SELECT setval('term_vocabulary_vocab_id_seq', %s, true)", (max_id,))
+    else:
+        cur.execute("SELECT setval('term_vocabulary_vocab_id_seq', 1, false)")
 
     cur.execute(
         """INSERT INTO term_vocabulary (word)
