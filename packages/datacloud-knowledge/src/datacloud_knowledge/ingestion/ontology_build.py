@@ -673,7 +673,7 @@ def _pack_zip(source_dir: Path, zip_path: Path) -> None:
     只打包服务端 importObjectZip/importViewZip 所需的文件，
     去掉 object/ 或 view/ 中间层，直接以 {code}/{code}_xxx.owl 为路径。
     """
-    include_suffixes = {"_definition.owl", "_mapping.owl", "_dbsource.owl"}
+    include_suffixes = {"_definition.owl", "_mapping.owl", "_dbsource.owl", "_relations.owl"}
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for file in source_dir.rglob("*.owl"):
