@@ -597,14 +597,14 @@ class TestBuildTerms:
         value_names = {t["term_name"] for t in value_terms}
         assert value_names == {"完成", "待办"}
 
-        # 关系：HAS_FIELD(1) + HAS_TERM(2) = 3
+        # 关系：HAS_FIELD(1) + HAS_TERM(1 prop→type) = 2
         mock_adapter.batch_process_relation.assert_called_once()
         rel_items = mock_adapter.batch_process_relation.call_args.args[0]
-        assert len(rel_items) == 3
+        assert len(rel_items) == 2
         has_field_rels = [r for r in rel_items if r["relation_category"] == "HAS_FIELD"]
         has_term_rels = [r for r in rel_items if r["relation_category"] == "HAS_TERM"]
         assert len(has_field_rels) == 1
-        assert len(has_term_rels) == 2
+        assert len(has_term_rels) == 1
 
     def test_mixed_fields_both_binding_and_inline(self) -> None:
         """混合字段：同时有 term_type_code 绑定和 term_values 内联。"""

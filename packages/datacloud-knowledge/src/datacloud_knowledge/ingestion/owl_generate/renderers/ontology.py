@@ -474,17 +474,19 @@ def render_single_view(config: OwlGenConfig, view: ViewConfig) -> str:
     object_codes_json = json.dumps(view.object_codes, ensure_ascii=False)
     relations_json = json.dumps(_view_relation_ids(config, view), ensure_ascii=False)
 
-    # 字段引用行
+    # 字段引用行 — field_id 含来源对象前缀，避免同名字段重复
     field_refs_xml = "\n".join(
-        f'        <fields rdf:resource="#{m.property_code}_field"/>' for m in view.field_mappings
+        f'        <fields rdf:resource="#{m.source_object_code}__{m.property_code}_field"/>'
+        for m in view.field_mappings
     )
 
     # 每个 SceneField 节点
     scene_field_parts: list[str] = []
     for m in view.field_mappings:
+        field_id = f"{m.source_object_code}__{m.property_code}_field"
         ext_prop = _view_field_role_json(m)
         synonyms_str = json.dumps(m.synonyms, ensure_ascii=False) if m.synonyms else ""
-        scene_field_parts.append(f"""    <owl:NamedIndividual rdf:about="#{m.property_code}_field">
+        scene_field_parts.append(f"""    <owl:NamedIndividual rdf:about="#{field_id}">
         <rdf:type rdf:resource="#SceneField"/>
         <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(m.property_code)}</property_code>
         <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(m.property_name)}</property_name>

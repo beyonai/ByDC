@@ -70,6 +70,25 @@ _ENTITY_CLASS_MAP: dict[str, str] = {
     "RelationDef": "#TermRelation",
 }
 
+# KPS cardinality → 旧 OWL relation_type 字符串（供 datacloud-data OwlParser 兼容）
+_CARDINALITY_TO_RELATION_TYPE: dict[str, str] = {
+    "1:1": "ONE_TO_ONE",
+    "1:N": "ONE_TO_MANY",
+    "N:1": "MANY_TO_ONE",
+    "N:N": "MANY_TO_MANY",
+}
+
+
+def _extract_term_code(compound: str) -> str:
+    """从复合 term code 提取末段编码。
+
+    "LIB#object#by_customer" → "by_customer"
+    "L1#prop#customer_name" → "customer_name"
+    无 # 分隔符时返回原值。
+    """
+    return compound.rsplit("#", maxsplit=1)[-1] if "#" in compound else compound
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # XML 工具函数（内置于 GraphBuilder，_xml.py 删除后不依赖外部）
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -292,7 +311,7 @@ class GraphBuilder:
         uri = self._ns[rel_id]
         self._graph.add((uri, self._RDF.type, self._ns.TermRelation))
 
-        # 源和目标编码
+        # 源和目标编码（新格式：复合单字段）
         self._add_literal(uri, self._ns.sourceTermCode, rel.source_term_code)
         self._add_literal(uri, self._ns.targetTermCode, rel.target_term_code)
 
@@ -300,6 +319,15 @@ class GraphBuilder:
         self._add_literal(uri, self._ns.relationName, rel.relation_name)
         self._add_literal(uri, self._ns.relationCategory, rel.relation_category)
         self._add_literal(uri, self._ns.cardinality, rel.cardinality)
+
+        # 旧格式兼容字段（供 datacloud-data OwlParser 读取）
+        self._add_literal(uri, self._ns.source_code, _extract_term_code(rel.source_term_code))
+        self._add_literal(uri, self._ns.target_code, _extract_term_code(rel.target_term_code))
+        self._add_literal(
+            uri,
+            self._ns.relation_type,
+            _CARDINALITY_TO_RELATION_TYPE.get(rel.cardinality, "ONE_TO_MANY"),
+        )
 
         # JOIN 键（JSON 序列化），仅 MANY_TO_ONE 关系有值
         if rel.joinkeys:

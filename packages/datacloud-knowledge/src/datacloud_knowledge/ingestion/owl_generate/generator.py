@@ -32,6 +32,9 @@ from datacloud_knowledge.ingestion.owl_generate.renderers.ontology import (
     render_object,
     render_single_view,
 )
+from datacloud_knowledge.ingestion.owl_generate.renderers.relations import (
+    render_view_relations_for_view,
+)
 from datacloud_knowledge.ingestion.owl_generate.renderers.term_types import (
     _term_data_type_to_category,
     build_term_type_defs,
@@ -114,6 +117,10 @@ def _write_package(
     for view in config.resolved_views():
         view_dir = out / "view" / view.view_code
         write_text(view_dir / f"{view.view_code}_definition.owl", render_single_view(config, view))
+        write_text(
+            view_dir / f"{view.view_code}_relations.owl",
+            render_view_relations_for_view(config, view),
+        )
 
         pkg = _build_view_package(config, view, term_values, term_type_defs)
         relation_file_count += _write_kps_view_files(view_dir, pkg)
@@ -249,30 +256,23 @@ def _build_object_package(
     # ── 值术语（LIST_TERM / DICT_TERM）─────────────────────────────────────
     for binding in binding_lookup.values():
         type_code = binding.term_type_code
-        type_name = term_type_defs.get(type_code, (type_code, "", ""))[0]
-        for entry in term_values.get(type_code, []):
-            terms.append(
-                _build_term_def(
-                    config,
-                    term_code=entry["code"],
-                    term_name=entry["name"],
-                    term_type_code=type_code,
-                    term_desc=f"{type_name}术语：{entry['name']}",
-                    parent_term_code=entry.get("parent_prop_code", ""),
-                )
+        resolved_prop = config.resolve_object_prop(
+            table.code, binding.column_name, binding.column_name
+        )
+        prop_code = resolved_prop.property_code
+
+        # HAS_TERM（prop → type）：一个 binding 对应一条关系，term 值由业务系统单独导入
+        source_term_v = f"{config.library_code}#prop#{prop_code}"
+        target_term_v = f"{config.library_code}#{type_code}#{type_code}"
+        relations.append(
+            RelationDef(
+                source_term_code=source_term_v,
+                target_term_code=target_term_v,
+                relation_name=f"{prop_code}绑定{type_code}",
+                relation_category="HAS_TERM",
+                cardinality="1:1",
             )
-            # 值术语关系：HAS_TERM
-            source_term_v = f"{config.library_code}#{type_code}#{type_code}"
-            target_term_v = f"{config.library_code}#{type_code}#{entry['code']}"
-            relations.append(
-                RelationDef(
-                    source_term_code=source_term_v,
-                    target_term_code=target_term_v,
-                    relation_name=f"{type_code}包含{entry['name']}",
-                    relation_category="HAS_TERM",
-                    cardinality="1:N",
-                )
-            )
+        )
 
     # ── JOIN 关系（MANY_TO_ONE）────────────────────────────────────────────
     for rel in config.object_relations:
@@ -400,33 +400,9 @@ def _build_view_package(
                 )
             )
 
-    # ── 视图值术语（force_view_value_terms 模式）─────────────────────────
-    if config.force_view_value_terms and term_values and term_type_defs:
-        binding_lookup = {
-            (binding.table_code, binding.column_name): binding for binding in config.term_bindings
-        }
-        emitted_props: set[str] = set()
-        for mapping in view.field_mappings:
-            binding = binding_lookup.get(
-                (mapping.source_object_code, mapping.source_object_column_code)
-            )
-            if binding is None or mapping.property_code in emitted_props:
-                continue
-            emitted_props.add(mapping.property_code)
-            type_name = term_type_defs.get(
-                binding.term_type_code, (binding.term_type_code, "", "")
-            )[0]
-            for entry in term_values.get(binding.term_type_code, []):
-                terms.append(
-                    _build_term_def(
-                        config,
-                        term_code=entry["code"],
-                        term_name=entry["name"],
-                        term_type_code=binding.term_type_code,
-                        term_desc=f"{type_name}术语：{entry['name']}",
-                        parent_term_code=mapping.property_code,
-                    )
-                )
+    # ── 视图值术语：已移除，term 值由业务系统单独导入。                  ──
+    # 原 force_view_value_terms 逻辑在此迭代 term_values 生成 value term。
+    # 现在 HAS_TERM 改为 prop→type，值只由单独导入提供。
 
     return KnowledgePackage(
         terms=tuple(terms),
@@ -487,7 +463,11 @@ def _write_kps_view_files(
     view_dir: Path,
     pkg: KnowledgePackage,
 ) -> int:
-    """将视图 KnowledgePackage 拆分为独立 OWL 文件并写入视图目录。"""
+    """将视图 KnowledgePackage 拆分为独立 OWL 文件并写入视图目录。
+
+    注意：_relations.owl 由 render_view_relations_for_view 单独生成（标准格式），
+    此处只写 _terms.owl，不再重复写 _relations.owl。
+    """
     code = pkg.terms[0].term_code
     gb = GraphBuilder()
     gb.add_package(pkg)
@@ -495,11 +475,7 @@ def _write_kps_view_files(
     # 术语
     terms_graph = gb.export_terms_graph()
     write_text(view_dir / f"{code}_terms.owl", _serialize_graph(terms_graph))
-
-    # 关系
-    rel_graph = gb.export_relations_graph()
-    write_text(view_dir / f"{code}_relations.owl", _serialize_graph(rel_graph))
-    return 1 if len(list(rel_graph.subjects())) > 0 else 0
+    return 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -547,10 +523,12 @@ def _generate_object(state: dict[str, Any], output_dir: Path) -> None:
     # 自动在最前面插入 id 主键字段（如果用户没有传）
     has_id = any(f.get("property_code", "").lower() == "id" for f in fields)
     if not has_id:
+        # 非结构化（KNOWLEDGE_BASE）主键用 STRING，结构化（DYNAMIC_TABLE）用 INTEGER
+        id_data_type = "STRING" if state.get("entity_source") == "KNOWLEDGE_BASE" else "INTEGER"
         id_field: dict[str, Any] = {
             "property_code": "id",
             "property_name": "主键",
-            "data_type": "INTEGER",
+            "data_type": id_data_type,
             "ext_property": {
                 "property_role_rule": {"property_role": "MEASURE", "rule_type": "primary_key"}
             },

@@ -135,19 +135,18 @@ def build_terms(
                     parent_term_code=property_code,
                 )
                 terms.append(value_term)
-                value_term_id = value_term.compute_term_id(parent_term_id=prop_term_id)
 
-                # HAS_TERM 关系
-                type_node_id = f"{library_code}#{value_type_code}#{value_type_code}"
-                relations.append(
-                    RelationDef(
-                        source_term_code=type_node_id,
-                        target_term_code=value_term_id,
-                        relation_name=f"{value_type_code}包含{value_name}",
-                        relation_category="HAS_TERM",
-                        cardinality="1:N",
-                    )
+            # HAS_TERM（prop → type）：一个 prop 对应一条关系
+            type_node_id = f"{library_code}#{value_type_code}#{value_type_code}"
+            relations.append(
+                RelationDef(
+                    source_term_code=prop_term_id,
+                    target_term_code=type_node_id,
+                    relation_name=f"{property_name}绑定{value_type_code}",
+                    relation_category="HAS_TERM",
+                    cardinality="1:1",
                 )
+            )
         elif term_type_code:
             # ── 绑定已有术语库（term_type_code 非空，值术语已存在）──
             type_category = _term_data_type_to_category(term_data_type)

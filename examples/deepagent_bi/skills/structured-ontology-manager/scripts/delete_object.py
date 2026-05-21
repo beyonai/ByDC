@@ -13,10 +13,10 @@ I/O 协议：stdin JSON → stdout JSON
     {"ok": true, "entity_code": "by_my_task"}
     {"ok": false, "error": "..."}
 
-删除流程（三步顺序执行，任意一步失败终止）:
-    1. delete_owl_scope("OBJECT", entity_code) — 清除术语库数据
-    2. deleteResourceByCode(entity_code) — 下架本体（门户服务）
-    3. drop_table(entity_code) — 删除 SQLite 表
+删除流程（三步顺序执行，步骤一失败则终止）:
+    1. deleteResourceByCode(entity_code) — 下架本体（门户服务），被引用时失败终止
+    2. drop_table(entity_code)           — 删除 SQLite 表（IF EXISTS，表不存在也安全）
+    3. delete_owl_scope("OBJECT", ...)   — 清除术语库数据
 """
 
 from __future__ import annotations
@@ -49,14 +49,14 @@ def main() -> None:
 
     session = OntologyBuildSession()
 
-    # 步骤一：清除术语库数据
-    session.delete_owl_scope("OBJECT", entity_code)
-
-    # 步骤二：下架本体
+    # 步骤一：下架本体（被引用时门户会拒绝，直接终止）
     delete_resource_by_code(entity_code)
 
-    # 步骤三：删除 SQLite 表
+    # 步骤二：删除 SQLite 表（IF EXISTS，表不存在也安全）
     drop_table(entity_code)
+
+    # 步骤三：清除术语库数据
+    session.delete_owl_scope("OBJECT", entity_code)
 
     print(json.dumps({"ok": True, "entity_code": entity_code}, ensure_ascii=False), flush=True)
 

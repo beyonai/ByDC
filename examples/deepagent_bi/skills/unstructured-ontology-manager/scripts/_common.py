@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import threading
@@ -103,3 +104,82 @@ def delete_resource_by_code(resource_code: str) -> None:
     )
     if not data or data.get("code") != 0:
         raise RuntimeError(f"下架本体失败: {data}")
+
+
+def load_embedding_model_from_redis() -> bool:
+    """从 Redis 读取 embedding 模型配置并设置环境变量。
+
+    直接读取 Redis hash key ``byai:aimodel:typelist`` 中的 EMBEDDING 模型列表，
+    取第一个带 ABILITY_DATA_CLOUD("5") 标签的模型，将 api_base/api_key/model/dims
+    写入 DATACLOUD_EMBEDDING_* 环境变量。
+
+    不依赖 byclaw_data 包，逻辑与 model_environment.build_embedding_config() 等价。
+
+    Returns:
+        True 表示成功加载，False 表示跳过（不会抛异常）。
+    """
+    try:
+        import redis as _redis
+    except ImportError:
+        logger.warning("redis 包未安装，跳过 Embedding 模型加载")
+        return False
+
+    if os.environ.get("DATACLOUD_LLM_MODEL_LOAD_MODE", "ONLINE") == "LOCAL":
+        logger.warning("Embedding 模型加载模式为 LOCAL，跳过")
+        return False
+
+    try:
+        client = _redis.Redis(
+            host=os.environ.get("REDIS_HOST", "localhost"),
+            port=int(os.environ.get("REDIS_PORT", "6379")),
+            db=int(os.environ.get("REDIS_DATABASE", "0")),
+            password=os.environ.get("REDIS_PASSWORD") or None,
+            username=os.environ.get("REDIS_USERNAME") or None,
+            decode_responses=True,
+        )
+
+        raw = client.hget("byai:aimodel:typelist", "EMBEDDING")
+        if not raw:
+            logger.warning("Redis 中未找到 EMBEDDING 类型模型")
+            return False
+
+        models: list[dict] = json.loads(raw)
+        if not isinstance(models, list) or not models:
+            logger.warning("Redis 中 EMBEDDING 模型列表为空")
+            return False
+
+        # 优先取带 "5" (ABILITY_DATA_CLOUD) 标签的模型
+        model = next(
+            (m for m in models if "5" in (m.get("instanceParam") or {}).get("abilities", [])),
+            None,
+        )
+        # 其次取 isDefault=1 的
+        if not model:
+            model = next((m for m in models if m.get("isDefault") == 1), None)
+        # 兜底取第一个
+        if not model:
+            model = models[0]
+
+        instance_param = model.get("instanceParam") or {}
+        dims = (
+            instance_param.get("dimensions")
+            or instance_param.get("dimension")
+            or instance_param.get("dims")
+            or 1024
+        )
+
+        os.environ["DATACLOUD_EMBEDDING_MODEL"] = str(model.get("modelCode", ""))
+        os.environ["DATACLOUD_EMBEDDING_API_BASE"] = str(model.get("url", ""))
+        os.environ["DATACLOUD_EMBEDDING_API_KEY"] = str(model.get("authToken", ""))
+        os.environ["DATACLOUD_EMBEDDING_DIMS"] = str(dims)
+
+        logger.info(
+            "已加载 Embedding 模型: %s (dims=%s)",
+            model.get("modelCode"),
+            dims,
+        )
+        return True
+    except Exception:
+        logger.warning("从 Redis 加载 Embedding 模型失败，向量回填将跳过", exc_info=True)
+        return False
+

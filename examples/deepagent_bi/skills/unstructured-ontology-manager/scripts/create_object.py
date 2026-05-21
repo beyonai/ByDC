@@ -95,6 +95,9 @@ def main() -> None:
         )
 
     elif action == "submit":
+        from _common import load_embedding_model_from_redis
+
+        load_embedding_model_from_redis()
         result = session.submit_object(entity_code=entity_code, session_id=session_id)
         print(json.dumps(result, ensure_ascii=False), flush=True)
 

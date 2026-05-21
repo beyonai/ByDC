@@ -450,7 +450,7 @@ class TestSem006:
     """SEM-006: 值术语 parent 必须为 prop。"""
 
     def test_value_term_without_parent(self) -> None:
-        """值术语无 parent_term_code 触发 SEM-006。"""
+        """值术语无 parent_term_code 不再触发 SEM-006（新架构允许单独导入）。"""
         pkg = KnowledgePackage(
             terms=(
                 TermDef(
@@ -465,7 +465,7 @@ class TestSem006:
             term_types=(TermTypeDef(type_code="LIST_TERM", type_name="列表术语", type_category=1),),
         )
         errors = sem_006_value_parent_prop(pkg)
-        assert any("SEM-006" in e and "缺少 parent_term_code" in e for e in errors)
+        assert len(errors) == 0
 
     def test_value_term_parent_not_prop(self) -> None:
         """值术语的 parent 不是 prop 触发 SEM-006。"""
@@ -806,10 +806,10 @@ class TestSem009:
 
 
 class TestSem010:
-    """SEM-010: 关系引用的 source/target term_code 必须在包内存在。"""
+    """SEM-010: 跨包引入场景下不阻断，仅 WARNING 日志；DB FK 兜底。"""
 
-    def test_missing_source_term(self) -> None:
-        """source term_code 不在包内触发 SEM-010。"""
+    def test_missing_source_term_warns_not_blocks(self) -> None:
+        """source term_code 不在包内不返回 error，仅日志 WARNING。"""
         pkg = KnowledgePackage(
             terms=(
                 TermDef(
@@ -831,10 +831,10 @@ class TestSem010:
             ),
         )
         errors = sem_010_relation_term_existence(pkg)
-        assert any("source='missing'" in e for e in errors)
+        assert len(errors) == 0  # 不再阻断，改为 WARNING 日志
 
-    def test_missing_target_term(self) -> None:
-        """target term_code 不在包内触发 SEM-010。"""
+    def test_missing_target_term_warns_not_blocks(self) -> None:
+        """target term_code 不在包内不返回 error，仅日志 WARNING。"""
         pkg = KnowledgePackage(
             terms=(
                 TermDef(
@@ -856,7 +856,7 @@ class TestSem010:
             ),
         )
         errors = sem_010_relation_term_existence(pkg)
-        assert any("target='missing'" in e for e in errors)
+        assert len(errors) == 0  # 不再阻断，改为 WARNING 日志
 
     def test_all_terms_exist_passes(self) -> None:
         """所有引用的术语都存在时通过。"""
@@ -891,7 +891,7 @@ class TestValidateLayer1:
         assert any("terms 为空" in e for e in errors)
 
     def test_empty_relations(self) -> None:
-        """空 relations 触发 Layer 1 错误。"""
+        """空 relations 不再触发 Layer 1 错误（术语值单独导入无需关系）。"""
         pkg = KnowledgePackage(
             terms=(
                 TermDef(
@@ -905,7 +905,7 @@ class TestValidateLayer1:
             relations=(),
         )
         errors = validate_layer1_structure(pkg)
-        assert any("relations 为空" in e for e in errors)
+        assert not any("relations 为空" in e for e in errors)
 
     def test_missing_required_field_term_name(self) -> None:
         """term_name 为空触发 Layer 1 错误。"""

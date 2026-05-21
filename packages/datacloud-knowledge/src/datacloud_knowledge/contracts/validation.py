@@ -23,6 +23,12 @@ logger = logging.getLogger(__name__)
 # 合法的 type_category 值：1=列表术语, 2=字典术语, 3=本体术语, 4=文档名称术语
 VALID_TYPE_CATEGORIES: frozenset[int] = frozenset({1, 2, 3, 4})
 
+# 内置术语类型编码：这些 type_code 是系统约定的基础类型，
+# 即使包内未显式 TermTypeDef 声明也视为合法（跨包共享、无需重复声明）。
+BUILTIN_TERM_TYPE_CODES: frozenset[str] = frozenset(
+    {"object", "prop", "view", "LIST_TERM", "DICT_TERM"}
+)
+
 # 合法的 cardinality 值
 VALID_CARDINALITY: frozenset[str] = frozenset({"1:1", "1:N", "N:1", "N:N"})
 
@@ -149,10 +155,10 @@ def sem_005_prop_parent_object(pkg: KnowledgePackage) -> list[str]:
 
 
 def sem_006_value_parent_prop(pkg: KnowledgePackage) -> list[str]:
-    """SEM-006: 值术语（LIST_TERM/DICT_TERM）的 parent_term_code 必须指向 prop 术语。
+    """SEM-006: 值术语（LIST_TERM/DICT_TERM）若有 parent_term_code，必须指向 prop 术语。
 
-    检索层 get_prop_enum_values 通过 prop→value 的父子层级查找枚举值，
-    parent 非 prop 导致维度值查询失败。
+    新架构下值术语可单独导入，通过 term_type_code + HAS_TERM(prop→type) 检索，
+    不强制 parent_term_code。若提供了则校验其目标为 prop。
     """
     errors: list[str] = []
     term_map: dict[str, TermDef] = {t.term_code: t for t in pkg.terms}
@@ -164,11 +170,7 @@ def sem_006_value_parent_prop(pkg: KnowledgePackage) -> list[str]:
         if term.term_type_code not in value_type_codes:
             continue
         if not term.parent_term_code:
-            errors.append(
-                f"SEM-006: 值术语 '{term.term_code}' (type='{term.term_type_code}') "
-                f"缺少 parent_term_code，必须指向所属的 prop"
-            )
-            continue
+            continue  # 新架构：值术语可无 parent_term_code
         parent = term_map.get(term.parent_term_code)
         if parent is None:
             continue  # 由 SEM-010 验证
@@ -254,25 +256,30 @@ def sem_009_unique_prop_codes(pkg: KnowledgePackage) -> list[str]:
 
 
 def sem_010_relation_term_existence(pkg: KnowledgePackage) -> list[str]:
-    """SEM-010: 关系的 source/target term_code 在包内必须存在（或推迟到 DB 验证）。
+    """SEM-010: 关系的 source/target term_code 包内引用完整性检查。
 
-    检索层关系链路（如 owl_relation_resolver）依赖完整的 term 引用，
-    孤立的关系边导致 BFS 遍历断裂，无法从源术语到达目标术语。
+    跨包导入场景（术语值先导入、本体后导入）下，关系引用的术语可能
+    已在其他包中入库，此时不阻断导入，仅记录 WARNING。
+    DB 层 FK 约束提供最终兜底：真正缺失的术语会在 writer 写入 relation
+    时触发 integrity error。
     """
-    errors: list[str] = []
     term_codes: set[str] = {t.term_code for t in pkg.terms}
     for rel in pkg.relations:
         source_code = _extract_term_code(rel.source_term_code)
         target_code = _extract_term_code(rel.target_term_code)
         if source_code and source_code not in term_codes:
-            errors.append(
-                f"SEM-010: 关系 '{rel.relation_name}' source='{source_code}' 不在包内术语列表中"
+            logger.warning(
+                "SEM-010: 关系 '%s' source='%s' 不在包内术语列表中（跨包引用，DB FK 兜底）",
+                rel.relation_name,
+                source_code,
             )
         if target_code and target_code not in term_codes:
-            errors.append(
-                f"SEM-010: 关系 '{rel.relation_name}' target='{target_code}' 不在包内术语列表中"
+            logger.warning(
+                "SEM-010: 关系 '%s' target='%s' 不在包内术语列表中（跨包引用，DB FK 兜底）",
+                rel.relation_name,
+                target_code,
             )
-    return errors
+    return []
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -294,8 +301,6 @@ def validate_layer1_structure(pkg: KnowledgePackage) -> list[str]:
     # 知识包核心结构检查
     if not pkg.terms:
         errors.append("Layer 1: 知识包 terms 为空，至少需要一个术语")
-    if not pkg.relations:
-        errors.append("Layer 1: 知识包 relations 为空，至少需要一个关系")
 
     # 术语必填字段检查
     for term in pkg.terms:
@@ -343,7 +348,10 @@ def validate_layer2_field_completeness(pkg: KnowledgePackage) -> list[str]:
             type_codes_seen.add(tt.type_code)
 
     # 检查术语引用的 term_type_code 是否在 term_types 中声明
-    declared_type_codes: set[str] = {tt.type_code for tt in pkg.term_types}
+    # 内置类型编码（object/prop/view 等）无需重复声明，合并到已知集合
+    declared_type_codes: set[str] = set(BUILTIN_TERM_TYPE_CODES) | {
+        tt.type_code for tt in pkg.term_types
+    }
     for term in pkg.terms:
         if term.term_type_code not in declared_type_codes:
             errors.append(
@@ -444,6 +452,8 @@ def _extract_term_code(term_code_with_prefix: str) -> str:
 
 
 __all__ = [
+    "BUILTIN_TERM_TYPE_CODES",
+    "VALID_TYPE_CATEGORIES",
     "sem_001_type_category",
     "sem_002_term_id_format",
     "sem_003_has_field_source",
