@@ -211,7 +211,7 @@ class TestObjectPackageRoundtrip:
         assert cardinalities == {"N:1"}, f"MANY_TO_ONE 期望 cardinality=N:1，实际: {cardinalities}"
 
     def test_roundtrip_has_term_cardinality(self) -> None:
-        """往返后：HAS_TERM 关系 cardinality = 1:N。"""
+        """往返后：HAS_TERM 关系 cardinality = 1:1（prop → type）。"""
         config = _build_base_config()
         config.term_bindings = [
             TermBinding("obj_customer", "customer_level", "level_type", "LIST_TERM")
@@ -256,7 +256,7 @@ class TestObjectPackageRoundtrip:
         cardinalities = {
             str(o) for _s, _p, o in g.triples((None, None, None)) if str(_p).endswith("cardinality")
         }
-        assert cardinalities == {"1:N"}, f"HAS_TERM 期望 cardinality=1:N，实际: {cardinalities}"
+        assert cardinalities == {"1:1"}, f"HAS_TERM 期望 cardinality=1:1，实际: {cardinalities}"
 
     def test_roundtrip_prop_deduplication(self) -> None:
         """往返后：跨对象去重，相同 prop 只出现一次。"""
