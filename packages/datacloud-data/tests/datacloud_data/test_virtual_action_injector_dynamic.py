@@ -43,7 +43,8 @@ def test_inject_virtual_actions_adds_dynamic_table_write_actions() -> None:
     insert_action = next(
         action for action in cls.actions if action.action_code == "insert_sales_note"
     )
-    record_schema = insert_action.input_schema["properties"]["records"]["items"]
+    insert_schema = insert_action.input_schema or {}
+    record_schema = insert_schema["properties"]["records"]["items"]
     assert "id" not in record_schema["properties"]
 
 
@@ -68,15 +69,26 @@ def test_inject_virtual_actions_adds_kb_write_action() -> None:
         "search_by_file_name_meeting_doc",
         "write_meeting_doc",
     }.issubset(action_codes)
+    search_action = next(
+        action for action in cls.actions if action.action_code == "search_meeting_doc"
+    )
+    search_schema = search_action.input_schema or {}
+    assert set(search_schema["properties"]) == {
+        "query",
+        "filters",
+        "filter_relation",
+        "order_by",
+        "limit",
+        "offset",
+    }
     file_name_search_action = next(
         action for action in cls.actions if action.action_code == "search_by_file_name_meeting_doc"
     )
-    assert set(file_name_search_action.input_schema["properties"]) == {"query", "fileName"}
-    assert file_name_search_action.input_schema["required"] == ["query", "fileName"]
+    file_name_search_schema = file_name_search_action.input_schema or {}
+    assert set(file_name_search_schema["properties"]) == {"query", "fileName"}
+    assert file_name_search_schema["required"] == ["query", "fileName"]
     write_action = next(
         action for action in cls.actions if action.action_code == "write_meeting_doc"
     )
-    assert (
-        write_action.input_schema["properties"]["labels"]["properties"]["status"]["type"]
-        == "string"
-    )
+    write_schema = write_action.input_schema or {}
+    assert write_schema["properties"]["labels"]["properties"]["status"]["type"] == "string"

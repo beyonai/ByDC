@@ -18,6 +18,7 @@ from datacloud_data_sdk.executor.kb_search_backend import (
     KnowledgeWriteRequest,
     KnowledgeWriteResult,
     _render_markdown_with_front_matter,
+    _to_markdown_file_path,
 )
 from datacloud_data_sdk.executor.kb_search_executor import KbSearchExecutor
 from datacloud_data_sdk.ontology.loader import OntologyLoader
@@ -53,7 +54,7 @@ class CustomSearchBackend:
     async def search(self, request: KnowledgeSearchRequest) -> KnowledgeSearchResult:
         self.request = request
         return KnowledgeSearchResult(
-            records=[{"content": "命中文档", "doc_id": "d1"}],
+            records=[{"content": "命中文档", "doc_id": "d1", "filePath": "/docs/d1.md"}],
             total=1,
             meta={"provider": "custom"},
         )
@@ -64,11 +65,49 @@ class CustomSearchBackend:
     ) -> KnowledgeSearchResult:
         self.file_name_request = request
         return KnowledgeSearchResult(
-            records=[{"content": "命中文档", "doc_id": "d1"}],
+            records=[{"content": "命中文档", "doc_id": "d1", "filePath": "/docs/d1.md"}],
             total=1,
             meta={"provider": "custom"},
         )
 
+    async def write(self, request: KnowledgeWriteRequest) -> KnowledgeWriteResult:
+        self.write_request = request
+        return KnowledgeWriteResult(
+            records=[
+                {
+                    **request.labels,
+                    "knCode": request.kb_id,
+                    "filePath": request.file_path,
+                    "content": request.content,
+                }
+            ],
+            total=1,
+            meta={"provider": "custom"},
+        )
+
+
+class PrimaryKeyOmittingBackend(CustomSearchBackend):
+    async def search(self, request: KnowledgeSearchRequest) -> KnowledgeSearchResult:
+        self.request = request
+        return KnowledgeSearchResult(
+            records=[{"content": "命中文档", "filePath": "/sales/meeting.md"}],
+            total=1,
+            meta={"provider": "custom"},
+        )
+
+    async def search_by_file_name(
+        self,
+        request: KnowledgeFileNameSearchRequest,
+    ) -> KnowledgeSearchResult:
+        self.file_name_request = request
+        return KnowledgeSearchResult(
+            records=[{"content": "命中文档", "filePath": "/sales/meeting.md"}],
+            total=1,
+            meta={"provider": "custom"},
+        )
+
+
+class PrimaryKeyAwareBackend(CustomSearchBackend):
     async def write(self, request: KnowledgeWriteRequest) -> KnowledgeWriteResult:
         self.write_request = request
         return KnowledgeWriteResult(
@@ -147,9 +186,17 @@ async def test_kb_search_executor_uses_custom_backend() -> None:
         offset=0,
     )
     assert result == {
-        "records": [{"content": "命中文档", "doc_id": "d1"}],
+        "records": [{"fileName": "d1.md", "filePath": "/docs/d1.md"}],
         "total": 1,
-        "meta": {"provider": "custom"},
+        "meta": {
+            "columns": [
+                {"name": "fileName", "label": "文件名称", "type": "string"},
+                {"name": "filePath", "label": "文件路径", "type": "string"},
+            ],
+            "object_code": "kb_object",
+            "datasource_alias": "kb_docs",
+            "query": "如何配置数据源",
+        },
     }
 
 
@@ -169,7 +216,6 @@ async def test_kb_search_executor_accepts_query_style_arguments() -> None:
         "kb_object",
         {
             "query": "续签流程",
-            "select": ["status", "tags"],
             "filters": [{"field": "status", "op": "eq", "value": "active"}],
             "filter_relation": "OR",
             "order_by": [{"field": "updatedAt", "direction": "desc"}],
@@ -184,7 +230,6 @@ async def test_kb_search_executor_accepts_query_style_arguments() -> None:
         query="续签流程",
         filters={"status": {"op": "eq", "value": "active"}},
         filter_relation="OR",
-        select=["status", "tags"],
         order_by=[{"field": "updatedAt", "direction": "desc"}],
         limit=5,
         offset=10,
@@ -224,6 +269,75 @@ async def test_kb_search_executor_accepts_file_name_action_arguments() -> None:
 
 
 @pytest.mark.asyncio
+async def test_kb_search_executor_always_returns_primary_key_in_search_results() -> None:
+    backend = PrimaryKeyOmittingBackend()
+    cls = OntologyClass(
+        object_code="kb_object",
+        object_name="知识库对象",
+        description="",
+        source_type="KNOWLEDGE_BASE",
+        datasource_alias="kb_docs",
+        fields=[
+            OntologyField(
+                field_code="doc_id",
+                field_name="文档主键",
+                field_type="STRING",
+                is_primary_key=True,
+            )
+        ],
+    )
+    loader = DummyLoader(cls, DummyConfig(kb_search_backend=backend))
+
+    result = await KbSearchExecutor(loader).execute(
+        "kb_object",
+        {
+            "query": "会议",
+            "select": ["content"],
+        },
+    )
+
+    assert backend.request is not None
+    assert backend.request.select == []
+    assert result["records"][0]["doc_id"] == "meeting-1f59ad0b0b32"
+
+
+@pytest.mark.asyncio
+async def test_kb_search_executor_always_returns_primary_key_in_file_name_search_results() -> None:
+    backend = PrimaryKeyOmittingBackend()
+    cls = OntologyClass(
+        object_code="kb_object",
+        object_name="知识库对象",
+        description="",
+        source_type="KNOWLEDGE_BASE",
+        datasource_alias="kb_docs",
+        fields=[
+            OntologyField(
+                field_code="doc_id",
+                field_name="文档主键",
+                field_type="STRING",
+                is_primary_key=True,
+            )
+        ],
+    )
+    loader = DummyLoader(cls, DummyConfig(kb_search_backend=backend))
+
+    result = await KbSearchExecutor(loader).search_by_file_name(
+        "kb_object",
+        {"query": "会议", "fileName": "meeting.md"},
+    )
+
+    assert backend.file_name_request is not None
+    assert backend.file_name_request.metadata_field_list == ["doc_id"]
+    assert result["records"][0]["doc_id"] == "meeting-1f59ad0b0b32"
+    assert result["records"][0]["content"] == "命中文档"
+    assert result["meta"]["columns"][-1] == {
+        "name": "content",
+        "label": "文件内容",
+        "type": "string",
+    }
+
+
+@pytest.mark.asyncio
 async def test_kb_search_by_file_name_error_returns_traceback() -> None:
     cls = OntologyClass(
         object_code="kb_object",
@@ -242,6 +356,43 @@ async def test_kb_search_by_file_name_error_returns_traceback() -> None:
     assert result["total"] == 0
     assert "RuntimeError: backend exploded" in result["meta"]["error"]
     assert "search_by_file_name" in result["meta"]["error"]
+
+
+@pytest.mark.asyncio
+async def test_kb_write_uses_final_markdown_filename_to_generate_primary_key() -> None:
+    backend = PrimaryKeyAwareBackend()
+    cls = OntologyClass(
+        object_code="kb_object",
+        object_name="知识库对象",
+        description="",
+        source_type="KNOWLEDGE_BASE",
+        datasource_alias="kb_docs",
+        ext_property={"kb_id": "kb-sales", "kb_directory": "/sales"},
+        fields=[
+            OntologyField(
+                field_code="doc_id",
+                field_name="文档主键",
+                field_type="STRING",
+                is_primary_key=True,
+            ),
+            OntologyField(field_code="status", field_name="状态", field_type="STRING"),
+        ],
+    )
+    loader = DummyLoader(cls, DummyConfig(kb_search_backend=backend))
+
+    result = await KbSearchExecutor(loader).write(
+        "kb_object",
+        {
+            "source_path": "/sales/meeting.docx",
+            "labels": {"status": "active"},
+            "content": "会议内容",
+        },
+    )
+
+    assert backend.write_request is not None
+    assert backend.write_request.labels["doc_id"] == "meeting-1f59ad0b0b32"
+    assert result["records"][0]["doc_id"] == "meeting-1f59ad0b0b32"
+    assert _to_markdown_file_path("/sales/meeting.docx", "/sales") == "/sales/meeting.md"
 
 
 @pytest.mark.asyncio
@@ -594,6 +745,7 @@ async def test_kb_search_executor_write_uses_ext_property_binding() -> None:
         source_type="KNOWLEDGE_BASE",
         datasource_alias="kb_docs",
         ext_property={"kb_id": "kb-sales", "kb_directory": "/sales"},
+        fields=[OntologyField(field_code="status", field_name="状态", field_type="STRING")],
     )
     loader = DummyLoader(cls, DummyConfig(kb_search_backend=backend))
 
@@ -609,12 +761,20 @@ async def test_kb_search_executor_write_uses_ext_property_binding() -> None:
     assert result["records"] == [
         {
             "status": "active",
-            "knCode": "kb-sales",
+            "fileName": "meeting.md",
             "filePath": "/sales/meeting.md",
-            "content": "会议内容",
         }
     ]
-    assert result["meta"]["fields"] == []
+    assert result["meta"] == {
+        "columns": [
+            {"name": "status", "label": "状态", "type": "string"},
+            {"name": "fileName", "label": "文件名称", "type": "string"},
+            {"name": "filePath", "label": "文件路径", "type": "string"},
+        ],
+        "object_code": "kb_object",
+        "datasource_alias": "kb_docs",
+        "query": "",
+    }
 
 
 @pytest.mark.asyncio
