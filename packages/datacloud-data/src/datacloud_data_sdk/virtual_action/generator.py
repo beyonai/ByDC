@@ -49,7 +49,7 @@ def build_search_description(
         lines.append("")
     lines.append(
         f"检索{scope_name}知识库文档。入参协议与 query 明细查询保持一致，"
-        "额外必须提供 query 检索文本；支持 select、filters、filter_relation、order_by、limit、offset；"
+        "额外必须提供 query 检索文本；支持 filters、filter_relation、order_by、limit、offset；"
         "不支持聚合统计。仅允许使用声明的字段。"
     )
     lines.append("")
@@ -263,18 +263,12 @@ def build_search_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
         "description": (
             f"在知识库 {scope_name} 中检索文件。"
             "协议与 query 明细查询一致，额外必须填写 query 语义检索文本；"
-            "select、filters.field、order_by.field 只能填写当前工具列出的属性编码。"
+            "filters.field、order_by.field 只能填写当前工具列出的属性编码。"
         ),
         "x-dc-action-family": "search",
         "x-dc-scope-type": "object",
         "properties": {
             "query": {"type": "string", "description": "检索文本，向量相似度匹配"},
-            "select": {
-                "type": "array",
-                "items": {"type": "string", "enum": [_fc(f) for f in fields]},
-                "description": "需要返回的元数据字段列表，统一填写属性编码；为空时由服务端返回默认字段。",
-                "x-dc-field-catalog": [{"name": _fn(f), "code": _fc(f)} for f in fields],
-            },
             "filters": filters_schema,
             "filter_relation": {
                 "type": "string",
@@ -382,18 +376,24 @@ def _writable_fields(fields: list[Any], *, include_primary_key: bool = False) ->
 
 def build_kb_write_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
     """生成 write_* 知识库写入动作 inputSchema。"""
-    label_properties = {_fc(field): _field_value_property(field) for field in fields}
+    label_properties = {
+        _fc(field): _field_value_property(field)
+        for field in _writable_fields(fields, include_primary_key=False)
+    }
     return {
         "type": "object",
         "additionalProperties": False,
-        "description": f"写入{scope_name}知识库文档。",
+        "description": (
+            f"写入{scope_name}知识库文档。主键字段由最终生成的 .md 文件名自动生成，"
+            "不需要也不允许在 labels 中显式传入。"
+        ),
         "x-dc-action-family": "write",
         "x-dc-scope-type": "object",
         "properties": {
             "labels": {
                 "type": "object",
                 "additionalProperties": False,
-                "description": "知识库属性标签，键必须是对象属性编码。",
+                "description": "知识库属性标签，键必须是对象属性编码；主键字段不在此处填写。",
                 "properties": label_properties,
             },
             "source_path": {

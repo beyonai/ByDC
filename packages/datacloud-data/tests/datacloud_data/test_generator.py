@@ -38,6 +38,7 @@ import pytest
 from datacloud_data_sdk.virtual_action.generator import (
     build_compute_description,
     build_compute_schema,
+    build_kb_write_schema,
     build_query_description,
     build_query_schema,
 )
@@ -74,6 +75,7 @@ class _F:
         self.property_kind = property_kind
         self.required_filter_group = required_filter_group
         self.secondary_role = secondary_role
+        self.is_primary_key = False
 
 
 # 三个典型字段
@@ -104,6 +106,11 @@ _REVENUE = _F(
 )
 
 FIELDS = [_REGION, _PERIOD, _REVENUE]
+KB_FIELDS = [
+    _F("doc_id", "文档主键", property_kind="physical"),
+    _F("status", "状态", property_kind="physical"),
+]
+KB_FIELDS[0].is_primary_key = True
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -300,6 +307,14 @@ def test_x3_measure_catalog_field_is_field_code(compute_schema: dict[str, Any]) 
         )
 
 
+def test_kb_write_schema_excludes_primary_key_field() -> None:
+    """KB write schema 的 labels 不应暴露主键字段。"""
+    schema = build_kb_write_schema("知识库对象", KB_FIELDS)
+    labels_props = schema["properties"]["labels"]["properties"]
+    assert "status" in labels_props
+    assert "doc_id" not in labels_props
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # D 系列：description 文本
 # ─────────────────────────────────────────────────────────────────────────────
@@ -339,14 +354,14 @@ def test_d4_compute_description_no_wrong_error_hint() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-# ── G1-G3: complex_conditions 触发条件 2 修复（§5.1.1）────────────────────────
+# ── G1-G3: filters 触发条件 2 修复（§5.1.1）──────────────────────────────────
 
 
 def test_g1_query_complex_conditions_no_unknown_field_trigger(
     query_schema: dict[str, Any],
 ) -> None:
-    """G1: query complex_conditions.description 不含"字段名找不到→写 complex_conditions"。"""
-    desc = query_schema["properties"]["complex_conditions"]["description"]
+    """G1: query filters.description 不含旧的字段命中提示。"""
+    desc = query_schema["properties"]["filters"]["description"]
     assert "字段名在当前对象字段列表中找不到精确对应" not in desc
     assert "非标准词），需系统做语义推断" not in desc
 
@@ -354,18 +369,16 @@ def test_g1_query_complex_conditions_no_unknown_field_trigger(
 def test_g2_query_complex_conditions_explains_field_not_in_list(
     query_schema: dict[str, Any],
 ) -> None:
-    """G2: query complex_conditions.description 明确说明字段名未命中时不写此列表。"""
-    desc = query_schema["properties"]["complex_conditions"]["description"]
-    assert any(phrase in desc for phrase in ["不写入此列表", "不写此列表", "不进此列表"]), (
-        f"complex_conditions.description 未说明字段未命中时不写入此列表: {desc!r}"
-    )
+    """G2: query filters.description 明确要求使用属性编码。"""
+    desc = query_schema["properties"]["filters"]["description"]
+    assert "属性编码" in desc, f"filters.description 未明确要求属性编码: {desc!r}"
 
 
 def test_g3_compute_complex_conditions_no_unknown_field_trigger(
     compute_schema: dict[str, Any],
 ) -> None:
-    """G3: compute complex_conditions.description 同样不含字段名未命中→complex_conditions。"""
-    desc = compute_schema["properties"]["complex_conditions"]["description"]
+    """G3: compute filters.description 同样不含旧的字段命中提示。"""
+    desc = compute_schema["properties"]["filters"]["description"]
     assert "字段名在当前对象字段列表中找不到精确对应" not in desc
     assert "非标准词），需系统做语义推断" not in desc
 

@@ -14,8 +14,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import traceback
+from pathlib import PurePosixPath
 from typing import Any, cast
 
 from datacloud_data_sdk.exceptions import KbExecutionError
@@ -26,6 +28,7 @@ from datacloud_data_sdk.executor.kb_search_backend import (
     KnowledgeSearchRequest,
     KnowledgeWriteBackend,
     KnowledgeWriteRequest,
+    _to_markdown_file_path,
 )
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.plan.term_resolver import TermResolver
@@ -67,9 +70,13 @@ class KbSearchExecutor:
 
         backend = self._resolve_backend(cls, kb_configs, configured_backend)
         query = str(arguments.get("query", "") or "")
+        select = [
+            str(getattr(field, "field_code", ""))
+            for field in getattr(cls, "fields", [])
+            if str(getattr(field, "field_code", ""))
+        ]
         filters = self._normalize_filters(arguments.get("filters") or [])
         filter_relation = str(arguments.get("filter_relation") or "AND")
-        select = self._normalize_string_list(arguments.get("select") or [])
         order_by = self._normalize_order_by(arguments.get("order_by") or [])
         limit = int(arguments.get("limit") or 20)
         offset = int(arguments.get("offset") or 0)
@@ -92,11 +99,21 @@ class KbSearchExecutor:
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("knowledge base search failed: object_code=%s", object_code)
-            return self._empty_response(object_code, arguments, str(exc), error=True)
+            return self._empty_response(
+                object_code,
+                arguments,
+                str(exc),
+                error=True,
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
+            )
         response = result.to_response()
-        response["records"] = ResultTermConverter(
+        records = ResultTermConverter(
             getattr(self._loader._config, "term_loader", None)
         ).convert_by_fields(response.get("records", []), list(getattr(cls, "fields", [])))
+        records = self._ensure_primary_key_in_records(records, cls)
+        records = _normalize_action_records(records, cls)
+        response["records"] = records
+        response["meta"] = _standard_action_meta(cls, datasource_alias, query)
         return response
 
     async def search_by_file_name(
@@ -114,7 +131,18 @@ class KbSearchExecutor:
         query = str(arguments.get("query", "") or "")
         file_name = str(arguments.get("fileName") or "")
         if not file_name:
-            return self._empty_response(object_code, arguments, "fileName is required", error=True)
+            return self._empty_response(
+                object_code,
+                arguments,
+                "fileName is required",
+                error=True,
+                meta_extra=_standard_action_meta(
+                    cls,
+                    datasource_alias,
+                    query,
+                    include_content=True,
+                ),
+            )
         search_by_file_name = getattr(backend, "search_by_file_name", None)
         if not callable(search_by_file_name):
             return self._empty_response(
@@ -122,6 +150,12 @@ class KbSearchExecutor:
                 arguments,
                 "knowledge backend does not support search_by_file_name",
                 error=True,
+                meta_extra=_standard_action_meta(
+                    cls,
+                    datasource_alias,
+                    query,
+                    include_content=True,
+                ),
             )
 
         try:
@@ -133,20 +167,41 @@ class KbSearchExecutor:
                     file_name=file_name,
                     kb_id=self._get_kb_id(cls),
                     kb_directory=self._get_kb_directory(cls),
-                    metadata_field_list=[
-                        str(getattr(field, "field_code", "")) for field in cls.fields
-                    ],
+                    metadata_field_list=self._with_primary_key_metadata_fields(
+                        [str(getattr(field, "field_code", "")) for field in cls.fields],
+                        cls,
+                    ),
                 )
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("knowledge base file-name search failed: object_code=%s", object_code)
             error_traceback = "".join(traceback.format_exception(exc))
-            return self._empty_response(object_code, arguments, error_traceback, error=True)
+            return self._empty_response(
+                object_code,
+                arguments,
+                error_traceback,
+                error=True,
+                meta_extra=_standard_action_meta(
+                    cls,
+                    datasource_alias,
+                    query,
+                    include_content=True,
+                ),
+            )
 
         response = result.to_response()
-        response["records"] = ResultTermConverter(
+        records = ResultTermConverter(
             getattr(self._loader._config, "term_loader", None)
         ).convert_by_fields(response.get("records", []), list(getattr(cls, "fields", [])))
+        records = self._ensure_primary_key_in_records(records, cls)
+        records = _normalize_action_records(records, cls, include_content=True)
+        response["records"] = records
+        response["meta"] = _standard_action_meta(
+            cls,
+            datasource_alias,
+            query,
+            include_content=True,
+        )
         return response
 
     async def write(
@@ -159,10 +214,16 @@ class KbSearchExecutor:
         kb_configs = getattr(self._loader._config, "kb_source_configs", None)
         configured_backend = getattr(self._loader._config, "kb_search_backend", None)
         datasource_alias = self._get_datasource_alias(cls)
+        query = ""
 
         kb_id = self._get_kb_id(cls)
         if not kb_id:
-            return self._empty_response(object_code, arguments, "knowledge base id not configured")
+            return self._empty_response(
+                object_code,
+                arguments,
+                "knowledge base id not configured",
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
+            )
 
         backend = self._resolve_backend(cls, kb_configs, configured_backend)
         if not hasattr(backend, "write"):
@@ -171,10 +232,10 @@ class KbSearchExecutor:
                 arguments,
                 "knowledge backend does not support write",
                 error=True,
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
             )
 
         labels = self._resolve_label_terms(arguments.get("labels") or {}, cls)
-        # labels = arguments.get("labels") or {}
         file_path = str(arguments.get("source_path") or arguments.get("file_path") or "")
         content = str(arguments.get("content") or arguments.get("source_text") or "")
         if not file_path.startswith("/"):
@@ -183,9 +244,18 @@ class KbSearchExecutor:
                 arguments,
                 "source_path must start with /",
                 error=True,
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
             )
         if not content:
-            return self._empty_response(object_code, arguments, "content is required", error=True)
+            return self._empty_response(
+                object_code,
+                arguments,
+                "content is required",
+                error=True,
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
+            )
+        markdown_file_path = _to_markdown_file_path(file_path, self._get_kb_directory(cls))
+        labels = self._inject_primary_key_label(labels, cls, markdown_file_path)
 
         try:
             write_backend = cast(KnowledgeWriteBackend, backend)
@@ -204,16 +274,21 @@ class KbSearchExecutor:
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("knowledge base write failed: object_code=%s", object_code)
-            return self._empty_response(object_code, arguments, str(exc), error=True)
+            return self._empty_response(
+                object_code,
+                arguments,
+                str(exc),
+                error=True,
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
+            )
 
         response = result.to_response()
-        response["records"] = ResultTermConverter(
+        records = ResultTermConverter(
             getattr(self._loader._config, "term_loader", None)
         ).convert_by_fields(response.get("records", []), list(getattr(cls, "fields", [])))
-        response["meta"] = {
-            **(response.get("meta") if isinstance(response.get("meta"), dict) else {}),
-            "fields": _field_meta(list(getattr(cls, "fields", []))),
-        }
+        records = _normalize_action_records(records, cls)
+        response["records"] = records
+        response["meta"] = _standard_action_meta(cls, datasource_alias, query)
         return response
 
     def _resolve_backend(
@@ -293,6 +368,66 @@ class KbSearchExecutor:
         return resolved
 
     @staticmethod
+    def _with_primary_key_metadata_fields(fields: list[str], cls: Any) -> list[str]:
+        primary_key = KbSearchExecutor._get_primary_key_field_code(cls)
+        if not primary_key:
+            return fields
+        if primary_key in fields:
+            return fields
+        return [*fields, primary_key]
+
+    def _inject_primary_key_label(
+        self,
+        labels: dict[str, Any],
+        cls: Any,
+        markdown_file_path: str,
+    ) -> dict[str, Any]:
+        primary_key = self._get_primary_key_field_code(cls)
+        if not primary_key:
+            return labels
+
+        resolved = dict(labels)
+        resolved[primary_key] = self._generate_primary_key_value(markdown_file_path)
+        return resolved
+
+    def _ensure_primary_key_in_records(
+        self,
+        records: list[dict[str, Any]],
+        cls: Any,
+    ) -> list[dict[str, Any]]:
+        primary_key = self._get_primary_key_field_code(cls)
+        if not primary_key or not records:
+            return records
+
+        normalized_records: list[dict[str, Any]] = []
+        for record in records:
+            if primary_key in record and record[primary_key] not in (None, ""):
+                normalized_records.append(record)
+                continue
+            file_path = str(record.get("filePath") or "")
+            if not file_path:
+                normalized_records.append(record)
+                continue
+            updated = dict(record)
+            updated[primary_key] = self._generate_primary_key_value(file_path)
+            normalized_records.append(updated)
+        return normalized_records
+
+    @staticmethod
+    def _get_primary_key_field_code(cls: Any) -> str | None:
+        for field in getattr(cls, "fields", []):
+            if getattr(field, "is_primary_key", False):
+                return str(getattr(field, "field_code", "") or "")
+        return None
+
+    @staticmethod
+    def _generate_primary_key_value(file_path: str) -> str:
+        """Generate the KB primary key from the final Markdown file name."""
+        file_name = PurePosixPath(file_path).name or "document.md"
+        digest = hashlib.sha1(file_name.encode("utf-8")).hexdigest()[:12]
+        return f"{digest}"
+
+    @staticmethod
     def _get_kb_id(cls: Any) -> str | None:
         ext_property = getattr(cls, "ext_property", {}) or {}
         if isinstance(ext_property, dict):
@@ -370,12 +505,15 @@ class KbSearchExecutor:
         note: str,
         *,
         error: bool = False,
+        meta_extra: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         meta: dict[str, Any] = {
             "object_code": object_code,
             "query": arguments.get("query", ""),
             "note": note,
         }
+        if meta_extra:
+            meta.update(meta_extra)
         if error:
             meta["error"] = note
         return {
@@ -394,6 +532,67 @@ def _field_meta(fields: list[Any]) -> list[dict[str, str]]:
         }
         for field in fields
     ]
+
+
+def _standard_action_meta(
+    cls: Any,
+    datasource_alias: str,
+    query: str,
+    *,
+    include_content: bool = False,
+) -> dict[str, Any]:
+    return {
+        "columns": _action_columns(list(getattr(cls, "fields", [])), include_content),
+        "object_code": str(getattr(cls, "object_code", "")),
+        "datasource_alias": datasource_alias,
+        "query": query,
+    }
+
+
+def _action_columns(fields: list[Any], include_content: bool) -> list[dict[str, str]]:
+    columns = _field_meta(fields)
+    existing_names = {column["name"] for column in columns}
+    for column in (
+        {"name": "fileName", "label": "文件名称", "type": "string"},
+        {"name": "filePath", "label": "文件路径", "type": "string"},
+    ):
+        if column["name"] not in existing_names:
+            columns.append(column)
+            existing_names.add(column["name"])
+    if include_content and "content" not in existing_names:
+        columns.append({"name": "content", "label": "文件内容", "type": "string"})
+    return columns
+
+
+def _normalize_action_records(
+    records: list[dict[str, Any]],
+    cls: Any,
+    *,
+    include_content: bool = False,
+) -> list[dict[str, Any]]:
+    field_codes = [
+        str(getattr(field, "field_code", ""))
+        for field in getattr(cls, "fields", [])
+        if str(getattr(field, "field_code", ""))
+    ]
+    normalized: list[dict[str, Any]] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        item = {field_code: record.get(field_code) for field_code in field_codes}
+        file_path = str(record.get("filePath") or "")
+        item["fileName"] = str(record.get("fileName") or _file_name_from_path(file_path))
+        item["filePath"] = file_path
+        if include_content:
+            item["content"] = str(record.get("content") or "")
+        normalized.append(item)
+    return normalized
+
+
+def _file_name_from_path(file_path: str) -> str:
+    if not file_path:
+        return ""
+    return PurePosixPath(file_path).name
 
 
 def _metadata_field_types(fields: list[Any]) -> dict[str, str]:
