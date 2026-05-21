@@ -201,7 +201,8 @@ def render_view_relations_for_view(config: OwlGenConfig, view: ViewConfig) -> st
         if synonyms:
             ext["synonyms"] = synonyms
         ext_field_str = json.dumps(ext, ensure_ascii=False)
-        rel_id = f"rel_{view.view_code}_{mapping.property_code}"
+        # rel_id 含来源对象前缀，避免同名字段重复
+        rel_id = f"rel_{view.view_code}_{mapping.source_object_code}__{mapping.property_code}"
         nodes.append(
             _rel_node(
                 rel_id=rel_id,
