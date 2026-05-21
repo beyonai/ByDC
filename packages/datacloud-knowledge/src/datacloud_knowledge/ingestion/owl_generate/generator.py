@@ -32,6 +32,9 @@ from datacloud_knowledge.ingestion.owl_generate.renderers.ontology import (
     render_object,
     render_single_view,
 )
+from datacloud_knowledge.ingestion.owl_generate.renderers.relations import (
+    render_view_relations_for_view,
+)
 from datacloud_knowledge.ingestion.owl_generate.renderers.term_types import (
     _term_data_type_to_category,
     build_term_type_defs,
@@ -114,6 +117,10 @@ def _write_package(
     for view in config.resolved_views():
         view_dir = out / "view" / view.view_code
         write_text(view_dir / f"{view.view_code}_definition.owl", render_single_view(config, view))
+        write_text(
+            view_dir / f"{view.view_code}_relations.owl",
+            render_view_relations_for_view(config, view),
+        )
 
         pkg = _build_view_package(config, view, term_values, term_type_defs)
         relation_file_count += _write_kps_view_files(view_dir, pkg)
@@ -456,7 +463,11 @@ def _write_kps_view_files(
     view_dir: Path,
     pkg: KnowledgePackage,
 ) -> int:
-    """将视图 KnowledgePackage 拆分为独立 OWL 文件并写入视图目录。"""
+    """将视图 KnowledgePackage 拆分为独立 OWL 文件并写入视图目录。
+
+    注意：_relations.owl 由 render_view_relations_for_view 单独生成（标准格式），
+    此处只写 _terms.owl，不再重复写 _relations.owl。
+    """
     code = pkg.terms[0].term_code
     gb = GraphBuilder()
     gb.add_package(pkg)
@@ -464,11 +475,7 @@ def _write_kps_view_files(
     # 术语
     terms_graph = gb.export_terms_graph()
     write_text(view_dir / f"{code}_terms.owl", _serialize_graph(terms_graph))
-
-    # 关系
-    rel_graph = gb.export_relations_graph()
-    write_text(view_dir / f"{code}_relations.owl", _serialize_graph(rel_graph))
-    return 1 if len(list(rel_graph.subjects())) > 0 else 0
+    return 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
