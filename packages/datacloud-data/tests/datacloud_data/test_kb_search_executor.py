@@ -561,6 +561,52 @@ async def test_http_kb_file_name_search_uses_chunk_search_endpoint() -> None:
 
 
 @pytest.mark.asyncio
+async def test_http_kb_search_preserves_metadata_envelope() -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "resultCode": "0",
+        "resultMsg": "success",
+        "resultObject": {
+            "data": [
+                {
+                    "knCode": "21",
+                    "filePath": "/会议纪要/覃国权发起的视频会议.md",
+                    "score": 0.483384879423994,
+                    "metadata": {
+                        "topic": {
+                            "valueType": "string",
+                            "value": "大模型输出异常排查",
+                        },
+                        "meeting_date": {
+                            "valueType": "datetime",
+                            "value": "2025-12-17T08:00:00+08:00",
+                        },
+                    },
+                }
+            ]
+        },
+    }
+    backend = HttpKnowledgeSearchBackend({"endpoint_url": "http://kb-service"})
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp):
+        result = await backend.search(
+            KnowledgeSearchRequest(
+                object_code="kb_object",
+                datasource_alias="kb_object",
+                query="大模型输出异常排查",
+            )
+        )
+
+    assert result.records[0]["topic"] == "大模型输出异常排查"
+    assert result.records[0]["meeting_date"] == "2025-12-17T08:00:00+08:00"
+    assert result.records[0]["metadata"] == {
+        "topic": {"valueType": "string", "value": "大模型输出异常排查"},
+        "meeting_date": {"valueType": "datetime", "value": "2025-12-17T08:00:00+08:00"},
+    }
+
+
+@pytest.mark.asyncio
 async def test_http_kb_search_adds_kb_directory_file_path_prefix_filter() -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -692,6 +738,7 @@ async def test_http_kb_search_aggregates_chunk_content_by_file() -> None:
             "chunkText": "第二段",
             "content": "第一段\n\n第二段",
             "score": 91,
+            "metadata": {"status": {"valueType": "string", "value": "active"}},
             "status": "active",
         }
     ]

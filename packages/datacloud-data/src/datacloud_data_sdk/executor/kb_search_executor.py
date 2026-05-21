@@ -70,6 +70,11 @@ class KbSearchExecutor:
 
         backend = self._resolve_backend(cls, kb_configs, configured_backend)
         query = str(arguments.get("query", "") or "")
+        select = [
+            str(getattr(field, "field_code", ""))
+            for field in getattr(cls, "fields", [])
+            if str(getattr(field, "field_code", ""))
+        ]
         filters = self._normalize_filters(arguments.get("filters") or [])
         filter_relation = str(arguments.get("filter_relation") or "AND")
         order_by = self._normalize_order_by(arguments.get("order_by") or [])
@@ -83,6 +88,7 @@ class KbSearchExecutor:
                     query=query,
                     filters=filters,
                     filter_relation=filter_relation,
+                    select=select,
                     order_by=order_by,
                     limit=limit,
                     offset=offset,
