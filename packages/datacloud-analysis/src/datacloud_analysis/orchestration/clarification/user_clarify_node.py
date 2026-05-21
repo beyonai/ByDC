@@ -21,6 +21,26 @@ from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin imp
 logger = logging.getLogger(__name__)
 
 
+def _make_pm_key(paradigm_id: str, kid: int | str) -> str:
+    """Build path_mapping key from paradigm_id and kid.
+
+    Must match the key formats used by build_paradigm_list
+    in ``datacloud_knowledge.intent.clarification.cartesian._paradigm``:
+
+    - paradigmId="1" (select):   ``str(kid)``                  → "1", "2", ...
+    - paradigmId="2" (groupBy):  ``f"g{i+1}"``                 → "g1", "g2", ...
+    - paradigmId="4" (orderBy):  ``f"o{i+1}"``                 → "o1", "o2", ...
+    """
+    kid_str = str(kid)
+    if paradigm_id == "1":
+        return kid_str
+    if paradigm_id == "2":
+        return f"g{kid_str}"
+    if paradigm_id == "4":
+        return f"o{kid_str}"
+    return kid_str  # fallback
+
+
 def _get_gateway_user_id(config: RunnableConfig) -> str | None:
     """从 gateway_context 获取用户 ID；缺失时不做降级。"""
     configurable = config.get("configurable") or {}
@@ -189,14 +209,18 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
                     for item in (paradigm.get("paradigmResult") or [])
                     if item.get("keyword")
                 }
-                # 从 metadata.paradigmList（含 kid）反查对应的 kid
-                _remaining_kids = {
-                    str(item.get("kid"))
-                    for paradigm in meta_paradigm_list
-                    for item in (paradigm.get("paradigmResult") or [])
-                    if item.get("kid") is not None and str(item.get("keyword")) in _remaining_kw
-                }
-                _filtered_pm = {k: v for k, v in _pm.items() if k in _remaining_kids}
+                # 从 metadata.paradigmList（含 paradigmId + kid）构造应保留的
+                # path_mapping 键。不同 paradigm 使用不同键格式：
+                #   select(1): "1"/"2"/...  groupBy(2): "g1"/"g2"/...  orderBy(4): "o1"/"o2"/...
+                _kept_pm_keys: set[str] = set()
+                for paradigm in meta_paradigm_list:
+                    pid = str(paradigm.get("paradigmId", ""))
+                    for item in paradigm.get("paradigmResult") or []:
+                        kid = item.get("kid")
+                        kw = str(item.get("keyword", ""))
+                        if kid is not None and kw in _remaining_kw:
+                            _kept_pm_keys.add(_make_pm_key(pid, kid))
+                _filtered_pm = {k: v for k, v in _pm.items() if k in _kept_pm_keys}
                 if _filtered_pm != _pm:
                     # 收集仍被引用的 select 索引，裁剪 structured_input.select
                     _keep_idx = set()
@@ -206,9 +230,10 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
                                 _keep_idx.add(int(_pv.split(".")[1]))
                     logger.info(
                         "[user_clarify] path_mapping pruned: before=%s after=%s"
-                        " remaining_keywords=%s select_indices_to_keep=%s",
+                        " kept_keys=%s remaining_keywords=%s select_indices_to_keep=%s",
                         _pm,
                         _filtered_pm,
+                        sorted(_kept_pm_keys),
                         _remaining_kw,
                         _keep_idx,
                     )
