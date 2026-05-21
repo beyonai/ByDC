@@ -315,6 +315,14 @@ def test_kb_write_schema_excludes_primary_key_field() -> None:
     assert "doc_id" not in labels_props
 
 
+def test_kb_write_schema_content_description_requires_full_text() -> None:
+    """KB write schema 的 content 描述应强调完整正文。"""
+    schema = build_kb_write_schema("知识库对象", KB_FIELDS)
+    description = schema["properties"]["content"]["description"]
+    assert "完整正文" in description
+    assert "不得摘要" in description
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # D 系列：description 文本
 # ─────────────────────────────────────────────────────────────────────────────

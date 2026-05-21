@@ -145,7 +145,7 @@ class HttpKnowledgeSearchBackend:
             "query": request.query,
             "topK": request.limit,
             "searchMode": str(
-                config.get("searchMode") or config.get("search_mode") or "fullTextRecall"
+                config.get("searchMode") or config.get("search_mode") or "mixedRecall"
             ),
         }
         where = _filters_to_where(request.filters, request.filter_relation, request.field_types)
