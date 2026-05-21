@@ -9,6 +9,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from datacloud_data_sdk.exceptions import KbExecutionError
 from datacloud_data_sdk.executor.kb_search_backend import (
     HttpKnowledgeSearchBackend,
     KnowledgeFileNameSearchRequest,
@@ -262,6 +263,7 @@ async def test_http_kb_search_converts_in_filter_to_or_contains() -> None:
                 },
                 filter_relation="AND",
                 limit=5,
+                field_types={"status": "string", "tags": "stringList"},
             )
         )
 
@@ -277,6 +279,95 @@ async def test_http_kb_search_converts_in_filter_to_or_contains() -> None:
             },
         ]
     }
+
+
+@pytest.mark.asyncio
+async def test_http_kb_search_converts_string_contains_to_wildcard() -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"resultCode": "0", "resultMsg": "success", "resultObject": []}
+    backend = HttpKnowledgeSearchBackend({"endpoint_url": "http://kb-service"})
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp) as post:
+        await backend.search(
+            KnowledgeSearchRequest(
+                object_code="kb_object",
+                datasource_alias="kb_object",
+                query="王威参与的会议",
+                filters={"participants": {"op": "contains", "value": "王威"}},
+                limit=20,
+                kb_directory="/会议纪要/",
+                field_types={"participants": "string"},
+            )
+        )
+
+    body = post.call_args.kwargs["json"]
+    assert body["where"] == {
+        "and": [
+            {"prefix": {"fieldName": "filePath", "value": "/会议纪要/"}},
+            {"wildcard": {"fieldName": "participants", "value": "*王威*"}},
+        ]
+    }
+
+
+@pytest.mark.asyncio
+async def test_http_kb_search_keeps_string_in_as_in_operator() -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"resultCode": "0", "resultMsg": "success", "resultObject": []}
+    backend = HttpKnowledgeSearchBackend({"endpoint_url": "http://kb-service"})
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp) as post:
+        await backend.search(
+            KnowledgeSearchRequest(
+                object_code="kb_object",
+                datasource_alias="kb_object",
+                query="会议",
+                filters={"participants": {"op": "in", "value": ["王威", "黎嘉朗"]}},
+                field_types={"participants": "string"},
+            )
+        )
+
+    body = post.call_args.kwargs["json"]
+    assert body["where"] == {"in": {"fieldName": "participants", "value": ["王威", "黎嘉朗"]}}
+
+
+@pytest.mark.asyncio
+async def test_http_kb_search_includes_dsl_error_list_in_exception() -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "resultCode": "-1",
+        "resultMsg": "request validation failed",
+        "resultObject": {
+            "errorCode": "DSL_VALIDATION_ERROR",
+            "errorList": [
+                {
+                    "path": "where.and[1].contains.fieldName",
+                    "code": "INVALID_FIELD_VALUE_TYPE",
+                    "message": "'contains' is only valid for stringList fields; 'participants' is string",
+                }
+            ],
+        },
+    }
+    backend = HttpKnowledgeSearchBackend({"endpoint_url": "http://kb-service"})
+
+    with (
+        patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp),
+        pytest.raises(KbExecutionError) as exc_info,
+    ):
+        await backend.search(
+            KnowledgeSearchRequest(
+                object_code="kb_object",
+                datasource_alias="kb_object",
+                query="王威参与的会议",
+            )
+        )
+
+    message = str(exc_info.value)
+    assert "DSL_VALIDATION_ERROR: request validation failed" in message
+    assert "where.and[1].contains.fieldName [INVALID_FIELD_VALUE_TYPE]" in message
+    assert "'participants' is string" in message
 
 
 @pytest.mark.asyncio
@@ -474,6 +565,7 @@ async def test_http_kb_search_combines_kb_directory_with_user_filters() -> None:
                 },
                 filter_relation="AND",
                 kb_directory="/制度/人事/",
+                field_types={"status": "string", "tags": "stringList"},
             )
         )
 

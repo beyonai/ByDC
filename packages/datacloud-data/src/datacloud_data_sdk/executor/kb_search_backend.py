@@ -36,6 +36,7 @@ class KnowledgeSearchRequest:
     offset: int = 0
     kb_id: str | None = None
     kb_directory: str | None = None
+    field_types: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -147,7 +148,7 @@ class HttpKnowledgeSearchBackend:
                 config.get("searchMode") or config.get("search_mode") or "mixedRecall"
             ),
         }
-        where = _filters_to_where(request.filters, request.filter_relation)
+        where = _filters_to_where(request.filters, request.filter_relation, request.field_types)
         where = _with_kb_directory_filter(where, request.kb_directory)
         if where:
             body["where"] = where
@@ -180,19 +181,12 @@ class HttpKnowledgeSearchBackend:
         result_object = data.get("resultObject")
         if isinstance(result_object, dict):
             raw_records = result_object.get("data")
-            error_code = result_object.get("errorCode")
             if data.get("resultCode") not in (None, "0", 0):
-                raise KbExecutionError(
-                    request.datasource_alias,
-                    f"{error_code or data.get('resultCode')}: {data.get('resultMsg', '')}",
-                )
+                raise KbExecutionError(request.datasource_alias, _format_error_message(data))
         else:
             raw_records = data.get("results")
             if data.get("resultCode") not in (None, "0", 0):
-                raise KbExecutionError(
-                    request.datasource_alias,
-                    str(data.get("resultMsg") or data.get("resultCode")),
-                )
+                raise KbExecutionError(request.datasource_alias, _format_error_message(data))
 
         records = self._normalize_records(raw_records)
         return KnowledgeSearchResult(
@@ -576,18 +570,11 @@ class HttpKnowledgeSearchBackend:
         result_object = data.get("resultObject")
         if isinstance(result_object, dict):
             if data.get("resultCode") not in (None, "0", 0):
-                error_code = result_object.get("errorCode")
-                raise KbExecutionError(
-                    datasource_alias,
-                    f"{error_code or data.get('resultCode')}: {data.get('resultMsg', '')}",
-                )
+                raise KbExecutionError(datasource_alias, _format_error_message(data))
             return result_object.get("data")
 
         if data.get("resultCode") not in (None, "0", 0):
-            raise KbExecutionError(
-                datasource_alias,
-                str(data.get("resultMsg") or data.get("resultCode")),
-            )
+            raise KbExecutionError(datasource_alias, _format_error_message(data))
         return data.get("results")
 
     def _get_config(self, datasource_alias: str) -> dict[str, Any]:
@@ -1038,25 +1025,64 @@ def _format_error_message(body: dict[str, Any]) -> str:
     message = str(body.get("resultMsg") or body.get("resultCode") or "request failed")
     result_object = body.get("resultObject")
     if isinstance(result_object, dict):
+        error_code = result_object.get("errorCode")
+        if error_code:
+            message = f"{error_code}: {message}"
+
         errors = result_object.get("errors")
-        if isinstance(errors, list) and errors:
-            error_lines: list[str] = []
-            for item in errors:
-                if not isinstance(item, dict):
-                    error_lines.append(str(item))
-                    continue
-                location = item.get("loc")
-                location_text = (
-                    ".".join(str(part) for part in location) if isinstance(location, list) else ""
-                )
-                detail = str(item.get("msg") or item.get("type") or "unknown error")
-                if location_text:
-                    error_lines.append(f"{location_text}: {detail}")
-                else:
-                    error_lines.append(detail)
-            if error_lines:
-                message = f"{message}; {', '.join(error_lines)}"
+        error_list = result_object.get("errorList")
+        error_lines = [
+            *_format_validation_errors(errors),
+            *_format_dsl_error_list(error_list),
+        ]
+        if error_lines:
+            message = f"{message}; {', '.join(error_lines)}"
     return message
+
+
+def _format_validation_errors(errors: Any) -> list[str]:
+    if not isinstance(errors, list):
+        return []
+
+    error_lines: list[str] = []
+    for item in errors:
+        if not isinstance(item, dict):
+            error_lines.append(str(item))
+            continue
+        location = item.get("loc")
+        location_text = (
+            ".".join(str(part) for part in location) if isinstance(location, list) else ""
+        )
+        detail = str(item.get("msg") or item.get("type") or "unknown error")
+        if location_text:
+            error_lines.append(f"{location_text}: {detail}")
+        else:
+            error_lines.append(detail)
+    return error_lines
+
+
+def _format_dsl_error_list(error_list: Any) -> list[str]:
+    if not isinstance(error_list, list):
+        return []
+
+    error_lines: list[str] = []
+    for item in error_list:
+        if not isinstance(item, dict):
+            error_lines.append(str(item))
+            continue
+
+        path = str(item.get("path") or "")
+        code = str(item.get("code") or "")
+        detail = str(item.get("message") or "unknown error")
+        if path and code:
+            error_lines.append(f"{path} [{code}]: {detail}")
+        elif path:
+            error_lines.append(f"{path}: {detail}")
+        elif code:
+            error_lines.append(f"{code}: {detail}")
+        else:
+            error_lines.append(detail)
+    return error_lines
 
 
 def _to_markdown_file_path(file_path: str, kb_directory: str | None = None) -> str:
@@ -1117,14 +1143,29 @@ def _yaml_scalar(value: Any) -> str:
     return json.dumps(str(value), ensure_ascii=False)
 
 
-def _filters_to_where(filters: dict[str, Any], filter_relation: str) -> dict[str, Any]:
+_SYSTEM_FIELD_TYPES: dict[str, str] = {
+    "fileName": "string",
+    "fileType": "string",
+    "fileSize": "number",
+    "mimeType": "string",
+    "filePath": "string",
+    "createdAt": "datetime",
+    "updatedAt": "datetime",
+}
+
+
+def _filters_to_where(
+    filters: dict[str, Any],
+    filter_relation: str,
+    field_types: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Compile query-style filters to metadata API ``where`` AST."""
     if not filters:
         return {}
 
     nodes: list[dict[str, Any]] = []
     for field_name, raw_filter in filters.items():
-        node = _filter_to_where_node(str(field_name), raw_filter)
+        node = _filter_to_where_node(str(field_name), raw_filter, field_types or {})
         if node:
             nodes.append(node)
 
@@ -1194,7 +1235,58 @@ def _normalize_file_name(file_name: str | None) -> str | None:
     return PurePosixPath(name).name
 
 
-def _filter_to_where_node(field_name: str, raw_filter: Any) -> dict[str, Any]:
+def _normalize_metadata_field_type(field_type: str | None) -> str:
+    normalized = str(field_type or "").strip().lower()
+    if normalized in {"array", "list", "string_list", "stringlist"}:
+        return "stringList"
+    if normalized in {
+        "integer",
+        "int",
+        "bigint",
+        "long",
+        "smallint",
+        "number",
+        "float",
+        "double",
+        "decimal",
+        "real",
+    }:
+        return "number"
+    if normalized in {"boolean", "bool"}:
+        return "boolean"
+    if normalized in {"date", "datetime", "time", "timestamp"}:
+        return "datetime"
+    return "string"
+
+
+def _field_type_for_filter(field_name: str, field_types: dict[str, str]) -> str:
+    return _normalize_metadata_field_type(
+        field_types.get(field_name) or _SYSTEM_FIELD_TYPES.get(field_name)
+    )
+
+
+def _contains_wildcard_value(value: Any) -> str:
+    text = str(value or "")
+    if "*" in text or "?" in text:
+        return text
+    if "%" in text or "_" in text:
+        return text.replace("%", "*").replace("_", "?")
+    return f"*{text}*"
+
+
+def _string_list_contains_node(field_name: str, value: Any) -> dict[str, Any]:
+    return {"contains": {"fieldName": field_name, "value": str(value)}}
+
+
+def _string_contains_node(field_name: str, value: Any) -> dict[str, Any]:
+    return {"wildcard": {"fieldName": field_name, "value": _contains_wildcard_value(value)}}
+
+
+def _filter_to_where_node(
+    field_name: str,
+    raw_filter: Any,
+    field_types: dict[str, str],
+) -> dict[str, Any]:
     """Compile a single query-style filter to metadata API leaf/compound node."""
     if isinstance(raw_filter, dict):
         op = str(raw_filter.get("op", "eq") or "eq").lower()
@@ -1203,6 +1295,7 @@ def _filter_to_where_node(field_name: str, raw_filter: Any) -> dict[str, Any]:
         op = "eq"
         value = raw_filter
 
+    field_type = _field_type_for_filter(field_name, field_types)
     if op == "is_null":
         return {"not": {"exists": {"fieldName": field_name}}}
     if op == "is_not_null":
@@ -1222,19 +1315,30 @@ def _filter_to_where_node(field_name: str, raw_filter: Any) -> dict[str, Any]:
         values = [item for item in values if item is not None]
         if not values:
             return {}
-        if field_name in {"fileType", "fileName", "mimeType", "filePath"}:
+        if field_type != "stringList":
             return {"in": {"fieldName": field_name, "value": values}}
-        nodes = [{"contains": {"fieldName": field_name, "value": item}} for item in values]
+        nodes = [_string_list_contains_node(field_name, item) for item in values]
         if len(nodes) == 1:
             return nodes[0]
         return {"or": nodes}
+
+    if op in {"like", "contains"}:
+        if field_type == "stringList":
+            return _string_list_contains_node(field_name, value)
+        if field_type == "string":
+            return _string_contains_node(field_name, value)
+        return {"eq": {"fieldName": field_name, "value": value}}
+
+    if field_type == "stringList":
+        if op == "eq":
+            return _string_list_contains_node(field_name, value)
+        if op in {"neq", "ne"}:
+            return {"not": _string_list_contains_node(field_name, value)}
 
     op_map = {
         "eq": "eq",
         "neq": "ne",
         "ne": "ne",
-        "like": "contains",
-        "contains": "contains",
         "gt": "gt",
         "gte": "gte",
         "lt": "lt",
