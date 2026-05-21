@@ -464,32 +464,77 @@ def _build_scene_field_props(m: ViewFieldMapping) -> dict[str, str]:
 
 
 def render_single_view(config: OwlGenConfig, view: ViewConfig) -> str:
-    """单个视图定义 OWL（SceneDefinition + SceneField）— GraphBuilder API。
+    """单个视图定义 OWL（SceneDefinition + SceneField）— 直接生成标准格式 XML。
 
-    业务逻辑：为每个视图配置生成 SceneDefinition（含 object_codes、relations、
-    字段引用）+ 每个字段映射的 SceneField（含源对象/字段、同义词、角色）。
-    产物写入 {view_code}_definition.owl 文件。
+    与标准 scene_new_sales_analysis_definition.owl 格式完全对齐：
+    - 属性名使用下划线（view_code / view_name / object_codes / ext_property）
+    - rdf:about 使用相对 URI（#xxx）
+    - SceneDefinition 节点在前，SceneField 节点在后
     """
     object_codes_json = json.dumps(view.object_codes, ensure_ascii=False)
     relations_json = json.dumps(_view_relation_ids(config, view), ensure_ascii=False)
 
-    # 字段引用 ID 列表
-    field_ref_ids = [f"{m.property_code}_field" for m in view.field_mappings]
-
-    builder = GraphBuilder()
-    builder.add_scene_definition(
-        view_code=view.view_code,
-        view_name=view.view_name,
-        view_desc=view.view_desc,
-        object_codes_json=object_codes_json,
-        relations_json=relations_json,
-        field_refs=field_ref_ids,
+    # 字段引用行
+    field_refs_xml = "\n".join(
+        f'        <fields rdf:resource="#{m.property_code}_field"/>' for m in view.field_mappings
     )
 
+    # 每个 SceneField 节点
+    scene_field_parts: list[str] = []
     for m in view.field_mappings:
-        builder.add_scene_field(_build_scene_field_props(m))
+        ext_prop = _view_field_role_json(m)
+        synonyms_str = json.dumps(m.synonyms, ensure_ascii=False) if m.synonyms else ""
+        scene_field_parts.append(f"""    <owl:NamedIndividual rdf:about="#{m.property_code}_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(m.property_code)}</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(m.property_name)}</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(m.source_object_code)}</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(m.source_object_column_code)}</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(synonyms_str)}</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(ext_prop)}</ext_property>
+    </owl:NamedIndividual>""")
 
-    return _serialize_xml(builder)
+    scene_fields_xml = "\n\n".join(scene_field_parts)
+
+    return f"""<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/scene/ontology#">
+
+    <owl:Class rdf:about="#SceneDefinition"><rdfs:label>视图定义</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#SceneField"><rdfs:label>视图字段</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#{view.view_code}_v1">
+        <rdf:type rdf:resource="#SceneDefinition"/>
+        <view_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(view.view_code)}</view_code>
+        <view_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(view.view_name)}</view_name>
+        <description rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(view.view_desc)}</description>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+        <object_codes rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(object_codes_json)}</object_codes>
+        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(relations_json)}</relations>
+{field_refs_xml}
+    </owl:NamedIndividual>
+
+{scene_fields_xml}
+
+    <owl:DatatypeProperty rdf:about="#view_code"/>
+    <owl:DatatypeProperty rdf:about="#view_name"/>
+    <owl:DatatypeProperty rdf:about="#description"/>
+    <owl:DatatypeProperty rdf:about="#version"/>
+    <owl:DatatypeProperty rdf:about="#object_codes"/>
+    <owl:DatatypeProperty rdf:about="#relations"/>
+    <owl:ObjectProperty rdf:about="#fields"/>
+    <owl:DatatypeProperty rdf:about="#property_code"/>
+    <owl:DatatypeProperty rdf:about="#property_name"/>
+    <owl:DatatypeProperty rdf:about="#source_object_code"/>
+    <owl:DatatypeProperty rdf:about="#source_object_column_code"/>
+    <owl:DatatypeProperty rdf:about="#synonyms"/>
+    <owl:DatatypeProperty rdf:about="#ext_property"/>
+</rdf:RDF>
+"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
