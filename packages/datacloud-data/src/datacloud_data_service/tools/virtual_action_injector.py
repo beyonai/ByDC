@@ -430,9 +430,11 @@ def _inject_view_actions(loader, registry) -> None:
         if not object_codes:
             continue
 
-        # 检查是否所有对象都是 DB 类型
+        # 检查是否所有对象都是可查询类型（DB 或 DYNAMIC_TABLE）
+        _QUERYABLE = {"DB", "DYNAMIC_TABLE"}
         all_db = all(
-            loader._classes.get(oc, None) is not None and loader._classes[oc].source_type == "DB"
+            loader._classes.get(oc, None) is not None
+            and loader._classes[oc].source_type in _QUERYABLE
             for oc in object_codes
         )
         if not all_db:
