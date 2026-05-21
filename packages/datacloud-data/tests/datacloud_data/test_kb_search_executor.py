@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from datacloud_data_sdk.executor.kb_search_backend import (
     HttpKnowledgeSearchBackend,
+    KnowledgeFileNameSearchRequest,
     KnowledgeSearchRequest,
     KnowledgeSearchResult,
     KnowledgeWriteRequest,
@@ -45,10 +46,22 @@ class DummyLoader(OntologyLoader):
 class CustomSearchBackend:
     def __init__(self) -> None:
         self.request: KnowledgeSearchRequest | None = None
+        self.file_name_request: KnowledgeFileNameSearchRequest | None = None
         self.write_request: KnowledgeWriteRequest | None = None
 
     async def search(self, request: KnowledgeSearchRequest) -> KnowledgeSearchResult:
         self.request = request
+        return KnowledgeSearchResult(
+            records=[{"content": "命中文档", "doc_id": "d1"}],
+            total=1,
+            meta={"provider": "custom"},
+        )
+
+    async def search_by_file_name(
+        self,
+        request: KnowledgeFileNameSearchRequest,
+    ) -> KnowledgeSearchResult:
+        self.file_name_request = request
         return KnowledgeSearchResult(
             records=[{"content": "命中文档", "doc_id": "d1"}],
             total=1,
@@ -69,6 +82,17 @@ class CustomSearchBackend:
             total=1,
             meta={"provider": "custom"},
         )
+
+
+class FailingFileNameSearchBackend:
+    async def search(self, request: KnowledgeSearchRequest) -> KnowledgeSearchResult:
+        return KnowledgeSearchResult(records=[], total=0)
+
+    async def search_by_file_name(
+        self,
+        request: KnowledgeFileNameSearchRequest,
+    ) -> KnowledgeSearchResult:
+        raise RuntimeError("backend exploded")
 
 
 def test_render_markdown_with_front_matter_skips_empty_values() -> None:
@@ -167,6 +191,59 @@ async def test_kb_search_executor_accepts_query_style_arguments() -> None:
 
 
 @pytest.mark.asyncio
+async def test_kb_search_executor_accepts_file_name_action_arguments() -> None:
+    backend = CustomSearchBackend()
+    cls = OntologyClass(
+        object_code="kb_object",
+        object_name="知识库对象",
+        description="",
+        source_type="KNOWLEDGE_BASE",
+        datasource_alias="kb_docs",
+        ext_property={"kb_id": "kb-sales", "kb_directory": "/sales/default"},
+    )
+    loader = DummyLoader(cls, DummyConfig(kb_search_backend=backend))
+
+    await KbSearchExecutor(loader).search_by_file_name(
+        "kb_object",
+        {
+            "query": "续签流程",
+            "fileName": "续签流程.md",
+        },
+    )
+
+    assert backend.file_name_request == KnowledgeFileNameSearchRequest(
+        object_code="kb_object",
+        datasource_alias="kb_docs",
+        query="续签流程",
+        file_name="续签流程.md",
+        kb_id="kb-sales",
+        kb_directory="/sales/default",
+        metadata_field_list=[],
+    )
+
+
+@pytest.mark.asyncio
+async def test_kb_search_by_file_name_error_returns_traceback() -> None:
+    cls = OntologyClass(
+        object_code="kb_object",
+        object_name="知识库对象",
+        description="",
+        source_type="KNOWLEDGE_BASE",
+        datasource_alias="kb_docs",
+    )
+    loader = DummyLoader(cls, DummyConfig(kb_search_backend=FailingFileNameSearchBackend()))
+
+    result = await KbSearchExecutor(loader).search_by_file_name(
+        "kb_object",
+        {"query": "续签流程", "fileName": "续签流程.md"},
+    )
+
+    assert result["total"] == 0
+    assert "RuntimeError: backend exploded" in result["meta"]["error"]
+    assert "search_by_file_name" in result["meta"]["error"]
+
+
+@pytest.mark.asyncio
 async def test_http_kb_search_converts_in_filter_to_or_contains() -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -203,6 +280,45 @@ async def test_http_kb_search_converts_in_filter_to_or_contains() -> None:
 
 
 @pytest.mark.asyncio
+async def test_http_kb_file_search_keeps_search_file_endpoint() -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"resultCode": "0", "resultMsg": "success", "resultObject": []}
+    backend = HttpKnowledgeSearchBackend({"endpoint_url": "http://kb-service"})
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp) as post:
+        await backend.search(
+            KnowledgeSearchRequest(
+                object_code="kb_object",
+                datasource_alias="kb_object",
+                query="续签流程",
+            )
+        )
+
+    assert post.call_args.args[0] == "http://kb-service/api/v1/knowledgeItems/searchFile"
+
+
+@pytest.mark.asyncio
+async def test_http_kb_file_name_search_uses_chunk_search_endpoint() -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"resultCode": "0", "resultMsg": "success", "resultObject": []}
+    backend = HttpKnowledgeSearchBackend({"endpoint_url": "http://kb-service"})
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp) as post:
+        await backend.search_by_file_name(
+            KnowledgeFileNameSearchRequest(
+                object_code="kb_object",
+                datasource_alias="kb_object",
+                query="续签流程",
+                file_name="续签流程.md",
+            )
+        )
+
+    assert post.call_args.args[0] == "http://kb-service/api/v1/knowledgeItems/search"
+
+
+@pytest.mark.asyncio
 async def test_http_kb_search_adds_kb_directory_file_path_prefix_filter() -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -221,6 +337,122 @@ async def test_http_kb_search_adds_kb_directory_file_path_prefix_filter() -> Non
 
     body = post.call_args.kwargs["json"]
     assert body["where"] == {"prefix": {"fieldName": "filePath", "value": "/制度/人事/"}}
+
+
+@pytest.mark.asyncio
+async def test_http_kb_search_combines_directory_file_name_and_filters() -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "resultCode": "0",
+        "resultMsg": "success",
+        "resultObject": {"data": []},
+    }
+    backend = HttpKnowledgeSearchBackend({"endpoint_url": "http://kb-service"})
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp) as post:
+        await backend.search_by_file_name(
+            KnowledgeFileNameSearchRequest(
+                object_code="kb_object",
+                datasource_alias="kb_object",
+                query="续签流程",
+                kb_directory="/制度/人事",
+                file_name="/tmp/续签流程.md",
+                limit=5,
+                kb_id="2",
+            )
+        )
+
+    body = post.call_args.kwargs["json"]
+    assert body == {
+        "query": "续签流程",
+        "topK": 5,
+        "searchMode": "mixedRecall",
+        "where": {
+            "and": [
+                {"eq": {"fieldName": "fileName", "value": "续签流程.md"}},
+                {"prefix": {"fieldName": "filePath", "value": "/制度/人事/"}},
+            ]
+        },
+        "knCodeList": ["2"],
+    }
+
+
+@pytest.mark.asyncio
+async def test_http_kb_file_name_search_does_not_fallback_to_config_kn_code() -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "resultCode": "0",
+        "resultMsg": "success",
+        "resultObject": {"data": []},
+    }
+    backend = HttpKnowledgeSearchBackend({"endpoint_url": "http://kb-service", "knCode": "legacy"})
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp) as post:
+        await backend.search_by_file_name(
+            KnowledgeFileNameSearchRequest(
+                object_code="kb_object",
+                datasource_alias="kb_object",
+                query="续签流程",
+                file_name="续签流程.md",
+            )
+        )
+
+    body = post.call_args.kwargs["json"]
+    assert "knCodeList" not in body
+
+
+@pytest.mark.asyncio
+async def test_http_kb_search_aggregates_chunk_content_by_file() -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "resultCode": "0",
+        "resultMsg": "success",
+        "resultObject": {
+            "data": [
+                {
+                    "knCode": "2",
+                    "filePath": "/制度/人事/续签流程.md",
+                    "chunkId": 1,
+                    "chunkText": "第一段",
+                    "score": 95,
+                },
+                {
+                    "knCode": "2",
+                    "filePath": "/制度/人事/续签流程.md",
+                    "chunkId": 2,
+                    "chunkText": "第二段",
+                    "score": 91,
+                    "metadata": {"status": {"valueType": "string", "value": "active"}},
+                },
+            ]
+        },
+    }
+    backend = HttpKnowledgeSearchBackend({"endpoint_url": "http://kb-service"})
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp):
+        result = await backend.search_by_file_name(
+            KnowledgeFileNameSearchRequest(
+                object_code="kb_object",
+                datasource_alias="kb_object",
+                query="续签流程",
+                file_name="续签流程.md",
+            )
+        )
+
+    assert result.records == [
+        {
+            "knCode": "2",
+            "filePath": "/制度/人事/续签流程.md",
+            "chunkId": 2,
+            "chunkText": "第二段",
+            "content": "第一段\n\n第二段",
+            "score": 91,
+            "status": "active",
+        }
+    ]
 
 
 @pytest.mark.asyncio

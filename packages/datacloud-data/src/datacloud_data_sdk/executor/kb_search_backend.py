@@ -59,6 +59,30 @@ class KnowledgeSearchBackend(Protocol):
 
 
 @dataclass(frozen=True)
+class KnowledgeFileNameSearchRequest:
+    """Structured request for chunk-level search constrained by a file name."""
+
+    object_code: str
+    datasource_alias: str
+    query: str
+    file_name: str
+    kb_id: str | None = None
+    kb_directory: str | None = None
+    metadata_field_list: list[str] = field(default_factory=list)
+    limit: int = 20
+
+
+class KnowledgeFileNameSearchBackend(Protocol):
+    """Protocol for file-name constrained chunk search implementations."""
+
+    async def search_by_file_name(
+        self,
+        request: KnowledgeFileNameSearchRequest,
+    ) -> KnowledgeSearchResult:
+        """Execute a file-name constrained chunk-level search request."""
+
+
+@dataclass(frozen=True)
 class KnowledgeWriteRequest:
     """Structured request passed to knowledge-base write backends."""
 
@@ -123,10 +147,8 @@ class HttpKnowledgeSearchBackend:
                 config.get("searchMode") or config.get("search_mode") or "mixedRecall"
             ),
         }
-        where = _with_kb_directory_filter(
-            _filters_to_where(request.filters, request.filter_relation),
-            request.kb_directory,
-        )
+        where = _filters_to_where(request.filters, request.filter_relation)
+        where = _with_kb_directory_filter(where, request.kb_directory)
         if where:
             body["where"] = where
 
@@ -173,6 +195,58 @@ class HttpKnowledgeSearchBackend:
                 )
 
         records = self._normalize_records(raw_records)
+        return KnowledgeSearchResult(
+            records=records,
+            total=len(records),
+            meta={
+                "object_code": request.object_code,
+                "datasource_alias": request.datasource_alias,
+                "query": request.query,
+            },
+        )
+
+    async def search_by_file_name(
+        self,
+        request: KnowledgeFileNameSearchRequest,
+    ) -> KnowledgeSearchResult:
+        """Search chunks by query and file name using the upgraded knowledgeItems/search API."""
+        config = self._get_config(request.datasource_alias)
+        body: dict[str, Any] = {
+            "query": request.query,
+            "topK": request.limit,
+            "searchMode": str(
+                config.get("searchMode") or config.get("search_mode") or "mixedRecall"
+            ),
+        }
+        where = _with_kb_directory_filter({}, request.kb_directory)
+        where = _with_file_name_filter(where, request.file_name)
+        if where:
+            body["where"] = where
+        kn_code_list = _coerce_string_list(request.kb_id)
+        if kn_code_list:
+            body["knCodeList"] = kn_code_list
+        if request.metadata_field_list:
+            body["metadataFieldList"] = request.metadata_field_list
+
+        endpoint = self._resolve_endpoint(config)
+        if endpoint:
+            data = await self._post_json(
+                self._build_chunk_search_url(endpoint, config),
+                body,
+                request.datasource_alias,
+            )
+        else:
+            service_name = self._resolve_service_name(config, request.datasource_alias)
+            data = await self._post_json_by_discovery(
+                service_name=service_name,
+                path=self._build_chunk_search_path(config),
+                body=body,
+                datasource_alias=request.datasource_alias,
+            )
+
+        records = _aggregate_content_by_file(
+            self._normalize_records(self._extract_raw_records(data, request.datasource_alias))
+        )
         return KnowledgeSearchResult(
             records=records,
             total=len(records),
@@ -497,6 +571,25 @@ class HttpKnowledgeSearchBackend:
             )
             raise KbExecutionError(datasource_alias, error_message)
 
+    @staticmethod
+    def _extract_raw_records(data: dict[str, Any], datasource_alias: str) -> Any:
+        result_object = data.get("resultObject")
+        if isinstance(result_object, dict):
+            if data.get("resultCode") not in (None, "0", 0):
+                error_code = result_object.get("errorCode")
+                raise KbExecutionError(
+                    datasource_alias,
+                    f"{error_code or data.get('resultCode')}: {data.get('resultMsg', '')}",
+                )
+            return result_object.get("data")
+
+        if data.get("resultCode") not in (None, "0", 0):
+            raise KbExecutionError(
+                datasource_alias,
+                str(data.get("resultMsg") or data.get("resultCode")),
+            )
+        return data.get("results")
+
     def _get_config(self, datasource_alias: str) -> dict[str, Any]:
         if not self._configs:
             return {}
@@ -535,6 +628,13 @@ class HttpKnowledgeSearchBackend:
         return _normalize_discovery_path(
             _first_non_empty_str(config.get("search_file_path"), config.get("searchFilePath")),
             "/api/v1/knowledgeItems/searchFile",
+        )
+
+    @staticmethod
+    def _build_chunk_search_path(config: dict[str, Any]) -> str:
+        return _normalize_discovery_path(
+            _first_non_empty_str(config.get("search_path"), config.get("searchPath")),
+            "/api/v1/knowledgeItems/search",
         )
 
     @staticmethod
@@ -681,6 +781,20 @@ class HttpKnowledgeSearchBackend:
         return endpoint.rstrip("/") + "/" + path.lstrip("/")
 
     @staticmethod
+    def _build_chunk_search_url(endpoint: str, config: dict[str, Any]) -> str:
+        explicit_url = config.get("search_url") or config.get("searchUrl")
+        if explicit_url:
+            return str(explicit_url)
+
+        if endpoint.rstrip("/").endswith("/api/v1/knowledgeItems/search"):
+            return endpoint.rstrip("/")
+
+        path = str(
+            config.get("search_path") or config.get("searchPath") or "/api/v1/knowledgeItems/search"
+        )
+        return endpoint.rstrip("/") + "/" + path.lstrip("/")
+
+    @staticmethod
     def _build_import_url(endpoint: str, config: dict[str, Any]) -> str:
         explicit_url = config.get("import_url") or config.get("importUrl")
         if explicit_url:
@@ -818,6 +932,29 @@ def _flatten_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
         else:
             flattened[key] = raw_value
     return flattened
+
+
+def _aggregate_content_by_file(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Aggregate chunk text into one record per file while preserving record attributes."""
+    aggregated: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    for record in records:
+        key = str(record.get("filePath") or record.get("knCode") or len(order))
+        if key not in aggregated:
+            aggregated[key] = dict(record)
+            order.append(key)
+        else:
+            aggregated[key].update({k: v for k, v in record.items() if k not in {"content"}})
+
+        content = str(record.get("content") or "")
+        if not content:
+            continue
+        existing_content = str(aggregated[key].get("content") or "")
+        if not existing_content:
+            aggregated[key]["content"] = content
+        elif content not in existing_content:
+            aggregated[key]["content"] = f"{existing_content}\n\n{content}"
+    return [aggregated[key] for key in order]
 
 
 def _normalize_metadata_properties(
@@ -999,6 +1136,22 @@ def _filters_to_where(filters: dict[str, Any], filter_relation: str) -> dict[str
     return {relation: nodes}
 
 
+def _merge_where_nodes(*nodes: dict[str, Any]) -> dict[str, Any]:
+    valid_nodes = [node for node in nodes if isinstance(node, dict) and node]
+    if not valid_nodes:
+        return {}
+    if len(valid_nodes) == 1:
+        return valid_nodes[0]
+
+    merged: list[dict[str, Any]] = []
+    for node in valid_nodes:
+        if isinstance(node.get("and"), list):
+            merged.extend(node["and"])
+        else:
+            merged.append(node)
+    return {"and": merged}
+
+
 def _with_kb_directory_filter(where: dict[str, Any], kb_directory: str | None) -> dict[str, Any]:
     """Add the object's knowledge-base directory constraint to the metadata where AST."""
     directory_prefix = _kb_directory_to_file_path_prefix(kb_directory)
@@ -1006,11 +1159,17 @@ def _with_kb_directory_filter(where: dict[str, Any], kb_directory: str | None) -
         return where
 
     directory_node = {"prefix": {"fieldName": "filePath", "value": directory_prefix}}
-    if not where:
-        return directory_node
-    if isinstance(where.get("and"), list):
-        return {"and": [directory_node, *where["and"]]}
-    return {"and": [directory_node, where]}
+    return _merge_where_nodes(directory_node, where)
+
+
+def _with_file_name_filter(where: dict[str, Any], file_name: str | None) -> dict[str, Any]:
+    """Add the fixed file name constraint for file-scoped semantic search."""
+    normalized_file_name = _normalize_file_name(file_name)
+    if not normalized_file_name:
+        return where
+
+    file_name_node = {"eq": {"fieldName": "fileName", "value": normalized_file_name}}
+    return _merge_where_nodes(file_name_node, where)
 
 
 def _kb_directory_to_file_path_prefix(kb_directory: str | None) -> str | None:
@@ -1024,6 +1183,15 @@ def _kb_directory_to_file_path_prefix(kb_directory: str | None) -> str | None:
     if directory != "/" and not directory.endswith("/"):
         directory = f"{directory}/"
     return directory
+
+
+def _normalize_file_name(file_name: str | None) -> str | None:
+    if not file_name:
+        return None
+    name = str(file_name).strip()
+    if not name:
+        return None
+    return PurePosixPath(name).name
 
 
 def _filter_to_where_node(field_name: str, raw_filter: Any) -> dict[str, Any]:
@@ -1051,13 +1219,12 @@ def _filter_to_where_node(field_name: str, raw_filter: Any) -> dict[str, Any]:
         }
     if op == "in":
         values = value if isinstance(value, list) else [value]
-        nodes = [
-            {"contains": {"fieldName": field_name, "value": item}}
-            for item in values
-            if item is not None
-        ]
-        if not nodes:
+        values = [item for item in values if item is not None]
+        if not values:
             return {}
+        if field_name in {"fileType", "fileName", "mimeType", "filePath"}:
+            return {"in": {"fieldName": field_name, "value": values}}
+        nodes = [{"contains": {"fieldName": field_name, "value": item}} for item in values]
         if len(nodes) == 1:
             return nodes[0]
         return {"or": nodes}
