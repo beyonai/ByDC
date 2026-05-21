@@ -646,8 +646,8 @@ class TestBuildTerms:
         rel_items = mock_adapter.batch_process_relation.call_args.args[0]
         assert len(rel_items) == 3
 
-    def test_no_term_fields_skipped(self) -> None:
-        """无术语绑定的字段被跳过，只保留实体术语。"""
+    def test_no_term_fields_get_prop_and_has_field(self) -> None:
+        """无术语绑定的字段也创建 prop 术语 + HAS_FIELD 关系（与 OWL 生成器一致）。"""
         from datacloud_knowledge.ingestion.ontology_terms import build_terms
 
         fields: list[dict[str, str]] = [
@@ -671,10 +671,18 @@ class TestBuildTerms:
                 fields=fields,
             )
 
-        # 只有实体术语，无字段术语 — 跳过写入
+        # 术语：entity(1) + prop(1) = 2
         assert result["ok"] is True
-        assert result.get("message") == "无字段术语需要入库"
-        mock_adapter.begin_import.assert_not_called()
+        term_items = mock_adapter.batch_process_term.call_args.args[0]
+        assert len(term_items) == 2
+        prop_term = next(t for t in term_items if t["term_code"] == "title")
+        assert prop_term["term_type_code"] == "prop"
+
+        # 关系：HAS_FIELD(1)
+        rel_items = mock_adapter.batch_process_relation.call_args.args[0]
+        assert len(rel_items) == 1
+        assert rel_items[0]["relation_category"] == "HAS_FIELD"
+        assert "title" in rel_items[0]["target_term_code"]
 
     def test_empty_fields_skipped(self) -> None:
         """空字段列表时跳过。"""

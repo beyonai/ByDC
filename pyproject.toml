@@ -84,6 +84,14 @@ Repository = "https://github.com/beyonai/by-datacloud"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+    ".venv*",
+    "**/.venv*",
+    "dist",
+    ".git",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/by_datacloud"]
 

@@ -613,6 +613,8 @@ def _generate_object(state: dict[str, Any], output_dir: Path) -> None:
         output_dir=output_dir,
         field_roles=field_roles,
         entity_source=state.get("entity_source", "DYNAMIC_TABLE"),
+        kb_id=state.get("kb_id", ""),
+        kb_directory=state.get("kb_directory", ""),
     )
 
     generate_from_tables(config, [table], {})
@@ -620,7 +622,12 @@ def _generate_object(state: dict[str, Any], output_dir: Path) -> None:
 
 def _generate_view(state: dict[str, Any], output_dir: Path) -> None:
     """从视图 workspace_state 生成 OWL 导入包。"""
-    from datacloud_knowledge.ingestion.owl_generate.models import ObjectRelation, ViewConfig
+    from datacloud_knowledge.ingestion.owl_generate.models import (
+        FieldRole,
+        ObjectRelation,
+        ViewConfig,
+        ViewFieldMapping,
+    )
 
     view_code: str = state["view_code"]
     object_codes: list[str] = state.get("object_codes", [])
@@ -642,11 +649,51 @@ def _generate_view(state: dict[str, Any], output_dir: Path) -> None:
             )
         )
 
+    # 从 object_relations 构建视图字段映射（每个关联字段对生成两个 SceneField）
+    field_mappings: list[ViewFieldMapping] = []
+    seen_fields: set[tuple[str, str]] = set()
+    default_role = FieldRole(property_role="DIMENSION", rule_type="description")
+    for rel in raw_relations:
+        src_obj = rel.get("source_object_code", "")
+        tgt_obj = rel.get("target_object_code", "")
+        src_field = rel.get("source_object_field_code", "")
+        tgt_field = rel.get("target_object_field_code", "")
+        for obj_code, col_code in [(src_obj, src_field), (tgt_obj, tgt_field)]:
+            if not obj_code or not col_code:
+                continue
+            key = (obj_code, col_code)
+            if key in seen_fields:
+                continue
+            seen_fields.add(key)
+            # 从 state 的 fields 里找字段名称和角色（如果有）
+            field_name = col_code
+            field_role = default_role
+            for f in state.get("fields", []):
+                if f.get("property_code") == col_code:
+                    field_name = f.get("property_name", col_code)
+                    ext = (f.get("ext_property") or {}).get("property_role_rule", {})
+                    if ext.get("property_role"):
+                        field_role = FieldRole(
+                            property_role=ext["property_role"],
+                            rule_type=ext.get("rule_type", "description"),
+                        )
+                    break
+            field_mappings.append(
+                ViewFieldMapping(
+                    property_code=col_code,
+                    property_name=field_name,
+                    source_object_code=obj_code,
+                    source_object_column_code=col_code,
+                    role=field_role,
+                )
+            )
+
     view = ViewConfig(
         view_code=view_code,
         view_name=state.get("view_name", view_code),
         view_desc=state.get("view_desc", ""),
         object_codes=object_codes,
+        field_mappings=field_mappings,
     )
 
     config = OwlGenConfig(

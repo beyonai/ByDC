@@ -6,9 +6,24 @@ from psycopg import Cursor
 
 
 def _batch_insert_vocabulary_words(cur: Cursor, words: list[str]) -> None:
-    """向 term_vocabulary 批量插入词汇，自动跳过已存在的词。"""
+    """向 term_vocabulary 批量插入词汇，自动跳过已存在的词。
+
+    先同步序列（修复因手动插入导致序列落后于数据的常见问题），
+    再通过 ``WHERE NOT EXISTS`` 跳过已存在的 word。
+    """
     if not words:
         return
+
+    # 修复 vocab_id 序列不同步：setval 将 last_value 设为当前最大 ID，
+    # 确保 nextval 不会返回已占用的值。
+    cur.execute(
+        "SELECT setval("
+        "'term_vocabulary_vocab_id_seq', "
+        "COALESCE((SELECT MAX(vocab_id) FROM term_vocabulary), 0), "
+        "true"
+        ")"
+    )
+
     cur.execute(
         """INSERT INTO term_vocabulary (word)
            SELECT w FROM unnest(%s::text[]) AS t(w)
