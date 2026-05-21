@@ -117,73 +117,142 @@ def render_relation_view(config: OwlGenConfig) -> str:
     return _serialize_relations_xml(builder)
 
 
+def _xml_escape(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+def _rel_node(
+    rel_id: str,
+    library_code: str,
+    source_type: str,
+    source_code: str,
+    target_type: str,
+    target_code: str,
+    relation_name: str,
+    relation_type: str,
+    joinkeys: str = "[]",
+    ext_field: str = "",
+) -> str:
+    return f"""    <owl:NamedIndividual rdf:about="#{_xml_escape(rel_id)}">
+        <rdf:type rdf:resource="#TermRelation"/>
+        <source_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_escape(library_code)}</source_libeary>
+        <source_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_escape(source_type)}</source_type>
+        <source_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_escape(source_code)}</source_code>
+        <target_libeary rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_escape(library_code)}</target_libeary>
+        <target_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_escape(target_type)}</target_type>
+        <target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_escape(target_code)}</target_code>
+        <relation_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_escape(relation_name)}</relation_name>
+        <relation_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_escape(relation_type)}</relation_type>
+        <joinkeys rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_escape(joinkeys)}</joinkeys>
+        <ext_field rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_escape(ext_field)}</ext_field>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+    </owl:NamedIndividual>"""
+
+
+_RELATIONS_FOOTER = """
+    <owl:DatatypeProperty rdf:about="#source_libeary"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#source_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#source_code"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_libeary"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#target_code"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#relation_name"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#relation_type"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#joinkeys"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#ext_field"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+    <owl:DatatypeProperty rdf:about="#version"><rdfs:domain rdf:resource="#TermRelation"/><rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/></owl:DatatypeProperty>
+</rdf:RDF>"""
+
+
 def render_view_relations_for_view(config: OwlGenConfig, view: ViewConfig) -> str:
-    """渲染单个视图的关系：HAS_OBJECT + HAS_FIELD + MANY_TO_ONE。
+    """渲染单个视图的关系 OWL（标准下划线格式，与门户标准完全对齐）。
 
-    产物写入 {view_code}_relations.owl 文件。
+    包含三类节点：
+    - HAS_OBJECT：视图 → 每个关联对象
+    - HAS_FIELD：视图 → 每个字段（ext_field 含 field_alias/synonyms）
+    - MANY_TO_ONE：对象间 JOIN 关系（含 joinkeys）
     """
-    relations: list[RelationDef] = []
+    lib = config.library_code
+    view_name = view.view_name
+    nodes: list[str] = []
 
-    # HAS_OBJECT: 视图包含哪些对象
+    # HAS_OBJECT
     for obj_code in view.object_codes:
-        relations.append(
-            _build_relation_def(
-                config,
+        obj_name = config.table_names.get(obj_code, obj_code)
+        rel_id = f"rel_{view.view_code}_to_{obj_code}"
+        nodes.append(
+            _rel_node(
+                rel_id=rel_id,
+                library_code=lib,
                 source_type="view",
                 source_code=view.view_code,
                 target_type="object",
                 target_code=obj_code,
-                relation_name=f"{view.view_name}_包含_{config.table_names.get(obj_code, obj_code)}",
-                relation_category="HAS_OBJECT",
+                relation_name=f"{view_name}_包含_{obj_name}",
+                relation_type="HAS_OBJECT",
             )
         )
 
-    # HAS_FIELD: 视图拥有的字段（带视图专属别名）
+    # HAS_FIELD
     for mapping in view.field_mappings:
         alias = mapping.property_name or mapping.source_object_column_code
-        object_prop_code = config.resolve_object_prop_code(
-            mapping.source_object_code,
-            mapping.source_object_column_code,
-        )
-        target_code = object_prop_code
-        if mapping.property_code not in {mapping.source_object_column_code, object_prop_code}:
-            target_code = mapping.property_code
-        relations.append(
-            _build_relation_def(
-                config,
+        synonyms = mapping.synonyms or []
+        ext: dict[str, Any] = {"field_alias": alias}
+        if synonyms:
+            ext["synonyms"] = synonyms
+        ext_field_str = json.dumps(ext, ensure_ascii=False)
+        rel_id = f"rel_{view.view_code}_{mapping.property_code}"
+        nodes.append(
+            _rel_node(
+                rel_id=rel_id,
+                library_code=lib,
                 source_type="view",
                 source_code=view.view_code,
                 target_type="prop",
-                target_code=target_code,
-                relation_name=f"{view.view_name}_拥有字段_{alias}",
-                relation_category="HAS_FIELD",
-                ext_field=_has_field_ext_field(alias, mapping.synonyms),
+                target_code=mapping.property_code,
+                relation_name=f"{view_name}_拥有字段_{alias}",
+                relation_type="HAS_FIELD",
+                ext_field=ext_field_str,
             )
         )
 
-    # MANY_TO_ONE: 视图内对象间的 JOIN 关系
+    # MANY_TO_ONE（对象间 JOIN）
     obj_set = set(view.object_codes)
     for rel in config.object_relations:
-        if rel.source_code in obj_set and rel.target_code in obj_set:
-            jk = json.dumps(rel.join_keys, ensure_ascii=False, separators=(",", ":"))
-            relations.append(
-                _build_relation_def(
-                    config,
-                    source_type="object",
-                    source_code=rel.source_code,
-                    target_type="object",
-                    target_code=rel.target_code,
-                    relation_name=rel.relation_name,
-                    relation_category="MANY_TO_ONE",
-                    joinkeys=jk,
-                )
+        if rel.source_code not in obj_set or rel.target_code not in obj_set:
+            continue
+        jk = json.dumps(rel.join_keys, ensure_ascii=False, separators=(",", ":"))
+        rel_id = f"rel_{rel.source_code}_to_{rel.target_code}"
+        nodes.append(
+            _rel_node(
+                rel_id=rel_id,
+                library_code=lib,
+                source_type="object",
+                source_code=rel.source_code,
+                target_type="object",
+                target_code=rel.target_code,
+                relation_name=rel.relation_name,
+                relation_type="MANY_TO_ONE",
+                joinkeys=jk,
             )
+        )
 
-    if not relations:
+    if not nodes:
         return ""
-    builder = GraphBuilder()
-    builder.add_relations(relations)
-    return _serialize_relations_xml(builder)
+
+    body = "\n".join(nodes)
+    return f"""<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/relation/ontology#">
+
+    <owl:Class rdf:about="#TermRelation"><rdfs:label>术语关系</rdfs:label></owl:Class>
+
+{body}
+{_RELATIONS_FOOTER}"""
 
 
 def render_relation_object(config: OwlGenConfig) -> str:
