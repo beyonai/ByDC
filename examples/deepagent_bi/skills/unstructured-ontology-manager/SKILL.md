@@ -54,6 +54,12 @@ allowed-tools: execute, read_file
 | 查看术语类型 | 查枚举 | `scripts/list_term_types.py` |
 | 查看术语值 | 查枚举值 | `scripts/get_term_type_values.py` |
 
+## 字段说明
+
+- `kb_id`：知识库编码，必须使用 `list_knowledge_bases.py` 返回的 **`resourceCode`** 字段，**不是 `resourceId`**
+  - 示例：`resourceCode: "16"`（不是 `resourceId: "10000765"`）
+- `kb_directory`：知识库目录路径，来自 `list_kb_directories.py` 返回的 `directoryPath` 字段
+
 ## 认证与环境变量
 
 | 变量 | 用途 |

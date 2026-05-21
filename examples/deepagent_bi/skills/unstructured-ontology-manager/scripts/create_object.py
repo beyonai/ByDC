@@ -12,7 +12,7 @@ I/O 协议：stdin JSON → stdout JSON
         "entity_code": "by_meeting_note",
         "entity_name": "会议纪要",
         "entity_desc": "会议纪要文档对象",
-        "kb_id": "kb-001",              # 知识库 ID，来自 list_knowledge_bases.py
+        "kb_id": "kb-001",              # 知识库编码（resourceCode），来自 list_knowledge_bases.py 返回的 resourceCode 字段，不是 resourceId
         "kb_directory": "/meeting",     # 知识库目录，来自 list_kb_directories.py
         "fields": [
             {
