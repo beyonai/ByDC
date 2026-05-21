@@ -87,6 +87,7 @@ class KbSearchExecutor:
                     offset=offset,
                     kb_id=self._get_kb_id(cls),
                     kb_directory=self._get_kb_directory(cls),
+                    field_types=_metadata_field_types(list(getattr(cls, "fields", []))),
                 )
             )
         except Exception as exc:  # noqa: BLE001
@@ -393,6 +394,14 @@ def _field_meta(fields: list[Any]) -> list[dict[str, str]]:
         }
         for field in fields
     ]
+
+
+def _metadata_field_types(fields: list[Any]) -> dict[str, str]:
+    return {
+        str(getattr(field, "field_code", "")): _metadata_value_type(field, None)
+        for field in fields
+        if str(getattr(field, "field_code", ""))
+    }
 
 
 def _metadata_properties_from_labels(labels: dict[str, Any], cls: Any) -> list[dict[str, Any]]:
