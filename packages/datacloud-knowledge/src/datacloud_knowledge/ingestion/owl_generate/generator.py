@@ -547,10 +547,12 @@ def _generate_object(state: dict[str, Any], output_dir: Path) -> None:
     # 自动在最前面插入 id 主键字段（如果用户没有传）
     has_id = any(f.get("property_code", "").lower() == "id" for f in fields)
     if not has_id:
+        # 非结构化（KNOWLEDGE_BASE）主键用 STRING，结构化（DYNAMIC_TABLE）用 INTEGER
+        id_data_type = "STRING" if state.get("entity_source") == "KNOWLEDGE_BASE" else "INTEGER"
         id_field: dict[str, Any] = {
             "property_code": "id",
             "property_name": "主键",
-            "data_type": "INTEGER",
+            "data_type": id_data_type,
             "ext_property": {
                 "property_role_rule": {"property_role": "MEASURE", "rule_type": "primary_key"}
             },
