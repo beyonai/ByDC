@@ -431,7 +431,7 @@ class PostgresTermReader:
         """轻量级字段 + 值别名精确消歧。
 
         在 scope_code 对应的视图/对象下查找字段别名（TermName.name_text → prop term_code）
-        和可选值别名（child term 的 term_name/TermName 别名）。
+        和可选值别名（child term 的 term_name/TermName 别名，通过 HAS_TERM 链路）。
 
         Args:
             terms: 待解析的字段中文名/别名列表。
@@ -489,6 +489,8 @@ class PostgresTermReader:
                     view_obj = aliased(Term, name="view_obj")
                     prop = aliased(Term, name="prop")
                     child = aliased(Term, name="child")
+                    type_term = aliased(Term, name="type_term")
+                    has_term_rel = aliased(TermRelation, name="has_term_rel")
 
                     _null_scope = cast(literal(None), JSONB)
 
@@ -504,7 +506,13 @@ class PostgresTermReader:
                         .select_from(view_obj)
                         .join(TermRelation, TermRelation.source_term_id == view_obj.term_id)
                         .join(prop, prop.term_id == TermRelation.target_term_id)
-                        .join(child, child.parent_term_id == prop.term_id)
+                        .join(
+                            has_term_rel,
+                            (has_term_rel.source_term_id == prop.term_id)
+                            & (has_term_rel.relation_category == "HAS_TERM"),
+                        )
+                        .join(type_term, type_term.term_id == has_term_rel.target_term_id)
+                        .join(child, child.term_type_code == type_term.term_code)
                         .where(
                             view_obj.term_code == scope_code,
                             view_obj.term_type_code.in_(["view", "object"]),
@@ -518,7 +526,8 @@ class PostgresTermReader:
                     view_obj2 = aliased(Term, name="view_obj2")
                     prop2 = aliased(Term, name="prop2")
                     child2 = aliased(Term, name="child2")
-
+                    type_term2 = aliased(Term, name="type_term2")
+                    has_term_rel2 = aliased(TermRelation, name="has_term2")
                     val_alias_q = (
                         select(
                             literal("value").label("match_type"),
@@ -530,7 +539,13 @@ class PostgresTermReader:
                         .select_from(view_obj2)
                         .join(TermRelation, TermRelation.source_term_id == view_obj2.term_id)
                         .join(prop2, prop2.term_id == TermRelation.target_term_id)
-                        .join(child2, child2.parent_term_id == prop2.term_id)
+                        .join(
+                            has_term_rel2,
+                            (has_term_rel2.source_term_id == prop2.term_id)
+                            & (has_term_rel2.relation_category == "HAS_TERM"),
+                        )
+                        .join(type_term2, type_term2.term_id == has_term_rel2.target_term_id)
+                        .join(child2, child2.term_type_code == type_term2.term_code)
                         .join(TermName, TermName.term_id == child2.term_id)
                         .where(
                             view_obj2.term_code == scope_code,
@@ -632,7 +647,7 @@ class PostgresTermReader:
         """轻量级属性值精确消歧。
 
         在 scope_code 对应的 view/object 下，通过关系链路
-        ``view/object → HAS_FIELD → prop → (parent_term_id) → child term``
+        ``view/object → HAS_FIELD → prop → HAS_TERM → type_term → child(term_type_code)``
         查找值术语，并在 child term 的 ``term_name`` 和 ``TermName.name_text``（别名）
         中精确匹配输入 terms。
 
@@ -652,7 +667,10 @@ class PostgresTermReader:
 
         view_obj = aliased(Term, name="view_obj")
         prop = aliased(Term, name="prop")
+        type_term = aliased(Term, name="type_term")
         child = aliased(Term, name="child")
+        has_field_rel = aliased(TermRelation, name="has_field")
+        has_term_rel = aliased(TermRelation, name="has_term")
 
         try:
             with self._session_factory() as session:
@@ -661,11 +679,17 @@ class PostgresTermReader:
                     select(child.term_name)
                     .select_from(view_obj)
                     .join(
-                        TermRelation,
-                        TermRelation.source_term_id == view_obj.term_id,
+                        has_field_rel,
+                        has_field_rel.source_term_id == view_obj.term_id,
                     )
-                    .join(prop, prop.term_id == TermRelation.target_term_id)
-                    .join(child, child.parent_term_id == prop.term_id)
+                    .join(prop, prop.term_id == has_field_rel.target_term_id)
+                    .join(
+                        has_term_rel,
+                        (has_term_rel.source_term_id == prop.term_id)
+                        & (has_term_rel.relation_category == "HAS_TERM"),
+                    )
+                    .join(type_term, type_term.term_id == has_term_rel.target_term_id)
+                    .join(child, child.term_type_code == type_term.term_code)
                     .where(
                         view_obj.term_code == scope_code,
                         view_obj.term_type_code.in_(["view", "object"]),
@@ -684,11 +708,17 @@ class PostgresTermReader:
                         select(TermName.name_text)
                         .select_from(view_obj)
                         .join(
-                            TermRelation,
-                            TermRelation.source_term_id == view_obj.term_id,
+                            has_field_rel,
+                            has_field_rel.source_term_id == view_obj.term_id,
                         )
-                        .join(prop, prop.term_id == TermRelation.target_term_id)
-                        .join(child, child.parent_term_id == prop.term_id)
+                        .join(prop, prop.term_id == has_field_rel.target_term_id)
+                        .join(
+                            has_term_rel,
+                            (has_term_rel.source_term_id == prop.term_id)
+                            & (has_term_rel.relation_category == "HAS_TERM"),
+                        )
+                        .join(type_term, type_term.term_id == has_term_rel.target_term_id)
+                        .join(child, child.term_type_code == type_term.term_code)
                         .join(TermName, TermName.term_id == child.term_id)
                         .where(
                             view_obj.term_code == scope_code,
@@ -817,7 +847,7 @@ class PostgresTermReader:
     ) -> dict[str, list[ValueWithAliases]]:
         """批量查询对象下属性的值术语及其别名。
 
-        路径: source → (HAS_FIELD) → prop → (parent_term_id) → child term。
+        路径: source → (HAS_FIELD) → prop → (HAS_TERM) → type_term → child(term_type_code)。
 
         Args:
             source_term_ids: 源术语 ID 列表。
@@ -830,20 +860,28 @@ class PostgresTermReader:
             return {}
 
         prop = aliased(Term, name="prop")
+        type_term = aliased(Term, name="type_term")
         child = aliased(Term, name="child")
+        has_term_rel = aliased(TermRelation, name="has_term")
 
         try:
             with self._session_factory() as session:
                 child_rows = session.execute(
                     select(
                         TermRelation.source_term_id,
-                        child.parent_term_id,
+                        prop.term_id,
                         child.term_id,
                         child.term_code,
                         child.term_name,
                     )
                     .join(prop, prop.term_id == TermRelation.target_term_id)
-                    .join(child, child.parent_term_id == prop.term_id)
+                    .join(
+                        has_term_rel,
+                        (has_term_rel.source_term_id == prop.term_id)
+                        & (has_term_rel.relation_category == "HAS_TERM"),
+                    )
+                    .join(type_term, type_term.term_id == has_term_rel.target_term_id)
+                    .join(child, child.term_type_code == type_term.term_code)
                     .where(
                         TermRelation.source_term_id.in_(source_term_ids_list),
                         prop.term_type_code == "prop",
@@ -875,10 +913,10 @@ class PostgresTermReader:
         result: dict[str, list[ValueWithAliases]] = {
             source_term_id: [] for source_term_id in source_term_ids_list
         }
-        for source_id, parent_term_id, term_id, term_code, term_name in child_rows:
+        for source_id, prop_term_id, term_id, term_code, term_name in child_rows:
             result.setdefault(str(source_id), []).append(
                 ValueWithAliases(
-                    parent_term_id=str(parent_term_id),
+                    parent_term_id=str(prop_term_id),
                     term_id=str(term_id),
                     term_code=str(term_code),
                     term_name=str(term_name),
@@ -892,8 +930,8 @@ class PostgresTermReader:
     ) -> dict[str, list[str]]:
         """查询指定 prop 的枚举值（child term_name + 别名）。
 
-        路径: view/object(scope_code) → HAS_FIELD → prop(field_code) → child terms。
-        child term 的 term_name 和 TermName 别名均作为枚举值返回。
+        路径: view/object(scope_code) → HAS_FIELD → prop → HAS_TERM → type_term
+              → children(term_type_code = type_term.term_code)。
 
         Args:
             scope_code: 视图或对象 code。
@@ -910,21 +948,28 @@ class PostgresTermReader:
 
         view_obj = aliased(Term, name="view_obj")
         prop = aliased(Term, name="prop")
+        type_term = aliased(Term, name="type_term")
         child = aliased(Term, name="child")
+        has_field_rel = aliased(TermRelation, name="has_field")
+        has_term_rel = aliased(TermRelation, name="has_term")
 
         try:
             with self._session_factory() as session:
-                # 查询 child term_name（直接值）
-                direct_rows = session.execute(
+                # Step 1: 查找 prop → HAS_TERM → type_term_code
+                prop_type_rows = session.execute(
                     select(
                         prop.term_code.label("field_code"),
-                        child.term_name.label("value_name"),
-                        child.term_id.label("child_id"),
+                        type_term.term_code.label("type_code"),
                     )
                     .select_from(view_obj)
-                    .join(TermRelation, TermRelation.source_term_id == view_obj.term_id)
-                    .join(prop, prop.term_id == TermRelation.target_term_id)
-                    .join(child, child.parent_term_id == prop.term_id)
+                    .join(has_field_rel, has_field_rel.source_term_id == view_obj.term_id)
+                    .join(prop, prop.term_id == has_field_rel.target_term_id)
+                    .join(
+                        has_term_rel,
+                        (has_term_rel.source_term_id == prop.term_id)
+                        & (has_term_rel.relation_category == "HAS_TERM"),
+                    )
+                    .join(type_term, type_term.term_id == has_term_rel.target_term_id)
                     .where(
                         view_obj.term_code == scope_code,
                         view_obj.term_type_code.in_(["view", "object"]),
@@ -933,13 +978,34 @@ class PostgresTermReader:
                     )
                 ).all()
 
-                # 收集 child term_id → field_code 映射
-                child_to_field: dict[str, str] = {}
-                result_raw: dict[str, list[str]] = {code: [] for code in unique_codes}
-                for field_code, value_name, child_id in direct_rows:
+                # {field_code: type_code}
+                prop_type_map: dict[str, str] = {}
+                type_to_fields: dict[str, list[str]] = {}
+                for field_code, type_code in prop_type_rows:
                     fc = str(field_code)
-                    result_raw.setdefault(fc, []).append(str(value_name))
-                    child_to_field[str(child_id)] = fc
+                    tc = str(type_code)
+                    prop_type_map[fc] = tc
+                    type_to_fields.setdefault(tc, []).append(fc)
+
+                # Step 2: 查找所有属于这些 type_code 的 child value terms
+                result_raw: dict[str, list[str]] = {code: [] for code in unique_codes}
+                child_to_field: dict[str, str] = {}
+
+                type_codes = list(type_to_fields.keys())
+                if type_codes:
+                    value_rows = session.execute(
+                        select(
+                            child.term_type_code.label("type_code"),
+                            child.term_name.label("value_name"),
+                            child.term_id.label("child_id"),
+                        ).where(child.term_type_code.in_(type_codes))
+                    ).all()
+
+                    for type_code, value_name, child_id in value_rows:
+                        tc = str(type_code)
+                        for fc in type_to_fields.get(tc, []):
+                            result_raw.setdefault(fc, []).append(str(value_name))
+                            child_to_field[str(child_id)] = fc
 
                 # 查询 child 的 TermName 别名
                 child_ids = list(child_to_field.keys())
