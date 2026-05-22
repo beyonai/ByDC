@@ -98,12 +98,10 @@ def _run_async_in_thread(coro: Any) -> Any:
 
 def delete_resource_by_code(resource_code: str) -> None:
     """通过 resourceCode 直接下架个人本体。"""
-    data = post_json(
+    post_json(
         path="/byaiService/tool/deleteResourceByCodeAndOwnerType",
         payload={"resourceCode": resource_code, "ownerType": "personal"},
     )
-    if not data or data.get("code") != 0:
-        raise RuntimeError(f"下架本体失败: {data}")
 
 
 def load_embedding_model_from_redis() -> bool:
