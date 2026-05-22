@@ -215,3 +215,9 @@ examples/chatbi_demo/logs/
 
 # Datacloud exports
 datacloud/exports/
+examples/chatbi_demo/model_env/glm-5.1.env
+examples/chatbi_demo/model_env/deepseek-v4-flash.env
+examples/chatbi_demo/model_env/deepseek-v4-pro.env
+examples/chatbi_demo/model_env/kimi-k2.6.env
+examples/chatbi_demo/model_env/qwen3.6-27b.env
+examples/chatbi_demo/model_env/qwen3.6-35b-a3b.env
