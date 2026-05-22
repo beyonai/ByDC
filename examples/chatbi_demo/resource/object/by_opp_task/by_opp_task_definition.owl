@@ -35,7 +35,7 @@
         <fields rdf:resource="#update_by_field"/>
         <fields rdf:resource="#update_time_field"/>
         <fields rdf:resource="#remark_field"/>
-        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["create_by_opp_task","update_by_opp_task","get_by_opp_task","list_by_opp_task","delete_by_opp_task"]</action_refs>
+        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["create_by_opp_task","update_by_opp_task","delete_by_opp_task"]</action_refs>
         <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;rel_by_opp_task_to_po_users_initiator&quot;, &quot;rel_by_opp_task_to_po_users_handler&quot;]</relations>
     </owl:NamedIndividual>
 

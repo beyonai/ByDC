@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from collections import OrderedDict
 from collections.abc import AsyncGenerator
@@ -70,6 +71,20 @@ class ErrorEvent(OntologyAgentEvent):
 
     message: str
     code: str | None = None
+
+
+@dataclass
+class PerfEvent(OntologyAgentEvent):
+    """单次 ask/resume 的性能汇总，在 AnswerEvent 之后 yield。"""
+
+    total_duration_ms: int
+    ttft_ms: int | None
+    react_turns: int
+    llm_call_count: int
+    interrupt_count: int
+    thinking_chars: int
+    thinking_duration_ms: int
+    thinking_chars_per_sec: float
 
 
 # ── 维度选项模型 ──────────────────────────────────────────────────────────────
@@ -515,6 +530,16 @@ class OntologyAgent:
             graph_input = Command(resume=resume_value)
 
         try:
+            _t_start = time.monotonic()
+            _ttft_ms: int | None = None
+            _react_turns = 0
+            _llm_call_count = 0
+            _thinking_chars = 0
+            _thinking_t_start: float | None = None
+            _thinking_duration_ms = 0
+            _in_thinking = False
+            _current_node = ""
+
             async for event in compiled.astream_events(
                 graph_input,
                 config=run_config,
@@ -524,11 +549,36 @@ class OntologyAgent:
                 metadata = event.get("metadata") or {}
                 node = metadata.get("langgraph_node", "")
 
+                # ── ReAct 轮次计数 ──────────────────────────────────────────
+                if event_type == "on_chain_start" and node and node != _current_node:
+                    _current_node = node
+                    if node not in ("respond", "__start__", "__end__"):
+                        _react_turns += 1
+
+                # ── LLM 调用计数 ────────────────────────────────────────────
+                if event_type == "on_chat_model_start":
+                    _llm_call_count += 1
+
+                # ── 思考流 ──────────────────────────────────────────────────
                 if event_type == "on_chat_model_stream" and node != "respond":
                     chunk = (event.get("data") or {}).get("chunk")
                     content = getattr(chunk, "content", "") or ""
                     if content:
+                        # 首字节
+                        if _ttft_ms is None:
+                            _ttft_ms = int((time.monotonic() - _t_start) * 1000)
+                        # 思考计时
+                        if not _in_thinking:
+                            _in_thinking = True
+                            _thinking_t_start = time.monotonic()
+                        _thinking_chars += len(content)
                         yield ThinkingEvent(content=content)
+                    else:
+                        # 空 chunk 表示本轮思考结束
+                        if _in_thinking and _thinking_t_start is not None:
+                            _thinking_duration_ms += int((time.monotonic() - _thinking_t_start) * 1000)
+                            _in_thinking = False
+                            _thinking_t_start = None
 
                 elif event_type == "on_custom_event" and event.get("name") == "dc_stream_chunk":
                     data = event.get("data") or {}
@@ -570,8 +620,30 @@ class OntologyAgent:
             )
             return
 
+        # 收尾：如果思考还在进行中（流正常结束但没有空 chunk），补算时长
+        if _in_thinking and _thinking_t_start is not None:
+            _thinking_duration_ms += int((time.monotonic() - _thinking_t_start) * 1000)
+
         final_answer = str(snapshot.values.get("final_answer") or "")
         yield AnswerEvent(content=final_answer)
+
+        # 性能汇总事件
+        _total_ms = int((time.monotonic() - _t_start) * 1000)
+        _chars_per_sec = (
+            round(_thinking_chars / (_thinking_duration_ms / 1000), 1)
+            if _thinking_duration_ms > 0
+            else 0.0
+        )
+        yield PerfEvent(
+            total_duration_ms=_total_ms,
+            ttft_ms=_ttft_ms,
+            react_turns=_react_turns,
+            llm_call_count=_llm_call_count,
+            interrupt_count=0,
+            thinking_chars=_thinking_chars,
+            thinking_duration_ms=_thinking_duration_ms,
+            thinking_chars_per_sec=_chars_per_sec,
+        )
 
     # 让 async generator 方法可被直接调用并返回 AsyncGenerator
     # _iter_events 是 async def + yield，Python 自动使其成为 async generator function。

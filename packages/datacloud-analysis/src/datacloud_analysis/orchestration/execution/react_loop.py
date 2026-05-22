@@ -446,6 +446,14 @@ async def _stream_llm_call(
             raise
         did_stream_text = False
 
+    # thinking 模型（kimi/deepseek-r 系列）：LangChain chunk 累加会丢失 reasoning_content，
+    # 手动从 _thinking_acc 补回，确保下一轮发给模型时消息合法。
+    if full_msg is not None and getattr(full_msg, "tool_calls", None):
+        kwargs = dict(full_msg.additional_kwargs or {})
+        if "reasoning_content" not in kwargs:
+            kwargs["reasoning_content"] = _thinking_acc
+            full_msg = full_msg.model_copy(update={"additional_kwargs": kwargs})
+
     # [DIAG] 诊断日志：记录本次 LLM 调用流式推送的 finish_react.answer 内容
     if _fr_answer_emitted > 0:
         m = re.search(r'"answer"\s*:\s*"((?:[^"\\]|\\.)*)', _fr_args_acc)
@@ -493,6 +501,8 @@ async def _invoke_llm_with_fallback(
 
     # ── 主模型（含重试）────────────────────────────────────────────────────────
     last_exc: Exception
+    # thinking 模型（kimi/deepseek-r 系列）要求 AIMessage.additional_kwargs 里有 reasoning_content
+    messages_window = _patch_messages_for_thinking_models(messages_window)
     try:
         return await stream_llm_call_with_retry(
             _stream_llm_call,
@@ -870,6 +880,24 @@ def _compress_tool_result(result: Any, tool_name: str) -> str:
             + f"... [\u5df2\u622a\u65ad, \u539f\u957f {len(text)} \u5b57\u7b26]"
         )
     return text
+
+
+def _patch_messages_for_thinking_models(messages: list) -> list:
+    """修复 kimi/deepseek 等 thinking 模型的消息序列。
+
+    这类模型要求：有 tool_calls 的 AIMessage 必须在 additional_kwargs 里携带
+    reasoning_content 字段（即使为空字符串），否则下一轮调用返回 400。
+    LangChain 在 chunk 累加时不会自动保留该字段，需要在发给 LLM 前手动补充。
+    """
+    patched = []
+    for msg in messages:
+        if isinstance(msg, AIMessage) and getattr(msg, "tool_calls", None):
+            kwargs = dict(msg.additional_kwargs or {})
+            if "reasoning_content" not in kwargs:
+                kwargs["reasoning_content"] = ""
+                msg = msg.model_copy(update={"additional_kwargs": kwargs})
+        patched.append(msg)
+    return patched
 
 
 def _trim_messages_window(messages: list) -> list:

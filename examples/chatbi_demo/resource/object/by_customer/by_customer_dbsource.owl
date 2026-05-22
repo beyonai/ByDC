@@ -9,11 +9,10 @@
     <owl:Class rdf:about="#DatabaseDefinition"><rdfs:label>数据源定义</rdfs:label></owl:Class>
 
     <owl:NamedIndividual rdf:about="#dbsource_wukong_crm_demo">
-        <rdf:type rdf:resource="#DatabaseDefinition"/>        
-        <dbId rdf:datatype="http://www.w3.org/2001/XMLSchema#string">86088</dbId>
+        <rdf:type rdf:resource="#DatabaseDefinition"/>
         <dbCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">wukong_crm_demo</dbCode>
         <dbType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">OPENGAUSS</dbType>
-        <dbParams rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"jdbc_url": "jdbc:opengauss://{{DATACLOUD_DB_HOST}}:{{DATACLOUD_DB_PORT}}/{{DATACLOUD_DB_DATABASE}}?currentSchema={{DATACLOUD_DB_SCHEMA}}", "user": "{{DATACLOUD_DB_USER}}", "password": "{{DATACLOUD_DB_PASSWORD}}", "pool_min": 5, "pool_max": 20}</dbParams>
+        <dbParams rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{"jdbc_url": "jdbc:opengauss://10.10.168.203:5432/postgres?currentSchema=demo", "user": "gaussdb", "password": "Admin@123", "pool_min": 5, "pool_max": 20}</dbParams>
     </owl:NamedIndividual>
 
     <owl:DatatypeProperty rdf:about="#dbCode"/>

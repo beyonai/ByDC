@@ -42,7 +42,7 @@
         <fields rdf:resource="#update_by_field"/>
         <fields rdf:resource="#update_time_field"/>
         <fields rdf:resource="#remark_field"/>
-        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["create_by_project","update_by_project","get_by_project","list_by_project","delete_by_project"]</action_refs>
+        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["create_by_project","update_by_project","delete_by_project"]</action_refs>
         <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;rel_by_project_to_by_opportunity&quot;, &quot;rel_by_project_to_by_project_task&quot;, &quot;rel_by_project_to_by_rd_task&quot;, &quot;rel_by_project_to_po_users_sales&quot;, &quot;rel_by_project_to_po_organization&quot;]</relations>
     </owl:NamedIndividual>
 

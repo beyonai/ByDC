@@ -1,0 +1,1 @@
+{"columns": [{"name": "city", "label": "所属城市", "type": "string"}, {"name": "total_customers", "label": "total_customers", "type": "string"}], "overflow": true, "preview_rows": 10, "viewId": "auto_view", "trace": {}, "file_url": "/datacloud/exports/05e7bc6f-d1f1-4216-8c3a-f5fbbfb16838.csv", "storage_type": "local"}

@@ -43,6 +43,7 @@ def _ontology_agent_exports() -> dict[str, Any]:
         ParadigmGroup,
         ParadigmGroupSelection,
         ParadigmOption,
+        PerfEvent,
         StepEvent,
         ThinkingEvent,
     )
@@ -56,6 +57,7 @@ def _ontology_agent_exports() -> dict[str, Any]:
         "InterruptEvent": InterruptEvent,
         "AnswerEvent": AnswerEvent,
         "ErrorEvent": ErrorEvent,
+        "PerfEvent": PerfEvent,
         "ParadigmAnswer": ParadigmAnswer,
         "ParadigmGroup": ParadigmGroup,
         "ParadigmGroupSelection": ParadigmGroupSelection,
@@ -74,8 +76,16 @@ __all__ = [
     "InterruptEvent",
     "AnswerEvent",
     "ErrorEvent",
+    "PerfEvent",
     "ParadigmAnswer",
     "ParadigmGroup",
     "ParadigmGroupSelection",
     "ParadigmOption",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    exports = _ontology_agent_exports()
+    if name in exports:
+        return exports[name]
+    raise AttributeError(f"module 'datacloud_analysis' has no attribute {name!r}")

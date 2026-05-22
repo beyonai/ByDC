@@ -38,7 +38,7 @@
         <fields rdf:resource="#update_by_field"/>
         <fields rdf:resource="#update_time_field"/>
         <fields rdf:resource="#remark_field"/>
-        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["create_by_opportunity","update_by_opportunity","get_by_opportunity","list_by_opportunity","delete_by_opportunity"]</action_refs>
+        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">["create_by_opportunity","update_by_opportunity","delete_by_opportunity"]</action_refs>
         <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;rel_by_opportunity_to_by_project&quot;, &quot;rel_by_opportunity_to_by_opp_task&quot;, &quot;rel_by_opportunity_to_po_users_sales&quot;, &quot;rel_by_opportunity_to_po_organization&quot;]</relations>
     </owl:NamedIndividual>
 

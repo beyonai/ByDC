@@ -1,0 +1,816 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xml:base="http://example.org/scene/ontology#">
+
+    <owl:Class rdf:about="#SceneDefinition"><rdfs:label>视图定义</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#SceneField"><rdfs:label>视图字段</rdfs:label></owl:Class>
+
+    <owl:NamedIndividual rdf:about="#scene_rd_management_v1">
+        <rdf:type rdf:resource="#SceneDefinition"/>
+        <view_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">scene_rd_management</view_code>
+        <view_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">研发管理视图</view_name>
+        <description rdf:datatype="http://www.w3.org/2001/XMLSchema#string">以研发任务为 anchor，LEFT JOIN 项目、客户、用户、组织，分析需求、开发、测试、故障处理和研发延期。</description>
+        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
+        <object_codes rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;by_rd_task&quot;, &quot;by_project&quot;, &quot;by_customer&quot;, &quot;po_users&quot;, &quot;po_organization&quot;]</object_codes>
+        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;rel_scene_rd_management_to_by_rd_task&quot;, &quot;rel_scene_rd_management_to_by_project&quot;, &quot;rel_scene_rd_management_to_by_customer&quot;, &quot;rel_scene_rd_management_to_po_users&quot;, &quot;rel_scene_rd_management_to_po_organization&quot;, &quot;rel_by_rd_task_to_po_users_initiator&quot;, &quot;rel_by_rd_task_to_po_users_handler&quot;]</relations>
+        <fields rdf:resource="#id_field"/>
+        <fields rdf:resource="#project_code_field"/>
+        <fields rdf:resource="#opp_code_field"/>
+        <fields rdf:resource="#customer_code_field"/>
+        <fields rdf:resource="#product_code_field"/>
+        <fields rdf:resource="#task_type_field"/>
+        <fields rdf:resource="#initiator_user_id_field"/>
+        <fields rdf:resource="#handler_user_id_field"/>
+        <fields rdf:resource="#task_status_field"/>
+        <fields rdf:resource="#task_name_field"/>
+        <fields rdf:resource="#task_desc_field"/>
+        <fields rdf:resource="#handle_desc_field"/>
+        <fields rdf:resource="#initiate_time_field"/>
+        <fields rdf:resource="#plan_finish_time_field"/>
+        <fields rdf:resource="#actual_finish_time_field"/>
+        <fields rdf:resource="#project_id_field"/>
+        <fields rdf:resource="#project_project_code_field"/>
+        <fields rdf:resource="#project_project_name_field"/>
+        <fields rdf:resource="#project_industry_field"/>
+        <fields rdf:resource="#project_domain_field"/>
+        <fields rdf:resource="#project_customer_code_field"/>
+        <fields rdf:resource="#project_sales_user_id_field"/>
+        <fields rdf:resource="#project_dept_id_field"/>
+        <fields rdf:resource="#project_opp_id_field"/>
+        <fields rdf:resource="#project_product_code_field"/>
+        <fields rdf:resource="#project_project_status_field"/>
+        <fields rdf:resource="#project_contract_amount_field"/>
+        <fields rdf:resource="#project_revenue_amount_field"/>
+        <fields rdf:resource="#project_payment_amount_field"/>
+        <fields rdf:resource="#project_arrear_amount_field"/>
+        <fields rdf:resource="#project_plan_online_date_field"/>
+        <fields rdf:resource="#project_actual_online_date_field"/>
+        <fields rdf:resource="#project_plan_revenue_date_field"/>
+        <fields rdf:resource="#project_actual_revenue_date_field"/>
+        <fields rdf:resource="#project_plan_payment_date _field"/>
+        <fields rdf:resource="#project_actual_payment_date_field"/>
+        <fields rdf:resource="#project_create_time_field"/>
+        <fields rdf:resource="#customer_id_field"/>
+        <fields rdf:resource="#customer_customer_code_field"/>
+        <fields rdf:resource="#customer_customer_name_field"/>
+        <fields rdf:resource="#customer_industry_field"/>
+        <fields rdf:resource="#customer_province_field"/>
+        <fields rdf:resource="#customer_city_field"/>
+        <fields rdf:resource="#customer_domain_field"/>
+        <fields rdf:resource="#customer_sales_user_id_field"/>
+        <fields rdf:resource="#customer_sales_person_field"/>
+        <fields rdf:resource="#customer_dept_id_field"/>
+        <fields rdf:resource="#customer_dept_name_field"/>
+        <fields rdf:resource="#customer_create_time_field"/>
+        <fields rdf:resource="#handler_user_user_id_field"/>
+        <fields rdf:resource="#handler_user_user_name_field"/>
+        <fields rdf:resource="#handler_user_user_code_field"/>
+        <fields rdf:resource="#handler_user_user_number_field"/>
+        <fields rdf:resource="#handler_user_email_field"/>
+        <fields rdf:resource="#handler_user_phone_field"/>
+        <fields rdf:resource="#handler_user_state_field"/>
+        <fields rdf:resource="#handler_user_station_id_field"/>
+        <fields rdf:resource="#handler_user_create_date_field"/>
+        <fields rdf:resource="#handler_user_update_date_field"/>
+        <fields rdf:resource="#handler_user_last_login_date_field"/>
+        <fields rdf:resource="#org_org_id_field"/>
+        <fields rdf:resource="#org_org_code_field"/>
+        <fields rdf:resource="#org_org_name_field"/>
+        <fields rdf:resource="#org_org_type_field"/>
+        <fields rdf:resource="#org_parent_org_id_field"/>
+        <fields rdf:resource="#org_org_level_field"/>
+        <fields rdf:resource="#org_org_index_field"/>
+        <fields rdf:resource="#org_path_code_field"/>
+        <fields rdf:resource="#org_org_desc_field"/>
+        <fields rdf:resource="#org_create_date_field"/>
+        <fields rdf:resource="#org_update_date_field"/>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#id_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">研发任务主键</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_rd_task</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">id</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;研发任务主键&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;MEASURE&quot;, &quot;rule_type&quot;: &quot;primary_key&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_code_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_code</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">项目编码</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_rd_task</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_code</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;项目编码&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#opp_code_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">opp_code</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">商机编码</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_rd_task</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">opp_code</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;商机编码&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#customer_code_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_code</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">客户编码</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_rd_task</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_code</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;客户编码&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#product_code_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">product_code</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">产品编码</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_rd_task</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">product_code</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;产品编码&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#task_type_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">task_type</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">研发任务类型</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_rd_task</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">task_type</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;研发任务类型&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#initiator_user_id_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">initiator_user_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">发起人用户ID</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_rd_task</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">initiator_user_id</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;发起人用户ID&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#handler_user_id_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handler_user_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">处理人用户ID</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_rd_task</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handler_user_id</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;处理人用户ID&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#task_status_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">task_status</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">任务状态</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_rd_task</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">task_status</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;任务状态&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#task_name_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">task_name</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">任务名称</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_rd_task</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">task_name</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#task_desc_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">task_desc</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">任务描述</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_rd_task</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">task_desc</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;description&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#handle_desc_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handle_desc</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">处理描述</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_rd_task</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handle_desc</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;description&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#initiate_time_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">initiate_time</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">发起时间</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_rd_task</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">initiate_time</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;datetime&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#plan_finish_time_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">plan_finish_time</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">计划完成时间</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_rd_task</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">plan_finish_time</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;datetime&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#actual_finish_time_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">actual_finish_time</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">实际完成时间</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_rd_task</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">actual_finish_time</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;datetime&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_id_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目项目主键</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">id</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目项目主键&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_project_code_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_project_code</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目项目编码</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_code</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目项目编码&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_project_name_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_project_name</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目项目名称</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_name</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目项目名称&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_industry_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_industry</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目所属行业</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目所属行业&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_domain_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_domain</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目所属领域</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">domain</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目所属领域&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_customer_code_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_customer_code</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目所属客户编码</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_code</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目所属客户编码&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_sales_user_id_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_sales_user_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目所属销售用户ID</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sales_user_id</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目所属销售用户ID&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_dept_id_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_dept_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目所属部门ID</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">dept_id</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目所属部门ID&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_opp_id_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_opp_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目关联商机ID</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">opp_id</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目关联商机ID&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_product_code_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_product_code</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目所属产品编码</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">product_code</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目所属产品编码&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_project_status_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_project_status</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目项目状态</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_status</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目项目状态&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_contract_amount_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_contract_amount</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目签约金额</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">contract_amount</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目签约金额&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;numeric&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_revenue_amount_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_revenue_amount</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目收入金额</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">revenue_amount</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目收入金额&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;numeric&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_payment_amount_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_payment_amount</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目回款金额</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">payment_amount</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目回款金额&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;numeric&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_arrear_amount_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_arrear_amount</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目欠费金额</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">arrear_amount</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目欠费金额&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;numeric&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_plan_online_date_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_plan_online_date</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目计划上线日期(YYYY-MM-DD) </property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">plan_online_date</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目计划上线日期(YYYY-MM-DD) &quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;datetime&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_actual_online_date_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_actual_online_date</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目实际上线日期(YYYY-MM-DD) </property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">actual_online_date</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目实际上线日期(YYYY-MM-DD) &quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;datetime&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_plan_revenue_date_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_plan_revenue_date</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目计划收入完成日期(YYYY-MM-DD) </property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">plan_revenue_date</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目计划收入完成日期(YYYY-MM-DD) &quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;datetime&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_actual_revenue_date_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_actual_revenue_date</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目实际收入完成日期(YYYY-MM-DD) </property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">actual_revenue_date</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目实际收入完成日期(YYYY-MM-DD) &quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;datetime&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_plan_payment_date _field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_plan_payment_date </property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目计划回款完成日期(YYYY-MM-DD) </property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">plan_payment_date </source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目计划回款完成日期(YYYY-MM-DD) &quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;datetime&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_actual_payment_date_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_actual_payment_date</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目实际回款完成日期(YYYY-MM-DD) </property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">actual_payment_date</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目实际回款完成日期(YYYY-MM-DD) &quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;datetime&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#project_create_time_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">project_create_time</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属项目项目创建时间</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_project</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_time</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属项目项目创建时间&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;datetime&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#customer_id_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属客户客户主键</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">id</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属客户客户主键&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#customer_customer_code_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_customer_code</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属客户客户编码</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_code</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属客户客户编码&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#customer_customer_name_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_customer_name</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属客户客户名称</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_name</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属客户客户名称&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#customer_industry_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_industry</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属客户所属行业</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">industry</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属客户所属行业&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#customer_province_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_province</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属客户所属省份</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">province</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属客户所属省份&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#customer_city_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_city</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属客户所属城市</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">city</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属客户所属城市&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#customer_domain_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_domain</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属客户所属领域</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">domain</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属客户所属领域&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#customer_sales_user_id_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_sales_user_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属客户所属销售用户ID</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sales_user_id</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属客户所属销售用户ID&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#customer_sales_person_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_sales_person</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属客户所属销售姓名</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">sales_person</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属客户所属销售姓名&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#customer_dept_id_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_dept_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属客户所属组织ID</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">dept_id</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属客户所属组织ID&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#customer_dept_name_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_dept_name</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属客户所属组织名称</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">dept_name</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属客户所属组织名称&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#customer_create_time_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">customer_create_time</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属客户客户创建时间</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">by_customer</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_time</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属客户客户创建时间&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;datetime&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#handler_user_user_id_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handler_user_user_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">处理人用户ID</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_id</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;处理人用户ID&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#handler_user_user_name_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handler_user_user_name</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">处理人用户名称</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_name</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;处理人用户名称&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#handler_user_user_code_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handler_user_user_code</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">处理人用户登录标识</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_code</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;处理人用户登录标识&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#handler_user_user_number_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handler_user_user_number</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">处理人工号</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">user_number</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;处理人工号&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#handler_user_email_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handler_user_email</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">处理人用户邮箱</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">email</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;处理人用户邮箱&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#handler_user_phone_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handler_user_phone</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">处理人用户电话</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">phone</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;处理人用户电话&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#handler_user_state_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handler_user_state</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">处理人用户状态</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">state</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;处理人用户状态&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#handler_user_station_id_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handler_user_station_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">处理人所属驻地ID</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">station_id</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;处理人所属驻地ID&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#handler_user_create_date_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handler_user_create_date</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">处理人用户创建时间</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_date</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;处理人用户创建时间&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;datetime&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#handler_user_update_date_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handler_user_update_date</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">处理人用户更新时间</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_date</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;处理人用户更新时间&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;datetime&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#handler_user_last_login_date_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">handler_user_last_login_date</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">处理人最后登录时间</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_users</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">last_login_date</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;处理人最后登录时间&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;datetime&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#org_org_id_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_org_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属组织组织ID</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_organization</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_id</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属组织组织ID&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#org_org_code_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_org_code</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属组织组织编码</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_organization</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_code</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属组织组织编码&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#org_org_name_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_org_name</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属组织组织名称</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_organization</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_name</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属组织组织名称&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#org_org_type_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_org_type</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属组织组织类型</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_organization</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_type</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属组织组织类型&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#org_parent_org_id_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_parent_org_id</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属组织上级组织ID</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_organization</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">parent_org_id</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属组织上级组织ID&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#org_org_level_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_org_level</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属组织组织层级</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_organization</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_level</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属组织组织层级&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#org_org_index_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_org_index</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属组织组织排序</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_organization</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_index</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属组织组织排序&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;name&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#org_path_code_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_path_code</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属组织组织路径编码</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_organization</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">path_code</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属组织组织路径编码&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;id&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#org_org_desc_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_org_desc</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属组织组织描述</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_organization</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_desc</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属组织组织描述&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;description&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#org_create_date_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_create_date</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属组织组织创建时间</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_organization</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">create_date</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属组织组织创建时间&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;datetime&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:NamedIndividual rdf:about="#org_update_date_field">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">org_update_date</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">所属组织组织更新时间</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">po_organization</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">update_date</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[&quot;所属组织组织更新时间&quot;]</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{&quot;property_role_rule&quot;: {&quot;property_role&quot;: &quot;DIMENSION&quot;, &quot;rule_type&quot;: &quot;datetime&quot;}}</ext_property>
+    </owl:NamedIndividual>
+
+    <owl:DatatypeProperty rdf:about="#view_code"/>
+    <owl:DatatypeProperty rdf:about="#view_name"/>
+    <owl:DatatypeProperty rdf:about="#description"/>
+    <owl:DatatypeProperty rdf:about="#version"/>
+    <owl:DatatypeProperty rdf:about="#object_codes"/>
+    <owl:DatatypeProperty rdf:about="#relations"/>
+    <owl:ObjectProperty rdf:about="#fields"/>
+    <owl:DatatypeProperty rdf:about="#property_code"/>
+    <owl:DatatypeProperty rdf:about="#property_name"/>
+    <owl:DatatypeProperty rdf:about="#source_object_code"/>
+    <owl:DatatypeProperty rdf:about="#source_object_column_code"/>
+    <owl:DatatypeProperty rdf:about="#synonyms"/>
+    <owl:DatatypeProperty rdf:about="#ext_property"/>
+</rdf:RDF>

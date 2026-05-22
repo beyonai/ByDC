@@ -1,0 +1,1 @@
+{"columns": [{"name": "dept_name", "label": "所属组织名称", "type": "string"}, {"name": "total_customers", "label": "total_customers", "type": "string"}], "overflow": true, "preview_rows": 10, "viewId": "auto_view", "trace": {}, "file_url": "/datacloud/exports/da5394bb-1b1f-47c7-882b-5060bd189836.csv", "storage_type": "local"}
