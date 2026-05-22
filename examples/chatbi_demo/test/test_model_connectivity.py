@@ -9,7 +9,9 @@ import time
 from openai import OpenAI
 
 BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-API_KEY = os.environ.get("DASHSCOPE_API_KEY", "sk-7dc821fff0e7459ab74a2cc65bdcbe8c")
+API_KEY = os.environ.get("DASHSCOPE_API_KEY") or ""
+if not API_KEY:
+    raise EnvironmentError("请设置环境变量 DASHSCOPE_API_KEY")
 
 MODELS = [
     "qwen3.6-35b-a3b",
