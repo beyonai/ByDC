@@ -6,26 +6,18 @@ Moved from api.py to eliminate local imports and enable independent testing.
 from __future__ import annotations
 
 import logging
-import re
 
 from datacloud_knowledge.adapters import create_reader
+from datacloud_knowledge.contracts.intent_types import (
+    find_paired_where_key,
+    is_field_code,
+    term_key,
+)
 from datacloud_knowledge.contracts.types import ResolvedField
 
 from .models import ExtractedTerm, PreResolveResult
 
 logger = logging.getLogger(__name__)
-
-_FIELD_CODE_RE: re.Pattern[str] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-
-def is_field_code(term: str) -> bool:
-    """判断术语是否为英文字段编码。"""
-    return bool(_FIELD_CODE_RE.match(term))
-
-
-def term_key(t: ExtractedTerm) -> str:
-    """生成术语的复合键：path:raw_text。"""
-    return f"{t.path}:{t.raw_text}"
 
 
 def pre_resolve_terms(
@@ -126,6 +118,21 @@ def pre_resolve_terms(
         except Exception:
             logger.warning("[pre_resolve] get_prop_enum_values 失败", exc_info=True)
 
+    # 查询 ontology 下所有 prop→type 绑定，供召回层按 type_code 过滤
+    prop_type_map: dict[str, str] = {}
+    if scope_code:
+        try:
+            prop_type_map = create_reader().get_prop_type_map(
+                scope_code=scope_code,
+                field_codes=None,  # 拉全量，覆盖所有 prop
+            )
+            logger.info(
+                "[pre_resolve] prop_type_map loaded: %d props with HAS_TERM",
+                len(prop_type_map),
+            )
+        except Exception:
+            logger.warning("[pre_resolve] get_prop_type_map 失败", exc_info=True)
+
     # 分拣 unresolved
     unresolved: list[ExtractedTerm] = []
     for t in terms:
@@ -145,36 +152,5 @@ def pre_resolve_terms(
         unresolved_terms=unresolved,
         value_enum_map=value_enum_map,
         provenance=provenance,
+        prop_type_map=prop_type_map,
     )
-
-
-def find_paired_where_key(
-    value_term: ExtractedTerm,
-    all_terms: list[ExtractedTerm],
-) -> ExtractedTerm | None:
-    """查找 whereValue 对应的 whereKey 术语。"""
-    filter_prefix = extract_filter_prefix(value_term.path)
-    if not filter_prefix:
-        return None
-    for t in all_terms:
-        if t.ktype == "whereKey" and extract_filter_prefix(t.path) == filter_prefix:
-            return t
-    return None
-
-
-def extract_filter_prefix(path: str) -> str:
-    """从 path 提取 filter 前缀：'filters.1.field' → 'filters.1'。
-
-    支持 query 模式 (filters.*) 和 compute 模式 (metrics.*.filters.*)。
-    """
-    parts = path.split(".")
-    if len(parts) >= 2 and parts[0] == "filters":
-        return f"{parts[0]}.{parts[1]}"
-    for i, p in enumerate(parts):
-        if p in {"filters", "where"} and i + 1 < len(parts):
-            try:
-                int(parts[i + 1])
-                return ".".join(parts[: i + 2])
-            except ValueError:
-                pass
-    return ""
