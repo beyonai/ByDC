@@ -9,7 +9,11 @@ import logging
 from typing import Any
 
 from datacloud_knowledge.adapters.opengauss.vector_validation import is_vector_recall_available
-from datacloud_knowledge.contracts.intent_types import ExtractedTerm, PreResolveResult
+from datacloud_knowledge.contracts.intent_types import (
+    ExtractedTerm,
+    PreResolveResult,
+    find_paired_where_key,
+)
 from datacloud_knowledge.contracts.rrf import rrf_fuse
 from datacloud_knowledge.retrieval._recall_common import (
     KTYPE_CATEGORY_MAP,
@@ -30,12 +34,19 @@ logger = logging.getLogger(__name__)
 class _RecallItem:
     """轻量 TypedKeywordState 协议实现，用于传入 typed_multi_recall_with_session。"""
 
-    __slots__ = ("keyword", "ktype", "search_enabled")
+    __slots__ = ("keyword", "ktype", "search_enabled", "type_code")
 
-    def __init__(self, keyword: str, ktype: str, search_enabled: bool) -> None:
+    def __init__(
+        self,
+        keyword: str,
+        ktype: str,
+        search_enabled: bool,
+        type_code: str | None = None,
+    ) -> None:
         self.keyword = keyword
         self.ktype = ktype
         self.search_enabled = search_enabled
+        self.type_code = type_code
 
 
 def unified_recall(
@@ -46,6 +57,7 @@ def unified_recall(
     scope_layers: list[ScopeRecallLayer] | None = None,
     field_layers: list[ScopeRecallLayer] | None = None,
     value_layers: list[ScopeRecallLayer] | None = None,
+    prop_type_map: dict[str, str] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """对所有术语执行统一召回。
 
@@ -58,9 +70,28 @@ def unified_recall(
     all other terms use ``field_layers`` (base ontology + confirmed_object only).
     ``scope_layers`` is a legacy synonym for when the caller doesn't split by type.
 
+    When ``prop_type_map`` is provided, whereValue terms with a confirmed whereKey
+    get ``type_code`` resolved from the prop→type chain, and recall filters by
+    ``term_type_code`` instead of ``search_scope``.
+
     Returns:
         dict["ktype:raw_text", list[CandidateDict]]。
     """
+    # 构建 whereValue→type_code 映射（需要匹配 whereKey 的 prop_code）
+    value_type_map: dict[str, str] = {}
+    if prop_type_map:
+        for t in terms:
+            if t.ktype != "whereValue" or not t.search_enabled:
+                continue
+            key_term = find_paired_where_key(t, terms)
+            if key_term is None:
+                continue
+            # 查找 whereKey 是否已确认 → 拿到 prop_code → 查 prop_type_map
+            # whereKey 的 raw_text 就是 prop 的 code（已通过别名解析确认）
+            type_code = prop_type_map.get(key_term.raw_text)
+            if type_code:
+                value_type_map[t.path] = type_code
+
     # 去重：相同 ktype + raw_text 只召回一次
     seen: set[str] = set()
     normal_items: list[_RecallItem] = []
@@ -73,10 +104,12 @@ def unified_recall(
         if key in seen:
             continue
         seen.add(key)
+        type_code = value_type_map.get(term.path) if term.ktype == "whereValue" else None
         item = _RecallItem(
             keyword=term.raw_text,
             ktype=term.ktype,
             search_enabled=True,
+            type_code=type_code,
         )
         if term.vector_only:
             vector_only_items.append(item)
