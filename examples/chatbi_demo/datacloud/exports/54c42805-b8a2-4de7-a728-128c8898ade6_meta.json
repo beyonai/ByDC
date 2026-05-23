@@ -1,0 +1,1 @@
+{"columns": [{"name": "industry", "label": "所属行业", "type": "string"}, {"name": "opp_status", "label": "商机状态", "type": "string"}, {"name": "opp_count", "label": "opp_count", "type": "string"}], "overflow": true, "preview_rows": 10, "viewId": "auto_view", "trace": {}, "file_url": "/datacloud/exports/54c42805-b8a2-4de7-a728-128c8898ade6.csv", "storage_type": "local"}

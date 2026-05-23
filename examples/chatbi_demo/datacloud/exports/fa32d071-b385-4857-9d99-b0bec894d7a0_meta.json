@@ -1,0 +1,1 @@
+{"columns": [{"name": "project_project_name", "label": "所属项目项目名称", "type": "string"}, {"name": "task_count", "label": "task_count", "type": "string"}], "overflow": true, "preview_rows": 10, "viewId": "auto_view", "trace": {}, "file_url": "/datacloud/exports/fa32d071-b385-4857-9d99-b0bec894d7a0.csv", "storage_type": "local"}

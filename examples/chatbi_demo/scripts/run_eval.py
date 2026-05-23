@@ -156,7 +156,7 @@ async def _run_single_case(
     retry: int,
 ) -> dict:
     """执行单个 case，采集性能指标，写入 cases/{case_id}.json。"""
-    from datacloud_analysis import AnswerEvent, PerfEvent
+    from datacloud_analysis import AnswerEvent, InterruptEvent, PerfEvent
 
     case_id = case["id"]
     question = case["question"]
@@ -173,10 +173,11 @@ async def _run_single_case(
                 async def _collect() -> tuple[str, dict]:
                     sql = ""
                     perf: dict = {}
+                    thread_id = str(uuid.uuid4())
                     async for event in agent.ask(  # type: ignore[attr-defined]
                         question=question,
                         view_codes=[view_code],
-                        thread_id=str(uuid.uuid4()),
+                        thread_id=thread_id,
                         user_code="eval_user",
                     ):
                         if isinstance(event, AnswerEvent):
@@ -192,6 +193,31 @@ async def _run_single_case(
                                 "thinking_duration_ms": event.thinking_duration_ms,
                                 "thinking_chars_per_sec": event.thinking_chars_per_sec,
                             }
+                        elif isinstance(event, InterruptEvent):
+                            # 评测模式：自动选第一个选项，不等待用户
+                            auto_choice = None
+                            if event.paradigm_list:
+                                first_group = event.paradigm_list[0]
+                                if first_group.options:
+                                    auto_choice = first_group.options[0].id
+                            async for ev2 in agent.resume(  # type: ignore[attr-defined]
+                                thread_id=thread_id,
+                                user_code="eval_user",
+                                paradigm_answer=auto_choice,
+                            ):
+                                if isinstance(ev2, AnswerEvent):
+                                    sql = ev2.content
+                                elif isinstance(ev2, PerfEvent):
+                                    perf = {
+                                        "total_duration_ms": ev2.total_duration_ms,
+                                        "ttft_ms": ev2.ttft_ms,
+                                        "react_turns": ev2.react_turns,
+                                        "llm_call_count": ev2.llm_call_count,
+                                        "interrupt_count": ev2.interrupt_count,
+                                        "thinking_chars": ev2.thinking_chars,
+                                        "thinking_duration_ms": ev2.thinking_duration_ms,
+                                        "thinking_chars_per_sec": ev2.thinking_chars_per_sec,
+                                    }
                     return sql, perf
 
                 generated_sql, perf_data = await asyncio.wait_for(_collect(), timeout=timeout)
@@ -393,7 +419,8 @@ async def run_eval(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="评测执行脚本")
-    parser.add_argument("--model", required=True, help="模型 ID，如 ali-bailian/deepseek-v4-pro")
+    parser.add_argument("--model", default=None, help="模型 ID（可选，优先级低于 --env-file 里的 DEMO_MODEL）")
+    parser.add_argument("--env-file", default=None, help="model env 文件路径，如 model_env/qwen3.6-27b.env")
     parser.add_argument("--run-id", required=True, help="本次运行 ID，如 run_20260522_001")
     parser.add_argument("--eval-file", default=str(EVAL_DIR / "cases.jsonl"), help="评测集路径")
     parser.add_argument("--prompt-patch", default=None, help="prompt patch 文件路径")
@@ -403,10 +430,17 @@ def main() -> None:
     parser.add_argument("--retry", type=int, default=DEFAULT_RETRY, help="失败重试次数")
 
     args = parser.parse_args()
+
+    # 先加载 env，再确定 model（env 里的 DEMO_MODEL 优先，--model 作为兜底）
+    _load_env(args.env_file)
+    model = args.model or os.environ.get("DEMO_MODEL", "")
+    if not model:
+        parser.error("必须通过 --model 或 --env-file（含 DEMO_MODEL）指定模型")
+
     categories = args.categories.split(",") if args.categories else None
 
     asyncio.run(run_eval(
-        model=args.model,
+        model=model,
         run_id=args.run_id,
         eval_file=Path(args.eval_file),
         patch_path=args.prompt_patch,
@@ -414,6 +448,7 @@ def main() -> None:
         concurrency=args.concurrency,
         timeout=args.timeout,
         retry=args.retry,
+        model_env_file=args.env_file,
     ))
 
 

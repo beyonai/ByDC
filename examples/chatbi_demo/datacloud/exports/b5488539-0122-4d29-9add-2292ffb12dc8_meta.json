@@ -1,0 +1,1 @@
+{"columns": [{"name": "task_status", "label": "任务状态", "type": "string"}, {"name": "task_name", "label": "任务名称", "type": "string"}], "overflow": true, "preview_rows": 10, "viewId": "auto_view", "trace": {}, "file_url": "/datacloud/exports/b5488539-0122-4d29-9add-2292ffb12dc8.csv", "storage_type": "local"}

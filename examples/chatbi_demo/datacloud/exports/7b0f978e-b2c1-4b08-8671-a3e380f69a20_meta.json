@@ -1,0 +1,1 @@
+{"columns": [{"name": "project_project_name", "label": "所属项目项目名称", "type": "string"}, {"name": "研发任务数量", "label": "研发任务数量", "type": "string"}, {"name": "已完成任务数", "label": "已完成任务数", "type": "string"}], "overflow": true, "preview_rows": 10, "viewId": "auto_view", "trace": {}, "file_url": "/datacloud/exports/7b0f978e-b2c1-4b08-8671-a3e380f69a20.csv", "storage_type": "local"}

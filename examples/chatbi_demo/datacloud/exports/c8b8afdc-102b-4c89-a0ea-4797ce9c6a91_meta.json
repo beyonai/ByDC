@@ -1,0 +1,1 @@
+{"columns": [{"name": "customer_province", "label": "所属客户所属省份", "type": "string"}, {"name": "客户数量", "label": "客户数量", "type": "string"}], "overflow": true, "preview_rows": 10, "viewId": "auto_view", "trace": {}, "file_url": "/datacloud/exports/c8b8afdc-102b-4c89-a0ea-4797ce9c6a91.csv", "storage_type": "local"}

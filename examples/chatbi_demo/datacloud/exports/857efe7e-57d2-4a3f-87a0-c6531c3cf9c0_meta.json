@@ -1,0 +1,1 @@
+{"columns": [{"name": "project_name", "label": "项目名称", "type": "string"}, {"name": "total_tasks", "label": "total_tasks", "type": "string"}], "overflow": true, "preview_rows": 10, "viewId": "auto_view", "trace": {}, "file_url": "/datacloud/exports/857efe7e-57d2-4a3f-87a0-c6531c3cf9c0.csv", "storage_type": "local"}
