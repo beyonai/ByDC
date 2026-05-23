@@ -925,6 +925,77 @@ class PostgresTermReader:
             )
         return result
 
+    def get_prop_type_map(
+        self,
+        *,
+        scope_code: str,
+        field_codes: Sequence[str] | None = None,
+    ) -> dict[str, str]:
+        """查询 ontology 下 prop 的 HAS_TERM 绑定 type_code。
+
+        路径: view/object(scope_code) → HAS_FIELD → prop → HAS_TERM → type_term。
+
+        Args:
+            scope_code: 视图或对象 code。
+            field_codes: 可选，限定 prop 范围。None 时返回该 ontology 下所有 prop。
+
+        Returns:
+            {prop_code: type_code}，仅包含有 HAS_TERM 绑定的 prop。
+        """
+        if not scope_code:
+            return {}
+
+        field_codes_list = list(field_codes) if field_codes else []
+        unique_codes = list(dict.fromkeys(field_codes_list)) if field_codes_list else None
+
+        view_obj = aliased(Term, name="view_obj_ptm")
+        prop = aliased(Term, name="prop_ptm")
+        type_term = aliased(Term, name="type_term_ptm")
+        has_field_rel = aliased(TermRelation, name="has_field_ptm")
+        has_term_rel = aliased(TermRelation, name="has_term_ptm")
+
+        try:
+            with self._session_factory() as session:
+                stmt = (
+                    select(
+                        prop.term_code.label("field_code"),
+                        type_term.term_code.label("type_code"),
+                    )
+                    .select_from(view_obj)
+                    .join(
+                        has_field_rel,
+                        has_field_rel.source_term_id == view_obj.term_id,
+                    )
+                    .join(prop, prop.term_id == has_field_rel.target_term_id)
+                    .join(
+                        has_term_rel,
+                        (has_term_rel.source_term_id == prop.term_id)
+                        & (has_term_rel.relation_category == "HAS_TERM"),
+                    )
+                    .join(type_term, type_term.term_id == has_term_rel.target_term_id)
+                    .where(
+                        view_obj.term_code == scope_code,
+                        view_obj.term_type_code.in_(["view", "object"]),
+                        prop.term_type_code == "prop",
+                    )
+                )
+                if unique_codes:
+                    stmt = stmt.where(prop.term_code.in_(unique_codes))
+
+                rows = session.execute(stmt).all()
+        except Exception:
+            logger.exception(
+                "get_prop_type_map failed: scope_code=%s, field_codes=%s",
+                scope_code,
+                unique_codes,
+            )
+            raise
+
+        result: dict[str, str] = {}
+        for field_code, type_code in rows:
+            result[str(field_code)] = str(type_code)
+        return result
+
     def get_prop_enum_values(
         self, *, scope_code: str, field_codes: Sequence[str]
     ) -> dict[str, list[str]]:
@@ -946,45 +1017,17 @@ class PostgresTermReader:
 
         unique_codes = list(dict.fromkeys(field_codes_list))
 
-        view_obj = aliased(Term, name="view_obj")
-        prop = aliased(Term, name="prop")
-        type_term = aliased(Term, name="type_term")
         child = aliased(Term, name="child")
-        has_field_rel = aliased(TermRelation, name="has_field")
-        has_term_rel = aliased(TermRelation, name="has_term")
 
         try:
             with self._session_factory() as session:
-                # Step 1: 查找 prop → HAS_TERM → type_term_code
-                prop_type_rows = session.execute(
-                    select(
-                        prop.term_code.label("field_code"),
-                        type_term.term_code.label("type_code"),
-                    )
-                    .select_from(view_obj)
-                    .join(has_field_rel, has_field_rel.source_term_id == view_obj.term_id)
-                    .join(prop, prop.term_id == has_field_rel.target_term_id)
-                    .join(
-                        has_term_rel,
-                        (has_term_rel.source_term_id == prop.term_id)
-                        & (has_term_rel.relation_category == "HAS_TERM"),
-                    )
-                    .join(type_term, type_term.term_id == has_term_rel.target_term_id)
-                    .where(
-                        view_obj.term_code == scope_code,
-                        view_obj.term_type_code.in_(["view", "object"]),
-                        prop.term_type_code == "prop",
-                        prop.term_code.in_(unique_codes),
-                    )
-                ).all()
-
-                # {field_code: type_code}
-                prop_type_map: dict[str, str] = {}
+                # Step 1: 复用 get_prop_type_map 查 prop → type_code
+                prop_type_map = self.get_prop_type_map(
+                    scope_code=scope_code,
+                    field_codes=unique_codes,
+                )
                 type_to_fields: dict[str, list[str]] = {}
-                for field_code, type_code in prop_type_rows:
-                    fc = str(field_code)
-                    tc = str(type_code)
-                    prop_type_map[fc] = tc
+                for fc, tc in prop_type_map.items():
                     type_to_fields.setdefault(tc, []).append(fc)
 
                 # Step 2: 查找所有属于这些 type_code 的 child value terms
