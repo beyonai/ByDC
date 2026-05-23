@@ -623,7 +623,9 @@ def _generate_view(state: dict[str, Any], output_dir: Path) -> None:
                 source_code=src,
                 target_code=tgt,
                 relation_name=rel.get("relation_name", f"{src}_to_{tgt}"),
-                join_keys=[{"sourceField": src_field, "targetField": tgt_field, "joinType": "LEFT"}],
+                join_keys=[
+                    {"sourceField": src_field, "targetField": tgt_field, "joinType": "LEFT"}
+                ],
             )
         )
 
