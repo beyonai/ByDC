@@ -153,6 +153,17 @@ def build_terms(
             _register_type(
                 term_types, seen_type_codes, term_type_code, term_type_code, "", type_category
             )
+            # HAS_TERM（prop → type）：绑定到已有类型，一个 prop 一条关系
+            type_node_id = f"{library_code}#{term_type_code}#{term_type_code}"
+            relations.append(
+                RelationDef(
+                    source_term_code=prop_term_id,
+                    target_term_code=type_node_id,
+                    relation_name=f"{property_name}绑定{term_type_code}",
+                    relation_category="HAS_TERM",
+                    cardinality="1:1",
+                )
+            )
 
     if len(terms) <= 1:  # 只有实体术语，无字段
         return {"ok": True, "message": "无字段术语需要入库"}
