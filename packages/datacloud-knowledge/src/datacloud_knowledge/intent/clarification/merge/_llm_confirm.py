@@ -367,5 +367,7 @@ def _validate_confirmed_in_recall(
     if key not in recall_map:
         return  # term was not searched (e.g. search_enabled=False), skip validation
     candidates = _recall_fallback_candidates(recall_map, ktype, raw_text)
-    if not candidates or confirmed not in candidates:
+    if not candidates:
+        return  # 全局搜索无候选，信任 LLM/用户原始输入
+    if confirmed not in candidates:
         raise ClarificationConfirmedNotInRecallError(raw_text, confirmed, candidates)

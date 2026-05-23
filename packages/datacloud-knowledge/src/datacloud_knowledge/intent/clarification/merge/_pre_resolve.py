@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from datacloud_knowledge.contracts.intent_types import term_key
 from datacloud_knowledge.intent.clarification._patch import apply_confirmed_values, set_by_path
-from datacloud_knowledge.intent.clarification._pre_resolve import term_key
 from datacloud_knowledge.intent.clarification.models import ExtractedTerm, PreResolveResult
 
 
