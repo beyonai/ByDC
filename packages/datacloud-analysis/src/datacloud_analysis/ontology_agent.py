@@ -147,6 +147,8 @@ class OntologyAgentConfig:
     # HTTP_SQL 后端服务地址。非空时强制走 HttpSqlConnector 并注入此地址，
     # 取代历史的 DATACLOUD_SQL_SERVICE_URL 环境变量。
     sql_execute_url: str | None = None
+    # 结果文件（CSV 导出等）的工作目录根路径。None 时退化到 os.getcwd()。
+    workspace_dir: str | None = None
 
 
 # ── 缓存 key ──────────────────────────────────────────────────────────────────
@@ -163,7 +165,7 @@ def _make_cache_key(
 # ── 初始状态构建辅助 ──────────────────────────────────────────────────────────
 
 
-def _build_input_payload(question: str) -> dict[str, Any]:
+def _build_input_payload(question: str, workspace_dir: str | None = None) -> dict[str, Any]:
     """构建 AgentState 初始字段，与 runner.py 保持一致。"""
     from langchain_core.messages import HumanMessage  # noqa: PLC0415
 
@@ -171,7 +173,7 @@ def _build_input_payload(question: str) -> dict[str, Any]:
         "messages": [HumanMessage(content=question)],
         "agent_id": None,
         "agent_name": None,
-        "workspace_dir": None,
+        "workspace_dir": workspace_dir,
         "user_query": "",
         "enriched_query": "",
         "knowledge_payload": {},
@@ -518,7 +520,9 @@ class OntologyAgent:
         }
 
         if resume_input is None:
-            graph_input: Any = _build_input_payload(question)
+            graph_input: Any = _build_input_payload(
+                question, workspace_dir=self._config.workspace_dir
+            )
             graph_input["prompts_overwrite"] = {"locale": effective_locale}
         elif isinstance(resume_input, str):
             graph_input = Command(resume=resume_input)
@@ -531,6 +535,7 @@ class OntologyAgent:
 
         try:
             import time as _time
+
             _t_start = _time.monotonic()
             _ttft_ms: int | None = None
             _react_turns = 0
@@ -563,8 +568,11 @@ class OntologyAgent:
 
                 # 工具调用采集（finish_react 不算）
                 if event_type == "on_tool_start":
-                    tool_name = str((event.get("data") or {}).get("input", {}).get("tool", "")
-                                    or event.get("name", "") or "")
+                    tool_name = str(
+                        (event.get("data") or {}).get("input", {}).get("tool", "")
+                        or event.get("name", "")
+                        or ""
+                    )
                     if tool_name and tool_name != "finish_react":
                         _last_tool_called = tool_name
 
@@ -581,7 +589,9 @@ class OntologyAgent:
                         yield ThinkingEvent(content=content)
                     else:
                         if _in_thinking and _thinking_t_start is not None:
-                            _thinking_duration_ms += int((_time.monotonic() - _thinking_t_start) * 1000)
+                            _thinking_duration_ms += int(
+                                (_time.monotonic() - _thinking_t_start) * 1000
+                            )
                             _in_thinking = False
                             _thinking_t_start = None
 
@@ -636,7 +646,8 @@ class OntologyAgent:
         _total_ms = int((_time.monotonic() - _t_start) * 1000)
         _chars_per_sec = (
             round(_thinking_chars / (_thinking_duration_ms / 1000), 1)
-            if _thinking_duration_ms > 0 else 0.0
+            if _thinking_duration_ms > 0
+            else 0.0
         )
         yield PerfEvent(
             total_duration_ms=_total_ms,
