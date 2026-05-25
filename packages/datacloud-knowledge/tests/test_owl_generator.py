@@ -610,8 +610,13 @@ class TestBuildViewPackage:
         assert prop_terms[0].term_name == "视图企业ID"
         assert prop_terms[0].synonyms == ("视图企业唯一ID",)
 
-    def test_view_prop_term_skipped_when_same_code(self) -> None:
-        """mapping.property_code 等于 source_object_column_code 时，不生成额外的 prop 术语。"""
+    def test_view_prop_term_for_anchor_field(self) -> None:
+        """视图 anchor 字段（property_code == source_object_column_code）也生成 view scope 下的 prop 术语。
+
+        anchor 字段是视图"通过 HAS_OBJECT 继承"的字段，必须在 view scope 下拥有
+        自己的 prop 术语，否则 HAS_FIELD 关系的 target_term_id 会指向不存在的 term，
+        导致字段别名解析、召回链路全部失效。
+        """
         config = _minimal_config(
             table_names={"by_customer": "客户"},
             table_descs={"by_customer": "客户对象"},
@@ -623,7 +628,7 @@ class TestBuildViewPackage:
             object_codes=["by_customer"],
             field_mappings=[
                 ViewFieldMapping(
-                    property_code="enterprise_id",  # 与 source_object_column_code 相同
+                    property_code="enterprise_id",  # 与 source_object_column_code 相同（anchor 字段）
                     property_name="企业ID",
                     source_object_code="by_customer",
                     source_object_column_code="enterprise_id",
@@ -634,9 +639,11 @@ class TestBuildViewPackage:
 
         pkg = _build_view_package(config, view)
 
-        # 没有 prop 术语（只有视图本体术语）
+        # anchor 字段也生成 view scope 下的 prop 术语
         prop_terms = [t for t in pkg.terms if t.term_type_code == "prop"]
-        assert len(prop_terms) == 0
+        assert len(prop_terms) == 1
+        assert prop_terms[0].term_code == "enterprise_id"
+        assert prop_terms[0].term_name == "企业ID"
 
     def test_many_to_one_relations_in_view(self) -> None:
         """视图内对象间的 MANY_TO_ONE 关系（只包含在 view.object_codes 内的对象）。"""

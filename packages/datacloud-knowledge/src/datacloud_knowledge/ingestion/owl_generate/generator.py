@@ -368,12 +368,7 @@ def _build_view_package(
             )
         )
 
-        # 视图专属 prop 术语
-        if not config.force_view_prop_terms and mapping.property_code in {
-            mapping.source_object_column_code,
-            object_prop_code,
-        }:
-            continue
+        # 视图专属 prop 术语（含 anchor 字段，使 view scope 下可检索）
         terms.append(
             _build_term_def(
                 config,
