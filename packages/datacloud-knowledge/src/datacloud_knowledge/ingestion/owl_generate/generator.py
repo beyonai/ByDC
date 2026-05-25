@@ -262,7 +262,10 @@ def _build_object_package(
         prop_code = resolved_prop.property_code
 
         # HAS_TERM（prop → type）：一个 binding 对应一条关系，term 值由业务系统单独导入
-        source_term_v = f"{config.library_code}#prop#{prop_code}"
+        # source 使用 object-scoped 格式 {lib}#object#{obj}#prop#{prop}，
+        # 与 import 后 prop 的 term_id 格式一致，避免 source_term_id 指向不存在的全局 prop。
+        scope_root = f"{config.library_code}#object#{table.code}"
+        source_term_v = f"{scope_root}#prop#{prop_code}"
         target_term_v = f"{config.library_code}#{type_code}#{type_code}"
         relations.append(
             RelationDef(
