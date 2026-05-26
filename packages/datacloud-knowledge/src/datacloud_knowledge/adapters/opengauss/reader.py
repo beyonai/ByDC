@@ -35,6 +35,16 @@ from datacloud_knowledge.adapters.opengauss._db.models import (
     TermRelation,
 )
 from datacloud_knowledge.adapters.opengauss.bm25 import bm25_search_with_or
+from datacloud_knowledge.contracts.term_provider_types import (
+    LabelCondition,
+    LabelFilter,
+    QueryResult,
+    QueryType,
+    TermDetail,
+)
+from datacloud_knowledge.contracts.term_provider_types import (
+    TermItem as ProviderTermItem,
+)
 from datacloud_knowledge.contracts.types import (
     AmbiguousCandidate,
     DimensionValueItem,
@@ -1726,6 +1736,348 @@ class PostgresTermReader:
             if tid not in mapping:
                 mapping[tid] = str(name_id)
         return mapping
+
+    # ── TermProvider 协议新增方法 ──────────────────────────────────────
+
+    def query_terms(
+        self,
+        *,
+        dataset_ids: list[str] | None = None,
+        keyword: str | None = None,
+        term_name: str | None = None,
+        term_type: str | None = None,
+        query_type: QueryType = "fulltext",
+        parent_term_code: str | None = None,
+        label_filters: list[LabelFilter] | None = None,
+        label_condition: LabelCondition = "and",
+        term_ids: list[str] | None = None,
+        top_k: int = 20,
+        offset: int = 0,
+    ) -> QueryResult:
+        """检索术语（OpenGauss 实现）。
+
+        根据 query_type 选择检索策略：
+        - fulltext: 通过 search_terms_exact 精确匹配
+        - exact: 同 fulltext
+        - embedding/mixed: 当前未实现，返回空结果
+
+        Note:
+            embedding 和 mixed 策略需要 pgvector 扩展支持，当前 OpenGauss 实现
+            暂未集成向量检索路径。label_filters 参数当前未使用。
+        """
+        _ = (label_filters, label_condition)  # OpenGauss 实现暂不使用 label 过滤
+        try:
+            with self._session_factory() as session:
+                # 构建基础过滤
+                filters: list[Any] = []
+                if term_type:
+                    canonical = self._normalize_type_code(term_type)
+                    filters.append(Term.term_type_code == canonical)
+                if parent_term_code:
+                    filters.append(Term.parent_term_id == parent_term_code)
+                if dataset_ids:
+                    filters.append(Term.library_id.in_(dataset_ids))
+                if term_ids:
+                    filters.append(Term.term_id.in_(term_ids))
+
+                # 关键词或术语名称匹配
+                normalized_keyword = (keyword or "").strip()
+                if term_name:
+                    filters.append(
+                        or_(
+                            Term.term_name == term_name,
+                            Term.term_code == term_name,
+                        )
+                    )
+                elif normalized_keyword:
+                    filters.append(
+                        or_(
+                            Term.term_name.ilike(f"%{normalized_keyword}%"),
+                            Term.term_code.ilike(f"%{normalized_keyword}%"),
+                        )
+                    )
+
+                if not filters:
+                    filters.append(text("1=1"))
+
+                where_clause = and_(*filters)
+
+                total = int(
+                    session.execute(
+                        select(func.count()).select_from(Term).where(where_clause)
+                    ).scalar_one()
+                )
+
+                if total == 0:
+                    return QueryResult(total=0, items=[])
+
+                rows = session.execute(
+                    select(
+                        Term.term_id,
+                        Term.term_code,
+                        Term.term_name,
+                        Term.term_type_code,
+                        Term.library_id,
+                        Term.parent_term_id,
+                        Term.desc_summary,
+                        Term.term_tags,
+                        Term.created_time,
+                        Term.updated_time,
+                    )
+                    .where(where_clause)
+                    .limit(top_k)
+                    .offset(offset)
+                    .order_by(Term.updated_time.desc())
+                ).all()
+        except Exception:
+            logger.exception(
+                "query_terms failed: keyword=%s term_type=%s",
+                keyword,
+                term_type,
+            )
+            raise
+
+        items: list[ProviderTermItem] = []
+        for row in rows:
+            tags: dict[str, str] = {}
+            raw_tags = row[7]
+            if isinstance(raw_tags, dict):
+                tags = {str(k): str(v) for k, v in raw_tags.items()}
+
+            items.append(
+                ProviderTermItem(
+                    term_id=str(row[0]),
+                    term_code=str(row[1]),
+                    term_name=str(row[2]),
+                    term_type=str(row[3]),
+                    dataset_id=str(row[4]) if row[4] else "",
+                    parent_term_code=str(row[5]) if row[5] else "",
+                    desc=str(row[6]) if row[6] else "",
+                    labels=tags,
+                    synonyms="",
+                    ext_attrs={},
+                    created_time=0,
+                    updated_time=0,
+                )
+            )
+        return QueryResult(total=total, items=items)
+
+    def get_term_detail(
+        self,
+        *,
+        dataset_id: str,
+        term_id: str,
+    ) -> TermDetail | None:
+        """查询单条术语完整详情（OpenGauss 实现）。
+
+        从 term 表查询完整字段，补充 term_name 和 term_knowledge 的关联信息。
+        """
+        _ = dataset_id  # OpenGauss 不按 dataset_id 过滤
+        try:
+            with self._session_factory() as session:
+                row = session.execute(
+                    select(
+                        Term.term_id,
+                        Term.term_code,
+                        Term.term_name,
+                        Term.term_type_code,
+                        Term.library_id,
+                        Term.parent_term_id,
+                        Term.desc_summary,
+                        Term.term_tags,
+                        Term.created_time,
+                        Term.updated_time,
+                    ).where(Term.term_id == term_id)
+                ).one_or_none()
+
+                if row is None:
+                    return None
+
+                # 查询父术语名称
+                parent_term_id = str(row[5]) if row[5] else ""
+                parent_term_name = ""
+                if parent_term_id:
+                    parent_row = session.execute(
+                        select(Term.term_name).where(Term.term_id == parent_term_id)
+                    ).scalar_one_or_none()
+                    if parent_row:
+                        parent_term_name = str(parent_row)
+
+                # 查询同义词列表（TermName 表）
+                synonym_rows = session.execute(
+                    select(TermName.name_text).where(
+                        TermName.term_id == term_id,
+                        TermName.name_text != str(row[2]),
+                    )
+                ).all()
+                synonym_list = [str(s[0]) for s in synonym_rows]
+
+                # 查询标签信息（term_tags JSONB）
+                tags: dict[str, str] = {}
+                raw_tags = row[7]
+                if isinstance(raw_tags, dict):
+                    tags = {str(k): str(v) for k, v in raw_tags.items()}
+
+                # 查询术语类型名称
+                term_type_name = ""
+                type_row = session.execute(
+                    select(Term.term_name).where(
+                        Term.term_code == str(row[3]),
+                        Term.term_type_code == "prop",
+                    )
+                ).scalar_one_or_none()
+                if type_row:
+                    term_type_name = str(type_row)
+        except Exception:
+            logger.exception("get_term_detail failed: term_id=%s", term_id)
+            raise
+
+        return TermDetail(
+            term_id=str(row[0]),
+            term_code=str(row[1]),
+            term_name=str(row[2]),
+            term_type=str(row[3]),
+            dataset_id=str(row[4]) if row[4] else "",
+            parent_term_code=parent_term_id,
+            desc=str(row[6]) if row[6] else "",
+            labels=tags,
+            synonyms="|".join(synonym_list),
+            ext_attrs={},
+            created_time=0,
+            updated_time=0,
+            parent_term_name=parent_term_name,
+            label_info=[],
+            synonym_list=synonym_list,
+            term_type_name=term_type_name,
+        )
+
+    def list_terms(
+        self,
+        *,
+        dataset_id: str,
+        term_type: str | None = None,
+        term_type_no_eq: str | None = None,
+        page_index: int = 1,
+        page_size: int = 50,
+    ) -> QueryResult:
+        """分页列出术语（每条含完整详情）。
+
+        OpenGauss 实现：按 term_type 和 library_id 分页查询，
+        返回 TermDetail 列表（含 parent_name/synonyms/labels）。
+        """
+        _ = dataset_id  # OpenGauss 不按 dataset_id 过滤
+        try:
+            with self._session_factory() as session:
+                filters: list[Any] = []
+                if term_type:
+                    canonical = self._normalize_type_code(term_type)
+                    filters.append(Term.term_type_code == canonical)
+                if term_type_no_eq:
+                    canonical_no_eq = self._normalize_type_code(term_type_no_eq)
+                    filters.append(Term.term_type_code != canonical_no_eq)
+
+                where_clause = and_(*filters) if filters else text("1=1")
+
+                total = int(
+                    session.execute(
+                        select(func.count()).select_from(Term).where(where_clause)
+                    ).scalar_one()
+                )
+
+                if total == 0:
+                    return QueryResult(total=0, items=[])
+
+                offset = (page_index - 1) * page_size
+                rows = session.execute(
+                    select(
+                        Term.term_id,
+                        Term.term_code,
+                        Term.term_name,
+                        Term.term_type_code,
+                        Term.library_id,
+                        Term.parent_term_id,
+                        Term.desc_summary,
+                        Term.term_tags,
+                        Term.created_time,
+                        Term.updated_time,
+                    )
+                    .where(where_clause)
+                    .limit(page_size)
+                    .offset(offset)
+                    .order_by(Term.updated_time.desc())
+                ).all()
+
+                # 批量查询父术语名称（优化：一次查询而非 N 次）
+                parent_ids = [
+                    str(r[5])
+                    for r in rows
+                    if r[5] is not None
+                ]
+                parent_name_map: dict[str, str] = {}
+                if parent_ids:
+                    parent_rows = session.execute(
+                        select(Term.term_id, Term.term_name).where(
+                            Term.term_id.in_(parent_ids)
+                        )
+                    ).all()
+                    parent_name_map = {
+                        str(pr[0]): str(pr[1]) for pr in parent_rows
+                    }
+
+                # 查询所有同义词（批量）
+                all_term_ids = [str(r[0]) for r in rows]
+                synonym_rows = session.execute(
+                    select(TermName.term_id, TermName.name_text).where(
+                        TermName.term_id.in_(all_term_ids)
+                    )
+                ).all()
+                synonym_map: dict[str, list[str]] = {tid: [] for tid in all_term_ids}
+                for sr in synonym_rows:
+                    synonym_map.setdefault(str(sr[0]), []).append(str(sr[1]))
+
+        except Exception:
+            logger.exception(
+                "list_terms failed: term_type=%s",
+                term_type,
+            )
+            raise
+
+        items: list[TermDetail] = []
+        for row in rows:
+            tid = str(row[0])
+            tags: dict[str, str] = {}
+            raw_tags = row[7]
+            if isinstance(raw_tags, dict):
+                tags = {str(k): str(v) for k, v in raw_tags.items()}
+
+            parent_tid = str(row[5]) if row[5] else ""
+            all_syns = synonym_map.get(tid, [])
+            # 过滤掉与 term_name 重复的同义词
+            term_name_text = str(row[2])
+            unique_syns = [s for s in all_syns if s != term_name_text]
+
+            items.append(
+                TermDetail(
+                    term_id=tid,
+                    term_code=str(row[1]),
+                    term_name=term_name_text,
+                    term_type=str(row[3]),
+                    dataset_id=str(row[4]) if row[4] else "",
+                    parent_term_code=parent_tid,
+                    desc=str(row[6]) if row[6] else "",
+                    labels=tags,
+                    synonyms="|".join(unique_syns),
+                    ext_attrs={},
+                    created_time=0,
+                    updated_time=0,
+                    parent_term_name=parent_name_map.get(parent_tid, ""),
+                    label_info=[],
+                    synonym_list=unique_syns,
+                    term_type_name="",
+                )
+            )
+
+        return QueryResult(total=total, items=list(items))
 
     def delete_scope(self, scope: str) -> dict[str, Any]:
         """删除指定 scope 下的所有术语数据（术语 + 名称 + 关系 + 知识）。

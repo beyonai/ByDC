@@ -18,6 +18,11 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from datacloud_knowledge.adapters.opengauss._db.connection import get_session
+from datacloud_knowledge.contracts.term_provider_types import (
+    ImportResult,
+    TermCreate,
+    TermUpdate,
+)
 from datacloud_knowledge.contracts.types import TermNameCreate
 
 log = logging.getLogger(__name__)
@@ -479,6 +484,170 @@ class PostgresTermWriter:
                 "search_scope": _json.dumps(search_scope),
                 "updated_time": updated_time,
             },
+        )
+
+    # ── TermProvider 协议新增方法 ──────────────────────────────────────
+
+    def import_terms(
+        self,
+        *,
+        dataset_id: str,
+        terms: list[TermCreate],
+    ) -> ImportResult:
+        """批量新增术语（含同义词、标签、扩展属性）。
+
+        对每条 TermCreate，依次执行 insert_term + create_term_name。
+        所有操作在同一个 Session 内完成，由调用方控制事务提交。
+
+        Args:
+            dataset_id: 目标术语库 ID（映射到 library_id）。
+            terms: 待新增术语列表。
+
+        Returns:
+            ImportResult，含创建数和 term_id 列表。
+        """
+        created = 0
+        term_ids: list[str] = []
+        errors: list[str] = []
+
+        for term in terms:
+            try:
+                term_id = self.insert_term(
+                    term_name=term.term_name,
+                    term_type_code=term.term_type,
+                    library_id=dataset_id,
+                    domain_id="",
+                    parent_term_id=term.parent_term_code or None,
+                    term_tags=dict(term.labels),
+                )
+
+                # 创建标准名称记录
+                if term.term_name:
+                    self.create_term_name(
+                        term_id=term_id,
+                        name_text=term.term_name,
+                        search_scope={},
+                    )
+
+                # 创建同义词记录
+                for syn in term.synonyms:
+                    if syn and syn != term.term_name:
+                        self.create_term_name(
+                            term_id=term_id,
+                            name_text=syn,
+                            search_scope={},
+                        )
+
+                term_ids.append(term_id)
+                created += 1
+            except Exception as exc:
+                log.exception(
+                    "import_terms 单条创建失败: term_name=%s",
+                    term.term_name,
+                )
+                errors.append(f"{term.term_name}: {exc}")
+
+        log.info(
+            "import_terms 完成: dataset_id=%s created=%d errors=%d",
+            dataset_id,
+            created,
+            len(errors),
+        )
+        return ImportResult(created=created, term_ids=term_ids, errors=errors)
+
+    def update_term(
+        self,
+        *,
+        dataset_id: str,
+        term_id: str,
+        updates: TermUpdate,
+    ) -> None:
+        """更新术语。仅更新非 None 字段。
+
+        Args:
+            dataset_id: 术语库 ID（OpenGauss 不按此过滤，仅用于接口兼容）。
+            term_id: 术语 ID。
+            updates: 更新字段（None = 不修改）。
+
+        Raises:
+            ValueError: 术语不存在。
+        """
+        _ = dataset_id  # OpenGauss 不按 dataset_id 过滤
+        now = datetime.now(tz=UTC)
+
+        # 先检查术语是否存在
+        existing = self._session.execute(
+            text("SELECT term_id FROM term WHERE term_id = :term_id"),
+            {"term_id": term_id},
+        ).fetchone()
+
+        if existing is None:
+            raise ValueError(f"术语不存在: {term_id}")
+
+        # 构建 UPDATE SET 子句
+        set_parts: dict[str, object] = {}
+        if updates.term_name is not None:
+            set_parts["term_name"] = updates.term_name
+        if updates.term_code is not None:
+            set_parts["term_code"] = updates.term_code
+        if updates.term_type is not None:
+            set_parts["term_type_code"] = updates.term_type
+        if updates.parent_term_code is not None:
+            set_parts["parent_term_id"] = updates.parent_term_code
+        if updates.desc is not None:
+            # desc 合并到 term_tags JSONB 或单独字段
+            set_parts["desc_summary"] = updates.desc
+        if updates.labels is not None:
+            set_parts["term_tags"] = json.dumps(updates.labels)
+        # ext_attrs 暂存到 desc_summary 补充字段（OpenGauss 无独立 ext_attrs 列）
+        if updates.ext_attrs is not None:
+            ext_json = json.dumps(updates.ext_attrs)
+            self._session.execute(
+                text(
+                    "UPDATE term SET desc_summary = COALESCE(desc_summary, '') || :ext "
+                    "WHERE term_id = :term_id"
+                ),
+                {"ext": f" ext_attrs:{ext_json}", "term_id": term_id},
+            )
+
+        if not set_parts:
+            return
+
+        set_parts["updated_time"] = now
+
+        # 构建动态 UPDATE SQL
+        set_clause = ", ".join(f"{key} = :{key}" for key in set_parts)
+        params: dict[str, object] = dict(set_parts)
+        params["term_id"] = term_id
+
+        self._session.execute(
+            text(f"UPDATE term SET {set_clause} WHERE term_id = :term_id"),
+            params,
+        )
+
+        # 更新同义词（TermName 表）：删除旧同义词，插入新同义词
+        if updates.synonyms is not None:
+            # 删除旧的非标准名同义词
+            self._session.execute(
+                text(
+                    "DELETE FROM term_name WHERE term_id = :term_id "
+                    "AND search_scope = '{}'::jsonb"
+                ),
+                {"term_id": term_id},
+            )
+            # 插入新同义词
+            for syn in updates.synonyms:
+                if syn.strip():
+                    self.create_term_name(
+                        term_id=term_id,
+                        name_text=syn.strip(),
+                        search_scope={},
+                    )
+
+        log.info(
+            "update_term 完成: term_id=%s fields=%s",
+            term_id,
+            list(set_parts.keys()),
         )
 
     # ═══════════════════════════════════════════════════════════════════════════════
