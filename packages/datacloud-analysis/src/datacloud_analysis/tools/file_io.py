@@ -59,13 +59,15 @@ async def read_file(
 
     不传 ``begin_line`` 和 ``end_line`` 则返回文件全部内容。
     """
+    logger.info("read_file called: path=%r begin_line=%d end_line=%d", path, begin_line, end_line)
     storage = _resolve_storage()
     try:
         content = storage.read_text(path, begin_line=begin_line, end_line=end_line)
     except ValueError as exc:
+        logger.error("read_file ValueError: path=%r error=%s", path, exc)
         return f"错误：{exc}"
     except (OSError, httpx.HTTPError) as exc:
-        logger.error("read_file failed path=%s error=%s", path, exc)
+        logger.error("read_file failed path=%r error=%s", path, exc)
         return f"错误：读取失败 {exc}"
 
     if content is None:
