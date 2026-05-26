@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any
 
+from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 
 from datacloud_analysis.orchestration.intend.command_router import CommandRouter
@@ -28,9 +30,30 @@ async def intend_node(
 ) -> dict[str, Any]:
     gw_ctx = (config.get("configurable") or {}).get("gateway_context")
     messages = state.get("messages") or []
-    # 必须用「最后一条用户话」，不能取 messages[-1]：合并后的 state 常以 AIMessage 结尾，
-    # 否则会误把助手回复当作用户问题，表现为意图/识别永远像第一轮。
     user_query = last_human_text(messages)
+
+    # target_tool 短路：跳过 LLM，直接构造 tool_call 走 tool_dispatcher
+    target_tool = str(state.get("target_tool") or "").strip()
+    if target_tool:
+        logger.info("[intend_node] target_tool=%r → bypassing LLM, injecting tool_call", target_tool)
+        tool_call_id = f"tc_{uuid.uuid4().hex[:12]}"
+        ai_msg = AIMessage(
+            content="",
+            tool_calls=[{
+                "id": tool_call_id,
+                "name": target_tool,
+                "args": {"query": user_query},
+                "type": "tool_call",
+            }],
+        )
+        return {
+            "intent": "react",
+            "intent_source": "target_tool",
+            "execution_status": "target_tool_direct",
+            "user_query": user_query,
+            "messages": [ai_msg],
+            "react_round_idx": 1,
+        }
 
     # 1. 命令路由
     result = await _router.try_dispatch(
