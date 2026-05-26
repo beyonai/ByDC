@@ -207,9 +207,12 @@ def _collect_terms_from_params(
 
     for f in tool_params.get("filters") or []:
         if isinstance(f, dict):
-            t = _get_field_term(f)
-            if t:
-                field_terms.append(t)
+            # 同 metrics/dimensions：field_code 已是合法字段码则跳过 field 显示名收集
+            fc_filter = str(f.get("field_code") or "")
+            if not (fc_filter and _is_field_code(fc_filter)):
+                t = _get_field_term(f)
+                if t:
+                    field_terms.append(t)
             # op=like 是模糊搜索，不需要精确消歧
             if str(f.get("op") or "").lower() != "like":
                 raw_value = f.get("value")
@@ -218,10 +221,21 @@ def _collect_terms_from_params(
                     if _is_term_value_candidate(value):
                         value_terms.append(str(value).strip())
     for s in tool_params.get("select") or []:
-        if s and not _is_field_code(str(s)):
+        if isinstance(s, dict):
+            sc = str(s.get("field_code") or "")
+            if sc and _is_field_code(sc):
+                continue
+            t = _get_field_term(s)
+            if t:
+                field_terms.append(t)
+        elif isinstance(s, str) and not _is_field_code(s):
             field_terms.append(str(s))
     for d in tool_params.get("dimensions") or []:
         if isinstance(d, dict):
+            # 同 metrics：field_code 已是合法字段码则跳过 field 显示名收集
+            dc = str(d.get("field_code") or "")
+            if dc and _is_field_code(dc):
+                continue
             t = _get_field_term(d)
             if t:
                 field_terms.append(t)
@@ -229,6 +243,11 @@ def _collect_terms_from_params(
             field_terms.append(d)
     for m in tool_params.get("metrics") or []:
         if isinstance(m, dict):
+            # 如果 field_code 已经是合法字段码（如 "id", "project_status"），
+            # 说明 LLM 已正确解析，无需把 field 显示名（如 "项目数量"）当作未消歧术语。
+            fc = str(m.get("field_code") or "")
+            if fc and _is_field_code(fc):
+                continue
             t = _get_field_term(m)
             if t:
                 field_terms.append(t)
