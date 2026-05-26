@@ -187,7 +187,11 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911
             from datacloud_knowledge.ingestion.owl_import.importer.executor import (
                 run as import_package,
             )
+            from datacloud_knowledge.ingestion.validate import check_package
 
+            ok, errors = check_package(str(args.package))
+            if not ok:
+                parser.exit(1, "\n".join(errors))
             result = import_package(str(args.package), schema=args.schema, db_url=args.db_url)
             _print_result(result)
             return 0 if result.get("status") != "failed" else 1
@@ -211,6 +215,11 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911
             from datacloud_knowledge.ingestion.owl_import.importer.executor import (
                 run as import_package,
             )
+            from datacloud_knowledge.ingestion.validate import check_package
+
+            ok, errors = check_package(str(args.package))
+            if not ok:
+                parser.exit(1, "\n".join(errors))
 
             results: dict[str, Any] = {}
             results["ensure_schema"] = ensure_schema(

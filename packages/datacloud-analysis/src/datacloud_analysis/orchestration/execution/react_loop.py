@@ -359,6 +359,7 @@ async def _stream_llm_call(
             )
 
     _thinking_notified = False
+    _reasoning_content_acc: str = ""  # 累积 kimi/deepseek-r 的 reasoning_content
     try:
         async for chunk in llm_with_tools.astream(messages_window):
             # 首个 chunk 到达：计算等待耗时并推送通知（仅首轮，无论耗时长短）
@@ -367,6 +368,11 @@ async def _stream_llm_call(
                 if round_idx == 0 and query_received_at is not None:
                     elapsed = time.monotonic() - query_received_at
                     await _emit_thinking_done_notification(elapsed, config=config)
+
+            # 从 chunk 里提取 reasoning_content（kimi/deepseek-r 系列）
+            _rc = (chunk.additional_kwargs or {}).get("reasoning_content", "")
+            if _rc:
+                _reasoning_content_acc += _rc
 
             # 累加 chunk
             if full_msg is None:
@@ -446,6 +452,15 @@ async def _stream_llm_call(
             raise
         did_stream_text = False
 
+    # thinking 模型（kimi/deepseek-r 系列）：LangChain chunk 累加会丢失 reasoning_content，
+    # 手动从 _reasoning_content_acc 或 _thinking_acc 补回，确保下一轮发给模型时消息合法。
+    if full_msg is not None and getattr(full_msg, "tool_calls", None):
+        kwargs = dict(full_msg.additional_kwargs or {})
+        if "reasoning_content" not in kwargs:
+            # 优先用从 chunk.additional_kwargs 累积的内容，其次用 thinking block 内容
+            kwargs["reasoning_content"] = _reasoning_content_acc or _thinking_acc
+            full_msg = full_msg.model_copy(update={"additional_kwargs": kwargs})
+
     # [DIAG] 诊断日志：记录本次 LLM 调用流式推送的 finish_react.answer 内容
     if _fr_answer_emitted > 0:
         m = re.search(r'"answer"\s*:\s*"((?:[^"\\]|\\.)*)', _fr_args_acc)
@@ -493,6 +508,8 @@ async def _invoke_llm_with_fallback(
 
     # ── 主模型（含重试）────────────────────────────────────────────────────────
     last_exc: Exception
+    # 确保 thinking 模型（kimi/deepseek-r）的 AIMessage 携带 reasoning_content
+    messages_window = _ensure_reasoning_content(messages_window)
     try:
         return await stream_llm_call_with_retry(
             _stream_llm_call,
@@ -788,7 +805,9 @@ def _build_llm(state: Any, llm_config: dict[str, Any] | None = None) -> Any:
     if provider == "anthropic":
         return init_chat_model(model_provider="anthropic", **kwargs)
     else:
-        return init_chat_model(model_provider="openai", **kwargs)
+        llm = init_chat_model(model_provider="openai", **kwargs)
+        # 对 thinking 模型（kimi/deepseek-r 系列）包装，确保 reasoning_content 被正确发送
+        return _ThinkingAwareChatOpenAI(llm)
 
 
 def _build_system_message(
@@ -870,6 +889,78 @@ def _compress_tool_result(result: Any, tool_name: str) -> str:
             + f"... [\u5df2\u622a\u65ad, \u539f\u957f {len(text)} \u5b57\u7b26]"
         )
     return text
+
+
+def _ensure_reasoning_content(messages: list) -> list:
+    """确保有 tool_calls 的 AIMessage 携带 reasoning_content 字段。
+
+    kimi/deepseek-r 等 thinking 模型要求：有 tool_calls 的 AIMessage 必须在
+    additional_kwargs 里携带 reasoning_content（即使为空字符串），否则下一轮
+    调用返回 400。LangGraph checkpoint 序列化/反序列化会丢失该字段，在发给
+    LLM 之前统一补充。
+    """
+    result = []
+    for msg in messages:
+        if isinstance(msg, AIMessage) and getattr(msg, "tool_calls", None):
+            kwargs = dict(msg.additional_kwargs or {})
+            if "reasoning_content" not in kwargs:
+                kwargs["reasoning_content"] = ""
+                msg = msg.model_copy(update={"additional_kwargs": kwargs})
+        result.append(msg)
+    return result
+
+
+class _ThinkingAwareChatOpenAI:
+    """ChatOpenAI 的薄包装，在序列化消息时把 additional_kwargs.reasoning_content
+    注入到发送给 API 的消息体里。
+
+    kimi/deepseek-r 等 thinking 模型要求 assistant 消息里携带 reasoning_content
+    字段，但 LangChain 的 ChatOpenAI 序列化时会忽略 additional_kwargs 里的非标准字段。
+    这里通过 monkey-patch LangChain 的 _convert_message_to_dict 来解决。
+    """
+
+    def __init__(self, llm: Any) -> None:
+        self._llm = llm
+        self._patch_applied = False
+
+    def _apply_patch(self) -> None:
+        """Monkey-patch LangChain 的消息转换函数，使其包含 reasoning_content。"""
+        if self._patch_applied:
+            return
+        try:
+            import langchain_openai.chat_models.base as _lc_base
+
+            _orig_convert = _lc_base._convert_message_to_dict
+
+            def _patched_convert(message: Any) -> dict:
+                d = _orig_convert(message)
+                if d.get("role") == "assistant" and d.get("tool_calls"):
+                    rc = (getattr(message, "additional_kwargs", {}) or {}).get("reasoning_content")
+                    if rc is not None:
+                        d["reasoning_content"] = rc
+                return d
+
+            _lc_base._convert_message_to_dict = _patched_convert
+            self._patch_applied = True
+        except Exception:
+            pass
+
+    def bind_tools(self, tools: list) -> "_ThinkingAwareChatOpenAI":
+        return _ThinkingAwareChatOpenAI(self._llm.bind_tools(tools))
+
+    async def astream(self, messages: list, **kwargs: Any):  # type: ignore[override]
+        self._apply_patch()
+        patched = _ensure_reasoning_content(messages)
+        async for chunk in self._llm.astream(patched, **kwargs):
+            yield chunk
+
+    async def ainvoke(self, messages: list, **kwargs: Any) -> Any:
+        self._apply_patch()
+        patched = _ensure_reasoning_content(messages)
+        return await self._llm.ainvoke(patched, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._llm, name)
 
 
 def _trim_messages_window(messages: list) -> list:

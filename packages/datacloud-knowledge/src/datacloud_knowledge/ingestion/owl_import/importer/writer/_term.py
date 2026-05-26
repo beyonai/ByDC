@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import jieba
 from psycopg import Cursor
 
 from datacloud_knowledge.ingestion.owl_import.importer._helpers import (
@@ -17,6 +18,12 @@ from datacloud_knowledge.ingestion.owl_import.importer.snowflake import _next_sn
 
 from ._base import _term_name_search_scope_payload
 from ._vocabulary import _batch_insert_vocabulary_words
+
+
+def _jieba_tokenize(text: str) -> str:
+    """jieba 搜索引擎模式分词，空格拼接，供 to_tsvector('simple', ...) 使用。"""
+    tokens = [t for t in jieba.lcut_for_search(text) if t.strip()]
+    return " ".join(tokens)
 
 
 def _dedupe_term_name_sync_items(
@@ -73,6 +80,39 @@ def _split_term_name_items_by_prop_scope(
         else:
             other_items.append(item)
     return prop_items, other_items
+
+
+def _backfill_jieba_tsvector_batch(
+    cur: Cursor,
+    all_rows: list[tuple[str, str, str, str]],
+    *,
+    page_size: int = 2000,
+) -> None:
+    """批量 UPDATE name_keywords_jieba，使用 jieba 分词 tsvector。
+
+    在 INSERT 之后调用，为刚写入的 name_id 填充 name_keywords_jieba 列。
+    """
+    jieba_batch: list[tuple[str, str]] = []
+    for name_id, _, name_text, _ in all_rows:
+        tokens = [t for t in jieba.lcut_for_search(name_text) if t.strip()]
+        if tokens:
+            jieba_batch.append((name_id, " ".join(tokens)))
+
+    if not jieba_batch:
+        return
+
+    for i in range(0, len(jieba_batch), page_size):
+        chunk = jieba_batch[i : i + page_size]
+        single_row = "(%s::varchar, %s::text)"
+        values_clause = ",".join([single_row] * len(chunk))
+        flat: list[Any] = []
+        for nid, jt in chunk:
+            flat.extend([nid, jt])
+        cur.execute(
+            "UPDATE term_name tn SET name_keywords_jieba = to_tsvector('simple', v.jt) "
+            f"FROM (VALUES {values_clause}) AS v(id, jt) WHERE tn.name_id = v.id",
+            flat,
+        )
 
 
 def _batch_sync_term_names(
@@ -139,6 +179,10 @@ def _batch_sync_term_names(
         all_rows,
         page_size=2000,
     )
+
+    # 批量 UPDATE name_keywords_jieba（jieba 分词 tsvector，导入时直接写入）
+    _backfill_jieba_tsvector_batch(cur, all_rows, page_size=2000)
+
     words = list({row[2] for row in all_rows})
     _batch_insert_vocabulary_words(cur, words)
     return len(all_rows)

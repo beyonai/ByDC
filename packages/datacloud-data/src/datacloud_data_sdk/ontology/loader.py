@@ -41,6 +41,15 @@ if TYPE_CHECKING:
     from datacloud_data_sdk.view import View
 
 
+DEFAULT_KB_BACKEND = "http_knowledge_import"
+
+
+def _default_kb_backends() -> dict[str, Any]:
+    from datacloud_data_sdk.executor.kb_search_backend import HttpKnowledgeSearchBackend
+
+    return {DEFAULT_KB_BACKEND: HttpKnowledgeSearchBackend()}
+
+
 @dataclass
 class LoaderConfig:
     """
@@ -67,6 +76,9 @@ class LoaderConfig:
     result_file_storage: Any = None
     sql_execution_mode: str = "internal"
     term_loader: Any = None
+    kb_search_backend: Any = None
+    kb_backends: dict[str, Any] = field(default_factory=_default_kb_backends)
+    default_kb_backend: str | None = DEFAULT_KB_BACKEND
     query_result_csv_threshold: int = 10  # 0 = 不启用溢出截断
     sql_execute_url: str | None = None  # HTTP_SQL 后端服务地址（chatbi 等调用方注入）
 
@@ -356,6 +368,21 @@ class OntologyLoader:
         for k, v in kwargs.items():
             if hasattr(self._config, k):
                 setattr(self._config, k, v)
+        self._ensure_default_kb_backend()
+
+    def _ensure_default_kb_backend(self) -> None:
+        """Ensure the built-in knowledge backend is available unless explicitly replaced."""
+        if not self._config.kb_backends:
+            self._config.kb_backends = _default_kb_backends()
+        if not self._config.default_kb_backend:
+            self._config.default_kb_backend = DEFAULT_KB_BACKEND
+        if (
+            self._config.default_kb_backend == DEFAULT_KB_BACKEND
+            and DEFAULT_KB_BACKEND not in self._config.kb_backends
+        ):
+            self._config.kb_backends[DEFAULT_KB_BACKEND] = _default_kb_backends()[
+                DEFAULT_KB_BACKEND
+            ]
 
     @property
     def result_file_storage(self) -> Any:
@@ -368,7 +395,7 @@ class OntologyLoader:
         return self._config.sql_execute_url
 
     def _extract_datasource_configs_from_objects(self) -> dict[str, Any]:
-        """从 source_type=DB 且含 source_config 的对象提取 DataSourceConfig，按 alias 去重。"""
+        """从 DB/DYNAMIC_TABLE 对象 source_config 提取 DataSourceConfig，按 alias 去重。"""
         from datacloud_data_sdk.sql_executor.config_loader import (
             _dict_to_config,
             _substitute_dict,
@@ -376,7 +403,7 @@ class OntologyLoader:
 
         configs: dict[str, Any] = {}
         for cls in self._classes.values():
-            if cls.source_type != "DB" or not cls.source_config:
+            if cls.source_type not in {"DB", "DYNAMIC_TABLE"} or not cls.source_config:
                 continue
             sc = cls.source_config
             alias = sc.get("alias") if isinstance(sc, dict) else None

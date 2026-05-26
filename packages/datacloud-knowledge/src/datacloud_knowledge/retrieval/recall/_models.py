@@ -11,6 +11,7 @@ class TypedKeywordState(Protocol):
     keyword: str
     ktype: str
     search_enabled: bool
+    type_code: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +24,7 @@ class RecallRequest:
     per_type_limit: int
     scope_code: str | None = None
     is_value_recall: bool = False
+    type_code_filter: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

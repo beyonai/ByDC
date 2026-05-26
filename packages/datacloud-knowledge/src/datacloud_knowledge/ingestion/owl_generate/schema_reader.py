@@ -1,16 +1,112 @@
-"""MySQL schema 读取器。
+"""数据库 schema 读取器 — 统一 MySQL/OpenGauss 表结构读取。
 
-职责：连接 MySQL，读取 INFORMATION_SCHEMA 表结构 + 术语化字段的 DISTINCT 值。
-与 OWL 渲染完全解耦，只返回数据模型。
+通过 adapter 工厂模式支持多种数据库后端：
+- MySQL: 直接 pymysql 连接（旧路径，逐步迁移）。
+- OpenGauss / PostgreSQL: 委托 adapters/opengauss/schema_reader.py。
+
+生成器调用方不直接 import 数据库驱动，全部通过此模块。
 """
 
 from __future__ import annotations
 
+import logging
 from collections import OrderedDict
 from importlib import import_module
 from typing import Any
 
 from datacloud_knowledge.ingestion.owl_generate.models import Column, OwlGenConfig, Table
+
+logger = logging.getLogger(__name__)
+
+
+def _db_backend(config: OwlGenConfig) -> str:
+    """推断数据库后端类型：优先 db_type，否则从 db_params/driver 推断。"""
+    db_type = config.db_type.lower()
+    if db_type in ("opengauss", "postgresql", "postgres"):
+        return "opengauss"
+    if db_type == "mysql":
+        return "mysql"
+    # 从 db_params 推断
+    db_params_type = str(config.db_params.get("db_type", "")).lower()
+    if db_params_type in ("opengauss", "postgresql", "postgres"):
+        return "opengauss"
+    if db_params_type == "mysql":
+        return "mysql"
+    # 默认：如果 config 中有 mysql_host，用 MySQL；否则用 opengauss
+    if config.mysql_host:
+        return "mysql"
+    return "opengauss"
+
+
+def read_tables(config: OwlGenConfig) -> list[Table]:
+    """从数据库 INFORMATION_SCHEMA 读取表结构（自动选择 MySQL/OpenGauss 后端）。"""
+    backend = _db_backend(config)
+
+    if backend == "opengauss":
+        return _read_tables_opengauss(config)
+
+    return _read_tables_mysql(config)
+
+
+def load_term_values(
+    config: OwlGenConfig,
+) -> dict[str, list[dict[str, str]]]:
+    """从数据库读取术语化字段的 DISTINCT 值（自动选择后端）。
+
+    返回 ``{term_type_code: [{code, name, parent_prop_code}, ...]}``。
+    """
+    backend = _db_backend(config)
+
+    if backend == "opengauss":
+        return _load_term_values_opengauss(config)
+
+    return _load_term_values_mysql(config)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# OpenGauss / PostgreSQL 后端（通过 adapters 层）
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _read_tables_opengauss(config: OwlGenConfig) -> list[Table]:
+    """通过 adapters/opengauss/schema_reader.py 读取 OpenGauss 表结构。"""
+    from datacloud_knowledge.adapters.opengauss.schema_reader import (
+        read_tables as og_read_tables,
+    )
+
+    schema = config.db_params.get("schema", "") or config.db_params.get(
+        "database", config.mysql_database
+    )
+    if not schema:
+        schema = config.mysql_database
+
+    return og_read_tables(
+        schema=schema,
+        table_codes=config.table_codes,
+        table_names=config.table_names,
+        table_descs=config.table_descs,
+        host=config.db_params.get("host", config.mysql_host),
+        port=config.db_params.get("port", config.mysql_port) or 5432,
+        database=config.db_params.get("database", config.mysql_database),
+        user=config.db_params.get("user", config.mysql_user),
+        password=config.db_params.get("password", config.mysql_password),
+    )
+
+
+def _load_term_values_opengauss(
+    config: OwlGenConfig,
+) -> dict[str, list[dict[str, str]]]:
+    """通过 adapters/opengauss/schema_reader.py 读取 OpenGauss 术语值。"""
+    from datacloud_knowledge.adapters.opengauss.schema_reader import (
+        load_all_term_values,
+    )
+
+    return load_all_term_values(config)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MySQL 后端（旧路径，保留作为兼容）
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def _load_pymysql() -> Any:
@@ -18,7 +114,7 @@ def _load_pymysql() -> Any:
     return import_module("pymysql")
 
 
-def read_tables(config: OwlGenConfig) -> list[Table]:
+def _read_tables_mysql(config: OwlGenConfig) -> list[Table]:
     """从 MySQL INFORMATION_SCHEMA 读取表结构。"""
     pymysql = _load_pymysql()
 
@@ -73,13 +169,10 @@ def read_tables(config: OwlGenConfig) -> list[Table]:
     return tables
 
 
-def load_term_values(
+def _load_term_values_mysql(
     config: OwlGenConfig,
 ) -> dict[str, list[dict[str, str]]]:
-    """从 MySQL 读取术语化字段的 DISTINCT 值。
-
-    返回 ``{term_type_code: [{code, name, parent_prop_code}, ...]}``。
-    """
+    """从 MySQL 读取术语化字段的 DISTINCT 值。"""
     pymysql = _load_pymysql()
 
     conn = pymysql.connect(

@@ -130,7 +130,8 @@ class DataSourceManager:
         如果连接器已缓存则直接返回，否则根据配置创建新连接器。
         如果本地配置中找不到，尝试从 fallback_loader 获取。
 
-        如果配置中 datasource_id 不为空，则强制使用 HTTP_SQL 连接器。
+        如果配置中 connector_type 不为空，优先按 connector_type 选择连接器。
+        否则如果 datasource_id 不为空，则兼容历史逻辑强制使用 HTTP_SQL 连接器。
 
         Args:
             alias: 数据源别名
@@ -163,17 +164,23 @@ class DataSourceManager:
             raise DataSourceUnavailableError(alias)
 
         # 选型规则：
-        # 1. fallback_loader.sql_execute_url 非空 → 强制 HTTP_SQL，并把 URL 注入 config 副本
-        # 2. config.datasource_id 非空（兼容历史路径）→ 强制 HTTP_SQL（URL 由调用方自带）
-        # 3. 否则按 config.db_type 走本地 connector
+        # 1. config.connector_type 非空 → 按业务方注册的 connector_type 选择 connector
+        # 2. fallback_loader.sql_execute_url 非空 → 强制 HTTP_SQL，并把 URL 注入 config 副本
+        # 3. config.datasource_id 非空（兼容历史路径）→ 强制 HTTP_SQL（URL 由调用方自带）
+        # 4. 否则按 config.db_type 走本地 connector
         sql_execute_url = (
             getattr(self._fallback_loader, "sql_execute_url", None)
             if self._fallback_loader is not None
             else None
         )
-        force_http = bool(sql_execute_url) or config.datasource_id is not None
+        connector_type = config.connector_type.strip()
+        force_http = not connector_type and (
+            bool(sql_execute_url) or config.datasource_id is not None
+        )
 
-        if force_http:
+        if connector_type:
+            connector_cls = ConnectorRegistry.get(connector_type)
+        elif force_http:
             connector_cls = ConnectorRegistry.get("HTTP_SQL")
             if sql_execute_url:
                 # 用副本承载 endpoint_url，避免污染原配置（可能被多个 manager 共享）

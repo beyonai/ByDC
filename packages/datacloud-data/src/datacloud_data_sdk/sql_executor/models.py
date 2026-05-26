@@ -30,6 +30,8 @@ class DataSourceConfig:
         pool_max: 连接池最大连接数
         pool_timeout: 连接池超时时间（秒）
         open_gauss_compat: 是否启用 openGauss 兼容模式
+        connector_type: 连接器类型（可选，用于选择业务方自定义 connector）
+        service_name: 远程服务名（可选，由具体 connector 按需使用）
         datasource_id: 数据源ID（不为空时使用 HTTP SQL 服务执行）
         endpoint_url: HTTP_SQL 后端服务地址（仅 HTTP_SQL 使用）。
             由 ``DataSourceManager`` 在选择 HTTP connector 时根据
@@ -54,6 +56,8 @@ class DataSourceConfig:
     pool_max: int = 5
     pool_timeout: float = 30.0
     open_gauss_compat: bool = False
+    connector_type: str = ""
+    service_name: str = ""
     datasource_id: int | None = None
     endpoint_url: str = ""
 

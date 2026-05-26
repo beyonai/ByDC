@@ -376,8 +376,12 @@ class Object:
             api_exec = ApiExecutor(loader, config.csv_base_dir) if loader else None
             script_exec = ScriptExecutor(loader)
             kb_exec = (
-                KbExecutor(config.kb_source_configs, config.csv_base_dir)
-                if config.kb_source_configs
+                KbExecutor(
+                    config.kb_source_configs or {},
+                    config.csv_base_dir,
+                    search_backend=getattr(config, "kb_search_backend", None),
+                )
+                if config.kb_source_configs or getattr(config, "kb_search_backend", None)
                 else None
             )
 

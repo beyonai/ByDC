@@ -197,3 +197,15 @@ examples/chatbi_demo/data/sql_en/
 examples/chatbi_demo/resource_en/
 examples/chatbi_demo/data/translate_sql.py
 examples/chatbi_demo/data/.translate_cache.json
+examples/deepagent_bi/.env_deepagent
+examples/deepagent_bi/skills/skills
+examples/deepagent_bi/owl_docs/
+examples/deepagent_bi/owl_resources/
+examples/deepagent_bi/skills/unstructured-ontology-manager/by_datacloud-0.1.37-py3-none-any.whl
+examples/deepagent_bi/skills/unstructured-ontology-manager.zip
+examples/deepagent_bi/skills/structured-ontology-manager.zip
+examples/deepagent_bi/skills/structured-ontology-manager/by_datacloud-0.1.37-py3-none-any.whl
+examples/deepagent_bi/skills/structured-ontology-manager/by_datacloud-0.1.37-py3-none-any.whl
+examples/deepagent_bi/skills/structured-ontology-manager/by_datacloud-0.1.37-py3-none-any.whl
+examples/deepagent_bi/skills/structured-ontology-manager/by_datacloud-0.1.37-py3-none-any.whl
+examples/deepagent_bi/skills/structured-ontology-manager/by_datacloud-0.1.37-py3-none-any.whl

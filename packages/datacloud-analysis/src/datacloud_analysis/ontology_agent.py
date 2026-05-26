@@ -72,6 +72,21 @@ class ErrorEvent(OntologyAgentEvent):
     code: str | None = None
 
 
+@dataclass
+class PerfEvent(OntologyAgentEvent):
+    """单次 ask/resume 的性能汇总，在 AnswerEvent 之后 yield。"""
+
+    total_duration_ms: int
+    ttft_ms: int | None
+    react_turns: int
+    llm_call_count: int
+    interrupt_count: int
+    thinking_chars: int
+    thinking_duration_ms: int
+    thinking_chars_per_sec: float
+    last_tool_called: str = ""
+
+
 # ── 维度选项模型 ──────────────────────────────────────────────────────────────
 
 
@@ -132,6 +147,8 @@ class OntologyAgentConfig:
     # HTTP_SQL 后端服务地址。非空时强制走 HttpSqlConnector 并注入此地址，
     # 取代历史的 DATACLOUD_SQL_SERVICE_URL 环境变量。
     sql_execute_url: str | None = None
+    # 结果文件（CSV 导出等）的工作目录根路径。None 时退化到 os.getcwd()。
+    workspace_dir: str | None = None
 
 
 # ── 缓存 key ──────────────────────────────────────────────────────────────────
@@ -148,7 +165,7 @@ def _make_cache_key(
 # ── 初始状态构建辅助 ──────────────────────────────────────────────────────────
 
 
-def _build_input_payload(question: str) -> dict[str, Any]:
+def _build_input_payload(question: str, workspace_dir: str | None = None) -> dict[str, Any]:
     """构建 AgentState 初始字段，与 runner.py 保持一致。"""
     from langchain_core.messages import HumanMessage  # noqa: PLC0415
 
@@ -156,7 +173,7 @@ def _build_input_payload(question: str) -> dict[str, Any]:
         "messages": [HumanMessage(content=question)],
         "agent_id": None,
         "agent_name": None,
-        "workspace_dir": None,
+        "workspace_dir": workspace_dir,
         "user_query": "",
         "enriched_query": "",
         "knowledge_payload": {},
@@ -503,7 +520,9 @@ class OntologyAgent:
         }
 
         if resume_input is None:
-            graph_input: Any = _build_input_payload(question)
+            graph_input: Any = _build_input_payload(
+                question, workspace_dir=self._config.workspace_dir
+            )
             graph_input["prompts_overwrite"] = {"locale": effective_locale}
         elif isinstance(resume_input, str):
             graph_input = Command(resume=resume_input)
@@ -515,6 +534,19 @@ class OntologyAgent:
             graph_input = Command(resume=resume_value)
 
         try:
+            import time as _time
+
+            _t_start = _time.monotonic()
+            _ttft_ms: int | None = None
+            _react_turns = 0
+            _llm_call_count = 0
+            _thinking_chars = 0
+            _thinking_t_start: float | None = None
+            _thinking_duration_ms = 0
+            _in_thinking = False
+            _current_node = ""
+            _last_tool_called = ""
+
             async for event in compiled.astream_events(
                 graph_input,
                 config=run_config,
@@ -524,11 +556,44 @@ class OntologyAgent:
                 metadata = event.get("metadata") or {}
                 node = metadata.get("langgraph_node", "")
 
+                # ReAct 轮次计数
+                if event_type == "on_chain_start" and node and node != _current_node:
+                    _current_node = node
+                    if node not in ("respond", "__start__", "__end__"):
+                        _react_turns += 1
+
+                # LLM 调用计数
+                if event_type == "on_chat_model_start":
+                    _llm_call_count += 1
+
+                # 工具调用采集（finish_react 不算）
+                if event_type == "on_tool_start":
+                    tool_name = str(
+                        (event.get("data") or {}).get("input", {}).get("tool", "")
+                        or event.get("name", "")
+                        or ""
+                    )
+                    if tool_name and tool_name != "finish_react":
+                        _last_tool_called = tool_name
+
                 if event_type == "on_chat_model_stream" and node != "respond":
                     chunk = (event.get("data") or {}).get("chunk")
                     content = getattr(chunk, "content", "") or ""
                     if content:
+                        if _ttft_ms is None:
+                            _ttft_ms = int((_time.monotonic() - _t_start) * 1000)
+                        if not _in_thinking:
+                            _in_thinking = True
+                            _thinking_t_start = _time.monotonic()
+                        _thinking_chars += len(content)
                         yield ThinkingEvent(content=content)
+                    else:
+                        if _in_thinking and _thinking_t_start is not None:
+                            _thinking_duration_ms += int(
+                                (_time.monotonic() - _thinking_t_start) * 1000
+                            )
+                            _in_thinking = False
+                            _thinking_t_start = None
 
                 elif event_type == "on_custom_event" and event.get("name") == "dc_stream_chunk":
                     data = event.get("data") or {}
@@ -570,8 +635,31 @@ class OntologyAgent:
             )
             return
 
+        # 收尾：如果思考还在进行中，补算时长
+        if _in_thinking and _thinking_t_start is not None:
+            _thinking_duration_ms += int((_time.monotonic() - _thinking_t_start) * 1000)
+
         final_answer = str(snapshot.values.get("final_answer") or "")
         yield AnswerEvent(content=final_answer)
+
+        # 性能汇总事件
+        _total_ms = int((_time.monotonic() - _t_start) * 1000)
+        _chars_per_sec = (
+            round(_thinking_chars / (_thinking_duration_ms / 1000), 1)
+            if _thinking_duration_ms > 0
+            else 0.0
+        )
+        yield PerfEvent(
+            total_duration_ms=_total_ms,
+            ttft_ms=_ttft_ms,
+            react_turns=_react_turns,
+            llm_call_count=_llm_call_count,
+            interrupt_count=0,
+            thinking_chars=_thinking_chars,
+            thinking_duration_ms=_thinking_duration_ms,
+            thinking_chars_per_sec=_chars_per_sec,
+            last_tool_called=_last_tool_called,
+        )
 
     # 让 async generator 方法可被直接调用并返回 AsyncGenerator
     # _iter_events 是 async def + yield，Python 自动使其成为 async generator function。

@@ -5,6 +5,7 @@
 2. 注入是基于 dataclasses.replace 的副本，不污染原 config
 3. ``sql_execute_url`` 与 ``datasource_id`` 都为空时仍按 db_type 走本地 connector
 4. 仅 ``datasource_id`` 非空（兼容历史路径）时仍走 HTTP_SQL
+5. ``connector_type`` 非空时优先使用业务方注册的 connector
 """
 
 from __future__ import annotations
@@ -12,6 +13,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from datacloud_data_sdk.sql_executor.base_connector import BaseSourceConnector
+from datacloud_data_sdk.sql_executor.connector_registry import ConnectorRegistry
 from datacloud_data_sdk.sql_executor.connectors.http_sql_connector import HttpSqlConnector
 from datacloud_data_sdk.sql_executor.data_source_manager import (
     DataSourceManager,
@@ -36,6 +39,24 @@ def _unwrap(connector: Any) -> Any:
     if isinstance(connector, _LoggingConnectorProxy):
         return connector._real  # type: ignore[attr-defined]
     return connector
+
+
+class _CustomSqlConnector(BaseSourceConnector):
+    """测试用业务方自定义 connector。"""
+
+    @classmethod
+    def supported_type(cls) -> str:
+        return "TEST_CUSTOM_SQL"
+
+    async def execute(
+        self,
+        sql: str,
+        params: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        return [{"sql": sql, "params": params}]
+
+    async def test_connection(self) -> bool:
+        return True
 
 
 def test_sql_execute_url_forces_http_connector_and_injects_endpoint_url() -> None:
@@ -90,6 +111,23 @@ def test_datasource_id_only_still_forces_http_connector() -> None:
     connector = _unwrap(manager.get_connector("legacy_http"))
     assert isinstance(connector, HttpSqlConnector)
     assert connector.config.endpoint_url == "http://legacy.example/sql"
+
+
+def test_connector_type_takes_precedence_over_legacy_http_selection() -> None:
+    ConnectorRegistry.register("TEST_CUSTOM_SQL", _CustomSqlConnector)
+    config = DataSourceConfig(
+        alias="dynamic_table",
+        db_type="SQLITE",
+        connector_type="TEST_CUSTOM_SQL",
+        datasource_id=999,
+        endpoint_url="http://legacy.example/sql",
+    )
+    manager = DataSourceManager({"dynamic_table": config}, fallback_loader=None)
+
+    connector = _unwrap(manager.get_connector("dynamic_table"))
+    assert isinstance(connector, _CustomSqlConnector)
+    assert connector.config.db_type == "SQLITE"
+    assert connector.config.connector_type == "TEST_CUSTOM_SQL"
 
 
 def test_loader_without_sql_execute_url_attribute_is_tolerated() -> None:

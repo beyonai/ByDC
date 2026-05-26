@@ -6,8 +6,8 @@ import json
 import logging
 from typing import Any
 
+from datacloud_knowledge.contracts.intent_types import extract_filter_prefix, term_key
 from datacloud_knowledge.i18n import get_confirm_labels
-from datacloud_knowledge.intent.clarification._pre_resolve import extract_filter_prefix, term_key
 from datacloud_knowledge.intent.clarification.models import (
     CCTermMeta,
     ExtractedTerm,

@@ -41,9 +41,12 @@ _PROPERTY_ALIASES: Final[dict[str, str]] = {
     "trem_type_code": "term_type_code",
     "trem_type_name": "term_type_name",
     "trem_type_desc": "term_type_desc",
+    "trem_type_category": "term_type_category",
     "trem_data_type": "term_data_type",
     "source_libeary": "source_library",
     "target_libeary": "target_library",
+    # GraphBuilder 使用 camelCase 属性名，统一归一化为 snake_case
+    "extField": "ext_field",
 }
 
 
@@ -91,13 +94,42 @@ def _parse_owl_rdflib(file_path: Path) -> list[dict[str, Any]]:
 
     datatype_properties = _collect_datatype_properties(graph)
     datatype_property_names = {_extract_local_name(uri) for uri in datatype_properties}
+    # 若无 DatatypeProperty 声明（如 GraphBuilder 产出的 RDF/XML），接受所有 Literal 属性
+    _accept_all_literals = len(datatype_property_names) == 0
     entities: list[dict[str, Any]] = []
-    for individual in graph.subjects(RDF.type, OWL.NamedIndividual):
-        if not isinstance(individual, URIRef):
+
+    # 收集图中所有有业务类型的实体。
+    # 兼容两种格式：
+    #   1. 旧格式（_xml.py 产出）：<owl:NamedIndividual rdf:about="...">
+    #      <rdf:type rdf:resource="#TermDefinition"/></owl:NamedIndividual>
+    #      实体 rdf:type = owl:NamedIndividual AND #TermDefinition
+    #   2. 新格式（GraphBuilder 产出）：<rdf:Description rdf:about="...">
+    #      <rdf:type rdf:resource="#TermDefinition"/></rdf:Description>
+    #      实体 rdf:type = #TermDefinition (无 owl:NamedIndividual)
+    individuals_by_type: dict[URIRef, set[str]] = {}
+    for s, _p, o in graph.triples((None, RDF.type, None)):
+        if not isinstance(s, URIRef):
             continue
-        entity: dict[str, Any] = {
-            "entity_type": _resolve_entity_type(graph, individual),
-        }
+        type_local = _extract_local_name(o)
+        entity_type = _ENTITY_TYPE_MAPPING.get(type_local)
+        if entity_type is not None:
+            individuals_by_type.setdefault(s, set()).add(type_local)
+
+    # 检查是否还有旧格式 owl:NamedIndividual 实体
+    for individual in graph.subjects(RDF.type, OWL.NamedIndividual):
+        if isinstance(individual, URIRef) and individual not in individuals_by_type:
+            individuals_by_type.setdefault(individual, set())
+
+    for individual, type_names in individuals_by_type.items():
+        entity_type = ""
+        for type_name in type_names:
+            mapped = _ENTITY_TYPE_MAPPING.get(type_name)
+            if mapped:
+                entity_type = mapped
+                break
+        if not entity_type:
+            continue
+        entity: dict[str, Any] = {"entity_type": entity_type}
         for predicate, value in graph.predicate_objects(individual):
             if not isinstance(predicate, URIRef):
                 continue
@@ -106,7 +138,8 @@ def _parse_owl_rdflib(file_path: Path) -> list[dict[str, Any]]:
             property_name = _normalize_property_name(_extract_local_name(predicate))
             raw_property_name = _extract_local_name(predicate)
             if (
-                predicate not in datatype_properties
+                not _accept_all_literals
+                and predicate not in datatype_properties
                 and raw_property_name not in datatype_property_names
             ):
                 continue

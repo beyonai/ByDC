@@ -1,7 +1,7 @@
-"""知识包导入子模块：precheck（预检）+ executor（入库）。"""
+"""知识包导入子模块：executor（入库）。校验已迁移到 ingestion/validate.py。"""
 
 from __future__ import annotations
 
-from . import executor, precheck
+from . import executor
 
-__all__ = ["executor", "precheck"]
+__all__ = ["executor"]

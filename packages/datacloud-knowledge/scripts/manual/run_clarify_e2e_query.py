@@ -7,11 +7,18 @@ Run:
 """
 
 import json
+import logging
 from dataclasses import asdict
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)-5s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
 
 from datacloud_knowledge.intent.clarification.api import analyze_query_clarification
 from datacloud_knowledge.intent.types import StreamEvent, StreamEventKind
@@ -29,14 +36,18 @@ def print_event(event: StreamEvent) -> None:
 
 
 def main() -> None:
-    # 场景：找出亩产效益后30%的地块上的中低效能企业清单
-    query = "查询物理网格数据，包含网格编码、网格名称、贡献率三个字段，条件是贡献率大于100，返回10条数据"
-    ontology_code = "scene_grid_analysis"
+    query = "查询签约成功的商机信息，返回商机名称和签约金额"
+    ontology_code = "by_opportunity"
     structured_query = {
-        "select": ["phy_grid_id", "phy_grid_name", "贡献率"],
-        "limit": 10,
-        "complex_conditions": ["贡献率大于100"],
+        "select": ["opp_name", "contract_amount"],
+        "filters": [{"field": "opp_status", "op": "eq", "value": "签约成功"}],
+        "complex_conditions": [],
     }
+    # structured_query = {'select': ['opp_name', 'contract_amount'], 'filters': [{'field': 'sales_person', 'op': 'eq', 'value': '黄药师'}], 'complex_conditions': []}
+
+    # query= '查询销售用户黄牛逼的商机信息，展示商机名称和签约金额'
+    # ontology_code='scene_sales_management'
+    # structured_query= {'select': ['opp_name', 'contract_amount'], 'filters': [{'field': 'sales_user_user_name', 'op': 'eq', 'value': '黄牛逼'}], 'complex_conditions': []}
 
     print("=" * 60)
     print("端到端验证 analyze_query_clarification(mode='query')")

@@ -102,11 +102,15 @@ def _build_effective_scope_clause(scope_code: str | None, *, strict: bool = Fals
                                  FROM term root
                                  JOIN term_relation tr ON tr.source_term_id = root.term_id
                                  JOIN term prop ON prop.term_id = tr.target_term_id
-                                 JOIN term child ON child.parent_term_id = prop.term_id
+                                 JOIN term_relation has_term
+                                   ON has_term.source_term_id = prop.term_id
+                                  AND has_term.relation_category = 'HAS_TERM'
+                                 JOIN term type_term
+                                   ON type_term.term_id = has_term.target_term_id
                                  WHERE root.term_code = :scope_code
                                    AND root.term_type_code IN ('view', 'object')
                                    AND root.library_id = t.library_id
-                                   AND child.term_id = t.term_id
+                                   AND t.term_type_code = type_term.term_code
                              )
                         )
                   )"""
@@ -126,11 +130,12 @@ def _build_scope_params(scope_code: str | None) -> dict[str, str]:
 
 def _group_requests_by_filter(
     requests: tuple[RecallRequest, ...],
-) -> dict[frozenset[str] | None, list[RecallRequest]]:
-    """按 type_filter 分组请求，同组共享一条 SQL。"""
-    grouped: dict[frozenset[str] | None, list[RecallRequest]] = defaultdict(list)
+) -> dict[tuple[frozenset[str] | None, str | None], list[RecallRequest]]:
+    """按 (type_filter, type_code_filter) 分组请求，同组共享一条 SQL。"""
+    grouped: dict[tuple[frozenset[str] | None, str | None], list[RecallRequest]] = defaultdict(list)
     for request in requests:
-        grouped[request.type_filter].append(request)
+        key = (request.type_filter, request.type_code_filter)
+        grouped[key].append(request)
     return grouped
 
 
@@ -158,6 +163,7 @@ def _build_tsquery_sql(
     type_filter: frozenset[str] | None,
     per_type_limit: int = 0,
     scope_clause: str = "",
+    type_code_clause: str = "",
 ) -> object:
     """构建 tsquery 窗口函数 SQL（兼顾 per-type 与普通模式）。"""
     type_clause = ""
@@ -183,7 +189,7 @@ def _build_tsquery_sql(
               FROM input i
               JOIN term_name tn ON tn.{tsvector_column} @@ to_tsquery('simple', i.tsquery_text)
               JOIN term t ON tn.term_id = t.term_id
-              WHERE tn.{tsvector_column} IS NOT NULL{type_clause}{scope_clause}
+              WHERE tn.{tsvector_column} IS NOT NULL{type_clause}{scope_clause}{type_code_clause}
             )
             SELECT keyword_key, term_id, term_name, name_id, term_type_code, score, term_code
             FROM ranked
@@ -210,7 +216,7 @@ def _build_tsquery_sql(
               FROM input i
               JOIN term_name tn ON tn.{tsvector_column} @@ to_tsquery('simple', i.tsquery_text)
               JOIN term t ON tn.term_id = t.term_id
-              WHERE tn.{tsvector_column} IS NOT NULL{type_clause}{scope_clause}
+              WHERE tn.{tsvector_column} IS NOT NULL{type_clause}{scope_clause}{type_code_clause}
                 AND ts_rank_cd(tn.{tsvector_column}, to_tsquery('simple', i.tsquery_text), 32) >= :min_score
             )
             SELECT keyword_key, term_id, term_name, name_id, term_type_code, score, term_code
@@ -231,6 +237,7 @@ def _build_substring_sql(
     type_filter: frozenset[str] | None,
     per_type_limit: int = 0,
     scope_clause: str = "",
+    type_code_clause: str = "",
 ) -> object:
     """构建子串匹配窗口函数 SQL（兼顾 per-type 与普通模式）。"""
     type_clause = ""
@@ -259,7 +266,7 @@ def _build_substring_sql(
                     OR POSITION(i.keyword_text IN tn.name_text) > 0
                   )
               JOIN term t ON tn.term_id = t.term_id
-              WHERE 1 = 1{type_clause}{scope_clause}
+              WHERE 1 = 1{type_clause}{scope_clause}{type_code_clause}
             )
             SELECT keyword_key, term_id, term_name, name_id, term_type_code, score, term_code
             FROM ranked
@@ -289,7 +296,7 @@ def _build_substring_sql(
                     OR POSITION(i.keyword_text IN tn.name_text) > 0
                   )
               JOIN term t ON tn.term_id = t.term_id
-              WHERE 1 = 1{type_clause}{scope_clause}
+              WHERE 1 = 1{type_clause}{scope_clause}{type_code_clause}
             )
             SELECT keyword_key, term_id, term_name, name_id, term_type_code, score, term_code
             FROM ranked
@@ -303,7 +310,9 @@ def _build_substring_sql(
     return sql_obj
 
 
-def _build_vector_sql(*, typed: bool, per_type: bool, scope_clause: str = "") -> object:
+def _build_vector_sql(
+    *, typed: bool, per_type: bool, scope_clause: str = "", type_code_clause: str = ""
+) -> object:
     """构建向量召回 SQL（支持 typed 过滤与 per-type 分区）。"""
     type_clause = ""
     if typed:
@@ -332,7 +341,7 @@ def _build_vector_sql(*, typed: bool, per_type: bool, scope_clause: str = "") ->
                            t.term_code
                     FROM term_name tn
                     JOIN term t ON tn.term_id = t.term_id
-                    WHERE tn.name_embedding IS NOT NULL{type_clause}{scope_clause}
+                    WHERE tn.name_embedding IS NOT NULL{type_clause}{scope_clause}{type_code_clause}
                     ORDER BY tn.name_embedding <=> CAST(:vector AS vector)
                     LIMIT :limit
                 ) top_n
@@ -350,7 +359,7 @@ def _build_vector_sql(*, typed: bool, per_type: bool, scope_clause: str = "") ->
                    t.term_code
             FROM term_name tn
             JOIN term t ON tn.term_id = t.term_id
-            WHERE tn.name_embedding IS NOT NULL{type_clause}{scope_clause}
+            WHERE tn.name_embedding IS NOT NULL{type_clause}{scope_clause}{type_code_clause}
             ORDER BY tn.name_embedding <=> CAST(:vector AS vector)
             LIMIT :limit
         """
@@ -1018,7 +1027,7 @@ class PostgresSearchEngine(TermSearchEngine):
 
         with self._with_session() as session:
             results: dict[str, list[tuple[str, str, str, str, str]]] = {}
-            for type_filter, group in _group_requests_by_filter(tuple(requests)).items():
+            for (type_filter, _tc), group in _group_requests_by_filter(tuple(requests)).items():
                 local_per_type = per_type_limit
                 if per_type_limit <= 0 and group:
                     local_per_type = group[0].per_type_limit if group[0].is_per_type else 0
@@ -1056,7 +1065,7 @@ class PostgresSearchEngine(TermSearchEngine):
 
         with self._with_session() as session:
             results: dict[str, list[tuple[str, str, str, str, str]]] = {}
-            for type_filter, group in _group_requests_by_filter(tuple(requests)).items():
+            for (type_filter, _tc), group in _group_requests_by_filter(tuple(requests)).items():
                 local_per_type = per_type_limit
                 if per_type_limit <= 0 and group:
                     local_per_type = group[0].per_type_limit if group[0].is_per_type else 0
@@ -1122,8 +1131,16 @@ class PostgresSearchEngine(TermSearchEngine):
     ) -> dict[str, list[tuple[str, str, str, str, str]]]:
         """执行一组同 type_filter 的 tsquery 批量查询。"""
         scope_code = requests[0].scope_code if requests else None
-        is_strict = bool(requests) and not requests[0].is_value_recall
-        scope_clause = _build_effective_scope_clause(scope_code, strict=is_strict)
+        type_code_filter = requests[0].type_code_filter if requests else None
+
+        # type_code_filter 优先：有明确 type_code 时用 type_code 过滤，不用 scope
+        if type_code_filter and requests and requests[0].is_value_recall:
+            scope_clause = ""
+            type_code_clause = "\n            AND t.term_type_code = :type_code_filter"
+        else:
+            is_strict = bool(requests) and not requests[0].is_value_recall
+            scope_clause = _build_effective_scope_clause(scope_code, strict=is_strict)
+            type_code_clause = ""
         input_values, params = _build_values_clause(
             requests,
             value_getter=lambda request: str(tokenizer_fn(request.keyword)),
@@ -1136,6 +1153,7 @@ class PostgresSearchEngine(TermSearchEngine):
                 type_filter=type_filter,
                 per_type_limit=per_type_limit,
                 scope_clause=scope_clause,
+                type_code_clause=type_code_clause,
             )
             params["per_type_limit"] = per_type_limit
         else:
@@ -1145,6 +1163,7 @@ class PostgresSearchEngine(TermSearchEngine):
                 order_expr="score DESC",
                 type_filter=type_filter,
                 scope_clause=scope_clause,
+                type_code_clause=type_code_clause,
             )
             params["per_kw_limit"] = top_k * 3
 
@@ -1153,6 +1172,8 @@ class PostgresSearchEngine(TermSearchEngine):
             params["type_codes"] = sorted(type_filter)
         if scope_clause:
             params.update(_build_scope_params(scope_code))
+        if type_code_filter:
+            params["type_code_filter"] = type_code_filter
         statement: Any = sql
         return _collect_ranked_rows(session.execute(statement, params).fetchall())
 
@@ -1167,8 +1188,15 @@ class PostgresSearchEngine(TermSearchEngine):
     ) -> dict[str, list[tuple[str, str, str, str, str]]]:
         """执行一组同 type_filter 的子串匹配批量查询。"""
         scope_code = requests[0].scope_code if requests else None
-        is_strict = bool(requests) and not requests[0].is_value_recall
-        scope_clause = _build_effective_scope_clause(scope_code, strict=is_strict)
+        type_code_filter = requests[0].type_code_filter if requests else None
+
+        if type_code_filter and requests and requests[0].is_value_recall:
+            scope_clause = ""
+            type_code_clause = "\n                  AND t.term_type_code = :type_code_filter"
+        else:
+            is_strict = bool(requests) and not requests[0].is_value_recall
+            scope_clause = _build_effective_scope_clause(scope_code, strict=is_strict)
+            type_code_clause = ""
         input_values, params = _build_values_clause(
             requests,
             value_getter=lambda request: request.keyword,
@@ -1179,6 +1207,7 @@ class PostgresSearchEngine(TermSearchEngine):
                 type_filter=type_filter,
                 per_type_limit=per_type_limit,
                 scope_clause=scope_clause,
+                type_code_clause=type_code_clause,
             )
             params["per_type_limit"] = per_type_limit
         else:
@@ -1186,12 +1215,15 @@ class PostgresSearchEngine(TermSearchEngine):
                 input_values=input_values,
                 type_filter=type_filter,
                 scope_clause=scope_clause,
+                type_code_clause=type_code_clause,
             )
             params["per_kw_limit"] = top_k * 3
         if type_filter is not None:
             params["type_codes"] = sorted(type_filter)
         if scope_clause:
             params.update(_build_scope_params(scope_code))
+        if type_code_filter:
+            params["type_code_filter"] = type_code_filter
         statement: Any = sql
         return _collect_ranked_rows(session.execute(statement, params).fetchall())
 
@@ -1204,7 +1236,7 @@ class PostgresSearchEngine(TermSearchEngine):
         top_k: int,
         per_type_limit: int = 0,
     ) -> dict[str, list[tuple[str, str, str, str, str]]]:
-        """执行一条向量召回查询（scope / type_filter / per_type 支持）。"""
+        """执行一条向量召回查询（scope / type_filter / per_type / type_code 支持）。"""
         from datacloud_knowledge.retrieval.recall._models import _VECTOR_MIN_SIMILARITY
 
         params: dict[str, Any] = {
@@ -1212,15 +1244,24 @@ class PostgresSearchEngine(TermSearchEngine):
         }
         if vector_str is not None:
             params["vector"] = vector_str
-        scope_clause = _build_effective_scope_clause(
-            request.scope_code, strict=not request.is_value_recall
-        )
+
+        # type_code_filter 优先：有明确 type_code 时用 type_code 过滤，不用 scope
+        if request.type_code_filter and request.is_value_recall:
+            scope_clause = ""
+            type_code_clause = "\n              AND t.term_type_code = :type_code_filter"
+            params["type_code_filter"] = request.type_code_filter
+        else:
+            scope_clause = _build_effective_scope_clause(
+                request.scope_code, strict=not request.is_value_recall
+            )
+            type_code_clause = ""
         local_per_type = request.per_type_limit if request.is_per_type else per_type_limit
         if local_per_type > 0 and request.type_filter is not None:
             sql: Any = _build_vector_sql(
                 typed=True,
                 per_type=True,
                 scope_clause=scope_clause,
+                type_code_clause=type_code_clause,
             )
             params["type_codes"] = sorted(request.type_filter)
             params["per_type_limit"] = local_per_type
@@ -1230,6 +1271,7 @@ class PostgresSearchEngine(TermSearchEngine):
                 typed=True,
                 per_type=False,
                 scope_clause=scope_clause,
+                type_code_clause=type_code_clause,
             )
             params["type_codes"] = sorted(request.type_filter)
             params["limit"] = top_k * 3
@@ -1238,6 +1280,7 @@ class PostgresSearchEngine(TermSearchEngine):
                 typed=False,
                 per_type=False,
                 scope_clause=scope_clause,
+                type_code_clause=type_code_clause,
             )
             params["limit"] = top_k * 3
         if scope_clause:

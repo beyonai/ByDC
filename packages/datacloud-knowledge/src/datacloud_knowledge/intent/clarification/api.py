@@ -147,6 +147,12 @@ def analyze_query_clarification(
     field_layers, value_layers = _build_scope_recall_layers(ontology_code, pre, cc_pre)
     use_field_layers = field_layers if len(field_layers) > 1 else None
     use_value_layers = value_layers if len(value_layers) > 1 else None
+
+    # prop_type_map: 当有 type_code 过滤时，value_layers 可降级（type_code 比 scope 更精确）
+    prop_type_map = pre.prop_type_map or cc_pre.prop_type_map
+    if prop_type_map:
+        use_value_layers = None  # type_code_filter 替代 scope layers
+
     with emit.step("知识召回", "knowledge_recall"):
         recall_map = (
             _unified_recall(
@@ -154,6 +160,7 @@ def analyze_query_clarification(
                 scope_code=ontology_code,
                 field_layers=use_field_layers,
                 value_layers=use_value_layers,
+                prop_type_map=prop_type_map,
             )
             if recall_terms
             else {}

@@ -1,0 +1,14 @@
+{
+  "entity_name": "手机信息表",
+  "entity_code": "by_phone",
+  "entity_desc": "手机设备主数据对象，承载手机品牌、型号、颜色、存储容量、价格等信息",
+  "fields": [
+    {"property_code": "id", "property_name": "主键", "data_type": "BIGINT", "is_required": true, "ext_property": {"property_role_rule": {"property_role": "MEASURE", "rule_type": "primary_key"}}},
+    {"property_code": "brand", "property_name": "品牌", "data_type": "VARCHAR", "is_required": false, "ext_property": {"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}},
+    {"property_code": "model", "property_name": "型号", "data_type": "VARCHAR", "is_required": false, "ext_property": {"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}},
+    {"property_code": "color", "property_name": "颜色", "data_type": "VARCHAR", "is_required": false, "ext_property": {"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}},
+    {"property_code": "storage", "property_name": "存储容量", "data_type": "VARCHAR", "is_required": false, "ext_property": {"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}},
+    {"property_code": "price", "property_name": "价格", "data_type": "DECIMAL", "is_required": false, "ext_property": {"property_role_rule": {"property_role": "MEASURE", "rule_type": "raw_number"}}},
+    {"property_code": "stock", "property_name": "库存", "data_type": "INTEGER", "is_required": false, "ext_property": {"property_role_rule": {"property_role": "MEASURE", "rule_type": "raw_number"}}}
+  ]
+}

@@ -34,6 +34,7 @@ from datacloud_data_sdk.exceptions import DataSourceUnavailableError
 from datacloud_data_sdk.executor.param_coercion import coerce_sql_param
 from datacloud_data_sdk.executor.time_grouping import build_time_group_expr
 from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.result_term_converter import ResultTermConverter
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 from datacloud_data_sdk.virtual_action.validator import (
     VirtualActionValidationError,
@@ -288,6 +289,7 @@ class ComputeExecutor:
         select_parts: list[str] = []
         group_by_parts: list[str] = []
         dim_aliases: dict[str, str] = {}  # field_code → select alias
+        dimension_fields: list[Any] = []
 
         for dim in dimensions:
             if isinstance(dim, str):
@@ -297,6 +299,8 @@ class ComputeExecutor:
             buckets_raw = dim.get("buckets")
             buckets = cast(list[dict[str, Any]] | None, buckets_raw)
             f = field_map.get(fc)
+            if f is not None:
+                dimension_fields.append(f)
             col = _resolve_col_expr(f, fc)
 
             if group_op == "range" and buckets:
@@ -440,6 +444,9 @@ class ComputeExecutor:
         records = [
             dict(zip(col_keys, row)) if isinstance(row, (list, tuple)) else row for row in rows
         ]
+        records = ResultTermConverter(
+            getattr(self._loader._config, "term_loader", None)
+        ).convert_by_fields(records, dimension_fields)
 
         columns: list[dict[str, str]] = []
         for dim in dimensions:

@@ -49,7 +49,10 @@ def _dict_to_config(alias: str, d: dict) -> DataSourceConfig:
         pool_max=int(d.get("pool_max", 5)),
         pool_timeout=float(d.get("pool_timeout", 30.0)),
         open_gauss_compat=bool(d.get("open_gauss_compat", False)),
+        connector_type=str(d.get("connector_type") or ""),
+        service_name=str(d.get("service_name") or ""),
         datasource_id=d.get("datasource_id") if d.get("datasource_id") is not None else None,
+        endpoint_url=str(d.get("endpoint_url") or ""),
     )
 
 

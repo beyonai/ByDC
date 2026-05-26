@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 class EmbeddingConfig(BaseSettings):
     """Embedding 服务配置。
 
-    环境变量：
+    环境变量（优先级低于显式传参）：
         DATACLOUD_EMBEDDING_API_BASE: API 基础 URL
         DATACLOUD_EMBEDDING_API_KEY: API 密钥
         DATACLOUD_EMBEDDING_MODEL: 模型名称
@@ -38,6 +38,28 @@ class EmbeddingConfig(BaseSettings):
     embedding_dims: int = Field(default=1024, alias="DATACLOUD_EMBEDDING_DIMS")
 
     model_config = SettingsConfigDict(env_prefix="", env_file=".env", extra="ignore")
+
+    @classmethod
+    def from_params(
+        cls,
+        *,
+        api_base: str = "",
+        api_key: str = "",
+        model: str = "",
+        batch_size: int | None = None,
+        dims: int | None = None,
+    ) -> EmbeddingConfig:
+        """从显式参数构造配置（显式值优先，缺失字段回退到环境变量默认值）。"""
+        values: dict[str, str | int] = {
+            "embedding_api_base": api_base,
+            "embedding_api_key": api_key,
+            "embedding_model": model,
+        }
+        if batch_size is not None:
+            values["embedding_batch_size"] = batch_size
+        if dims is not None:
+            values["embedding_dims"] = dims
+        return cls(**values)  # type: ignore[arg-type]
 
 
 class EmbeddingService:

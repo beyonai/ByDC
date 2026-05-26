@@ -8,7 +8,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from datacloud_knowledge.contracts.intent_types import ExtractedTerm, PreResolveResult
+from datacloud_knowledge.adapters.opengauss.vector_validation import is_vector_recall_available
+from datacloud_knowledge.contracts.intent_types import (
+    ExtractedTerm,
+    PreResolveResult,
+    find_paired_where_key,
+)
 from datacloud_knowledge.contracts.rrf import rrf_fuse
 from datacloud_knowledge.retrieval._recall_common import (
     KTYPE_CATEGORY_MAP,
@@ -29,12 +34,19 @@ logger = logging.getLogger(__name__)
 class _RecallItem:
     """轻量 TypedKeywordState 协议实现，用于传入 typed_multi_recall_with_session。"""
 
-    __slots__ = ("keyword", "ktype", "search_enabled")
+    __slots__ = ("keyword", "ktype", "search_enabled", "type_code")
 
-    def __init__(self, keyword: str, ktype: str, search_enabled: bool) -> None:
+    def __init__(
+        self,
+        keyword: str,
+        ktype: str,
+        search_enabled: bool,
+        type_code: str | None = None,
+    ) -> None:
         self.keyword = keyword
         self.ktype = ktype
         self.search_enabled = search_enabled
+        self.type_code = type_code
 
 
 def unified_recall(
@@ -45,6 +57,7 @@ def unified_recall(
     scope_layers: list[ScopeRecallLayer] | None = None,
     field_layers: list[ScopeRecallLayer] | None = None,
     value_layers: list[ScopeRecallLayer] | None = None,
+    prop_type_map: dict[str, str] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """对所有术语执行统一召回。
 
@@ -57,9 +70,28 @@ def unified_recall(
     all other terms use ``field_layers`` (base ontology + confirmed_object only).
     ``scope_layers`` is a legacy synonym for when the caller doesn't split by type.
 
+    When ``prop_type_map`` is provided, whereValue terms with a confirmed whereKey
+    get ``type_code`` resolved from the prop→type chain, and recall filters by
+    ``term_type_code`` instead of ``search_scope``.
+
     Returns:
         dict["ktype:raw_text", list[CandidateDict]]。
     """
+    # 构建 whereValue→type_code 映射（需要匹配 whereKey 的 prop_code）
+    value_type_map: dict[str, str] = {}
+    if prop_type_map:
+        for t in terms:
+            if t.ktype != "whereValue" or not t.search_enabled:
+                continue
+            key_term = find_paired_where_key(t, terms)
+            if key_term is None:
+                continue
+            # 查找 whereKey 是否已确认 → 拿到 prop_code → 查 prop_type_map
+            # whereKey 的 raw_text 就是 prop 的 code（已通过别名解析确认）
+            type_code = prop_type_map.get(key_term.raw_text)
+            if type_code:
+                value_type_map[t.path] = type_code
+
     # 去重：相同 ktype + raw_text 只召回一次
     seen: set[str] = set()
     normal_items: list[_RecallItem] = []
@@ -72,10 +104,12 @@ def unified_recall(
         if key in seen:
             continue
         seen.add(key)
+        type_code = value_type_map.get(term.path) if term.ktype == "whereValue" else None
         item = _RecallItem(
             keyword=term.raw_text,
             ktype=term.ktype,
             search_enabled=True,
+            type_code=type_code,
         )
         if term.vector_only:
             vector_only_items.append(item)
@@ -112,7 +146,12 @@ def unified_recall(
 
     # 英文标识符：只走向量召回（BM25/子串匹配对英文→中文无意义）
     if vector_only_items:
-        result.update(_vector_only_recall(vector_only_items, top_k=top_k, scope_code=scope_code))
+        enable_vector = is_vector_recall_available()
+        result.update(
+            _vector_only_recall(
+                vector_only_items, top_k=top_k, scope_code=scope_code, enable_vector=enable_vector
+            )
+        )
 
     return result
 
@@ -135,7 +174,7 @@ def build_scope_recall_layers(
     ``_build_effective_scope_clause`` needs ``HAS_FIELD`` relations from the root
     term to its props.  A view may lack the specific prop whose children contain
     the searched value terms (e.g. ``sales_person`` under ``by_customer``).  We
-    resolve the objects that the view "包含" (BUSINESS relations to objects) and
+    resolve the objects that the view "包含" (HAS_OBJECT/MANY_TO_ONE relations to objects) and
     add them to ``value_layers``, so value terms from included objects can be
     found through their scopes.
     """
@@ -151,7 +190,7 @@ def build_scope_recall_layers(
     value_layers: list[ScopeRecallLayer] = list(base)
     seen_scopes: set[str] = {ontology_code}
 
-    # ── When ontology_code is a view, include BUSINESS-related objects
+    # ── When ontology_code is a view, include HAS_OBJECT/MANY_TO_ONE-related objects
     #     (e.g. "研发管理视图_包含_用户信息表" → po_users).  These objects
     #     may have the HAS_FIELD → prop → child chain for value terms. ──
     included_codes: list[str] = _collect_view_included_objects(ontology_code)
@@ -174,9 +213,9 @@ def build_scope_recall_layers(
 
 
 def _collect_view_included_objects(ontology_code: str) -> list[str]:
-    """Return object codes that a view "包含" (includes) via BUSINESS relations.
+    """Return object codes that a view "包含" (includes) via HAS_OBJECT/MANY_TO_ONE relations.
 
-    Views define their data sources through BUSINESS relations to object-type
+    Views define their data sources through HAS_OBJECT/MANY_TO_ONE relations to object-type
     terms (e.g., ``"研发管理视图_包含_用户信息表" → po_users``).  Unlike
     ``_collect_joinkey_related_objects``, this does NOT require joinkey
     matching — all included objects are relevant for whereValue recall.
@@ -193,7 +232,7 @@ def _collect_view_included_objects(ontology_code: str) -> list[str]:
                     "FROM term AS source "
                     "JOIN term_relation AS rel "
                     "  ON rel.source_term_id = source.term_id "
-                    " AND rel.relation_category = 'BUSINESS' "
+                    " AND rel.relation_category IN ('HAS_OBJECT', 'MANY_TO_ONE') "
                     "JOIN term AS target "
                     "  ON target.term_id = rel.target_term_id "
                     " AND target.term_type_code = 'object' "
@@ -219,10 +258,11 @@ def _collect_joinkey_related_objects(
 ) -> list[str]:
     """Extract target object codes where joinkeys.sourceField matches a confirmed field.
 
-    Cross-object BUSINESS relations carry joinkeys (e.g., ``handler_user_id → user_id``)
-    stored in ``term_relation.ext_attrs``. This function only adds a target object to
-    the scope when a confirmed field code is listed as a ``sourceField`` in at least
-    one joinkey — avoiding the noise of adding ALL BUSINESS-related objects.
+    Cross-object HAS_OBJECT/MANY_TO_ONE relations carry joinkeys (e.g.,
+    ``handler_user_id → user_id``) stored in ``term_relation.ext_attrs``.
+    This function only adds a target object to the scope when a confirmed
+    field code is listed as a ``sourceField`` in at least one joinkey —
+    avoiding the noise of adding ALL related objects.
     """
     if not field_codes:
         return []
@@ -238,7 +278,7 @@ def _collect_joinkey_related_objects(
                     "FROM term AS source "
                     "JOIN term_relation AS rel "
                     "  ON rel.source_term_id = source.term_id "
-                    " AND rel.relation_category = 'BUSINESS' "
+                    " AND rel.relation_category IN ('HAS_OBJECT', 'MANY_TO_ONE') "
                     "JOIN term AS target "
                     "  ON target.term_id = rel.target_term_id "
                     " AND target.term_type_code = 'object' "
@@ -283,12 +323,19 @@ def _vector_only_recall(
     *,
     top_k: int,
     scope_code: str | None = None,
+    enable_vector: bool = True,
 ) -> dict[str, list[dict[str, Any]]]:
     """对英文标识符术语只执行向量召回。
 
     英文编码（如 stat_date）无法通过 BM25/子串匹配命中中文术语名，
     但向量语义检索可以将 "stat_date" 匹配到 "统计日期"。
+
+    当 enable_vector=False（向量服务不可用时），直接返回空结果，
+    让上层走降级/澄清路径。
     """
+    if not enable_vector:
+        return {}
+
     # 构建 RecallRequest（需要 type_filter）
     category_cache: dict[frozenset[int], set[str]] = {}
     requests: list[RecallRequest] = []

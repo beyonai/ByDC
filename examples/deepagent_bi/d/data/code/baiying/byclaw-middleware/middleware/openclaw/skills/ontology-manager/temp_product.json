@@ -1,0 +1,138 @@
+{
+  "entity_name": "产品",
+  "entity_desc": "产品基础信息表",
+  "fields": [
+    {
+      "property_code": "product_code",
+      "property_name": "产品编码",
+      "data_type": "VARCHAR",
+      "is_required": true,
+      "ext_property": {
+        "property_role_rule": {
+          "property_role": "DIMENSION",
+          "rule_type": "id"
+        }
+      }
+    },
+    {
+      "property_code": "product_name",
+      "property_name": "产品名称",
+      "data_type": "VARCHAR",
+      "is_required": true,
+      "ext_property": {
+        "property_role_rule": {
+          "property_role": "DIMENSION",
+          "rule_type": "name"
+        }
+      }
+    },
+    {
+      "property_code": "category",
+      "property_name": "产品分类",
+      "data_type": "VARCHAR",
+      "is_required": true,
+      "ext_property": {
+        "property_role_rule": {
+          "property_role": "DIMENSION",
+          "rule_type": "name"
+        }
+      },
+      "term_type": "DICT_TERM",
+      "term_values": [
+        {"code": "ELECTRONIC", "name": "电子产品"},
+        {"code": "CLOTHING", "name": "服装"},
+        {"code": "FOOD", "name": "食品"},
+        {"code": "HOME", "name": "家居"}
+      ]
+    },
+    {
+      "property_code": "unit_price",
+      "property_name": "单价",
+      "data_type": "DECIMAL",
+      "is_required": true,
+      "ext_property": {
+        "property_role_rule": {
+          "property_role": "MEASURE",
+          "rule_type": "raw_number"
+        }
+      }
+    },
+    {
+      "property_code": "unit",
+      "property_name": "单位",
+      "data_type": "VARCHAR",
+      "is_required": true,
+      "ext_property": {
+        "property_role_rule": {
+          "property_role": "DIMENSION",
+          "rule_type": "name"
+        }
+      },
+      "term_type": "DICT_TERM",
+      "term_values": [
+        {"code": "PCS", "name": "个"},
+        {"code": "PIECE", "name": "件"},
+        {"code": "BOX", "name": "箱"},
+        {"code": "KG", "name": "千克"}
+      ]
+    },
+    {
+      "property_code": "status",
+      "property_name": "产品状态",
+      "data_type": "VARCHAR",
+      "is_required": true,
+      "ext_property": {
+        "property_role_rule": {
+          "property_role": "DIMENSION",
+          "rule_type": "name"
+        }
+      },
+      "term_type": "DICT_TERM",
+      "term_values": [
+        {"code": "ON_SALE", "name": "在售"},
+        {"code": "DISCONTINUED", "name": "停售"},
+        {"code": "OUT_OF_STOCK", "name": "缺货"}
+      ]
+    },
+    {
+      "property_code": "description",
+      "property_name": "产品描述",
+      "data_type": "TEXT",
+      "is_required": false,
+      "ext_property": {
+        "property_role_rule": {
+          "property_role": "DIMENSION",
+          "rule_type": "description"
+        }
+      }
+    },
+    {
+      "property_code": "create_time",
+      "property_name": "创建时间",
+      "data_type": "DATETIME",
+      "data_format": "yyyy-MM-dd HH:mm:ss",
+      "is_required": true,
+      "ext_property": {
+        "property_role_rule": {
+          "property_role": "DIMENSION",
+          "rule_type": "datetime"
+        }
+      }
+    },
+    {
+      "property_code": "update_time",
+      "property_name": "更新时间",
+      "data_type": "DATETIME",
+      "data_format": "yyyy-MM-dd HH:mm:ss",
+      "is_required": false,
+      "ext_property": {
+        "property_role_rule": {
+          "property_role": "DIMENSION",
+          "rule_type": "datetime"
+        }
+      }
+    }
+  ],
+  "relations": [],
+  "actions": []
+}

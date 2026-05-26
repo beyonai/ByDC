@@ -64,6 +64,17 @@ def _prepare_batch(
         is_per_type = (
             item.ktype == "whereValue" and frozen_filter is not None and len(frozen_filter) > 1
         )
+
+        # type_code 过滤：whereValue 有 type_code 时用 type_code 过滤，不设 scope
+        is_value = item.ktype == "whereValue"
+        item_type_code: str | None = getattr(item, "type_code", None)
+        if is_value and item_type_code:
+            req_scope_code: str | None = None
+            type_code_filter: str | None = item_type_code
+        else:
+            req_scope_code = scope_code
+            type_code_filter = None
+
         requests.append(
             RecallRequest(
                 map_key=map_key,
@@ -72,8 +83,9 @@ def _prepare_batch(
                 type_filter=frozen_filter,
                 is_per_type=is_per_type,
                 per_type_limit=wv_per_type if is_per_type else 0,
-                scope_code=scope_code,
-                is_value_recall=item.ktype == "whereValue",
+                scope_code=req_scope_code,
+                is_value_recall=is_value,
+                type_code_filter=type_code_filter,
             )
         )
 

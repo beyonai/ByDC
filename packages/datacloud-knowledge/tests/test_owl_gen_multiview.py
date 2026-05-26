@@ -31,6 +31,7 @@ from datacloud_knowledge.ingestion.owl_generate.renderers.terms import (
     render_terms,
     render_terms_for_view,
 )
+from rdflib import RDF, Graph
 
 
 def _build_config() -> OwlGenConfig:
@@ -156,9 +157,34 @@ def test_render_relation_view_counts_all_view_object_links() -> None:
 
     result = render_relation_view(config)
 
-    assert result.count("<owl:NamedIndividual") == 5
-    assert "rel_scene_enterprise_analysis_to_ads_manage_grid_analysis" in result
-    assert "rel_scene_grid_analysis_to_ads_manage_grid_analysis" in result
+    g = Graph()
+    g.parse(data=result, format="xml")
+
+    # 统计 TermRelation 实体数
+    term_rel_count = sum(
+        1 for _s, _p, o in g.triples((None, RDF.type, None)) if "TermRelation" in str(o)
+    )
+    assert term_rel_count == 5
+
+    # 验证场景视图到对象的包含关系：通过 sourceTermCode / targetTermCode 对
+    source_map: dict = {}
+    target_map: dict = {}
+    for s, p, o in g.triples((None, None, None)):
+        p_str = str(p)
+        if p_str.endswith("sourceTermCode"):
+            source_map[s] = str(o)
+        elif p_str.endswith("targetTermCode"):
+            target_map[s] = str(o)
+
+    pairs = {(source_map[k], target_map[k]) for k in source_map if k in target_map}
+
+    # 企业综合分析视图包含三张表
+    assert ("L1#view#scene_enterprise_analysis", "L1#object#ads_enterprise_analysis") in pairs
+    assert ("L1#view#scene_enterprise_analysis", "L1#object#ads_grid_analysis") in pairs
+    assert ("L1#view#scene_enterprise_analysis", "L1#object#ads_manage_grid_analysis") in pairs
+    # 物理网格综合分析视图包含两张表
+    assert ("L1#view#scene_grid_analysis", "L1#object#ads_grid_analysis") in pairs
+    assert ("L1#view#scene_grid_analysis", "L1#object#ads_manage_grid_analysis") in pairs
 
 
 def test_render_manifest_includes_per_view_definition_and_mapping_steps() -> None:
@@ -195,8 +221,14 @@ def test_render_terms_emits_one_term_per_view() -> None:
 
     ontology_terms, _count = result["terms/terms_ontology.owl"]
 
-    assert "term_view_scene_enterprise_analysis" in ontology_terms
-    assert "term_view_scene_grid_analysis" in ontology_terms
+    g = Graph()
+    g.parse(data=ontology_terms, format="xml")
+
+    term_code_paths = {
+        str(o) for _s, _p, o in g.triples((None, None, None)) if str(_p).endswith("term_code_path")
+    }
+    assert "L1#view#scene_enterprise_analysis" in term_code_paths
+    assert "L1#view#scene_grid_analysis" in term_code_paths
 
 
 def test_render_terms_dedupes_props_across_objects_with_generic_desc() -> None:
@@ -235,10 +267,25 @@ def test_render_terms_dedupes_props_across_objects_with_generic_desc() -> None:
     ontology_terms, count = result["terms/terms_ontology.owl"]
 
     assert count == 7
-    assert ontology_terms.count("term_prop_enterprise_id") == 1
-    assert "属性：企业唯一ID" in ontology_terms
-    assert "企业综合分析表的字段" not in ontology_terms
-    assert "物理网格综合分析表的字段" not in ontology_terms
+
+    g = Graph()
+    g.parse(data=ontology_terms, format="xml")
+
+    # Deduped: 仅一个 enterprise_id prop term
+    prop_term_count = sum(
+        1
+        for _s, _p, o in g.triples((None, None, None))
+        if str(_p).endswith("term_code_path") and str(o) == "L1#prop#enterprise_id"
+    )
+    assert prop_term_count == 1
+
+    # 描述使用 comment 而非表名拼接
+    term_descs = {
+        str(o) for _s, _p, o in g.triples((None, None, None)) if str(_p).endswith("term_desc")
+    }
+    assert "属性：企业唯一ID" in term_descs
+    assert "企业综合分析表的字段" not in term_descs
+    assert "物理网格综合分析表的字段" not in term_descs
 
 
 def test_resolved_views_wraps_legacy_single_view_fields() -> None:
@@ -351,18 +398,41 @@ def test_generate_from_tables_uses_business_object_prop_config(tmp_path: Path) -
         / "ads_enterprise_analysis_attribute_relations.owl"
     ).read_text()
 
-    assert "enterprise_total_revenue_field" in object_definition
-    assert (
-        '<property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_total_revenue</property_code>'
-        in object_definition
-    )
+    # 字段定义包含 business object prop config 的 property_code
+    g_def = Graph()
+    g_def.parse(data=object_definition, format="xml")
+    pc_values = {
+        str(o)
+        for _s, _p, o in g_def.triples((None, None, None))
+        if str(_p).endswith("propertyCode")
+    }
+    assert "enterprise_total_revenue" in pc_values
+
+    # 映射文件包含对应字段
     assert "enterprise_total_revenue_mapping" in object_mapping
-    assert "term_prop_enterprise_total_revenue" in object_terms
-    assert (
-        '<target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_total_revenue</target_code>'
-        in object_relations
-    )
-    assert "企业收入" in object_relations
+
+    # 术语文件包含 prop term
+    g_terms = Graph()
+    g_terms.parse(data=object_terms, format="xml")
+    term_code_paths = {
+        str(o)
+        for _s, _p, o in g_terms.triples((None, None, None))
+        if str(_p).endswith("term_code_path")
+    }
+    assert "L1#prop#enterprise_total_revenue" in term_code_paths
+
+    # 属性关系文件目标指向 prop term
+    g_rel = Graph()
+    g_rel.parse(data=object_relations, format="xml")
+    target_codes = {
+        str(o)
+        for _s, _p, o in g_rel.triples((None, None, None))
+        if str(_p).endswith("targetTermCode")
+    }
+    assert "L1#prop#enterprise_total_revenue" in target_codes
+
+    # 同义词 "企业收入" 出现在关系文件的 extField JSON 中
+    assert any("企业收入" in str(o) for _s, _p, o in g_rel.triples((None, None, None)))
 
 
 def test_generate_from_tables_uses_business_term_type_config(tmp_path: Path) -> None:
@@ -422,12 +492,22 @@ def test_generate_from_tables_uses_business_term_type_config(tmp_path: Path) -> 
         tmp_path / "object" / "ads_enterprise_analysis" / "ads_enterprise_analysis_terms.owl"
     ).read_text()
 
-    assert "企业等级" in term_types
-    assert "企业等级术语类型" in term_types
-    assert (
-        '<parent_term_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_level</parent_term_code>'
-        in object_terms
-    )
+    # 术语类型文件包含 term name 和 desc
+    g_tt = Graph()
+    g_tt.parse(data=term_types, format="xml")
+    type_values = {str(o) for _s, _p, o in g_tt.triples((None, None, None))}
+    assert "企业等级" in type_values
+    assert "企业等级术语类型" in type_values
+
+    # 术语文件包含 parent_term_code
+    g_terms = Graph()
+    g_terms.parse(data=object_terms, format="xml")
+    parent_codes = {
+        str(o)
+        for _s, _p, o in g_terms.triples((None, None, None))
+        if str(_p).endswith("parent_term_code")
+    }
+    assert "enterprise_level" in parent_codes
 
 
 def test_render_object_distinguishes_code_and_name_term_bindings() -> None:
@@ -449,10 +529,40 @@ def test_render_object_distinguishes_code_and_name_term_bindings() -> None:
 
     result = render_object(config, table)
 
-    assert "L1#enterprise_name" in result
-    assert "L1#enterprise_level" in result
-    assert result.count(">name</rel_term_codeorname>") == 1
-    assert result.count(">code</rel_term_codeorname>") == 1
+    g = Graph()
+    g.parse(data=result, format="xml")
+
+    # termTypeCodePath 包含正确的 term type code
+    type_paths = {
+        str(o)
+        for _s, _p, o in g.triples((None, None, None))
+        if str(_p).endswith("termTypeCodePath")
+    }
+    assert "L1#enterprise_name" in type_paths
+    assert "L1#enterprise_level" in type_paths
+
+    # relTermCodeorname 正确区分 name / code
+    rel_names = {
+        str(o)
+        for _s, _p, o in g.triples((None, None, None))
+        if str(_p).endswith("relTermCodeorname")
+    }
+    assert "name" in rel_names
+    assert "code" in rel_names
+
+    # 各出现一次
+    name_count = sum(
+        1
+        for _s, _p, o in g.triples((None, None, None))
+        if str(_p).endswith("relTermCodeorname") and str(o) == "name"
+    )
+    code_count = sum(
+        1
+        for _s, _p, o in g.triples((None, None, None))
+        if str(_p).endswith("relTermCodeorname") and str(o) == "code"
+    )
+    assert name_count == 1
+    assert code_count == 1
 
 
 def test_render_object_applies_identity_and_property_alias_term_rules() -> None:
@@ -481,10 +591,38 @@ def test_render_object_applies_identity_and_property_alias_term_rules() -> None:
 
     result = render_object(config, table)
 
-    assert result.count("L1#enterprise_name") == 2
-    assert "L1#grid_name" in result
-    assert result.count(">code</rel_term_codeorname>") == 2
-    assert result.count(">name</rel_term_codeorname>") == 1
+    g = Graph()
+    g.parse(data=result, format="xml")
+
+    # termTypeCodePath 中 L1#enterprise_name 出现 2 次（id alias + name alias）
+    name_type_count = sum(
+        1
+        for _s, _p, o in g.triples((None, None, None))
+        if str(_p).endswith("termTypeCodePath") and str(o) == "L1#enterprise_name"
+    )
+    assert name_type_count == 2
+
+    # L1#grid_name 出现 1 次（property alias）
+    grid_type_count = sum(
+        1
+        for _s, _p, o in g.triples((None, None, None))
+        if str(_p).endswith("termTypeCodePath") and str(o) == "L1#grid_name"
+    )
+    assert grid_type_count == 1
+
+    # relTermCodeorname: code 出现 2 次（id alias + grid_id alias），name 出现 1 次
+    code_count = sum(
+        1
+        for _s, _p, o in g.triples((None, None, None))
+        if str(_p).endswith("relTermCodeorname") and str(o) == "code"
+    )
+    name_count = sum(
+        1
+        for _s, _p, o in g.triples((None, None, None))
+        if str(_p).endswith("relTermCodeorname") and str(o) == "name"
+    )
+    assert code_count == 2
+    assert name_count == 1
 
 
 def test_render_terms_for_view_emits_only_view_term() -> None:
@@ -524,11 +662,28 @@ def test_render_terms_for_view_emits_only_view_term() -> None:
     result, count = render_terms_for_view(config, config.views[0])
 
     assert count == 2
-    assert "VIEW#scene_enterprise_analysis" in result
-    assert "term_prop_enterprise_id" not in result
-    assert "term_prop_grid_total_revenue" in result
-    assert "VIEW_PROP#scene_enterprise_analysis#grid_total_revenue" in result
-    assert "所属物理网格总营收（万元）" in result
+
+    g = Graph()
+    g.parse(data=result, format="xml")
+
+    term_code_paths = {
+        str(o) for _s, _p, o in g.triples((None, None, None)) if str(_p).endswith("term_code_path")
+    }
+
+    # 视图 term 存在
+    assert "L1#view#scene_enterprise_analysis" in term_code_paths
+
+    # 同 code 映射沿用对象层 prop，不重复生成
+    assert "L1#prop#enterprise_id" not in term_code_paths
+
+    # 独立 prop term 已生成
+    assert "L1#prop#grid_total_revenue" in term_code_paths
+
+    # 中文描述存在
+    term_names = {
+        str(o) for _s, _p, o in g.triples((None, None, None)) if str(_p).endswith("term_name")
+    }
+    assert "所属物理网格总营收（万元）" in term_names
 
 
 def test_render_terms_for_view_skips_configured_object_prop_code() -> None:
@@ -560,8 +715,19 @@ def test_render_terms_for_view_skips_configured_object_prop_code() -> None:
     result, count = render_terms_for_view(config, config.views[0])
 
     assert count == 1
-    assert "VIEW#scene_enterprise_analysis" in result
-    assert "term_prop_enterprise_total_revenue" not in result
+
+    g = Graph()
+    g.parse(data=result, format="xml")
+
+    term_code_paths = {
+        str(o) for _s, _p, o in g.triples((None, None, None)) if str(_p).endswith("term_code_path")
+    }
+
+    # 视图 term 存在
+    assert "L1#view#scene_enterprise_analysis" in term_code_paths
+
+    # 对象层已有 prop，视图层不重复生成
+    assert "L1#prop#enterprise_total_revenue" not in term_code_paths
 
 
 def test_render_view_relations_for_view_targets_property_code_for_prefixed_fields() -> None:
@@ -586,14 +752,17 @@ def test_render_view_relations_for_view_targets_property_code_for_prefixed_field
 
     result = render_view_relations_for_view(config, config.views[0])
 
-    assert (
-        '<target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">grid_total_revenue</target_code>'
-        in result
-    )
-    assert (
-        '<target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">total_revenue</target_code>'
-        not in result
-    )
+    g = Graph()
+    g.parse(data=result, format="xml")
+
+    target_codes = {
+        str(o) for _s, _p, o in g.triples((None, None, None)) if str(_p).endswith("targetTermCode")
+    }
+
+    # prefixed 字段 targetTermCode 指向 L1#prop#grid_total_revenue
+    assert any("grid_total_revenue" in t for t in target_codes)
+    # 不指向原始 column total_revenue
+    assert not any(t.endswith("#total_revenue") and "prop" in str(t) for t in target_codes)
 
 
 def test_render_view_relations_for_view_uses_object_prop_code_for_same_code_mapping() -> None:
@@ -624,7 +793,12 @@ def test_render_view_relations_for_view_uses_object_prop_code_for_same_code_mapp
 
     result = render_view_relations_for_view(config, config.views[0])
 
-    assert (
-        '<target_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">enterprise_total_revenue</target_code>'
-        in result
-    )
+    g = Graph()
+    g.parse(data=result, format="xml")
+
+    target_codes = {
+        str(o) for _s, _p, o in g.triples((None, None, None)) if str(_p).endswith("targetTermCode")
+    }
+
+    # property_code 映射到对象层已配置的 prop code
+    assert any("enterprise_total_revenue" in t for t in target_codes)

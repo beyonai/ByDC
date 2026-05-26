@@ -42,12 +42,18 @@ def test_resolve_field_aliases_delegates_to_reader() -> None:
 
 
 def test_search_terms_by_type_delegates_to_reader() -> None:
-    """术语检索委托给 PostgresTermReader。"""
+    """术语检索委托给 PostgresTermReader — 精确匹配空结果后降级到 BM25。"""
     expected = SearchTermsResult(total=0, items=[])
-    with patch(
-        "datacloud_knowledge.adapters.opengauss.reader.PostgresTermReader.search_terms",
-        return_value=expected,
-    ) as mock_search:
+    with (
+        patch(
+            "datacloud_knowledge.adapters.opengauss.reader.PostgresTermReader.search_terms_exact",
+            return_value=SearchTermsResult(total=0, items=[]),
+        ),
+        patch(
+            "datacloud_knowledge.adapters.opengauss.reader.PostgresTermReader.search_terms",
+            return_value=expected,
+        ) as mock_search,
+    ):
         result = search_terms_by_type(term_type_code="metric", keyword="销售额")
 
     assert result == expected
@@ -100,6 +106,10 @@ def test_finalize_query_clarification_without_clarification_normalizes() -> None
     normalized = {"select": ["sales_amount"]}
     with (
         patch(
+            "datacloud_knowledge.provider._format_clarification_query",
+            return_value={"select": ["销售额"]},
+        ),
+        patch(
             "datacloud_knowledge.provider._normalize_clarification_params",
             return_value=normalized,
         ) as mock_normalize,
@@ -114,6 +124,8 @@ def test_finalize_query_clarification_without_clarification_normalizes() -> None
             structured_input={"select": ["销售额"]},
             mode="query",
             needs_clarification=False,
+            form={},
+            metadata={},
         )
 
     assert result == FinalizedClarification(

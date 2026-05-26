@@ -59,6 +59,36 @@ types: feat / fix / docs / style / refactor / test / chore
 - 一个 commit 一个逻辑变更
 - 实现与测试一起提交
 
+**Changelog 维护规则：**
+
+每次提交代码时，如果改动属于以下类型，必须同步在 `CHANGELOG.md` 的 `## [Unreleased]` 块下追加一行：
+- `feat` → `### Added`
+- `fix` → `### Fixed`
+- `refactor` / `perf` → `### Changed`
+- `docs`、`test`、`chore` → 不需要写入 Changelog
+
+格式要求：
+- 一行，面向用户描述，不写实现细节
+- 中文，简洁，能让用户理解"这个版本有什么变化"
+- **同一个功能或 bug 只写一行**：如果 `[Unreleased]` 里已有对应条目，后续 commit 直接修改或补充那一行，不新增重复条目
+
+示例：
+```markdown
+## [Unreleased]
+
+### Added
+- OWL action 支持 `action_name` 作为工具显示标题
+
+### Fixed
+- 动态 Agent 思考过程文字重复推送两遍的问题
+```
+
+**发版时（develop → main）：**
+1. 把 `[Unreleased]` 改为 `[x.y.z] - YYYY-MM-DD`
+2. 在顶部加新的空 `## [Unreleased]`
+3. 同步更新 `pyproject.toml` 的 `version` 字段
+4. 打 git tag：`git tag v0.1.38`
+
 ## Anti-Patterns
 
 - ❌ `from ... import *` — 禁用通配符导入

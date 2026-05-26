@@ -1,77 +1,47 @@
-"""领域 & 本体库 OWL 渲染。"""
+"""领域 & 本体库 OWL 渲染 — 基于 GraphBuilder API。
+
+根据实施计划 v2.2，domain.owl / library.owl 已取消独立文件，
+领域和术语库信息由术语的 domain_code / library_code 字段承载。
+此处渲染函数供 GraphBuilder 内部使用，用于在 OWL 图中注册 Domain/Library 实体。
+
+迁移模式（供其他 renderer 参考）：
+1. 将 Config/Model 数据转为 KPS frozen dataclass（DomainDef/LibraryDef/...）
+2. 调用 GraphBuilder.add_*() 方法将实体注册到 rdflib.Graph
+3. 最终由 generator.py 统一调用 builder.build().serialize() 产出 OWL XML
+"""
 
 from __future__ import annotations
 
-from datacloud_knowledge.ingestion.owl_generate._xml import xml_escape
+from datacloud_knowledge.contracts.kps import DomainDef, LibraryDef
+from datacloud_knowledge.ingestion.owl_generate.graph_builder import GraphBuilder
 from datacloud_knowledge.ingestion.owl_generate.models import OwlGenConfig
 
 
-def render_domains(config: OwlGenConfig) -> str:
-    """领域定义 OWL。"""
-    return f"""\
-<?xml version="1.0"?>
-<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
-         xmlns:owl="http://www.w3.org/2002/07/owl#"
-         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
-         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
-         xml:base="http://example.org/domain/ontology#">
+def render_domains(config: OwlGenConfig, builder: GraphBuilder) -> None:
+    """将领域定义加入 GraphBuilder 图中。
 
-    <owl:Class rdf:about="#DomainDefinition">
-        <rdfs:label>领域定义</rdfs:label>
-    </owl:Class>
-
-    <owl:NamedIndividual rdf:about="#domain_{config.domain_code.lower()}">
-        <rdf:type rdf:resource="#DomainDefinition"/>
-        <domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{config.domain_code}</domain_code>
-        <domain_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{config.domain_name}</domain_name>
-        <parent_domain_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-</parent_domain_code>
-        <remark rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(config.domain_desc)}</remark>
-        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-    </owl:NamedIndividual>
-
-    <owl:DatatypeProperty rdf:about="#domain_code"/>
-    <owl:DatatypeProperty rdf:about="#domain_name"/>
-    <owl:DatatypeProperty rdf:about="#parent_domain_code"/>
-    <owl:DatatypeProperty rdf:about="#remark"/>
-    <owl:DatatypeProperty rdf:about="#version"/>
-</rdf:RDF>
-"""
+    业务逻辑：从生成配置中提取领域信息，构造 KPS DomainDef，
+    通过 GraphBuilder 的 RDFLib Graph API 注册为 OWL NamedIndividual。
+    领域不作为独立 .owl 文件产出，信息由各术语的 domain_code 字段承载。
+    """
+    domain = DomainDef(
+        domain_code=config.domain_code,
+        domain_name=config.domain_name,
+        domain_desc=config.domain_desc,
+    )
+    builder.add_domain(domain)
 
 
-def render_library(config: OwlGenConfig) -> str:
-    """本体库定义 OWL。"""
-    return f"""\
-<?xml version="1.0"?>
-<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
-         xmlns:owl="http://www.w3.org/2002/07/owl#"
-         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
-         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
-         xml:base="http://example.org/library/ontology#">
+def render_library(config: OwlGenConfig, builder: GraphBuilder) -> None:
+    """将术语库定义加入 GraphBuilder 图中。
 
-    <owl:Class rdf:about="#LibraryDefinition">
-        <rdfs:label>本体库定义</rdfs:label>
-    </owl:Class>
-
-    <owl:NamedIndividual rdf:about="#library_{config.library_code.lower()}">
-        <rdf:type rdf:resource="#LibraryDefinition"/>
-        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{config.library_code}</library_code>
-        <library_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{config.library_name}</library_name>
-        <library_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(config.library_desc)}</library_desc>
-        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-    </owl:NamedIndividual>
-
-    <owl:DatatypeProperty rdf:about="#library_code"/>
-    <owl:DatatypeProperty rdf:about="#library_name"/>
-    <owl:DatatypeProperty rdf:about="#library_desc"/>
-    <owl:DatatypeProperty rdf:about="#version"/>
-</rdf:RDF>
-"""
+    业务逻辑：从生成配置中提取术语库信息，构造 KPS LibraryDef，
+    通过 GraphBuilder 的 RDFLib Graph API 注册为 OWL NamedIndividual。
+    术语库不作为独立 .owl 文件产出，信息由各术语的 library_code 字段承载。
+    """
+    library = LibraryDef(
+        library_code=config.library_code,
+        library_name=config.library_name,
+        library_desc=config.library_desc,
+    )
+    builder.add_library(library)

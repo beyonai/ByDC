@@ -57,6 +57,10 @@ class ConnectorRegistry:
             db_type: 数据库类型标识（不区分大小写）
             connector_cls: 连接器类
         """
+        if not isinstance(connector_cls, type) or not issubclass(
+            connector_cls, BaseSourceConnector
+        ):
+            raise TypeError("ConnectorRegistry.register expects a BaseSourceConnector class")
         cls._registry[db_type.upper()] = connector_cls
 
     @classmethod
@@ -124,5 +128,14 @@ try:
     )
 
     ConnectorRegistry.register("HTTP_SQL", HttpSqlConnector)
+except ImportError:
+    pass
+
+try:
+    from datacloud_data_sdk.sql_executor.connectors.byclaw_sql_execute_connector import (
+        ByclawSqlExecuteConnector,
+    )
+
+    ConnectorRegistry.register("BYCLAW_SQL_EXECUTE", ByclawSqlExecuteConnector)
 except ImportError:
     pass

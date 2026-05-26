@@ -9,7 +9,8 @@ import contextlib
 import json
 from typing import Any
 
-from ._pre_resolve import term_key
+from datacloud_knowledge.contracts.intent_types import term_key
+
 from .models import ExtractedTerm, PreResolveResult
 
 

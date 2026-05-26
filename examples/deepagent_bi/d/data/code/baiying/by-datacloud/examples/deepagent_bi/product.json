@@ -1,0 +1,66 @@
+{
+  "entity_name": "产品",
+  "entity_desc": "记录产品的基本信息，用于销售和库存管理",
+  "fields": [
+    {
+      "property_code": "product_code",
+      "property_name": "产品编码",
+      "data_type": "VARCHAR",
+      "is_required": true,
+      "ext_property": {
+        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "id"}
+      }
+    },
+    {
+      "property_code": "product_name",
+      "property_name": "产品名称",
+      "data_type": "VARCHAR",
+      "is_required": true,
+      "ext_property": {
+        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}
+      }
+    },
+    {
+      "property_code": "category",
+      "property_name": "产品分类",
+      "data_type": "VARCHAR",
+      "is_required": false,
+      "term_type": "DICT_TERM",
+      "term_values": [
+        {"code": "ELECTRONIC", "name": "电子产品"},
+        {"code": "FOOD", "name": "食品"},
+        {"code": "CLOTHING", "name": "服装"}
+      ],
+      "ext_property": {
+        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}
+      }
+    },
+    {
+      "property_code": "price",
+      "property_name": "单价",
+      "data_type": "DECIMAL",
+      "is_required": true,
+      "ext_property": {
+        "property_role_rule": {"property_role": "MEASURE", "rule_type": "basic_metric"}
+      }
+    },
+    {
+      "property_code": "stock_quantity",
+      "property_name": "库存数量",
+      "data_type": "INTEGER",
+      "is_required": false,
+      "ext_property": {
+        "property_role_rule": {"property_role": "MEASURE", "rule_type": "raw_number"}
+      }
+    },
+    {
+      "property_code": "create_time",
+      "property_name": "创建时间",
+      "data_type": "DATETIME",
+      "data_format": "yyyy-MM-dd HH:mm:ss",
+      "ext_property": {
+        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "datetime"}
+      }
+    }
+  ]
+}

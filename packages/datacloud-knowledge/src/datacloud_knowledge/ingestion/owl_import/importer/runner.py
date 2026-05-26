@@ -1,9 +1,9 @@
-"""知识包全流程执行器：预检 → 入库 → 回调通知。
+"""知识包全流程执行器：校验 → 入库 → 回调通知。
 
 流程：
-  1. 调用 precheck.run() 做全量校验
-  2. 预检失败 → 组装 precheck_failed 结果，触发回调后返回
-  3. 预检通过 → 调用 executor.run() 单事务入库
+  1. 调用 validate.check_package() 做 OWL 目录校验 + KPS 语义规则
+  2. 校验失败 → 组装 validate_failed 结果，触发回调后返回
+  3. 校验通过 → 调用 executor.run() 单事务入库
   4. 入库完成（成功/失败）→ 触发回调通知（若配置了 callback）
   5. 返回 RunResult
 """
@@ -13,7 +13,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from . import executor, notifier, precheck
+from datacloud_knowledge.ingestion.validate import check_package
+
+from . import executor, notifier
 
 logger = logging.getLogger(__name__)
 
@@ -38,16 +40,16 @@ def run(
     """
     cb_headers = callback_headers or {}
 
-    # ── Step 1：预检 ─────────────────────────────────────────────────────────
-    logger.info("runner: precheck start folder=%s", folder_path)
-    pc = precheck.run(folder_path)
+    # ── Step 1：OWL 目录校验 ────────────────────────────────────────────
+    logger.info("runner: validate start folder=%s", folder_path)
+    ok, errors = check_package(folder_path)
 
-    if pc["status"] != "ok":
-        logger.info("runner: precheck failed, %d errors", len(pc["errors"]))
+    if not ok:
+        logger.info("runner: validate failed, %d errors", len(errors))
         result: dict[str, Any] = {
-            "status": "precheck_failed",
+            "status": "validate_failed",
             "folder_path": folder_path,
-            "precheck_errors": pc["errors"],
+            "validate_errors": errors,
             "stats": {},
             "error": None,
             "callback_notified": False,
@@ -60,15 +62,15 @@ def run(
         )
         return result
 
-    # ── Step 2：入库 ─────────────────────────────────────────────────────────
-    logger.info("runner: precheck ok, total_rows=%d, start import", pc["total_rows"])
+    # ── Step 2：入库 ───────────────────────────────────────────────────
+    logger.info("runner: validate ok, start import")
     exec_result = executor.run(folder_path)
 
     if exec_result["status"] == "success":
         result = {
             "status": "success",
             "folder_path": folder_path,
-            "precheck_errors": [],
+            "validate_errors": [],
             "stats": exec_result["stats"],
             "error": None,
             "callback_notified": False,
@@ -77,7 +79,7 @@ def run(
         result = {
             "status": "import_failed",
             "folder_path": folder_path,
-            "precheck_errors": [],
+            "validate_errors": [],
             "stats": exec_result.get("stats", {}),
             "error": exec_result.get("error"),
             "callback_notified": False,

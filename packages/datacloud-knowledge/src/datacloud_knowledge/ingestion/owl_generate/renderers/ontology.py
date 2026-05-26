@@ -1,4 +1,11 @@
-"""本体 OWL 渲染：对象、映射、数据源、视图、动作。"""
+"""本体 OWL 渲染：对象、映射、数据源、视图 — 基于 GraphBuilder API。
+
+迁移说明：
+- 定义级实体（EntityDefinition/EntityField/SceneDefinition 等）非 KPS，保留在
+  GraphBuilder 中作为独立方法，通过 rdflib Graph API 序列化产出标准 RDF/XML。
+- 业务逻辑辅助函数（binding lookup、field role、term meta 等）不变。
+- 旧 f-string 模板替换为 GraphBuilder.add_*() + build().serialize()。
+"""
 
 from __future__ import annotations
 
@@ -9,8 +16,8 @@ from datacloud_knowledge.ingestion.owl_generate._xml import (
     map_data_type,
     map_measurement_unit,
     map_value_format,
-    xml_escape,
 )
+from datacloud_knowledge.ingestion.owl_generate.graph_builder import GraphBuilder
 from datacloud_knowledge.ingestion.owl_generate.models import (
     OwlGenConfig,
     Table,
@@ -18,6 +25,10 @@ from datacloud_knowledge.ingestion.owl_generate.models import (
     ViewConfig,
     ViewFieldMapping,
 )
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 业务逻辑辅助函数（不变）
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def _build_binding_lookup(
@@ -35,10 +46,11 @@ def _term_data_type_for_term_type(config: OwlGenConfig, term_type_code: str) -> 
 
 def _empty_term_meta() -> dict[str, str]:
     return {
-        "term_type_code_path": "",
-        "library_code": "",
-        "rel_term_codeorname": "",
-        "term_data_type": "",
+        "termTypeCodePath": "",
+        "libraryCode": "",
+        "relTermCodeorname": "",
+        "termDataType": "",
+        "relAction": "[]",
     }
 
 
@@ -49,10 +61,11 @@ def _term_meta_for_alias(
     if not term_data_type:
         return _empty_term_meta()
     return {
-        "term_type_code_path": f"{config.library_code}#{term_type_code}",
-        "library_code": config.library_code,
-        "rel_term_codeorname": rel_term_codeorname,
-        "term_data_type": term_data_type,
+        "termTypeCodePath": f"{config.library_code}#{term_type_code}",
+        "libraryCode": config.library_code,
+        "relTermCodeorname": rel_term_codeorname,
+        "termDataType": term_data_type,
+        "relAction": "[]",
     }
 
 
@@ -82,12 +95,13 @@ def _term_meta_for_object_field(
     binding = binding_lookup.get((table_code, column_name))
     if binding is None:
         return _empty_term_meta()
-    return {
-        "term_type_code_path": f"{config.library_code}#{binding.term_type_code}",
-        "library_code": config.library_code,
-        "rel_term_codeorname": _rel_term_codeorname_for_binding(config, binding),
-        "term_data_type": binding.term_data_type,
-    }
+
+    meta = _empty_term_meta()
+    meta["termTypeCodePath"] = f"{config.library_code}#{binding.term_type_code}"
+    meta["libraryCode"] = config.library_code
+    meta["relTermCodeorname"] = _rel_term_codeorname_for_binding(config, binding)
+    meta["termDataType"] = binding.term_data_type
+    return meta
 
 
 def _field_role_json(
@@ -105,7 +119,6 @@ def _field_role_json(
         if role.formula:
             obj["formula"] = role.formula
         return json.dumps(obj, ensure_ascii=False)
-    # 向后兼容：未配置 field_roles 时保留原逻辑
     return "主键" if is_pk else ""
 
 
@@ -114,81 +127,139 @@ def _property_group_for_field(
     table_code: str,
     column_name: str,
 ) -> str:
-    """根据字段角色返回 property_group：formula 非空则为 COMPUTED，否则 STORAGE。"""
+    """根据字段角色返回 property_group。"""
     role = config.field_roles.get((table_code, column_name))
     if role is not None and role.formula:
         return "COMPUTED"
     return "STORAGE"
 
 
-# ── 对象定义 ──────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# 内部辅助：实体字段构建（旧 _xml 参数 → dict props）
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _build_entity_field_props(
+    config: OwlGenConfig,
+    table_code: str,
+    col: Any,  # Column
+    resolved_prop: Any,  # ResolvedObjectProp
+    term_meta: dict[str, str],
+) -> dict[str, str]:
+    """构建 EntityField 属性字典，用于 GraphBuilder.add_entity_field()。"""
+    dtype = map_data_type(col.sql_type, col.name)
+    ext_prop = _field_role_json(config, table_code, col.name, col.is_primary_key)
+    prop_group = _property_group_for_field(config, table_code, col.name)
+    return {
+        "propertyCode": resolved_prop.property_code,
+        "propertyName": resolved_prop.property_name,
+        "dataType": dtype,
+        "isRequired": str(not col.nullable).lower(),
+        "defaultValue": "",
+        "sourceColumn": col.name,
+        "synonyms": "",
+        "dataFormat": map_value_format(col.sql_type),
+        "measurementUnit": map_measurement_unit(col.comment or ""),
+        "propertyCategory": "",
+        "propertyGroup": prop_group,
+        "extProperty": ext_prop,
+        "termTypeCodePath": term_meta.get("termTypeCodePath", ""),
+        "libraryCode": term_meta.get("libraryCode", ""),
+        "relAction": term_meta.get("relAction", "[]"),
+        "relTermCodeorname": term_meta.get("relTermCodeorname", ""),
+        "termDataType": term_meta.get("termDataType", ""),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 内部辅助：序列化
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _serialize_xml(builder: GraphBuilder) -> str:
+    """将 GraphBuilder 的图序列化为 XML 字符串。"""
+    result = builder.build().serialize(format="xml")
+    return result if isinstance(result, str) else result.decode("utf-8")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 对象定义（_definition.owl）
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _camel_to_snake(name: str) -> str:
+    """驼峰转下划线，如 propertyCode → property_code。"""
+    import re
+
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
+def _xml_str(value: str) -> str:
+    """转义 XML 特殊字符。"""
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
+
+
+def _render_field_xml(field_id: str, props: dict[str, str]) -> str:
+    """生成单个 EntityField 的 owl:NamedIndividual XML 片段。"""
+    lines = [
+        f'    <owl:NamedIndividual rdf:about="#{field_id}">',
+        '        <rdf:type rdf:resource="#EntityField"/>',
+    ]
+    for key, val in props.items():
+        tag = _camel_to_snake(key)
+        lines.append(
+            f'        <{tag} rdf:datatype="http://www.w3.org/2001/XMLSchema#string">'
+            f"{_xml_str(val)}</{tag}>"
+        )
+    lines.append("    </owl:NamedIndividual>")
+    return "\n".join(lines)
 
 
 def render_object(config: OwlGenConfig, table: Table) -> str:
-    """对象定义 OWL（实体 + 字段）。"""
+    """对象定义 OWL（EntityDefinition + EntityField）— 直接生成标准格式 XML。"""
     binding_lookup = _build_binding_lookup(config)
     resolved_props = {
         col.name: config.resolve_object_prop(table.code, col.name, col.comment or col.name)
         for col in table.columns
     }
-    field_refs = "\n".join(
-        f'        <fields rdf:resource="#{resolved_props[col.name].property_code}_field"/>'
-        for col in table.columns
-    )
+
     action_code = f"query_{table.code}"
     action_refs = json.dumps([action_code], ensure_ascii=False)
     relation_ids = [r.relation_id for r in config.object_relations if r.source_code == table.code]
     relation_refs = json.dumps(relation_ids, ensure_ascii=False)
 
-    field_items: list[str] = []
+    # 生成字段 XML 片段
+    field_xml_parts: list[str] = []
+    field_refs_xml: list[str] = []
     for col in table.columns:
-        dtype = map_data_type(col.sql_type, col.name)
         resolved_prop = resolved_props[col.name]
         term_meta = _term_meta_for_object_field(config, table.code, col.name, binding_lookup)
-        ext_prop = _field_role_json(config, table.code, col.name, col.is_primary_key)
-        prop_group = _property_group_for_field(config, table.code, col.name)
-        field_items.append(
-            f"""\
-    <owl:NamedIndividual rdf:about="#{resolved_prop.property_code}_field">
-        <rdf:type rdf:resource="#EntityField"/>
-        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{resolved_prop.property_code}</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(resolved_prop.property_name)}</property_name>
-        <data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{dtype}</data_type>
-        <is_required rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">\
-{str(not col.nullable).lower()}</is_required>
-        <default_value rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-</default_value>
-        <source_column rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{col.name}</source_column>
-        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></synonyms>
-        <data_format rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{map_value_format(col.sql_type)}</data_format>
-        <measurement_unit rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{map_measurement_unit(col.comment)}</measurement_unit>
-        <property_category rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-</property_category>
-        <property_group rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{prop_group}</property_group>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{ext_prop}</ext_property>
-        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{term_meta["term_type_code_path"]}</term_type_code_path>
-        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{term_meta["library_code"]}</library_code>
-        <rel_action rdf:datatype="http://www.w3.org/2001/XMLSchema#string">[]</rel_action>
-        <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{term_meta["rel_term_codeorname"]}</rel_term_codeorname>
-        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{term_meta["term_data_type"]}</term_data_type>
-    </owl:NamedIndividual>"""
+        field_props = _build_entity_field_props(config, table.code, col, resolved_prop, term_meta)
+        field_id = f"{resolved_prop.property_code}_field"
+        field_xml_parts.append(_render_field_xml(field_id, field_props))
+        field_refs_xml.append(f'        <fields rdf:resource="#{field_id}"/>')
+
+    fields_block = "\n".join(field_refs_xml)
+    fields_xml = "\n\n".join(field_xml_parts)
+
+    # 非结构化本体：在 EntityDefinition 上写实体级 ext_property
+    entity_ext_property_xml = ""
+    if config.kb_id:
+        kb_ext = json.dumps(
+            {"kb_id": config.kb_id, "kb_directory": config.kb_directory}, ensure_ascii=False
+        )
+        entity_ext_property_xml = (
+            f'        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">'
+            f"{_xml_str(kb_ext)}</ext_property>\n"
         )
 
-    fields_body = "\n\n".join(field_items)
-    return f"""\
-<?xml version="1.0"?>
+    return f"""<?xml version="1.0"?>
 <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
          xmlns:owl="http://www.w3.org/2002/07/owl#"
          xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -196,30 +267,22 @@ def render_object(config: OwlGenConfig, table: Table) -> str:
          xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
          xml:base="http://example.org/entity/ontology#">
 
-    <owl:Class rdf:about="#EntityDefinition">\
-<rdfs:label>实体定义</rdfs:label></owl:Class>
-    <owl:Class rdf:about="#EntityField">\
-<rdfs:label>实体字段</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#EntityDefinition"><rdfs:label>实体定义</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#EntityField"><rdfs:label>实体字段</rdfs:label></owl:Class>
 
     <owl:NamedIndividual rdf:about="#{table.code}_v1">
         <rdf:type rdf:resource="#EntityDefinition"/>
-        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{table.code}</entity_code>
-        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{table.name}</entity_name>
-        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(table.desc)}</entity_desc>
+        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.code)}</entity_code>
+        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.name)}</entity_name>
+        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.desc or "")}</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-DB</entity_source>
-{field_refs}
-        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(action_refs)}</action_refs>
-        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(relation_refs)}</relations>
-    </owl:NamedIndividual>
+        <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(config.entity_source)}</entity_source>
+{fields_block}
+        <action_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(action_refs)}</action_refs>
+        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(relation_refs)}</relations>
+{entity_ext_property_xml}    </owl:NamedIndividual>
 
-{fields_body}
+{fields_xml}
 
     <owl:DatatypeProperty rdf:about="#entity_code"/>
     <owl:DatatypeProperty rdf:about="#entity_name"/>
@@ -229,6 +292,7 @@ DB</entity_source>
     <owl:DatatypeProperty rdf:about="#fields"/>
     <owl:DatatypeProperty rdf:about="#action_refs"/>
     <owl:DatatypeProperty rdf:about="#relations"/>
+    <owl:DatatypeProperty rdf:about="#ext_property"/>
     <owl:DatatypeProperty rdf:about="#property_code"/>
     <owl:DatatypeProperty rdf:about="#property_name"/>
     <owl:DatatypeProperty rdf:about="#data_type"/>
@@ -240,7 +304,6 @@ DB</entity_source>
     <owl:DatatypeProperty rdf:about="#measurement_unit"/>
     <owl:DatatypeProperty rdf:about="#property_category"/>
     <owl:DatatypeProperty rdf:about="#property_group"/>
-    <owl:DatatypeProperty rdf:about="#ext_property"/>
     <owl:DatatypeProperty rdf:about="#term_type_code_path"/>
     <owl:DatatypeProperty rdf:about="#library_code"/>
     <owl:DatatypeProperty rdf:about="#rel_action"/>
@@ -250,43 +313,43 @@ DB</entity_source>
 """
 
 
-# ── 对象映射 ────────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# 对象映射（_mapping.owl）
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def render_mapping(config: OwlGenConfig, table: Table) -> str:
-    """对象映射 OWL。"""
+    """对象映射 OWL（EntityMapping + Mapping）— 直接生成标准格式 XML。"""
     resolved_props = {
         col.name: config.resolve_object_prop(table.code, col.name, col.comment or col.name)
         for col in table.columns
     }
-    mapping_refs = "\n".join(
+
+    # mapping 引用行
+    mapping_refs_xml = "\n".join(
         f'        <mapping rdf:resource="#{resolved_props[col.name].property_code}_mapping"/>'
         for col in table.columns
     )
-    mapping_items: list[str] = []
+
+    # 每个字段的 Mapping 节点
+    field_mappings_xml_parts: list[str] = []
     for col in table.columns:
         resolved_prop = resolved_props[col.name]
-        mapping_items.append(
-            f"""\
-    <owl:NamedIndividual rdf:about="#{resolved_prop.property_code}_mapping">
+        ext_prop = _field_role_json(config, table.code, col.name, col.is_primary_key)
+        mid = f"{resolved_prop.property_code}_mapping"
+        field_mappings_xml_parts.append(f"""    <owl:NamedIndividual rdf:about="#{mid}">
         <rdf:type rdf:resource="#Mapping"/>
-        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{resolved_prop.property_code}</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(resolved_prop.property_name)}</property_name>
-        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{table.code}</source_table_code>
-        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{col.name}</source_column_code>
-        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{config.db_code}</source_datasource_code>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{_field_role_json(config, table.code, col.name, col.is_primary_key)}</ext_property>
-    </owl:NamedIndividual>"""
-        )
-    body = "\n\n".join(mapping_items)
-    return f"""\
-<?xml version="1.0"?>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(resolved_prop.property_code)}</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(resolved_prop.property_name)}</property_name>
+        <source_table_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.code)}</source_table_code>
+        <source_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(col.name)}</source_column_code>
+        <source_datasource_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(config.db_code)}</source_datasource_code>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(ext_prop)}</ext_property>
+    </owl:NamedIndividual>""")
+
+    field_mappings_xml = "\n\n".join(field_mappings_xml_parts)
+
+    return f"""<?xml version="1.0"?>
 <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
          xmlns:owl="http://www.w3.org/2002/07/owl#"
          xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -294,24 +357,19 @@ def render_mapping(config: OwlGenConfig, table: Table) -> str:
          xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
          xml:base="http://example.org/entity/mapping#">
 
-    <owl:Class rdf:about="#EntityMapping">\
-<rdfs:label>实体映射</rdfs:label></owl:Class>
-    <owl:Class rdf:about="#Mapping">\
-<rdfs:label>映射关系</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#EntityMapping"><rdfs:label>实体映射</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#Mapping"><rdfs:label>映射关系</rdfs:label></owl:Class>
 
     <owl:NamedIndividual rdf:about="#{table.code}_mapping">
         <rdf:type rdf:resource="#EntityMapping"/>
-        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{table.code}</entity_code>
-        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{table.name}</entity_name>
-        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(table.desc)}</entity_desc>
+        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.code)}</entity_code>
+        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.name)}</entity_name>
+        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.desc or "")}</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-{mapping_refs}
+{mapping_refs_xml}
     </owl:NamedIndividual>
 
-{body}
+{field_mappings_xml}
 
     <owl:DatatypeProperty rdf:about="#entity_code"/>
     <owl:DatatypeProperty rdf:about="#entity_name"/>
@@ -328,14 +386,18 @@ def render_mapping(config: OwlGenConfig, table: Table) -> str:
 """
 
 
-# ── 数据源 ───────────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# 数据源（_dbsource.owl）
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def render_dbsource(config: OwlGenConfig) -> str:
-    """数据源定义 OWL。"""
-    params = json.dumps(config.db_params, ensure_ascii=False)
-    return f"""\
-<?xml version="1.0"?>
+    """数据源定义 OWL（DatabaseDefinition）— 直接生成标准格式 XML。"""
+    db_params = json.dumps(
+        {**config.db_params, "connector_type": "BYCLAW_SQL_EXECUTE"},
+        ensure_ascii=False,
+    )
+    return f"""<?xml version="1.0"?>
 <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
          xmlns:owl="http://www.w3.org/2002/07/owl#"
          xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -343,17 +405,13 @@ def render_dbsource(config: OwlGenConfig) -> str:
          xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
          xml:base="http://example.org/dbsource/ontology#">
 
-    <owl:Class rdf:about="#DatabaseDefinition">\
-<rdfs:label>数据源定义</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#DatabaseDefinition"><rdfs:label>数据源定义</rdfs:label></owl:Class>
 
-    <owl:NamedIndividual rdf:about="#dbsource_{config.db_code}">
+    <owl:NamedIndividual rdf:about="#dbsource_{_xml_str(config.db_code)}">
         <rdf:type rdf:resource="#DatabaseDefinition"/>
-        <dbCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{config.db_code}</dbCode>
-        <dbType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{config.db_type}</dbType>
-        <dbParams rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(params)}</dbParams>
+        <dbCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(config.db_code)}</dbCode>
+        <dbType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">SQLITE</dbType>
+        <dbParams rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(db_params)}</dbParams>
     </owl:NamedIndividual>
 
     <owl:DatatypeProperty rdf:about="#dbCode"/>
@@ -363,10 +421,13 @@ def render_dbsource(config: OwlGenConfig) -> str:
 """
 
 
-# ── 视图 ────────────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# 视图定义（_definition.owl）
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def _view_relation_ids(config: OwlGenConfig, view: ViewConfig) -> list[str]:
+    """计算视图的关系 ID 列表。"""
     rel_ids = [f"rel_{view.view_code}_to_{obj_code}" for obj_code in view.object_codes]
     anchor = view.object_codes[0] if view.object_codes else ""
     for rel in config.object_relations:
@@ -388,43 +449,56 @@ def _view_field_role_json(m: ViewFieldMapping) -> str:
     return json.dumps(obj, ensure_ascii=False)
 
 
-def _render_view_field_items(mappings: list[ViewFieldMapping]) -> str:
-    """渲染视图字段个体列表。"""
-    field_items: list[str] = []
-    for m in mappings:
-        ext_prop = _view_field_role_json(m)
-        synonyms_str = json.dumps(m.synonyms, ensure_ascii=False) if m.synonyms else ""
-        field_items.append(
-            f"""\
-    <owl:NamedIndividual rdf:about="#{m.property_code}_field">
-        <rdf:type rdf:resource="#SceneField"/>
-        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{m.property_code}</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(m.property_name)}</property_name>
-        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{m.source_object_code}</source_object_code>
-        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{m.source_object_column_code}</source_object_column_code>
-        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(synonyms_str)}</synonyms>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(ext_prop)}</ext_property>
-    </owl:NamedIndividual>"""
-        )
-    return "\n\n".join(field_items)
+def _build_scene_field_props(m: ViewFieldMapping) -> dict[str, str]:
+    """构建 SceneField 属性字典，用于 GraphBuilder.add_scene_field()。"""
+    ext_prop = _view_field_role_json(m)
+    synonyms_str = json.dumps(m.synonyms, ensure_ascii=False) if m.synonyms else ""
+    return {
+        "propertyCode": m.property_code,
+        "propertyName": m.property_name,
+        "sourceObjectCode": m.source_object_code,
+        "sourceObjectColumnCode": m.source_object_column_code,
+        "synonyms": synonyms_str,
+        "extProperty": ext_prop,
+    }
 
 
 def render_single_view(config: OwlGenConfig, view: ViewConfig) -> str:
-    """单个视图定义 OWL。"""
-    object_codes = json.dumps(view.object_codes, ensure_ascii=False)
+    """单个视图定义 OWL（SceneDefinition + SceneField）— 直接生成标准格式 XML。
+
+    与标准 scene_new_sales_analysis_definition.owl 格式完全对齐：
+    - 属性名使用下划线（view_code / view_name / object_codes / ext_property）
+    - rdf:about 使用相对 URI（#xxx）
+    - SceneDefinition 节点在前，SceneField 节点在后
+    """
+    object_codes_json = json.dumps(view.object_codes, ensure_ascii=False)
     relations_json = json.dumps(_view_relation_ids(config, view), ensure_ascii=False)
-    field_refs = "\n".join(
-        f'        <fields rdf:resource="#{m.property_code}_field"/>' for m in view.field_mappings
+
+    # 字段引用行 — field_id 含来源对象前缀，避免同名字段重复
+    field_refs_xml = "\n".join(
+        f'        <fields rdf:resource="#{m.source_object_code}__{m.property_code}_field"/>'
+        for m in view.field_mappings
     )
-    fields_body = _render_view_field_items(view.field_mappings)
-    return f"""\
-<?xml version="1.0"?>
+
+    # 每个 SceneField 节点
+    scene_field_parts: list[str] = []
+    for m in view.field_mappings:
+        field_id = f"{m.source_object_code}__{m.property_code}_field"
+        ext_prop = _view_field_role_json(m)
+        synonyms_str = json.dumps(m.synonyms, ensure_ascii=False) if m.synonyms else ""
+        scene_field_parts.append(f"""    <owl:NamedIndividual rdf:about="#{field_id}">
+        <rdf:type rdf:resource="#SceneField"/>
+        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(m.property_code)}</property_code>
+        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(m.property_name)}</property_name>
+        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(m.source_object_code)}</source_object_code>
+        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(m.source_object_column_code)}</source_object_column_code>
+        <synonyms rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(synonyms_str)}</synonyms>
+        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(ext_prop)}</ext_property>
+    </owl:NamedIndividual>""")
+
+    scene_fields_xml = "\n\n".join(scene_field_parts)
+
+    return f"""<?xml version="1.0"?>
 <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
          xmlns:owl="http://www.w3.org/2002/07/owl#"
          xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -432,28 +506,21 @@ def render_single_view(config: OwlGenConfig, view: ViewConfig) -> str:
          xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
          xml:base="http://example.org/scene/ontology#">
 
-    <owl:Class rdf:about="#SceneDefinition">\
-<rdfs:label>视图定义</rdfs:label></owl:Class>
-    <owl:Class rdf:about="#SceneField">\
-<rdfs:label>视图字段</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#SceneDefinition"><rdfs:label>视图定义</rdfs:label></owl:Class>
+    <owl:Class rdf:about="#SceneField"><rdfs:label>视图字段</rdfs:label></owl:Class>
 
     <owl:NamedIndividual rdf:about="#{view.view_code}_v1">
         <rdf:type rdf:resource="#SceneDefinition"/>
-        <view_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{view.view_code}</view_code>
-        <view_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{view.view_name}</view_name>
-        <description rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(view.view_desc)}</description>
+        <view_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(view.view_code)}</view_code>
+        <view_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(view.view_name)}</view_name>
+        <description rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(view.view_desc)}</description>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-        <object_codes rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(object_codes)}</object_codes>
-        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(relations_json)}</relations>
-{field_refs}
+        <object_codes rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(object_codes_json)}</object_codes>
+        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(relations_json)}</relations>
+{field_refs_xml}
     </owl:NamedIndividual>
 
-{fields_body}
+{scene_fields_xml}
 
     <owl:DatatypeProperty rdf:about="#view_code"/>
     <owl:DatatypeProperty rdf:about="#view_name"/>
@@ -470,6 +537,11 @@ def render_single_view(config: OwlGenConfig, view: ViewConfig) -> str:
     <owl:DatatypeProperty rdf:about="#ext_property"/>
 </rdf:RDF>
 """
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 兼容旧接口（生成器未使用，保留供后续迁移）
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def render_view(config: OwlGenConfig) -> str:
@@ -478,84 +550,36 @@ def render_view(config: OwlGenConfig) -> str:
     if not views:
         return ""
 
-    individuals: list[str] = []
-    all_field_bodies: list[str] = []
+    builder = GraphBuilder()
     for view in views:
-        object_codes = json.dumps(view.object_codes, ensure_ascii=False)
+        object_codes_json = json.dumps(view.object_codes, ensure_ascii=False)
         relations_json = json.dumps(_view_relation_ids(config, view), ensure_ascii=False)
-        field_refs = "\n".join(
-            f'        <fields rdf:resource="#{m.property_code}_field"/>'
-            for m in view.field_mappings
+        field_ref_ids = [f"{m.property_code}_field" for m in view.field_mappings]
+        builder.add_scene_definition(
+            view_code=view.view_code,
+            view_name=view.view_name,
+            view_desc=view.view_desc,
+            object_codes_json=object_codes_json,
+            relations_json=relations_json,
+            field_refs=field_ref_ids,
         )
-        individuals.append(f"""\
-    <owl:NamedIndividual rdf:about="#{view.view_code}_v1">
-        <rdf:type rdf:resource="#SceneDefinition"/>
-        <view_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{view.view_code}</view_code>
-        <view_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{view.view_name}</view_name>
-        <description rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(view.view_desc)}</description>
-        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-        <object_codes rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(object_codes)}</object_codes>
-        <relations rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(relations_json)}</relations>
-{field_refs}
-    </owl:NamedIndividual>""")
-        fields_body = _render_view_field_items(view.field_mappings)
-        if fields_body:
-            all_field_bodies.append(fields_body)
+        for m in view.field_mappings:
+            builder.add_scene_field(_build_scene_field_props(m))
 
-    body = "\n\n".join(individuals)
-    fields_section = "\n\n".join(all_field_bodies)
-    return f"""\
-<?xml version="1.0"?>
-<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
-         xmlns:owl="http://www.w3.org/2002/07/owl#"
-         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
-         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
-         xml:base="http://example.org/scene/ontology#">
-
-    <owl:Class rdf:about="#SceneDefinition">\
-<rdfs:label>视图定义</rdfs:label></owl:Class>
-    <owl:Class rdf:about="#SceneField">\
-<rdfs:label>视图字段</rdfs:label></owl:Class>
-
-{body}
-
-{fields_section}
-
-    <owl:DatatypeProperty rdf:about="#view_code"/>
-    <owl:DatatypeProperty rdf:about="#view_name"/>
-    <owl:DatatypeProperty rdf:about="#description"/>
-    <owl:DatatypeProperty rdf:about="#version"/>
-    <owl:DatatypeProperty rdf:about="#object_codes"/>
-    <owl:DatatypeProperty rdf:about="#relations"/>
-    <owl:ObjectProperty rdf:about="#fields"/>
-    <owl:DatatypeProperty rdf:about="#property_code"/>
-    <owl:DatatypeProperty rdf:about="#property_name"/>
-    <owl:DatatypeProperty rdf:about="#source_object_code"/>
-    <owl:DatatypeProperty rdf:about="#source_object_column_code"/>
-    <owl:DatatypeProperty rdf:about="#synonyms"/>
-    <owl:DatatypeProperty rdf:about="#ext_property"/>
-</rdf:RDF>
-"""
-
-
-# ── 视图映射 ──────────────────────────────────────────────────────────────────
+    return _serialize_xml(builder)
 
 
 def render_view_mapping(config: OwlGenConfig, view: ViewConfig | None = None) -> str:
-    """视图映射 OWL（视图字段→对象字段）。"""
+    """视图映射 OWL（视图字段→对象字段）— GraphBuilder API。
+
+    兼容旧接口：支持单 view 参数或回退到 config.view_* 字段。
+    """
     if view is not None:
         mappings = view.field_mappings
         v_code = view.view_code
         v_name = view.view_name
         v_desc = view.view_desc
     else:
-        # 向后兼容
         mappings = config.view_field_mappings
         v_code = config.view_code
         v_name = config.view_name
@@ -563,10 +587,16 @@ def render_view_mapping(config: OwlGenConfig, view: ViewConfig | None = None) ->
     if not mappings:
         return ""
 
-    mapping_refs = "\n".join(
-        f'        <mapping rdf:resource="#{m.property_code}_mapping"/>' for m in mappings
+    mapping_ref_ids = [f"{m.property_code}_mapping" for m in mappings]
+
+    builder = GraphBuilder()
+    builder.add_entity_mapping(
+        object_code=v_code,
+        object_name=v_name,
+        object_desc=v_desc,
+        mapping_refs=mapping_ref_ids,
     )
-    mapping_items: list[str] = []
+
     for m in mappings:
         role_obj: dict[str, Any] = {
             "property_role_rule": {
@@ -577,82 +607,37 @@ def render_view_mapping(config: OwlGenConfig, view: ViewConfig | None = None) ->
         if m.role.formula:
             role_obj["formula"] = m.role.formula
         role_json = json.dumps(role_obj, ensure_ascii=False)
-        mapping_items.append(
-            f"""\
-    <owl:NamedIndividual rdf:about="#{m.property_code}_mapping">
-        <rdf:type rdf:resource="#Mapping"/>
-        <property_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{m.property_code}</property_code>
-        <property_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(m.property_name)}</property_name>
-        <source_object_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{m.source_object_code}</source_object_code>
-        <source_object_column_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{m.source_object_column_code}</source_object_column_code>
-        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(role_json)}</ext_property>
-    </owl:NamedIndividual>"""
+        builder.add_field_mapping(
+            {
+                "propertyCode": m.property_code,
+                "propertyName": m.property_name,
+                "sourceTableCode": m.source_object_code,
+                "sourceColumnCode": m.source_object_column_code,
+                "sourceDatasourceCode": "",
+                "extProperty": role_json,
+            }
         )
-    body = "\n\n".join(mapping_items)
-    return f"""\
-<?xml version="1.0"?>
-<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
-         xmlns:owl="http://www.w3.org/2002/07/owl#"
-         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
-         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
-         xml:base="http://example.org/entity/mapping#">
 
-    <owl:Class rdf:about="#EntityMapping">\
-<rdfs:label>实体映射</rdfs:label></owl:Class>
-    <owl:Class rdf:about="#Mapping">\
-<rdfs:label>映射关系</rdfs:label></owl:Class>
-
-    <owl:NamedIndividual rdf:about="#{v_code}_mapping">
-        <rdf:type rdf:resource="#EntityMapping"/>
-        <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{v_code}</entity_code>
-        <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(v_name)}</entity_name>
-        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(v_desc)}</entity_desc>
-        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-{mapping_refs}
-    </owl:NamedIndividual>
-
-{body}
-
-    <owl:DatatypeProperty rdf:about="#entity_code"/>
-    <owl:DatatypeProperty rdf:about="#entity_name"/>
-    <owl:DatatypeProperty rdf:about="#entity_desc"/>
-    <owl:DatatypeProperty rdf:about="#version"/>
-    <owl:ObjectProperty rdf:about="#mapping"/>
-    <owl:DatatypeProperty rdf:about="#property_code"/>
-    <owl:DatatypeProperty rdf:about="#property_name"/>
-    <owl:DatatypeProperty rdf:about="#source_object_code"/>
-    <owl:DatatypeProperty rdf:about="#source_object_column_code"/>
-    <owl:DatatypeProperty rdf:about="#ext_property"/>
-</rdf:RDF>
-"""
-
-
-# ── 动作定义 ──────────────────────────────────────────────────────────────────────
+    return _serialize_xml(builder)
 
 
 def render_actions(config: OwlGenConfig, tables: list[Table]) -> str:
-    """动作定义 OWL。每个表生成一个查询动作。"""
+    """动作定义 OWL — 兼容旧接口。
+
+    注意：此函数已被 actions.py + GraphBuilder.add_actions() 替代。
+    保留仅为向后兼容。
+    """
     binding_lookup = _build_binding_lookup(config)
-    action_items: list[str] = []
-    param_items: list[str] = []
+    actions: list[dict[str, Any]] = []
+    all_params: list[dict[str, str]] = []
 
     for table in tables:
         action_code = f"query_{table.code}"
-        req_refs: list[str] = []
-        resp_refs: list[str] = []
+        req_ref_ids: list[str] = []
+        resp_ref_ids: list[str] = []
 
         for col in table.columns:
             binding = binding_lookup.get((table.code, col.name))
-            # 请求参数：主键 + 术语化字段
             if col.is_primary_key or binding:
                 term_path = (
                     f"{config.library_code}#{binding.term_type_code}"
@@ -661,124 +646,66 @@ def render_actions(config: OwlGenConfig, tables: list[Table]) -> str:
                 )
                 term_dt = binding.term_data_type if binding else "ONTOLOGY_TERM"
                 rel_term = "name" if binding else col.name
-                req_refs.append(
-                    f'        <request_params rdf:resource="#param_{action_code}_{col.name}"/>'
+                req_ref_ids.append(f"param_{action_code}_{col.name}")
+                all_params.append(
+                    {
+                        "id": f"param_{action_code}_{col.name}",
+                        "type": "RequestParameter",
+                        "paramCode": col.name,
+                        "paramType": "string",
+                        "description": col.comment or col.name,
+                        "isRequired": "false",
+                        "termTypeCodePath": term_path,
+                        "libraryCode": config.library_code,
+                        "relTermCodeorname": rel_term,
+                        "termDataType": term_dt,
+                    }
                 )
-                param_items.append(
-                    f"""\
-    <owl:NamedIndividual rdf:about="#param_{action_code}_{col.name}">
-        <rdf:type rdf:resource="#RequestParameter"/>
-        <paramCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{col.name}</paramCode>
-        <type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">string</type>
-        <description rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(col.comment or col.name)}</description>
-        <isRequired rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">\
-false</isRequired>
-        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{term_path}</term_type_code_path>
-        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{config.library_code}</library_code>
-        <rel_term_codeorname rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{rel_term}</rel_term_codeorname>
-        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{term_dt}</term_data_type>
-    </owl:NamedIndividual>"""
-                )
-            # 响应参数：所有字段
-            resp_refs.append(
-                f'        <response_params rdf:resource="#resp_{action_code}_{col.name}"/>'
-            )
-            param_items.append(
-                f"""\
-    <owl:NamedIndividual rdf:about="#resp_{action_code}_{col.name}">
-        <rdf:type rdf:resource="#ResponseParameter"/>
-        <fieldCode rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{col.name}</fieldCode>
-        <fieldType rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{map_data_type(col.sql_type, col.name).lower()}</fieldType>
-        <term_type_code_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-OBJECT#{table.code}</term_type_code_path>
-        <library_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{config.library_code}</library_code>
-        <object_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{col.name}</object_property>
-        <json_path rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-data.{col.name}</json_path>
-        <term_data_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-ONTOLOGY_TERM</term_data_type>
-    </owl:NamedIndividual>"""
+            resp_ref_ids.append(f"resp_{action_code}_{col.name}")
+            all_params.append(
+                {
+                    "id": f"resp_{action_code}_{col.name}",
+                    "type": "ResponseParameter",
+                    "fieldCode": col.name,
+                    "fieldType": map_data_type(col.sql_type, col.name).lower(),
+                    "termTypeCodePath": f"OBJECT#{table.code}",
+                    "libraryCode": config.library_code,
+                    "objectProperty": col.name,
+                    "jsonPath": f"data.{col.name}",
+                    "termDataType": "ONTOLOGY_TERM",
+                }
             )
 
-        action_items.append(
-            f"""\
-    <owl:NamedIndividual rdf:about="#action_{action_code}">
-        <rdf:type rdf:resource="#ActionDefinition"/>
-        <action_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{action_code}</action_code>
-        <action_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-查询{table.name}</action_name>
-        <action_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{table.name}查询动作</action_desc>
-        <action_type rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-QUERY</action_type>
-        <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
-        <function_refs rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(json.dumps([action_code], ensure_ascii=False))}</function_refs>
-        <belong_entity rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-{xml_escape(json.dumps([table.code], ensure_ascii=False))}</belong_entity>
-        <request_url rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-/{action_code}</request_url>
-        <request_method rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-POST</request_method>
-        <request_header rdf:resource="#http_header"/>
-{chr(10).join(req_refs)}
-{chr(10).join(resp_refs)}
-    </owl:NamedIndividual>"""
+        actions.append(
+            {
+                "actionCode": action_code,
+                "actionName": f"查询{table.name}",
+                "actionDesc": f"{table.name}查询动作",
+                "actionType": "QUERY",
+                "functionRefs": json.dumps([action_code], ensure_ascii=False),
+                "belongEntity": json.dumps([table.code], ensure_ascii=False),
+                "requestUrl": f"/{action_code}",
+                "requestMethod": "POST",
+                "requestParams": req_ref_ids,
+                "responseParams": resp_ref_ids,
+            }
         )
 
-    actions_body = "\n\n".join(action_items)
-    params_body = "\n\n".join(param_items)
-    return f"""\
-<?xml version="1.0"?>
-<rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
-         xmlns:owl="http://www.w3.org/2002/07/owl#"
-         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
-         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
-         xml:base="http://example.org/action/ontology#">
+    builder = GraphBuilder()
+    for action_data in actions:
+        uri = builder._ns[f"action_{action_data['actionCode']}"]
+        builder._graph.add((uri, builder._RDF.type, builder._ns.ActionDefinition))
+        builder._add_literal(uri, builder._ns.actionCode, action_data["actionCode"])
+        builder._add_literal(uri, builder._ns.actionName, action_data["actionName"])
+        builder._add_literal(uri, builder._ns.actionType, action_data["actionType"])
+        builder._add_literal(uri, builder._ns.requestUrl, action_data["requestUrl"])
+        builder._add_literal(uri, builder._ns.requestMethod, action_data["requestMethod"])
 
-    <owl:Class rdf:about="#ActionDefinition">\
-<rdfs:label>动作定义</rdfs:label></owl:Class>
-    <owl:Class rdf:about="#RequestParameter">\
-<rdfs:label>请求参数</rdfs:label></owl:Class>
-    <owl:Class rdf:about="#ResponseParameter">\
-<rdfs:label>响应参数</rdfs:label></owl:Class>
-    <owl:Class rdf:about="#HeaderParameter">\
-<rdfs:label>请求头参数</rdfs:label></owl:Class>
+    for param in all_params:
+        param_uri = builder._ns[param["id"]]
+        builder._graph.add((param_uri, builder._RDF.type, builder._ns[param["type"]]))
+        for key, value in param.items():
+            if key not in ("id", "type"):
+                builder._add_literal(param_uri, builder._ns[key], value)
 
-{actions_body}
-
-{params_body}
-
-    <owl:NamedIndividual rdf:about="#http_header">
-        <rdf:type rdf:resource="#HeaderParameter"/>
-        <name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-Content-Type</name>
-        <value rdf:datatype="http://www.w3.org/2001/XMLSchema#string">\
-application/json</value>
-    </owl:NamedIndividual>
-
-    <owl:DatatypeProperty rdf:about="#action_code"/>
-    <owl:DatatypeProperty rdf:about="#action_name"/>
-    <owl:DatatypeProperty rdf:about="#action_desc"/>
-    <owl:DatatypeProperty rdf:about="#action_type"/>
-    <owl:DatatypeProperty rdf:about="#function_refs"/>
-    <owl:DatatypeProperty rdf:about="#belong_entity"/>
-    <owl:DatatypeProperty rdf:about="#request_url"/>
-    <owl:DatatypeProperty rdf:about="#request_method"/>
-    <owl:DatatypeProperty rdf:about="#request_header"/>
-    <owl:DatatypeProperty rdf:about="#request_params"/>
-    <owl:DatatypeProperty rdf:about="#response_params"/>
-</rdf:RDF>
-"""
+    return _serialize_xml(builder)

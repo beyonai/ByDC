@@ -15,9 +15,26 @@ from datacloud_knowledge.ingestion.owl_import.importer._helpers import (
 from datacloud_knowledge.ingestion.owl_import.importer.snowflake import _next_snowflake_ids
 
 from ._base import _is_prop_term_id, _term_name_search_scope_payload
+from ._term import _backfill_jieba_tsvector_batch
 from ._vocabulary import _batch_insert_vocabulary_words
 
 logger = logging.getLogger(__name__)
+
+
+def _warn_missing_category(obj: dict[str, Any], legacy_default: str) -> str:
+    """当 relation_category 缺失时记录警告并返回安全默认值。
+
+    正常情况下数据经 KPS pipeline 传递后 relation_category 总是存在，
+    此函数仅作为兼容旧格式数据的最后兜底。
+    """
+    logger.warning(
+        "relation_category 缺失 (relation_code=%s, relation_name=%s)，"
+        "回退为旧默认值 '%s'。请检查上游 KPS pipeline 是否正确设置。",
+        obj.get("relation_code", "?"),
+        obj.get("relation_name", "?"),
+        legacy_default,
+    )
+    return legacy_default
 
 
 def _parse_relation_ext_field(ext_field: Any) -> dict[str, Any]:
@@ -131,6 +148,9 @@ def _batch_insert_relation_term_names(cur: Cursor, relation_ids: list[str]) -> i
     inserted_count = cur.rowcount
     cur.execute("DROP TABLE _tmp_rel_term_name")
 
+    # 回填 name_keywords_jieba（prop 术语走 relation term_name 路径，不走 _batch_sync_term_names）
+    _backfill_jieba_tsvector_batch(cur, scope_rows)
+
     words = list({row[2] for row in scope_rows})
     _batch_insert_vocabulary_words(cur, words)
     return inserted_count
@@ -214,7 +234,7 @@ def _batch_process_relation(cur: Cursor, objs: list[dict[str, Any]], stats: dict
                     obj, id_key="target_term_id", code_key="target_term_code"
                 ),
                 obj["relation_name"],
-                obj.get("relation_category", "BUSINESS"),
+                obj.get("relation_category") or _warn_missing_category(obj, "HAS_OBJECT"),
                 obj.get("cardinality"),
                 obj.get("action_term_id"),
                 obj.get("ext_field"),
@@ -264,7 +284,7 @@ def _batch_process_relation(cur: Cursor, objs: list[dict[str, Any]], stats: dict
                     o, id_key="target_term_id", code_key="target_term_code"
                 ),
                 o["relation_name"],
-                o.get("relation_category", "BUSINESS"),
+                o.get("relation_category") or _warn_missing_category(o, "HAS_OBJECT"),
                 o.get("cardinality"),
                 o.get("action_term_id"),
                 o.get("ext_field"),

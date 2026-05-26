@@ -148,6 +148,9 @@ class OwlGenConfig:
     # ── 输出目录 ──
     output_dir: Path
 
+    # ── Action 配置（独立通道，不作为术语）──
+    actions: list[ActionConfig] = field(default_factory=list)
+
     # ── 视图（多视图优先）──
     views: list[ViewConfig] = field(default_factory=list)
     # 向后兼容：仍可设置单视图字段，resolved_views() 自动转换
@@ -188,6 +191,13 @@ class OwlGenConfig:
     # ── 对象字段业务配置（推荐）──
     # key = (table_code, column_name)
     object_prop_configs: dict[tuple[str, str], ObjectPropConfig] = field(default_factory=dict)
+
+    # ── 实体来源（DYNAMIC_TABLE / KNOWLEDGE_BASE）──
+    entity_source: str = "DYNAMIC_TABLE"
+
+    # ── 非结构化本体知识库绑定（KNOWLEDGE_BASE 模式专用）──
+    kb_id: str = ""
+    kb_directory: str = ""
 
     # ── 术语类型业务配置（推荐）──
     # key = term_type_code
@@ -260,3 +270,36 @@ class OwlGenConfig:
     def resolve_term_type(self, term_type_code: str) -> TermTypeConfig | None:
         """解析术语类型配置。"""
         return self.term_type_configs.get(term_type_code)
+
+
+@dataclass
+class ActionParamConfig:
+    """Action 参数配置 — 描述请求/响应参数的语义信息。
+
+    用于 OwlGenConfig 中配置 Action 的 request/response 参数。
+    """
+
+    param_code: str  # 参数编码
+    param_type: str = "string"  # 参数类型: integer | string | array | object
+    description: str = ""  # 参数中文描述
+    is_required: bool = False  # 是否必填
+
+
+@dataclass
+class ActionConfig:
+    """Action 定义配置 — 描述一个数据操作 API 的元信息。
+
+    用于 OwlGenConfig.actions 列表，驱动 renderers/actions.py 生成
+    actions/{action_code}.owl 文件。
+
+    Phase 1 中 Action 不作为术语类型，不进术语体系。
+    """
+
+    action_code: str  # Action 编码（如 get_by_customer）
+    action_name: str  # Action 中文名称（如 "获取客户详情"）
+    action_type: str  # QUERY | MUTATION
+    request_url: str  # API 接口 URL
+    request_method: str  # HTTP 方法: GET | POST | PUT | DELETE
+    request_params: list[ActionParamConfig] = field(default_factory=list)
+    response_params: list[ActionParamConfig] = field(default_factory=list)
+    header_params: list[ActionParamConfig] = field(default_factory=list)

@@ -1,0 +1,2 @@
+执行命令: cd /skills/ontology-manager/scripts && python create_object.py /tmp/product_object.json
+

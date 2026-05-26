@@ -22,6 +22,17 @@ logger = logging.getLogger(__name__)
 _SENSITIVE_KEYS = frozenset({"password", "token", "secret", "api_key", "apikey"})
 
 
+def _tool_display_label(tool_name: str, tools_map: dict[str, BaseTool]) -> str:
+    """返回工具的友好显示名称，优先使用 OWL action_name（metadata.title），回退到 tool_name。"""
+    tool = tools_map.get(tool_name)
+    if tool is not None:
+        meta = getattr(tool, "metadata", None) or {}
+        title = str(meta.get("title") or "").strip()
+        if title and title != tool_name:
+            return title
+    return tool_name
+
+
 class ToolErrorDict(TypedDict):
     """Fully-classified tool error passed back to the agent as ToolMessage content."""
 
@@ -572,7 +583,7 @@ async def dispatch_tool(
                 )
             return tool_call_id, result
         if gateway_context is not None:
-            async with gateway_context.sub_step(tool_name):
+            async with gateway_context.sub_step(_tool_display_label(tool_name, tools_map)):
                 delegate_parent_scope_factory = getattr(
                     gateway_context,
                     "delegate_parent_scope",
@@ -833,7 +844,7 @@ async def dispatch_tool(
 
     if gateway_context is not None:
         try:
-            async with gateway_context.sub_step(tool_name):
+            async with gateway_context.sub_step(_tool_display_label(tool_name, tools_map)):
                 # 执行工具（SDK 内部的 sub_step 自动嵌套在此层下）
                 delegate_parent_scope_factory = getattr(
                     gateway_context,

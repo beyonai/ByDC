@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from datacloud_data_sdk.exceptions import ObjectNotFoundError
+from datacloud_data_sdk.executor.kb_search_backend import HttpKnowledgeSearchBackend
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 
 MINIMAL_REGISTRY = {
@@ -126,12 +127,45 @@ def test_configure_sets_plan_generator() -> None:
     assert loader._config.csv_base_dir == "/tmp/test"
 
 
-def test_configure_sql_execution_mode():
-    from datacloud_data_sdk.ontology.loader import OntologyLoader
-
+def test_configure_sql_execution_mode() -> None:
     loader = OntologyLoader()
     loader.configure(sql_execution_mode="external")
     assert loader._config.sql_execution_mode == "external"
+
+
+def test_loader_config_has_default_kb_backend() -> None:
+    loader = OntologyLoader()
+
+    assert loader._config.default_kb_backend == "http_knowledge_import"
+    assert isinstance(
+        loader._config.kb_backends["http_knowledge_import"],
+        HttpKnowledgeSearchBackend,
+    )
+
+
+def test_configure_restores_default_kb_backend_when_empty() -> None:
+    loader = OntologyLoader()
+
+    loader.configure(kb_backends={}, default_kb_backend=None)
+
+    assert loader._config.default_kb_backend == "http_knowledge_import"
+    assert isinstance(
+        loader._config.kb_backends["http_knowledge_import"],
+        HttpKnowledgeSearchBackend,
+    )
+
+
+def test_configure_preserves_custom_default_kb_backend() -> None:
+    custom_backend = object()
+    loader = OntologyLoader()
+
+    loader.configure(
+        kb_backends={"custom_kb": custom_backend},
+        default_kb_backend="custom_kb",
+    )
+
+    assert loader._config.default_kb_backend == "custom_kb"
+    assert loader._config.kb_backends == {"custom_kb": custom_backend}
 
 
 def test_ontology_class_parses_source_config() -> None:
