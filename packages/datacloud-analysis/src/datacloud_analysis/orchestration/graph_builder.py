@@ -173,7 +173,7 @@ def build_analysis_graph(
     - false（默认）：V0.3 自研图拓扑（旧路径，现有生产代码）
     - true：V0.4 prebuilt ToolNode 图拓扑（新路径）
     """
-    use_prebuilt = os.getenv("DATACLOUD_USE_PREBUILT_REACT", "false").strip().lower() == "true"
+    use_prebuilt = os.getenv("DATACLOUD_USE_PREBUILT_REACT", "true").strip().lower() == "true"
     if use_prebuilt:
         logger.info("build_analysis_graph: V0.4 prebuilt path (DATACLOUD_USE_PREBUILT_REACT=true)")
         return _build_prebuilt_graph(
