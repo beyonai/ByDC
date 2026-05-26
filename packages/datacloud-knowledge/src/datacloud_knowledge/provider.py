@@ -19,7 +19,17 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from datacloud_knowledge.adapters import create_reader
+from datacloud_knowledge.adapters import create_reader, create_writer
+from datacloud_knowledge.contracts.term_provider_types import (
+    ImportResult,
+    LabelCondition,
+    LabelFilter,
+    QueryResult,
+    QueryType,
+    TermCreate,
+    TermDetail,
+    TermUpdate,
+)
 from datacloud_knowledge.contracts.types import (
     ClarificationMode as _ClarificationMode,
 )
@@ -332,6 +342,156 @@ def get_prop_enum_values(
     return reader.get_prop_enum_values(scope_code=scope_code, field_codes=list(field_codes))
 
 
+# ── TermProvider 新增公开 API ─────────────────────────────────────────
+
+
+def query_terms(
+    *,
+    dataset_ids: list[str] | None = None,
+    keyword: str | None = None,
+    term_name: str | None = None,
+    term_type: str | None = None,
+    query_type: QueryType = "fulltext",
+    parent_term_code: str | None = None,
+    label_filters: list[LabelFilter] | None = None,
+    label_condition: LabelCondition = "and",
+    term_ids: list[str] | None = None,
+    top_k: int = 20,
+    offset: int = 0,
+) -> QueryResult:
+    """检索术语。
+
+    支持按关键词、术语名称、类型、标签等多维度检索，返回分页结果。
+    典型用途：术语搜索、候选列表加载。
+
+    Args:
+        dataset_ids:      术语库 ID 列表。None/空 = 不限制。
+        keyword:          检索关键词（模糊匹配 term_name/term_code）。
+        term_name:        术语名称精确匹配。与 keyword 互斥。
+        term_type:        术语类型编码。None = 不限制类型。
+        query_type:       检索策略（fulltext/exact/embedding/mixed）。
+        parent_term_code: 父术语编码过滤。None = 不限制。
+        label_filters:    标签过滤条件列表。
+        label_condition:  多标签组合方式（and/or）。
+        term_ids:         按 ID 列表精确查询。传入时忽略 keyword/query_type。
+        top_k:            返回条数（1..200）。
+        offset:           分页偏移（>=0）。
+
+    Returns:
+        QueryResult，包含 total 和 items（TermItem 列表）。
+    """
+    reader = create_reader()
+    return reader.query_terms(
+        dataset_ids=dataset_ids,
+        keyword=keyword,
+        term_name=term_name,
+        term_type=term_type,
+        query_type=query_type,
+        parent_term_code=parent_term_code,
+        label_filters=label_filters,
+        label_condition=label_condition,
+        term_ids=term_ids,
+        top_k=top_k,
+        offset=offset,
+    )
+
+
+def get_term_detail(
+    *,
+    dataset_id: str,
+    term_id: str,
+) -> TermDetail | None:
+    """查询单条术语完整详情。
+
+    返回术语的所有字段（含标签翻译、同义词列表、父术语名称）。
+    典型用途：术语详情页、编辑前回显。
+
+    Args:
+        dataset_id: 术语库 ID。
+        term_id:    术语 ID。
+
+    Returns:
+        TermDetail，不存在返回 None。
+    """
+    reader = create_reader()
+    return reader.get_term_detail(dataset_id=dataset_id, term_id=term_id)
+
+
+def list_terms(
+    *,
+    dataset_id: str,
+    term_type: str | None = None,
+    term_type_no_eq: str | None = None,
+    page_index: int = 1,
+    page_size: int = 50,
+) -> QueryResult:
+    """分页列出术语（每条含完整详情）。
+
+    一次请求返回 TermDetail 列表（含 parent_term_name/synonym_list/label_info），
+    替代 N 次并发 get_term_detail。典型用途：加载某类型全量术语、构建 name index。
+
+    Args:
+        dataset_id:      术语库 ID。
+        term_type:       术语类型编码。None = 不限。
+        term_type_no_eq: 排除的术语类型编码。传 "-1" 表示排除术语类型本身。
+        page_index:      页码（从 1 开始）。
+        page_size:       每页条数。
+
+    Returns:
+        QueryResult，其中 items 为 TermDetail 列表。
+    """
+    reader = create_reader()
+    return reader.list_terms(
+        dataset_id=dataset_id,
+        term_type=term_type,
+        term_type_no_eq=term_type_no_eq,
+        page_index=page_index,
+        page_size=page_size,
+    )
+
+
+def import_terms(
+    *,
+    dataset_id: str,
+    terms: list[TermCreate],
+) -> ImportResult:
+    """批量新增术语（含同义词、标签、扩展属性）。
+
+    典型用途：批量导入术语数据、知识包导入。
+
+    Args:
+        dataset_id: 目标术语库 ID。
+        terms:      待新增术语列表。
+
+    Returns:
+        ImportResult，含创建数、term_id 列表和错误信息。
+    """
+    with create_writer() as writer:
+        return writer.import_terms(dataset_id=dataset_id, terms=terms)
+
+
+def update_term(
+    *,
+    dataset_id: str,
+    term_id: str,
+    updates: TermUpdate,
+) -> None:
+    """更新术语。仅更新非 None 字段。
+
+    典型用途：术语编辑保存、字段级部分更新。
+
+    Args:
+        dataset_id: 术语库 ID。
+        term_id:    术语 ID。
+        updates:    更新字段（None = 不修改）。
+
+    Raises:
+        ValueError: 术语不存在。
+    """
+    with create_writer() as writer:
+        writer.update_term(dataset_id=dataset_id, term_id=term_id, updates=updates)
+
+
 # ── 内部辅助函数 ───────────────────────────────────────────────────
 
 
@@ -402,11 +562,22 @@ __all__ = [
     "ClarificationAnalysis",
     "ClarificationMode",
     "FinalizedClarification",
+    "ImportResult",
     "PersistedSynonyms",
+    "QueryResult",
+    "QueryType",
+    "TermCreate",
+    "TermDetail",
+    "TermUpdate",
     "finalize_query_clarification",
     "get_object_props_by_code",
     "get_prop_enum_values",
+    "get_term_detail",
+    "import_terms",
+    "list_terms",
     "prepare_query_clarification",
+    "query_terms",
     "resolve_field_aliases",
     "search_terms_by_type",
+    "update_term",
 ]
