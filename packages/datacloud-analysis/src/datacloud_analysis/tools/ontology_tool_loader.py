@@ -821,9 +821,14 @@ class OntologyToolLoader:
                         code_el = desc.find(f"{{{ent_ns}}}term_code")
                         name_el = desc.find(f"{{{ent_ns}}}term_name")
                         type_el = desc.find(f"{{{ent_ns}}}term_type_code")
-                        if code_el is not None and name_el is not None and type_el is not None:
-                            if type_el.text == dict_type and code_el.text != dict_type:
-                                mappings.append(f"{code_el.text}={name_el.text}")
+                        if (
+                            code_el is not None
+                            and name_el is not None
+                            and type_el is not None
+                            and type_el.text == dict_type
+                            and code_el.text != dict_type
+                        ):
+                            mappings.append(f"{code_el.text}={name_el.text}")
                     if mappings:
                         field_list = "、".join(field_names)
                         lines.append(f"- 字段 {field_list}：{', '.join(sorted(mappings))}")
