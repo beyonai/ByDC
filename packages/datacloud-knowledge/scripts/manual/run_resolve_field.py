@@ -4,6 +4,7 @@ load_dotenv()
 
 from datacloud_knowledge.provider import resolve_field_aliases
 
+
 def main():
     field_terms = []
     scope_code = 'scene_crm_comprehensive_analysis'
