@@ -35,13 +35,13 @@ export PATH="$HOME/.local/bin:$PATH"
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 uv pip install --python /tmp/ont_env/bin/python \
-  /by/.openclaw/workspace-baiying-agent-10002987/skills/structured-ontology-manager/by_datacloud-0.1.37-py3-none-any.whl \
+  by-datacloud \
   by-framework \
   -i https://mirrors.aliyun.com/pypi/simple/ \
   --extra-index-url https://pypi.org/simple/
 ```
 
-> ⚠️ `by_datacloud` whl 从本地安装，`by-framework` 从公网 PyPI 安装（阿里云镜像可能没有）。必须加 `--extra-index-url https://pypi.org/simple/`。
+> ⚠️ `by-datacloud`，`by-framework` 从公网 PyPI 安装（阿里云镜像可能没有）。必须加 `--extra-index-url https://pypi.org/simple/`。
 
 ### 第 4 步：验证环境就绪
 
