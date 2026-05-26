@@ -916,13 +916,27 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         # CACHE MISS：首次执行，调用 SDK；interrupt 前写入完整缓存供 resume 命中
         _ck = _make_cache_key(tool_name, query)
         logger.info("[query_clarification] CACHE MISS — calling _analyze_clarification()")
-        paradigm_list, clarify_knowledge, needs_clarification = _analyze_clarification(
-            query,
-            scope_code,
-            structured_input,
-            is_compute=is_compute,
-            language=language,
-        )
+        try:
+            paradigm_list, clarify_knowledge, needs_clarification = _analyze_clarification(
+                query,
+                scope_code,
+                structured_input,
+                is_compute=is_compute,
+                language=language,
+            )
+        except Exception as _analyze_exc:  # noqa: BLE001
+            # ClarificationNoCandidatesError：知识库里找不到候选（如 OpenGauss 不可用或数据缺失）。
+            # 降级为直接放行，用 LLM 生成的原始参数执行 SQL，避免反复报错。
+            logger.warning(
+                "[query_clarification] _analyze_clarification failed (%s: %s), falling back to original params",
+                type(_analyze_exc).__name__,
+                str(_analyze_exc)[:200],
+            )
+            tool_params = _apply_resolved_to_params(tool_params, resolved)
+            ctx["tool_params"] = tool_params
+            if is_complex:
+                return _build_redirect_decision(tool_name, query, tool_params)
+            return {"action": "patch", "patch": {"tool_params": tool_params}}
         if _graph_state is not None:
             _graph_state["_clarification_cache"] = {
                 "cache_key": _ck,
@@ -948,20 +962,31 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             logger.info("[query_clarification] needs_clarification=False, 直接应用 LLM 确认结果")
             form_str = json.dumps({"paradigmList": paradigm_list}, ensure_ascii=False)
 
-            finalized = _sdk_finalize_clarification(
-                query=query,
-                ontology_code=scope_code,
-                structured_input=structured_input,
-                mode="compute" if is_compute else "query",
-                needs_clarification=needs_clarification,
-                form=form_str,
-                metadata=clarify_knowledge,
-                user_id=user_id,
-                persist_confirmed_synonyms=True,
-                language=language,
-            )
+            try:
+                finalized = _sdk_finalize_clarification(
+                    query=query,
+                    ontology_code=scope_code,
+                    structured_input=structured_input,
+                    mode="compute" if is_compute else "query",
+                    needs_clarification=needs_clarification,
+                    form=form_str,
+                    metadata=clarify_knowledge,
+                    user_id=user_id,
+                    persist_confirmed_synonyms=True,
+                    language=language,
+                )
+                tool_params = finalized.structured_input
+            except Exception as _finalize_exc:  # noqa: BLE001
+                # ClarificationNoCandidatesError / ClarificationConfirmedNotInRecallError：
+                # 知识库里找不到候选（如 OpenGauss 不可用或数据缺失），降级为直接放行，
+                # 用 LLM 生成的原始参数执行 SQL，避免反复报错。
+                logger.warning(
+                    "[query_clarification] finalize failed (%s: %s), falling back to original params",
+                    type(_finalize_exc).__name__,
+                    str(_finalize_exc)[:200],
+                )
+                tool_params = _apply_resolved_to_params(tool_params, resolved)
 
-            tool_params = finalized.structured_input
             tool_params["query"] = query  # _format_clarification 回填结果不含 query，需补回
             ctx["tool_params"] = tool_params
             if is_complex:

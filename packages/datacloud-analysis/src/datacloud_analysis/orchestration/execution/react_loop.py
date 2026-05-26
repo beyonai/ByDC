@@ -461,6 +461,24 @@ async def _stream_llm_call(
             kwargs["reasoning_content"] = _reasoning_content_acc or _thinking_acc
             full_msg = full_msg.model_copy(update={"additional_kwargs": kwargs})
 
+    # 部分模型（如 glm）生成的 tool_call id 带外层单引号（如 "'call_xxx'"），
+    # 下一轮发给其他模型时会返回 400。在 LLM 返回后立即清洗，确保 id 格式干净。
+    if full_msg is not None and getattr(full_msg, "tool_calls", None):
+        fixed_tcs = []
+        changed = False
+        for tc in full_msg.tool_calls:
+            tc_id = tc.get("id") or ""
+            if tc_id.startswith("'") and tc_id.endswith("'") and len(tc_id) > 2:
+                tc = {**tc, "id": tc_id[1:-1]}
+                changed = True
+            fixed_tcs.append(tc)
+        if changed:
+            logger.warning(
+                "[react_loop] fixed quoted tool_call_ids in LLM response: %s",
+                [tc.get("id") for tc in fixed_tcs],
+            )
+            full_msg = full_msg.model_copy(update={"tool_calls": fixed_tcs})
+
     # [DIAG] 诊断日志：记录本次 LLM 调用流式推送的 finish_react.answer 内容
     if _fr_answer_emitted > 0:
         m = re.search(r'"answer"\s*:\s*"((?:[^"\\]|\\.)*)', _fr_args_acc)
@@ -742,9 +760,25 @@ def _conversation_messages_for_llm(state: Any) -> list[HumanMessage | AIMessage]
     导致「前 3 个网格」等指代无法解析。
     """
     out: list[HumanMessage | AIMessage] = []
-    for m in state.get("messages") or []:
+    raw_messages = state.get("messages") or []
+    for m in raw_messages:
         if isinstance(m, (HumanMessage, AIMessage)):
             out.append(m)
+        elif isinstance(m, dict):
+            # LangGraph checkpoint 反序列化后消息可能是 dict，需要重建
+            msg_type = m.get("type") or m.get("role") or ""
+            content = str(m.get("content") or "")
+            if msg_type in ("human", "user") and content:
+                out.append(HumanMessage(content=content))
+            elif msg_type in ("ai", "assistant") and content:
+                out.append(AIMessage(content=content))
+    if not out:
+        logger.warning(
+            "[react_loop] _conversation_messages_for_llm: no Human/AI messages found, "
+            "state.messages count=%d types=%s",
+            len(raw_messages),
+            [type(m).__name__ for m in raw_messages[:5]],
+        )
     return out
 
 
@@ -1047,7 +1081,36 @@ def _trim_messages_window(messages: list) -> list:
                 continue
         cleaned.append(msg)
         i += 1
-    return cleaned
+
+    # 清洗 tool_call_id 格式：部分模型（如 glm）生成的 id 带外层单引号（如 "'call_xxx'"），
+    # 切换模型后对端会拒绝该格式返回 400。统一去掉首尾单引号。
+    final: list[Any] = []
+    for msg in cleaned:
+        if isinstance(msg, AIMessage) and msg.tool_calls:
+            fixed_tcs = []
+            for tc in msg.tool_calls:
+                tc_id = tc.get("id") or ""
+                if tc_id.startswith("'") and tc_id.endswith("'") and len(tc_id) > 2:
+                    tc = {**tc, "id": tc_id[1:-1]}
+                fixed_tcs.append(tc)
+            if fixed_tcs != list(msg.tool_calls):
+                logger.warning(
+                    "[react_loop] trim_messages: fixed quoted tool_call_ids: %s → %s",
+                    [tc.get("id") for tc in msg.tool_calls],
+                    [tc.get("id") for tc in fixed_tcs],
+                )
+                msg = msg.model_copy(update={"tool_calls": fixed_tcs})
+        elif isinstance(msg, ToolMessage):
+            tc_id = getattr(msg, "tool_call_id", "") or ""
+            if tc_id.startswith("'") and tc_id.endswith("'") and len(tc_id) > 2:
+                logger.warning(
+                    "[react_loop] trim_messages: fixed quoted ToolMessage tool_call_id: %r → %r",
+                    tc_id,
+                    tc_id[1:-1],
+                )
+                msg = msg.model_copy(update={"tool_call_id": tc_id[1:-1]})
+        final.append(msg)
+    return final
 
 
 async def run_react_loop(
@@ -1168,6 +1231,21 @@ async def run_react_loop(
         logger.info(
             "[react_loop] RESUME from checkpoint: round=%d messages=%d", start_round, len(messages)
         )
+        # 安全检查：checkpoint 恢复后 messages 必须包含至少一条 HumanMessage，
+        # 否则 LLM 会收到只有 system 的非法序列返回 400。
+        # 若缺失，从 state 补充 user_query / enriched_query。
+        has_human = any(isinstance(m, HumanMessage) for m in messages)
+        if not has_human:
+            _fallback_query = str(
+                state.get("user_query") or state.get("enriched_query") or ""
+            ).strip()
+            if _fallback_query:
+                messages.insert(1, HumanMessage(content=_fallback_query))
+                logger.warning(
+                    "[react_loop] checkpoint messages missing HumanMessage, "
+                    "injected user_query: %r",
+                    _fallback_query[:100],
+                )
     else:
         # 首次执行：初始化messages
         # Prompt Caching：仅 Anthropic 协议支持 cache_control，OpenAI 兼容协议退回纯字符串

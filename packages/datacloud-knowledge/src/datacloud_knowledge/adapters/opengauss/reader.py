@@ -559,6 +559,106 @@ class PostgresTermReader:
                     )
                     queries.append(val_alias_q)
 
+                    # 子查询 4+5：View → included_object 值消歧
+                    # view 自身的 prop 没有 HAS_TERM，维度值存在 included objects 下
+                    # （via HAS_OBJECT），需下钻一层遍历。不遍历 MANY_TO_ONE，
+                    # 因为那是 object↔object 的业务 JOIN 链，不需要用于值消歧。
+                    view_obj3 = aliased(Term, name="view_obj3")
+                    included_obj = aliased(Term, name="included_obj")
+                    include_rel = aliased(TermRelation, name="include_rel")
+                    prop3 = aliased(Term, name="prop3")
+                    child3 = aliased(Term, name="child3")
+                    type_term3 = aliased(Term, name="type_term3")
+                    has_term_rel3 = aliased(TermRelation, name="has_term3")
+
+                    # included_object → child.term_name 直接匹配
+                    val_included_direct_q = (
+                        select(
+                            literal("value").label("match_type"),
+                            child3.term_name.label("matched_text"),
+                            literal("").label("term_code"),
+                            literal("").label("term_name"),
+                            _null_scope.label("search_scope"),
+                        )
+                        .select_from(view_obj3)
+                        .join(
+                            include_rel,
+                            (include_rel.source_term_id == view_obj3.term_id)
+                            & (include_rel.relation_category == "HAS_OBJECT"),
+                        )
+                        .join(
+                            included_obj,
+                            (included_obj.term_id == include_rel.target_term_id)
+                            & (included_obj.term_type_code == "object"),
+                        )
+                        .join(TermRelation, TermRelation.source_term_id == included_obj.term_id)
+                        .join(prop3, prop3.term_id == TermRelation.target_term_id)
+                        .join(
+                            has_term_rel3,
+                            (has_term_rel3.source_term_id == prop3.term_id)
+                            & (has_term_rel3.relation_category == "HAS_TERM"),
+                        )
+                        .join(type_term3, type_term3.term_id == has_term_rel3.target_term_id)
+                        .join(child3, child3.term_type_code == type_term3.term_code)
+                        .where(
+                            view_obj3.term_code == scope_code,
+                            view_obj3.term_type_code.in_(["view", "object"]),
+                            prop3.term_type_code == "prop",
+                            child3.term_name.in_(unique_value_terms),
+                        )
+                    )
+                    queries.append(val_included_direct_q)
+
+                    # included_object → TermName 别名匹配
+                    view_obj4 = aliased(Term, name="view_obj4")
+                    included_obj2 = aliased(Term, name="included_obj2")
+                    include_rel2 = aliased(TermRelation, name="include_rel2")
+                    prop4 = aliased(Term, name="prop4")
+                    child4 = aliased(Term, name="child4")
+                    type_term4 = aliased(Term, name="type_term4")
+                    has_term_rel4 = aliased(TermRelation, name="has_term4")
+
+                    val_included_alias_q = (
+                        select(
+                            literal("value").label("match_type"),
+                            TermName.name_text.label("matched_text"),
+                            literal("").label("term_code"),
+                            literal("").label("term_name"),
+                            _null_scope.label("search_scope"),
+                        )
+                        .select_from(view_obj4)
+                        .join(
+                            include_rel2,
+                            (include_rel2.source_term_id == view_obj4.term_id)
+                            & (include_rel2.relation_category == "HAS_OBJECT"),
+                        )
+                        .join(
+                            included_obj2,
+                            (included_obj2.term_id == include_rel2.target_term_id)
+                            & (included_obj2.term_type_code == "object"),
+                        )
+                        .join(TermRelation, TermRelation.source_term_id == included_obj2.term_id)
+                        .join(prop4, prop4.term_id == TermRelation.target_term_id)
+                        .join(
+                            has_term_rel4,
+                            (has_term_rel4.source_term_id == prop4.term_id)
+                            & (has_term_rel4.relation_category == "HAS_TERM"),
+                        )
+                        .join(type_term4, type_term4.term_id == has_term_rel4.target_term_id)
+                        .join(child4, child4.term_type_code == type_term4.term_code)
+                        .join(TermName, TermName.term_id == child4.term_id)
+                        .where(
+                            view_obj4.term_code == scope_code,
+                            view_obj4.term_type_code.in_(["view", "object"]),
+                            prop4.term_type_code == "prop",
+                            TermName.name_text.in_(unique_value_terms),
+                            or_(
+                                TermName.search_scope.contains(global_scope),
+                            ),
+                        )
+                    )
+                    queries.append(val_included_alias_q)
+
                 if not queries:
                     all_unresolved = unique_field_terms + unique_value_terms
                     return FieldResolutionResult(unresolved=all_unresolved)

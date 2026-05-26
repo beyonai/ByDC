@@ -51,20 +51,23 @@ async def read_file(
     """读取 workspace 内指定文件，返回文本内容。
 
     Args:
-        path: 文件路径（逻辑路径，相对于 workspace_dir 或绝对逻辑路径）
+        path: 文件路径（必填）。必须是具体的文件路径，例如 "result.csv" 或 "/output/report.txt"。
+            不能为空字符串、"/" 或纯目录路径。路径相对于 workspace_dir，或使用绝对逻辑路径。
         begin_line: 起始行号（0 起，含），默认 0；与 ``end_line`` 同时为默认值时返回全文
         end_line: 结束行号（不含），-1 表示读到文件末尾，默认 -1
         encoding: 预留参数，当前 ResultFileStorage 抽象固定使用 utf-8
 
     不传 ``begin_line`` 和 ``end_line`` 则返回文件全部内容。
     """
+    logger.info("read_file called: path=%r begin_line=%d end_line=%d", path, begin_line, end_line)
     storage = _resolve_storage()
     try:
         content = storage.read_text(path, begin_line=begin_line, end_line=end_line)
     except ValueError as exc:
+        logger.error("read_file ValueError: path=%r error=%s", path, exc)
         return f"错误：{exc}"
     except (OSError, httpx.HTTPError) as exc:
-        logger.error("read_file failed path=%s error=%s", path, exc)
+        logger.error("read_file failed path=%r error=%s", path, exc)
         return f"错误：读取失败 {exc}"
 
     if content is None:

@@ -186,6 +186,8 @@ class OntologyAgentConfig:
     sql_execute_url: str | None = None
     # 结果文件（CSV 导出等）的工作目录根路径。None 时退化到 os.getcwd()。
     workspace_dir: str | None = None
+    # False 时跳过 KbTermLoader（不连 OpenGauss），适用于 OpenGauss 不可用的环境（如评测 mock 环境）。
+    use_kb_term_loader: bool = True
 
 
 # ── 缓存 key ──────────────────────────────────────────────────────────────────
@@ -427,6 +429,7 @@ class OntologyAgent:
         session_id: str | None = None,
         locale: str | None = None,
         extras: dict[str, Any] | None = None,
+        target_tool: str | None = None,
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """发起一次问答，流式返回事件。
 
@@ -439,6 +442,9 @@ class OntologyAgent:
         在内部组装成 duck-typed 容器并注入 LangGraph configurable，供下游
         tool_wrapper / HookAwareToolNode 通过 InvocationContext 透传至 SDK
         result_file_storage 等需要这两个字段的位置。本接口不感知 Gateway 概念。
+
+        target_tool: 强制指定初始工具名（如 "data_query_crm_customer"），跳过 LLM 工具选择，
+        直接从该工具开始执行。用于对比实验（Text2SQL vs DSL 路径）。
         """
         effective_tid = thread_id or str(uuid.uuid4())
         return self._iter_events(
@@ -451,6 +457,7 @@ class OntologyAgent:
             locale=locale,
             resume_input=None,
             extras=extras,
+            target_tool=target_tool,
         )
 
     def resume(
@@ -520,6 +527,7 @@ class OntologyAgent:
             temperature=self._config.temperature,
             result_file_storage=self._config.result_file_storage,
             sql_execute_url=self._config.sql_execute_url,
+            use_kb_term_loader=self._config.use_kb_term_loader,
         )
 
         mounted = list(view_codes or []) + list(object_codes or [])
@@ -539,8 +547,14 @@ class OntologyAgent:
         )
 
         loader, mounted = self._build_loader(view_codes, object_codes)
-        tools = OntologyToolLoader(mounted_objects=mounted, loader=loader).load()
-        graph = build_analysis_graph(tools=tools, loader=loader)
+        tool_loader = OntologyToolLoader(
+            mounted_objects=mounted,
+            loader=loader,
+            resource_path=self._config.resource_path,
+        )
+        tools = tool_loader.load()
+        redirect_tools = tool_loader.build_all_nl_query_tools()
+        graph = build_analysis_graph(tools=tools, loader=loader, redirect_tools=redirect_tools or None)
         return graph.compile(checkpointer=self._checkpointer)
 
     def _get_or_build_graph(
@@ -575,6 +589,7 @@ class OntologyAgent:
         locale: str | None,
         resume_input: str | ParadigmAnswer | dict[str, Any] | None,
         extras: dict[str, Any] | None = None,
+        target_tool: str | None = None,
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """核心事件迭代器：构建图、执行、转换事件。"""
         try:
@@ -615,6 +630,8 @@ class OntologyAgent:
                 question, workspace_dir=self._config.workspace_dir
             )
             graph_input["prompts_overwrite"] = {"locale": effective_locale}
+            if target_tool:
+                graph_input["target_tool"] = target_tool
         elif isinstance(resume_input, str | dict):
             graph_input = Command(resume=resume_input)
         else:

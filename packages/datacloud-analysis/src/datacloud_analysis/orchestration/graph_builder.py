@@ -72,6 +72,7 @@ def after_tools_route(state: AgentState) -> Literal["agent", "finish_react_node"
     """tools 节点出口（正常执行路径）。
 
     L1: 本轮 ToolMessage 中含 finish_react → finish_react_node
+    L2: target_tool 模式 → finish_react_node（不让 LLM 重试其他工具）
     其他: → agent（继续下一轮 LLM 推理）
 
     ClarificationNeededError 由 HookAwareToolNode 返回 Command 直接路由，不经过此函数。
@@ -82,6 +83,8 @@ def after_tools_route(state: AgentState) -> Literal["agent", "finish_react_node"
             break
         if isinstance(msg, ToolMessage) and msg.name == "finish_react":
             return "finish_react_node"
+    if str(state.get("target_tool") or ""):
+        return "finish_react_node"
     return "agent"
 
 
@@ -101,6 +104,8 @@ def _route_after_intend(state: AgentState) -> str:
     status = str(state.get("execution_status") or "llm_call")
     if status == "command_done":
         return "command_done"
+    if status == "target_tool_direct":
+        return "tool_dispatcher"
     return "llm_call"
 
 
@@ -118,6 +123,9 @@ def _route_after_tool_dispatcher(state: AgentState) -> str:
         return "finish_react"
     if status == "clarify_needed":
         return "analyze_clarify"
+    # target_tool 模式：工具执行完后直接走 finish_react，不让 LLM 重试其他工具
+    if str(state.get("target_tool") or ""):
+        return "finish_react"
     return "llm_call"
 
 
@@ -338,7 +346,7 @@ def _build_legacy_graph(
     builder.add_conditional_edges(
         "intend",
         _route_after_intend,
-        {"command_done": END, "llm_call": "llm_call"},
+        {"command_done": END, "llm_call": "llm_call", "tool_dispatcher": "tool_dispatcher"},
     )
     builder.add_conditional_edges(
         "llm_call",
@@ -485,7 +493,7 @@ def _build_prebuilt_graph(
     builder.add_conditional_edges(
         "intend",
         _route_after_intend,
-        {"command_done": END, "llm_call": "agent"},
+        {"command_done": END, "llm_call": "agent", "tool_dispatcher": "tools"},
     )
     builder.add_conditional_edges(
         "agent",
