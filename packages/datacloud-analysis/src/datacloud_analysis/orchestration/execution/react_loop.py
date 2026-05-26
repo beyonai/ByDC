@@ -945,7 +945,7 @@ class _ThinkingAwareChatOpenAI:
         except Exception:
             pass
 
-    def bind_tools(self, tools: list) -> "_ThinkingAwareChatOpenAI":
+    def bind_tools(self, tools: list) -> _ThinkingAwareChatOpenAI:
         return _ThinkingAwareChatOpenAI(self._llm.bind_tools(tools))
 
     async def astream(self, messages: list, **kwargs: Any):  # type: ignore[override]
