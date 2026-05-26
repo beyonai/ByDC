@@ -47,14 +47,51 @@ class StepEvent(OntologyAgentEvent):
 
 
 @dataclass
+class OperationFormField:
+    """操作确认表单字段，支持通过 children 递归表达对象和对象数组。"""
+
+    form_type: str
+    field_code: str
+    field_name: str
+    field_type: str
+    field_path: str = ""
+    field_value: Any = None
+    children: list[list[OperationFormField]] | None = None
+    item_id: str = ""
+    description: str = ""
+    required: bool = False
+    readonly: bool = False
+    disabled: bool = False
+    is_hidden: bool = False
+    default_files: list[str] = dc_field(default_factory=list)
+    term: dict[str, Any] | None = None
+
+
+@dataclass
+class OperationForm:
+    """操作确认表单，rule 使用二维字段数组表达一组或多组表单。"""
+
+    schema_version: str
+    form_id: str
+    action_code: str
+    action_name: str = ""
+    title: str = ""
+    description: str = ""
+    rule: list[list[OperationFormField]] = dc_field(default_factory=list)
+    raw: dict[str, Any] = dc_field(default_factory=dict)
+
+
+@dataclass
 class InterruptEvent(OntologyAgentEvent):
     """图在此处暂停，调用方需处理后调用 resume()。"""
 
     thread_id: str
     reason: str  # "PARADIGM_CLARIFICATION" | "ASK_USER" | ...
     prompt: str
+    interrupt_type: str = ""
     paradigm_list: list[ParadigmGroup] | None = None
     query: str = ""
+    operation_form: OperationForm | None = None
 
 
 @dataclass
@@ -309,6 +346,59 @@ def _interrupt_value_to_paradigm_list(
     return groups or None
 
 
+def _operation_form_from_payload(payload: dict[str, Any]) -> OperationForm:
+    """将 operation_form 原始 dict 转为 SDK 公开的轻量强类型结构。"""
+    return OperationForm(
+        schema_version=str(payload.get("schemaVersion") or ""),
+        form_id=str(payload.get("formId") or ""),
+        action_code=str(payload.get("actionCode") or ""),
+        action_name=str(payload.get("actionName") or ""),
+        title=str(payload.get("title") or ""),
+        description=str(payload.get("description") or ""),
+        rule=_operation_rule_from_payload(payload.get("rule")),
+        raw=dict(payload),
+    )
+
+
+def _operation_rule_from_payload(value: Any) -> list[list[OperationFormField]]:
+    if not isinstance(value, list):
+        return []
+    rows: list[list[OperationFormField]] = []
+    for row in value:
+        if not isinstance(row, list):
+            continue
+        fields = [_operation_field_from_payload(item) for item in row if isinstance(item, dict)]
+        if fields:
+            rows.append(fields)
+    return rows
+
+
+def _operation_field_from_payload(payload: dict[str, Any]) -> OperationFormField:
+    default_files_raw = payload.get("defaultFiles")
+    default_files = (
+        [str(item) for item in default_files_raw] if isinstance(default_files_raw, list) else []
+    )
+    term_raw = payload.get("term")
+    children = _operation_rule_from_payload(payload.get("children"))
+    return OperationFormField(
+        form_type=str(payload.get("formType") or ""),
+        field_code=str(payload.get("fieldCode") or ""),
+        field_name=str(payload.get("fieldName") or ""),
+        field_type=str(payload.get("fieldType") or ""),
+        field_path=str(payload.get("fieldPath") or ""),
+        field_value=payload.get("fieldValue"),
+        children=children or None,
+        item_id=str(payload.get("itemId") or ""),
+        description=str(payload.get("description") or ""),
+        required=bool(payload.get("required")),
+        readonly=bool(payload.get("readonly")),
+        disabled=bool(payload.get("disabled")),
+        is_hidden=bool(payload.get("isHidden")),
+        default_files=default_files,
+        term=dict(term_raw) if isinstance(term_raw, dict) else None,
+    )
+
+
 # ── OntologyAgent ─────────────────────────────────────────────────────────────
 
 
@@ -366,7 +456,7 @@ class OntologyAgent:
     def resume(
         self,
         thread_id: str,
-        user_input: str | ParadigmAnswer,
+        user_input: str | ParadigmAnswer | dict[str, Any],
         *,
         view_codes: list[str] | None = None,
         object_codes: list[str] | None = None,
@@ -380,6 +470,7 @@ class OntologyAgent:
         user_input:
           - str：文本回复（ASK_USER 场景）
           - ParadigmAnswer：维度选择（PARADIGM_CLARIFICATION 场景）
+          - dict：结构化恢复值，如操作确认表单 operation_form 场景
         user_code / session_id: 同 ask()。
         """
         return self._iter_events(
@@ -482,7 +573,7 @@ class OntologyAgent:
         user_code: str | None,
         session_id: str | None,
         locale: str | None,
-        resume_input: str | ParadigmAnswer | None,
+        resume_input: str | ParadigmAnswer | dict[str, Any] | None,
         extras: dict[str, Any] | None = None,
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """核心事件迭代器：构建图、执行、转换事件。"""
@@ -524,7 +615,7 @@ class OntologyAgent:
                 question, workspace_dir=self._config.workspace_dir
             )
             graph_input["prompts_overwrite"] = {"locale": effective_locale}
-        elif isinstance(resume_input, str):
+        elif isinstance(resume_input, str | dict):
             graph_input = Command(resume=resume_input)
         else:
             resume_value = _paradigm_answer_to_resume_value(
@@ -620,18 +711,30 @@ class OntologyAgent:
         if snapshot.interrupts:
             interrupt = snapshot.interrupts[0]
             iv = interrupt.value if hasattr(interrupt, "value") else interrupt
-            reason_code = str((iv or {}).get("reason_code") or "UNKNOWN")
-            prompt = str((iv or {}).get("prompt") or "")
-            ask_payload: dict[str, Any] = dict((iv or {}).get("ask_user_payload") or {})
+            interrupt_value = dict(iv or {}) if isinstance(iv, dict) else {}
+            reason_code = str(interrupt_value.get("reason_code") or "UNKNOWN")
+            prompt = str(interrupt_value.get("prompt") or "")
+            interrupt_type = str(interrupt_value.get("interrupt_type") or "")
+            ask_payload: dict[str, Any] = dict(interrupt_value.get("ask_user_payload") or {})
             paradigm_list = _interrupt_value_to_paradigm_list(ask_payload)
             query = str(ask_payload.get("query") or "")
+            operation_form_raw = interrupt_value.get("operation_form") or ask_payload.get(
+                "operation_form"
+            )
+            operation_form = (
+                _operation_form_from_payload(operation_form_raw)
+                if isinstance(operation_form_raw, dict)
+                else None
+            )
 
             yield InterruptEvent(
                 thread_id=thread_id,
                 reason=reason_code,
                 prompt=prompt,
+                interrupt_type=interrupt_type,
                 paradigm_list=paradigm_list,
                 query=query,
+                operation_form=operation_form,
             )
             return
 

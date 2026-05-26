@@ -278,3 +278,37 @@ def test_kb_term_loader_cache_isolated_by_keyword_for_resolve_value() -> None:
         assert mock_search.call_count == 2
         mock_search.assert_any_call(term_type_code="staffName", keyword="EMP001", limit=100)
         mock_search.assert_any_call(term_type_code="staffName", keyword="EMP002", limit=100)
+
+
+def test_kb_term_loader_get_entries_page_pushes_pagination() -> None:
+    mock_result = MagicMock()
+    mock_result.total = 30
+    mock_result.items = [
+        MagicMock(term_code="EMP011", term_name="员工11"),
+        MagicMock(term_code="EMP012", term_name="员工12"),
+    ]
+
+    with patch(
+        "datacloud_data_sdk.ontology.term_loader.search_terms_by_type",
+        return_value=mock_result,
+    ) as mock_search:
+        loader = KbTermLoader()
+        entries, total = loader.get_entries_page(
+            "staffName.code",
+            term_type_code="staffName",
+            keyword="员工",
+            limit=2,
+            offset=10,
+        )
+
+    assert total == 30
+    assert entries == [
+        {"code": "EMP011", "label": "员工11"},
+        {"code": "EMP012", "label": "员工12"},
+    ]
+    mock_search.assert_called_once_with(
+        term_type_code="staffName",
+        keyword="员工",
+        limit=2,
+        offset=10,
+    )

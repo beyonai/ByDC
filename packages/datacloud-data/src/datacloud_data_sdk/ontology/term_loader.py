@@ -82,6 +82,23 @@ class TermLoader(ABC):
     ) -> list[dict[str, str]]:
         """返回术语集的所有条目，每项包含 code 和 label。"""
 
+    def get_entries_page(
+        self,
+        term_set: str,
+        dataset_id: int | None = None,
+        term_type_code: str | None = None,
+        keyword: str = "",
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, str]], int]:
+        """返回分页术语条目。
+
+        默认实现兼容旧 TermLoader：先读取 get_entries() 再做内存分页。
+        支持数据库分页的实现应覆盖此方法，将 limit/offset 下推到底层查询。
+        """
+        entries = self.get_entries(term_set, dataset_id, term_type_code, keyword)
+        return entries[offset : offset + limit], len(entries)
+
     @classmethod
     def from_config(cls, config: dict) -> TermLoader:
         """根据配置返回 KbTermLoader。"""
@@ -282,9 +299,47 @@ class KbTermLoader(TermLoader):
         keyword: str = "",
     ) -> list[dict[str, str]]:
         """返回术语集的所有条目，每项包含 code 和 label。"""
+        entries, _total = self.get_entries_page(
+            term_set,
+            dataset_id=dataset_id,
+            term_type_code=term_type_code,
+            keyword=keyword,
+            limit=100,
+            offset=0,
+        )
+        return entries
+
+    def get_entries_page(
+        self,
+        term_set: str,
+        dataset_id: int | None = None,
+        term_type_code: str | None = None,
+        keyword: str = "",
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, str]], int]:
+        """返回分页术语条目，knowledge 后端通过 limit/offset 下推到数据库层。"""
         memory_entries = self._mapping_entries(term_set)
         if memory_entries:
-            return [{"code": e.code, "label": e.label} for e in memory_entries]
+            total = len(memory_entries)
+            return (
+                [
+                    {"code": e.code, "label": e.label}
+                    for e in memory_entries[offset : offset + limit]
+                ],
+                total,
+            )
         tc = self._resolve_term_type_code(term_set, term_type_code)
-        entries = self._get_cached_entries(tc, keyword)
-        return [{"code": e.code, "label": e.label} for e in entries]
+        if search_terms_by_type is None:
+            raise ImportError("datacloud-knowledge is not installed")
+        result = search_terms_by_type(
+            term_type_code=tc,
+            keyword=keyword or None,
+            limit=limit,
+            offset=offset,
+        )
+        entries = [
+            {"code": item.term_code, "label": item.term_name}
+            for item in list(getattr(result, "items", []) or [])
+        ]
+        return entries, int(getattr(result, "total", len(entries)))

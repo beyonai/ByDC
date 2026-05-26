@@ -123,6 +123,8 @@ def _route_after_tool_dispatcher(state: AgentState) -> str:
 
 def _route_after_analyze(state: AgentState) -> str:
     analyze_result = state.get("clarification_analyze_result") or {}
+    if str(analyze_result.get("interrupt_type") or "") == "operation_form":
+        return "user_clarify"
     paradigm_list = list(analyze_result.get("paradigm_list") or [])
     if paradigm_list:
         return "user_clarify"

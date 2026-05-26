@@ -19,6 +19,12 @@ logging.basicConfig(
 
 load_dotenv(Path("xx"))
 
+BYCLAW_RESOURCE_DIR = Path(
+    "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai_v2/ByClaw/byclaw-data"
+    "/byclaw/resource"
+)
+ORDER_OBJECT_CODE = "p_order_0027024630_59e187"
+
 
 async def main1() -> None:
     loader = OntologyLoader()
@@ -265,10 +271,9 @@ async def main8() -> None:
 async def main9() -> None:
     loader = OntologyLoader()
     loader.load_from_owl_resource_directory(
-        "xxx",
-        object_codes=["sales_meeting_note"],
+        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai_v2/ByClaw/byclaw-data/byclaw/resource",
+        object_codes=["sales_meeting_note_0027024630"],
     )
-    from datacloud_data_sdk.executor.kb_search_backend import HttpKnowledgeSearchBackend
 
     loader.configure(
         plan_generator=LangGraphPlanGenerator(
@@ -281,12 +286,8 @@ async def main9() -> None:
         term_loader=TermLoader.from_config({}),
         csv_base_dir=str(Path("./tmp").resolve()),
         sql_execution_mode="internal",
-        kb_backends={
-            "http_knowledge_import": HttpKnowledgeSearchBackend(kb_configs={"endpoint_url": "xxx"}),
-        },
-        default_kb_backend="http_knowledge_import",
     )
-    obj = loader.get_object("sales_meeting_note")
+    obj = loader.get_object("sales_meeting_note_0027024630")
     from datacloud_data_service.tools.virtual_action_injector import (
         inject_virtual_actions,
     )
@@ -294,25 +295,37 @@ async def main9() -> None:
     inject_virtual_actions(loader)
 
     print("actions:", obj.list_action_codes())
-    print("schema:", obj.get_action_schema("search_sales_meeting_note"))
-    print("schema:", obj.get_action_schema("write_sales_meeting_note"))
+    print("schema:", obj.get_action_schema("search_sales_meeting_note_0027024630"))
+    print("schema:", obj.get_action_schema("write_sales_meeting_note_0027024630"))
 
-    # with InvocationContext(tenant_id="t1", user_id="u1"):
-    #     result = await obj.invoke_action(
-    #         "write_sales_meeting_note",
-    #         {
-    #             "labels": {
-    #                 "meetingId": "2",
-    #                 "meetingTitle": "datacloud的会议纪要内容",
-    #                 "meetingTime": "2026-05-18 20:52:25",
-    #                 "relatedBoId": 23,
-    #                 "relatedCustomerId": 100,
-    #                 "participantEmpNos": ["黄升", "罗彦卓"],
-    #             },
-    #             "source_path": "/会议纪要/datacloud的会议纪要内容.docx",
-    #             "content": 'datacloud的会议纪要内容会议时间：2026-05-18 20:52:25会议主持：王威参与人员：黄升,罗彦卓会议主题：datacloud的会议──────────────────────────────────────────────────一、会议概述本次技术联调会议围绕端到端流程验证中的接口认证、服务注册与数据传递问题展开，重点排查了401认证错误、Redis缓存未刷新、会话ID错传等关键故障点，并明确了参数补全与SDK调用规范的修复方案。二、故障排查与定位1.401认证异常问题描述：接口返回401状态码，初步判断为认证配置问题。调用路径中多出BYservice层级，导致请求未正确路由。原因分析：实际服务已免登录，但因服务名未正常解析为IP地址，引发认证拦截。该问题与中层网关的服务发现机制有关。2.Redis缓存未刷新问题描述：模型APIKey未更新，因系统从Redis读取旧key所致。陈晓锋指出"没刷redis"，需手动触发刷新操作。修复方式：在管理页面更新token并保存，强制刷新缓存数据。验证后模型切换成功。三、服务注册与实例管理1.过期实例未清理问题描述：中层服务注册了多个instance，部分为上周遗留实例，TTL机制未能自动清除。处理建议：增强心跳检测逻辑，确保get时仅返回有效实例，避免调用失效节点。2.服务注册路径错误问题描述：直接调用SDK返回401，而本地命令行可通，怀疑注册路径不一致。后续动作：需进一步查看真实发出的请求头和路径。四、数据流与会话一致性1.会话ID传递错误问题描述：家长侧调用"大师"接口写文件时，传入的CSID（会话ID）错误，导致文件写入非目标目录。根因分析：正确sessionID应为纯数字格式（如4545401），但实际传入为doc-10042908类结构化ID。根本原因为中层服务未正确传递前端会话上下文，拼接逻辑出错。2.缺失必要参数问题描述：当前消息体中漏传usercode、sessionID、parentmessageID等关键字段，导致下游无法串联完整数据链路。五、修复方案与后续动作1.参数传递规范统一使用下划线命名法传递参数：user_code、session_id。所有调用应通过标准SDK发起，避免手动构造请求体导致协议不一致。小红负责修改代码，确保消息体包含全部必要字段。2.工具与资源准备MCP工具、智能体、知识库等组件需提前导入测试环境，当前部分工具缺失或未激活。王威安排向2.0群同步最新工具包，包括空气分析智能体、MGP能力模块等。3.验证计划明日完成最后一次端到端全流程验证，确保所有环节就绪。六、AI洞察1.多次故障根源指向服务元数据管理薄弱，建议建立注册实例健康度监控看板。2.手动构造请求而非使用SDK是主要风险源，需推动标准化接入并废弃自定义调用路径。3.会话上下文丢失问题暴露了中台服务对前端状态依赖过重，宜设计更健壮的上下文透传机制。──────────────────────────────────────────────────文档生成时间：2026-05-1410:58:12',
-    #         },
-    #     )
+    with InvocationContext(tenant_id="t1", user_id="u1"):
+        result = await obj.invoke_action(
+            "write_sales_meeting_note_0027024630",
+            # {
+            #     "labels": {
+            #         "meetingId": "2",
+            #         "meetingTitle": "datacloud的会议纪要内容",
+            #         "meetingTime": "2026-05-18 20:52:25",
+            #         "relatedBoId": 23,
+            #         "relatedCustomerId": 100,
+            #         "participantEmpNos": ["黄升", "罗彦卓"],
+            #     },
+            #     "source_path": "/会议纪要/datacloud的会议纪要内容.docx",
+            #     "content": 'datacloud的会议纪要内容会议时间：2026-05-18 20:52:25会议主持：王威参与人员：黄升,罗彦卓会议主题：datacloud的会议──────────────────────────────────────────────────一、会议概述本次技术联调会议围绕端到端流程验证中的接口认证、服务注册与数据传递问题展开，重点排查了401认证错误、Redis缓存未刷新、会话ID错传等关键故障点，并明确了参数补全与SDK调用规范的修复方案。二、故障排查与定位1.401认证异常问题描述：接口返回401状态码，初步判断为认证配置问题。调用路径中多出BYservice层级，导致请求未正确路由。原因分析：实际服务已免登录，但因服务名未正常解析为IP地址，引发认证拦截。该问题与中层网关的服务发现机制有关。2.Redis缓存未刷新问题描述：模型APIKey未更新，因系统从Redis读取旧key所致。陈晓锋指出"没刷redis"，需手动触发刷新操作。修复方式：在管理页面更新token并保存，强制刷新缓存数据。验证后模型切换成功。三、服务注册与实例管理1.过期实例未清理问题描述：中层服务注册了多个instance，部分为上周遗留实例，TTL机制未能自动清除。处理建议：增强心跳检测逻辑，确保get时仅返回有效实例，避免调用失效节点。2.服务注册路径错误问题描述：直接调用SDK返回401，而本地命令行可通，怀疑注册路径不一致。后续动作：需进一步查看真实发出的请求头和路径。四、数据流与会话一致性1.会话ID传递错误问题描述：家长侧调用"大师"接口写文件时，传入的CSID（会话ID）错误，导致文件写入非目标目录。根因分析：正确sessionID应为纯数字格式（如4545401），但实际传入为doc-10042908类结构化ID。根本原因为中层服务未正确传递前端会话上下文，拼接逻辑出错。2.缺失必要参数问题描述：当前消息体中漏传usercode、sessionID、parentmessageID等关键字段，导致下游无法串联完整数据链路。五、修复方案与后续动作1.参数传递规范统一使用下划线命名法传递参数：user_code、session_id。所有调用应通过标准SDK发起，避免手动构造请求体导致协议不一致。小红负责修改代码，确保消息体包含全部必要字段。2.工具与资源准备MCP工具、智能体、知识库等组件需提前导入测试环境，当前部分工具缺失或未激活。王威安排向2.0群同步最新工具包，包括空气分析智能体、MGP能力模块等。3.验证计划明日完成最后一次端到端全流程验证，确保所有环节就绪。六、AI洞察1.多次故障根源指向服务元数据管理薄弱，建议建立注册实例健康度监控看板。2.手动构造请求而非使用SDK是主要风险源，需推动标准化接入并废弃自定义调用路径。3.会话上下文丢失问题暴露了中台服务对前端状态依赖过重，宜设计更健壮的上下文透传机制。──────────────────────────────────────────────────文档生成时间：2026-05-1410:58:12',
+            # },
+            {
+                "source_path": "/端到端流程故障排查会议纪要_042211.md",
+                "content": '# 端到端流程故障排查会议纪要\n\n会议时间：2026-04-22 20:52:25    会议主持：王威\n参与人员：王威, 黎嘉朗, 陈晓锋, 肖钟城, 邹海天\n会议主题：端到端流程故障排查\n\n──────────────────────────────────────────────────\n# 一、会议概述\n本次技术联调会议围绕端到端流程验证中的接口认证、服务注册与数据传递问题展开，重点排查了401认证错误、Redis缓存未刷新、会话ID错传等关键故障点，并明确了参数补全与SDK调用规范的修复方案。\n# 二、故障排查与定位\n## 1. 401认证异常\n问题描述：接口返回401状态码，初步判断为认证配置问题。调用路径中多出BY service层级，导致请求未正确路由。\n原因分析：实际服务已免登录，但因服务名未正常解析为IP地址，引发认证拦截。该问题与中层网关的服务发现机制有关。\n## 2. Redis缓存未刷新\n问题描述：模型API Key未更新，因系统从Redis读取旧key所致。陈晓锋指出"没刷redis"，需手动触发刷新操作。\n修复方式：在管理页面更新token并保存，强制刷新缓存数据。验证后模型切换成功。\n# 三、服务注册与实例管理\n## 1. 过期实例未清理\n问题描述：中层服务注册了多个instance，部分为上周遗留实例，TTL机制未能自动清除。\n处理建议：增强心跳检测逻辑，确保get时仅返回有效实例，避免调用失效节点。\n## 2. 服务注册路径错误\n问题描述：直接调用SDK返回401，而本地命令行可通，怀疑注册路径不一致。\n后续动作：需进一步查看真实发出的请求头和路径。\n# 四、数据流与会话一致性\n## 1. 会话ID传递错误\n问题描述：家长侧调用"大师"接口写文件时，传入的CSID（会话ID）错误，导致文件写入非目标目录。\n根因分析：正确session ID应为纯数字格式（如4545401），但实际传入为doc-10042908类结构化ID。根本原因为中层服务未正确传递前端会话上下文，拼接逻辑出错。\n## 2. 缺失必要参数\n问题描述：当前消息体中漏传user code、session ID、parent message ID等关键字段，导致下游无法串联完整数据链路。\n# 五、修复方案与后续动作\n## 1. 参数传递规范\n统一使用下划线命名法传递参数：user_code、session_id。所有调用应通过标准SDK发起，避免手动构造请求体导致协议不一致。小红负责修改代码，确保消息体包含全部必要字段。\n## 2. 工具与资源准备\nMCP工具、智能体、知识库等组件需提前导入测试环境，当前部分工具缺失或未激活。王威安排向2.0群同步最新工具包，包括空气分析智能体、MGP能力模块等。\n## 3. 验证计划\n明日完成最后一次端到端全流程验证，确保所有环节就绪。\n# 六、AI洞察\n1. 多次故障根源指向服务元数据管理薄弱，建议建立注册实例健康度监控看板。\n2. 手动构造请求而非使用SDK是主要风险源，需推动标准化接入并废弃自定义调用路径。\n3. 会话上下文丢失问题暴露了中台服务对前端状态依赖过重，宜设计更健壮的上下文透传机制。\n\n──────────────────────────────────────────────────\n文档生成时间：2026-05-14 10:58:12',
+                "file_description": "端到端流程故障排查会议纪要文档",
+                "labels": {
+                    "meetingId": "端到端流程故障排查会议纪要_0422",
+                    "meetingTitle": "端到端流程故障排查会议纪要",
+                    "meetingTime": "2026-04-22 20:52:25",
+                    "participantEmpNos": ["王威", "黎嘉朗", "陈晓锋", "肖钟城", "邹海天"],
+                },
+            },
+        )
+        print(f"result:{result}")
 
     select_fields = [
         "meetingId",
@@ -466,12 +479,12 @@ async def main9() -> None:
         ),
     ]
 
-    with InvocationContext(tenant_id="t1", user_id="u1"):
-        for case_name, payload in search_cases:
-            print(f"\n===== search case: {case_name} =====")
-            print("payload:", payload)
-            result = await obj.invoke_action("search_sales_meeting_note", payload)
-            print("result:", result)
+    # with InvocationContext(tenant_id="t1", user_id="u1"):
+    #     for case_name, payload in search_cases:
+    #         print(f"\n===== search case: {case_name} =====")
+    #         print("payload:", payload)
+    #         result = await obj.invoke_action("search_sales_meeting_note_0027024630", payload)
+    #         print("result:", result)
 
 
 async def main10() -> None:
@@ -636,13 +649,206 @@ async def main10() -> None:
         #     result = await obj.invoke_action("compute_by_customer", payload)
         #     print("result:", result)
 
+        for action_code, case_name, payload in operation_cases:
+            print(f"\n===== dynamic operation case: {case_name} =====")
+            print("action:", action_code)
+            print("payload:", payload)
+            if action_code == "delete_by_customer":
+                print("skip execute delete_by_customer by default; remove guard to run it.")
+                continue
+            result = await obj.invoke_action(action_code, payload)
+            print("result:", result)
+
+
+async def main11() -> None:
+    loader = OntologyLoader()
+    loader.load_from_owl_resource_directory(
+        str(BYCLAW_RESOURCE_DIR),
+        object_codes=[ORDER_OBJECT_CODE],
+    )
+
+    # ByclawSqlExecuteConnector.configure_default_redis(
+    #     RedisDiscoveryConfig(host="10.10.168.203", password="admin123", username="default")
+    # )
+    loader.configure(
+        plan_generator=LangGraphPlanGenerator(
+            model="MiniMax-M2.7-highspeed",
+            base_url="https://api.minimaxi.com/v1",
+            api_key="xxx",
+            temperature=0.0,
+            max_retries=2,
+        ),
+        term_loader=TermLoader.from_config({}),
+        csv_base_dir=str(Path("./tmp").resolve()),
+        sql_execution_mode="internal",
+    )
+    obj = loader.get_object(ORDER_OBJECT_CODE)
+    from datacloud_data_service.tools.virtual_action_injector import (
+        inject_virtual_actions,
+    )
+
+    inject_virtual_actions(loader)
+
+    insert_action = f"insert_{ORDER_OBJECT_CODE}"
+    update_action = f"update_{ORDER_OBJECT_CODE}"
+    delete_action = f"delete_{ORDER_OBJECT_CODE}"
+    query_action = f"query_{ORDER_OBJECT_CODE}"
+    compute_action = f"compute_{ORDER_OBJECT_CODE}"
+    schemas = {
+        insert_action: obj.get_action_schema(insert_action),
+        update_action: obj.get_action_schema(update_action),
+        delete_action: obj.get_action_schema(delete_action),
+        query_action: obj.get_action_schema(query_action),
+        compute_action: obj.get_action_schema(compute_action),
+    }
+
+    print("actions:", obj.list_action_codes())
+    for action_code, schema in schemas.items():
+        print(f"\n===== schema: {action_code} =====")
+        print(schema)
+
+    insert_schema = schemas[insert_action]["inputSchema"]
+    record_schema = insert_schema["properties"]["records"]["items"]
+    sample_record = {
+        "order_no": "ORDER-SDK-20260519-001",
+        "customer_name": "北京国投中债资产管理有限公司",
+        "order_date": "2026-05-19",
+        "order_status": "待发货",
+        "total_amount": 12888.88,
+        "product_count": 3,
+        "payment_status": "已支付",
+        "shipping_address": "北京市朝阳区测试路1号",
+        "order_remark": "SDK动态表新增测试订单",
+        "payment_method": "银行转账",
+        "delivery_address": "北京市朝阳区测试路1号",
+        "remark": "main11测试数据",
+    }
+    sample_record = {
+        field_code: value
+        for field_code, value in sample_record.items()
+        if field_code in record_schema.get("properties", {})
+    }
+
+    query_select = _schema_enum_values(
+        schemas[query_action]["inputSchema"]["properties"]["select"]
+    )[:8]
+    if not query_select:
+        query_select = list(record_schema.get("properties", {}))[:8]
+
+    query_cases = [
+        (
+            "query_by_id",
+            {
+                "select": query_select,
+                "filters": [{"field": "id", "op": "eq", "value": 1}],
+                "limit": 10,
+                "offset": 0,
+            },
+        ),
+        (
+            "query_paid_orders",
+            {
+                "select": query_select,
+                "filters": [{"field": "payment_status", "op": "eq", "value": "已支付"}],
+                "order_by": [{"field": "order_date", "direction": "desc"}],
+                "limit": 10,
+                "offset": 0,
+            },
+        ),
+        (
+            "query_amount_range",
+            {
+                "select": query_select,
+                "filters": [
+                    {"field": "total_amount", "op": "gte", "value": 1000},
+                    {"field": "total_amount", "op": "lte", "value": 50000},
+                ],
+                "limit": 10,
+                "offset": 0,
+            },
+        ),
+        (
+            "query_customer_or_order_no",
+            {
+                "select": query_select,
+                "filter_relation": "OR",
+                "filters": [
+                    {"field": "customer_name", "op": "like", "value": "国投中债"},
+                    {"field": "order_no", "op": "like", "value": "ORDER-SDK"},
+                ],
+                "limit": 10,
+                "offset": 0,
+            },
+        ),
+    ]
+    compute_cases = [
+        (
+            "compute_count_all",
+            {
+                "dimensions": [],
+                "metrics": [{"agg": "count_all", "as": "order_count"}],
+                "filters": [{"field": "payment_status", "op": "eq", "value": "已支付"}],
+                "limit": 10,
+            },
+        ),
+        (
+            "compute_amount_by_status",
+            {
+                "dimensions": [{"field": "order_status"}],
+                "metrics": [
+                    {"field": "total_amount", "agg": "sum", "as": "total_amount_sum"},
+                    {"field": "product_count", "agg": "sum", "as": "product_count_sum"},
+                    {"agg": "count_all", "as": "order_count"},
+                ],
+                "filters": [{"field": "order_date", "op": "gte", "value": "2026-01-01"}],
+                "order_by": [{"field": "total_amount_sum", "direction": "desc"}],
+                "limit": 10,
+            },
+        ),
+    ]
+    operation_cases = [
+        (
+            insert_action,
+            "insert_order_sample",
+            {"records": [sample_record]},
+        ),
+        (
+            update_action,
+            "update_order_sample",
+            {
+                "values": {"order_status": "已发货", "remark": "main11已更新"},
+                "filters": [{"field": "order_no", "op": "eq", "value": sample_record["order_no"]}],
+                "filter_relation": "AND",
+            },
+        ),
+        (
+            delete_action,
+            "delete_order_sample",
+            {
+                "filters": [{"field": "order_no", "op": "eq", "value": sample_record["order_no"]}],
+                "filter_relation": "AND",
+            },
+        ),
+    ]
+
+    with InvocationContext(tenant_id="t1", user_id="0027024630", language=""):
+        for case_name, payload in query_cases:
+            print(f"\n===== dynamic query case: {case_name} =====")
+            print("payload:", payload)
+            result = await obj.invoke_action(query_action, payload)
+            print("result:", result)
+
+        for case_name, payload in compute_cases:
+            print(f"\n===== dynamic compute case: {case_name} =====")
+            print("payload:", payload)
+            result = await obj.invoke_action(compute_action, payload)
+            print("result:", result)
+
+        # 写操作会真实修改动态表数据。需要验证新增/修改/删除时，取消下面注释。
         # for action_code, case_name, payload in operation_cases:
         #     print(f"\n===== dynamic operation case: {case_name} =====")
         #     print("action:", action_code)
         #     print("payload:", payload)
-        #     if action_code == "delete_by_customer":
-        #         print("skip execute delete_by_customer by default; remove guard to run it.")
-        #         continue
         #     result = await obj.invoke_action(action_code, payload)
         #     print("result:", result)
 
@@ -676,5 +882,206 @@ def _sample_value_for_schema(schema: object) -> object:
     return "北京国投中债资产管理有限公司"
 
 
+async def main12() -> None:
+    loader = OntologyLoader()
+    loader.load_from_owl_resource_directory(
+        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai_v2/ByClaw/byclaw-data/byclaw/resource",
+        object_codes=["p_by_visit_record_0027024630_a85910"],
+    )
+
+    loader.configure(
+        plan_generator=LangGraphPlanGenerator(
+            model="MiniMax-M2.7-highspeed",
+            base_url="https://api.minimaxi.com/v1",
+            api_key="xxx",
+            temperature=0.0,
+            max_retries=2,
+        ),
+        term_loader=TermLoader.from_config({}),
+        csv_base_dir=str(Path("./tmp").resolve()),
+        sql_execution_mode="internal",
+    )
+    obj = loader.get_object("p_by_visit_record_0027024630_a85910")
+    from datacloud_data_service.tools.virtual_action_injector import (
+        inject_virtual_actions,
+    )
+
+    inject_virtual_actions(loader)
+
+    print("actions:", obj.list_action_codes())
+    # print("schema:", obj.get_action_schema("search_sales_meeting_note_0027024630"))
+    # print("schema:", obj.get_action_schema("write_sales_meeting_note_0027024630"))
+    print(
+        "schema:", obj.get_action_schema("search_by_file_name_p_by_visit_record_0027024630_a85910")
+    )
+
+    # with InvocationContext(tenant_id="t1", user_id="u1"):
+    #     result = await obj.invoke_action(
+    #         "write_p_by_visit_record_0027024630_a85910",
+    #         # {
+    #         #     "labels": {
+    #         #         "meetingId": "2",
+    #         #         "meetingTitle": "datacloud的会议纪要内容",
+    #         #         "meetingTime": "2026-05-18 20:52:25",
+    #         #         "relatedBoId": 23,
+    #         #         "relatedCustomerId": 100,
+    #         #         "participantEmpNos": ["黄升", "罗彦卓"],
+    #         #     },
+    #         #     "source_path": "/会议纪要/datacloud的会议纪要内容.docx",
+    #         #     "content": 'datacloud的会议纪要内容会议时间：2026-05-18 20:52:25会议主持：王威参与人员：黄升,罗彦卓会议主题：datacloud的会议──────────────────────────────────────────────────一、会议概述本次技术联调会议围绕端到端流程验证中的接口认证、服务注册与数据传递问题展开，重点排查了401认证错误、Redis缓存未刷新、会话ID错传等关键故障点，并明确了参数补全与SDK调用规范的修复方案。二、故障排查与定位1.401认证异常问题描述：接口返回401状态码，初步判断为认证配置问题。调用路径中多出BYservice层级，导致请求未正确路由。原因分析：实际服务已免登录，但因服务名未正常解析为IP地址，引发认证拦截。该问题与中层网关的服务发现机制有关。2.Redis缓存未刷新问题描述：模型APIKey未更新，因系统从Redis读取旧key所致。陈晓锋指出"没刷redis"，需手动触发刷新操作。修复方式：在管理页面更新token并保存，强制刷新缓存数据。验证后模型切换成功。三、服务注册与实例管理1.过期实例未清理问题描述：中层服务注册了多个instance，部分为上周遗留实例，TTL机制未能自动清除。处理建议：增强心跳检测逻辑，确保get时仅返回有效实例，避免调用失效节点。2.服务注册路径错误问题描述：直接调用SDK返回401，而本地命令行可通，怀疑注册路径不一致。后续动作：需进一步查看真实发出的请求头和路径。四、数据流与会话一致性1.会话ID传递错误问题描述：家长侧调用"大师"接口写文件时，传入的CSID（会话ID）错误，导致文件写入非目标目录。根因分析：正确sessionID应为纯数字格式（如4545401），但实际传入为doc-10042908类结构化ID。根本原因为中层服务未正确传递前端会话上下文，拼接逻辑出错。2.缺失必要参数问题描述：当前消息体中漏传usercode、sessionID、parentmessageID等关键字段，导致下游无法串联完整数据链路。五、修复方案与后续动作1.参数传递规范统一使用下划线命名法传递参数：user_code、session_id。所有调用应通过标准SDK发起，避免手动构造请求体导致协议不一致。小红负责修改代码，确保消息体包含全部必要字段。2.工具与资源准备MCP工具、智能体、知识库等组件需提前导入测试环境，当前部分工具缺失或未激活。王威安排向2.0群同步最新工具包，包括空气分析智能体、MGP能力模块等。3.验证计划明日完成最后一次端到端全流程验证，确保所有环节就绪。六、AI洞察1.多次故障根源指向服务元数据管理薄弱，建议建立注册实例健康度监控看板。2.手动构造请求而非使用SDK是主要风险源，需推动标准化接入并废弃自定义调用路径。3.会话上下文丢失问题暴露了中台服务对前端状态依赖过重，宜设计更健壮的上下文透传机制。──────────────────────────────────────────────────文档生成时间：2026-05-1410:58:12',
+    #         # },
+    #         {
+    #             "labels": {
+    #                 "customer": "智能科技有限公司",
+    #                 "visit_date": "2026-05-19",
+    #                 "visitors": "邹海天、罗彦卓",
+    #                 "contact_person": "黄升",
+    #                 "visit_summary": "初次拜访智能科技有限公司。客户成立于2015年，注册资本5000万元，员工约200人，主营企业级软件开发与服务。客户现有客服系统响应速度慢、数据分析依赖人工整理，有意引入智能化工具提升运营效率，预算范围50-80万元/年，计划上半年完成选型、下半年实施部署。介绍了智能客服产品及解决方案，客户对智能分流和数据报表功能表现出较高兴趣。客户希望了解具体案例，关注数据安全并询问是否支持私有化部署，希望安排一次产品演示。后续需向公司领导汇报后再做进一步决策。",
+    #                 "action_items": "1. 发送公司产品介绍资料及成功案例，负责人邹海天，完成期限2026-06-30；2. 安排产品演示会议（线上/线下），负责人邹海天，完成期限2026-06-30；3. 提供私有化部署方案及报价，负责人罗彦卓，完成期限2026-06-30。",
+    #             },
+    #             "source_path": "/拜访记录_智能科技有限公司初次拜访.docx",
+    #             "content": "客户名称：智能科技有限公司；拜访日期：2026年05月19日 09:30-11:00；拜访地址：北京市海淀区科技园B座12层；拜访人员：邹海天、罗彦卓；客户接待人：黄升；拜访目的：初次拜访，了解决策链及业务需求；拜访过程记录：一、客户基本情况：某智能科技有限公司成立于2015年，注册资本5000万元，现有员工约200人。公司主要从事企业级软件开发与服务，客户群体以中型企业为主。二、业务需求了解：现有客服系统响应速度慢，客户满意度下降；数据分析依赖人工整理，效率较低；有意引入智能化工具提升运营效率；预算范围在50-80万元/年；计划上半年完成选型，下半年实施部署。三、产品介绍：介绍了智能客服产品及解决方案，包括智能客服机器人的语义理解能力、多渠道接入统一管理平台、数据分析仪表盘功能。客户对产品表现出较高兴趣，尤其是智能分流和数据报表功能。四、客户反馈：产品功能基本满足需求，希望了解具体案例；对数据安全较为关注，询问是否支持私有化部署；希望能安排一次产品演示，直观感受系统操作；后续需要向公司领导汇报后再做进一步决策。后续跟进事项：1. 发送公司产品介绍资料及成功案例，负责人邹海天，完成期限2026-06-30；2. 安排产品演示会议（线上/线下），负责人邹海天，完成期限2026-06-30；3. 提供私有化部署方案及报价，负责人罗彦卓，完成期限2026-06-30。客户决策链：罗彦卓（IT部门负责人）- 主要对接人，负责技术评估；邹海天（副总经理）- 分管IT，最终决策权。需重点维护与刘经理的关系，获取技术支持。下次拜访计划：计划时间2026年07月01日，计划内容产品演示+技术方案交流，参与人员黄升、邹海天、罗彦卓。文件路径：/by/.sessions/10005129/拜访记录_智能科技有限公司初次拜访.docx",
+    #             "file_description": "智能科技有限公司初次拜访记录",
+    #         },
+    #     )
+    #     print(f"result:{result}")
+
+    with InvocationContext(tenant_id="t1", user_id="u1"):
+        result = await obj.invoke_action(
+            "search_by_file_name_p_by_visit_record_0027024630_a85910",
+            # {
+            #     "labels": {
+            #         "meetingId": "2",
+            #         "meetingTitle": "datacloud的会议纪要内容",
+            #         "meetingTime": "2026-05-18 20:52:25",
+            #         "relatedBoId": 23,
+            #         "relatedCustomerId": 100,
+            #         "participantEmpNos": ["黄升", "罗彦卓"],
+            #     },
+            #     "source_path": "/会议纪要/datacloud的会议纪要内容.docx",
+            #     "content": 'datacloud的会议纪要内容会议时间：2026-05-18 20:52:25会议主持：王威参与人员：黄升,罗彦卓会议主题：datacloud的会议──────────────────────────────────────────────────一、会议概述本次技术联调会议围绕端到端流程验证中的接口认证、服务注册与数据传递问题展开，重点排查了401认证错误、Redis缓存未刷新、会话ID错传等关键故障点，并明确了参数补全与SDK调用规范的修复方案。二、故障排查与定位1.401认证异常问题描述：接口返回401状态码，初步判断为认证配置问题。调用路径中多出BYservice层级，导致请求未正确路由。原因分析：实际服务已免登录，但因服务名未正常解析为IP地址，引发认证拦截。该问题与中层网关的服务发现机制有关。2.Redis缓存未刷新问题描述：模型APIKey未更新，因系统从Redis读取旧key所致。陈晓锋指出"没刷redis"，需手动触发刷新操作。修复方式：在管理页面更新token并保存，强制刷新缓存数据。验证后模型切换成功。三、服务注册与实例管理1.过期实例未清理问题描述：中层服务注册了多个instance，部分为上周遗留实例，TTL机制未能自动清除。处理建议：增强心跳检测逻辑，确保get时仅返回有效实例，避免调用失效节点。2.服务注册路径错误问题描述：直接调用SDK返回401，而本地命令行可通，怀疑注册路径不一致。后续动作：需进一步查看真实发出的请求头和路径。四、数据流与会话一致性1.会话ID传递错误问题描述：家长侧调用"大师"接口写文件时，传入的CSID（会话ID）错误，导致文件写入非目标目录。根因分析：正确sessionID应为纯数字格式（如4545401），但实际传入为doc-10042908类结构化ID。根本原因为中层服务未正确传递前端会话上下文，拼接逻辑出错。2.缺失必要参数问题描述：当前消息体中漏传usercode、sessionID、parentmessageID等关键字段，导致下游无法串联完整数据链路。五、修复方案与后续动作1.参数传递规范统一使用下划线命名法传递参数：user_code、session_id。所有调用应通过标准SDK发起，避免手动构造请求体导致协议不一致。小红负责修改代码，确保消息体包含全部必要字段。2.工具与资源准备MCP工具、智能体、知识库等组件需提前导入测试环境，当前部分工具缺失或未激活。王威安排向2.0群同步最新工具包，包括空气分析智能体、MGP能力模块等。3.验证计划明日完成最后一次端到端全流程验证，确保所有环节就绪。六、AI洞察1.多次故障根源指向服务元数据管理薄弱，建议建立注册实例健康度监控看板。2.手动构造请求而非使用SDK是主要风险源，需推动标准化接入并废弃自定义调用路径。3.会话上下文丢失问题暴露了中台服务对前端状态依赖过重，宜设计更健壮的上下文透传机制。──────────────────────────────────────────────────文档生成时间：2026-05-1410:58:12',
+            # },
+            {
+                "labels": {
+                    "customer": "智能科技有限公司",
+                    "visit_date": "2026-05-19",
+                    "visitors": "邹海天、罗彦卓",
+                    "contact_person": "黄升",
+                    "visit_summary": "初次拜访智能科技有限公司。客户成立于2015年，注册资本5000万元，员工约200人，主营企业级软件开发与服务。客户现有客服系统响应速度慢、数据分析依赖人工整理，有意引入智能化工具提升运营效率，预算范围50-80万元/年，计划上半年完成选型、下半年实施部署。介绍了智能客服产品及解决方案，客户对智能分流和数据报表功能表现出较高兴趣。客户希望了解具体案例，关注数据安全并询问是否支持私有化部署，希望安排一次产品演示。后续需向公司领导汇报后再做进一步决策。",
+                    "action_items": "1. 发送公司产品介绍资料及成功案例，负责人邹海天，完成期限2026-06-30；2. 安排产品演示会议（线上/线下），负责人邹海天，完成期限2026-06-30；3. 提供私有化部署方案及报价，负责人罗彦卓，完成期限2026-06-30。",
+                },
+                "fileName": "/拜访记录_智能科技有限公司初次拜访.docx",
+                "query": "智能科技",
+                "file_description": "智能科技有限公司初次拜访记录",
+            },
+        )
+        print(f"result:{result}")
+
+
+async def main13() -> None:
+    loader = OntologyLoader()
+    loader.load_from_owl_resource_directory(
+        "/Users/zouhaitian/Documents/workplace/project/Haojing/baiyin_ai_v2/ByClaw/byclaw-data/byclaw/resource",
+        object_codes=["p_by_meeting_minutes_0027024630_bec24c"],
+    )
+
+    loader.configure(
+        plan_generator=LangGraphPlanGenerator(
+            model="MiniMax-M2.7-highspeed",
+            base_url="https://api.minimaxi.com/v1",
+            api_key="xxx",
+            temperature=0.0,
+            max_retries=2,
+        ),
+        term_loader=TermLoader.from_config({}),
+        csv_base_dir=str(Path("./tmp").resolve()),
+        sql_execution_mode="internal",
+    )
+    obj = loader.get_object("p_by_meeting_minutes_0027024630_bec24c")
+    from datacloud_data_service.tools.virtual_action_injector import (
+        inject_virtual_actions,
+    )
+
+    inject_virtual_actions(loader)
+
+    print("actions:", obj.list_action_codes())
+    # print("schema:", obj.get_action_schema("search_sales_meeting_note_0027024630"))
+    # print("schema:", obj.get_action_schema("write_sales_meeting_note_0027024630"))
+    print("schema:", obj.get_action_schema("search_p_by_meeting_minutes_0027024630_bec24c"))
+
+    # with InvocationContext(tenant_id="t1", user_id="u1"):
+    #     result = await obj.invoke_action(
+    #         "write_p_by_meeting_minutes_0027024630_bec24c",
+    #         # {
+    #         #     "labels": {
+    #         #         "meetingId": "2",
+    #         #         "meetingTitle": "datacloud的会议纪要内容",
+    #         #         "meetingTime": "2026-05-18 20:52:25",
+    #         #         "relatedBoId": 23,
+    #         #         "relatedCustomerId": 100,
+    #         #         "participantEmpNos": ["黄升", "罗彦卓"],
+    #         #     },
+    #         #     "source_path": "/会议纪要/datacloud的会议纪要内容.docx",
+    #         #     "content": 'datacloud的会议纪要内容会议时间：2026-05-18 20:52:25会议主持：王威参与人员：黄升,罗彦卓会议主题：datacloud的会议──────────────────────────────────────────────────一、会议概述本次技术联调会议围绕端到端流程验证中的接口认证、服务注册与数据传递问题展开，重点排查了401认证错误、Redis缓存未刷新、会话ID错传等关键故障点，并明确了参数补全与SDK调用规范的修复方案。二、故障排查与定位1.401认证异常问题描述：接口返回401状态码，初步判断为认证配置问题。调用路径中多出BYservice层级，导致请求未正确路由。原因分析：实际服务已免登录，但因服务名未正常解析为IP地址，引发认证拦截。该问题与中层网关的服务发现机制有关。2.Redis缓存未刷新问题描述：模型APIKey未更新，因系统从Redis读取旧key所致。陈晓锋指出"没刷redis"，需手动触发刷新操作。修复方式：在管理页面更新token并保存，强制刷新缓存数据。验证后模型切换成功。三、服务注册与实例管理1.过期实例未清理问题描述：中层服务注册了多个instance，部分为上周遗留实例，TTL机制未能自动清除。处理建议：增强心跳检测逻辑，确保get时仅返回有效实例，避免调用失效节点。2.服务注册路径错误问题描述：直接调用SDK返回401，而本地命令行可通，怀疑注册路径不一致。后续动作：需进一步查看真实发出的请求头和路径。四、数据流与会话一致性1.会话ID传递错误问题描述：家长侧调用"大师"接口写文件时，传入的CSID（会话ID）错误，导致文件写入非目标目录。根因分析：正确sessionID应为纯数字格式（如4545401），但实际传入为doc-10042908类结构化ID。根本原因为中层服务未正确传递前端会话上下文，拼接逻辑出错。2.缺失必要参数问题描述：当前消息体中漏传usercode、sessionID、parentmessageID等关键字段，导致下游无法串联完整数据链路。五、修复方案与后续动作1.参数传递规范统一使用下划线命名法传递参数：user_code、session_id。所有调用应通过标准SDK发起，避免手动构造请求体导致协议不一致。小红负责修改代码，确保消息体包含全部必要字段。2.工具与资源准备MCP工具、智能体、知识库等组件需提前导入测试环境，当前部分工具缺失或未激活。王威安排向2.0群同步最新工具包，包括空气分析智能体、MGP能力模块等。3.验证计划明日完成最后一次端到端全流程验证，确保所有环节就绪。六、AI洞察1.多次故障根源指向服务元数据管理薄弱，建议建立注册实例健康度监控看板。2.手动构造请求而非使用SDK是主要风险源，需推动标准化接入并废弃自定义调用路径。3.会话上下文丢失问题暴露了中台服务对前端状态依赖过重，宜设计更健壮的上下文透传机制。──────────────────────────────────────────────────文档生成时间：2026-05-1410:58:12',
+    #         # },
+    #         {
+    #             "labels": {
+    #                 "customer": "智能科技有限公司",
+    #                 "visit_date": "2026-05-19",
+    #                 "visitors": "邹海天、罗彦卓",
+    #                 "contact_person": "黄升",
+    #                 "visit_summary": "初次拜访智能科技有限公司。客户成立于2015年，注册资本5000万元，员工约200人，主营企业级软件开发与服务。客户现有客服系统响应速度慢、数据分析依赖人工整理，有意引入智能化工具提升运营效率，预算范围50-80万元/年，计划上半年完成选型、下半年实施部署。介绍了智能客服产品及解决方案，客户对智能分流和数据报表功能表现出较高兴趣。客户希望了解具体案例，关注数据安全并询问是否支持私有化部署，希望安排一次产品演示。后续需向公司领导汇报后再做进一步决策。",
+    #                 "action_items": "1. 发送公司产品介绍资料及成功案例，负责人邹海天，完成期限2026-06-30；2. 安排产品演示会议（线上/线下），负责人邹海天，完成期限2026-06-30；3. 提供私有化部署方案及报价，负责人罗彦卓，完成期限2026-06-30。",
+    #             },
+    #             "source_path": "/拜访记录_智能科技有限公司初次拜访2.docx",
+    #             "content": "客户名称：智能科技有限公司；拜访日期：2026年05月19日 09:30-11:00；拜访地址：北京市海淀区科技园B座12层；拜访人员：邹海天、罗彦卓；客户接待人：黄升；拜访目的：初次拜访，了解决策链及业务需求；拜访过程记录：一、客户基本情况：某智能科技有限公司成立于2015年，注册资本5000万元，现有员工约200人。公司主要从事企业级软件开发与服务，客户群体以中型企业为主。二、业务需求了解：现有客服系统响应速度慢，客户满意度下降；数据分析依赖人工整理，效率较低；有意引入智能化工具提升运营效率；预算范围在50-80万元/年；计划上半年完成选型，下半年实施部署。三、产品介绍：介绍了智能客服产品及解决方案，包括智能客服机器人的语义理解能力、多渠道接入统一管理平台、数据分析仪表盘功能。客户对产品表现出较高兴趣，尤其是智能分流和数据报表功能。四、客户反馈：产品功能基本满足需求，希望了解具体案例；对数据安全较为关注，询问是否支持私有化部署；希望能安排一次产品演示，直观感受系统操作；后续需要向公司领导汇报后再做进一步决策。后续跟进事项：1. 发送公司产品介绍资料及成功案例，负责人邹海天，完成期限2026-06-30；2. 安排产品演示会议（线上/线下），负责人邹海天，完成期限2026-06-30；3. 提供私有化部署方案及报价，负责人罗彦卓，完成期限2026-06-30。客户决策链：罗彦卓（IT部门负责人）- 主要对接人，负责技术评估；邹海天（副总经理）- 分管IT，最终决策权。需重点维护与刘经理的关系，获取技术支持。下次拜访计划：计划时间2026年07月01日，计划内容产品演示+技术方案交流，参与人员黄升、邹海天、罗彦卓。文件路径：/by/.sessions/10005129/拜访记录_智能科技有限公司初次拜访.docx",
+    #             "file_description": "智能科技有限公司初次拜访记录",
+    #         },
+    #     )
+    #     print(f"result:{result}")
+
+    with InvocationContext(tenant_id="t1", user_id="u1"):
+        result = await obj.invoke_action(
+            "search_p_by_meeting_minutes_0027024630_bec24c",
+            # {
+            #     "labels": {
+            #         "meetingId": "2",
+            #         "meetingTitle": "datacloud的会议纪要内容",
+            #         "meetingTime": "2026-05-18 20:52:25",
+            #         "relatedBoId": 23,
+            #         "relatedCustomerId": 100,
+            #         "participantEmpNos": ["黄升", "罗彦卓"],
+            #     },
+            #     "source_path": "/会议纪要/datacloud的会议纪要内容.docx",
+            #     "content": 'datacloud的会议纪要内容会议时间：2026-05-18 20:52:25会议主持：王威参与人员：黄升,罗彦卓会议主题：datacloud的会议──────────────────────────────────────────────────一、会议概述本次技术联调会议围绕端到端流程验证中的接口认证、服务注册与数据传递问题展开，重点排查了401认证错误、Redis缓存未刷新、会话ID错传等关键故障点，并明确了参数补全与SDK调用规范的修复方案。二、故障排查与定位1.401认证异常问题描述：接口返回401状态码，初步判断为认证配置问题。调用路径中多出BYservice层级，导致请求未正确路由。原因分析：实际服务已免登录，但因服务名未正常解析为IP地址，引发认证拦截。该问题与中层网关的服务发现机制有关。2.Redis缓存未刷新问题描述：模型APIKey未更新，因系统从Redis读取旧key所致。陈晓锋指出"没刷redis"，需手动触发刷新操作。修复方式：在管理页面更新token并保存，强制刷新缓存数据。验证后模型切换成功。三、服务注册与实例管理1.过期实例未清理问题描述：中层服务注册了多个instance，部分为上周遗留实例，TTL机制未能自动清除。处理建议：增强心跳检测逻辑，确保get时仅返回有效实例，避免调用失效节点。2.服务注册路径错误问题描述：直接调用SDK返回401，而本地命令行可通，怀疑注册路径不一致。后续动作：需进一步查看真实发出的请求头和路径。四、数据流与会话一致性1.会话ID传递错误问题描述：家长侧调用"大师"接口写文件时，传入的CSID（会话ID）错误，导致文件写入非目标目录。根因分析：正确sessionID应为纯数字格式（如4545401），但实际传入为doc-10042908类结构化ID。根本原因为中层服务未正确传递前端会话上下文，拼接逻辑出错。2.缺失必要参数问题描述：当前消息体中漏传usercode、sessionID、parentmessageID等关键字段，导致下游无法串联完整数据链路。五、修复方案与后续动作1.参数传递规范统一使用下划线命名法传递参数：user_code、session_id。所有调用应通过标准SDK发起，避免手动构造请求体导致协议不一致。小红负责修改代码，确保消息体包含全部必要字段。2.工具与资源准备MCP工具、智能体、知识库等组件需提前导入测试环境，当前部分工具缺失或未激活。王威安排向2.0群同步最新工具包，包括空气分析智能体、MGP能力模块等。3.验证计划明日完成最后一次端到端全流程验证，确保所有环节就绪。六、AI洞察1.多次故障根源指向服务元数据管理薄弱，建议建立注册实例健康度监控看板。2.手动构造请求而非使用SDK是主要风险源，需推动标准化接入并废弃自定义调用路径。3.会话上下文丢失问题暴露了中台服务对前端状态依赖过重，宜设计更健壮的上下文透传机制。──────────────────────────────────────────────────文档生成时间：2026-05-1410:58:12',
+            # },
+            # {
+            #     "query": "王威参与的会议",
+            #     "filters": [{"field": "participants", "op": "in", "value": ["王威"]}],
+            #     "select": [
+            #         "id",
+            #         "topic",
+            #         "meeting_date",
+            #         "participants",
+            #         "summary",
+            #         "action_items",
+            #     ],
+            # },
+            # {
+            #     "query": "2025年所有的会议纪要",
+            #     "filters": [
+            #         {
+            #             "field": "meeting_date",
+            #             "op": "between",
+            #             "value": ["2025-01-01", "2025-12-31"],
+            #         }
+            #     ],
+            #     "limit": 100,
+            # },
+            {"query": "聚智", "limit": 20},
+        )
+        print(f"result:{result}")
+
+
 if __name__ == "__main__":
-    asyncio.run(main10())
+    asyncio.run(main13())
