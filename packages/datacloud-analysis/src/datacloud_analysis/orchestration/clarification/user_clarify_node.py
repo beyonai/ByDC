@@ -332,11 +332,13 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             _pm = _kd.get("path_mapping") or {}
             if _pm:
                 # 收集前端保留的 keyword 集合（前端提交条目无 kid，用 keyword 匹配）
+                # paradigm_list_from_resume 已是平铺的选项列表（来自
+                # resume_value.paradigmList[0].paradigmList），直接迭代即可，
+                # 不再嵌套 paradigmResult 读取。
                 _remaining_kw = {
                     str(item.get("keyword"))
-                    for paradigm in paradigm_list_from_resume
-                    for item in (paradigm.get("paradigmResult") or [])
-                    if item.get("keyword")
+                    for item in paradigm_list_from_resume
+                    if isinstance(item, dict) and item.get("keyword")
                 }
                 # 从 metadata.paradigmList（含 paradigmId + kid）构造应保留的
                 # path_mapping 键。不同 paradigm 使用不同键格式：
