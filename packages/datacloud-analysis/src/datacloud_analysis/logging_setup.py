@@ -55,8 +55,11 @@ _SETUP_DONE: bool = False
 _CONFIGURED_NAMESPACES: list[str] = []
 
 _FMT_CONSOLE = "%(asctime)s [%(levelname)-5s] %(name)s: %(message)s"
+_FMT_CONSOLE_RID = "%(asctime)s [rid=%(rid)s] [%(levelname)-5s] %(name)s: %(message)s"
 _FMT_FILE = "%(asctime)s [%(levelname)-5s] %(process)d %(name)s: %(message)s"
+_FMT_FILE_RID = "%(asctime)s [rid=%(rid)s] [%(levelname)-5s] %(process)d %(name)s: %(message)s"
 _FMT_REQUEST = "%(asctime)s [%(levelname)-5s] %(name)s: %(message)s"
+_FMT_REQUEST_RID = "%(asctime)s [rid=%(rid)s] [%(levelname)-5s] %(name)s: %(message)s"
 _DATE_FMT = "%Y-%m-%d %H:%M:%S"
 
 # 日志配置覆盖的命名空间（不触碰 root logger）
@@ -71,6 +74,37 @@ _NOISY_LOGGERS = (
     "langchain_core.callbacks",
     "openai._base_client",
 )
+
+
+class _RequestIdFilter(logging.Filter):
+    """向每条 LogRecord 注入当前协程的 request_id（来自 ContextVar）。
+
+    有 request 上下文时 record.rid = rid 字符串；
+    无上下文时 record.rid = None，Formatter 据此选择不含 rid 的格式。
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        ctx = _current_request.get()
+        record.rid = ctx[0] if ctx is not None else None  # type: ignore[attr-defined]
+        return True
+
+
+class _OptionalRidFormatter(logging.Formatter):
+    """有 rid 时在时间戳后插入 [rid=xxx]，无 rid 时格式与原来完全一致。
+
+    避免 rid=None 被打印成字面量 "None"。
+    """
+
+    def __init__(self, fmt_with_rid: str, fmt_without_rid: str, **kwargs: object) -> None:
+        super().__init__(fmt_with_rid, **kwargs)
+        self._fmt_with = fmt_with_rid
+        self._fmt_without = fmt_without_rid
+
+    def format(self, record: logging.LogRecord) -> str:
+        self._style._fmt = (  # type: ignore[attr-defined]
+            self._fmt_with if getattr(record, "rid", None) else self._fmt_without
+        )
+        return super().format(record)
 
 
 def _gz_namer(name: str) -> str:
@@ -111,7 +145,7 @@ def _make_timed_handler(
     handler.namer = _gz_namer
     handler.rotator = _gzip_rotator
     handler.setLevel(level)
-    handler.setFormatter(logging.Formatter(_FMT_FILE, datefmt=_DATE_FMT))
+    handler.setFormatter(_OptionalRidFormatter(_FMT_FILE_RID, _FMT_FILE, datefmt=_DATE_FMT))
     return handler
 
 
@@ -174,11 +208,18 @@ def setup_logging(
     app_handler = _make_timed_handler(_log_dir / "app.log", _level, _app_keep)
     err_handler = _make_timed_handler(_log_dir / "error.log", logging.ERROR, _error_keep)
 
+    rid_filter = _RequestIdFilter()
+    app_handler.addFilter(rid_filter)
+    err_handler.addFilter(rid_filter)
+
     console_handler: logging.StreamHandler | None = None  # type: ignore[type-arg]
     if enable_console:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(_level)
-        console_handler.setFormatter(logging.Formatter(_FMT_CONSOLE, datefmt=_DATE_FMT))
+        console_handler.setFormatter(
+            _OptionalRidFormatter(_FMT_CONSOLE_RID, _FMT_CONSOLE, datefmt=_DATE_FMT)
+        )
+        console_handler.addFilter(rid_filter)
 
     # ── 按命名空间配置，不触碰 root logger ──────────────────────────────────
     for ns in _CONFIGURED_NAMESPACES:
@@ -301,7 +342,8 @@ def _ensure_router_installed(
 
     if _per_request_router is None:
         router = _PerRequestRouter(level=level)
-        router.setFormatter(logging.Formatter(_FMT_REQUEST, datefmt=_DATE_FMT))
+        router.setFormatter(_OptionalRidFormatter(_FMT_REQUEST_RID, _FMT_REQUEST, datefmt=_DATE_FMT))
+        router.addFilter(_RequestIdFilter())
         _per_request_router = router
     else:
         router = _per_request_router
