@@ -526,10 +526,10 @@ class TestGraphBuilder:
         node_names = list(compiled.get_graph().nodes.keys())
 
         assert "intend" in node_names
-        # V0.3: execution split into llm_call + tool_dispatcher + finish_react
-        assert "llm_call" in node_names
-        assert "tool_dispatcher" in node_names
-        assert "finish_react" in node_names
+        # V0.3: execution split into agent + tools + finish_react_node
+        assert "agent" in node_names
+        assert "tools" in node_names
+        assert "finish_react_node" in node_names
         assert "analyze_clarify" in node_names
         assert "user_clarify" in node_names
         assert "respond" in node_names
