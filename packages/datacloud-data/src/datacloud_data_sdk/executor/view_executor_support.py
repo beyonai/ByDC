@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
 
 from datacloud_data_sdk.executor.param_coercion import coerce_sql_param
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -165,6 +168,29 @@ def build_filters_where(
         kind = (field_kind_map or {}).get(field_code)
         field_type = (field_type_map or {}).get(field_code, "")
         param_field = _build_param_field(field_code, kind, field_type)
+
+        value_field = item.get("value_field")
+        if value_field:
+            resolved_vf = field_to_alias_col.get(value_field)
+            if not resolved_vf:
+                logger.warning(
+                    "build_filters_where: value_field %r not found in view mapping, skipping filter",
+                    value_field,
+                )
+                continue
+            vf_alias, vf_col = resolved_vf
+            vf_expr = f"{vf_alias}.{quote_identifier(vf_col, db_type)}"
+            op_map = {"eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+            sql_op = op_map.get(op)
+            if not sql_op:
+                logger.warning(
+                    "build_filters_where: op %r not supported for value_field comparison, skipping",
+                    op,
+                )
+                continue
+            clauses.append(f"{col_expr} {sql_op} {vf_expr}")
+            continue
+
         if op == "is_null":
             clauses.append(f"{col_expr} IS NULL")
         elif op == "is_not_null":

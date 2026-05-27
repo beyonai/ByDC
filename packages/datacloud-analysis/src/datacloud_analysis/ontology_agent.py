@@ -554,7 +554,9 @@ class OntologyAgent:
         )
         tools = tool_loader.load()
         redirect_tools = tool_loader.build_all_nl_query_tools()
-        graph = build_analysis_graph(tools=tools, loader=loader, redirect_tools=redirect_tools or None)
+        graph = build_analysis_graph(
+            tools=tools, loader=loader, redirect_tools=redirect_tools or None
+        )
         return graph.compile(checkpointer=self._checkpointer)
 
     def _get_or_build_graph(

@@ -91,11 +91,7 @@ class FakeTermReader:
         elif keyword:
             # 关键词模糊匹配 term_name / term_code
             kw = keyword.lower()
-            items = [
-                t
-                for t in items
-                if kw in t.term_name.lower() or kw in t.term_code.lower()
-            ]
+            items = [t for t in items if kw in t.term_name.lower() or kw in t.term_code.lower()]
 
         # term_type 过滤
         if term_type:
@@ -123,9 +119,7 @@ class FakeTermReader:
         按 dataset_id 和 term_type 过滤，支持 term_type_no_eq 排除。
         返回的 items 为 TermDetail 列表。
         """
-        items = [
-            t for t in self._terms.values() if t.dataset_id == dataset_id
-        ]
+        items = [t for t in self._terms.values() if t.dataset_id == dataset_id]
         if term_type:
             items = [t for t in items if t.term_type == term_type]
         if term_type_no_eq:
@@ -135,9 +129,7 @@ class FakeTermReader:
         paged = items[start : start + page_size]
         return QueryResult(total=total, items=list(paged))
 
-    def get_term_detail(
-        self, *, dataset_id: str, term_id: str
-    ) -> TermDetail | None:
+    def get_term_detail(self, *, dataset_id: str, term_id: str) -> TermDetail | None:
         """查询单条术语完整详情。
 
         Args:
@@ -185,9 +177,7 @@ class FakeTermReader:
 
         return SearchTermsResult(total=0, items=[])
 
-    def get_term_by_ids(
-        self, *, keys: Any = None
-    ) -> dict[tuple[str, str, str], str]:
+    def get_term_by_ids(self, *, keys: Any = None) -> dict[tuple[str, str, str], str]:
         """空实现。"""
         return {}
 
@@ -214,29 +204,21 @@ class FakeTermReader:
 
         return FieldResolutionResult(unresolved=list(terms or []))
 
-    def resolve_value_aliases(
-        self, *, terms: Any = None, scope_code: str = ""
-    ) -> Any:
+    def resolve_value_aliases(self, *, terms: Any = None, scope_code: str = "") -> Any:
         """空实现。"""
         from datacloud_knowledge.contracts.types import ValueResolutionResult
 
         return ValueResolutionResult(unmatched=list(terms or []))
 
-    def get_object_props(
-        self, *, source_term_ids: Any = None
-    ) -> dict[str, list[Any]]:
+    def get_object_props(self, *, source_term_ids: Any = None) -> dict[str, list[Any]]:
         """空实现。"""
         return {}
 
-    def get_object_props_by_code(
-        self, *, scope_code: str = ""
-    ) -> list[Any]:
+    def get_object_props_by_code(self, *, scope_code: str = "") -> list[Any]:
         """空实现。"""
         return []
 
-    def get_prop_values_with_aliases(
-        self, *, source_term_ids: Any = None
-    ) -> dict[str, list[Any]]:
+    def get_prop_values_with_aliases(self, *, source_term_ids: Any = None) -> dict[str, list[Any]]:
         """空实现。"""
         return {}
 
@@ -270,15 +252,11 @@ class FakeTermReader:
         """空实现。"""
         return []
 
-    def get_user_scoped_names(
-        self, *, user_id: str = ""
-    ) -> Any:
+    def get_user_scoped_names(self, *, user_id: str = "") -> Any:
         """空实现。"""
         return []
 
-    def get_type_codes_by_category(
-        self, *, categories: set[int] | None = None
-    ) -> set[str]:
+    def get_type_codes_by_category(self, *, categories: set[int] | None = None) -> set[str]:
         """空实现。"""
         return set()
 
@@ -356,9 +334,7 @@ class FakeTermWriter:
 
     # ── TermWriter 新增方法实现 ────────────────────────────────────────
 
-    def import_terms(
-        self, *, dataset_id: str, terms: list[TermCreate]
-    ) -> ImportResult:
+    def import_terms(self, *, dataset_id: str, terms: list[TermCreate]) -> ImportResult:
         """批量新增术语（内存记录）。
 
         Args:
@@ -448,9 +424,7 @@ class FakeTermWriter:
         """空实现，返回 fake ID。"""
         return "fake-name-id"
 
-    def batch_create_term_names(
-        self, *, items: Any = None
-    ) -> list[str]:
+    def batch_create_term_names(self, *, items: Any = None) -> list[str]:
         """空实现。"""
         return ["fake-name-id" for _ in range(len(items))] if items else []
 
@@ -469,14 +443,10 @@ class FakeTermWriter:
         """空实现，返回 fake ID。"""
         return "fake-term-id"
 
-    def batch_create_vocabulary(
-        self, *, words: Any = None
-    ) -> None:
+    def batch_create_vocabulary(self, *, words: Any = None) -> None:
         """空实现。"""
 
-    def get_name_search_scope(
-        self, *, name_id: str = ""
-    ) -> dict[str, object] | None:
+    def get_name_search_scope(self, *, name_id: str = "") -> dict[str, object] | None:
         """空实现。"""
         return None
 

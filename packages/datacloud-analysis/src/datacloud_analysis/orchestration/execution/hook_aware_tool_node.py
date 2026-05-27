@@ -24,6 +24,17 @@ from datacloud_analysis.tool_hook_plugins.types import ClarificationNeededError,
 logger = logging.getLogger(__name__)
 
 
+def _get_tool_display_label(tool_name: str, tools_map: dict[str, Any]) -> str:
+    """返回工具的友好显示名称，优先使用 metadata.title，回退到 tool_name。"""
+    tool = tools_map.get(tool_name)
+    if tool is not None:
+        meta = getattr(tool, "metadata", None) or {}
+        title = str(meta.get("title") or "").strip()
+        if title and title != tool_name:
+            return title
+    return tool_name
+
+
 class HookAwareToolNode(ToolNode):
     """在 prebuilt ToolNode 基础上注入 before/after_call_back 钩子。
 
@@ -292,12 +303,15 @@ class HookAwareToolNode(ToolNode):
                 _locale,
             )
 
+            _tools_map: dict[str, Any] = dict(self.tools_by_name)  # type: ignore[attr-defined]
             for msg in result_dict.get("messages") or []:
                 if not isinstance(msg, ToolMessage) or (msg.name or "") == "finish_react":
                     continue
                 params = call_params_map.get(str(msg.tool_call_id or ""), {})
+                _tool_name = msg.name or "tool"
+                _tool_label = _get_tool_display_label(_tool_name, _tools_map)
                 try:
-                    async with _gw_ctx.sub_step(msg.name or "tool"):
+                    async with _gw_ctx.sub_step(_tool_label):
                         if params:
                             await _emit_tool_detail(
                                 _gw_ctx, _get_ui_text("tool_input", _locale), params

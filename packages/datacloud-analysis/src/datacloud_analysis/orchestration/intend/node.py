@@ -35,16 +35,20 @@ async def intend_node(
     # target_tool 短路：跳过 LLM，直接构造 tool_call 走 tool_dispatcher
     target_tool = str(state.get("target_tool") or "").strip()
     if target_tool:
-        logger.info("[intend_node] target_tool=%r → bypassing LLM, injecting tool_call", target_tool)
+        logger.info(
+            "[intend_node] target_tool=%r → bypassing LLM, injecting tool_call", target_tool
+        )
         tool_call_id = f"tc_{uuid.uuid4().hex[:12]}"
         ai_msg = AIMessage(
             content="",
-            tool_calls=[{
-                "id": tool_call_id,
-                "name": target_tool,
-                "args": {"query": user_query},
-                "type": "tool_call",
-            }],
+            tool_calls=[
+                {
+                    "id": tool_call_id,
+                    "name": target_tool,
+                    "args": {"query": user_query},
+                    "type": "tool_call",
+                }
+            ],
         )
         return {
             "intent": "react",

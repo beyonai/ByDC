@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any, cast
 
@@ -29,6 +30,7 @@ from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 
 _PKEY_RE = re.compile(r"[^a-zA-Z0-9]")
+_logger = logging.getLogger(__name__)
 
 
 def _safe_pkey(prefix: str, fc: str, idx: int) -> str:
@@ -157,6 +159,25 @@ def _build_filters_where(
         value = item.get("value")
         col = field_to_col.get(fc, fc)
         pkey = _safe_pkey("p", fc, idx)
+
+        value_field = item.get("value_field")
+        if value_field:
+            vf_col = field_to_col.get(value_field)
+            if vf_col is None:
+                _logger.warning(
+                    "_build_filters_where: value_field %r not in field_to_col, skipping",
+                    value_field,
+                )
+                continue
+            op_map = {"eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+            sql_op = op_map.get(op)
+            if not sql_op:
+                _logger.warning(
+                    "_build_filters_where: op %r not supported for value_field, skipping", op
+                )
+                continue
+            clauses.append(f"{q(col)} {sql_op} {q(vf_col)}")
+            continue
 
         if op == "is_null":
             clauses.append(f"{q(col)} IS NULL")

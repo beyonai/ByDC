@@ -159,7 +159,11 @@ def _filter_item_schema(f: Any, *, strict_field_code: bool) -> dict[str, Any]:
     role_hint = f"[{role}-{kind}]" if role else ""
     return {
         "type": "object",
-        "description": f"{field_name}（{field_code}）{role_hint}过滤条件",
+        "description": (
+            f"{field_name}({field_code}){role_hint}过滤条件。"
+            "若需与另一字段比较(如'实际上线日期晚于计划上线日期')，"
+            "用 value_field 填目标字段编码，不要填 value。"
+        ),
         "properties": {
             "field": _field_code_property(field_code, field_name)
             if strict_field_code
@@ -172,6 +176,14 @@ def _filter_item_schema(f: Any, *, strict_field_code: bool) -> dict[str, Any]:
             },
             "op": {"type": "string", "enum": filter_ops, "description": "过滤操作符"},
             "value": _value_schema_for_field(f),
+            "value_field": {
+                "type": "string",
+                "description": (
+                    "字段引用比较：当过滤值是另一个字段时使用，填写目标字段编码（如 'plan_online_date'）。"
+                    "与 value 互斥，优先级高于 value。"
+                    "仅支持 op: eq / neq / gt / gte / lt / lte。"
+                ),
+            },
         },
         "required": ["field", "op"],
     }
@@ -213,6 +225,14 @@ _FILTER_CATCHALL_SCHEMA: dict[str, Any] = {
                 {"type": "array", "items": {"oneOf": [{"type": "string"}, {"type": "number"}]}},
             ],
         },
+        "value_field": {
+            "type": "string",
+            "description": (
+                "字段引用比较：当过滤值是另一个字段时使用，填写目标字段编码（如 'plan_online_date'）。"
+                "与 value 互斥，优先级高于 value。"
+                "仅支持 op: eq / neq / gt / gte / lt / lte。"
+            ),
+        },
     },
     "required": ["field", "op"],
 }
@@ -227,9 +247,11 @@ def _build_filters_schema(fields: list[Any], *, strict_field_code: bool = False)
     if not strict_field_code:
         items.append(_FILTER_CATCHALL_SCHEMA)
     description = (
-        "过滤条件列表，field 统一填写属性编码"
+        "过滤条件列表，field 统一填写属性编码；"
+        "若需比较两个字段(如'实际上线日期 > 计划上线日期')，用 value_field 填目标字段编码，不填 value"
         if strict_field_code
-        else "过滤条件列表，field 可填写字段中文名或字段编码"
+        else "过滤条件列表，field 可填写字段中文名或字段编码；"
+        "若需比较两个字段(如'实际上线日期 > 计划上线日期')，用 value_field 填目标字段编码，不填 value"
     )
     return {
         "type": "array",
