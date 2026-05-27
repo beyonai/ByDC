@@ -170,8 +170,8 @@ def build_analysis_graph(
     """Return an uncompiled StateGraph.
 
     路由由 DATACLOUD_USE_PREBUILT_REACT 环境变量控制：
-    - false（默认）：V0.3 自研图拓扑（旧路径，现有生产代码）
-    - true：V0.4 prebuilt ToolNode 图拓扑（新路径）
+    - true（默认）：V0.4 prebuilt ToolNode 图拓扑（当前生产路径）
+    - false：V0.3 自研图拓扑（旧路径，已废弃）
     """
     use_prebuilt = os.getenv("DATACLOUD_USE_PREBUILT_REACT", "true").strip().lower() == "true"
     if use_prebuilt:
@@ -197,6 +197,11 @@ def _build_legacy_graph(
     redirect_tools: dict[str, Any] | None = None,
 ) -> StateGraph[AgentState]:
     """V0.3 自研 StateGraph（旧路径，现有生产代码不修改）。"""
+    logger.warning(
+        "build_analysis_graph: V0.3 legacy path activated "
+        "(DATACLOUD_USE_PREBUILT_REACT=false) — "
+        "此路径已废弃，请将 DATACLOUD_USE_PREBUILT_REACT 设为 true 切换到 V0.4"
+    )
     builder = StateGraph(AgentState)
 
     # ── 构建 system prompt（stable 部分，供 Prompt Caching）──────────────────────

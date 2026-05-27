@@ -54,7 +54,7 @@ async def analyze_clarify_node(state: AgentState, config: RunnableConfig) -> dic
         paradigm_list: list[dict[str, Any]] = list(cached_paradigm_list)
         clarify_knowledge = str(ctx.get("clarify_knowledge") or "")
         logger.info(
-            "[analyze_clarify] V0.3 cache hit: tool=%s paradigm_count=%d",
+            "[analyze_clarify] cache hit: tool=%s paradigm_count=%d",
             tool_name,
             len(paradigm_list),
         )

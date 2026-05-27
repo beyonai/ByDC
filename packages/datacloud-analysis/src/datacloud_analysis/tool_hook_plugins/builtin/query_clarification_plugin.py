@@ -769,7 +769,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         )
         if _clarify_result and _clarify_result.get("tool_name") == tool_name:
             logger.info(
-                "[query_clarification] RESUME ENTRY → TOOL (not reAct): V0.3 early-return"
+                "[query_clarification] RESUME ENTRY → TOOL (not reAct): early-return"
                 " tool=%s is_complex=%s fmt_params_keys=%s",
                 tool_name,
                 bool(_clarify_result.get("is_complex")),
@@ -821,7 +821,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             )
             if _unresolved_fp:
                 logger.warning(
-                    "[query_clarification] V0.3 DATA-MISMATCH: unresolved terms %s"
+                    "[query_clarification] DATA-MISMATCH: unresolved terms %s"
                     " not found in ontology catalog — check KG choiceKeyword vs OWL field_name/aliases",
                     _unresolved_fp,
                 )
@@ -865,7 +865,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 _graph_state.pop("_clarification_cache", None)
             else:
                 logger.warning(
-                    "[query_clarification] CACHE HIT (old path) — V0.3 应走 clarification_formatted_params"
+                    "[query_clarification] CACHE HIT (old path) — 应走 clarification_formatted_params"
                     " 路径，此处被触发说明 user_clarify_node 未写入 state，需排查"
                     " tool=%s cache_key=%s",
                     tool_name,
