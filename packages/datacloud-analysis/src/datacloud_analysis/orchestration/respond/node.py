@@ -19,13 +19,27 @@ def _clear_messages_update() -> dict[str, Any]:
     return {"messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES)]}
 
 
+def _clear_react_runtime_update(state: AgentState) -> dict[str, Any]:
+    """Build a state update that clears temporary ReAct runtime fields."""
+    return {
+        "react_rounds": int(state.get("react_round_idx") or 0),
+        "react_messages_log": None,
+        "react_round_idx": None,
+        "react_last_query_data": None,
+        "answer_streamed": None,
+        "execution_status": None,
+    }
+
+
 async def respond_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     gw_ctx = (config.get("configurable") or {}).get("gateway_context")
     react_final = state.get("react_final") or {}
     workspace_dir = state.get("workspace_dir")
+    used_fallback_react_final = False
 
     if not react_final:
         # L2/L3 兜底：should_continue 直接路由到 respond 时 react_final 未设置
+        used_fallback_react_final = True
         messages = list(state.get("messages") or [])
         last_ai = next((m for m in reversed(messages) if isinstance(m, AIMessage)), None)
         answer = extract_ai_text(last_ai.content) if last_ai else ""
@@ -41,6 +55,8 @@ async def respond_node(state: AgentState, config: RunnableConfig) -> dict[str, A
 
     final_answer = await format_result(react_final, gw_ctx, workspace_dir, config=config)
     update = _clear_messages_update()
+    if used_fallback_react_final:
+        update.update(_clear_react_runtime_update(state))
     if final_answer is not None:
         update["final_answer"] = final_answer
     return update
