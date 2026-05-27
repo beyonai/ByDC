@@ -32,6 +32,7 @@ from datacloud_data_sdk.virtual_action.validator import (
 )
 
 _PKEY_RE = re.compile(r"[^a-zA-Z0-9]")
+_logger = __import__("logging").getLogger(__name__)
 
 # analytic_kind 中需要展开 formula 的类型
 _FORMULA_KINDS = frozenset({"derived_metric", "formula_metric", "virtual_tag"})
@@ -100,6 +101,21 @@ def _build_where(
         f = field_map.get(fc)
         col = _resolve_col_expr(f) if f else fc
         pkey = _safe_pkey("p", fc, idx)
+
+        value_field = item.get("value_field")
+        if value_field:
+            vf = field_map.get(value_field)
+            if vf is None:
+                _logger.warning("_build_where: value_field %r not in field_map, skipping", value_field)
+                continue
+            vf_col_expr = _resolve_col_expr(vf)
+            op_map = {"eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+            sql_op = op_map.get(op)
+            if not sql_op:
+                _logger.warning("_build_where: op %r not supported for value_field, skipping", op)
+                continue
+            clauses.append(f"{col} {sql_op} {vf_col_expr}")
+            continue
 
         if op == "is_null":
             clauses.append(f"{col} IS NULL")
