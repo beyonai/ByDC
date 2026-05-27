@@ -15,16 +15,14 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-
-from datacloud_data_sdk.executor.view_executor_support import build_filters_where
-from datacloud_data_sdk.executor.query_executor import _build_where
-from datacloud_data_sdk.executor.compute_executor import _build_filters_where as compute_build_where
 from datacloud_data_sdk.executor.analyze_executor import _build_filters_where as analyze_build_where
+from datacloud_data_sdk.executor.compute_executor import _build_filters_where as compute_build_where
+from datacloud_data_sdk.executor.query_executor import _build_where
+from datacloud_data_sdk.executor.view_executor_support import build_filters_where
 from datacloud_data_sdk.virtual_action.generator import (
-    _filter_item_schema,
     _FILTER_CATCHALL_SCHEMA,
+    _filter_item_schema,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 辅助工具
@@ -33,6 +31,7 @@ from datacloud_data_sdk.virtual_action.generator import (
 
 def _param_key_builder(prefix: str, fc: str, idx: int) -> str:
     import re
+
     safe = re.sub(r"[^a-zA-Z0-9]", "_", fc)[:40]
     return f"{prefix}_{safe}_{idx}"
 
@@ -223,7 +222,7 @@ class TestBuildWhereQueryExecutor:
         )
         parts = sql.split(" AND ")
         assert len(parts) == 2
-        assert "actual_online_date > plan_online_date" == parts[0]
+        assert parts[0] == "actual_online_date > plan_online_date"
         assert "project_status" in parts[1]
         assert len(params) == 1
         assert list(params.values())[0] == "进行中"

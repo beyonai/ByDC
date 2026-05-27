@@ -164,12 +164,17 @@ def _build_filters_where(
         if value_field:
             vf_col = field_to_col.get(value_field)
             if vf_col is None:
-                _logger.warning("_build_filters_where: value_field %r not in field_to_col, skipping", value_field)
+                _logger.warning(
+                    "_build_filters_where: value_field %r not in field_to_col, skipping",
+                    value_field,
+                )
                 continue
             op_map = {"eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
             sql_op = op_map.get(op)
             if not sql_op:
-                _logger.warning("_build_filters_where: op %r not supported for value_field, skipping", op)
+                _logger.warning(
+                    "_build_filters_where: op %r not supported for value_field, skipping", op
+                )
                 continue
             clauses.append(f"{q(col)} {sql_op} {q(vf_col)}")
             continue
