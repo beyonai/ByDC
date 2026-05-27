@@ -630,8 +630,7 @@ class PostgresTermWriter:
             # 删除旧的非标准名同义词
             self._session.execute(
                 text(
-                    "DELETE FROM term_name WHERE term_id = :term_id "
-                    "AND search_scope = '{}'::jsonb"
+                    "DELETE FROM term_name WHERE term_id = :term_id AND search_scope = '{}'::jsonb"
                 ),
                 {"term_id": term_id},
             )

@@ -56,6 +56,7 @@ def _get_or_create_http_adapter() -> Any:
         logger.info("HTTP adapter 已初始化: base_url=%s", base_url)
     return _http_adapter
 
+
 # ── 注册表 — 新增后端在此添加 ─────────────────────────────────────────
 
 _reader_registry: dict[str, type[TermReader]] = {}

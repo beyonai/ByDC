@@ -353,8 +353,10 @@ class OntologyToolLoader:
         self._mounted_objects: list[str] = list(mounted_objects or [])
         self._skip_action_families = skip_action_families
         self._agent_friendly = agent_friendly
-        self._resource_path: Path | None = Path(str(resource_path)) if resource_path else (
-            Path(str(ontology_path)) if ontology_path else None
+        self._resource_path: Path | None = (
+            Path(str(resource_path))
+            if resource_path
+            else (Path(str(ontology_path)) if ontology_path else None)
         )
 
     # ------------------------------------------------------------------
@@ -936,9 +938,9 @@ class OntologyToolLoader:
             else:
                 entity = loader.get_object(resource_code)
             # 合并系统预置上下文和调用方传入的上下文
-            merged_context = "\n\n".join(
-                p for p in [default_context_knowledge, contextKnowledge] if p
-            ) or None
+            merged_context = (
+                "\n\n".join(p for p in [default_context_knowledge, contextKnowledge] if p) or None
+            )
             return await entity.query(question=query, knowledge_context=merged_context)
 
         desc = f"数据查询工具: {resource_name or resource_code}"

@@ -322,14 +322,15 @@ class HttpTermAdapter:
         paged = items[offset : offset + top_k]
         return QueryResult(total=total, items=list(paged))
 
-    def get_term_detail(
-        self, *, dataset_id: str, term_id: str
-    ) -> TermDetail | None:
+    def get_term_detail(self, *, dataset_id: str, term_id: str) -> TermDetail | None:
         """查询单条术语完整详情。映射到 POST /core/term/queryTermDetail。"""
-        resp = self._client.post("/core/term/queryTermDetail", json={
-            "datasetId": int(dataset_id),
-            "termId": int(term_id),
-        })
+        resp = self._client.post(
+            "/core/term/queryTermDetail",
+            json={
+                "datasetId": int(dataset_id),
+                "termId": int(term_id),
+            },
+        )
         data: dict[str, Any] = resp.json()
         if resp.status_code == 404 or data.get("resultCode") != "0":
             return None
@@ -463,9 +464,7 @@ class HttpTermAdapter:
         _ = library_id
         unique_field_terms = list(dict.fromkeys(terms)) if terms else []
         unique_value_terms = (
-            list(dict.fromkeys(value_terms))
-            if (resolve_values and value_terms)
-            else []
+            list(dict.fromkeys(value_terms)) if (resolve_values and value_terms) else []
         )
         if not scope_code or (not unique_field_terms and not unique_value_terms):
             all_unresolved = unique_field_terms + unique_value_terms
@@ -610,7 +609,8 @@ class HttpTermAdapter:
         result: dict[str, list[str]] = {code: [] for code in unique_codes}
         for fc in unique_codes:
             children = self.query_terms(
-                parent_term_code=fc, top_k=500,
+                parent_term_code=fc,
+                top_k=500,
             )
             seen: set[str] = set()
             for child in children.items:
@@ -660,7 +660,8 @@ class HttpTermAdapter:
         result: dict[str, list[NameItem]] = {}
         for tid in term_ids_list:
             detail = self.get_term_detail(
-                dataset_id=self._default_dataset_id, term_id=tid,
+                dataset_id=self._default_dataset_id,
+                term_id=tid,
             )
             if detail is None:
                 result[tid] = []
@@ -676,9 +677,7 @@ class HttpTermAdapter:
             result[tid] = names
         return result
 
-    def get_object_props(
-        self, *, source_term_ids: Sequence[str]
-    ) -> dict[str, list[PropItem]]:
+    def get_object_props(self, *, source_term_ids: Sequence[str]) -> dict[str, list[PropItem]]:
         """批量查询对象/视图下的属性。
 
         对每个 source_term_id，通过 get_term_detail 获取 term_code 后查子 prop。
@@ -689,7 +688,8 @@ class HttpTermAdapter:
         result: dict[str, list[PropItem]] = {}
         for sid in source_term_ids_list:
             detail = self.get_term_detail(
-                dataset_id=self._default_dataset_id, term_id=sid,
+                dataset_id=self._default_dataset_id,
+                term_id=sid,
             )
             if detail is None:
                 result[sid] = []
@@ -703,8 +703,7 @@ class HttpTermAdapter:
     ) -> dict[str, list[ValueWithAliases]]:
         """HTTP API 不支持此操作。"""
         raise NotImplementedError(
-            "HTTP 后端不支持 get_prop_values_with_aliases，"
-            "请使用 get_prop_enum_values 替代"
+            "HTTP 后端不支持 get_prop_values_with_aliases，请使用 get_prop_enum_values 替代"
         )
 
     def get_bfs_distance(
@@ -715,9 +714,7 @@ class HttpTermAdapter:
         max_depth: int = 4,
     ) -> int | None:
         """HTTP API 不支持知识图谱遍历。"""
-        raise NotImplementedError(
-            "HTTP 后端不支持知识图谱 BFS 遍历，仅支持术语 CRUD"
-        )
+        raise NotImplementedError("HTTP 后端不支持知识图谱 BFS 遍历，仅支持术语 CRUD")
 
     def get_shortest_path_tree(
         self,
@@ -727,15 +724,11 @@ class HttpTermAdapter:
         max_depth: int = 6,
     ) -> Sequence[ShortestPathNode]:
         """HTTP API 不支持知识图谱遍历。"""
-        raise NotImplementedError(
-            "HTTP 后端不支持最短路径树查询，仅支持术语 CRUD"
-        )
+        raise NotImplementedError("HTTP 后端不支持最短路径树查询，仅支持术语 CRUD")
 
     def get_dimension_values(self) -> Sequence[DimensionValueItem]:
         """HTTP API 不支持维度值直接查询。"""
-        raise NotImplementedError(
-            "HTTP 后端不支持维度值查询，请使用 list_terms 替代"
-        )
+        raise NotImplementedError("HTTP 后端不支持维度值查询，请使用 list_terms 替代")
 
     def get_user_scoped_names(self, *, user_id: str) -> Sequence[UserScopedNameItem]:
         """通过标签系统查询用户作用域下的术语别名。"""
@@ -759,9 +752,7 @@ class HttpTermAdapter:
         for cat in categories:
             cat_result = self.query_terms(
                 term_type="-1",
-                label_filters=[
-                    LabelFilter(field_code="typeCategory", filter_value=str(cat))
-                ],
+                label_filters=[LabelFilter(field_code="typeCategory", filter_value=str(cat))],
                 top_k=500,
             )
             result.update(item.term_code for item in cat_result.items)
@@ -775,17 +766,13 @@ class HttpTermAdapter:
         limit: int = 2,
     ) -> Sequence[tuple[str, int]]:
         """HTTP API 不支持复杂对象匹配。"""
-        raise NotImplementedError(
-            "HTTP 后端不支持对象匹配查询，仅支持术语 CRUD"
-        )
+        raise NotImplementedError("HTTP 后端不支持对象匹配查询，仅支持术语 CRUD")
 
     def get_global_name_index(
         self,
     ) -> dict[str, list[tuple[str, str, str]]]:
         """HTTP API 不支持全局名称索引构建（全量遍历太慢）。"""
-        raise NotImplementedError(
-            "HTTP 后端不支持全局名称索引，请使用 OpenGauss 后端"
-        )
+        raise NotImplementedError("HTTP 后端不支持全局名称索引，请使用 OpenGauss 后端")
 
     def get_name_ids_by_word(
         self,
@@ -795,16 +782,17 @@ class HttpTermAdapter:
         user_id: str | None = None,
     ) -> dict[str, str]:
         """HTTP API 不支持按单词+术语ID查询 name_id。"""
-        raise NotImplementedError(
-            "HTTP 后端不支持 name_id 查询，仅支持术语 CRUD"
-        )
+        raise NotImplementedError("HTTP 后端不支持 name_id 查询，仅支持术语 CRUD")
 
     # ═════════════════════════════════════════════════════════════════════
     # TermWriter — 新增协议方法（TermProvider）
     # ═════════════════════════════════════════════════════════════════════
 
     def import_terms(
-        self, *, dataset_id: str, terms: list[TermCreate],
+        self,
+        *,
+        dataset_id: str,
+        terms: list[TermCreate],
     ) -> ImportResult:
         """批量新增术语。映射到 POST /file/importMultipleTerm。"""
         ds_id = dataset_id or self._default_dataset_id
@@ -824,7 +812,11 @@ class HttpTermAdapter:
         )
 
     def update_term(
-        self, *, dataset_id: str, term_id: str, updates: TermUpdate,
+        self,
+        *,
+        dataset_id: str,
+        term_id: str,
+        updates: TermUpdate,
     ) -> None:
         """更新术语。映射到 POST /core/terms/updateTerm。"""
         ds_id = dataset_id or self._default_dataset_id
@@ -905,8 +897,7 @@ class HttpTermAdapter:
     ) -> str:
         """HTTP API 不支持单独创建术语知识记录。"""
         raise NotImplementedError(
-            "HTTP 后端不支持 insert_term_knowledge，"
-            "请使用 create_term_with_knowledge 附带知识描述"
+            "HTTP 后端不支持 insert_term_knowledge，请使用 create_term_with_knowledge 附带知识描述"
         )
 
     def create_term_name(
@@ -925,7 +916,8 @@ class HttpTermAdapter:
         _ = (search_scope, user_id)
         # 先获取当前同义词列表
         detail = self.get_term_detail(
-            dataset_id=self._default_dataset_id, term_id=term_id,
+            dataset_id=self._default_dataset_id,
+            term_id=term_id,
         )
         current_synonyms: list[str] = list(detail.synonym_list) if detail else []
         if name_text in current_synonyms:
@@ -938,7 +930,9 @@ class HttpTermAdapter:
         return f"syn-{term_id}-{name_text}"
 
     def batch_create_term_names(
-        self, *, items: Sequence[TermNameCreate],
+        self,
+        *,
+        items: Sequence[TermNameCreate],
     ) -> list[str]:
         """批量创建术语别名。逐个调用 create_term_name。"""
         return [
@@ -995,9 +989,7 @@ class HttpTermAdapter:
 
     def get_name_search_scope(self, *, name_id: str) -> dict[str, object] | None:
         """HTTP API 不支持 name_id 级 search_scope 查询。"""
-        raise NotImplementedError(
-            "HTTP 后端不支持 get_name_search_scope，请使用 OpenGauss 后端"
-        )
+        raise NotImplementedError("HTTP 后端不支持 get_name_search_scope，请使用 OpenGauss 后端")
 
     def update_name_search_scope(
         self,
@@ -1007,9 +999,7 @@ class HttpTermAdapter:
         updated_time: object,
     ) -> None:
         """HTTP API 不支持 name_id 级 search_scope 更新。"""
-        raise NotImplementedError(
-            "HTTP 后端不支持 update_name_search_scope，请使用 OpenGauss 后端"
-        )
+        raise NotImplementedError("HTTP 后端不支持 update_name_search_scope，请使用 OpenGauss 后端")
 
     # ═════════════════════════════════════════════════════════════════════
     # 上下文管理器（TermWriter 协议要求）

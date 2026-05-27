@@ -342,7 +342,9 @@ def _ensure_router_installed(
 
     if _per_request_router is None:
         router = _PerRequestRouter(level=level)
-        router.setFormatter(_OptionalRidFormatter(_FMT_REQUEST_RID, _FMT_REQUEST, datefmt=_DATE_FMT))
+        router.setFormatter(
+            _OptionalRidFormatter(_FMT_REQUEST_RID, _FMT_REQUEST, datefmt=_DATE_FMT)
+        )
         router.addFilter(_RequestIdFilter())
         _per_request_router = router
     else:

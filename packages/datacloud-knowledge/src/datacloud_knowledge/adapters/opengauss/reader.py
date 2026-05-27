@@ -2008,21 +2008,13 @@ class PostgresTermReader:
                 ).all()
 
                 # 批量查询父术语名称（优化：一次查询而非 N 次）
-                parent_ids = [
-                    str(r[5])
-                    for r in rows
-                    if r[5] is not None
-                ]
+                parent_ids = [str(r[5]) for r in rows if r[5] is not None]
                 parent_name_map: dict[str, str] = {}
                 if parent_ids:
                     parent_rows = session.execute(
-                        select(Term.term_id, Term.term_name).where(
-                            Term.term_id.in_(parent_ids)
-                        )
+                        select(Term.term_id, Term.term_name).where(Term.term_id.in_(parent_ids))
                     ).all()
-                    parent_name_map = {
-                        str(pr[0]): str(pr[1]) for pr in parent_rows
-                    }
+                    parent_name_map = {str(pr[0]): str(pr[1]) for pr in parent_rows}
 
                 # 查询所有同义词（批量）
                 all_term_ids = [str(r[0]) for r in rows]
