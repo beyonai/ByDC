@@ -331,15 +331,17 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             _kd = json.loads(_effective_knowledge)
             _pm = _kd.get("path_mapping") or {}
             if _pm:
-                # 收集前端保留的 keyword 集合（前端提交条目无 kid，用 keyword 匹配）
-                # paradigm_list_from_resume 已是平铺的选项列表（来自
-                # resume_value.paradigmList[0].paradigmList），直接迭代即可，
-                # 不再嵌套 paradigmResult 读取。
-                _remaining_kw = {
-                    str(item.get("keyword"))
-                    for item in paradigm_list_from_resume
-                    if isinstance(item, dict) and item.get("keyword")
-                }
+                # 收集前端保留的 keyword 集合。
+                # paradigm_list_from_resume 来自 resume_value.paradigmList[0].paradigmList，
+                # 结构与原始 paradigm_list 一致：每个 group 内的 paradigmResult 子项才携带 keyword。
+                _remaining_kw: set[str] = set()
+                for group in paradigm_list_from_resume:
+                    if not isinstance(group, dict):
+                        continue
+                    for item in group.get("paradigmResult") or []:
+                        kw = item.get("keyword") if isinstance(item, dict) else None
+                        if kw:
+                            _remaining_kw.add(str(kw))
                 # 从 metadata.paradigmList（含 paradigmId + kid）构造应保留的
                 # path_mapping 键。不同 paradigm 使用不同键格式：
                 #   select(1): "1"/"2"/...  groupBy(2): "g1"/"g2"/...  orderBy(4): "o1"/"o2"/...
