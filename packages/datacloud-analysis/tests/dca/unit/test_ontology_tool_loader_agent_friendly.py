@@ -248,9 +248,11 @@ def test_TC05d_complex_conditions_no_field_not_found_trigger() -> None:
     )
 
     # 应明确指出字段名找不到时填原词到标准参数
-    assert "不写入此列表" in cc_desc or "select/filters/order_by 中填" in cc_desc, (
-        f"complex_conditions description 应声明字段名找不到时填原词到标准参数，实际: {cc_desc!r}"
-    )
+    assert (
+        "不写入此列表" in cc_desc
+        or "select/filters/order_by 中填" in cc_desc
+        or "do NOT write it here" in cc_desc
+    ), f"complex_conditions description 应声明字段名找不到时填原词到标准参数，实际: {cc_desc!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -314,9 +316,11 @@ def test_TC07_view_path_fields_from_get_view() -> None:
 
     assert "中文名" in filters.get("description", ""), "VIEW path: filters description 应含中文名"
     assert "中文名" in select_desc, "VIEW path: select description 应含中文名"
-    assert "不写入此列表" in cc_desc or "select/filters/order_by 中填" in cc_desc, (
-        "VIEW path: complex_conditions description 应声明原词透传"
-    )
+    assert (
+        "不写入此列表" in cc_desc
+        or "select/filters/order_by 中填" in cc_desc
+        or ("do NOT write it here" in cc_desc)
+    ), "VIEW path: complex_conditions description 应声明原词透传"
 
 
 # ---------------------------------------------------------------------------

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from datacloud_service.commands.update_terms_name_command import handle_update_terms_name_command
+from datacloud_analysis.command_plugins.update_terms_name_command import (
+    handle_update_terms_name_command,
+)
 
 
 def test_update_terms_name_command_updates_scores(monkeypatch: Any) -> None:

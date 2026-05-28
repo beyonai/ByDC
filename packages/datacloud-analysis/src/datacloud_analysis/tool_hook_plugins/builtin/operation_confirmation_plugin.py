@@ -42,6 +42,23 @@ _LOCATION_SCHEMA_KEYS: dict[str, str] = {
     "path": "path",
     "headers": "headers",
 }
+_FIELD_NAME_OVERRIDES: dict[str, str] = {
+    "labels": "知识库属性标签",
+    "values": "修改字段",
+    "filters": "过滤条件",
+    "filter_relation": "过滤条件连接方式",
+    "field": "字段",
+    "op": "操作符",
+    "value": "过滤值",
+    "source_path": "文件路径",
+    "file_path": "文件路径",
+    "content": "正文内容",
+    "source_text": "正文内容",
+    "file_description": "文件描述",
+}
+_LABEL_DESCRIPTION_MAX_LEN = 24
+_SENTENCE_PUNCTUATION = frozenset("，。；：、,.;:!?！？\n\r")
+_NULL_FILTER_OPERATORS = frozenset({"is_null", "is_not_null"})
 
 logger = logging.getLogger(__name__)
 
@@ -381,18 +398,26 @@ def _build_fields_from_schema(
     if not isinstance(properties, dict):
         return []
     required = set(schema.get("required") or [])
+    is_filter_condition = _is_filter_condition_schema(schema)
     fields: list[dict[str, Any]] = []
     for code, property_schema_raw in properties.items():
         if code in _IGNORED_SCHEMA_FIELDS or not isinstance(property_schema_raw, dict):
             continue
         property_schema = dict(property_schema_raw)
+        if is_filter_condition and str(code) == "value" and _is_null_filter_operator(values):
+            continue
         field_path = f"{parent_path}.{code}" if parent_path else str(code)
-        field_type = _schema_field_type(property_schema)
+        field_type = (
+            _filter_value_field_type(values)
+            if is_filter_condition and str(code) == "value"
+            else _schema_field_type(property_schema)
+        )
+        normalized_field_type = _field_type_family(field_type)
         field_value = values.get(code)
         if field_value is None and "default" in property_schema:
             field_value = property_schema.get("default")
         children: list[list[dict[str, Any]]] | None = None
-        if field_type == "object":
+        if normalized_field_type == "object":
             child_values = field_value if isinstance(field_value, dict) else {}
             children = [
                 _build_fields_from_schema(
@@ -404,33 +429,35 @@ def _build_fields_from_schema(
                     param_meta=param_meta,
                 )
             ]
-        elif field_type == "array" and _is_array_object_schema(property_schema):
-            items_schema = property_schema.get("items")
+        elif normalized_field_type == "array":
+            items_schema = _array_object_item_schema(property_schema)
             item_values = field_value if isinstance(field_value, list) else []
-            if not item_values:
+            if items_schema is not None and not item_values:
                 item_values = [{}]
-            children = [
-                _build_fields_from_schema(
-                    items_schema if isinstance(items_schema, dict) else {},
-                    item if isinstance(item, dict) else {},
-                    item_id=f"{item_id}_{code}_{index:03d}",
-                    parent_path=field_path,
-                    field_meta=field_meta,
-                    param_meta=param_meta,
-                )
-                for index, item in enumerate(item_values, start=1)
-            ]
+            if items_schema is not None:
+                children = [
+                    _build_fields_from_schema(
+                        _schema_for_array_item_value(items_schema, item),
+                        item if isinstance(item, dict) else {},
+                        item_id=f"{item_id}_{code}_{index:03d}",
+                        parent_path=field_path,
+                        field_meta=field_meta,
+                        param_meta=param_meta,
+                    )
+                    for index, item in enumerate(item_values, start=1)
+                ]
         meta = _match_field_meta(field_meta or {}, str(code), field_path)
         param = _match_field_meta(param_meta or {}, str(code), field_path)
+        field_name, description = _field_display_text(
+            field_code=str(code),
+            schema=property_schema,
+            field_meta=meta,
+            param=param,
+        )
         field = _build_field(
             field_code=str(code),
-            field_name=str(
-                getattr(param, "param_name", "")
-                or getattr(meta, "field_name", "")
-                or getattr(meta, "property_name", "")
-                or property_schema.get("description")
-                or code
-            ),
+            field_name=field_name,
+            description=description,
             field_type=field_type,
             field_value=field_value,
             children=children,
@@ -441,7 +468,11 @@ def _build_fields_from_schema(
                 or _term_from_param(param)
                 or _term_from_field_meta(meta)
             ),
+            optional=_schema_options(property_schema),
         )
+        filter_options = _filter_condition_options(property_schema)
+        if filter_options:
+            field["filterOptions"] = filter_options
         if not fields:
             field["itemId"] = item_id
         fields.append(field)
@@ -459,12 +490,14 @@ def _build_field_from_param(
     field = _build_field(
         field_code=code,
         field_name=str(getattr(param, "param_name", "") or code),
+        description=str(getattr(param, "description", "") or ""),
         field_type=_normalize_field_type(getattr(param, "param_type", "string")),
         field_value=tool_params.get(code, getattr(param, "default_value", None)),
         children=None,
         field_path=code,
         required=bool(getattr(param, "required", False)),
         term=_term_from_param(param),
+        optional=[],
     )
     if first:
         field["itemId"] = _build_item_id(form_id, 1)
@@ -475,21 +508,24 @@ def _build_field(
     *,
     field_code: str,
     field_name: str,
+    description: str,
     field_type: str,
     field_value: Any,
     children: list[list[dict[str, Any]]] | None,
     field_path: str,
     required: bool,
     term: dict[str, Any] | None,
+    optional: list[str],
 ) -> dict[str, Any]:
     field: dict[str, Any] = {
-        "formType": _form_type(field_type, term),
+        "formType": _field_form_type(field_type, term, optional),
         "fieldCode": field_code,
         "fieldPath": field_path,
         "fieldName": field_name,
         "fieldType": field_type,
+        "description": description,
         "required": required,
-        "readonly": False,
+        "readonly": _field_readonly(field_code, optional),
         "disabled": False,
         "isHidden": False,
         "defaultFiles": [],
@@ -500,11 +536,121 @@ def _build_field(
         field["fieldValue"] = field_value
     if term:
         field["term"] = term
+    if optional:
+        field["optional"] = optional
     return field
 
 
+def _field_form_type(
+    field_type: str,
+    term: dict[str, Any] | None,
+    optional: list[str],
+) -> str:
+    if field_type == "object":
+        return "object"
+    if field_type == "array<object>":
+        return "array"
+    if term:
+        return "term_select"
+    if optional:
+        return "select"
+    return {
+        "number": "number",
+        "integer": "number",
+        "boolean": "checkbox",
+        "object": "object",
+        "array": "array",
+    }.get(field_type, "input")
+
+
+def _field_readonly(field_code: str, optional: list[str]) -> bool:
+    return field_code in {"field", "op"} and bool(optional)
+
+
+def _field_display_text(
+    *,
+    field_code: str,
+    schema: dict[str, Any],
+    field_meta: Any | None,
+    param: Any | None,
+) -> tuple[str, str]:
+    """Resolve concise form label and keep schema description as helper text."""
+    description = str(schema.get("description") or "").strip()
+    explicit_name = str(
+        getattr(param, "param_name", "")
+        or getattr(field_meta, "field_name", "")
+        or getattr(field_meta, "property_name", "")
+        or ""
+    ).strip()
+    if explicit_name:
+        return explicit_name, description
+
+    title = str(
+        schema.get("title")
+        or schema.get("fieldName")
+        or schema.get("field_name")
+        or schema.get("x-form-label")
+        or ""
+    ).strip()
+    if title:
+        return title, description
+
+    override = _FIELD_NAME_OVERRIDES.get(field_code)
+    if override:
+        return override, description
+
+    if _is_concise_label(description):
+        return description, description
+
+    return field_code, description
+
+
+def _is_concise_label(text: str) -> bool:
+    if not text:
+        return False
+    if len(text) > _LABEL_DESCRIPTION_MAX_LEN:
+        return False
+    return not any(char in _SENTENCE_PUNCTUATION for char in text)
+
+
+def _is_filter_condition_schema(schema: dict[str, Any]) -> bool:
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return False
+    return {"field", "op", "value"}.issubset(set(properties))
+
+
+def _filter_value_field_type(values: dict[str, Any]) -> str:
+    return "array<string>" if str(values.get("op") or "").lower() == "in" else "string"
+
+
+def _is_null_filter_operator(values: dict[str, Any]) -> bool:
+    return str(values.get("op") or "").lower() in _NULL_FILTER_OPERATORS
+
+
 def _schema_field_type(schema: dict[str, Any]) -> str:
-    return _normalize_field_type(schema.get("type") or "string")
+    normalized = _normalize_field_type(schema.get("type") or "string")
+    if normalized != "array":
+        return normalized
+    if _array_object_item_schema(schema) is not None:
+        return "array<object>"
+    items = schema.get("items")
+    if not isinstance(items, dict):
+        return "array"
+    item_type = _normalize_field_type(items.get("type") or "")
+    if item_type in {"string", "integer", "number", "boolean"}:
+        return f"array<{item_type}>"
+    return "array"
+
+
+def _schema_options(schema: dict[str, Any]) -> list[str]:
+    options = _string_list(schema.get("enum"))
+    if options:
+        return options
+    const_value = schema.get("const")
+    if const_value is not None:
+        return [str(const_value)]
+    return []
 
 
 def _normalize_field_type(raw_type: Any) -> str:
@@ -528,16 +674,11 @@ def _normalize_field_type(raw_type: Any) -> str:
     return type_map.get(normalized, "string")
 
 
-def _form_type(field_type: str, term: dict[str, Any] | None) -> str:
-    if term:
-        return "term_select"
-    return {
-        "number": "number",
-        "integer": "number",
-        "boolean": "checkbox",
-        "object": "object",
-        "array": "array",
-    }.get(field_type, "input")
+def _field_type_family(field_type: str) -> str:
+    normalized = str(field_type or "").lower()
+    if normalized.startswith("array<"):
+        return "array"
+    return _normalize_field_type(normalized)
 
 
 def _term_from_param(param: Any) -> dict[str, Any] | None:
@@ -758,8 +899,174 @@ def _assign_schema_path(
 
 
 def _is_array_object_schema(schema: dict[str, Any]) -> bool:
+    return _array_object_item_schema(schema) is not None
+
+
+def _array_object_item_variants(schema: dict[str, Any]) -> list[dict[str, Any]]:
     items = schema.get("items")
-    return isinstance(items, dict) and str(items.get("type") or "").lower() == "object"
+    if not isinstance(items, dict):
+        return []
+    if str(items.get("type") or "").lower() == "object":
+        return [dict(items)]
+    variants = items.get("oneOf") or items.get("anyOf")
+    if not isinstance(variants, list):
+        return []
+    return [
+        dict(variant)
+        for variant in variants
+        if isinstance(variant, dict) and str(variant.get("type") or "").lower() == "object"
+    ]
+
+
+def _array_object_item_schema(schema: dict[str, Any]) -> dict[str, Any] | None:
+    object_variants = _array_object_item_variants(schema)
+    if not object_variants:
+        return None
+    if len(object_variants) == 1:
+        return object_variants[0]
+    merged = _merge_object_schema_variants(object_variants)
+    merged["oneOf"] = object_variants
+    return merged
+
+
+def _filter_condition_options(schema: dict[str, Any]) -> list[dict[str, Any]]:
+    options: list[dict[str, Any]] = []
+    for variant in _array_object_item_variants(schema):
+        properties = variant.get("properties")
+        if not isinstance(properties, dict):
+            continue
+        field_schema = properties.get("field")
+        op_schema = properties.get("op")
+        if not isinstance(field_schema, dict) or not isinstance(op_schema, dict):
+            continue
+        field_codes = _schema_options(field_schema)
+        operators = _schema_options(op_schema)
+        if not field_codes or not operators:
+            continue
+        for field_code in field_codes:
+            options.append(
+                {
+                    "fieldCode": field_code,
+                    "fieldName": _filter_field_name(variant, field_schema, field_code),
+                    "operators": operators,
+                }
+            )
+    return options
+
+
+def _filter_field_name(
+    variant: dict[str, Any],
+    field_schema: dict[str, Any],
+    field_code: str,
+) -> str:
+    for text in (
+        str(variant.get("description") or ""),
+        str(field_schema.get("description") or ""),
+    ):
+        parsed = _extract_text_between(text, "（", "）") or _extract_text_between(text, "(", ")")
+        if parsed and parsed != field_code:
+            return parsed
+        if "（" in text:
+            prefix = text.split("（", 1)[0].strip()
+            if prefix:
+                return prefix
+        if "(" in text:
+            prefix = text.split("(", 1)[0].strip()
+            if prefix:
+                return prefix
+    return field_code
+
+
+def _extract_text_between(text: str, start: str, end: str) -> str:
+    if start not in text:
+        return ""
+    tail = text.split(start, 1)[1]
+    if end not in tail:
+        return ""
+    return tail.split(end, 1)[0].strip()
+
+
+def _schema_for_array_item_value(item_schema: dict[str, Any], item_value: Any) -> dict[str, Any]:
+    variants = item_schema.get("oneOf") or item_schema.get("anyOf")
+    if isinstance(item_value, dict) and isinstance(variants, list):
+        matched = _match_object_schema_variant(variants, item_value)
+        if matched is not None:
+            return matched
+    return item_schema
+
+
+def _match_object_schema_variant(
+    variants: list[Any],
+    item_value: dict[str, Any],
+) -> dict[str, Any] | None:
+    field_value = item_value.get("field")
+    for variant in variants:
+        if not isinstance(variant, dict):
+            continue
+        properties = variant.get("properties")
+        if not isinstance(properties, dict):
+            continue
+        field_schema = properties.get("field")
+        if not isinstance(field_schema, dict):
+            continue
+        enum_values = field_schema.get("enum")
+        if isinstance(enum_values, list) and field_value in enum_values:
+            return dict(variant)
+    return None
+
+
+def _merge_object_schema_variants(variants: list[dict[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "type": "object",
+        "properties": {},
+    }
+    required: list[str] = []
+    for variant in variants:
+        for field_name in list(variant.get("required") or []):
+            if isinstance(field_name, str) and field_name not in required:
+                required.append(field_name)
+        properties = variant.get("properties")
+        if not isinstance(properties, dict):
+            continue
+        for key, schema_raw in properties.items():
+            if not isinstance(schema_raw, dict):
+                continue
+            existing = result["properties"].get(key)
+            result["properties"][key] = (
+                _merge_property_schema(existing, schema_raw)
+                if isinstance(existing, dict)
+                else dict(schema_raw)
+            )
+    if required:
+        result["required"] = required
+    return result
+
+
+def _merge_property_schema(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(left)
+    if not merged.get("type") and right.get("type"):
+        merged["type"] = right.get("type")
+    if not merged.get("description") and right.get("description"):
+        merged["description"] = right.get("description")
+    merged["enum"] = _merge_list_values(merged.get("enum"), right.get("enum"))
+    return {key: value for key, value in merged.items() if value not in (None, [])}
+
+
+def _merge_list_values(left: Any, right: Any) -> list[Any]:
+    values: list[Any] = []
+    for source in (left, right):
+        if not isinstance(source, list):
+            continue
+        for item in source:
+            if item not in values:
+                values.append(item)
+    return values
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if item is not None]
 
 
 def _normalize_rule_rows(rule: list[Any]) -> list[list[dict[str, Any]]]:
@@ -784,7 +1091,7 @@ def _fields_to_object(
             continue
         field_path = str(field.get("fieldPath") or "").strip()
         result_key = field_path if use_field_path and field_path else field_code
-        field_type = str(field.get("fieldType") or "").lower()
+        field_type = _field_type_family(str(field.get("fieldType") or ""))
         value = field.get("fieldValue")
         children = field.get("children")
         if field_type == "object":

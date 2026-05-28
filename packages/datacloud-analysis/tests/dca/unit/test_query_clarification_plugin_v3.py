@@ -142,6 +142,7 @@ async def test_user_scoped_alias_resolution_receives_gateway_user_id() -> None:
         value_terms: list[str],
         scope_code: str,
         user_id: str | None = None,
+        language: str = "zh_CN",
     ) -> tuple[dict[str, str], list[str]]:
         captured["field_terms"] = field_terms
         captured["value_terms"] = value_terms
