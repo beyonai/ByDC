@@ -449,6 +449,11 @@ def _build_prebuilt_graph(
     tools_list = _build_tools_list(tools)
     # finish_react 必须在 ToolNode tools 列表中，ToolNode 才能执行它
     all_tools = [*tools_list, finish_react]
+    # redirect_tools（data_query_*）只加入 ToolNode 执行列表，不加入 bind_tools。
+    # LLM 看不到这些工具，只有 complex_conditions 触发的内部 redirect 或
+    # target_tool 强制路由时才会被执行。
+    redirect_list = list((redirect_tools or {}).values())
+    executable_tools = [*all_tools, *redirect_list]
 
     # ── 节点闭包 ─────────────────────────────────────────────────────────────────
     llm_call_fn = make_llm_call_node(
@@ -457,7 +462,7 @@ def _build_prebuilt_graph(
         stable_system_prompt=stable_system_prompt,
     )
 
-    hook_tool_node = HookAwareToolNode(all_tools, loader=loader)
+    hook_tool_node = HookAwareToolNode(executable_tools, loader=loader)
 
     # ── 节点包装（统一 _as_state_update 校验）────────────────────────────────────
     async def _intend(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
