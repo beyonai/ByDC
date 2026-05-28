@@ -109,13 +109,16 @@ def make_tool_dispatcher_node(
             messages.append(tool_msg)
             logger.info("[tool_dispatcher] tool=%s done", tool_name)
 
-        return {
+        result_update: dict[str, Any] = {
             "react_messages_log": _serialize_messages(messages),
-            # clarification_formatted_params 不在此处清除：
-            # tool_dispatcher 执行完后 llm_call_node 可能重新生成工具调用，
-            # before_call_back 仍需读到澄清结果来应用正确参数。
-            # 若此处清除，LLM 重新调用时会把原始值（如"王小二"）当成新的未知术语再次触发澄清。
             "execution_status": None,
         }
+        # target_tool 模式：把 ToolMessage 同步到 state["messages"]，
+        # 让 finish_react_node 能从 messages 里找到查询数据。
+        if str(state.get("target_tool") or ""):
+            tool_messages = [m for m in messages if isinstance(m, ToolMessage)]
+            if tool_messages:
+                result_update["messages"] = tool_messages
+        return result_update
 
     return _tool_dispatcher

@@ -186,6 +186,7 @@ async def test_gateway_user_id_controls_synonym_persistence() -> None:
         metadata="知识",
         user_id="user-1",
         persist_confirmed_synonyms=True,
+        language="zh_CN",
     )
 
     finalized.persisted_synonyms = None
@@ -229,6 +230,7 @@ async def test_gateway_header_user_code_is_user_identity() -> None:
         metadata="知识",
         user_id="adminvip",
         persist_confirmed_synonyms=True,
+        language="zh_CN",
     )
 
 
@@ -265,4 +267,66 @@ async def test_gateway_current_command_header_user_code_is_user_identity() -> No
         metadata="知识",
         user_id="adminvip",
         persist_confirmed_synonyms=True,
+        language="zh_CN",
     )
+
+
+async def test_operation_form_confirm_resume_writes_formatted_params() -> None:
+    """操作表单确认后写入统一的 clarification_formatted_params。"""
+    operation_form = {
+        "formId": "form-1",
+        "actionCode": "insert_customer",
+        "rule": [
+            [
+                {
+                    "itemId": "item-1",
+                    "fieldCode": "customerId",
+                    "fieldType": "string",
+                    "fieldValue": "C001",
+                }
+            ]
+        ],
+    }
+    state = {
+        "pending_clarification_context": {},
+        "clarification_analyze_result": {
+            "interrupt_type": "operation_form",
+            "tool_name": "insert_customer",
+            "operation_form": operation_form,
+            "structured_input": {},
+        },
+    }
+    resume_value = {"formId": "form-1", "confirmed": True, "rule": operation_form["rule"]}
+
+    with patch(_INTERRUPT_PATCH, return_value=resume_value):
+        result = await user_clarify_node(state, {"configurable": {}})  # type: ignore[arg-type]
+
+    fp = result["clarification_formatted_params"]
+    assert fp["interrupt_type"] == "operation_form"
+    assert fp["confirmed"] is True
+    assert fp["params"]["customerId"] == "C001"
+    assert fp["params"]["userConfirmed"] is True
+    assert result["clarify_abort"] is False
+
+
+async def test_operation_form_cancel_resume_aborts_execution() -> None:
+    """操作表单取消后不再回到工具执行。"""
+    operation_form = {"formId": "form-1", "actionCode": "delete_customer", "rule": [[]]}
+    state = {
+        "pending_clarification_context": {},
+        "clarification_analyze_result": {
+            "interrupt_type": "operation_form",
+            "tool_name": "delete_customer",
+            "operation_form": operation_form,
+        },
+    }
+    resume_value = {"formId": "form-1", "confirmed": False, "reason": "用户取消"}
+
+    with patch(_INTERRUPT_PATCH, return_value=resume_value):
+        result = await user_clarify_node(state, {"configurable": {}})  # type: ignore[arg-type]
+
+    fp = result["clarification_formatted_params"]
+    assert fp["confirmed"] is False
+    assert fp["reason"] == "用户取消"
+    assert result["clarify_abort"] is True
+    assert result["execution_status"] == "cancelled"

@@ -215,9 +215,11 @@ def collect_terms_from_params(tool_params: dict[str, Any]) -> tuple[list[str], l
 
     for filter_item in tool_params.get("filters") or []:
         if isinstance(filter_item, dict):
-            field_term = _get_field_term(filter_item)
-            if field_term:
-                field_terms.append(field_term)
+            fc_f = str(filter_item.get("field_code") or "")
+            if not (fc_f and _is_field_code(fc_f)):
+                field_term = _get_field_term(filter_item)
+                if field_term:
+                    field_terms.append(field_term)
             raw_value = filter_item.get("value")
             values = raw_value if isinstance(raw_value, list) else [raw_value]
             for value in values:
@@ -225,11 +227,20 @@ def collect_terms_from_params(tool_params: dict[str, Any]) -> tuple[list[str], l
                 if text and not _is_field_code(text):
                     value_terms.append(text)
     for select_item in tool_params.get("select") or []:
-        if select_item and not _is_field_code(str(select_item)):
+        if isinstance(select_item, dict):
+            sc = str(select_item.get("field_code") or "")
+            if not (sc and _is_field_code(sc)):
+                ft = _get_field_term(select_item)
+                if ft:
+                    field_terms.append(ft)
+        elif select_item and not _is_field_code(str(select_item)):
             field_terms.append(str(select_item))
     for key in ("dimensions", "metrics", "order_by", "having"):
         for item in tool_params.get(key) or []:
             if isinstance(item, dict):
+                fc = str(item.get("field_code") or "")
+                if fc and _is_field_code(fc):
+                    continue
                 field_term = _get_field_term(item)
                 if field_term:
                     field_terms.append(field_term)

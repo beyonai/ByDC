@@ -247,6 +247,10 @@ def create_app(
 
     app.include_router(download_router, prefix="/api/v1")
 
+    from datacloud_data_service.api.terms import router as terms_router
+
+    app.include_router(terms_router, prefix="/api/v1")
+
     from datacloud_data_service.api.skills import router as skills_router
 
     app.include_router(skills_router, prefix="/api/v1/skills")

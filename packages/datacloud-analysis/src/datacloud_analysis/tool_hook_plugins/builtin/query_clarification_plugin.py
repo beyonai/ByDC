@@ -207,9 +207,12 @@ def _collect_terms_from_params(
 
     for f in tool_params.get("filters") or []:
         if isinstance(f, dict):
-            t = _get_field_term(f)
-            if t:
-                field_terms.append(t)
+            # 同 metrics/dimensions：field_code 已是合法字段码则跳过 field 显示名收集
+            fc_filter = str(f.get("field_code") or "")
+            if not (fc_filter and _is_field_code(fc_filter)):
+                t = _get_field_term(f)
+                if t:
+                    field_terms.append(t)
             # op=like 是模糊搜索，不需要精确消歧
             if str(f.get("op") or "").lower() != "like":
                 raw_value = f.get("value")
@@ -218,10 +221,21 @@ def _collect_terms_from_params(
                     if _is_term_value_candidate(value):
                         value_terms.append(str(value).strip())
     for s in tool_params.get("select") or []:
-        if s and not _is_field_code(str(s)):
+        if isinstance(s, dict):
+            sc = str(s.get("field_code") or "")
+            if sc and _is_field_code(sc):
+                continue
+            t = _get_field_term(s)
+            if t:
+                field_terms.append(t)
+        elif isinstance(s, str) and not _is_field_code(s):
             field_terms.append(str(s))
     for d in tool_params.get("dimensions") or []:
         if isinstance(d, dict):
+            # 同 metrics：field_code 已是合法字段码则跳过 field 显示名收集
+            dc = str(d.get("field_code") or "")
+            if dc and _is_field_code(dc):
+                continue
             t = _get_field_term(d)
             if t:
                 field_terms.append(t)
@@ -229,6 +243,11 @@ def _collect_terms_from_params(
             field_terms.append(d)
     for m in tool_params.get("metrics") or []:
         if isinstance(m, dict):
+            # 如果 field_code 已经是合法字段码（如 "id", "project_status"），
+            # 说明 LLM 已正确解析，无需把 field 显示名（如 "项目数量"）当作未消歧术语。
+            fc = str(m.get("field_code") or "")
+            if fc and _is_field_code(fc):
+                continue
             t = _get_field_term(m)
             if t:
                 field_terms.append(t)
@@ -750,7 +769,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         )
         if _clarify_result and _clarify_result.get("tool_name") == tool_name:
             logger.info(
-                "[query_clarification] RESUME ENTRY → TOOL (not reAct): V0.3 early-return"
+                "[query_clarification] RESUME ENTRY → TOOL (not reAct): early-return"
                 " tool=%s is_complex=%s fmt_params_keys=%s",
                 tool_name,
                 bool(_clarify_result.get("is_complex")),
@@ -802,7 +821,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             )
             if _unresolved_fp:
                 logger.warning(
-                    "[query_clarification] V0.3 DATA-MISMATCH: unresolved terms %s"
+                    "[query_clarification] DATA-MISMATCH: unresolved terms %s"
                     " not found in ontology catalog — check KG choiceKeyword vs OWL field_name/aliases",
                     _unresolved_fp,
                 )
@@ -846,7 +865,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 _graph_state.pop("_clarification_cache", None)
             else:
                 logger.warning(
-                    "[query_clarification] CACHE HIT (old path) — V0.3 应走 clarification_formatted_params"
+                    "[query_clarification] CACHE HIT (old path) — 应走 clarification_formatted_params"
                     " 路径，此处被触发说明 user_clarify_node 未写入 state，需排查"
                     " tool=%s cache_key=%s",
                     tool_name,
@@ -916,13 +935,27 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         # CACHE MISS：首次执行，调用 SDK；interrupt 前写入完整缓存供 resume 命中
         _ck = _make_cache_key(tool_name, query)
         logger.info("[query_clarification] CACHE MISS — calling _analyze_clarification()")
-        paradigm_list, clarify_knowledge, needs_clarification = _analyze_clarification(
-            query,
-            scope_code,
-            structured_input,
-            is_compute=is_compute,
-            language=language,
-        )
+        try:
+            paradigm_list, clarify_knowledge, needs_clarification = _analyze_clarification(
+                query,
+                scope_code,
+                structured_input,
+                is_compute=is_compute,
+                language=language,
+            )
+        except Exception as _analyze_exc:  # noqa: BLE001
+            # ClarificationNoCandidatesError：知识库里找不到候选（如 OpenGauss 不可用或数据缺失）。
+            # 降级为直接放行，用 LLM 生成的原始参数执行 SQL，避免反复报错。
+            logger.warning(
+                "[query_clarification] _analyze_clarification failed (%s: %s), falling back to original params",
+                type(_analyze_exc).__name__,
+                str(_analyze_exc)[:200],
+            )
+            tool_params = _apply_resolved_to_params(tool_params, resolved)
+            ctx["tool_params"] = tool_params
+            if is_complex:
+                return _build_redirect_decision(tool_name, query, tool_params)
+            return {"action": "patch", "patch": {"tool_params": tool_params}}
         if _graph_state is not None:
             _graph_state["_clarification_cache"] = {
                 "cache_key": _ck,
@@ -948,20 +981,31 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
             logger.info("[query_clarification] needs_clarification=False, 直接应用 LLM 确认结果")
             form_str = json.dumps({"paradigmList": paradigm_list}, ensure_ascii=False)
 
-            finalized = _sdk_finalize_clarification(
-                query=query,
-                ontology_code=scope_code,
-                structured_input=structured_input,
-                mode="compute" if is_compute else "query",
-                needs_clarification=needs_clarification,
-                form=form_str,
-                metadata=clarify_knowledge,
-                user_id=user_id,
-                persist_confirmed_synonyms=True,
-                language=language,
-            )
+            try:
+                finalized = _sdk_finalize_clarification(
+                    query=query,
+                    ontology_code=scope_code,
+                    structured_input=structured_input,
+                    mode="compute" if is_compute else "query",
+                    needs_clarification=needs_clarification,
+                    form=form_str,
+                    metadata=clarify_knowledge,
+                    user_id=user_id,
+                    persist_confirmed_synonyms=True,
+                    language=language,
+                )
+                tool_params = finalized.structured_input
+            except Exception as _finalize_exc:  # noqa: BLE001
+                # ClarificationNoCandidatesError / ClarificationConfirmedNotInRecallError：
+                # 知识库里找不到候选（如 OpenGauss 不可用或数据缺失），降级为直接放行，
+                # 用 LLM 生成的原始参数执行 SQL，避免反复报错。
+                logger.warning(
+                    "[query_clarification] finalize failed (%s: %s), falling back to original params",
+                    type(_finalize_exc).__name__,
+                    str(_finalize_exc)[:200],
+                )
+                tool_params = _apply_resolved_to_params(tool_params, resolved)
 
-            tool_params = finalized.structured_input
             tool_params["query"] = query  # _format_clarification 回填结果不含 query，需补回
             ctx["tool_params"] = tool_params
             if is_complex:

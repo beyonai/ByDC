@@ -60,16 +60,16 @@ class TestResolveViaAliases:
         assert unresolved == ["营收"]
 
     def test_returns_resolved_and_unresolved(self) -> None:
+        from unittest.mock import MagicMock
+
         from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
             _resolve_via_aliases,
         )
-        from datacloud_knowledge.api.types import FieldResolutionResult
 
-        mock_result = FieldResolutionResult(
-            resolved={"营收": "total_revenue"},
-            ambiguous={},
-            unresolved=["不存在"],
-        )
+        mock_result = MagicMock()
+        mock_result.resolved = {"营收": "total_revenue"}
+        mock_result.ambiguous = {}
+        mock_result.unresolved = ["不存在"]
         with patch(f"{_PLUGIN_MOD}.resolve_field_aliases", return_value=mock_result):
             resolved, unresolved = _resolve_via_aliases(
                 ["营收", "不存在"], [], "scene_enterprise_analysis"
@@ -78,34 +78,27 @@ class TestResolveViaAliases:
         assert unresolved == ["不存在"]
 
     def test_ambiguous_merged_into_unresolved(self) -> None:
+        from unittest.mock import MagicMock
+
         from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
             _resolve_via_aliases,
         )
-        from datacloud_knowledge.api.types import (
-            AmbiguousCandidate,
-            FieldResolutionResult,
-        )
 
-        mock_result = FieldResolutionResult(
-            resolved={},
-            ambiguous={
-                "营收": [
-                    AmbiguousCandidate(
-                        term_code="total_revenue",
-                        term_name="总营收",
-                        matched_alias="营收",
-                        scope={"scope": "global"},
-                    ),
-                    AmbiguousCandidate(
-                        term_code="net_revenue",
-                        term_name="净营收",
-                        matched_alias="营收",
-                        scope={"scope": "global"},
-                    ),
-                ]
-            },
-            unresolved=[],
-        )
+        mock_candidate_1 = MagicMock()
+        mock_candidate_1.term_code = "total_revenue"
+        mock_candidate_1.term_name = "总营收"
+        mock_candidate_1.matched_alias = "营收"
+        mock_candidate_1.scope = {"scope": "global"}
+        mock_candidate_2 = MagicMock()
+        mock_candidate_2.term_code = "net_revenue"
+        mock_candidate_2.term_name = "净营收"
+        mock_candidate_2.matched_alias = "营收"
+        mock_candidate_2.scope = {"scope": "global"}
+
+        mock_result = MagicMock()
+        mock_result.resolved = {}
+        mock_result.ambiguous = {"营收": [mock_candidate_1, mock_candidate_2]}
+        mock_result.unresolved = []
         with patch(f"{_PLUGIN_MOD}.resolve_field_aliases", return_value=mock_result):
             resolved, unresolved = _resolve_via_aliases(["营收"], [], "scene_enterprise_analysis")
         assert resolved == {}

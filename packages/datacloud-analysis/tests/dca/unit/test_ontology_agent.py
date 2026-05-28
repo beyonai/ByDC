@@ -158,6 +158,72 @@ async def test_ask_yields_interrupt_event_on_paradigm_clarification() -> None:
     assert ie.paradigm_list[0].paradigm_name == "部门"
 
 
+async def test_ask_yields_interrupt_event_with_operation_form() -> None:
+    operation_form = {
+        "schemaVersion": "1.0",
+        "formId": "op_form_1",
+        "actionCode": "create_by_rd_task",
+        "title": "确认执行：新增研发任务",
+        "rule": [
+            [
+                {
+                    "itemId": "item-1",
+                    "formType": "array",
+                    "fieldCode": "files",
+                    "fieldName": "附件",
+                    "fieldType": "array",
+                    "children": [
+                        [
+                            {
+                                "itemId": "file-1",
+                                "formType": "input",
+                                "fieldCode": "fileName",
+                                "fieldName": "附件文件名",
+                                "fieldType": "string",
+                                "fieldValue": "需求文档.docx",
+                            }
+                        ]
+                    ],
+                }
+            ]
+        ],
+    }
+    mock_interrupt = MagicMock()
+    mock_interrupt.value = {
+        "reason_code": "OPERATION_FORM_CONFIRMATION",
+        "prompt": "请确认操作表单。",
+        "interrupt_type": "operation_form",
+        "operation_form": operation_form,
+    }
+    compiled = _make_mock_compiled(interrupts=[mock_interrupt])
+
+    agent = OntologyAgent(_CONFIG)
+    with patch.object(agent, "_get_or_build_graph", return_value=compiled):
+        events: list[OntologyAgentEvent] = []
+        async for ev in agent.ask(
+            question="新增研发任务",
+            object_codes=_OBJ_CODES,
+            thread_id=_THREAD_ID,
+        ):
+            events.append(ev)
+
+    interrupt_events = [e for e in events if isinstance(e, InterruptEvent)]
+    assert len(interrupt_events) == 1
+    ie = interrupt_events[0]
+    assert ie.reason == "OPERATION_FORM_CONFIRMATION"
+    assert ie.interrupt_type == "operation_form"
+    assert ie.operation_form is not None
+    assert ie.operation_form.form_id == "op_form_1"
+    assert ie.operation_form.action_code == "create_by_rd_task"
+    assert ie.operation_form.raw == operation_form
+    files_field = ie.operation_form.rule[0][0]
+    assert files_field.field_code == "files"
+    assert files_field.children is not None
+    assert files_field.children[0][0].field_code == "fileName"
+    assert files_field.children[0][0].field_value == "需求文档.docx"
+    assert ie.paradigm_list is None
+
+
 # ── TC-T3-4: resume() 在恢复后 yield AnswerEvent ────────────────────────────
 
 
@@ -247,6 +313,28 @@ async def test_resume_with_str_user_input() -> None:
             thread_id=_THREAD_ID,
             user_input="华东",
             view_codes=_VIEW_CODES,
+        ):
+            events.append(ev)
+
+    assert any(isinstance(e, AnswerEvent) for e in events)
+
+
+async def test_resume_with_operation_form_dict_user_input() -> None:
+    compiled = _make_mock_compiled(final_answer="操作已执行")
+    agent = OntologyAgent(_CONFIG)
+    resume_value = {
+        "interrupt_type": "operation_form",
+        "formId": "op_form_1",
+        "confirmed": True,
+        "rule": [[{"fieldCode": "taskName", "fieldValue": "任务"}]],
+    }
+
+    with patch.object(agent, "_get_or_build_graph", return_value=compiled):
+        events: list[OntologyAgentEvent] = []
+        async for ev in agent.resume(
+            thread_id=_THREAD_ID,
+            user_input=resume_value,
+            object_codes=_OBJ_CODES,
         ):
             events.append(ev)
 

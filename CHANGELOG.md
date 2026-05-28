@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - 本体管理器支持挂载资源（mount resource）
 
 ### Fixed
+- `HookAwareToolNode` 调用工具时未注入 `InvocationContext` 导致结果文件存储报错的问题
+- V0.4 prebuilt 图推送思考步骤时工具名称未翻译为中文显示名的问题
 - 动态 Agent 思考过程文字重复推送两遍的问题
 - 虚拟工具（`query_*` / `compute_*`）在思考过程中显示技术编码而非中文名称的问题，现显示为 `[内置]查询XX` / `[内置]统计XX`
 - OWL 导入时 relation term names 分词缺失及 vocab 序列不同步

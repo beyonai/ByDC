@@ -31,6 +31,31 @@ logger = logging.getLogger(__name__)
 
 _ENV_BACKEND = "DATACLOUD_KNOWLEDGE_BACKEND"
 _DEFAULT_BACKEND = "opengauss"
+_ENV_HTTP_API_URL = "DATACLOUD_HTTP_API_URL"
+_ENV_HTTP_PID = "DATACLOUD_HTTP_PID"
+_DEFAULT_HTTP_API_URL = "http://localhost:8080"
+
+# ── HTTP adapter 单例 ────────────────────────────────────────────────
+
+_http_adapter: object | None = None
+
+
+def _get_or_create_http_adapter() -> Any:
+    """返回全局单例 HTTP adapter（共享连接池）。
+
+    通过环境变量 ``DATACLOUD_HTTP_API_URL`` 和 ``DATACLOUD_HTTP_PID`` 配置。
+    HttpTermAdapter 同时实现 TermReader 和 TermWriter 协议。
+    """
+    global _http_adapter
+    if _http_adapter is None:
+        from datacloud_knowledge.adapters.http.adapter import HttpTermAdapter
+
+        base_url = os.getenv(_ENV_HTTP_API_URL, _DEFAULT_HTTP_API_URL)
+        pid = os.getenv(_ENV_HTTP_PID, "")
+        _http_adapter = HttpTermAdapter(base_url, pid)
+        logger.info("HTTP adapter 已初始化: base_url=%s", base_url)
+    return _http_adapter
+
 
 # ── 注册表 — 新增后端在此添加 ─────────────────────────────────────────
 
@@ -63,12 +88,14 @@ def create_reader(backend: str | None = None) -> TermReader:
     """创建术语读取器实例。
 
     Args:
-        backend: 后端标识（"opengauss"/"mysql"），默认读环境变量。
+        backend: 后端标识（"opengauss"/"http"），默认读环境变量。
 
     Returns:
         实现了 TermReader 协议的读取器实例。
     """
     resolved = _resolve_backend(backend)
+    if resolved == "http":
+        return cast(TermReader, _get_or_create_http_adapter())
     if resolved not in _reader_registry:
         _register_opengauss()
     cls = _reader_registry.get(resolved)
@@ -110,7 +137,7 @@ def create_writer(
     """创建术语写入器实例。
 
     Args:
-        backend: 后端标识（"opengauss"/"mysql"），默认读环境变量。
+        backend: 后端标识（"opengauss"/"http"），默认读环境变量。
         session: 可选，SQLAlchemy Session。传入时 writer 绑定该 session，
             调用方负责事务管理。不传时 writer 自行管理 session 生命周期。
 
@@ -118,6 +145,8 @@ def create_writer(
         实现了 TermWriter 协议的写入器实例。
     """
     resolved = _resolve_backend(backend)
+    if resolved == "http":
+        return cast(TermWriter, _get_or_create_http_adapter())
     if resolved not in _writer_registry:
         _register_opengauss()
     cls = _writer_registry.get(resolved)

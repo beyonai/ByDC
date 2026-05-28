@@ -6,8 +6,8 @@ from pathlib import Path
 
 _ALLOWED_BASELINE = {
     # 历史保留：后续新增不得继续引入同类命名
-    "unit\\test_no_legacy_node_imports.py",
-    "unit\\test_prompts_v2.py",
+    "unit/test_no_legacy_node_imports.py",
+    "unit/test_prompts_v2.py",
 }
 
 

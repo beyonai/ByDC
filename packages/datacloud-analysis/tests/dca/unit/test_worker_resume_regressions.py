@@ -10,13 +10,11 @@ try:
     from by_framework.core.protocol.commands import AskAgentCommand, ResumeCommand
     from by_framework.core.protocol.message_header import MessageHeader
     from datacloud_service.worker import DataCloudWorker
-except ModuleNotFoundError as exc:
-    if exc.name == "dill":
-        pytest.skip(
-            "requires optional dependency 'dill' for by_framework imports",
-            allow_module_level=True,
-        )
-    raise
+except ModuleNotFoundError:
+    pytest.skip(
+        "requires optional dependencies: by_framework and datacloud_service",
+        allow_module_level=True,
+    )
 
 
 @dataclass

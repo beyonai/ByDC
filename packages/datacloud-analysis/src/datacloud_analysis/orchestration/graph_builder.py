@@ -72,6 +72,7 @@ def after_tools_route(state: AgentState) -> Literal["agent", "finish_react_node"
     """tools 节点出口（正常执行路径）。
 
     L1: 本轮 ToolMessage 中含 finish_react → finish_react_node
+    L2: target_tool 模式 → finish_react_node（不让 LLM 重试其他工具）
     其他: → agent（继续下一轮 LLM 推理）
 
     ClarificationNeededError 由 HookAwareToolNode 返回 Command 直接路由，不经过此函数。
@@ -82,6 +83,8 @@ def after_tools_route(state: AgentState) -> Literal["agent", "finish_react_node"
             break
         if isinstance(msg, ToolMessage) and msg.name == "finish_react":
             return "finish_react_node"
+    if str(state.get("target_tool") or ""):
+        return "finish_react_node"
     return "agent"
 
 
@@ -101,6 +104,8 @@ def _route_after_intend(state: AgentState) -> str:
     status = str(state.get("execution_status") or "llm_call")
     if status == "command_done":
         return "command_done"
+    if status == "target_tool_direct":
+        return "tool_dispatcher"
     return "llm_call"
 
 
@@ -118,11 +123,16 @@ def _route_after_tool_dispatcher(state: AgentState) -> str:
         return "finish_react"
     if status == "clarify_needed":
         return "analyze_clarify"
+    # target_tool 模式：工具执行完后直接走 finish_react，不让 LLM 重试其他工具
+    if str(state.get("target_tool") or ""):
+        return "finish_react"
     return "llm_call"
 
 
 def _route_after_analyze(state: AgentState) -> str:
     analyze_result = state.get("clarification_analyze_result") or {}
+    if str(analyze_result.get("interrupt_type") or "") == "operation_form":
+        return "user_clarify"
     paradigm_list = list(analyze_result.get("paradigm_list") or [])
     if paradigm_list:
         return "user_clarify"
@@ -160,10 +170,10 @@ def build_analysis_graph(
     """Return an uncompiled StateGraph.
 
     路由由 DATACLOUD_USE_PREBUILT_REACT 环境变量控制：
-    - false（默认）：V0.3 自研图拓扑（旧路径，现有生产代码）
-    - true：V0.4 prebuilt ToolNode 图拓扑（新路径）
+    - true（默认）：V0.4 prebuilt ToolNode 图拓扑（当前生产路径）
+    - false：V0.3 自研图拓扑（旧路径，已废弃）
     """
-    use_prebuilt = os.getenv("DATACLOUD_USE_PREBUILT_REACT", "false").strip().lower() == "true"
+    use_prebuilt = os.getenv("DATACLOUD_USE_PREBUILT_REACT", "true").strip().lower() == "true"
     if use_prebuilt:
         logger.info("build_analysis_graph: V0.4 prebuilt path (DATACLOUD_USE_PREBUILT_REACT=true)")
         return _build_prebuilt_graph(
@@ -187,6 +197,11 @@ def _build_legacy_graph(
     redirect_tools: dict[str, Any] | None = None,
 ) -> StateGraph[AgentState]:
     """V0.3 自研 StateGraph（旧路径，现有生产代码不修改）。"""
+    logger.warning(
+        "build_analysis_graph: V0.3 legacy path activated "
+        "(DATACLOUD_USE_PREBUILT_REACT=false) — "
+        "此路径已废弃，请将 DATACLOUD_USE_PREBUILT_REACT 设为 true 切换到 V0.4"
+    )
     builder = StateGraph(AgentState)
 
     # ── 构建 system prompt（stable 部分，供 Prompt Caching）──────────────────────
@@ -336,7 +351,7 @@ def _build_legacy_graph(
     builder.add_conditional_edges(
         "intend",
         _route_after_intend,
-        {"command_done": END, "llm_call": "llm_call"},
+        {"command_done": END, "llm_call": "llm_call", "tool_dispatcher": "tool_dispatcher"},
     )
     builder.add_conditional_edges(
         "llm_call",
@@ -434,6 +449,11 @@ def _build_prebuilt_graph(
     tools_list = _build_tools_list(tools)
     # finish_react 必须在 ToolNode tools 列表中，ToolNode 才能执行它
     all_tools = [*tools_list, finish_react]
+    # redirect_tools（data_query_*）只加入 ToolNode 执行列表，不加入 bind_tools。
+    # LLM 看不到这些工具，只有 complex_conditions 触发的内部 redirect 或
+    # target_tool 强制路由时才会被执行。
+    redirect_list = list((redirect_tools or {}).values())
+    executable_tools = [*all_tools, *redirect_list]
 
     # ── 节点闭包 ─────────────────────────────────────────────────────────────────
     llm_call_fn = make_llm_call_node(
@@ -442,7 +462,7 @@ def _build_prebuilt_graph(
         stable_system_prompt=stable_system_prompt,
     )
 
-    hook_tool_node = HookAwareToolNode(all_tools, loader=loader)
+    hook_tool_node = HookAwareToolNode(executable_tools, loader=loader)
 
     # ── 节点包装（统一 _as_state_update 校验）────────────────────────────────────
     async def _intend(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
@@ -483,7 +503,7 @@ def _build_prebuilt_graph(
     builder.add_conditional_edges(
         "intend",
         _route_after_intend,
-        {"command_done": END, "llm_call": "agent"},
+        {"command_done": END, "llm_call": "agent", "tool_dispatcher": "tools"},
     )
     builder.add_conditional_edges(
         "agent",

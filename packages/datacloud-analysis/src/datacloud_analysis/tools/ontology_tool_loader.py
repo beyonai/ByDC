@@ -340,6 +340,7 @@ class OntologyToolLoader:
         ontology_path: str | Path | None = None,
         skip_action_families: frozenset[str] = frozenset(),
         agent_friendly: bool = True,
+        resource_path: str | Path | None = None,
     ) -> None:
         if loader is not _LOADER_NOT_PROVIDED:
             # 显式传入 loader（可为 None，保持旧的 skip-on-None 行为）
@@ -352,6 +353,11 @@ class OntologyToolLoader:
         self._mounted_objects: list[str] = list(mounted_objects or [])
         self._skip_action_families = skip_action_families
         self._agent_friendly = agent_friendly
+        self._resource_path: Path | None = (
+            Path(str(resource_path))
+            if resource_path
+            else (Path(str(ontology_path)) if ontology_path else None)
+        )
 
     # ------------------------------------------------------------------
     # 公开方法
@@ -759,6 +765,119 @@ class OntologyToolLoader:
     # NL 查询工具工厂（阶段二 V-2 迁移）
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _build_enum_context(entity: Any, resource_path: Any = None) -> str:
+        """从 view/object 的字段定义里提取 enum 字段的字典映射，构建 contextKnowledge 字符串。
+
+        扫描 term_type='enum' 的字段，从 term_values 目录读取对应的 OWL 文件，
+        生成"字段名: 值1=含义1, 值2=含义2, ..." 格式的说明，注入给 LLM 作为背景知识。
+        """
+        try:
+            fields = list(getattr(entity, "fields", []) or [])
+            if not fields:
+                return ""
+
+            # 收集所有 enum 字段的 term_set（格式为 "{dict_type}.code"）
+            enum_fields: dict[str, list[str]] = {}  # dict_type -> [field_desc, ...]
+            for f in fields:
+                if getattr(f, "term_type", None) == "enum":
+                    term_set = str(getattr(f, "term_set", "") or "")
+                    if term_set.endswith(".code"):
+                        dict_type = term_set[:-5]  # 去掉 ".code"
+                        prop_code = str(getattr(f, "property_code", "") or "")
+                        prop_name = str(getattr(f, "property_name", "") or prop_code)
+                        if dict_type not in enum_fields:
+                            enum_fields[dict_type] = []
+                        enum_fields[dict_type].append(f"{prop_code}（{prop_name}）")
+
+            if not enum_fields:
+                return ""
+
+            if resource_path is None:
+                return ""
+
+            import xml.etree.ElementTree as ET  # noqa: PLC0415
+            from pathlib import Path  # noqa: PLC0415
+
+            rp = Path(str(resource_path))
+            # term_values 目录在 resource_path 的父目录下，或同级
+            for candidate in [rp.parent / "term_values", rp / "term_values"]:
+                if candidate.exists():
+                    term_values_dir = candidate
+                    break
+            else:
+                return ""
+
+            lines: list[str] = ["## 字段字典编码说明（过滤条件必须使用编码值，不能使用显示名称）"]
+            for dict_type, field_names in sorted(enum_fields.items()):
+                owl_file = term_values_dir / dict_type / f"{dict_type}_terms.owl"
+                if not owl_file.exists():
+                    continue
+                try:
+                    tree = ET.parse(str(owl_file))
+                    root = tree.getroot()
+                    ns = {"rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"}
+                    ent_ns = "http://example.org/entity/ontology#"
+                    mappings: list[str] = []
+                    for desc in root.findall(".//rdf:Description", ns):
+                        code_el = desc.find(f"{{{ent_ns}}}term_code")
+                        name_el = desc.find(f"{{{ent_ns}}}term_name")
+                        type_el = desc.find(f"{{{ent_ns}}}term_type_code")
+                        if (
+                            code_el is not None
+                            and name_el is not None
+                            and type_el is not None
+                            and type_el.text == dict_type
+                            and code_el.text != dict_type
+                        ):
+                            mappings.append(f"{code_el.text}={name_el.text}")
+                    if mappings:
+                        field_list = "、".join(field_names)
+                        lines.append(f"- 字段 {field_list}：{', '.join(sorted(mappings))}")
+                except Exception:  # noqa: BLE001
+                    pass
+
+            return "\n".join(lines) if len(lines) > 1 else ""
+        except Exception:  # noqa: BLE001
+            return ""
+
+    def build_all_nl_query_tools(self) -> dict[str, Any]:
+        """为所有已挂载的 view/object 批量生成 data_query_* 工具。
+
+        返回 dict[tool_name, StructuredTool]，供 build_analysis_graph(redirect_tools=...) 使用。
+        """
+        if not self._mounted_objects or self._loader is None:
+            return {}
+
+        result: dict[str, Any] = {}
+        for code in self._mounted_objects:
+            try:
+                if self._is_view(code):
+                    entity = self._loader.get_view(code)
+                    biz_type = "VIEW"
+                else:
+                    entity = self._loader.get_object(code)
+                    biz_type = "OBJECT"
+                name = getattr(entity, "name", None) or getattr(entity, "view_name", None) or code
+                desc = getattr(entity, "description", None) or ""
+                enum_context = self._build_enum_context(entity, self._resource_path)
+                tool = self.build_nl_query_tool(
+                    resource_code=code,
+                    resource_biz_type=biz_type,
+                    resource_name=str(name),
+                    resource_desc=str(desc),
+                    default_context_knowledge=enum_context,
+                )
+                result[tool.name] = tool
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("OntologyToolLoader: 构建 data_query_%s 工具失败: %s", code, exc)
+        logger.info(
+            "OntologyToolLoader: 已生成 %d 个 NL 查询工具: %s",
+            len(result),
+            sorted(result.keys()),
+        )
+        return result
+
     def build_nl_query_tool(
         self,
         resource_code: str,
@@ -767,6 +886,7 @@ class OntologyToolLoader:
         resource_desc: str,
         *,
         inject_context_knowledge: bool = True,
+        default_context_knowledge: str = "",
     ) -> Any:
         """生成自然语言查询 StructuredTool，名称为 data_query_{resource_code}。
 
@@ -776,6 +896,8 @@ class OntologyToolLoader:
             resource_name: 资源名称（工具描述中使用）。
             resource_desc: 资源描述（工具描述补充，取首行）。
             inject_context_knowledge: True 时在 schema 中注入 contextKnowledge 字段。
+            default_context_knowledge: 系统预置的上下文知识（如字典编码说明），
+                当调用方未传 contextKnowledge 时自动使用。
 
         Returns:
             StructuredTool，名称为 data_query_{resource_code}。
@@ -815,7 +937,11 @@ class OntologyToolLoader:
                 entity = loader.get_view(resource_code)
             else:
                 entity = loader.get_object(resource_code)
-            return await entity.query(question=query, knowledge_context=contextKnowledge or None)
+            # 合并系统预置上下文和调用方传入的上下文
+            merged_context = (
+                "\n\n".join(p for p in [default_context_knowledge, contextKnowledge] if p) or None
+            )
+            return await entity.query(question=query, knowledge_context=merged_context)
 
         desc = f"数据查询工具: {resource_name or resource_code}"
         if resource_desc:
@@ -849,6 +975,7 @@ def configure_loader(
     sql_execution_mode: str = "internal",
     result_file_storage: Any = None,
     sql_execute_url: str | None = None,
+    use_kb_term_loader: bool = True,
 ) -> None:
     """为 OntologyLoader 配置查询规划器和词条加载器。
 
@@ -868,6 +995,8 @@ def configure_loader(
             自动创建 LocalResultFileStorage(csv_base_dir)。
         sql_execute_url: HTTP_SQL 后端服务地址；非空时 DataSourceManager 强制
             走 HttpSqlConnector，并把该 URL 注入 connector 配置副本。
+        use_kb_term_loader: True（默认）时创建 KbTermLoader（需要 OpenGauss 连接）；
+            False 时跳过术语加载器，适用于 OpenGauss 不可用的环境（如评测 mock 环境）。
     """
     pg_kwargs: dict[str, Any] = {
         "model": model,
@@ -879,7 +1008,7 @@ def configure_loader(
         pg_kwargs["model_kwargs"] = model_kwargs
 
     plan_generator = LangGraphPlanGenerator(**pg_kwargs)  # type: ignore[operator]
-    term_loader = TermLoader.from_config({})  # type: ignore[union-attr]
+    term_loader = TermLoader.from_config({}) if use_kb_term_loader else None  # type: ignore[union-attr]
 
     if result_file_storage is None and csv_base_dir:
         from datacloud_data_sdk.file_storage import LocalResultFileStorage  # noqa: PLC0415

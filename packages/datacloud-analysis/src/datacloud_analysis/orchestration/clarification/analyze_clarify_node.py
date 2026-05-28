@@ -29,13 +29,32 @@ async def analyze_clarify_node(state: AgentState, config: RunnableConfig) -> dic
     structured_input = dict(ctx.get("structured_input") or {})
     is_compute: bool = bool(ctx.get("is_compute"))
 
+    if str(ctx.get("interrupt_type") or "") == "operation_form":
+        operation_form = dict(ctx.get("operation_form") or {})
+        logger.info(
+            "[analyze_clarify] operation_form passthrough: tool=%s form_id=%s",
+            tool_name,
+            operation_form.get("formId"),
+        )
+        return {
+            "clarification_analyze_result": {
+                "interrupt_type": "operation_form",
+                "tool_name": tool_name,
+                "structured_input": structured_input,
+                "operation_form": operation_form,
+                "operation_confirm_context": dict(ctx.get("operation_confirm_context") or {}),
+                "react_round_idx": ctx.get("react_round_idx"),
+            },
+            "pending_clarification_context": None,
+        }
+
     # V0.3 快速路径：ClarificationNeededError.context 已含 paradigm_list
     cached_paradigm_list = ctx.get("paradigm_list")
     if cached_paradigm_list is not None:
         paradigm_list: list[dict[str, Any]] = list(cached_paradigm_list)
         clarify_knowledge = str(ctx.get("clarify_knowledge") or "")
         logger.info(
-            "[analyze_clarify] V0.3 cache hit: tool=%s paradigm_count=%d",
+            "[analyze_clarify] cache hit: tool=%s paradigm_count=%d",
             tool_name,
             len(paradigm_list),
         )

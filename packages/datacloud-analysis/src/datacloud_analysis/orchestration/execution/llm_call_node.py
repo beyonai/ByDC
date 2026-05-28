@@ -7,6 +7,7 @@ interrupt() 只重跑工具节点，本节点作为独立图节点不受影响�
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
 import os
@@ -32,6 +33,8 @@ from datacloud_analysis.orchestration.state import AgentState
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MAX_ROUNDS = int(os.getenv("DATACLOUD_REACT_MAX_ROUNDS", "10"))
+# LLM 单次调用超时（秒），超时后抛 asyncio.TimeoutError，由 llm_retry 捕获重试或上抛
+_LLM_CALL_TIMEOUT = float(os.getenv("DATACLOUD_LLM_CALL_TIMEOUT", "120"))
 
 
 def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> str | None:
@@ -215,16 +218,28 @@ def make_llm_call_node(
             )[:120],
             (_dynamic or "")[:120],
         )
-        ai_msg, _did_stream = await _invoke_llm_with_fallback(
-            llm_with_tools,
-            fallback_with_tools,
-            messages_window,
-            _gateway_context,
-            state=state,
-            round_idx=current_round,
-            thinking_message_id=thinking_id,
-            config=config,
-        )
+        try:
+            ai_msg, _did_stream = await asyncio.wait_for(
+                _invoke_llm_with_fallback(
+                    llm_with_tools,
+                    fallback_with_tools,
+                    messages_window,
+                    _gateway_context,
+                    state=state,
+                    round_idx=current_round,
+                    thinking_message_id=thinking_id,
+                    config=config,
+                ),
+                timeout=_LLM_CALL_TIMEOUT,
+            )
+        except TimeoutError:
+            logger.error(
+                "[llm_call] TIMEOUT round=%d timeout=%.0fs session=%s — aborting",
+                current_round,
+                _LLM_CALL_TIMEOUT,
+                (config.get("configurable") or {}).get("session_id", ""),
+            )
+            return {"execution_status": "llm_timeout", "react_round_idx": current_round}
 
         calls = list(getattr(ai_msg, "tool_calls", None) or [])
         _usage = getattr(ai_msg, "usage_metadata", None) or {}

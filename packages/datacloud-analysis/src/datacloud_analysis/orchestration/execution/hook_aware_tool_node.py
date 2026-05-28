@@ -24,6 +24,17 @@ from datacloud_analysis.tool_hook_plugins.types import ClarificationNeededError,
 logger = logging.getLogger(__name__)
 
 
+def _get_tool_display_label(tool_name: str, tools_map: dict[str, Any]) -> str:
+    """返回工具的友好显示名称，优先使用 metadata.title，回退到 tool_name。"""
+    tool = tools_map.get(tool_name)
+    if tool is not None:
+        meta = getattr(tool, "metadata", None) or {}
+        title = str(meta.get("title") or "").strip()
+        if title and title != tool_name:
+            return title
+    return tool_name
+
+
 class HookAwareToolNode(ToolNode):
     """在 prebuilt ToolNode 基础上注入 before/after_call_back 钩子。
 
@@ -215,7 +226,52 @@ class HookAwareToolNode(ToolNode):
             call_params_map[tc_id] = display_params
 
         # 实际工具执行（走 prebuilt ToolNode 原有逻辑）
-        result = await super().ainvoke(patched_state, config, **kwargs)
+        # 注入 InvocationContext，使 SDK 内的 result_file_storage 等能通过
+        # get_current_context() 获取 user_id / session_id，与 tool_wrapper.dispatch_tool 对齐。
+        _inv_ctx: Any = None
+        if _gw_ctx is not None:
+            try:
+                from datacloud_data_sdk.context import InvocationContext  # type: ignore[import]
+
+                from datacloud_analysis.orchestration.execution.tool_wrapper import (  # noqa: PLC0415
+                    _resolve_gateway_user_id,
+                )
+                from datacloud_analysis.workspace.runtime import (  # noqa: PLC0415
+                    resolve_shared_workspace_dir,
+                )
+            except ImportError:
+                pass
+            else:
+                _gc_user_id = _resolve_gateway_user_id(_gw_ctx)
+                _gc_session_id = str(getattr(_gw_ctx, "session_id", "") or "")
+                _result_file_storage = getattr(self._loader, "result_file_storage", None)
+                _extras = getattr(_gw_ctx, "extras", None)
+                _locale = str(((config or {}).get("configurable") or {}).get("locale") or "zh_CN")
+                _workspace_dir = str(
+                    state_dict.get("workspace_dir")
+                    or ((config or {}).get("configurable") or {}).get("workspace_dir")
+                    or ""
+                )
+                _workspace_root = (
+                    resolve_shared_workspace_dir(_workspace_dir) if _workspace_dir else None
+                )
+                _inv_ctx = InvocationContext(
+                    user_id=_gc_user_id,
+                    session_id=_gc_session_id,
+                    gateway_context=_gw_ctx,
+                    workspace_dir=str(_workspace_root)
+                    if _workspace_root is not None
+                    else _workspace_dir,
+                    result_file_storage=_result_file_storage,
+                    extras=_extras,
+                    language=_locale,
+                )
+                _inv_ctx.__enter__()
+        try:
+            result = await super().ainvoke(patched_state, config, **kwargs)
+        finally:
+            if _inv_ctx is not None:
+                _inv_ctx.__exit__(None, None, None)
 
         result_dict: dict[str, Any] = dict(result) if isinstance(result, dict) else {"messages": []}
 
@@ -247,12 +303,15 @@ class HookAwareToolNode(ToolNode):
                 _locale,
             )
 
+            _tools_map: dict[str, Any] = dict(self.tools_by_name)  # type: ignore[attr-defined]
             for msg in result_dict.get("messages") or []:
                 if not isinstance(msg, ToolMessage) or (msg.name or "") == "finish_react":
                     continue
                 params = call_params_map.get(str(msg.tool_call_id or ""), {})
+                _tool_name = msg.name or "tool"
+                _tool_label = _get_tool_display_label(_tool_name, _tools_map)
                 try:
-                    async with _gw_ctx.sub_step(msg.name or "tool"):
+                    async with _gw_ctx.sub_step(_tool_label):
                         if params:
                             await _emit_tool_detail(
                                 _gw_ctx, _get_ui_text("tool_input", _locale), params

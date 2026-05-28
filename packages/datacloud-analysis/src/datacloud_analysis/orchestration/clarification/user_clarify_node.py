@@ -14,11 +14,17 @@ from langgraph.types import interrupt
 from datacloud_analysis.i18n.prompts import get_ui_text
 from datacloud_analysis.orchestration.gateway_user import get_gateway_user_id
 from datacloud_analysis.orchestration.state import AgentState
+from datacloud_analysis.tool_hook_plugins.builtin.operation_confirmation_plugin import (
+    find_operation_action,
+    restore_action_params,
+)
 from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
     _scope_code_from_tool,
 )
 
 logger = logging.getLogger(__name__)
+
+_OPERATION_FORM_INTERRUPT_TYPE = "operation_form"
 
 
 def _make_pm_key(paradigm_id: str, kid: int | str) -> str:
@@ -85,6 +91,121 @@ def _get_gateway_user_id(config: RunnableConfig) -> str | None:
     return get_gateway_user_id(gateway_context)
 
 
+def _is_operation_form_context(ctx: dict[str, Any], analyze_result: dict[str, Any]) -> bool:
+    return (
+        str(ctx.get("interrupt_type") or "") == _OPERATION_FORM_INTERRUPT_TYPE
+        or str(analyze_result.get("interrupt_type") or "") == _OPERATION_FORM_INTERRUPT_TYPE
+    )
+
+
+def _operation_form_from_context(
+    ctx: dict[str, Any],
+    analyze_result: dict[str, Any],
+) -> dict[str, Any]:
+    form = ctx.get("operation_form") or analyze_result.get("operation_form") or {}
+    return dict(form) if isinstance(form, dict) else {}
+
+
+def _normalize_operation_resume(
+    resume_value: Any,
+    operation_form: dict[str, Any],
+) -> dict[str, Any]:
+    payload = dict(resume_value) if isinstance(resume_value, dict) else {}
+    if "formId" not in payload and operation_form.get("formId"):
+        payload["formId"] = operation_form.get("formId")
+    if "rule" not in payload and isinstance(operation_form.get("rule"), list):
+        payload["rule"] = operation_form.get("rule")
+    return payload
+
+
+def _find_operation_action(config: RunnableConfig, tool_name: str) -> Any | None:
+    configurable = config.get("configurable") or {}
+    if not isinstance(configurable, dict):
+        configurable = {}
+    loader = configurable.get("loader")
+    if loader is None:
+        gateway_context = configurable.get("gateway_context")
+        loader = getattr(gateway_context, "loader", None)
+    if loader is None:
+        return None
+    return find_operation_action(loader, tool_name)
+
+
+async def _handle_operation_form_clarify(
+    *,
+    ctx: dict[str, Any],
+    analyze_result: dict[str, Any],
+    tool_name: str,
+    config: RunnableConfig,
+) -> dict[str, Any]:
+    operation_form = _operation_form_from_context(ctx, analyze_result)
+    logger.info(
+        "[user_clarify] operation_form suspend tool=%s form_id=%s",
+        tool_name,
+        operation_form.get("formId"),
+    )
+    resume_value = interrupt(
+        {
+            "prompt": "请确认操作表单。",
+            "reason_code": "OPERATION_FORM_CONFIRMATION",
+            "interrupt_type": _OPERATION_FORM_INTERRUPT_TYPE,
+            "operation_form": operation_form,
+        }
+    )
+    payload = _normalize_operation_resume(resume_value, operation_form)
+    confirmed = bool(payload.get("confirmed"))
+    form_id = str(payload.get("formId") or operation_form.get("formId") or "")
+    if not confirmed:
+        reason = str(payload.get("reason") or "用户取消操作")
+        logger.info(
+            "[user_clarify] operation_form cancelled tool=%s form_id=%s reason=%s",
+            tool_name,
+            form_id,
+            reason,
+        )
+        return {
+            "clarification_formatted_params": {
+                "tool_name": tool_name,
+                "interrupt_type": _OPERATION_FORM_INTERRUPT_TYPE,
+                "formId": form_id,
+                "confirmed": False,
+                "reason": reason,
+                "rule": payload.get("rule") or operation_form.get("rule") or [],
+                "params": {},
+            },
+            "clarify_abort": True,
+            "execution_status": "cancelled",
+            "final_answer": "已取消本次操作。",
+        }
+
+    rule = payload.get("rule") or operation_form.get("rule") or []
+    action = _find_operation_action(config, tool_name)
+    params = restore_action_params(
+        list(rule) if isinstance(rule, list) else [],
+        action=action,
+        original_params=dict(
+            analyze_result.get("structured_input") or ctx.get("structured_input") or {}
+        ),
+    )
+    params["userConfirmed"] = True
+    params["_operationConfirm"] = {
+        "formId": form_id,
+        "confirmed": True,
+    }
+    logger.info("[user_clarify] operation_form confirmed tool=%s form_id=%s", tool_name, form_id)
+    return {
+        "clarification_formatted_params": {
+            "tool_name": tool_name,
+            "interrupt_type": _OPERATION_FORM_INTERRUPT_TYPE,
+            "formId": form_id,
+            "confirmed": True,
+            "rule": rule,
+            "params": params,
+        },
+        "clarify_abort": False,
+    }
+
+
 async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """调用 interrupt() 暂停等待用户澄清，格式化回复后写入 clarification_formatted_params。"""
     ctx = dict(state.get("pending_clarification_context") or {})
@@ -129,6 +250,14 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             tool_name,
         )
         return {"clarify_abort": True}
+
+    if _is_operation_form_context(ctx, analyze_result):
+        return await _handle_operation_form_clarify(
+            ctx=ctx,
+            analyze_result=analyze_result,
+            tool_name=tool_name,
+            config=config,
+        )
 
     if not paradigm_list:
         # _route_after_analyze 已将空 paradigm_list 路由到 tool_dispatcher；
@@ -202,13 +331,17 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             _kd = json.loads(_effective_knowledge)
             _pm = _kd.get("path_mapping") or {}
             if _pm:
-                # 收集前端保留的 keyword 集合（前端提交条目无 kid，用 keyword 匹配）
-                _remaining_kw = {
-                    str(item.get("keyword"))
-                    for paradigm in paradigm_list_from_resume
-                    for item in (paradigm.get("paradigmResult") or [])
-                    if item.get("keyword")
-                }
+                # 收集前端保留的 keyword 集合。
+                # paradigm_list_from_resume 来自 resume_value.paradigmList[0].paradigmList，
+                # 结构与原始 paradigm_list 一致：每个 group 内的 paradigmResult 子项才携带 keyword。
+                _remaining_kw: set[str] = set()
+                for group in paradigm_list_from_resume:
+                    if not isinstance(group, dict):
+                        continue
+                    for item in group.get("paradigmResult") or []:
+                        kw = item.get("keyword") if isinstance(item, dict) else None
+                        if kw:
+                            _remaining_kw.add(str(kw))
                 # 从 metadata.paradigmList（含 paradigmId + kid）构造应保留的
                 # path_mapping 键。不同 paradigm 使用不同键格式：
                 #   select(1): "1"/"2"/...  groupBy(2): "g1"/"g2"/...  orderBy(4): "o1"/"o2"/...
