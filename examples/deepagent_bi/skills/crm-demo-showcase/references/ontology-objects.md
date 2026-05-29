@@ -168,28 +168,28 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 
 ## 二、非结构化本体
 
-### 2.1 拜访记录对象（visit_record）
+### 2.1 会议纪要对象（meeting_note）
 
-创建非结构化本体对象，绑定知识库目录中的拜访记录文档。
+创建非结构化本体对象，绑定知识库目录中的会议纪要文档。Mock 数据通过 `generate_meeting_minutes.py` 脚本输出。
 
 | 字段 | 值 |
 |------|-----|
-| `entity_code` | `visit_record` |
-| `entity_name` | 拜访记录 |
-| `entity_desc` | 销售拜访记录文档管理 |
+| `entity_code` | `meeting_note` |
+| `entity_name` | 会议纪要 |
+| `entity_desc` | DataCloud项目会议纪要文档管理 |
 | `entity_source` | `KNOWLEDGE_BASE` |
 | `kb_id` | `<知识库 resourceCode>`（来自 `list_knowledge_bases.py`） |
-| `kb_directory` | `/拜访记录`（来自 `list_kb_directories.py`） |
+| `kb_directory` | `/会议纪要`（来自 `list_kb_directories.py`） |
 
 **字段定义：**
 
 | property_code | property_name | data_type | property_role | rule_type | 说明 |
 |---------------|---------------|-----------|---------------|-----------|------|
-| `visit_date` | 拜访日期 | `DATE` | `DIMENSION` | `date` | 拜访日期 |
-| `customer_name` | 客户名称 | `STRING` | `DIMENSION` | `name` | 拜访客户 |
-| `sales_name` | 销售姓名 | `STRING` | `DIMENSION` | `name` | 负责销售 |
-| `topic` | 拜访主题 | `STRING` | `DIMENSION` | `name` | 拜访主题/概要 |
-| `result` | 拜访结果 | `STRING` | `DIMENSION` | `description` | 拜访结论摘要 |
+| `meeting_theme` | 会议主题 | `STRING` | `DIMENSION` | `name` | 会议标题 |
+| `meeting_date` | 会议日期 | `DATE` | `DIMENSION` | `date` | 开会日期 |
+| `participants` | 参会人员 | `STRING` | `DIMENSION` | `name` | 逗号分隔的姓名列表 |
+| `summary` | 会议摘要 | `STRING` | `DIMENSION` | `description` | 概要描述 |
+| `todos` | 待办事项 | `STRING` | `DIMENSION` | `description` | 多行待办 |
 
 **知识库绑定要求：**
 
@@ -200,11 +200,21 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 
 ### 2.2 Mock 数据
 
-| visit_date | customer_name | sales_name | topic | result |
-|------------|---------------|------------|-------|--------|
-| `2026-05-10` | 广州国投中债 | 黄药师 | 数据工厂产品演示 | 客户高度认可，计划启动 POC |
-| `2026-05-15` | 深圳创新科技 | 洪七公 | 智能分析平台需求沟通 | 需求明确，待出方案报价 |
-| `2026-05-20` | 北京华夏集团 | 黄药师 | 客户画像系统交流 | 初步接触，客户有预算意向 |
+三篇 DataCloud 项目会议纪要，通过 `scripts/meeting-minutes/generate_meeting_minutes.py` 获取：
+
+```bash
+/tmp/ont_env/bin/python scripts/meeting-minutes/generate_meeting_minutes.py           # 随机一篇（text 模式）
+/tmp/ont_env/bin/python scripts/meeting-minutes/generate_meeting_minutes.py --index 0 # 指定某一篇
+/tmp/ont_env/bin/python scripts/meeting-minutes/generate_meeting_minutes.py --output json  # 结构化 JSON
+```
+
+**数据摘要：**
+
+| 日期 | 主题 | 参会人员 | 关键内容 |
+|------|------|---------|---------|
+| 2026-05-25 | DataCloud平台需求确认会 | 黄药师、欧阳锋、韦小宝 | 四大核心模块需求优先级、MVP 计划（6/25 + 7/15） |
+| 2026-05-26 | DataCloud研发技术方案评审会 | 欧阳锋、韦小宝、周伯通 | Iceberg + ClickHouse + PG + Redis 数据存储选型、Flink 流处理、Vue3 前端 |
+| 2026-05-27 | DataCloud项目进度同步会 | 黄药师、欧阳锋、韦小宝、周伯通 | Sprint1 回顾（MySQL/PG 同步完成，API 部分完成）、Sprint2 计划、7/30 上线 |
 
 ### 2.3 脚本调用规范
 
@@ -228,55 +238,53 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 | `get_term_type_values.py` | 查询术语类型的值列表 |
 | `mount_resource.py` | 挂载本体到当前数字员工 |
 
-**创建对象示例（拜访记录）：**
+**创建对象示例（会议纪要）：**
 
 ```bash
 # 阶段一：收集信息
 /tmp/ont_env/bin/python scripts/ontology/unstructured/create_object.py '{
   "action": "collect",
-  "entity_code": "visit_record",
-  "entity_name": "拜访记录",
-  "entity_desc": "销售拜访记录文档管理",
+  "entity_code": "meeting_note",
+  "entity_name": "会议纪要",
+  "entity_desc": "DataCloud项目会议纪要文档管理",
   "kb_id": "<resourceCode>",
-  "kb_directory": "/拜访记录",
+  "kb_directory": "/会议纪要",
   "fields": [
     {
-      "property_code": "visit_date",
-      "property_name": "拜访日期",
+      "property_code": "meeting_theme",
+      "property_name": "会议主题",
+      "data_type": "STRING",
+      "ext_property": {
+        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}
+      }
+    },
+    {
+      "property_code": "meeting_date",
+      "property_name": "会议日期",
       "data_type": "DATE",
       "ext_property": {
         "property_role_rule": {"property_role": "DIMENSION", "rule_type": "date"}
       }
     },
     {
-      "property_code": "customer_name",
-      "property_name": "客户名称",
+      "property_code": "participants",
+      "property_name": "参会人员",
       "data_type": "STRING",
       "ext_property": {
         "property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}
       }
     },
     {
-      "property_code": "sales_name",
-      "property_name": "销售姓名",
+      "property_code": "summary",
+      "property_name": "会议摘要",
       "data_type": "STRING",
       "ext_property": {
-        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}
-      },
-      "term_type_code": "user_name",
-      "rel_term_codeorname": "name"
-    },
-    {
-      "property_code": "topic",
-      "property_name": "拜访主题",
-      "data_type": "STRING",
-      "ext_property": {
-        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}
+        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "description"}
       }
     },
     {
-      "property_code": "result",
-      "property_name": "拜访结果",
+      "property_code": "todos",
+      "property_name": "待办事项",
       "data_type": "STRING",
       "ext_property": {
         "property_role_rule": {"property_role": "DIMENSION", "rule_type": "description"}
@@ -288,7 +296,7 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 # 阶段二：确认提交
 /tmp/ont_env/bin/python scripts/ontology/unstructured/create_object.py '{
   "action": "submit",
-  "entity_code": "visit_record"
+  "entity_code": "meeting_note"
 }'
 ```
 

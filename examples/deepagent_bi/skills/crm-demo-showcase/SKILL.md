@@ -17,9 +17,9 @@ Agent 打开本文件后，先根据用户意图匹配下表，找到对应的�
 | 1 | 数据查询 | "查客户""查字段" | baiying_call | ✅ |
 | 2 | 数据统计 | "按x统计""前N名" | baiying_call | ✅ |
 | 3 | 歧义处理 | 字段不存在或含义不清 | baiying_call + 追问 | ✅ |
-| 4 | 数据操作 | "录入客户""创建商机""生成周报" | baiying_call + dws | 🔧 |
+| 4 | 数据操作 | "录入客户""创建商机""生成周报" | baiying_call | 🔧 |
 | 5 | 结构化本体 | "创建对象""创建视图""挂载本体" | exec(脚本) | 🔧 |
-| 6 | 非结构化本体 | "绑定知识库""创建拜访记录" | exec(脚本) | 🔧 |
+| 6 | 非结构化本体 | "创建会议纪要""查会议纪要" | exec(脚本) | 🔧 |
 
 > 用户说"新手引导""给我演示一下"时，按序号 1→6 逐项执行，每项完成后等用户回应再继续。
 
@@ -27,13 +27,15 @@ Agent 打开本文件后，先根据用户意图匹配下表，找到对应的�
 
 ## baiying_call 工具
 
-`baiying_call` 是 MCP 工具，**挂载视图后才在工具列表中可见**。未挂载时调用会直接不可用。
+`baiying_call` 是 MCP 工具，**挂载资源后才在工具列表中可见**。未挂载时调用会直接不可用。
 
-| 参数 | 值 | 说明 |
-|------|----|------|
-| `resource_id` | `10000104` | 数字型 |
-| `resource_type` | `VIEW` | 必须大写 |
-| `query` | 自然语言 | 用户想查什么就写什么 |
+| 参数 | 说明 |
+|------|------|
+| `resource_id` | 数字型 ID，不同资源 ID 不同。通过 `list_resources.py`（查询可用资源）或 `list_mounted_resources.py`（查询已挂载资源）获取，不可硬编码 |
+| `resource_type` | `VIEW`（查询）或 `OBJECT`（写入），必须大写 |
+| `query` | 自然语言，用户想做什么就写什么 |
+
+> **获取 resource_id**：执行 `list_resources.py`。不传参数默认查全部（个人+企业、OBJECT+VIEW）。可按 `keyword` 中文名称筛选，从返回结果中获取数字 `resourceId`。需限定范围时传 `owner_type` / `resource_biz_type`。
 
 ### 挂载生命周期
 
@@ -147,9 +149,7 @@ Agent 打开本文件后，先根据用户意图匹配下表，找到对应的�
 
 | 用户表述 | 处理方式 |
 |---------|---------|
-| 字段名不标准（如"商机贡献率"） | 列出候选含义，让用户选择 |
-| 信息明确（如"查韦小二的商机"） | 直接查询，不追问 |
-| 含公式（如"预测-签约<20万"） | 转化为筛选条件，展示计算逻辑 |
+| 字段名不标准（如"商机贡献度"） | 列出候选含义，让用户选择 |
 
 > 详细策略见 [歧义处理指南](./references/ambiguity-guide.md)。
 
@@ -159,7 +159,7 @@ Agent 打开本文件后，先根据用户意图匹配下表，找到对应的�
 
 **一句话**：展示从非结构化周报到结构化数据录入的完整闭环。流程：生成周报 → 信息抽取 → 客户校验录入 → 商机任务创建。
 
-**前置要求**：Python 环境已搭建（[搭建步骤](./references/python-env.md)），视图已挂载。
+**前置要求**：Python 环境已搭建（[搭建步骤](./references/python-env.md)），`by_customer` 和 `by_opp_task` 两个 OBJECT 已挂载（若 baiying_call 不可用则先挂载，挂载生命周期同 [前文](#挂载生命周期)）。
 
 ### 4.1 生成模拟周报
 
@@ -182,28 +182,20 @@ Agent 打开本文件后，先根据用户意图匹配下表，找到对应的�
 
 1. 校验编码与名称是否匹配（不匹配则分配新编码）
 2. 省份标记为编码的（如 "11（北京）"）纠正为实际城市
-3. 表格预览 → 用户确认 → 通过 `baiying_call`（resource_id=10000104）写入
+3. 表格预览 → 用户确认 → 通过 `baiying_call` 写入客户：
+   - 先执行 `list_resources.py`，传入 `{"keyword": "客户"}`，获取 `by_customer` 的 numeric `resourceId`
+   - 调用 `baiying_call`，resource_type=`OBJECT`，resource_id=上一步获取的 ID
 
-- **成功标志**：用户确认后，baiying_call 返回写入成功
+- **成功标志**：baiying_call 返回写入成功
 
 ### 4.4 商机任务创建
 
-```bash
-MONTH_END=$(date -d "$(date +%Y-%m-01) +1 month -1 day" +%Y-%m-%dT23:59:59+08:00)
+用户确认后，通过 `baiying_call` 创建商机任务：
+- 先执行 `list_resources.py`，传入 `{"keyword": "任务"}`，获取 `by_opp_task` 的 numeric `resourceId`
+- 调用 `baiying_call`，resource_type=`OBJECT`，resource_id=上一步获取的 ID
+- query 描述：任务标题、执行人、截止日期等
 
-# 先查 userId
-dws contact search --keyword "<销售姓名>" --format json
-
-# 创建任务
-dws todo task create \
-  --title "拜访客户落地合同推进" \
-  --executors <userId> \
-  --due "$MONTH_END" \
-  --format json
-```
-
-- **成功标志**：`dws todo task create` 返回任务 ID
-- **若 dws 不可用**：跳过此步，告知用户手动创建
+- **成功标志**：baiying_call 返回创建成功
 
 > 详细的字段映射、校验规则、周报格式见 [数据操作指南](./references/data-operations.md)。
 
@@ -246,7 +238,9 @@ Mock 数据：
 
 ### 5.4 挂载并查询
 
-`mount_resource.py` 挂载到当前 Agent → 通过 `baiying_call`（resource_id=10000104）查询视图，验证跨表查询能力。
+1. `mount_resource.py` 挂载到当前 Agent
+2. 执行 `list_mounted_resources.py`，传入 `{"resource_id": <Agent的resource_id>}`，从返回结果中找到 `resourceCode` 为 `product_order_view` 的 `resourceId`
+3. 通过 `baiying_call`（resource_id=上一步获取的 ID，resource_type=`VIEW`）查询视图，验证跨表查询能力
 
 - **成功标志**：视图查询一次返回产品 + 关联订单汇总数据
 
@@ -256,31 +250,59 @@ Mock 数据：
 
 ## 演示六：非结构化本体
 
-**一句话**：展示非结构化文档通过结构化标签增强后，与结构化数据的融合查询能力。
+**一句话**：展示非结构化文档（会议纪要）通过结构化标签增强后，按标签检索 + 查看文档内容的融合查询能力。
 
-**前置要求**：Python 环境已搭建，演示五已完成（有可复用的客户数据）。
+**前置要求**：Python 环境已搭建。
 
-**流程**：查询知识库 → 查询目录 → 创建对象 → `submit` → 挂载
+**流程**：生成会议纪要 → 查询知识库 → 查询目录 → 创建对象 → `submit` → 挂载 → 融合查询
 
-### 6.1 创建拜访记录对象（visit_record）
+### 6.1 生成会议纪要预览
 
-绑定知识库 + 目录，字段：`visit_date`(date)、`customer_name`(name)、`sales_name`(name)、`topic`(name)、`result`(description)
+```bash
+/tmp/ont_env/bin/python scripts/meeting-minutes/generate_meeting_minutes.py
+```
 
-Mock 数据：
+从 DataCloud 项目三篇会议纪要中随机输出一篇，供 Agent 展示。 可选 `--index 0/1/2` 指定某一篇，`--output json` 获取结构化字段。
 
-| 字段 | 值 |
-|------|-----|
-| visit_date | `2026-05-10` |
-| customer_name | 广州国投中债 |
-| sales_name | 黄药师 |
-| topic | 数据工厂产品演示 |
-| result | 客户高度认可，计划启动 POC |
+### 6.2 创建会议纪要对象（meeting_note）
 
-### 6.2 挂载并融合查询
+绑定知识库 + 目录，字段：
 
-`mount_resource.py` 挂载 → 查询客户时同时展示对应的拜访记录，验证结构化与非结构化融合。
+| property_code | property_name | 说明 |
+|---|---|---|
+| `meeting_theme` | 会议主题 | 会议标题（name 维度） |
+| `meeting_date` | 会议日期 | 开会日期（date 维度） |
+| `participants` | 参会人员 | 逗号分隔的姓名列表（name 维度） |
+| `summary` | 会议摘要 | 概要描述（description 维度） |
+| `todos` | 待办事项 | 多行待办（description 维度） |
 
-- **成功标志**：查询客户结果中包含关联的拜访记录字段
+Mock 数据摘要（三篇）：
+
+| 日期 | 主题 | 参会人员 | 关键内容 |
+|------|------|---------|---------|
+| 05-25 | 需求确认会 | 黄药师、欧阳锋、韦小宝 | 功能需求优先级排序、MVP 计划 |
+| 05-26 | 技术方案评审 | 欧阳锋、韦小宝、周伯通 | Iceberg+ClickHouse 选型、Flink 架构 |
+| 05-27 | 进度同步会 | 四人全员 | Sprint1 回顾、Sprint2 计划 |
+
+创建命令参见 [本体对象定义](./references/ontology-objects.md)。
+
+### 6.3 挂载并融合查询
+
+1. `mount_resource.py` 挂载到当前 Agent
+2. 执行 `list_mounted_resources.py`，传入 `{"resource_id": <Agent的resource_id>}`，从返回结果中找到 `resourceCode` 为 `meeting_note` 的 `resourceId`
+3. 通过 `baiying_call`（resource_id=上一步获取的 ID，resource_type=`OBJECT`）进行融合查询
+
+**融合查询示例**：
+
+| 查询意图 | query | 返回效果 |
+|---------|-------|---------|
+| 按人员查 | `查询黄药师参与的所有会议纪要` | 结构化过滤 participants 字段，返回匹配文档 |
+| 按日期查 | `查看5月25日的会议纪要内容` | 日期过滤 + 返回会议纪要全文 |
+| 按主题搜 | `DataCloud功能优先级是怎么排的` | 全文搜索 content，返回原文相关段落 |
+| 查待办 | `韦小宝有哪些待办事项` | 结构化匹配 todos 字段 |
+| 看技术选型 | `技术评审会选了哪些存储方案` | `--index 1` 配合关键词搜索返回原文 |
+
+- **成功标志**：一次 `baiying_call` 同时返回结构化标签（日期/人员/主题）+ 文档正文内容
 
 > 详细的字段定义、知识库绑定规范、脚本调用参考 [本体对象定义](./references/ontology-objects.md)。
 
@@ -304,7 +326,7 @@ Mock 数据：
 |------|------------|
 | 业务本体语义层 | baiying_call 返回的字段名（"客户名称"而非 `col_id_xxx`） |
 | 零 ETL 联邦查询 | 跨数据源查询结果（如 CRM + 通讯录） |
-| 异构数据融合 | 结构化客户 + 非结构化拜访记录通过共同字段关联 |
+| 异构数据融合 | 结构化标签（人员/日期/主题）检索非结构化会议纪要，返回文档全文 |
 | 性能与准确率双保障 | 视图查询速度 vs 传统多次 join |
 | 操作安全人工确认 | 客户录入时的「确认表单」步骤 |
 
@@ -318,7 +340,7 @@ Mock 数据：
 | "查询又快又准，怎么做到的？" | 对比视图一次查询 vs 传统多次 join |
 | "你用了本体吗？" | 列出 `list_resources.py` 返回的实际对象 |
 | "本体解决了什么问题？" | 统一数据接口、跨表关联、权限隔离，引用已演示例子 |
-| "结构化+非结构化怎么融合？" | 展示结构化客户 + 非结构化拜访纪要的关联 |
+| "结构化+非结构化怎么融合？" | 展示按人员/日期检索会议纪要 + 返回文档正文的融合效果 |
 | "多跳数据查询怎么解决？" | 用客户→商机→任务的数据关联说明 |
 | "数据安全怎么保证？" | 引用客户录入确认步骤 + 权限校验 |
 
@@ -359,7 +381,7 @@ Mock 数据：
   '{"agent_id": <Agent 编码里的数字后缀>, "resource_code": "scene_crm_comprehensive_analysis"}'
 ```
 
-> `list_resources.py` 只返回个人创建的结构化本体对象，**不能**用于校验平台级视图是否挂载。
+> `list_resources.py` 返回个人和企业资源列表（含平台级资源）。`list_mounted_resources.py` 用于检查某资源是否已挂载到当前 Agent。
 
 ### 脚本路径速查
 
@@ -368,7 +390,7 @@ Mock 数据：
 | 脚本 | 用途 |
 |------|------|
 | `scripts/ontology/structured/list_mounted_resources.py` | 查询 Agent 已挂载的资源 |
-| `scripts/ontology/structured/list_resources.py` | 查询个人创建的结构化对象/视图（不含平台级视图） |
+| `scripts/ontology/structured/list_resources.py` | 查询资源列表（默认全部，可按 keyword/owner_type/resource_biz_type 筛选） |
 | `scripts/ontology/structured/create_object.py` | 创建结构化对象（collect → submit） |
 | `scripts/ontology/structured/create_view.py` | 创建本体视图 |
 | `scripts/ontology/structured/delete_object.py` | 删除结构化对象 |
@@ -382,6 +404,7 @@ Mock 数据：
 | `scripts/ontology/unstructured/create_object.py` | 创建非结构化对象（collect → submit） |
 | `scripts/ontology/unstructured/delete_object.py` | 删除非结构化对象 |
 | `scripts/ontology/unstructured/mount_resource.py` | 挂载非结构化对象到 Agent |
+| `scripts/meeting-minutes/generate_meeting_minutes.py` | 生成模拟会议纪要 |
 | `scripts/weekly-report/generate_weekly_report.py` | 生成模拟周报 |
 
 ---

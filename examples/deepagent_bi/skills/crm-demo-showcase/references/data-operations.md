@@ -130,7 +130,9 @@ Agent 按以下位置从周报文本中定位各字段：
 
 ### 3.3 执行录入
 
-用户确认后，Agent 通过 `baiying_call`（resource_id=10000104, resource_type=VIEW）写入客户数据（参见 SKILL.md 数据操作说明）。
+用户确认后，Agent 通过 `baiying_call` 写入客户数据：
+- 先执行 `list_resources.py` 查询"客户"获取 `by_customer` 的 numeric `resource_id`
+- 调用 `baiying_call`，resource_type=`OBJECT`，resource_id=上一步获取的 ID
 
 **录入模式**：确认后执行（confirm-then-execute），任何数据操作类 API 在执行前必须经用户二次确认。
 
@@ -138,39 +140,22 @@ Agent 按以下位置从周报文本中定位各字段：
 
 ## 4. 商机任务创建
 
-客户录入完成后，为销售创建待办任务，跟进商机推进。
+客户录入完成后，通过 `baiying_call` 创建商机待办任务。
 
 ### 4.1 创建待办任务
 
-```bash
-# 计算本月最后一天
-MONTH_END=$(date -d "$(date +%Y-%m-01) +1 month -1 day" +%Y-%m-%dT23:59:59+08:00)
+- 先执行 `list_resources.py` 查询"任务"获取 `by_opp_task` 的 numeric `resource_id`
+- 调用 `baiying_call`，resource_type=`OBJECT`，resource_id=上一步获取的 ID
+- query 描述：任务标题、执行人、截止日期、关联客户和商机信息
 
-dws todo task create \
-  --title "拜访客户落地合同推进" \
-  --executors <userId> \
-  --due "$MONTH_END" \
-  --format json
-```
-
-### 4.2 获取销售用户 ID
-
-`--executors` 需要 userId，通过通讯录搜索获取：
-
-```bash
-dws contact search --keyword "<销售姓名>" --format json
-```
-
-从返回结果中提取 `userId` 填入上一步命令。
-
-### 4.3 任务内容字段
+### 4.2 任务内容字段
 
 | 字段 | 值 | 说明 |
 |------|-----|------|
 | 任务标题 | 拜访客户落地合同推进 | 固定模板 |
 | 所属客户 | {客户名称} | 从抽取结果填入 |
 | 负责销售 | {销售姓名}（{用户编码}） | 从抽取结果填入 |
-| 截止时间 | 本月底（`MONTH_END`） | 动态计算 |
+| 截止时间 | 本月底 | 动态计算 |
 | 任务描述 | 拜访客户，推进合同签订，落地 {产品名称} 项目 | 产品名从商机所属产品编码获取 |
 
 ---
@@ -181,5 +166,5 @@ dws contact search --keyword "<销售姓名>" --format json
 2. **信息抽取** — Agent 按字段映射从文本中解析客户和商机信息
 3. **客户校验** — 检查编码匹配性、纠正省份/城市错误
 4. **预览确认** — 表格展示待录入数据，等待用户确认
-5. **客户录入** — 用户确认后通过 `baiying_call`（resource_id=10000104）写入
-6. **任务创建** — 通过 `dws contact search` 获取 userId，`dws todo task create` 创建待办
+5. **客户录入** — 用户确认后通过 `baiying_call`（resource_type=OBJECT）写入
+6. **任务创建** — 通过 `baiying_call`（resource_type=OBJECT）创建商机待办任务
