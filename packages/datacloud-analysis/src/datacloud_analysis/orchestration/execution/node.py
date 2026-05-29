@@ -18,6 +18,7 @@ from datacloud_analysis.orchestration.execution.tool_wrapper import (
 )
 from datacloud_analysis.orchestration.state import AgentState
 from datacloud_analysis.tools.ask_user import ask_user
+from datacloud_analysis.tools.execute import execute
 from datacloud_analysis.tools.file_io import read_file
 
 logger = logging.getLogger(__name__)
@@ -140,6 +141,7 @@ _EXECUTION_REASONING_TITLE = "任务执行"
 _BUILTIN_TOOLS: list[BaseTool] = [
     ask_user,
     read_file,
+    execute,
 ]
 
 
