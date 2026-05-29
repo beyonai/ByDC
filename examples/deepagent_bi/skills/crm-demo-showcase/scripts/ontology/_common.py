@@ -55,21 +55,27 @@ async def _post_via_discovery(
     headers: dict[str, str],
 ) -> Any:
     from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
-    from by_framework.util.discovery_http_client import DiscoveryHttpClient  # type: ignore[import-untyped]
+    from by_framework.util.discovery_http_client import (
+        DiscoveryHttpClient,  # type: ignore[import-untyped]
+    )
     from by_framework.util.http_client import RetryConfig  # type: ignore[import-untyped]
 
     _init_discovery_redis()
     discovery_client = DiscoveryClient(cache_interval=5)
     retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
     try:
-        async with DiscoveryHttpClient(discovery_client, retry_config=retry_config, health_threshold_ms=-1) as client:
+        async with DiscoveryHttpClient(
+            discovery_client, retry_config=retry_config, health_threshold_ms=-1
+        ) as client:
             response = await client.post(service_name, path, headers=headers, json=payload)
     finally:
         await discovery_client.close()
 
     body: dict[str, Any] = response.data if isinstance(response.data, dict) else {}
     if not response.is_success or body.get("code", 0) != 0:
-        raise ValueError(f"HTTP {response.status_code} {service_name}{path}: {body.get('msg', body)}")
+        raise ValueError(
+            f"HTTP {response.status_code} {service_name}{path}: {body.get('msg', body)}"
+        )
     return body.get("data")
 
 
@@ -85,7 +91,7 @@ def _run_async_in_thread(coro: Any) -> Any:
     def runner() -> None:
         try:
             result["value"] = asyncio.run(coro)
-        except BaseException as exc:  # noqa: BLE001
+        except BaseException as exc:
             error["exc"] = exc
 
     thread = threading.Thread(target=runner, daemon=True)
@@ -98,10 +104,12 @@ def _run_async_in_thread(coro: Any) -> Any:
 
 def delete_resource_by_code(resource_code: str) -> None:
     """通过 resourceCode 直接下架个人本体。"""
-    post_json(
+    data = post_json(
         path="/byaiService/tool/deleteResourceByCodeAndOwnerType",
         payload={"resourceCode": resource_code, "ownerType": "personal"},
     )
+    if not data or data.get("code") != 0:
+        raise RuntimeError(f"下架本体失败: {data}")
 
 
 def load_embedding_model_from_redis() -> bool:

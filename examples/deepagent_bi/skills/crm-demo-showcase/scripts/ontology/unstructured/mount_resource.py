@@ -21,7 +21,7 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent / "lib"))
 
 from _common import post_json
@@ -30,7 +30,10 @@ from _common import post_json
 def main() -> None:
     raw = sys.argv[1] if len(sys.argv) > 1 else sys.stdin.read().strip()
     if not raw:
-        print(json.dumps({"ok": False, "error": "缺少入参，需要 agent_id 和 resource_code"}), flush=True)
+        print(
+            json.dumps({"ok": False, "error": "缺少入参，需要 agent_id 和 resource_code"}),
+            flush=True,
+        )
         sys.exit(1)
 
     params: dict = json.loads(raw)
