@@ -687,6 +687,14 @@ class OntologyAgent:
                 question, workspace_dir=self._config.workspace_dir
             )
             graph_input["prompts_overwrite"] = {"locale": effective_locale}
+            # 注入 skill task_prompt（请求级，不影响图缓存）
+            _task_prompt = str((extras or {}).get("task_prompt") or "").strip()
+            if _task_prompt:
+                graph_input["prompts_overwrite"]["task_prompt"] = _task_prompt
+            # 注入 skill_workspace_dir 供 read_file tool 使用
+            _skill_ws = str((extras or {}).get("skill_workspace_dir") or "").strip()
+            if _skill_ws:
+                graph_input["prompts_overwrite"]["skill_workspace_dir"] = _skill_ws
             if target_tool:
                 graph_input["target_tool"] = target_tool
         elif isinstance(resume_input, str | dict):
