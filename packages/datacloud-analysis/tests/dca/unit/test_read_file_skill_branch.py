@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from datacloud_analysis.tools.file_io import read_file
@@ -88,9 +88,7 @@ class TestReadFileSkillBranch:
 
         ctx = _make_skill_ctx(str(tmp_path))
         with patch("datacloud_analysis.tools.file_io.get_current_context", return_value=ctx):
-            result = await read_file.ainvoke(
-                {"path": str(target), "begin_line": 1, "end_line": 3}
-            )
+            result = await read_file.ainvoke({"path": str(target), "begin_line": 1, "end_line": 3})
 
         assert "line1" in result
         assert "line2" in result

@@ -11,13 +11,11 @@
 
 from __future__ import annotations
 
-import subprocess
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from datacloud_analysis.tools.execute import execute
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 辅助：构造 InvocationContext mock
@@ -111,7 +109,7 @@ class TestExecuteTool:
         ctx = _make_ctx(skill_workspace_dir=str(tmp_path))
         with patch("datacloud_analysis.tools.execute.get_current_context", return_value=ctx):
             result = await execute.ainvoke(
-                {"command": "python -c \"import time; time.sleep(10)\"", "timeout": 1}
+                {"command": 'python -c "import time; time.sleep(10)"', "timeout": 1}
             )
         assert "超时" in result
 

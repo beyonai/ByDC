@@ -57,15 +57,15 @@ async def execute(
 
     output = result.stdout.rstrip()
     if result.stderr:
-        stderr_lines = "\n".join(
-            f"[stderr] {line}" for line in result.stderr.splitlines()
-        )
+        stderr_lines = "\n".join(f"[stderr] {line}" for line in result.stderr.splitlines())
         output = f"{output}\n{stderr_lines}".strip() if output else stderr_lines
 
     if len(output.encode()) > _MAX_OUTPUT_BYTES:
         output = output.encode()[:_MAX_OUTPUT_BYTES].decode(errors="replace") + "\n[输出已截断]"
 
     if result.returncode != 0:
-        output = f"[exit={result.returncode}]\n{output}" if output else f"[exit={result.returncode}]"
+        output = (
+            f"[exit={result.returncode}]\n{output}" if output else f"[exit={result.returncode}]"
+        )
 
     return output or "(无输出)"
