@@ -33,6 +33,8 @@ async def execute(
             env["USER_CODE"] = str(extras["user_code"])
         if extras.get("beyond_token"):
             env["BEYOND_TOKEN"] = str(extras["beyond_token"])
+        if extras.get("be_domainname"):
+            env["BE_DOMAINNAME"] = str(extras["be_domainname"])
         skill_ws = str(extras.get("skill_workspace_dir") or "").strip()
         if skill_ws:
             cwd = skill_ws
