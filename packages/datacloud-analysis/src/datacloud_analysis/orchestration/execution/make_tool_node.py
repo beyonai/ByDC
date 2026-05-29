@@ -85,6 +85,7 @@ def make_tool_node(
                 "execution_status": "clarify_needed",
                 "pending_clarification_context": {
                     **exc.context,
+                    "tool_call_id": str(tc.get("id") or ""),
                     "tool_name": tool_name,
                     "react_round_idx": int(state.get("react_round_idx") or 0),
                 },
@@ -157,7 +158,7 @@ def _extract_from_pending_context(state: AgentState, tool_name: str) -> dict[str
         return {
             "name": tool_name,
             "args": ctx.get("structured_input") or {},
-            "id": "",
+            "id": str(ctx.get("tool_call_id") or ""),
         }
     return None
 

@@ -50,6 +50,7 @@ class CustomSearchBackend:
         self.request: KnowledgeSearchRequest | None = None
         self.file_name_request: KnowledgeFileNameSearchRequest | None = None
         self.write_request: KnowledgeWriteRequest | None = None
+        self.write_requests: list[KnowledgeWriteRequest] = []
 
     async def search(self, request: KnowledgeSearchRequest) -> KnowledgeSearchResult:
         self.request = request
@@ -72,6 +73,7 @@ class CustomSearchBackend:
 
     async def write(self, request: KnowledgeWriteRequest) -> KnowledgeWriteResult:
         self.write_request = request
+        self.write_requests.append(request)
         return KnowledgeWriteResult(
             records=[
                 {
@@ -110,6 +112,7 @@ class PrimaryKeyOmittingBackend(CustomSearchBackend):
 class PrimaryKeyAwareBackend(CustomSearchBackend):
     async def write(self, request: KnowledgeWriteRequest) -> KnowledgeWriteResult:
         self.write_request = request
+        self.write_requests.append(request)
         return KnowledgeWriteResult(
             records=[
                 {
@@ -822,6 +825,87 @@ async def test_kb_search_executor_write_uses_ext_property_binding() -> None:
         "datasource_alias": "kb_docs",
         "query": "",
     }
+
+
+@pytest.mark.asyncio
+async def test_kb_search_executor_write_supports_batch_records() -> None:
+    backend = CustomSearchBackend()
+    cls = OntologyClass(
+        object_code="kb_object",
+        object_name="知识库对象",
+        description="",
+        source_type="KNOWLEDGE_BASE",
+        datasource_alias="kb_docs",
+        ext_property={"kb_id": "kb-sales", "kb_directory": "/sales"},
+        fields=[OntologyField(field_code="status", field_name="状态", field_type="STRING")],
+    )
+    loader = DummyLoader(cls, DummyConfig(kb_search_backend=backend))
+
+    result = await KbSearchExecutor(loader).write(
+        "kb_object",
+        {
+            "records": [
+                {
+                    "source_path": "/sales/meeting-a.docx",
+                    "labels": {"status": "active"},
+                    "content": "会议 A 内容",
+                },
+                {
+                    "source_path": "/sales/meeting-b.docx",
+                    "labels": {"status": "archived"},
+                    "content": "会议 B 内容",
+                    "file_description": "第二份会议纪要",
+                },
+            ]
+        },
+    )
+
+    assert len(backend.write_requests) == 2
+    assert backend.write_requests[0].file_path == "/sales/meeting-a.docx"
+    assert backend.write_requests[0].labels == {"status": "active"}
+    assert backend.write_requests[1].file_path == "/sales/meeting-b.docx"
+    assert backend.write_requests[1].file_description == "第二份会议纪要"
+    assert result["total"] == 2
+    assert result["records"] == [
+        {
+            "status": "active",
+            "fileName": "meeting-a.docx",
+            "filePath": "/sales/meeting-a.docx",
+        },
+        {
+            "status": "archived",
+            "fileName": "meeting-b.docx",
+            "filePath": "/sales/meeting-b.docx",
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_kb_search_executor_write_batch_validates_record_index() -> None:
+    backend = CustomSearchBackend()
+    cls = OntologyClass(
+        object_code="kb_object",
+        object_name="知识库对象",
+        description="",
+        source_type="KNOWLEDGE_BASE",
+        datasource_alias="kb_docs",
+        ext_property={"kb_id": "kb-sales"},
+    )
+    loader = DummyLoader(cls, DummyConfig(kb_search_backend=backend))
+
+    result = await KbSearchExecutor(loader).write(
+        "kb_object",
+        {
+            "records": [
+                {"source_path": "/sales/meeting-a.md", "content": "会议 A 内容"},
+                {"source_path": "sales/meeting-b.md", "content": "会议 B 内容"},
+            ]
+        },
+    )
+
+    assert result["total"] == 0
+    assert result["meta"]["error"] == "records[1].source_path must start with /"
+    assert backend.write_requests == []
 
 
 @pytest.mark.asyncio

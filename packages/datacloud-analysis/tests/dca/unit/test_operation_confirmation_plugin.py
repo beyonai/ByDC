@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -11,6 +12,8 @@ from datacloud_analysis.tool_hook_plugins.builtin.operation_confirmation_plugin 
     restore_action_params,
 )
 from datacloud_analysis.tool_hook_plugins.types import ClarificationNeededError, HookContext
+from datacloud_data_sdk.exceptions import TermAmbiguousError, TermNotFoundError
+from datacloud_data_sdk.ontology.term_loader import KbTermLoader
 
 
 @dataclass
@@ -76,7 +79,8 @@ class _Class:
 
 
 class _Loader:
-    def __init__(self, action: _Action) -> None:
+    def __init__(self, action: _Action, term_loader: Any | None = None) -> None:
+        self._config = SimpleNamespace(term_loader=term_loader)
         self._class = _Class(
             actions=[action],
             fields=[
@@ -99,6 +103,26 @@ class _Loader:
         return []
 
 
+class _AmbiguousTermLoader:
+    def resolve_value(self, *_args: Any, **_kwargs: Any) -> str:
+        raise TermAmbiguousError(
+            "customer_status.code",
+            "张三",
+            [
+                {"code": "U001", "label": "张三-研发"},
+                {"code": "U002", "label": "张三-销售"},
+            ],
+        )
+
+
+class _MissingTermLoader:
+    def resolve_value(self, *_args: Any, **_kwargs: Any) -> str:
+        raise TermNotFoundError("customer_status.code", "不存在的值", available_entries=[])
+
+    def get_entries_page(self, *_args: Any, **_kwargs: Any) -> tuple[list[dict[str, str]], int]:
+        return [], 0
+
+
 async def test_operation_before_call_raises_form_interrupt() -> None:
     action = _Action()
     ctx: HookContext = {
@@ -117,9 +141,124 @@ async def test_operation_before_call_raises_form_interrupt() -> None:
     form = context["operation_form"]
     assert form["actionCode"] == "insert_customer"
     assert form["rule"][0][0]["itemId"]
+    action_form = context["operation_form_action"]
+    assert action_form["toolCallId"] == ""
+    assert action_form["toolName"] == "insert_customer"
+    assert "tool_call_id" not in action_form
+    assert "tool_name" not in action_form
     status_field = form["rule"][0][1]
     assert status_field["formType"] == "term_select"
     assert status_field["term"]["termSet"] == "customer_status.code"
+
+
+async def test_operation_form_keeps_unique_term_value_without_notice() -> None:
+    action = _Action()
+    term_loader = KbTermLoader.from_config(
+        {
+            "mapping": {
+                "customer_status.code": [
+                    {"code": "TODO", "label": "待处理", "aliases": ["待办"]},
+                    {"code": "DONE", "label": "已完成"},
+                ]
+            }
+        }
+    )
+    ctx: HookContext = {
+        "tool_name": "insert_customer",
+        "tool_params": {
+            "records": [{"customerId": "C001", "status": "待处理"}],
+        },
+        "metadata": {"loader": _Loader(action, term_loader=term_loader), "state": {}},
+    }
+
+    with pytest.raises(ClarificationNeededError) as exc_info:
+        await before_call_back(ctx)
+
+    status_field = exc_info.value.context["operation_form_action"]["rule"][0][1]
+    assert status_field["fieldValue"] == "待处理"
+    assert "termResolveNotice" not in status_field
+
+
+async def test_operation_form_recommends_first_term_when_value_not_found() -> None:
+    action = _Action()
+    term_loader = KbTermLoader.from_config(
+        {
+            "mapping": {
+                "customer_status.code": [
+                    {"code": "TODO", "label": "待处理"},
+                    {"code": "DONE", "label": "已完成"},
+                ]
+            }
+        }
+    )
+    ctx: HookContext = {
+        "tool_name": "insert_customer",
+        "tool_params": {
+            "records": [{"customerId": "C001", "status": "待办中"}],
+        },
+        "metadata": {"loader": _Loader(action, term_loader=term_loader), "state": {}},
+    }
+
+    with pytest.raises(ClarificationNeededError) as exc_info:
+        await before_call_back(ctx)
+
+    status_field = exc_info.value.context["operation_form_action"]["rule"][0][1]
+    assert status_field["fieldValue"] == "TODO"
+    notice = status_field["termResolveNotice"]
+    assert notice["status"] == "recommended"
+    assert notice["originalValue"] == "待办中"
+    assert notice["recommendedValue"] == "TODO"
+    assert notice["recommendedLabel"] == "待处理"
+
+
+async def test_operation_form_defaults_first_value_when_term_is_ambiguous() -> None:
+    action = _Action()
+    ctx: HookContext = {
+        "tool_name": "insert_customer",
+        "tool_params": {
+            "records": [{"customerId": "C001", "status": "张三"}],
+        },
+        "metadata": {"loader": _Loader(action, term_loader=_AmbiguousTermLoader()), "state": {}},
+    }
+
+    with pytest.raises(ClarificationNeededError) as exc_info:
+        await before_call_back(ctx)
+
+    status_field = exc_info.value.context["operation_form_action"]["rule"][0][1]
+    assert status_field["fieldValue"] == "U001"
+    notice = status_field["termResolveNotice"]
+    assert notice["status"] == "ambiguous_recommended"
+    assert notice["originalValue"] == "张三"
+    assert notice["recommendedValue"] == "U001"
+    assert notice["recommendedLabel"] == "张三-研发"
+    assert notice["candidates"] == [
+        {"value": "U001", "label": "张三-研发"},
+        {"value": "U002", "label": "张三-销售"},
+    ]
+    assert "请确认或重新选择" in notice["message"]
+
+
+async def test_operation_form_clears_value_when_term_has_no_recommendation() -> None:
+    action = _Action()
+    ctx: HookContext = {
+        "tool_name": "insert_customer",
+        "tool_params": {
+            "records": [{"customerId": "C001", "status": "不存在的值"}],
+        },
+        "metadata": {"loader": _Loader(action, term_loader=_MissingTermLoader()), "state": {}},
+    }
+
+    with pytest.raises(ClarificationNeededError) as exc_info:
+        await before_call_back(ctx)
+
+    status_field = exc_info.value.context["operation_form_action"]["rule"][0][1]
+    assert status_field["fieldValue"] is None
+    notice = status_field["termResolveNotice"]
+    assert notice["status"] == "not_found"
+    assert notice["originalValue"] == "不存在的值"
+    assert notice["recommendedValue"] == ""
+    assert notice["recommendedLabel"] == ""
+    assert "请重新选择" in notice["message"]
 
 
 async def test_operation_form_keeps_action_param_term_metadata() -> None:
@@ -199,6 +338,45 @@ async def test_operation_before_call_patches_confirmed_params() -> None:
     assert params["records"] == [{"customerId": "C001", "status": "DONE"}]
     assert params["userConfirmed"] is True
     assert params["_operationConfirm"]["confirmed"] is True
+
+
+async def test_operation_before_call_does_not_apply_batch_result_to_unknown_call_id() -> None:
+    action = _Action()
+    ctx: HookContext = {
+        "tool_call_id": "call_2",
+        "tool_name": "insert_customer",
+        "tool_params": {"records": [{"customerId": "old"}]},
+        "metadata": {
+            "loader": _Loader(action),
+            "state": {
+                "clarification_formatted_params": {
+                    "interrupt_type": "operation_form",
+                    "formId": "form-1",
+                    "tool_name": "insert_customer",
+                    "confirmed": True,
+                    "params_by_tool_call_id": {
+                        "call_1": {
+                            "tool_call_id": "call_1",
+                            "tool_name": "insert_customer",
+                            "confirmed": True,
+                            "params": {"records": [{"customerId": "C001"}]},
+                        }
+                    },
+                    "actions": [
+                        {
+                            "tool_call_id": "call_1",
+                            "tool_name": "insert_customer",
+                            "confirmed": True,
+                            "params": {"records": [{"customerId": "C001"}]},
+                        }
+                    ],
+                }
+            },
+        },
+    }
+
+    with pytest.raises(ClarificationNeededError):
+        await before_call_back(ctx)
 
 
 def test_restore_action_params_handles_object_array_field_value() -> None:
@@ -364,7 +542,8 @@ def test_build_operation_form_keeps_kb_write_schema_and_uses_field_description()
         "type": "object",
         "additionalProperties": False,
         "description": (
-            "写入会议纪要知识库文档。content 必须提供完整正文，不得摘要、截断、删减或改写。"
+            "写入会议纪要知识库文档。支持 records 批量写入；content 必须提供完整正文，"
+            "不得摘要、截断、删减或改写。"
         ),
         "x-dc-action-family": "write",
         "x-dc-scope-type": "object",
@@ -392,8 +571,42 @@ def test_build_operation_form_keeps_kb_write_schema_and_uses_field_description()
                 "description": "源文件完整正文文本，必须包含原文全部内容，不得摘要、截断、删减或改写。",
             },
             "file_description": {"type": "string", "description": "文件描述。"},
+            "records": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "labels": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "description": "知识库属性标签，键必须是对象属性编码；主键字段不在此处填写。",
+                            "properties": {
+                                "status": {"type": "string", "description": "状态"},
+                                "owner": {"type": "string", "description": "负责人"},
+                                "tags": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "标签",
+                                },
+                            },
+                        },
+                        "source_path": {
+                            "type": "string",
+                            "description": "上传到知识库后的文件全路径，以 / 开头，不包括知识库名称。",
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "源文件完整正文文本，必须包含原文全部内容，不得摘要、截断、删减或改写。",
+                        },
+                        "file_description": {"type": "string", "description": "文件描述。"},
+                    },
+                    "required": ["source_path", "content"],
+                },
+                "description": "待写入文档列表；批量写入时优先使用 records。",
+            },
         },
-        "required": ["source_path", "content"],
+        "anyOf": [{"required": ["source_path", "content"]}, {"required": ["records"]}],
     }
     original_schema = deepcopy(schema)
     action = _Action(
@@ -418,6 +631,7 @@ def test_build_operation_form_keeps_kb_write_schema_and_uses_field_description()
     labels_field = next(field for field in fields if field["fieldCode"] == "labels")
     source_path_field = next(field for field in fields if field["fieldCode"] == "source_path")
     content_field = next(field for field in fields if field["fieldCode"] == "content")
+    assert "records" not in {field["fieldCode"] for field in fields}
     assert labels_field["fieldName"] == "知识库属性标签"
     assert (
         labels_field["description"]
@@ -442,6 +656,97 @@ def test_build_operation_form_keeps_kb_write_schema_and_uses_field_description()
         "source_path": "/meeting/a.docx",
         "content": "正文",
         "file_description": "描述",
+    }
+
+
+def test_build_operation_form_supports_kb_write_batch_records() -> None:
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "x-dc-action-family": "write",
+        "x-dc-scope-type": "object",
+        "properties": {
+            "source_path": {"type": "string", "description": "文件路径"},
+            "content": {"type": "string", "description": "正文内容"},
+            "records": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "labels": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "description": "知识库属性标签，键必须是对象属性编码；主键字段不在此处填写。",
+                            "properties": {
+                                "status": {"type": "string", "description": "状态"},
+                            },
+                        },
+                        "source_path": {"type": "string", "description": "文件路径"},
+                        "content": {"type": "string", "description": "正文内容"},
+                        "file_description": {"type": "string", "description": "文件描述"},
+                    },
+                    "required": ["source_path", "content"],
+                },
+            },
+        },
+        "anyOf": [{"required": ["source_path", "content"]}, {"required": ["records"]}],
+    }
+    action = _Action(
+        action_code="write_meeting_doc",
+        action_name="写入会议纪要",
+        action_family="write",
+        input_schema=schema,
+    )
+
+    form = build_operation_form(
+        action,
+        {
+            "records": [
+                {
+                    "labels": {"status": "active"},
+                    "source_path": "/meeting/a.docx",
+                    "content": "正文 A",
+                },
+                {
+                    "labels": {"status": "archived"},
+                    "source_path": "/meeting/b.docx",
+                    "content": "正文 B",
+                    "file_description": "第二份",
+                },
+            ]
+        },
+    )
+
+    assert len(form["rule"]) == 2
+    first_row = form["rule"][0]
+    second_row = form["rule"][1]
+    assert [field["fieldCode"] for field in first_row] == [
+        "labels",
+        "source_path",
+        "content",
+        "file_description",
+    ]
+    assert first_row[0]["children"][0][0]["fieldValue"] == "active"
+    assert first_row[1]["fieldValue"] == "/meeting/a.docx"
+    assert second_row[0]["children"][0][0]["fieldValue"] == "archived"
+    assert second_row[3]["fieldValue"] == "第二份"
+
+    assert restore_action_params(form["rule"], action=action, original_params={"records": []}) == {
+        "records": [
+            {
+                "labels": {"status": "active"},
+                "source_path": "/meeting/a.docx",
+                "content": "正文 A",
+                "file_description": None,
+            },
+            {
+                "labels": {"status": "archived"},
+                "source_path": "/meeting/b.docx",
+                "content": "正文 B",
+                "file_description": "第二份",
+            },
+        ]
     }
 
 

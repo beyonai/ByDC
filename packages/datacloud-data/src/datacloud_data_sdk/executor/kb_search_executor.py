@@ -235,31 +235,41 @@ class KbSearchExecutor:
                 meta_extra=_standard_action_meta(cls, datasource_alias, query),
             )
 
-        labels = self._resolve_label_terms(arguments.get("labels") or {}, cls)
-        file_path = str(arguments.get("source_path") or arguments.get("file_path") or "")
-        content = str(arguments.get("content") or arguments.get("source_text") or "")
-        if not file_path.startswith("/"):
+        write_items = self._normalize_write_items(arguments)
+        if not write_items:
             return self._empty_response(
                 object_code,
                 arguments,
-                "source_path must start with /",
+                "records or source_path/content is required",
                 error=True,
                 meta_extra=_standard_action_meta(cls, datasource_alias, query),
             )
-        if not content:
-            return self._empty_response(
-                object_code,
-                arguments,
-                "content is required",
-                error=True,
-                meta_extra=_standard_action_meta(cls, datasource_alias, query),
-            )
-        markdown_file_path = _to_markdown_file_path(file_path, self._get_kb_directory(cls))
-        labels = self._inject_primary_key_label(labels, cls, markdown_file_path)
 
-        try:
-            write_backend = cast(KnowledgeWriteBackend, backend)
-            result = await write_backend.write(
+        write_requests: list[KnowledgeWriteRequest] = []
+        for index, item in enumerate(write_items):
+            file_path = str(item.get("source_path") or item.get("file_path") or "")
+            content = str(item.get("content") or item.get("source_text") or "")
+            if not file_path.startswith("/"):
+                return self._empty_response(
+                    object_code,
+                    arguments,
+                    f"records[{index}].source_path must start with /",
+                    error=True,
+                    meta_extra=_standard_action_meta(cls, datasource_alias, query),
+                )
+            if not content:
+                return self._empty_response(
+                    object_code,
+                    arguments,
+                    f"records[{index}].content is required",
+                    error=True,
+                    meta_extra=_standard_action_meta(cls, datasource_alias, query),
+                )
+
+            labels = self._resolve_label_terms(item.get("labels") or {}, cls)
+            markdown_file_path = _to_markdown_file_path(file_path, self._get_kb_directory(cls))
+            labels = self._inject_primary_key_label(labels, cls, markdown_file_path)
+            write_requests.append(
                 KnowledgeWriteRequest(
                     object_code=cls.object_code,
                     datasource_alias=datasource_alias,
@@ -268,10 +278,17 @@ class KbSearchExecutor:
                     file_path=file_path,
                     labels=labels,
                     content=content,
-                    file_description=str(arguments.get("file_description") or ""),
+                    file_description=str(item.get("file_description") or ""),
                     metadata_properties=_metadata_properties_from_labels(labels, cls),
                 )
             )
+
+        try:
+            write_backend = cast(KnowledgeWriteBackend, backend)
+            raw_records: list[dict[str, Any]] = []
+            for request in write_requests:
+                result = await write_backend.write(request)
+                raw_records.extend(result.records)
         except Exception as exc:  # noqa: BLE001
             logger.exception("knowledge base write failed: object_code=%s", object_code)
             return self._empty_response(
@@ -282,14 +299,12 @@ class KbSearchExecutor:
                 meta_extra=_standard_action_meta(cls, datasource_alias, query),
             )
 
-        response = result.to_response()
         records = ResultTermConverter(
             getattr(self._loader._config, "term_loader", None)
-        ).convert_by_fields(response.get("records", []), list(getattr(cls, "fields", [])))
+        ).convert_by_fields(raw_records, list(getattr(cls, "fields", [])))
         records = _normalize_action_records(records, cls)
-        response["records"] = records
-        response["meta"] = _standard_action_meta(cls, datasource_alias, query)
-        return response
+        meta = _standard_action_meta(cls, datasource_alias, query)
+        return {"records": records, "total": len(records), "meta": meta}
 
     def _resolve_backend(
         self,
@@ -366,6 +381,13 @@ class KbSearchExecutor:
             if isinstance(resolved_filter, list) and resolved_filter:
                 resolved[field_code] = resolved_filter[0].get("value")
         return resolved
+
+    @staticmethod
+    def _normalize_write_items(arguments: dict[str, Any]) -> list[dict[str, Any]]:
+        records = arguments.get("records")
+        if isinstance(records, list):
+            return [dict(item) for item in records if isinstance(item, dict)]
+        return [arguments]
 
     @staticmethod
     def _with_primary_key_metadata_fields(fields: list[str], cls: Any) -> list[str]:

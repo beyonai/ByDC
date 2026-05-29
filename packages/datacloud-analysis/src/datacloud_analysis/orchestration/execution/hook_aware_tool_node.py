@@ -19,6 +19,9 @@ from langgraph.prebuilt import ToolNode
 from langgraph.types import Command
 
 from datacloud_analysis.tool_hook_plugins import get_tool_hook_plugin_manager
+from datacloud_analysis.tool_hook_plugins.builtin.operation_confirmation_plugin import (
+    build_batch_operation_form,
+)
 from datacloud_analysis.tool_hook_plugins.types import ClarificationNeededError, HookContext
 
 logger = logging.getLogger(__name__)
@@ -119,6 +122,8 @@ class HookAwareToolNode(ToolNode):
 
         hook_manager = get_tool_hook_plugin_manager()
         patched_calls: list[dict[str, Any]] = []
+        operation_contexts: list[dict[str, Any]] = []
+        prebuilt_tool_messages: list[ToolMessage] = []
 
         # before_call_back 会消费 complex_conditions（路由元字段），提前从原始 args 中保存，
         # 供后续推送"工具入参"时还原展示，不影响实际执行参数。
@@ -128,8 +133,10 @@ class HookAwareToolNode(ToolNode):
         }
 
         for tc in last_ai.tool_calls:
+            tool_call_id = str(tc.get("id") or "")
             tool_name = str(tc.get("name") or "")
             ctx: HookContext = {
+                "tool_call_id": tool_call_id,
                 "tool_name": tool_name,
                 "tool_params": dict(tc.get("args") or {}),
                 "session_id": str(state_dict.get("agent_id") or ""),
@@ -148,6 +155,21 @@ class HookAwareToolNode(ToolNode):
             try:
                 ctx, _before_decision = await hook_manager.run_before(ctx)
             except ClarificationNeededError as exc:
+                if str(exc.context.get("interrupt_type") or "") == "operation_form":
+                    operation_contexts.append(
+                        {
+                            **exc.context,
+                            "tool_call_id": str(exc.context.get("tool_call_id") or tool_call_id),
+                            "tool_name": tool_name,
+                            "react_round_idx": int(state_dict.get("react_round_idx") or 0),
+                        }
+                    )
+                    logger.info(
+                        "[HookAwareToolNode] collected operation_form tool=%s tool_call_id=%s",
+                        tool_name,
+                        tool_call_id,
+                    )
+                    continue
                 logger.info(
                     "[HookAwareToolNode] ClarificationNeededError tool=%s round=%s",
                     tool_name,
@@ -158,6 +180,7 @@ class HookAwareToolNode(ToolNode):
                         "execution_status": "clarify_needed",
                         "pending_clarification_context": {
                             **exc.context,
+                            "tool_call_id": tool_call_id,
                             "tool_name": tool_name,
                             "react_round_idx": int(state_dict.get("react_round_idx") or 0),
                         },
@@ -182,12 +205,26 @@ class HookAwareToolNode(ToolNode):
                         tool_name,
                         error_type,
                     )
+                    if error_type == "OperationCancelled":
+                        prebuilt_tool_messages.append(
+                            ToolMessage(
+                                content=error_msg,
+                                name=tool_name,
+                                tool_call_id=tool_call_id,
+                            )
+                        )
+                        logger.info(
+                            "[HookAwareToolNode] operation cancelled tool=%s tool_call_id=%s",
+                            tool_name,
+                            tool_call_id,
+                        )
+                        continue
                     return {
                         "messages": [
                             ToolMessage(
                                 content=error_msg,
                                 name=tool_name,
-                                tool_call_id=str(tc.get("id") or ""),
+                                tool_call_id=tool_call_id,
                             )
                         ]
                     }
@@ -205,6 +242,34 @@ class HookAwareToolNode(ToolNode):
                 tp.get("metrics"),
             )
             patched_calls.append({**tc, "args": tp})
+
+        if operation_contexts:
+            batch_form = build_batch_operation_form(operation_contexts)
+            logger.info(
+                "[HookAwareToolNode] operation_form batch interrupt actions=%d form_id=%s",
+                len(batch_form.get("actions") or []),
+                batch_form.get("formId"),
+            )
+            return Command(
+                update={
+                    "execution_status": "clarify_needed",
+                    "pending_clarification_context": {
+                        "interrupt_type": "operation_form",
+                        "operation_form": batch_form,
+                        "operation_form_contexts": operation_contexts,
+                        "react_round_idx": int(state_dict.get("react_round_idx") or 0),
+                    },
+                },
+                goto="analyze_clarify",
+            )
+
+        if prebuilt_tool_messages and not patched_calls:
+            result_dict = {"messages": prebuilt_tool_messages}
+            if _is_operation_formatted_params(state_dict.get("clarification_formatted_params")):
+                result_dict["clarification_formatted_params"] = None
+                result_dict["clarification_analyze_result"] = None
+                result_dict["pending_clarification_context"] = None
+            return result_dict
 
         # 用修改后的 tool_calls 替换最后一条 AIMessage（Pydantic 不可变，必须 model_copy）
         patched_ai = last_ai.model_copy(update={"tool_calls": patched_calls})
@@ -274,6 +339,15 @@ class HookAwareToolNode(ToolNode):
                 _inv_ctx.__exit__(None, None, None)
 
         result_dict: dict[str, Any] = dict(result) if isinstance(result, dict) else {"messages": []}
+        if prebuilt_tool_messages:
+            result_dict["messages"] = [
+                *prebuilt_tool_messages,
+                *list(result_dict.get("messages") or []),
+            ]
+        if _is_operation_formatted_params(state_dict.get("clarification_formatted_params")):
+            result_dict["clarification_formatted_params"] = None
+            result_dict["clarification_analyze_result"] = None
+            result_dict["pending_clarification_context"] = None
 
         # after_call_back：遍历本轮产出的 ToolMessage
         for msg in result_dict.get("messages") or []:
@@ -340,6 +414,10 @@ class HookAwareToolNode(ToolNode):
 
 
 # ── 辅助函数 ───────────────────────────────────────────────────────────────────
+
+
+def _is_operation_formatted_params(value: Any) -> bool:
+    return isinstance(value, dict) and str(value.get("interrupt_type") or "") == "operation_form"
 
 
 def _extract_query_data_from_tool_messages(

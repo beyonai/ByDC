@@ -296,7 +296,16 @@ async def test_operation_form_confirm_resume_writes_formatted_params() -> None:
             "structured_input": {},
         },
     }
-    resume_value = {"formId": "form-1", "confirmed": True, "rule": operation_form["rule"]}
+    resume_value = {
+        "formId": "form-1",
+        "actions": [
+            {
+                "toolCallId": "",
+                "toolName": "insert_customer",
+                "rule": operation_form["rule"],
+            }
+        ],
+    }
 
     with patch(_INTERRUPT_PATCH, return_value=resume_value):
         result = await user_clarify_node(state, {"configurable": {}})  # type: ignore[arg-type]
@@ -306,7 +315,139 @@ async def test_operation_form_confirm_resume_writes_formatted_params() -> None:
     assert fp["confirmed"] is True
     assert fp["params"]["customerId"] == "C001"
     assert fp["params"]["userConfirmed"] is True
+    assert fp["actions"][0]["confirmed"] is True
     assert result["clarify_abort"] is False
+
+
+async def test_operation_form_insert_resume_uses_context_action_family_for_records() -> None:
+    """恢复阶段没有 loader 时，insert 也应根据中断上下文恢复为 records。"""
+    operation_form = {
+        "schemaVersion": "1.0",
+        "formId": "form-1",
+        "actions": [
+            {
+                "toolCallId": "call-1",
+                "toolName": "insert_customer",
+                "actionCode": "insert_customer",
+                "rule": [
+                    [
+                        {
+                            "itemId": "item-1",
+                            "fieldCode": "customerId",
+                            "fieldType": "string",
+                            "fieldValue": "C001",
+                        }
+                    ]
+                ],
+            }
+        ],
+    }
+    state = {
+        "pending_clarification_context": {},
+        "clarification_analyze_result": {
+            "interrupt_type": "operation_form",
+            "tool_name": "insert_customer",
+            "operation_form": operation_form,
+            "operation_form_contexts": [
+                {
+                    "tool_call_id": "call-1",
+                    "tool_name": "insert_customer",
+                    "structured_input": {},
+                    "operation_confirm_context": {
+                        "actionCode": "insert_customer",
+                        "actionFamily": "insert",
+                    },
+                }
+            ],
+        },
+    }
+    resume_value = {
+        "schemaVersion": "1.0",
+        "formId": "form-1",
+        "actions": [
+            {
+                "toolCallId": "call-1",
+                "toolName": "insert_customer",
+                "rule": operation_form["actions"][0]["rule"],
+            }
+        ],
+    }
+
+    with patch(_INTERRUPT_PATCH, return_value=resume_value):
+        result = await user_clarify_node(state, {"configurable": {}})  # type: ignore[arg-type]
+
+    params = result["clarification_formatted_params"]["params_by_tool_call_id"]["call-1"]["params"]
+    assert params["records"] == [{"customerId": "C001"}]
+    assert params["userConfirmed"] is True
+
+
+async def test_operation_form_update_resume_without_loader_keeps_business_params() -> None:
+    """恢复阶段没有 loader 时，非 records 类操作不能被薄 action meta 过滤空。"""
+    operation_form = {
+        "schemaVersion": "1.0",
+        "formId": "form-1",
+        "actions": [
+            {
+                "toolCallId": "call-1",
+                "toolName": "update_customer",
+                "actionCode": "update_customer",
+                "rule": [
+                    [
+                        {
+                            "itemId": "item-1",
+                            "fieldCode": "customerId",
+                            "fieldPath": "requestBody.customerId",
+                            "fieldType": "string",
+                            "fieldValue": "C001",
+                        },
+                        {
+                            "fieldCode": "status",
+                            "fieldPath": "requestBody.status",
+                            "fieldType": "string",
+                            "fieldValue": "active",
+                        },
+                    ]
+                ],
+            }
+        ],
+    }
+    state = {
+        "pending_clarification_context": {},
+        "clarification_analyze_result": {
+            "interrupt_type": "operation_form",
+            "tool_name": "update_customer",
+            "operation_form": operation_form,
+            "operation_form_contexts": [
+                {
+                    "tool_call_id": "call-1",
+                    "tool_name": "update_customer",
+                    "structured_input": {"requestBody": {"customerId": "old"}},
+                    "operation_confirm_context": {
+                        "actionCode": "update_customer",
+                        "actionFamily": "update",
+                    },
+                }
+            ],
+        },
+    }
+    resume_value = {
+        "schemaVersion": "1.0",
+        "formId": "form-1",
+        "actions": [
+            {
+                "toolCallId": "call-1",
+                "toolName": "update_customer",
+                "rule": operation_form["actions"][0]["rule"],
+            }
+        ],
+    }
+
+    with patch(_INTERRUPT_PATCH, return_value=resume_value):
+        result = await user_clarify_node(state, {"configurable": {}})  # type: ignore[arg-type]
+
+    params = result["clarification_formatted_params"]["params_by_tool_call_id"]["call-1"]["params"]
+    assert params["requestBody"] == {"customerId": "C001", "status": "active"}
+    assert params["userConfirmed"] is True
 
 
 async def test_operation_form_cancel_resume_aborts_execution() -> None:
@@ -320,7 +461,18 @@ async def test_operation_form_cancel_resume_aborts_execution() -> None:
             "operation_form": operation_form,
         },
     }
-    resume_value = {"formId": "form-1", "confirmed": False, "reason": "用户取消"}
+    resume_value = {
+        "formId": "form-1",
+        "actions": [
+            {
+                "toolCallId": "",
+                "toolName": "delete_customer",
+                "confirmed": False,
+                "reason": "用户取消",
+                "rule": operation_form["rule"],
+            }
+        ],
+    }
 
     with patch(_INTERRUPT_PATCH, return_value=resume_value):
         result = await user_clarify_node(state, {"configurable": {}})  # type: ignore[arg-type]
@@ -328,5 +480,67 @@ async def test_operation_form_cancel_resume_aborts_execution() -> None:
     fp = result["clarification_formatted_params"]
     assert fp["confirmed"] is False
     assert fp["reason"] == "用户取消"
-    assert result["clarify_abort"] is True
-    assert result["execution_status"] == "cancelled"
+    assert fp["actions"][0]["confirmed"] is False
+    assert result["clarify_abort"] is False
+
+
+async def test_operation_form_resume_defaults_returned_actions_to_confirmed() -> None:
+    """前端返回完整 actions 但不带 confirmed 时，按同意执行处理。"""
+    operation_form = {
+        "schemaVersion": "1.0",
+        "formId": "form-batch-1",
+        "actions": [
+            {
+                "toolCallId": "call-1",
+                "toolName": "insert_customer",
+                "actionCode": "insert_customer",
+                "rule": [
+                    [{"fieldCode": "customerId", "fieldType": "string", "fieldValue": "C001"}]
+                ],
+            },
+            {
+                "toolCallId": "call-2",
+                "toolName": "insert_customer",
+                "actionCode": "insert_customer",
+                "rule": [
+                    [{"fieldCode": "customerId", "fieldType": "string", "fieldValue": "C002"}]
+                ],
+            },
+        ],
+    }
+    state = {
+        "pending_clarification_context": {},
+        "clarification_analyze_result": {
+            "interrupt_type": "operation_form",
+            "tool_name": "insert_customer",
+            "operation_form": operation_form,
+        },
+    }
+    resume_value = {
+        "schemaVersion": "1.0",
+        "formId": "form-batch-1",
+        "actions": [
+            {
+                "toolCallId": "call-1",
+                "toolName": "insert_customer",
+                "rule": [
+                    [{"fieldCode": "customerId", "fieldType": "string", "fieldValue": "C101"}]
+                ],
+            },
+            {
+                "toolCallId": "call-2",
+                "toolName": "insert_customer",
+                "rule": [
+                    [{"fieldCode": "customerId", "fieldType": "string", "fieldValue": "C102"}]
+                ],
+            },
+        ],
+    }
+
+    with patch(_INTERRUPT_PATCH, return_value=resume_value):
+        result = await user_clarify_node(state, {"configurable": {}})  # type: ignore[arg-type]
+
+    actions = result["clarification_formatted_params"]["actions"]
+    assert [action["confirmed"] for action in actions] == [True, True]
+    assert actions[0]["params"]["customerId"] == "C101"
+    assert actions[1]["params"]["customerId"] == "C102"
