@@ -36,6 +36,10 @@ async def execute(
         skill_ws = str(extras.get("skill_workspace_dir") or "").strip()
         if skill_ws:
             cwd = skill_ws
+            env["SKILL_WORKSPACE_DIR"] = skill_ws
+        skill_dir = str(extras.get("skill_dir") or "").strip()
+        if skill_dir:
+            env["SKILL_DIR"] = skill_dir
     except DatacloudError:
         pass
 
