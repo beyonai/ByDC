@@ -53,15 +53,82 @@
 
 ### 1.3 产品订单视图（product_order_view）
 
-创建视图，关联产品（主对象）与订单（从对象），按产品汇总订单数据。
+创建视图，关联产品与订单两个对象，按产品汇总订单数据。
 
-| 字段 | 值 |
-|------|-----|
-| `view_code` | `product_order_view` |
-| `view_name` | 产品订单视图 |
-| `view_desc` | 产品与订单关联视图，按产品汇总订单金额与数量 |
-| `primary_object` | `product` |
-| `secondary_objects` | `order` |
+| 字段 | 值 | 说明 |
+|------|-----|------|
+| `view_code` | `product_order_view` | 视图编码（唯一标识） |
+| `view_name` | 产品订单视图 | 视图显示名称 |
+| `view_desc` | 产品与订单关联视图，按产品汇总订单金额与数量 | 视图描述 |
+
+**`object_codes`（视图包含的对象列表，扁平数组）：**
+
+```json
+["p_product_xxx", "p_order_xxx"]
+```
+
+> 注意：`object_codes` 是扁平列表，没有主/从对象之分。第一个对象被视作 anchor（主锚对象）。
+
+**`object_relations`（对象间关联条件）：**
+
+```json
+[{
+  "source_object_code": "p_product_xxx",
+  "source_object_field_code": "product_code",
+  "target_object_code": "p_order_xxx",
+  "target_object_field_code": "product_code",
+  "relation_type": "ONE_TO_MANY"
+}]
+```
+
+> **重要约束**：`collect_view_info` 从 `object_relations` 自动推导视图字段，**但只会把 source/target 列名生成进去**——如果关联条件只用了一个 `product_code`，则视图中**只会有 `product_code` 这一个字段**，其他列（如 `product_name`、`quantity`）不会被自动拉入。
+>
+> 要包含更多字段，通过 `fields` 参数显式声明（见下方"视图字段"）。
+
+**`fields`（视图字段，可选）：**
+
+控制视图可查询的字段及其业务语义。不传则只包含关联键列。字段按 `property_code` 做 upsert 合并，可多轮调用补充。
+
+```json
+[{
+  "property_code": "product_name",
+  "property_name": "产品名称",
+  "data_type": "STRING",
+  "ext_property": {
+    "property_role_rule": {
+      "property_role": "DIMENSION",
+      "rule_type": "name"
+    }
+  }
+}, {
+  "property_code": "quantity",
+  "property_name": "数量",
+  "data_type": "INTEGER",
+  "ext_property": {
+    "property_role_rule": {
+      "property_role": "MEASURE",
+      "rule_type": "count"
+    }
+  }
+}, {
+  "property_code": "order_total",
+  "property_name": "订单总金额",
+  "data_type": "FLOAT",
+  "ext_property": {
+    "property_role_rule": {
+      "property_role": "MEASURE",
+      "rule_type": "derived_metric",
+      "formula": "quantity * unit_price"
+    }
+  }
+}]
+```
+
+**计算属性（带 `formula` 的字段）：**
+- `rule_type` 设为 `derived_metric`、`formula_metric` 或 `virtual_tag` 时，需填 `formula`
+- `formula` 是 SQL 表达式，查询时会被展开到 SELECT/WHERE/GROUP BY 中
+- 表达式中的列名必须来自视图中已有的字段
+- 若 `formula` 非空，OWL 中该字段的 `propertyGroup` 自动标为 `COMPUTED`
 
 **关联条件：** `product.product_code = order.product_code`
 
@@ -195,6 +262,42 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
   "entity_code": "product"
 }'
 ```
+
+**创建视图示例（含计算属性）：**
+
+```bash
+# 阶段一：收集信息（object_codes 扁平列表 + object_relations + 含 formula 的 fields）
+/tmp/ont_env/bin/python scripts/ontology/structured/create_view.py '{
+  "action": "collect",
+  "view_code": "product_order_view",
+  "view_name": "产品订单视图",
+  "view_desc": "产品与订单关联视图，按产品汇总订单金额与数量",
+  "object_codes": ["p_product_xxx", "p_order_xxx"],
+  "object_relations": [{
+    "source_object_code": "p_product_xxx",
+    "source_object_field_code": "product_code",
+    "target_object_code": "p_order_xxx",
+    "target_object_field_code": "product_code",
+    "relation_type": "ONE_TO_MANY"
+  }],
+  "fields": [
+    {"property_code": "product_name", "property_name": "产品名称", "data_type": "STRING",
+     "ext_property": {"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}},
+    {"property_code": "quantity", "property_name": "数量", "data_type": "INTEGER",
+     "ext_property": {"property_role_rule": {"property_role": "MEASURE", "rule_type": "count"}}},
+    {"property_code": "order_total", "property_name": "订单总金额", "data_type": "FLOAT",
+     "ext_property": {"property_role_rule": {"property_role": "MEASURE", "rule_type": "derived_metric", "formula": "quantity * unit_price"}}}
+  ]
+}'
+
+# 阶段二：确认提交
+/tmp/ont_env/bin/python scripts/ontology/structured/create_view.py '{
+  "action": "submit",
+  "view_code": "product_order_view"
+}'
+```
+
+> **注意**：`object_codes` 是扁平列表，没有主/从对象之分。第一个对象（`p_product_xxx`）为 anchor 对象，运行时自动将其全部字段拉入视图；其他对象的字段必须通过 `fields` 显式声明才会暴露。`fields` 中的 `property_code` 须与关联键列名或 `object_codes` 中存在的列名匹配。
 
 ---
 
@@ -356,6 +459,11 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 | `MEASURE` | `amount` | 金额度量 | `unit_price`, `total_amount` |
 | `MEASURE` | `count` | 数量度量 | `quantity` |
 | `MEASURE` | `rate` | 比率度量 | 转化率、完成率等 |
+| `MEASURE` | `derived_metric` | 派生度量（SQL 公式） | `quantity * unit_price` |
+| `MEASURE` | `formula_metric` | 公式度量（SQL 公式） | `revenue - cost` |
+| `DIMENSION` | `virtual_tag` | 虚拟标签（SQL 公式） | `CASE WHEN amount > 100000 THEN '大额' ELSE '小额' END` |
+
+> 带 `derived_metric` / `formula_metric` / `virtual_tag` 的字段**必须填 `formula`**（SQL 表达式），空字符串视为存储字段。查询时公式会被展开到 SELECT / WHERE / GROUP BY 中。
 
 ### 3.3 data_type（数据类型）
 

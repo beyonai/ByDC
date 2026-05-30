@@ -58,9 +58,45 @@
 
 ### 第 4 步：创建视图 — product_order_view
 
-通过 `scripts/ontology/structured/create_view.py` 创建视图，关联 product（主对象）和 order（从对象），按产品汇总订单金额。
+通过 `scripts/ontology/structured/create_view.py` 创建视图，使用 **collect → submit 两阶段**。
 
-- collect → 展示关联关系 → 用户确认 → submit
+入参需传三个部分：
+
+1. **`object_codes`** — 视图包含的对象编码（扁平列表），**product 在前为 anchor**
+2. **`object_relations`** — 对象间关联条件（`product.product_code = order.product_code`）
+3. **`fields`** — 视图字段（**必须显式声明**，否则只包含关联键列）
+
+**collect 阶段入参：**
+
+```json
+{
+  "action": "collect",
+  "view_code": "product_order_view",
+  "view_name": "产品订单视图",
+  "view_desc": "产品与订单关联视图，按产品汇总订单金额与数量",
+  "object_codes": ["<product的resourceCode>", "<order的resourceCode>"],
+  "object_relations": [{
+    "source_object_code": "<product的resourceCode>",
+    "source_object_field_code": "product_code",
+    "target_object_code": "<order的resourceCode>",
+    "target_object_field_code": "product_code",
+    "relation_type": "ONE_TO_MANY"
+  }],
+  "fields": [
+    {"property_code": "product_name", "property_name": "产品名称", "data_type": "STRING",
+     "ext_property": {"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}},
+    {"property_code": "quantity", "property_name": "数量", "data_type": "INTEGER",
+     "ext_property": {"property_role_rule": {"property_role": "MEASURE", "rule_type": "count"}}},
+    {"property_code": "total_amount", "property_name": "订单金额", "data_type": "FLOAT",
+     "ext_property": {"property_role_rule": {"property_role": "MEASURE", "rule_type": "amount"}}}
+  ]
+}
+```
+
+> **说明**：`object_codes` 为扁平列表，第一个对象为 anchor，运行时自动拉入其全部字段。其他对象的字段**不会自动暴露**，须通过 `fields` 显式声明。
+> `property_code` 须匹配对应对象中实际存在的字段名；含 `formula` 的计算属性参见 [本体对象定义 §1.3](../references/ontology-objects.md#13-产品订单视图product_order_view)。
+
+- collect → 展示关联关系/字段 → 用户确认 → submit
 - **成功标志**：submit 返回创建成功, 并返回产品订单视图的resourceCode
 
 ### 第 5 步：挂载视图并查询
