@@ -307,15 +307,6 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 
 创建非结构化本体对象，绑定知识库目录中的会议纪要文档。会议纪要文档通过 `generate_meeting_minutes.py` 脚本的输出来获取。
 
-| 字段 | 值 |
-|------|-----|
-| `entity_code` | `meeting_note` |
-| `entity_name` | 会议纪要 |
-| `entity_desc` | DataCloud项目会议纪要文档管理 |
-| `entity_source` | `KNOWLEDGE_BASE` |
-| `kb_id` | `<知识库 resourceCode>`（来自 `list_knowledge_bases.py`） |
-| `kb_directory` | `/会议纪要`（来自 `list_kb_directories.py`） |
-
 **字段定义：**
 
 | property_code | property_name | data_type | property_role | rule_type | 说明 |
@@ -338,9 +329,7 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 三篇 DataCloud 项目会议纪要，通过 `scripts/meeting-minutes/generate_meeting_minutes.py` 获取：
 
 ```bash
-/tmp/ont_env/bin/python scripts/meeting-minutes/generate_meeting_minutes.py           # 随机一篇（text 模式）
 /tmp/ont_env/bin/python scripts/meeting-minutes/generate_meeting_minutes.py --index 0 # 指定某一篇
-/tmp/ont_env/bin/python scripts/meeting-minutes/generate_meeting_minutes.py --output json  # 结构化 JSON
 ```
 
 **数据摘要：**
@@ -351,7 +340,29 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 | 2026-05-26 | DataCloud研发技术方案评审会 | 欧阳锋、韦小宝、周伯通 | Iceberg + ClickHouse + PG + Redis 数据存储选型、Flink 流处理、Vue3 前端 |
 | 2026-05-27 | DataCloud项目进度同步会 | 黄药师、欧阳锋、韦小宝、周伯通 | Sprint1 回顾（MySQL/PG 同步完成，API 部分完成）、Sprint2 计划、7/30 上线 |
 
-### 2.3 脚本调用规范
+### 2.3 数据插入
+
+对象创建并挂载完成后，通过 `baiying_call` 将会议纪要文档全文写入。流程遵循 [数据操作指南 §3.3](data-operations.md#33-执行录入) 的模式：
+
+1. 执行 `mount_resource.py` 挂载会议纪要对象到当前 Agent
+2. 执行 `list_mounted_resources.py` 获取会议纪要对象的数字 `resource_id`
+3. 调用 `baiying_call`，`resource_type=OBJECT`，`resource_id` 为上一步获取的 ID
+4. `query` 中用自然语言描述插入意图，并附带完整的会议纪要文档正文
+
+**插入示例：**
+
+```
+baiying_call(
+    resource_type=OBJECT,
+    resource_id=<会议纪要对象的 resourceId>,
+    query="请将以下会议纪要内容录入到会议纪要对象中，需要包含完整的内容信息：[完整文档正文]"
+)
+```
+
+> **说明：**
+> - `[完整文档正文]` 来自 `generate_meeting_minutes.py` 的输出（默认 text 模式），是一篇完整的 Markdown 文档原文
+
+### 2.4 脚本调用规范
 
 所有非结构化本体操作脚本位于 `scripts/ontology/unstructured/` 目录，以 skill 根目录为基准执行：
 
@@ -366,75 +377,12 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 |------|------|
 | `create_object.py` | 创建非结构化对象（collect → submit 两阶段） |
 | `delete_object.py` | 删除非结构化对象 |
-| `list_mounted_resources.py` | 查询已有本体资源列表 |
+| `list_mounted_resources.py` | 查询当前 Agent 已挂载的资源列表（含数字 resourceId） |
 | `list_knowledge_bases.py` | 查询可用知识库列表（获取 kb_id） |
 | `list_kb_directories.py` | 查询知识库目录（获取 kb_directory） |
 | `list_term_types.py` | 查询可绑定的术语类型 |
 | `get_term_type_values.py` | 查询术语类型的值列表 |
 | `mount_resource.py` | 挂载本体到当前数字员工 |
-
-**创建对象示例（会议纪要）：**
-
-```bash
-# 阶段一：收集信息
-/tmp/ont_env/bin/python scripts/ontology/unstructured/create_object.py '{
-  "action": "collect",
-  "entity_code": "meeting_note",
-  "entity_name": "会议纪要",
-  "entity_desc": "DataCloud项目会议纪要文档管理",
-  "kb_id": "<resourceCode>",
-  "kb_directory": "/会议纪要",
-  "fields": [
-    {
-      "property_code": "meeting_theme",
-      "property_name": "会议主题",
-      "data_type": "STRING",
-      "ext_property": {
-        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}
-      }
-    },
-    {
-      "property_code": "meeting_date",
-      "property_name": "会议日期",
-      "data_type": "DATE",
-      "ext_property": {
-        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "date"}
-      }
-    },
-    {
-      "property_code": "participants",
-      "property_name": "参会人员",
-      "data_type": "STRING",
-      "ext_property": {
-        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}
-      }
-    },
-    {
-      "property_code": "summary",
-      "property_name": "会议摘要",
-      "data_type": "STRING",
-      "ext_property": {
-        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "description"}
-      }
-    },
-    {
-      "property_code": "todos",
-      "property_name": "待办事项",
-      "data_type": "STRING",
-      "ext_property": {
-        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "description"}
-      }
-    }
-  ]
-}'
-
-# 阶段二：确认提交
-/tmp/ont_env/bin/python scripts/ontology/unstructured/create_object.py '{
-  "action": "submit",
-  "entity_code": "meeting_note"
-}'
-```
-
 ---
 
 ## 三、字段角色速查

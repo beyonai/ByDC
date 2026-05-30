@@ -6,7 +6,7 @@
 
 ## 先演示
 
-1. 执行 [06-unstructured-ontology](../demos/06-unstructured-ontology.md) 全部 3 步（生成纪要→创建 meeting_note→挂载）
+1. 执行 [06-unstructured-ontology](../demos/06-unstructured-ontology.md) 全部 4 步（生成纪要→创建对象→挂载插入→融合查询）
 2. baiying_call 执行融合查询：`查询黄药师参与的所有会议纪要`
 
 ## 后解释

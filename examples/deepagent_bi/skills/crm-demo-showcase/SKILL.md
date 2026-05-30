@@ -223,6 +223,7 @@ Agent 根据用户问题匹配下表，找到对应场景，打开链接文件�
 | `scripts/ontology/unstructured/create_object.py` | 创建非结构化对象（collect → submit） |
 | `scripts/ontology/unstructured/delete_object.py` | 删除非结构化对象 |
 | `scripts/ontology/unstructured/mount_resource.py` | 挂载非结构化对象到 Agent |
+| `scripts/ontology/unstructured/list_mounted_resources.py` | 查询 Agent 已挂载的非结构化对象 |
 | `scripts/meeting-minutes/generate_meeting_minutes.py` | 生成模拟会议纪要 |
 | `scripts/weekly-report/generate_weekly_report.py` | 生成模拟周报 |
 

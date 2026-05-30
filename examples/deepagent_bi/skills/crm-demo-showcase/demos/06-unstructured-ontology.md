@@ -7,7 +7,8 @@
 ## 思维框架
 1. 标签赋能：为非结构化文档绑定结构化标签（日期/人员/主题/摘要）
 2. 双模检索：结构化标签过滤 + 全文内容搜索，两者融合
-3. 一次返回：baiying_call 一次调用同时返回标签字段和文档正文
+3. 全文录入：通过 baiying_call 将整篇文档传入对象，结构化标签由后端自动提取
+4. 一次返回：baiying_call 一次调用同时返回标签字段和文档正文
 
 > 完整命令参数见 [本体对象定义](../references/ontology-objects.md)。
 
@@ -15,25 +16,7 @@
 
 ## 演示步骤
 
-### 第 1 步：生成会议纪要
-
-```bash
-/tmp/ont_env/bin/python scripts/meeting-minutes/generate_meeting_minutes.py
-```
-
-可选参数：`--index 0/1/2` 指定某一篇，`--output json` 获取结构化字段。
-
-Mock 数据摘要（三篇）：
-
-| 日期 | 主题 | 参会人员 | 关键内容 |
-|------|------|---------|---------|
-| 05-25 | 需求确认会 | 黄药师、欧阳锋、韦小宝 | 功能需求优先级排序、MVP 计划 |
-| 05-26 | 技术方案评审 | 欧阳锋、韦小宝、周伯通 | Iceberg+ClickHouse 选型、Flink 架构 |
-| 05-27 | 进度同步会 | 四人全员 | Sprint1 回顾、Sprint2 计划 |
-
-- **成功标志**：输出模拟会议纪要文本
-
-### 第 2 步：创建非结构化对象
+### 第 1 步：创建会议纪要对象
 
 1. **查询知识库**：
 
@@ -47,10 +30,10 @@ Mock 数据摘要（三篇）：
 
    ```bash
    /tmp/ont_env/bin/python scripts/ontology/unstructured/list_kb_directories.py \
-     '{"kb_id": "<上一步的 resourceCode>"}'
+     '{"resource_code": "<上一步的 resourceCode>"}'
    ```
 
-   确认 `/会议纪要` 目录存在，获取 `kb_directory` 路径。
+  获取 `kb_directory` 路径。
 
 3. **创建对象**：通过 `scripts/ontology/unstructured/create_object.py`，collect → submit 两阶段。
 
@@ -64,13 +47,135 @@ Mock 数据摘要（三篇）：
    | `summary` | 会议摘要 | 概要描述（description 维度） |
    | `todos` | 待办事项 | 多行待办（description 维度） |
 
-- **成功标志**：submit 返回创建成功
+**创建对象示例（会议纪要）：**
 
-### 第 3 步：挂载并融合查询
+```bash
+# 阶段一：收集信息
+/tmp/ont_env/bin/python scripts/ontology/unstructured/create_object.py '{
+  "action": "collect",
+  "entity_code": "meeting_note",
+  "entity_name": "会议纪要",
+  "entity_desc": "DataCloud项目会议纪要文档管理",
+  "kb_id": "<resourceCode>",
+  "kb_directory": "/会议纪要",
+  "fields": [
+    {
+      "property_code": "meeting_theme",
+      "property_name": "会议主题",
+      "data_type": "STRING",
+      "ext_property": {
+        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}
+      }
+    },
+    {
+      "property_code": "meeting_date",
+      "property_name": "会议日期",
+      "data_type": "DATE",
+      "ext_property": {
+        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "date"}
+      }
+    },
+    {
+      "property_code": "participants",
+      "property_name": "参会人员",
+      "data_type": "STRING",
+      "ext_property": {
+        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}
+      }
+    },
+    {
+      "property_code": "summary",
+      "property_name": "会议摘要",
+      "data_type": "STRING",
+      "ext_property": {
+        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "description"}
+      }
+    },
+    {
+      "property_code": "todos",
+      "property_name": "待办事项",
+      "data_type": "STRING",
+      "ext_property": {
+        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "description"}
+      }
+    }
+  ]
+}'
 
-1. 挂载：`mount_resource.py` 挂载 `meeting_note` 到当前 Agent
-2. 通过 `list_mounted_resources.py` 获取 `meeting_note` 的数字 resourceId
-3. baiying_call（`resource_type=OBJECT`）融合查询
+# 阶段二：确认提交
+/tmp/ont_env/bin/python scripts/ontology/unstructured/create_object.py '{
+  "action": "submit",
+  "entity_code": "meeting_note"
+}'
+```
+
+- **成功标志**：submit 返回创建成功，并返回resource_code
+
+### 第 2 步：挂载对象、
+
+对象创建完成后，需要先挂载（`baiying_call` 必须挂载资源后才可用）。
+
+1. **挂载对象**：
+
+   ```bash
+   /tmp/ont_env/bin/python scripts/ontology/unstructured/mount_resource.py \
+     '{"agent_id": <Agent的数字后缀>, "resource_code": "<上一步获取的会议纪要对象的resource_code>"}'
+   ```
+
+2. **获取 resource_id**：
+
+   ```bash
+    /tmp/ont_env/bin/python scripts/ontology/unstructured/list_mounted_resources.py \
+      '{"resource_id": <Agent的数字后缀>, "keyword": "会议纪要"}'
+   ```
+
+   从返回的 `data[0].resourceId` 获取数字型 ID（如 `10008472`），用于下一步 `baiying_call`。
+
+3. **通过 baiying_call 写入文档全文**：
+
+   ```
+   baiying_call(
+       resource_type=OBJECT,
+       resource_id=<上一步获取的数字 resourceId>,
+       query="请将以下会议纪要内容录入到会议纪要对象中，需要包含完整的内容信息：[第1步生成的整篇文档正文]"
+   )
+   ```
+
+   `query` 中直接嵌入第 1 步 `generate_meeting_minutes.py` 输出的**完整文档正文**（Markdown 格式），不做结构化拆分。后端自动完成文档向量化和结构化标签提取（meeting_theme / meeting_date / participants / summary / todos）。
+
+- **成功标志**：baiying_call 返回插入成功，文档全文存储并建立结构化标签索引
+
+### 第 3 步：获取会议纪要
+
+```bash
+/tmp/ont_env/bin/python scripts/meeting-minutes/generate_meeting_minutes.py
+```
+
+可选参数：`--index 0/1/2` 指定某一篇。
+
+- **成功标志**：依次输出三篇模拟会议纪要文本
+
+### 第 3 步：插入文档数据
+
+对象创建完成后，需要先挂载再插入数据（`baiying_call` 必须挂载资源后才可用）。
+
+**通过 baiying_call 写入文档全文**：
+
+   ```
+   baiying_call(
+       resource_type=OBJECT,
+       resource_id=<上一步获取的数字 resourceId>,
+       query="请将以下会议纪要内容录入到会议纪要对象中，需要包含完整的内容信息：[第1步生成的整篇文档正文]"
+   )
+   ```
+
+   `query` 中直接嵌入上一步 `generate_meeting_minutes.py` 输出的**完整文档正文**（Markdown 格式）。
+
+- **成功标志**：baiying_call 返回插入成功
+
+### 第 4 步：融合查询
+
+1. baiying_call（`resource_type=OBJECT`，`resource_id` 同第 3 步）执行融合查询
 
 **融合查询示例**：
 
@@ -82,7 +187,7 @@ Mock 数据摘要（三篇）：
 | 查待办 | `韦小宝有哪些待办事项` | 结构化匹配 todos 字段 |
 | 看技术选型 | `技术评审会选了哪些存储方案` | `--index 1` 配合关键词搜索返回原文 |
 
-- **成功标志**：一次 baiying_call 同时返回结构化标签（日期/人员/主题）+ 文档正文内容
+- **成功标志**：一次 baiying_call 同时返回结构化标签（日期/人员/主题）+ 文档正文内容（先插入后查询的双向验证）
 
 ---
 
@@ -94,6 +199,8 @@ Mock 数据摘要（三篇）：
 ### 会议纪要原文
 
 ### 对象创建结果
+
+### 数据插入结果
 
 ### 融合查询结果
 
@@ -110,4 +217,4 @@ Mock 数据摘要（三篇）：
 - "5月25日的会议讨论了什么"
 
 ## 产品理念
-**异构数据融合**：结构化标签精确过滤 + 非结构化文档全文搜索，一次查询同时返回标签字段和文档正文。
+**异构数据融合**：结构化标签精确过滤 + 非结构化文档全文搜索，一次查询同时返回标签字段和文档正文。整篇文档直接传入对象，结构化标签由后端自动提取，无需人工拆解。
