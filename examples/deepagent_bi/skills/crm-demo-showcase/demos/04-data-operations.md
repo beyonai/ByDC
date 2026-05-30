@@ -46,13 +46,13 @@
 
 ### 第 5 步：客户录入
 
-用户确认后，通过 baiying_call（`resource_type=OBJECT`，resource_id 通过 `list_resources.py` 查询 `by_customer` 获取）写入客户数据。
+用户确认后，通过 baiying_call（`resource_type=OBJECT`，resource_id 通过 `list_mounted_resources.py` 查询 `by_customer` 获取）新增客户数据。
 
-- **成功标志**：返回写入成功
+- **成功标志**：返回成功
 
 ### 第 6 步：商机任务创建
 
-用户确认后，通过 baiying_call（`resource_type=OBJECT`，resource_id 通过 `list_resources.py` 查询 `by_opp_task` 获取）创建商机任务。
+用户确认后，通过 baiying_call（`resource_type=OBJECT`，resource_id 通过 `list_mounted_resources.py` 查询 `by_opp_task` 获取）创建商机任务。
 
 - **成功标志**：返回创建成功
 

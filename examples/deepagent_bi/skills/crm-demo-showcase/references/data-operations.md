@@ -130,8 +130,8 @@ Agent 按以下位置从周报文本中定位各字段：
 
 ### 3.3 执行录入
 
-用户确认后，Agent 通过 `baiying_call` 写入客户数据：
-- 先执行 `list_resources.py` 查询"客户"获取 `by_customer` 的 numeric `resource_id`
+用户确认后，Agent 通过 `baiying_call` 新增客户数据：
+- 先执行 `list_mounted_resources.py` 查询"客户"获取 `by_customer` 的 numeric `resource_id`
 - 调用 `baiying_call`，resource_type=`OBJECT`，resource_id=上一步获取的 ID
 
 **录入模式**：确认后执行（confirm-then-execute），任何数据操作类 API 在执行前必须经用户二次确认。
@@ -144,7 +144,7 @@ Agent 按以下位置从周报文本中定位各字段：
 
 ### 4.1 创建待办任务
 
-- 先执行 `list_resources.py` 查询"任务"获取 `by_opp_task` 的 numeric `resource_id`
+- 先执行 `list_mounted_resources.py` 查询"任务"获取 `by_opp_task` 的 numeric `resource_id`
 - 调用 `baiying_call`，resource_type=`OBJECT`，resource_id=上一步获取的 ID
 - query 描述：任务标题、执行人、截止日期、关联客户和商机信息
 

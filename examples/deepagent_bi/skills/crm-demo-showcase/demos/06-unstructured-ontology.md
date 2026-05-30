@@ -69,7 +69,7 @@ Mock 数据摘要（三篇）：
 ### 第 3 步：挂载并融合查询
 
 1. 挂载：`mount_resource.py` 挂载 `meeting_note` 到当前 Agent
-2. 通过 `list_resources.py` 获取 `meeting_note` 的数字 resourceId
+2. 通过 `list_mounted_resources.py` 获取 `meeting_note` 的数字 resourceId
 3. baiying_call（`resource_type=OBJECT`）融合查询
 
 **融合查询示例**：

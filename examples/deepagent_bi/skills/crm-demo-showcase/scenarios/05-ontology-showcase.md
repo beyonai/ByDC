@@ -6,8 +6,8 @@
 
 ## 先演示
 
-1. 执行 `list_resources.py` 展示已有本体列表
-2. 若为空：执行 [05-structured-ontology](../demos/05-structured-ontology.md) 创建 product/order/product_order_view，执行 [06-unstructured-ontology](../demos/06-unstructured-ontology.md) 创建 meeting_note
+1. 执行 `list_mounted_resources.py` 展示已有挂载本体列表
+2. 若为空：执行 [05-structured-ontology](../demos/05-structured-ontology.md) 创建 product/order/product_order_view，执行 [06-unstructured-ontology](../demos/06-unstructured-ontology.md) 创建 meeting_note。
 3. baiying_call 查询 product_order_view 视图，展示跨表关联结果
 
 ## 后解释

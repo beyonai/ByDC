@@ -77,11 +77,12 @@ bash scripts/setup.sh
 
 ### resource_id 获取
 
-`baiying_call` 的 `resource_id` 是**数字型 ID**，通过 `list_resources.py` 运行时动态获取，**不可硬编码**：
+`baiying_call` 的 `resource_id` 是**数字型 ID**，通过 `list_mounted_resources.py` 运行时动态获取，**不可硬编码**：
 
 ```bash
-/tmp/ont_env/bin/python scripts/ontology/structured/list_resources.py \
-  '{"keyword": "<中文名称>"}'
+# 提取 Agent 的 resource_id（从编码中的数字后缀，如 agent-10014603 → 10014603）
+/tmp/ont_env/bin/python scripts/ontology/structured/list_mounted_resources.py \
+  '{"resource_id": <Agent的resource_id>, "keyword": "<中文名称>"}'
 ```
 
 从返回 JSON 的 `data` 数组中提取数字 `resourceId`。各 demo 步骤中注明了对应的 keyword。
@@ -92,7 +93,7 @@ bash scripts/setup.sh
 
 ### 挂载生命周期
 
-演示 5/6 中创建的视图/对象挂载后，同样需要结束本轮等待生效。规则同上 Step 3。
+演示 5/6 中创建的视图/对象挂载后，属于非首次挂载，无需结束本轮等待生效。规则同上 Step 3。
 
 > Python 环境详情见 [Python 环境搭建](references/python-env.md)。
 
@@ -104,11 +105,11 @@ bash scripts/setup.sh
 
 | 参数 | 说明 |
 |------|------|
-| `resource_id` | 数字型 ID，不同资源 ID 不同。通过 `list_resources.py`（查询可用资源）或 `list_mounted_resources.py`（查询已挂载资源）获取，不可硬编码 |
+| `resource_id` | 数字型 ID，不同资源 ID 不同。通过 `list_mounted_resources.py`（查询已挂载资源）获取，不可硬编码 |
 | `resource_type` | `VIEW`（查询）或 `OBJECT`（写入），必须大写 |
 | `query` | 自然语言，用户想做什么就写什么 |
 
-> **获取 resource_id**：执行 `list_resources.py`。不传参数默认查全部（个人+企业、OBJECT+VIEW）。可按 `keyword` 中文名称筛选，从返回结果中获取数字 `resourceId`。
+> **获取 resource_id**：执行 `list_mounted_resources.py`。不传参数默认查全部（个人+企业、OBJECT+VIEW）。可按 `keyword` 中文名称筛选，从返回结果中获取数字 `resourceId`。
 
 ### 挂载生命周期
 
@@ -201,7 +202,7 @@ Agent 根据用户问题匹配下表，找到对应场景，打开链接文件�
   '{"agent_id": <Agent 编码里的数字后缀>, "resource_code": "scene_sales_management"}'
 ```
 
-> `list_resources.py` 返回个人和企业资源列表（含平台级资源）。`list_mounted_resources.py` 用于检查某资源是否已挂载到当前 Agent。
+> `list_mounted_resources.py` 用于检查某资源是否已挂载到当前 Agent。
 
 ### 脚本路径速查
 
@@ -210,7 +211,6 @@ Agent 根据用户问题匹配下表，找到对应场景，打开链接文件�
 | 脚本 | 用途 |
 |------|------|
 | `scripts/ontology/structured/list_mounted_resources.py` | 查询 Agent 已挂载的资源 |
-| `scripts/ontology/structured/list_resources.py` | 查询资源列表 |
 | `scripts/ontology/structured/create_object.py` | 创建结构化对象（collect → submit） |
 | `scripts/ontology/structured/create_view.py` | 创建本体视图 |
 | `scripts/ontology/structured/delete_object.py` | 删除结构化对象 |
@@ -218,7 +218,6 @@ Agent 根据用户问题匹配下表，找到对应场景，打开链接文件�
 | `scripts/ontology/structured/mount_resource.py` | 挂载视图到当前 Agent |
 | `scripts/ontology/structured/list_term_types.py` | 查询可绑定的术语类型 |
 | `scripts/ontology/structured/get_term_type_values.py` | 查询术语类型的值列表 |
-| `scripts/ontology/unstructured/list_resources.py` | 查询非结构化对象列表 |
 | `scripts/ontology/unstructured/list_knowledge_bases.py` | 查询可用知识库 |
 | `scripts/ontology/unstructured/list_kb_directories.py` | 查询知识库目录 |
 | `scripts/ontology/unstructured/create_object.py` | 创建非结构化对象（collect → submit） |
