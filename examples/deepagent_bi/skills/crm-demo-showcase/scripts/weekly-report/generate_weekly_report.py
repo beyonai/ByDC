@@ -32,60 +32,75 @@ _CITIES: dict[str, list[str]] = {
     "湖北": ["武汉"],
 }
 
-_INDUSTRIES: list[str] = ["金融", "制造", "医疗", "教育", "互联网", "能源", "零售", "物流"]
+_INDUSTRIES: list[str] = ["金融", "制造", "医疗健康", "教育", "政府"]
 
 _SALES_USERS: list[dict[str, str]] = [
     {"code": "0027024630", "name": "黄药师"},
-    {"code": "0027024631", "name": "韦小二"},
-    {"code": "0027024632", "name": "张三丰"},
-    {"code": "0027024633", "name": "李秋水"},
+    {"code": "0027029364", "name": "陈家洛"},
+    {"code": "0027023754", "name": "谢逊飞"},
 ]
 
 _ORGS: list[dict[str, str]] = [
-    {"code": "231", "name": "华北-金融组"},
-    {"code": "232", "name": "华东-制造组"},
-    {"code": "233", "name": "华南-互联网组"},
-    {"code": "234", "name": "西南-能源组"},
+    {"code": "240", "name": "华中-金融组"},
+    {"code": "241", "name": "华中-政府组"},
+    {"code": "242", "name": "华中-医疗组"},
+    {"code": "239", "name": "华西-制造组"},
 ]
 
 _PRODUCTS: list[dict[str, str]] = [
-    {"code": "WHALE_DF", "name": "数据工厂平台"},
-    {"code": "WHALE_AI", "name": "AI智能分析套件"},
-    {"code": "WHALE_DG", "name": "数据治理工具"},
-    {"code": "WHALE_BI", "name": "智能BI平台"},
+    {"code": "WHALE_DF", "name": "鲸智数据工厂"},
+    {"code": "WHALE_BI", "name": "鲸智BI"},
+    {"code": "WHALE_CRM", "name": "鲸智CRM"},
+    {"code": "WHALE_MASS", "name": "鲸智MASS平台"},
+    {"code": "WHALE_AGENT", "name": "鲸智智能体开发平台"},
+    {"code": "WHALE_BY", "name": "鲸智百应"},
+    {"code": "WHALE_DQC", "name": "鲸智数据质量平台"},
 ]
 
-_CUSTOMER_NAME_PREFIXES: list[str] = [
-    "北京", "广州", "深圳", "上海", "杭州", "成都", "武汉",
+# 真实客户种子数据（采样自业务系统）
+_SEED_CUSTOMERS: list[dict[str, str]] = [
+    {"code": "CUST000001", "name": "北京国投中债资产管理有限公司"},
+    {"code": "CUST000002", "name": "中国工商银行股份有限公司北京分行"},
+    {"code": "CUST000004", "name": "招商银行股份有限公司上海分行"},
+    {"code": "CUST000005", "name": "上海浦东发展银行股份有限公司"},
+    {"code": "CUST000007", "name": "广东省人民医院"},
+    {"code": "CUST000008", "name": "深圳市平安银行股份有限公司"},
+    {"code": "CUST000009", "name": "成都高新技术产业开发区管委会"},
+    {"code": "CUST000010", "name": "四川省教育厅"},
+    {"code": "CUST000011", "name": "武汉市商业银行股份有限公司"},
+    {"code": "CUST000013", "name": "南京银行股份有限公司"},
+    {"code": "CUST000015", "name": "浙江大学"},
+    {"code": "CUST000016", "name": "阿里巴巴（中国）有限公司"},
+    {"code": "CUST000018", "name": "深圳市腾讯计算机系统有限公司"},
+    {"code": "CUST000020", "name": "华为技术有限公司"},
+    {"code": "CUST000039", "name": "北京银行股份有限公司"},
 ]
 
-_CUSTOMER_NAME_SUFFIXES: list[str] = [
-    "国投中债资产管理有限公司",
-    "华融资产管理有限公司",
-    "招商银行股份有限公司",
-    "平安保险集团有限公司",
-    "万科企业股份有限公司",
-    "腾讯科技有限公司",
-    "阿里巴巴网络技术有限公司",
-    "华为技术有限公司",
-]
-
-_OPPORTUNITY_NAMES: list[str] = [
-    "数据工厂-项目",
-    "AI智能分析-平台建设",
-    "数据治理-咨询项目",
-    "智能BI-平台搭建",
-    "数据中台-一期项目",
+# 真实商机种子数据（采样自业务系统）
+_SEED_OPPORTUNITIES: list[dict[str, str]] = [
+    {"code": "OPP00000001", "name": "国投中债-BI-项目"},
+    {"code": "OPP00000003", "name": "国投中债-数据工厂-项目"},
+    {"code": "OPP00000004", "name": "工行北京-BI-项目"},
+    {"code": "OPP00000006", "name": "工行北京-MASS-项目"},
+    {"code": "OPP00000010", "name": "招行上海-BI-项目"},
+    {"code": "OPP00000011", "name": "招行上海-数据工厂-项目"},
+    {"code": "OPP00000022", "name": "平安银行-BI-项目"},
+    {"code": "OPP00000023", "name": "平安银行-数据工厂-项目"},
+    {"code": "OPP00000025", "name": "成都高新-CRM-项目"},
+    {"code": "OPP00000031", "name": "武汉商行-BI-项目"},
+    {"code": "OPP00000037", "name": "南京银行-BI-项目"},
+    {"code": "OPP00000044", "name": "浙大-智能体-项目"},
+    {"code": "OPP00000046", "name": "阿里巴巴-数据工厂-项目"},
+    {"code": "OPP00000047", "name": "阿里巴巴-BI-项目"},
 ]
 
 _OPPORTUNITY_STATUSES: list[dict[str, str]] = [
     {"code": "1", "name": "线索获取"},
     {"code": "2", "name": "方案交流"},
-    {"code": "3", "name": "商务谈判"},
-    {"code": "4", "name": "合同签订"},
+    {"code": "3", "name": "商务报价"},
+    {"code": "4", "name": "签约成功"},
 ]
 
-_DOMAINS: list[str] = ["1", "2", "3", "4"]
 
 # ============================================================
 # 数据模型
@@ -139,14 +154,6 @@ def _pick_one[T](items: list[T]) -> T:
     return random.choice(items)
 
 
-def _generate_customer_code(index: int) -> str:
-    return f"CUST{100001 + index:06d}"
-
-
-def _generate_opportunity_code(index: int) -> str:
-    return f"OPP{index:08d}"
-
-
 def _pick_province_city() -> tuple[str, str]:
     province = _pick_one(list(_CITIES.keys()))
     city = _pick_one(_CITIES[province])
@@ -154,19 +161,19 @@ def _pick_province_city() -> tuple[str, str]:
 
 
 def generate_customer(index: int) -> CustomerInfo:
+    seed = _pick_one(_SEED_CUSTOMERS)
     sales = _pick_one(_SALES_USERS)
     org = _pick_one(_ORGS)
     province, city = _pick_province_city()
-    prefix = _pick_one(_CUSTOMER_NAME_PREFIXES)
-    suffix = _pick_one(_CUSTOMER_NAME_SUFFIXES)
+    industry = _pick_one(_INDUSTRIES)
 
     return CustomerInfo(
-        code=_generate_customer_code(index),
-        name=f"{prefix}{suffix}",
-        industry=_pick_one(_INDUSTRIES),
+        code=seed["code"],
+        name=seed["name"],
+        industry=industry,
         province=province,
         city=city,
-        domain=_pick_one(_DOMAINS),
+        domain=industry,
         sales_code=sales["code"],
         sales_name=sales["name"],
         org_code=org["code"],
@@ -175,6 +182,7 @@ def generate_customer(index: int) -> CustomerInfo:
 
 
 def generate_opportunity(customer: CustomerInfo, index: int) -> OpportunityInfo:
+    seed = _pick_one(_SEED_OPPORTUNITIES)
     product = _pick_one(_PRODUCTS)
     status = _pick_one(_OPPORTUNITY_STATUSES)
     predict_amount = f"{random.randint(10, 80) * 10000:,.2f}"
@@ -182,8 +190,8 @@ def generate_opportunity(customer: CustomerInfo, index: int) -> OpportunityInfo:
     plan_sign_date = (date.today() + timedelta(days=random.randint(30, 180))).isoformat()
 
     return OpportunityInfo(
-        code=_generate_opportunity_code(3000000 + index),
-        name=_pick_one(_OPPORTUNITY_NAMES),
+        code=seed["code"],
+        name=seed["name"],
         industry=customer.industry,
         domain=customer.domain,
         customer_code=customer.code,
