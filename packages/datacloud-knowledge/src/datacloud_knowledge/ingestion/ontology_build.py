@@ -382,10 +382,13 @@ class OntologyBuildSession:
         view_desc: str = "",
         object_codes: list[str] | None = None,
         object_relations: list[dict[str, Any]] | None = None,
+        fields: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """收集本体视图信息，合并到暂存状态，返回当前完整状态。
 
         view_code 会自动拼上工号和随机后缀，保证全局唯一。
+        fields 可选，用于配置视图字段的显示名、角色、公式等属性，
+        按 property_code 做 upsert 合并。
         """
         user_code = os.environ.get("USER_CODE", "")
 
@@ -426,6 +429,17 @@ class OntologyBuildSession:
             for rel in object_relations:
                 existing_rels[_rel_key(rel)] = {**existing_rels.get(_rel_key(rel), {}), **rel}
             state["object_relations"] = list(existing_rels.values())
+
+        if fields:
+            existing: dict[str, dict[str, Any]] = {
+                f["property_code"]: f for f in state.get("fields", [])
+            }
+            for field in fields:
+                existing[field["property_code"]] = {
+                    **existing.get(field["property_code"], {}),
+                    **field,
+                }
+            state["fields"] = list(existing.values())
 
         store.save(key, state, ttl=3600)
 

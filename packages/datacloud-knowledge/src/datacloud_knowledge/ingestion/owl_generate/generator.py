@@ -654,6 +654,7 @@ def _generate_view(state: dict[str, Any], output_dir: Path) -> None:
                         field_role = FieldRole(
                             property_role=ext["property_role"],
                             rule_type=ext.get("rule_type", "description"),
+                            formula=ext.get("formula", ""),
                         )
                     break
             field_mappings.append(
