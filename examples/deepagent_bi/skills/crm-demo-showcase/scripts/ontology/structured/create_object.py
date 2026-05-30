@@ -49,7 +49,9 @@ from __future__ import annotations
 
 import json
 import sys
+from copy import deepcopy
 from pathlib import Path
+import traceback
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -87,11 +89,15 @@ def main() -> None:
             fields=params.get("fields"),
         )
         if not state.get("ok", True):
-            print(json.dumps(state, ensure_ascii=False), flush=True)
+            output_state = deepcopy(state)
+            output_state['entity_code'] = entity_code
+            print(json.dumps(output_state, ensure_ascii=False), flush=True)
             return
         missing = state.pop("missing", [])
+        output_state = deepcopy(state)
+        output_state['entity_code'] = entity_code
         print(
-            json.dumps({"ok": True, "state": state, "missing": missing}, ensure_ascii=False),
+            json.dumps({"ok": True, "state": output_state, "missing": missing}, ensure_ascii=False),
             flush=True,
         )
 
@@ -111,5 +117,5 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False), flush=True)
+        print(json.dumps({"ok": False, "error": str(traceback.format_exc())}, ensure_ascii=False), flush=True)
         sys.exit(1)
