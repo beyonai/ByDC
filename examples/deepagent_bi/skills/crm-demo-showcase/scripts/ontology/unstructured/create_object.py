@@ -49,6 +49,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from copy import deepcopy
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -83,14 +84,18 @@ def main() -> None:
             kb_directory=params.get("kb_directory", ""),
         )
         if not state.get("ok", True):
-            print(json.dumps(state, ensure_ascii=False), flush=True)
+            output_state = deepcopy(state)
+            output_state['entity_code'] = entity_code
+            print(json.dumps(output_state, ensure_ascii=False), flush=True)
             return
         missing = state.pop("missing", [])
         # 非结构化还需要 kb_id
         if not state.get("kb_id"):
             missing.append("kb_id")
+        output_state = deepcopy(state)
+        output_state['entity_code'] = entity_code
         print(
-            json.dumps({"ok": True, "state": state, "missing": missing}, ensure_ascii=False),
+            json.dumps({"ok": True, "state": output_state, "missing": missing}, ensure_ascii=False),
             flush=True,
         )
 
