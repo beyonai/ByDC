@@ -82,7 +82,39 @@
 | `O001` | 广州国投-数据工厂采购 | `P001` | 广州国投中债 | 2026-03-15 | 已完成 | 2 | 300000.00 |
 | `O002` | 深圳创新-分析平台采购 | `P002` | 深圳创新科技 | 2026-04-20 | 待处理 | 1 | 80000.00 |
 
-### 1.5 脚本调用规范
+### 1.5 数据插入
+
+对象创建完成后，先挂载再插入数据（`baiying_call` 必须挂载资源后才可用）。
+流程遵循 [数据操作指南 §3.3](data-operations.md#33-执行录入) 的模式：
+
+1. 执行 `mount_resource.py` 挂载目标对象到当前 Agent
+2. 执行 `list_mounted_resources.py` 获取目标对象的数字 `resource_id`
+3. 调用 `baiying_call`，`resource_type=OBJECT`，`resource_id` 为上一步获取的 ID
+4. `query` 中用自然语言描述待插入的数据内容
+
+**插入产品示例：**
+
+```
+baiying_call(
+    resource_type=OBJECT,
+    resource_id=<product 的 resourceId>,
+    query="新增产品：产品编码P001，产品名称数据工厂，分类数据平台，状态在售，单价150000.00"
+)
+```
+
+**插入订单示例：**
+
+```
+baiying_call(
+    resource_type=OBJECT,
+    resource_id=<order 的 resourceId>,
+    query="新增订单：订单编码O001，订单名称广州国投-数据工厂采购，产品编码P001，客户名称广州国投中债，下单日期2026-03-15，状态已完成，数量2，订单金额300000.00"
+)
+```
+
+> **注意**：产品数据必须先于订单数据插入，因为订单通过 `product_code` 关联产品。`resource_id` 是数字型 ID，通过 `list_mounted_resources.py` 运行时动态获取，不可硬编码。
+
+### 1.6 脚本调用规范
 
 所有结构化本体操作脚本位于 `scripts/ontology/structured/` 目录，以 skill 根目录为基准执行：
 
@@ -99,7 +131,7 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 | `create_view.py` | 创建本体视图 |
 | `delete_object.py` | 删除结构化对象 |
 | `delete_view.py` | 删除本体视图 |
-| `list_resources.py` | 查询已有本体对象/视图列表 |
+| `list_mounted_resources.py` | 查询已有本体对象/视图列表 |
 | `list_term_types.py` | 查询可绑定的术语类型 |
 | `get_term_type_values.py` | 查询术语类型的值列表 |
 | `mount_resource.py` | 挂载本体到当前数字员工 |
@@ -170,7 +202,7 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 
 ### 2.1 会议纪要对象（meeting_note）
 
-创建非结构化本体对象，绑定知识库目录中的会议纪要文档。Mock 数据通过 `generate_meeting_minutes.py` 脚本输出。
+创建非结构化本体对象，绑定知识库目录中的会议纪要文档。会议纪要文档通过 `generate_meeting_minutes.py` 脚本的输出来获取。
 
 | 字段 | 值 |
 |------|-----|
@@ -198,7 +230,7 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 | `kb_id` | 知识库编码（resourceCode，非 resourceId） | `list_knowledge_bases.py` |
 | `kb_directory` | 知识库内目录路径 | `list_kb_directories.py` |
 
-### 2.2 Mock 数据
+### 2.2 会议纪要文档获取
 
 三篇 DataCloud 项目会议纪要，通过 `scripts/meeting-minutes/generate_meeting_minutes.py` 获取：
 
@@ -231,7 +263,7 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 |------|------|
 | `create_object.py` | 创建非结构化对象（collect → submit 两阶段） |
 | `delete_object.py` | 删除非结构化对象 |
-| `list_resources.py` | 查询已有本体资源列表 |
+| `list_mounted_resources.py` | 查询已有本体资源列表 |
 | `list_knowledge_bases.py` | 查询可用知识库列表（获取 kb_id） |
 | `list_kb_directories.py` | 查询知识库目录（获取 kb_directory） |
 | `list_term_types.py` | 查询可绑定的术语类型 |
