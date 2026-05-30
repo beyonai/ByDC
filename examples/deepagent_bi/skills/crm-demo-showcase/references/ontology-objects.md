@@ -21,11 +21,11 @@
 
 | property_code | property_name | data_type | property_role | rule_type | 说明 |
 |---------------|---------------|-----------|---------------|-----------|------|
-| `product_code` | 产品编码 | `STRING` | `DIMENSION` | `name` | 产品唯一编码 |
+| `product_code` | 产品编码 | `STRING` | `DIMENSION` | `id` | 产品唯一编码 |
 | `product_name` | 产品名称 | `STRING` | `DIMENSION` | `name` | 产品显示名称 |
-| `category` | 产品分类 | `STRING` | `DIMENSION` | `category` | 产品所属类别 |
-| `status` | 产品状态 | `STRING` | `DIMENSION` | `status` | 在售/停售/预研 |
-| `unit_price` | 单价 | `FLOAT` | `MEASURE` | `amount` | 标准单价（元） |
+| `category` | 产品分类 | `STRING` | `DIMENSION` | `name` | 产品所属类别 |
+| `status` | 产品状态 | `STRING` | `DIMENSION` | `name` | 在售/停售/预研 |
+| `unit_price` | 单价 | `FLOAT` | `MEASURE` | `raw_number` | 标准单价（元） |
 
 ### 1.2 订单对象（order）
 
@@ -42,14 +42,14 @@
 
 | property_code | property_name | data_type | property_role | rule_type | 说明 |
 |---------------|---------------|-----------|---------------|-----------|------|
-| `order_code` | 订单编码 | `STRING` | `DIMENSION` | `name` | 订单唯一编码 |
+| `order_code` | 订单编码 | `STRING` | `DIMENSION` | `id` | 订单唯一编码 |
 | `order_name` | 订单名称 | `STRING` | `DIMENSION` | `name` | 订单显示名称 |
-| `product_code` | 产品编码 | `STRING` | `DIMENSION` | `name` | 关联产品编码 |
+| `product_code` | 产品编码 | `STRING` | `DIMENSION` | `id` | 关联产品编码 |
 | `customer_name` | 客户名称 | `STRING` | `DIMENSION` | `name` | 下单客户 |
 | `order_date` | 下单日期 | `DATE` | `DIMENSION` | `date` | 订单创建日期 |
-| `status` | 订单状态 | `STRING` | `DIMENSION` | `status` | 待处理/已完成/已取消 |
-| `quantity` | 数量 | `INTEGER` | `MEASURE` | `count` | 购买数量 |
-| `total_amount` | 订单金额 | `FLOAT` | `MEASURE` | `amount` | 订单总金额（元） |
+| `status` | 订单状态 | `STRING` | `DIMENSION` | `name` | 待处理/已完成/已取消 |
+| `quantity` | 数量 | `INTEGER` | `MEASURE` | `raw_number` | 购买数量 |
+| `total_amount` | 订单金额 | `FLOAT` | `MEASURE` | `raw_number` | 订单总金额（元） |
 
 ### 1.3 产品订单视图（product_order_view）
 
@@ -107,7 +107,7 @@
   "ext_property": {
     "property_role_rule": {
       "property_role": "MEASURE",
-      "rule_type": "count"
+      "rule_type": "raw_number"
     }
   }
 }, {
@@ -218,7 +218,7 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
       "property_name": "产品编码",
       "data_type": "STRING",
       "ext_property": {
-        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}
+        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "id"}
       }
     },
     {
@@ -234,7 +234,7 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
       "property_name": "产品分类",
       "data_type": "STRING",
       "ext_property": {
-        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "category"}
+        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}
       }
     },
     {
@@ -242,7 +242,7 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
       "property_name": "产品状态",
       "data_type": "STRING",
       "ext_property": {
-        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "status"}
+        "property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}
       }
     },
     {
@@ -250,7 +250,7 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
       "property_name": "单价",
       "data_type": "FLOAT",
       "ext_property": {
-        "property_role_rule": {"property_role": "MEASURE", "rule_type": "amount"}
+        "property_role_rule": {"property_role": "MEASURE", "rule_type": "raw_number"}
       }
     }
   ]
@@ -284,7 +284,7 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
     {"property_code": "product_name", "property_name": "产品名称", "data_type": "STRING",
      "ext_property": {"property_role_rule": {"property_role": "DIMENSION", "rule_type": "name"}}},
     {"property_code": "quantity", "property_name": "数量", "data_type": "INTEGER",
-     "ext_property": {"property_role_rule": {"property_role": "MEASURE", "rule_type": "count"}}},
+     "ext_property": {"property_role_rule": {"property_role": "MEASURE", "rule_type": "raw_number"}}},
     {"property_code": "order_total", "property_name": "订单总金额", "data_type": "FLOAT",
      "ext_property": {"property_role_rule": {"property_role": "MEASURE", "rule_type": "derived_metric", "formula": "quantity * unit_price"}}}
   ]
@@ -450,18 +450,17 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 
 | property_role | rule_type | 说明 | 典型字段示例 |
 |---------------|-----------|------|-------------|
-| `DIMENSION` | `name` | 名称维度（主标识） | `product_code`, `customer_name`, `order_code` |
+| `DIMENSION` | `id` | ID维度（外键/编码枚举） | `product_code`, `order_code` |
+| `DIMENSION` | `name` | 名称维度（中文字符串枚举） | `product_name`, `customer_name` |
 | `DIMENSION` | `description` | 描述维度 | `result`（拜访结果）、备注字段 |
-| `DIMENSION` | `status` | 状态维度 | `status`（订单状态、产品状态） |
-| `DIMENSION` | `category` | 分类维度 | `category`（产品分类） |
 | `DIMENSION` | `date` | 日期维度 | `order_date`, `visit_date` |
-| `DIMENSION` | `link` | 链接维度 | URL 类型字段 |
-| `MEASURE` | `amount` | 金额度量 | `unit_price`, `total_amount` |
-| `MEASURE` | `count` | 数量度量 | `quantity` |
-| `MEASURE` | `rate` | 比率度量 | 转化率、完成率等 |
-| `MEASURE` | `derived_metric` | 派生度量（SQL 公式） | `quantity * unit_price` |
-| `MEASURE` | `formula_metric` | 公式度量（SQL 公式） | `revenue - cost` |
-| `DIMENSION` | `virtual_tag` | 虚拟标签（SQL 公式） | `CASE WHEN amount > 100000 THEN '大额' ELSE '小额' END` |
+| `DIMENSION` | `datetime` | 时间戳维度 | 精确到时分秒的时间字段 |
+| `DIMENSION` | `numeric` | 数值维度 | 可用作过滤条件的数值字段 |
+| `MEASURE` | `raw_number` | 普通数值度量（支持SUM/AVG等） | `unit_price`, `total_amount`, `quantity` |
+| `MEASURE` | `basic_metric` | 普通指标度量 | 预计算的聚合指标 |
+| `MEASURE` | `derived_metric` | 派生度量（比率类，不可二次聚合） | `quantity * unit_price` |
+| `MEASURE` | `formula_metric` | 指标公式度量（实时计算） | `revenue - cost` |
+| `DIMENSION` | `virtual_tag` | 虚拟标签（SQL CASE WHEN） | `CASE WHEN amount > 100000 THEN '大额' END` |
 
 > 带 `derived_metric` / `formula_metric` / `virtual_tag` 的字段**必须填 `formula`**（SQL 表达式），空字符串视为存储字段。查询时公式会被展开到 SELECT / WHERE / GROUP BY 中。
 
