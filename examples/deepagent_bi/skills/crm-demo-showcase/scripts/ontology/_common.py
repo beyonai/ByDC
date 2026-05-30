@@ -14,6 +14,9 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# 服务发现目标：对应后端自动注册的服务名，不读环境变量
+_SERVICE_NAME = "ByaiService"
+
 
 def _init_discovery_redis() -> None:
     """全局初始化服务发现 Redis（幂等）。"""
@@ -36,9 +39,7 @@ def post_json(path: str, payload: dict[str, Any], service_env: str = "BE_DOMAINN
         payload: 请求体
         service_env: 服务名称的环境变量名，默认 BE_DOMAINNAME
     """
-    service_name = os.environ.get(service_env, "").strip()
-    if not service_name:
-        raise ValueError(f"{service_env} 环境变量未配置")
+    service_name = _SERVICE_NAME
 
     token = os.environ.get("BEYOND_TOKEN", "").strip()
     headers: dict[str, str] = {"Content-Type": "application/json"}
